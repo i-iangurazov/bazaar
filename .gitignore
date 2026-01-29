@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+dist
+.turbo
+.pnpm-store
+coverage
+pnpm-debug.log
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.DS_Store
+*.tsbuildinfo
+.env*
+!.env.example
+retail-system.zip
