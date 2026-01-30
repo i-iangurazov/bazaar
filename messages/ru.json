@@ -47,7 +47,10 @@
     },
     "saving": "Сохраняем...",
     "help": "Справка",
-    "openHelpArticle": "Открыть справку: {article}"
+    "openHelpArticle": "Открыть справку: {article}",
+    "selectedCount": "Выбрано: {count}",
+    "clearSelection": "Снять выделение",
+    "selectLocale": "Выберите язык"
   },
   "auth": {
     "loginTitle": "Платформа запасов",
@@ -65,6 +68,10 @@
     "loginRateLimited": "Слишком много попыток входа. Повторите позже.",
     "emailNotVerified": "Подтвердите email, чтобы войти.",
     "forgotPassword": "Забыли пароль?",
+    "createAccount": "Создать аккаунт",
+    "requestAccess": "Запросить доступ",
+    "acceptInvite": "Принять приглашение",
+    "inviteHint": "Есть приглашение? Откройте ссылку из письма.",
     "demoAccounts": "Демо аккаунты: admin@example.com (Admin123!), manager@example.com (Manager123!), staff@example.com (Staff123!)."
   },
   "meta": {
@@ -98,6 +105,7 @@
     "createAccount": "Создать аккаунт",
     "requestAccess": "Запросить доступ",
     "inviteOnlyNote": "Регистрация доступна только по приглашению.",
+    "haveInvite": "Есть приглашение?",
     "requestSuccess": "Запрос отправлен.",
     "signupSuccess": "Аккаунт создан.",
     "verifyHint": "Мы отправили ссылку для подтверждения email.",
@@ -108,6 +116,13 @@
   },
   "invite": {
     "title": "Принять приглашение",
+    "entryTitle": "Принять приглашение",
+    "entrySubtitle": "Вставьте ссылку или код приглашения.",
+    "entryLabel": "Ссылка или код приглашения",
+    "entryPlaceholder": "https://app.example.com/invite/xxxx",
+    "entrySubmit": "Продолжить",
+    "entryHint": "Скопируйте ссылку из письма администратора.",
+    "entryInvalid": "Введите корректную ссылку или код.",
     "name": "Имя",
     "namePlaceholder": "Имя и фамилия",
     "nameRequired": "Имя обязательно.",
@@ -169,6 +184,14 @@
   "nav": {
     "platform": "Платформа",
     "brand": "Northstar",
+    "groups": {
+      "core": "Основное",
+      "operations": "Операции",
+      "insights": "Инсайты",
+      "admin": "Администрирование",
+      "help": "Справка"
+    },
+    "groupToggle": "Свернуть или развернуть {group}",
     "dashboard": "Панель",
     "inventory": "Запасы",
     "purchaseOrders": "Заказы",
@@ -179,6 +202,7 @@
     "attributes": "Атрибуты",
     "units": "Ед. измерения",
     "imports": "Импорт",
+    "whatsNew": "Что нового",
     "adminSupport": "Поддержка",
     "adminMetrics": "Метрики",
     "adminJobs": "Фоновые задачи",
@@ -192,6 +216,19 @@
     "scanLabel": "Сканировать или искать товар",
     "barcodeNotFound": "Штрихкод {value} не найден.",
     "createWithBarcode": "Создать товар с этим штрихкодом"
+  },
+  "commandPalette": {
+    "title": "Командная панель",
+    "subtitle": "Быстрый поиск и действия (Ctrl+K)",
+    "placeholder": "Поиск товаров, поставщиков, заказов...",
+    "searchLabel": "Поиск по системе",
+    "actionsTitle": "Действия",
+    "resultsTitle": "Результаты",
+    "loading": "Поиск...",
+    "noResults": "Ничего не найдено.",
+    "actionCreatePo": "Создать заказ",
+    "actionStartCount": "Начать ревизию",
+    "actionPrintTags": "Печать ценников"
   },
   "dashboard": {
     "title": "Панель",
@@ -208,7 +245,10 @@
     "suggestedOrder": "Рекомендуемый заказ",
     "minStock": "Мин. остаток",
     "showMore": "Показать еще",
-    "hideMore": "Скрыть"
+    "hideMore": "Скрыть",
+    "chartsTitle": "Графики",
+    "chartsSubtitle": "Продажи, запасы и риски на одном экране.",
+    "chartsAction": "Открыть аналитику"
   },
   "inventory": {
     "title": "Запасы",
@@ -229,6 +269,18 @@
     "minStockSave": "Сохранить порог",
     "minStockNonNegative": "Минимальный остаток не может быть отрицательным.",
     "inventoryOverview": "Обзор запасов",
+    "selectAll": "Выбрать все",
+    "selectInventoryItem": "Выбрать {name}",
+    "printPriceTags": "Печать ценников",
+    "printSubtitle": "Выбрано: {count}",
+    "template": "Шаблон",
+    "template3x8": "3 x 8 (24 шт.)",
+    "template2x5": "2 x 5 (10 шт.)",
+    "printQty": "Количество ценников",
+    "printQtyMin": "Количество должно быть не меньше 1.",
+    "printDownload": "Скачать PDF",
+    "priceTagsFailed": "Не удалось создать PDF.",
+    "allStores": "Все магазины",
     "searchPlaceholder": "Поиск по SKU или названию",
     "sku": "SKU",
     "productRequired": "Выберите товар.",
@@ -341,6 +393,23 @@
     "description": "Описание",
     "photoUrl": "Фото (URL)",
     "photoUrlInvalid": "Укажите корректный URL.",
+    "imagesTitle": "Изображения товара",
+    "imagesHint": "Перетащите файлы или добавьте фото вручную. Первое фото — основное.",
+    "imagesAdd": "Добавить фото",
+    "imagesDrop": "Перетащите изображения сюда",
+    "imagesEmpty": "Фотографии не добавлены.",
+    "imagesReorderHint": "Перетаскивайте, чтобы изменить порядок.",
+    "imagePrimary": "Основное",
+    "imageAlt": "Фото товара #{index}",
+    "imagePosition": "Фото {index} из {total}",
+    "imageMoveUp": "Переместить вверх",
+    "imageMoveDown": "Переместить вниз",
+    "imageRemove": "Удалить фото",
+    "imageDragHint": "Тяните за карточку для перестановки.",
+    "imageUrlRequired": "Добавьте изображение.",
+    "imageInvalidType": "Поддерживаются только изображения.",
+    "imageTooLarge": "Файл слишком большой (макс. {size} МБ).",
+    "imageReadFailed": "Не удалось загрузить изображение.",
     "barcodes": "Штрихкоды",
     "barcodesCount": "{count, plural, one {# штрихкод} few {# штрихкода} many {# штрихкодов} other {# штрихкода}}",
     "barcodeHint": "Разделяйте штрихкоды запятыми или |",
@@ -404,6 +473,22 @@
     "restore": "Восстановить",
     "confirmRestore": "Вернуть товар из архива?",
     "restoreSuccess": "Товар восстановлен.",
+    "bulkArchive": "Архивировать выбранные",
+    "bulkRestore": "Восстановить выбранные",
+    "confirmBulkArchive": "Архивировать выбранные товары?",
+    "confirmBulkRestore": "Восстановить выбранные товары?",
+    "bulkArchiveSuccess": "Архивировано товаров: {count}",
+    "bulkRestoreSuccess": "Восстановлено товаров: {count}",
+    "bulkSetCategory": "Задать категорию",
+    "bulkCategoryTitle": "Категория для выбранных",
+    "bulkCategorySubtitle": "Обновите категорию сразу для нескольких товаров.",
+    "bulkCategoryPlaceholder": "Например, Бакалея",
+    "bulkCategoryHint": "Оставьте поле пустым, чтобы очистить категорию.",
+    "bulkCategorySuccess": "Категория обновлена для {count} товаров.",
+    "bulkSetStorePrice": "Цена для магазина",
+    "bulkStorePriceTitle": "Цена для выбранных товаров",
+    "bulkStorePriceSubtitle": "Установите цену для магазина сразу для нескольких товаров.",
+    "bulkStorePriceSuccess": "Цены обновлены для {count} товаров.",
     "allCategories": "Все категории",
     "importCsv": "Импорт CSV",
     "hideImport": "Скрыть импорт",
@@ -447,6 +532,11 @@
     "printQty": "Количество ценников",
     "printQtyMin": "Количество должно быть не меньше 1.",
     "printDownload": "Скачать PDF",
+    "printQueueTitle": "Очередь печати",
+    "printQueueHint": "Перетаскивайте для изменения порядка.",
+    "printQueueEmpty": "Очередь пуста.",
+    "printQueueMoveUp": "Поднять выше",
+    "printQueueMoveDown": "Опустить ниже",
     "priceTagsFailed": "Не удалось создать PDF.",
     "selectAll": "Выбрать все",
     "selectProduct": "Выбрать {name}",
@@ -545,7 +635,12 @@
     "trackExpiryLots": "Отслеживать сроки годности",
     "trackExpiryHint": "Добавляет учет партий со сроком годности при приемке и движениях.",
     "enableExpiryLots": "Включить учет сроков",
-    "disableExpiryLots": "Выключить учет сроков"
+    "disableExpiryLots": "Выключить учет сроков",
+    "complianceStatus": "KG compliance-ready",
+    "complianceDisabled": "Отключено",
+    "complianceNeedsSetup": "Требует настройки",
+    "complianceReady": "Настроено",
+    "complianceSettings": "KG compliance"
   },
   "purchaseOrders": {
     "title": "Заказы поставки",
@@ -592,6 +687,12 @@
     "cancelOrder": "Отменить",
     "confirmCancel": "Отменить заказ? Операцию нельзя будет отменить.",
     "cancelSuccess": "Заказ отменен.",
+    "selectAll": "Выбрать все",
+    "selectPurchaseOrder": "Выбрать заказ {number}",
+    "bulkCancel": "Отменить выбранные",
+    "confirmBulkCancel": "Отменить выбранные заказы?",
+    "bulkCancelSuccess": "Отменено заказов: {count}",
+    "bulkCancelUnavailable": "Нет выбранных заказов для отмены.",
     "linesTitle": "Позиции заказа",
     "linesRequired": "Добавьте хотя бы одну позицию.",
     "addLine": "Добавить позицию",
@@ -682,6 +783,11 @@
     "actions": "Действия",
     "edit": "Редактировать",
     "confirmDelete": "Удалить поставщика? Действие нельзя отменить.",
+    "selectAll": "Выбрать всех",
+    "selectSupplier": "Выбрать {name}",
+    "bulkDelete": "Удалить выбранных",
+    "confirmBulkDelete": "Удалить выбранных поставщиков?",
+    "bulkDeleteSuccess": "Удалено поставщиков: {count}",
     "noSuppliers": "Поставщики отсутствуют."
   },
   "users": {
@@ -891,7 +997,13 @@
     "planLimitReached": "Достигнут лимит вашего плана.",
     "trialExpired": "Пробный период завершен.",
     "orgNotFound": "Организация не найдена.",
-    "unexpectedError": "Произошла непредвиденная ошибка."
+    "unexpectedError": "Произошла непредвиденная ошибка.",
+    "exportFailed": "Не удалось сформировать экспорт.",
+    "exportTypeInvalid": "Неверный тип экспорта.",
+    "periodAlreadyClosed": "Период уже закрыт.",
+    "periodNotClosed": "Период еще не закрыт.",
+    "kkmNotConfigured": "ККМ не настроена.",
+    "copyFailed": "Не удалось скопировать."
   },
   "adminJobs": {
     "title": "Фоновые задачи",
@@ -1211,7 +1323,39 @@
       "qty": "Сумма",
       "user": "Сотрудник",
       "movements": "Движений"
-    }
+    },
+    "analyticsLink": "Аналитика",
+    "exportsLink": "Экспорты",
+    "closeLink": "Закрытие периода"
+  },
+  "analytics": {
+    "title": "Аналитика",
+    "subtitle": "Ключевые тренды продаж и запасов.",
+    "backToReports": "Назад к отчетам",
+    "allStores": "Все магазины",
+    "rangeLabel": "Период",
+    "range30": "Последние 30 дней",
+    "range90": "Последние 90 дней",
+    "granularityLabel": "Гранулярность",
+    "granularityDay": "По дням",
+    "granularityWeek": "По неделям",
+    "salesTrend": "Тренд продаж",
+    "salesFallback": "Продажи недоступны — показано количество движений.",
+    "topProducts": "Топ товары",
+    "metricLabel": "Метрика",
+    "metricUnits": "Единицы",
+    "metricRevenue": "Выручка",
+    "metricProfit": "Прибыль",
+    "lowStockTrend": "Низкие остатки",
+    "stockoutTrend": "События отсутствия",
+    "inventoryValue": "Стоимость запасов",
+    "deadStock30": "Без движения 30+ дней",
+    "deadStock60": "Без движения 60+ дней",
+    "deadStock90": "Без движения 90+ дней",
+    "emptySales": "Нет данных продаж за период.",
+    "emptyTopProducts": "Нет данных по товарам.",
+    "emptyLowStock": "Нет событий низкого остатка.",
+    "emptyInventory": "Нет данных по запасам."
   },
   "onboarding": {
     "title": "Быстрый запуск",
@@ -1376,6 +1520,167 @@
           "Ошибка про магазин или поставщика обычно означает, что не выбран фильтр сверху.",
           "Конфликт по штрихкоду означает, что этот код уже используется в вашей организации.",
           "Если действие повторяется из-за сети, используйте тот же idempotency ключ — система не продублирует движение."
+        ]
+      }
+    }
+  },
+  "whatsNew": {
+    "title": "Что нового",
+    "subtitle": "Коротко о главных обновлениях платформы.",
+    "sections": {
+      "v14": {
+        "title": "V1.4 — Онбординг и миграции",
+        "items": [
+          "Пошаговый онбординг для первого запуска.",
+          "Импорт каталога с предпросмотром и отчетом об ошибках.",
+          "Откат импортов с компенсирующими движениями."
+        ]
+      },
+      "v15": {
+        "title": "V1.5 — Поддержка и надежность",
+        "items": [
+          "Панели поддержки и заданий для администраторов.",
+          "Надежные фоновые задачи с повторными попытками.",
+          "Метрики и проверки готовности (health)."
+        ]
+      },
+      "v16": {
+        "title": "V1.6 — Регистрация и приглашения",
+        "items": [
+          "Самостоятельная регистрация и режимы доступа.",
+          "Приглашения сотрудников с проверкой email.",
+          "Тарифы и ограничения для пробного периода."
+        ]
+      }
+    }
+  },
+  "compliance": {
+    "title": "KG compliance-ready",
+    "subtitle": "Настройте режимы ККМ, ЭСФ, ЭТТН и маркировки для выбранного магазина.",
+    "subtitleStore": "Настройте режимы ККМ, ЭСФ, ЭТТН и маркировки для магазина «{store}».",
+    "cardTitle": "KG compliance-ready",
+    "cardSubtitle": "Включите только нужные модули, остальное — в расширенных настройках.",
+    "helpLink": "Справка по требованиям КР",
+    "saved": "Настройки сохранены",
+    "invalidJson": "Некорректный JSON",
+    "readOnlyHint": "Только администратор может изменять настройки.",
+    "kkmToggle": "ККМ",
+    "kkmHint": "Режим кассовых чеков: экспорт или адаптер.",
+    "esfToggle": "ЭСФ",
+    "esfHint": "Экспорт данных для электронных счетов-фактур.",
+    "ettnToggle": "ЭТТН",
+    "ettnHint": "Экспорт данных для электронных товарно-транспортных накладных.",
+    "markingToggle": "Маркировка",
+    "markingHint": "Отмечайте товары, требующие маркировки.",
+    "advancedShow": "Расширенные",
+    "advancedHide": "Скрыть",
+    "advancedIntro": "Дополнительные параметры видны только при необходимости.",
+    "defaultLocale": "Язык по умолчанию",
+    "taxRegime": "Налоговый режим",
+    "kkmMode": "Режим ККМ",
+    "kkmModeOff": "Выключено",
+    "kkmModeExport": "Только экспорт",
+    "kkmModeAdapter": "Через адаптер",
+    "exportOnlyHint": "Экспортируйте чеки для бухгалтера или поставщика ККМ.",
+    "adapterHint": "Адаптер будет вызывать фискализацию при подключении.",
+    "providerKey": "Ключ провайдера ККМ",
+    "settingsJson": "Настройки адаптера (JSON)"
+  },
+  "exports": {
+    "title": "Экспорт для бухгалтера",
+    "subtitle": "Сформируйте отчеты и выгрузки по периоду.",
+    "requestTitle": "Сформировать экспорт",
+    "storeLabel": "Магазин",
+    "typeLabel": "Тип экспорта",
+    "periodStart": "Начало периода",
+    "periodEnd": "Конец периода",
+    "generate": "Сформировать",
+    "created": "Экспорт создан",
+    "jobsTitle": "Экспорты",
+    "empty": "Экспортов пока нет.",
+    "download": "Скачать",
+    "copyJobId": "Скопировать ID",
+    "copyFileName": "Скопировать имя файла",
+    "copiedJobId": "ID скопирован",
+    "copiedFileName": "Имя файла скопировано",
+    "types": {
+      "salesSummary": "Сводка продаж",
+      "stockMovements": "Движения склада",
+      "purchases": "Закупки",
+      "inventoryOnHand": "Остатки на складе",
+      "periodClose": "Закрытие периода",
+      "kkmReceipts": "Чеки для ККМ"
+    },
+    "status": {
+      "QUEUED": "В очереди",
+      "RUNNING": "В обработке",
+      "DONE": "Готово",
+      "FAILED": "Ошибка"
+    },
+    "columns": {
+      "createdAt": "Создан",
+      "type": "Тип",
+      "period": "Период",
+      "status": "Статус",
+      "actions": "Действия"
+    }
+  },
+  "periodClose": {
+    "title": "Закрытие периода",
+    "subtitle": "Зафиксируйте итоги месяца для учета.",
+    "closeTitle": "Закрыть месяц",
+    "storeLabel": "Магазин",
+    "monthLabel": "Месяц",
+    "closeAction": "Закрыть период",
+    "closed": "Период закрыт",
+    "exportCreated": "Отчет сформирован",
+    "historyTitle": "Закрытые периоды",
+    "empty": "Закрытий пока нет.",
+    "statusClosed": "Закрыт",
+    "download": "Скачать отчет",
+    "columns": {
+      "period": "Период",
+      "closedAt": "Закрыт",
+      "status": "Статус",
+      "actions": "Действия"
+    }
+  },
+  "helpCompliance": {
+    "title": "KG compliance-ready",
+    "subtitle": "Короткие инструкции по режимам и экспортам.",
+    "toggleArticle": "Открыть статью: {title}",
+    "articles": {
+      "kkmModes": {
+        "title": "Режимы ККМ",
+        "summary": "Как выбрать режим ККМ для магазина.",
+        "body": [
+          "OFF — режим отключен, ККМ не используется.",
+          "EXPORT_ONLY — формируйте экспорт для бухгалтера или провайдера ККМ.",
+          "ADAPTER — подготовка к интеграции через адаптер без обещания полной соответствия."
+        ]
+      },
+      "exports": {
+        "title": "Экспорт для бухгалтера",
+        "summary": "Какие выгрузки доступны и как их отправлять.",
+        "body": [
+          "Выберите магазин, период и тип выгрузки.",
+          "Экспорты фиксируются в журнале с ID и временем создания."
+        ]
+      },
+      "ettnMarking": {
+        "title": "ЭСФ, ЭТТН и маркировка",
+        "summary": "Что мы отмечаем и что попадает в экспорт.",
+        "body": [
+          "Включайте модули только если они нужны вашему магазину.",
+          "Для отдельных товаров можно отметить требования к маркировке и ЭТТН."
+        ]
+      },
+      "periodClose": {
+        "title": "Закрытие периода",
+        "summary": "Фиксация итогов месяца без блокировки склада.",
+        "body": [
+          "Закрытие периода сохраняет итоговые показатели для бухгалтерии.",
+          "Складской журнал не блокируется — движения продолжаются."
         ]
       }
     }

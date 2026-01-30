@@ -15,6 +15,9 @@ import { attributesRouter } from "@/server/trpc/routers/attributes";
 import { categoryTemplatesRouter } from "@/server/trpc/routers/categoryTemplates";
 import { unitsRouter } from "@/server/trpc/routers/units";
 import { reportsRouter } from "@/server/trpc/routers/reports";
+import { complianceRouter } from "@/server/trpc/routers/compliance";
+import { exportsRouter } from "@/server/trpc/routers/exports";
+import { periodCloseRouter } from "@/server/trpc/routers/periodClose";
 import { importsRouter } from "@/server/trpc/routers/imports";
 import { onboardingRouter } from "@/server/trpc/routers/onboarding";
 import { adminJobsRouter } from "@/server/trpc/routers/adminJobs";
@@ -24,6 +27,8 @@ import { impersonationRouter } from "@/server/trpc/routers/impersonation";
 import { publicAuthRouter } from "@/server/trpc/routers/publicAuth";
 import { invitesRouter } from "@/server/trpc/routers/invites";
 import { billingRouter } from "@/server/trpc/routers/billing";
+import { searchRouter } from "@/server/trpc/routers/search";
+import { analyticsRouter } from "@/server/trpc/routers/analytics";
 
 export const appRouter = router({
   inventory: inventoryRouter,
@@ -42,6 +47,9 @@ export const appRouter = router({
   categoryTemplates: categoryTemplatesRouter,
   units: unitsRouter,
   reports: reportsRouter,
+  compliance: complianceRouter,
+  exports: exportsRouter,
+  periodClose: periodCloseRouter,
   imports: importsRouter,
   onboarding: onboardingRouter,
   adminJobs: adminJobsRouter,
@@ -51,6 +59,8 @@ export const appRouter = router({
   publicAuth: publicAuthRouter,
   invites: invitesRouter,
   billing: billingRouter,
+  search: searchRouter,
+  analytics: analyticsRouter,
 });
 
 export type AppRouter = typeof appRouter;

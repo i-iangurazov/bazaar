@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   Form,
   FormControl,
@@ -19,6 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -106,7 +108,10 @@ const SignupPage = () => {
 
   if (submitted) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
         <Card>
           <CardHeader>
             <CardTitle>{t("submittedTitle")}</CardTitle>
@@ -123,184 +128,208 @@ const SignupPage = () => {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-end">
+        <LanguageSwitcher />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           {mode === "invite_only" ? (
             <Form {...requestForm}>
               <form
-                className="space-y-4"
                 onSubmit={requestForm.handleSubmit((values) => {
                   requestMutation.mutate(values);
                 })}
               >
-                <FormField
-                  control={requestForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("email")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={requestForm.control}
-                  name="orgName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("orgName")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder={t("orgPlaceholder")} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
-                  {requestMutation.isLoading ? tCommon("loading") : t("requestAccess")}
-                </Button>
-                <p className="text-xs text-gray-500">{t("inviteOnlyNote")}</p>
+                <FormStack>
+                  <FormField
+                    control={requestForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("email")}</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={requestForm.control}
+                    name="orgName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("orgName")}</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={t("orgPlaceholder")} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
+                    {requestMutation.isLoading ? tCommon("loading") : t("requestAccess")}
+                  </Button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                    <span>{t("inviteOnlyNote")}</span>
+                    <a href="/invite" className="font-semibold text-ink underline">
+                      {t("haveInvite")}
+                    </a>
+                  </div>
+                </FormStack>
               </form>
             </Form>
           ) : (
             <Form {...signupForm}>
               <form
-                className="space-y-4"
                 onSubmit={signupForm.handleSubmit((values) => {
                   signupMutation.mutate(values);
                 })}
               >
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-gray-400">
-                  <span className={step === 1 ? "text-ink" : ""}>{t("stepAccount")}</span>
-                  <span>→</span>
-                  <span className={step === 2 ? "text-ink" : ""}>{t("stepOrg")}</span>
-                </div>
+                <FormStack>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-gray-400">
+                    <span className={step === 1 ? "text-ink" : ""}>{t("stepAccount")}</span>
+                    <span>→</span>
+                    <span className={step === 2 ? "text-ink" : ""}>{t("stepOrg")}</span>
+                  </div>
 
-                {step === 1 ? (
-                  <>
-                    <FormField
-                      control={signupForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("name")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder={t("namePlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("email")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("password")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="preferredLocale"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("preferredLocale")}</FormLabel>
-                          <FormControl>
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t("selectLocale")} />
-                              </SelectTrigger>
-                              <SelectContent>
-                              <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                              <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="button" variant="secondary" className="w-full" onClick={() => setStep(2)}>
-                      {t("continue")}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <FormField
-                      control={signupForm.control}
-                      name="orgName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("orgName")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder={t("orgPlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="storeName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("storeName")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder={t("storePlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("phone")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder={t("phonePlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex gap-2">
-                      <Button type="button" variant="ghost" className="w-full" onClick={() => setStep(1)}>
-                        {tCommon("back")}
+                  {step === 1 ? (
+                    <>
+                      <FormField
+                        control={signupForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("name")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder={t("namePlaceholder")} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("email")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("password")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="password"
+                                placeholder={t("passwordPlaceholder")}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="preferredLocale"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("preferredLocale")}</FormLabel>
+                            <FormControl>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t("selectLocale")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
+                                  <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() => setStep(2)}
+                      >
+                        {t("continue")}
                       </Button>
-                      <Button type="submit" className="w-full" disabled={signupMutation.isLoading}>
-                        {signupMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                        {signupMutation.isLoading ? tCommon("loading") : t("createAccount")}
-                      </Button>
-                    </div>
-                  </>
-                )}
+                    </>
+                  ) : (
+                    <>
+                      <FormField
+                        control={signupForm.control}
+                        name="orgName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("orgName")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder={t("orgPlaceholder")} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="storeName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("storeName")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder={t("storePlaceholder")} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("phone")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder={t("phonePlaceholder")} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="w-full"
+                          onClick={() => setStep(1)}
+                        >
+                          {tCommon("back")}
+                        </Button>
+                        <Button type="submit" className="w-full" disabled={signupMutation.isLoading}>
+                          {signupMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                          {signupMutation.isLoading ? tCommon("loading") : t("createAccount")}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </FormStack>
               </form>
             </Form>
           )}

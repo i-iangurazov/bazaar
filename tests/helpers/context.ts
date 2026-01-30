@@ -1,4 +1,5 @@
 import type { Role } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 import { appRouter } from "@/server/trpc/routers/_app";
 import { prisma } from "@/server/db/prisma";
@@ -10,7 +11,7 @@ export const createTestCaller = (user?: {
   role: Role;
   organizationId: string;
 }) => {
-  const requestId = "test-request";
+  const requestId = randomUUID();
   const ctx = {
     prisma,
     user: user ?? null,

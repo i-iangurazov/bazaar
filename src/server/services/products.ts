@@ -18,6 +18,11 @@ export type CreateProductInput = {
   basePriceKgs?: number | null;
   description?: string | null;
   photoUrl?: string | null;
+  images?: {
+    id?: string;
+    url: string;
+    position?: number;
+  }[];
   supplierId?: string;
   barcodes?: string[];
   packs?: {
@@ -135,6 +140,33 @@ const normalizePacks = (
     }
   });
 
+  return cleaned;
+};
+
+type NormalizedImage = {
+  id?: string;
+  url: string;
+  position: number;
+};
+
+const normalizeImages = (
+  images?: CreateProductInput["images"],
+): NormalizedImage[] => {
+  if (!images) {
+    return [];
+  }
+  const cleaned = images
+    .map((image, index) => ({
+      id: image.id,
+      url: image.url.trim(),
+      position:
+        typeof image.position === "number" && Number.isFinite(image.position)
+          ? Math.trunc(image.position)
+          : index,
+    }))
+    .filter((image) => image.url.length > 0)
+    .sort((a, b) => a.position - b.position)
+    .map((image, index) => ({ ...image, position: index }));
   return cleaned;
 };
 
@@ -368,6 +400,26 @@ const ensureBaseSnapshots = async (
   });
 };
 
+const syncProductImages = async (
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  productId: string,
+  normalizedImages: NormalizedImage[],
+) => {
+  await tx.productImage.deleteMany({ where: { productId } });
+  if (!normalizedImages.length) {
+    return;
+  }
+  await tx.productImage.createMany({
+    data: normalizedImages.map((image) => ({
+      organizationId,
+      productId,
+      url: image.url,
+      position: image.position,
+    })),
+  });
+};
+
 export const createProduct = async (input: CreateProductInput) =>
   prisma.$transaction(async (tx) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
@@ -382,6 +434,7 @@ export const createProduct = async (input: CreateProductInput) =>
       .map((pack) => pack.packBarcode)
       .filter(Boolean) as string[];
     await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
+    const normalizedImages = normalizeImages(input.images);
 
     const product = await tx.product.create({
       data: {
@@ -393,7 +446,9 @@ export const createProduct = async (input: CreateProductInput) =>
         baseUnitId: baseUnit.id,
         basePriceKgs: input.basePriceKgs ?? null,
         description: input.description ?? null,
-        photoUrl: input.photoUrl ?? null,
+        photoUrl:
+          input.photoUrl ??
+          (normalizedImages.length ? normalizedImages[0].url : null),
         supplierId: input.supplierId,
         barcodes: barcodes.length
           ? {
@@ -416,6 +471,17 @@ export const createProduct = async (input: CreateProductInput) =>
           multiplierToBase: pack.multiplierToBase,
           allowInPurchasing: pack.allowInPurchasing ?? true,
           allowInReceiving: pack.allowInReceiving ?? true,
+        })),
+      });
+    }
+
+    if (normalizedImages.length) {
+      await tx.productImage.createMany({
+        data: normalizedImages.map((image) => ({
+          organizationId: input.organizationId,
+          productId: product.id,
+          url: image.url,
+          position: image.position,
         })),
       });
     }
@@ -456,6 +522,7 @@ export type UpdateProductInput = {
   basePriceKgs?: number | null;
   description?: string | null;
   photoUrl?: string | null;
+  images?: CreateProductInput["images"];
   supplierId?: string | null;
   barcodes?: string[];
   packs?: CreateProductInput["packs"];
@@ -484,6 +551,7 @@ export const updateProduct = async (input: UpdateProductInput) =>
       }
     }
 
+    const normalizedImages = input.images ? normalizeImages(input.images) : undefined;
     const product = await tx.product.update({
       where: { id: input.productId },
       data: {
@@ -494,7 +562,8 @@ export const updateProduct = async (input: UpdateProductInput) =>
         baseUnitId: baseUnit.id,
         basePriceKgs: input.basePriceKgs ?? null,
         description: input.description ?? null,
-        photoUrl: input.photoUrl ?? null,
+        photoUrl:
+          input.photoUrl ?? (normalizedImages?.length ? normalizedImages[0].url : null),
         supplierId: input.supplierId ?? null,
       },
     });
@@ -511,6 +580,9 @@ export const updateProduct = async (input: UpdateProductInput) =>
     }
 
     await syncProductPacks(tx, input.organizationId, input.productId, input.packs);
+    if (normalizedImages) {
+      await syncProductImages(tx, input.organizationId, input.productId, normalizedImages);
+    }
 
     if (input.variants) {
       const incomingIds = new Set(
@@ -614,6 +686,51 @@ export const updateProduct = async (input: UpdateProductInput) =>
     });
 
     return product;
+  });
+
+export const bulkUpdateProductCategory = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productIds: string[];
+  category?: string | null;
+}) =>
+  prisma.$transaction(async (tx) => {
+    if (!input.productIds.length) {
+      return { updated: 0 };
+    }
+
+    const products = await tx.product.findMany({
+      where: { organizationId: input.organizationId, id: { in: input.productIds } },
+      select: { id: true, category: true },
+    });
+
+    if (!products.length) {
+      return { updated: 0 };
+    }
+
+    const nextCategory = input.category ?? null;
+    await tx.product.updateMany({
+      where: { organizationId: input.organizationId, id: { in: input.productIds } },
+      data: { category: nextCategory },
+    });
+
+    await Promise.all(
+      products.map((product) =>
+        writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "PRODUCT_UPDATE",
+          entity: "Product",
+          entityId: product.id,
+          before: toJson({ id: product.id, category: product.category }),
+          after: toJson({ id: product.id, category: nextCategory }),
+          requestId: input.requestId,
+        }),
+      ),
+    );
+
+    return { updated: products.length };
   });
 
 export type ImportProductRow = {

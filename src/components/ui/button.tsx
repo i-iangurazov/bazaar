@@ -29,6 +29,10 @@ const sizeClasses: Record<Size, string> = {
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", size = "default", className, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
+    const title =
+      size === "icon" && !props.title && props["aria-label"]
+        ? props["aria-label"]
+        : props.title;
     return (
       <Comp
       ref={ref}
@@ -38,6 +42,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         sizeClasses[size],
         className,
       )}
+      title={title}
       {...props}
     />
     );

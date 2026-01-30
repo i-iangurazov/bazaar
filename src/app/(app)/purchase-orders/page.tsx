@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -35,6 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -51,6 +52,8 @@ const PurchaseOrdersPage = () => {
   const canManage = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const { toast } = useToast();
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [bulkCanceling, setBulkCanceling] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const listQuery = trpc.purchaseOrders.list.useQuery();
   const cancelMutation = trpc.purchaseOrders.cancel.useMutation({
     onMutate: (variables) => {
@@ -67,6 +70,7 @@ const PurchaseOrdersPage = () => {
       setCancelingId(null);
     },
   });
+  const bulkCancelMutation = trpc.purchaseOrders.cancel.useMutation();
 
   useSse({
     "purchaseOrder.updated": () => listQuery.refetch(),
@@ -87,6 +91,71 @@ const PurchaseOrdersPage = () => {
         return StatusPendingIcon;
       default:
         return StatusPendingIcon;
+    }
+  };
+
+  const selectedOrders = useMemo(
+    () => (listQuery.data ?? []).filter((po) => selectedIds.has(po.id)),
+    [listQuery.data, selectedIds],
+  );
+  const allSelected =
+    Boolean(listQuery.data?.length) && selectedIds.size === (listQuery.data?.length ?? 0);
+  const cancelableSelected = selectedOrders.filter(
+    (po) => po.status === "DRAFT" || po.status === "SUBMITTED",
+  );
+
+  const toggleSelectAll = () => {
+    if (!listQuery.data?.length) {
+      return;
+    }
+    setSelectedIds(() => {
+      if (allSelected) {
+        return new Set();
+      }
+      return new Set(listQuery.data.map((po) => po.id));
+    });
+  };
+
+  const toggleSelect = (purchaseOrderId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(purchaseOrderId)) {
+        next.delete(purchaseOrderId);
+      } else {
+        next.add(purchaseOrderId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkCancel = async () => {
+    if (!cancelableSelected.length) {
+      toast({ variant: "error", description: t("bulkCancelUnavailable") });
+      return;
+    }
+    if (!window.confirm(t("confirmBulkCancel", { count: cancelableSelected.length }))) {
+      return;
+    }
+    setBulkCanceling(true);
+    try {
+      await Promise.all(
+        cancelableSelected.map((po) =>
+          bulkCancelMutation.mutateAsync({ purchaseOrderId: po.id }),
+        ),
+      );
+      await listQuery.refetch();
+      setSelectedIds(new Set());
+      toast({
+        variant: "success",
+        description: t("bulkCancelSuccess", { count: cancelableSelected.length }),
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setBulkCanceling(false);
     }
   };
 
@@ -112,11 +181,51 @@ const PurchaseOrdersPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {canManage && selectedOrders.length ? (
+            <div className="mb-3">
+              <TooltipProvider>
+                <SelectionToolbar
+                  count={selectedOrders.length}
+                  label={tCommon("selectedCount", { count: selectedOrders.length })}
+                  clearLabel={tCommon("clearSelection")}
+                  onClear={() => setSelectedIds(new Set())}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-danger shadow-none hover:text-danger"
+                        aria-label={t("bulkCancel")}
+                        onClick={handleBulkCancel}
+                        disabled={bulkCanceling || !cancelableSelected.length}
+                      >
+                        {bulkCanceling ? <Spinner className="h-4 w-4" /> : <CloseIcon className="h-4 w-4" aria-hidden />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("bulkCancel")}</TooltipContent>
+                  </Tooltip>
+                </SelectionToolbar>
+              </TooltipProvider>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <TooltipProvider>
               <Table className="min-w-[760px]">
                 <TableHeader>
                   <TableRow>
+                    {canManage ? (
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-ink"
+                          checked={allSelected}
+                          onChange={toggleSelectAll}
+                          aria-label={t("selectAll")}
+                        />
+                      </TableHead>
+                    ) : null}
                     <TableHead>{t("number")}</TableHead>
                     <TableHead>{t("supplier")}</TableHead>
                     <TableHead>{t("store")}</TableHead>
@@ -129,6 +238,17 @@ const PurchaseOrdersPage = () => {
                 <TableBody>
                   {listQuery.data?.map((po) => (
                     <TableRow key={po.id}>
+                      {canManage ? (
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-ink"
+                            checked={selectedIds.has(po.id)}
+                            onChange={() => toggleSelect(po.id)}
+                            aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
+                          />
+                        </TableCell>
+                      ) : null}
                       <TableCell className="text-xs text-gray-500" title={po.id}>
                         {po.id.slice(0, 8).toUpperCase()}
                       </TableCell>

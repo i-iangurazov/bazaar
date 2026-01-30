@@ -39,6 +39,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -55,6 +56,7 @@ const SuppliersPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const schema = useMemo(
     () =>
       z.object({
@@ -115,6 +117,7 @@ const SuppliersPage = () => {
       setDeletingId(null);
     },
   });
+  const bulkDeleteMutation = trpc.suppliers.bulkDelete.useMutation();
 
   const handleSubmit = (values: z.infer<typeof schema>) => {
     if (editingId) {
@@ -133,6 +136,60 @@ const SuppliersPage = () => {
       phone: values.phone,
       notes: values.notes,
     });
+  };
+
+  const selectedSuppliers = useMemo(
+    () => (suppliersQuery.data ?? []).filter((supplier) => selectedIds.has(supplier.id)),
+    [suppliersQuery.data, selectedIds],
+  );
+  const allSelected =
+    Boolean(suppliersQuery.data?.length) &&
+    selectedIds.size === (suppliersQuery.data?.length ?? 0);
+
+  const toggleSelectAll = () => {
+    if (!suppliersQuery.data?.length) {
+      return;
+    }
+    setSelectedIds(() => {
+      if (allSelected) {
+        return new Set();
+      }
+      return new Set(suppliersQuery.data.map((supplier) => supplier.id));
+    });
+  };
+
+  const toggleSelect = (supplierId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(supplierId)) {
+        next.delete(supplierId);
+      } else {
+        next.add(supplierId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedSuppliers.length) {
+      return;
+    }
+    if (!window.confirm(t("confirmBulkDelete", { count: selectedSuppliers.length }))) {
+      return;
+    }
+    try {
+      await bulkDeleteMutation.mutateAsync({
+        supplierIds: selectedSuppliers.map((supplier) => supplier.id),
+      });
+      await suppliersQuery.refetch();
+      setSelectedIds(new Set());
+      toast({ variant: "success", description: t("bulkDeleteSuccess", { count: selectedSuppliers.length }) });
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    }
   };
 
   return (
@@ -274,11 +331,55 @@ const SuppliersPage = () => {
           <CardTitle>{t("directory")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {canManage && selectedSuppliers.length ? (
+            <div className="mb-3">
+              <TooltipProvider>
+                <SelectionToolbar
+                  count={selectedSuppliers.length}
+                  label={tCommon("selectedCount", { count: selectedSuppliers.length })}
+                  clearLabel={tCommon("clearSelection")}
+                  onClear={() => setSelectedIds(new Set())}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-danger shadow-none hover:text-danger"
+                        aria-label={t("bulkDelete")}
+                        onClick={handleBulkDelete}
+                        disabled={bulkDeleteMutation.isLoading}
+                      >
+                        {bulkDeleteMutation.isLoading ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : (
+                          <DeleteIcon className="h-4 w-4" aria-hidden />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("bulkDelete")}</TooltipContent>
+                  </Tooltip>
+                </SelectionToolbar>
+              </TooltipProvider>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <TooltipProvider>
               <Table className="min-w-[560px]">
                 <TableHeader>
                   <TableRow>
+                    {canManage ? (
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-ink"
+                          checked={allSelected}
+                          onChange={toggleSelectAll}
+                          aria-label={t("selectAll")}
+                        />
+                      </TableHead>
+                    ) : null}
                     <TableHead>{t("name")}</TableHead>
                     <TableHead className="hidden sm:table-cell">{t("email")}</TableHead>
                     <TableHead className="hidden sm:table-cell">{t("phone")}</TableHead>
@@ -289,6 +390,17 @@ const SuppliersPage = () => {
                 <TableBody>
                   {suppliersQuery.data?.map((supplier) => (
                     <TableRow key={supplier.id}>
+                      {canManage ? (
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-ink"
+                            checked={selectedIds.has(supplier.id)}
+                            onChange={() => toggleSelect(supplier.id)}
+                            aria-label={t("selectSupplier", { name: supplier.name })}
+                          />
+                        </TableCell>
+                      ) : null}
                       <TableCell className="font-medium">{supplier.name}</TableCell>
                       <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
                         {supplier.email ?? tCommon("notAvailable")}

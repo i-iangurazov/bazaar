@@ -119,3 +119,53 @@ export const deleteSupplier = async (input: DeleteSupplierInput) =>
 
     return supplier;
   });
+
+export type BulkDeleteSuppliersInput = {
+  supplierIds: string[];
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+};
+
+export const bulkDeleteSuppliers = async (input: BulkDeleteSuppliersInput) =>
+  prisma.$transaction(async (tx) => {
+    const uniqueIds = Array.from(new Set(input.supplierIds));
+    const suppliers = await tx.supplier.findMany({
+      where: {
+        id: { in: uniqueIds },
+        organizationId: input.organizationId,
+      },
+    });
+
+    if (suppliers.length !== uniqueIds.length) {
+      throw new AppError("supplierNotFound", "NOT_FOUND", 404);
+    }
+
+    const [productsCount, poCount] = await Promise.all([
+      tx.product.count({ where: { supplierId: { in: uniqueIds } } }),
+      tx.purchaseOrder.count({ where: { supplierId: { in: uniqueIds } } }),
+    ]);
+
+    if (productsCount > 0 || poCount > 0) {
+      throw new AppError("supplierInUse", "CONFLICT", 409);
+    }
+
+    await tx.supplier.deleteMany({ where: { id: { in: uniqueIds } } });
+
+    await Promise.all(
+      suppliers.map((supplier) =>
+        writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "SUPPLIER_DELETE",
+          entity: "Supplier",
+          entityId: supplier.id,
+          before: toJson(supplier),
+          after: null,
+          requestId: input.requestId,
+        }),
+      ),
+    );
+
+    return { deleted: suppliers.length };
+  });

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   Form,
   FormControl,
@@ -20,6 +21,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -68,7 +70,10 @@ const InvitePage = () => {
 
   if (accepted) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
         <Card>
           <CardHeader>
             <CardTitle>{t("acceptedTitle")}</CardTitle>
@@ -85,12 +90,15 @@ const InvitePage = () => {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-end">
+        <LanguageSwitcher />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           {inviteQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Spinner className="h-4 w-4" />
@@ -105,61 +113,62 @@ const InvitePage = () => {
               </div>
               <Form {...form}>
                 <form
-                  className="space-y-4"
                   onSubmit={form.handleSubmit((values) =>
                     acceptMutation.mutate({ token, ...values }),
                   )}
                 >
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("name")}</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder={t("namePlaceholder")} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("password")}</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="preferredLocale"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("preferredLocale")}</FormLabel>
-                        <FormControl>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t("selectLocale")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                              <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" className="w-full" disabled={acceptMutation.isLoading}>
-                    {acceptMutation.isLoading ? tCommon("loading") : t("accept")}
-                  </Button>
+                  <FormStack>
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("name")}</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder={t("namePlaceholder")} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("password")}</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="preferredLocale"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("preferredLocale")}</FormLabel>
+                          <FormControl>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <SelectTrigger>
+                                <SelectValue placeholder={t("selectLocale")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
+                                <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" className="w-full" disabled={acceptMutation.isLoading}>
+                      {acceptMutation.isLoading ? tCommon("loading") : t("accept")}
+                    </Button>
+                  </FormStack>
                 </form>
               </Form>
             </>

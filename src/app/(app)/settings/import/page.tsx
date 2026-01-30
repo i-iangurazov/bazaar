@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 
@@ -64,6 +65,13 @@ type ValidationError = {
 };
 
 type ImportSource = "cloudshop" | "onec" | "csv";
+
+const ImportPreviewTable = dynamic(() => import("@/components/import-preview-table"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-32 animate-pulse rounded-lg border border-dashed border-gray-200 bg-gray-50" aria-hidden />
+  ),
+});
 
 const normalizeHeader = (value: string) =>
   value
@@ -488,32 +496,7 @@ const ImportPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {validation.rows.length ? (
-            <div className="overflow-x-auto">
-              <Table className="min-w-[520px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("fieldSku")}</TableHead>
-                    <TableHead>{t("fieldName")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("fieldCategory")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("fieldUnit")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {validation.rows.slice(0, 5).map((row) => (
-                    <TableRow key={`${row.sku}-${row.name}`}>
-                      <TableCell className="text-xs text-gray-500">{row.sku}</TableCell>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                        {row.category ?? tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                        {row.unit}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <ImportPreviewTable rows={validation.rows} />
           ) : (
             <p className="text-sm text-gray-500">{t("previewEmpty")}</p>
           )}

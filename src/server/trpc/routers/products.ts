@@ -6,6 +6,7 @@ import { adminProcedure, protectedProcedure, rateLimit, router } from "@/server/
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   archiveProduct,
+  bulkUpdateProductCategory,
   createProduct,
   restoreProduct,
   updateProduct,
@@ -205,6 +206,7 @@ export const productsRouter = router({
           variants: { where: { isActive: true } },
           packs: true,
           baseUnit: true,
+          images: { orderBy: { position: "asc" } },
         },
       });
       if (!product) {
@@ -309,6 +311,15 @@ export const productsRouter = router({
         basePriceKgs: z.number().min(0).optional(),
         description: z.string().optional(),
         photoUrl: z.string().url().optional(),
+        images: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              url: z.string().min(1),
+              position: z.number().int().optional(),
+            }),
+          )
+          .optional(),
         supplierId: z.string().optional(),
         barcodes: z.array(z.string()).optional(),
         packs: z
@@ -348,6 +359,7 @@ export const productsRouter = router({
           basePriceKgs: input.basePriceKgs,
           description: input.description,
           photoUrl: input.photoUrl,
+          images: input.images,
           supplierId: input.supplierId,
           barcodes: input.barcodes,
           packs: input.packs,
@@ -369,6 +381,15 @@ export const productsRouter = router({
         basePriceKgs: z.number().min(0).optional(),
         description: z.string().optional(),
         photoUrl: z.string().url().optional(),
+        images: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              url: z.string().min(1),
+              position: z.number().int().optional(),
+            }),
+          )
+          .optional(),
         supplierId: z.string().nullable().optional(),
         barcodes: z.array(z.string()).optional(),
         packs: z
@@ -409,10 +430,32 @@ export const productsRouter = router({
           basePriceKgs: input.basePriceKgs,
           description: input.description,
           photoUrl: input.photoUrl,
+          images: input.images,
           supplierId: input.supplierId ?? undefined,
           barcodes: input.barcodes,
           packs: input.packs,
           variants: input.variants,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkUpdateCategory: adminProcedure
+    .input(
+      z.object({
+        productIds: z.array(z.string()).min(1),
+        category: z.string().optional().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await bulkUpdateProductCategory({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productIds: input.productIds,
+          category: input.category ?? null,
         });
       } catch (error) {
         throw toTRPCError(error);

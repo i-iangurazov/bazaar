@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
   StatusWarningIcon,
   StatusSuccessIcon,
   StatusDangerIcon,
+  MetricsIcon,
 } from "@/components/icons";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel, getStockMovementLabel } from "@/lib/i18n/status";
@@ -222,6 +224,21 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <MetricsIcon className="h-4 w-4 text-ink" aria-hidden />
+              {t("chartsTitle")}
+            </CardTitle>
+            <p className="text-sm text-gray-500">{t("chartsSubtitle")}</p>
+          </div>
+          <Button asChild variant="ghost">
+            <Link href="/reports/analytics">{t("chartsAction")}</Link>
+          </Button>
+        </CardHeader>
+      </Card>
 
       <div className="mt-6 flex justify-center">
         <Button

@@ -68,7 +68,7 @@ const FormItem = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef
     const id = React.useId();
     return (
       <FormItemContext.Provider value={{ id }}>
-        <div ref={ref} className={cn("space-y-0", className)} {...props} />
+        <div ref={ref} className={cn("space-y-1", className)} {...props} />
       </FormItemContext.Provider>
     );
   },
@@ -114,6 +114,9 @@ FormControl.displayName = "FormControl";
 const FormDescription = React.forwardRef<HTMLParagraphElement, React.ComponentPropsWithoutRef<"p">>(
   ({ className, ...props }, ref) => {
     const { formDescriptionId } = useFormField();
+    if (!props.children) {
+      return null;
+    }
     return (
       <p
         ref={ref}
@@ -131,20 +134,18 @@ const FormMessage = React.forwardRef<HTMLParagraphElement, React.ComponentPropsW
   ({ className, children, ...props }, ref) => {
     const { error, formMessageId } = useFormField();
     const body = error ? String(error.message) : children;
-    const isVisible = Boolean(body);
+    if (!body) {
+      return null;
+    }
 
     return (
       <p
         ref={ref}
         id={formMessageId}
-        className={cn(
-          "min-h-[18px] text-xs font-medium text-danger transition-opacity",
-          !isVisible && "opacity-0",
-          className,
-        )}
+        className={cn("text-xs font-medium text-danger", className)}
         {...props}
       >
-        {body ?? ""}
+        {body}
       </p>
     );
   },

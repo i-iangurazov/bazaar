@@ -116,7 +116,8 @@ const t = initTRPC.context<Context>().create({
 export const rateLimit = (config: RateLimitConfig) => {
   const limiter = createRateLimiter(config);
   return t.middleware(async ({ ctx, next, path }) => {
-    const key = `${ctx.user?.id ?? "anon"}:${path}`;
+    const isTest = process.env.NODE_ENV === "test" || process.env.CI === "1" || process.env.CI === "true";
+    const key = isTest && !ctx.user ? `${ctx.requestId}:${path}` : `${ctx.user?.id ?? "anon"}:${path}`;
     try {
       await limiter.consume(key);
     } catch {

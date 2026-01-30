@@ -20,6 +20,16 @@ export const storesRouter = router({
         inn: true,
         address: true,
         phone: true,
+        complianceProfile: {
+          select: {
+            enableKkm: true,
+            kkmMode: true,
+            kkmProviderKey: true,
+            enableEsf: true,
+            enableEttn: true,
+            enableMarking: true,
+          },
+        },
       },
       orderBy: { name: "asc" },
     });

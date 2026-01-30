@@ -558,7 +558,7 @@ const UsersPage = () => {
       >
         <Form {...form}>
           <form
-            className="space-y-6"
+            className="flex flex-col gap-3 sm:gap-4"
             onSubmit={form.handleSubmit(async (values) => {
               if (isEditing && editingUser) {
                 try {
@@ -742,7 +742,7 @@ const UsersPage = () => {
       >
         <Form {...resetForm}>
           <form
-            className="space-y-4"
+            className="flex flex-col gap-3 sm:gap-4"
             onSubmit={resetForm.handleSubmit((values) => {
               if (!resetUser) {
                 return;

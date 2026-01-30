@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   Form,
   FormControl,
@@ -18,6 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -53,37 +55,41 @@ const ResetRequestPage = () => {
   });
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-end">
+        <LanguageSwitcher />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           {sent ? (
             <p className="text-sm text-gray-600">{t("requestSent")}</p>
           ) : (
             <Form {...form}>
               <form
-                className="space-y-4"
                 onSubmit={form.handleSubmit((values) => requestMutation.mutate(values))}
               >
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("email")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
-                  {requestMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                  {requestMutation.isLoading ? tCommon("loading") : t("send")}
-                </Button>
+                <FormStack>
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("email")}</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
+                    {requestMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {requestMutation.isLoading ? tCommon("loading") : t("send")}
+                  </Button>
+                </FormStack>
               </form>
             </Form>
           )}

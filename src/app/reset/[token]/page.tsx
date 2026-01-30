@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   Form,
   FormControl,
@@ -19,6 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -56,12 +58,15 @@ const ResetTokenPage = () => {
   });
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-end">
+        <LanguageSwitcher />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t("resetTitle")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           {done ? (
             <>
               <p className="text-sm text-gray-600">{t("resetSuccess")}</p>
@@ -72,26 +77,27 @@ const ResetTokenPage = () => {
           ) : (
             <Form {...form}>
               <form
-                className="space-y-4"
                 onSubmit={form.handleSubmit((values) => resetMutation.mutate({ token, ...values }))}
               >
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("newPassword")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={resetMutation.isLoading}>
-                  {resetMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                  {resetMutation.isLoading ? tCommon("loading") : t("save")}
-                </Button>
+                <FormStack>
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("newPassword")}</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full" disabled={resetMutation.isLoading}>
+                    {resetMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {resetMutation.isLoading ? tCommon("loading") : t("save")}
+                  </Button>
+                </FormStack>
               </form>
             </Form>
           )}

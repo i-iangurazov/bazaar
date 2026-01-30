@@ -61,6 +61,28 @@ enum AuthTokenType {
   PASSWORD_RESET
 }
 
+enum KkmMode {
+  OFF
+  EXPORT_ONLY
+  ADAPTER
+}
+
+enum ExportJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum ExportType {
+  SALES_SUMMARY
+  STOCK_MOVEMENTS
+  PURCHASES
+  INVENTORY_ON_HAND
+  PERIOD_CLOSE_REPORT
+  RECEIPTS_FOR_KKM
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -75,6 +97,7 @@ model Organization {
   products        Product[]
   units           Unit[]
   productBarcodes ProductBarcode[]
+  productImages   ProductImage[]
   productPacks    ProductPack[]
   purchaseOrders  PurchaseOrder[]
   auditLogs       AuditLog[]
@@ -93,6 +116,10 @@ model Organization {
   impersonationSessions ImpersonationSession[]
   inviteTokens    InviteToken[]
   accessRequests  AccessRequest[]
+  complianceProfiles StoreComplianceProfile[]
+  productComplianceFlags ProductComplianceFlags[]
+  exportJobs ExportJob[]
+  periodCloses PeriodClose[]
 }
 
 model User {
@@ -127,6 +154,9 @@ model User {
   storeFeatureFlagsUpdated StoreFeatureFlag[]
   inviteTokensCreated InviteToken[] @relation("inviteCreatedBy")
   authTokens AuthToken[]
+  complianceProfilesUpdated StoreComplianceProfile[] @relation("complianceUpdatedBy")
+  exportJobsRequested ExportJob[] @relation("exportRequestedBy")
+  periodClosesCreated PeriodClose[] @relation("periodClosedBy")
 }
 
 model Store {
@@ -155,9 +185,96 @@ model Store {
   stockLots     StockLot[]
   storePrices   StorePrice[]
   featureFlags StoreFeatureFlag[]
+  complianceProfile StoreComplianceProfile?
+  exportJobs ExportJob[]
+  periodCloses PeriodClose[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
+}
+
+model StoreComplianceProfile {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String   @unique
+  defaultLocale  String?
+  taxRegime      String?
+  enableKkm      Boolean  @default(false)
+  kkmMode        KkmMode  @default(OFF)
+  enableEsf      Boolean  @default(false)
+  enableEttn     Boolean  @default(false)
+  enableMarking  Boolean  @default(false)
+  kkmProviderKey String?
+  kkmSettings    Json?
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  updatedBy    User? @relation("complianceUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([organizationId, storeId])
+}
+
+model ProductComplianceFlags {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String   @unique
+  requiresMarking Boolean @default(false)
+  requiresEttn    Boolean @default(false)
+  markingType     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  product      Product @relation(fields: [productId], references: [id])
+
+  @@index([organizationId, productId])
+}
+
+model ExportJob {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  type           ExportType
+  status         ExportJobStatus @default(QUEUED)
+  periodStart    DateTime
+  periodEnd      DateTime
+  requestedById  String
+  createdAt      DateTime @default(now())
+  finishedAt     DateTime?
+  fileName       String?
+  mimeType       String?
+  fileSize       Int?
+  storagePath    String?
+  errorMessage   String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  requestedBy  User @relation("exportRequestedBy", fields: [requestedById], references: [id])
+
+  @@index([organizationId, storeId, createdAt])
+  @@index([status, createdAt])
+}
+
+model PeriodClose {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  periodStart    DateTime
+  periodEnd      DateTime
+  closedAt       DateTime @default(now())
+  closedById     String
+  snapshotHash   String?
+  totals         Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  closedBy     User @relation("periodClosedBy", fields: [closedById], references: [id])
+
+  @@unique([organizationId, storeId, periodStart, periodEnd])
+  @@index([organizationId, storeId, closedAt])
 }
 
 model Supplier {
@@ -228,9 +345,27 @@ model Product {
   storePrices      StorePrice[]
   productCosts     ProductCost[]
   attributeValues  VariantAttributeValue[]
+  images           ProductImage[]
+  complianceFlags  ProductComplianceFlags?
 
   @@unique([organizationId, sku])
   @@index([organizationId])
+}
+
+model ProductImage {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String
+  url            String
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  product      Product @relation(fields: [productId], references: [id])
+
+  @@index([organizationId])
+  @@index([productId, position])
 }
 
 model ProductBarcode {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -44,7 +44,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
-import { AddIcon, CloseIcon, DeleteIcon, StatusSuccessIcon } from "@/components/icons";
+import {
+  AddIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CloseIcon,
+  DeleteIcon,
+  GripIcon,
+  ImagePlusIcon,
+  StatusSuccessIcon,
+} from "@/components/icons";
 import { trpc } from "@/lib/trpc";
 import { buildVariantMatrix, type VariantGeneratorAttribute } from "@/lib/variantGenerator";
 
@@ -56,6 +65,11 @@ export type ProductFormValues = {
   basePriceKgs?: number;
   description?: string;
   photoUrl?: string;
+  images?: {
+    id?: string;
+    url: string;
+    position?: number;
+  }[];
   barcodes: string[];
   packs: {
     id?: string;
@@ -154,6 +168,15 @@ export const ProductForm = ({
           .url(t("photoUrlInvalid"))
           .optional()
           .or(z.literal("")),
+        images: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              url: z.string().min(1, t("imageUrlRequired")),
+              position: z.number().int().optional(),
+            }),
+          )
+          .optional(),
         barcodes: z.array(z.string()).optional(),
         packs: z
           .array(
@@ -217,6 +240,7 @@ export const ProductForm = ({
       basePriceKgs: initialValues.basePriceKgs ?? undefined,
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
+      images: initialValues.images ?? [],
       barcodes: initialValues.barcodes ?? [],
       packs: initialValues.packs ?? [],
       variants:
@@ -272,6 +296,16 @@ export const ProductForm = ({
   });
 
   const {
+    fields: imageFields,
+    append: appendImage,
+    remove: removeImage,
+    move: moveImage,
+  } = useFieldArray({
+    control: form.control,
+    name: "images",
+  });
+
+  const {
     fields: packFields,
     append: appendPack,
     remove: removePack,
@@ -280,10 +314,18 @@ export const ProductForm = ({
     name: "packs",
   });
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(
-    () => Boolean(initialValues.description?.trim() || initialValues.photoUrl?.trim()),
+    () =>
+      Boolean(
+        initialValues.description?.trim() ||
+          initialValues.photoUrl?.trim() ||
+          initialValues.images?.length,
+      ),
   );
   const [showAdvanced, setShowAdvanced] = useState(
     () => Boolean(initialValues.barcodes?.length || initialValues.variants?.length),
@@ -295,6 +337,73 @@ export const ProductForm = ({
   const [generatorValueDrafts, setGeneratorValueDrafts] = useState<Record<string, string>>({});
   const baseUnitId = form.watch("baseUnitId");
   const baseUnit = unitOptions.find((unit) => unit.id === baseUnitId);
+  const maxImageBytes = 5 * 1024 * 1024;
+
+  const readImageFile = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("imageReadFailed"));
+      reader.readAsDataURL(file);
+    });
+
+  const handleImageFiles = async (files: FileList | File[]) => {
+    if (readOnly) {
+      return;
+    }
+    const list = Array.from(files);
+    if (!list.length) {
+      return;
+    }
+    const nextImages: { url: string; position?: number }[] = [];
+    for (const file of list) {
+      if (!file.type.startsWith("image/")) {
+        toast({ variant: "error", description: t("imageInvalidType") });
+        continue;
+      }
+      if (file.size > maxImageBytes) {
+        toast({
+          variant: "error",
+          description: t("imageTooLarge", { size: Math.round(maxImageBytes / (1024 * 1024)) }),
+        });
+        continue;
+      }
+      try {
+        const url = await readImageFile(file);
+        if (url) {
+          nextImages.push({ url });
+        }
+      } catch {
+        toast({ variant: "error", description: t("imageReadFailed") });
+      }
+    }
+    if (nextImages.length) {
+      appendImage(nextImages);
+    }
+  };
+
+  const handleImageDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragActive(false);
+    if (readOnly) {
+      return;
+    }
+    if (event.dataTransfer?.files?.length) {
+      void handleImageFiles(event.dataTransfer.files);
+    }
+  };
+
+  const handleImageDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (readOnly) {
+      return;
+    }
+    event.preventDefault();
+    setIsDragActive(true);
+  };
+
+  const handleImageDragLeave = () => {
+    setIsDragActive(false);
+  };
 
   useEffect(() => {
     if (!requiredDefinitions.length) {
@@ -540,6 +649,23 @@ export const ProductForm = ({
       });
     }
 
+    const normalizedImages =
+      values.images
+        ?.map((image) => ({
+          id: image.id,
+          url: image.url.trim(),
+          position: image.position,
+        }))
+        .filter((image) => image.url.length > 0) ?? [];
+    const fallbackPhotoUrl = values.photoUrl?.trim() || "";
+    const resolvedImages =
+      normalizedImages.length > 0
+        ? normalizedImages.map((image, index) => ({ ...image, position: index }))
+        : fallbackPhotoUrl
+          ? [{ id: undefined, url: fallbackPhotoUrl, position: 0 }]
+          : [];
+    const resolvedPhotoUrl = resolvedImages.length > 0 ? resolvedImages[0].url : undefined;
+
     onSubmit({
       sku: values.sku.trim(),
       name: values.name.trim(),
@@ -549,7 +675,8 @@ export const ProductForm = ({
         ? values.basePriceKgs
         : undefined,
       description: values.description?.trim() || undefined,
-      photoUrl: values.photoUrl?.trim() || undefined,
+      photoUrl: resolvedPhotoUrl,
+      images: resolvedImages,
       barcodes: values.barcodes?.map((value) => value.trim()).filter(Boolean) ?? [],
       packs:
         values.packs?.map((pack) => ({
@@ -698,6 +825,158 @@ export const ProductForm = ({
               {showDetails ? (
                 <>
                   <Separator />
+                  <FormSection title={t("imagesTitle")} description={t("imagesHint")}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => {
+                          const files = event.target.files;
+                          if (files && files.length) {
+                            void handleImageFiles(files);
+                          }
+                          event.target.value = "";
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={readOnly}
+                      >
+                        <ImagePlusIcon className="h-4 w-4" aria-hidden />
+                        {t("imagesAdd")}
+                      </Button>
+                      <span className="text-xs text-gray-500">{t("imagesReorderHint")}</span>
+                    </div>
+                    <div
+                      className={`rounded-md border border-dashed px-4 py-4 text-sm text-gray-500 transition ${
+                        isDragActive ? "border-ink bg-gray-50" : "border-gray-200"
+                      }`}
+                      onDragOver={handleImageDragOver}
+                      onDragLeave={handleImageDragLeave}
+                      onDrop={handleImageDrop}
+                    >
+                      {t("imagesDrop")}
+                    </div>
+                    {imageFields.length ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {imageFields.map((image, index) => {
+                          const canMoveUp = index > 0;
+                          const canMoveDown = index < imageFields.length - 1;
+                          return (
+                            <div
+                              key={image.id}
+                              className={`flex items-start gap-3 rounded-md border border-gray-200 bg-white p-3 ${
+                                draggedImageIndex === index ? "opacity-60" : ""
+                              }`}
+                              draggable={!readOnly}
+                              onDragStart={() => {
+                                if (readOnly) {
+                                  return;
+                                }
+                                setDraggedImageIndex(index);
+                              }}
+                              onDragEnd={() => setDraggedImageIndex(null)}
+                              onDragOver={(event) => {
+                                if (draggedImageIndex === null || readOnly) {
+                                  return;
+                                }
+                                event.preventDefault();
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                if (draggedImageIndex === null || draggedImageIndex === index || readOnly) {
+                                  return;
+                                }
+                                moveImage(draggedImageIndex, index);
+                                setDraggedImageIndex(null);
+                              }}
+                            >
+                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-gray-50">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={image.url}
+                                  alt={t("imageAlt", { index: index + 1 })}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {index === 0 ? (
+                                    <Badge variant="success">{t("imagePrimary")}</Badge>
+                                  ) : null}
+                                  <span className="text-xs text-gray-500">
+                                    {t("imagePosition", { index: index + 1, total: imageFields.length })}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                  <GripIcon className="h-4 w-4" aria-hidden />
+                                  {t("imageDragHint")}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-center gap-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={t("imageMoveUp")}
+                                      onClick={() => canMoveUp && moveImage(index, index - 1)}
+                                      disabled={!canMoveUp || readOnly}
+                                    >
+                                      <ArrowUpIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("imageMoveUp")}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={t("imageMoveDown")}
+                                      onClick={() => canMoveDown && moveImage(index, index + 1)}
+                                      disabled={!canMoveDown || readOnly}
+                                    >
+                                      <ArrowDownIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("imageMoveDown")}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-danger shadow-none hover:text-danger"
+                                      aria-label={t("imageRemove")}
+                                      onClick={() => removeImage(index)}
+                                      disabled={readOnly}
+                                    >
+                                      <DeleteIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("imageRemove")}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400">{t("imagesEmpty")}</p>
+                    )}
+                  </FormSection>
                   <FormSection>
                     <FormGrid className="items-start">
                       <FormField

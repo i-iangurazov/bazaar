@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,19 @@ const ReportsPage = () => {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        action={
+          <>
+            <Button asChild variant="ghost">
+              <Link href="/reports/analytics">{t("analyticsLink")}</Link>
+            </Button>
+            <Button asChild variant="ghost">
+              <Link href="/reports/exports">{t("exportsLink")}</Link>
+            </Button>
+            <Button asChild variant="ghost">
+              <Link href="/reports/close">{t("closeLink")}</Link>
+            </Button>
+          </>
+        }
         filters={
           <>
             <div className="w-full sm:max-w-xs">

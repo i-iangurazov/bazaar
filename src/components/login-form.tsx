@@ -19,6 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { FormStack } from "@/components/form-layout";
 
 export const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -87,52 +88,54 @@ export const LoginForm = () => {
 
   return (
     <Form {...form}>
-      <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("email")}</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  type="email"
-                  autoComplete="email"
-                  placeholder={t("emailPlaceholder")}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("password")}</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder={t("passwordPlaceholder")}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {error ? <p className="text-sm text-red-500">{t(error)}</p> : null}
-        <div className="text-right">
-          <a href="/reset" className="text-xs font-semibold text-ink underline">
-            {t("forgotPassword")}
-          </a>
-        </div>
-        <Button className="w-full" type="submit" disabled={isLoading}>
-          {isLoading ? t("signingIn") : t("signIn")}
-        </Button>
+      <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <FormStack>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("email")}</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="email"
+                    autoComplete="email"
+                    placeholder={t("emailPlaceholder")}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("password")}</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder={t("passwordPlaceholder")}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {error ? <p className="text-sm text-red-500">{t(error)}</p> : null}
+          <div className="text-right">
+            <a href="/reset" className="text-xs font-semibold text-ink underline">
+              {t("forgotPassword")}
+            </a>
+          </div>
+          <Button className="w-full" type="submit" disabled={isLoading}>
+            {isLoading ? t("signingIn") : t("signIn")}
+          </Button>
+        </FormStack>
       </form>
     </Form>
   );

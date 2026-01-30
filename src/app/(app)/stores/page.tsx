@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -76,6 +77,40 @@ const StoresPage = () => {
   const storesQuery = trpc.stores.list.useQuery();
 
   type Store = NonNullable<typeof storesQuery.data>[number];
+
+  const resolveComplianceBadge = (store: Store) => {
+    const profile = store.complianceProfile;
+    if (!profile) {
+      return {
+        variant: "muted" as const,
+        icon: null,
+        label: t("complianceDisabled"),
+      };
+    }
+    const enabled =
+      profile.enableKkm || profile.enableEsf || profile.enableEttn || profile.enableMarking;
+    if (!enabled) {
+      return {
+        variant: "muted" as const,
+        icon: null,
+        label: t("complianceDisabled"),
+      };
+    }
+    const needsSetup =
+      profile.enableKkm && profile.kkmMode === "ADAPTER" && !profile.kkmProviderKey;
+    if (needsSetup) {
+      return {
+        variant: "warning" as const,
+        icon: <StatusWarningIcon className="h-3 w-3" aria-hidden />,
+        label: t("complianceNeedsSetup"),
+      };
+    }
+    return {
+      variant: "success" as const,
+      icon: <StatusSuccessIcon className="h-3 w-3" aria-hidden />,
+      label: t("complianceReady"),
+    };
+  };
 
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [storeDialogOpen, setStoreDialogOpen] = useState(false);
@@ -240,6 +275,7 @@ const StoresPage = () => {
                     <TableHead className="hidden lg:table-cell">{t("inn")}</TableHead>
                     <TableHead>{t("allowNegativeStock")}</TableHead>
                     <TableHead className="hidden md:table-cell">{t("trackExpiryLots")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("complianceStatus")}</TableHead>
                     <TableHead>{tCommon("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -248,6 +284,7 @@ const StoresPage = () => {
                     const isUpdating =
                       updatePolicyMutation.isLoading &&
                       updatePolicyMutation.variables?.storeId === store.id;
+                    const complianceBadge = resolveComplianceBadge(store);
                     return (
                       <TableRow key={store.id}>
                         <TableCell className="font-medium">{store.name}</TableCell>
@@ -284,6 +321,12 @@ const StoresPage = () => {
                             {store.trackExpiryLots ? tCommon("yes") : tCommon("no")}
                           </Badge>
                         </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <Badge variant={complianceBadge.variant}>
+                            {complianceBadge.icon}
+                            {complianceBadge.label}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           {canManage ? (
                             <DropdownMenu>
@@ -308,6 +351,11 @@ const StoresPage = () => {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onSelect={() => setViewingStore(store)}>
                                   {tCommon("view")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/stores/${store.id}/compliance`}>
+                                    {t("complianceSettings")}
+                                  </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => openEditDialog(store)}>
                                   {t("edit")}
@@ -412,7 +460,7 @@ const StoresPage = () => {
       >
         <Form {...storeForm}>
           <form
-            className="space-y-6"
+            className="flex flex-col gap-3 sm:gap-4"
             onSubmit={storeForm.handleSubmit(async (values) => {
               const normalized = {
                 name: values.name.trim(),

@@ -47,7 +47,10 @@
     },
     "saving": "Сакталууда...",
     "help": "Жардам",
-    "openHelpArticle": "Жардам макаласын ачуу: {article}"
+    "openHelpArticle": "Жардам макаласын ачуу: {article}",
+    "selectedCount": "Тандалды: {count}",
+    "clearSelection": "Тандоону тазалоо",
+    "selectLocale": "Тилди тандаңыз"
   },
   "auth": {
     "loginTitle": "Запастар платформасы",
@@ -65,6 +68,10 @@
     "loginRateLimited": "Көп жолу кирүү аракеттери болду. Кийинчерээк аракет кылыңыз.",
     "emailNotVerified": "Кирүү үчүн email тастыктаңыз.",
     "forgotPassword": "Сырсөздү унуттуңузбу?",
+    "createAccount": "Аккаунт түзүү",
+    "requestAccess": "Кирүүгө сурануу",
+    "acceptInvite": "Чакырууну кабыл алуу",
+    "inviteHint": "Чакыруу барбы? Каттагы шилтемени ачыңыз.",
     "demoAccounts": "Демо аккаунттар: admin@example.com (Admin123!), manager@example.com (Manager123!), staff@example.com (Staff123!)."
   },
   "meta": {
@@ -98,6 +105,7 @@
     "createAccount": "Аккаунт түзүү",
     "requestAccess": "Кирүүгө сурануу",
     "inviteOnlyNote": "Катталуу чакыруу аркылуу гана.",
+    "haveInvite": "Чакыруу барбы?",
     "requestSuccess": "Сурануу жөнөтүлдү.",
     "signupSuccess": "Аккаунт түзүлдү.",
     "verifyHint": "Email тастыктоо үчүн шилтеме жөнөтүлдү.",
@@ -108,6 +116,13 @@
   },
   "invite": {
     "title": "Чакыруу кабыл алуу",
+    "entryTitle": "Чакыруу кабыл алуу",
+    "entrySubtitle": "Чакыруу шилтемесин же кодун киргизиңиз.",
+    "entryLabel": "Чакыруунун шилтемеси же коду",
+    "entryPlaceholder": "https://app.example.com/invite/xxxx",
+    "entrySubmit": "Улантуу",
+    "entryHint": "Шилтемени администратор жиберген каттан көчүрүңүз.",
+    "entryInvalid": "Туура шилтеме же код киргизиңиз.",
     "name": "Аты-жөнү",
     "namePlaceholder": "Аты-жөнү",
     "nameRequired": "Аты-жөнү милдеттүү.",
@@ -169,6 +184,14 @@
   "nav": {
     "platform": "Платформа",
     "brand": "Northstar",
+    "groups": {
+      "core": "Негизги",
+      "operations": "Операциялар",
+      "insights": "Талдоо",
+      "admin": "Администрлөө",
+      "help": "Жардам"
+    },
+    "groupToggle": "{group} бөлүмүн жыйноо же ачуу",
     "dashboard": "Башкы панель",
     "inventory": "Запастар",
     "purchaseOrders": "Заказдар",
@@ -179,6 +202,7 @@
     "attributes": "Атрибуттар",
     "units": "Өлчөмдөр",
     "imports": "Импорт",
+    "whatsNew": "Эмне жаңылык",
     "adminSupport": "Колдоо",
     "adminMetrics": "Метрикалар",
     "adminJobs": "Фондук иштер",
@@ -192,6 +216,19 @@
     "scanLabel": "Буюмду сканерлөө же издөө",
     "barcodeNotFound": "Штрихкод {value} табылган жок.",
     "createWithBarcode": "Ушул штрихкод менен буюм түзүү"
+  },
+  "commandPalette": {
+    "title": "Командалык панель",
+    "subtitle": "Ыкчам издөө жана аракеттер (Ctrl+K)",
+    "placeholder": "Товарларды, поставщиктерди, заказдарды издөө...",
+    "searchLabel": "Системадан издөө",
+    "actionsTitle": "Аракеттер",
+    "resultsTitle": "Натыйжалар",
+    "loading": "Издөө...",
+    "noResults": "Эч нерсе табылган жок.",
+    "actionCreatePo": "Заказ түзүү",
+    "actionStartCount": "Ревизияны баштоо",
+    "actionPrintTags": "Баа белгилерин басып чыгаруу"
   },
   "dashboard": {
     "title": "Башкы панель",
@@ -208,7 +245,10 @@
     "suggestedOrder": "Сунушталган заказ",
     "minStock": "Мин. калдык",
     "showMore": "Көбүрөөк көрсөтүү",
-    "hideMore": "Жашыруу"
+    "hideMore": "Жашыруу",
+    "chartsTitle": "Графиктер",
+    "chartsSubtitle": "Сатуу, запастар жана тобокелдиктер бир экранда.",
+    "chartsAction": "Аналитиканы ачуу"
   },
   "inventory": {
     "title": "Запастар",
@@ -229,6 +269,18 @@
     "minStockSave": "Чекти сактоо",
     "minStockNonNegative": "Минималдуу калдык терс болбойт.",
     "inventoryOverview": "Запастар боюнча жалпы көрүнүш",
+    "selectAll": "Баарын тандоо",
+    "selectInventoryItem": "{name} тандоо",
+    "printPriceTags": "Баа тагдарын басып чыгаруу",
+    "printSubtitle": "Тандалган: {count}",
+    "template": "Шаблон",
+    "template3x8": "3 x 8 (24 даана)",
+    "template2x5": "2 x 5 (10 даана)",
+    "printQty": "Баа тагдарынын саны",
+    "printQtyMin": "Саны 1ден кем болбошу керек.",
+    "printDownload": "PDF жүктөө",
+    "priceTagsFailed": "PDF түзүү мүмкүн болгон жок.",
+    "allStores": "Бардык дүкөндөр",
     "searchPlaceholder": "SKU же аталыш боюнча издөө",
     "sku": "SKU",
     "productRequired": "Буюмду тандаңыз.",
@@ -341,6 +393,23 @@
     "description": "Сүрөттөмө",
     "photoUrl": "Сүрөт (URL)",
     "photoUrlInvalid": "Туура URL көрсөтүңүз.",
+    "imagesTitle": "Товардын сүрөттөрү",
+    "imagesHint": "Файлдарды таштаңыз же кол менен кошуңуз. Биринчи сүрөт — негизги.",
+    "imagesAdd": "Сүрөт кошуу",
+    "imagesDrop": "Сүрөттөрдү бул жакка таштаңыз",
+    "imagesEmpty": "Сүрөттөр кошула элек.",
+    "imagesReorderHint": "Тартипти өзгөртүү үчүн сүйрөңүз.",
+    "imagePrimary": "Негизги",
+    "imageAlt": "Товардын сүрөтү #{index}",
+    "imagePosition": "Сүрөт {index} / {total}",
+    "imageMoveUp": "Жогору жылдыруу",
+    "imageMoveDown": "Төмөн жылдыруу",
+    "imageRemove": "Сүрөттү өчүрүү",
+    "imageDragHint": "Которуу үчүн карточканы сүйрөңүз.",
+    "imageUrlRequired": "Сүрөттү кошуңуз.",
+    "imageInvalidType": "Сүрөт файлдары гана колдоого алынат.",
+    "imageTooLarge": "Файл өтө чоң (макс. {size} МБ).",
+    "imageReadFailed": "Сүрөттү жүктөө мүмкүн эмес.",
     "barcodes": "Штрихкоддор",
     "barcodesCount": "{count} штрихкод",
     "barcodeHint": "Штрихкоддорду үтүр же | менен бөлүңүз",
@@ -404,6 +473,22 @@
     "restore": "Кайтаруу",
     "confirmRestore": "Буюмду архивден кайтаруу керекпи?",
     "restoreSuccess": "Буюм калыбына келтирилди.",
+    "bulkArchive": "Тандалгандарды архивдөө",
+    "bulkRestore": "Тандалгандарды калыбына келтирүү",
+    "confirmBulkArchive": "Тандалган буюмдарды архивдөөгө ырастайсызбы?",
+    "confirmBulkRestore": "Тандалган буюмдарды калыбына келтирүүгө ырастайсызбы?",
+    "bulkArchiveSuccess": "Архивделген буюмдар: {count}",
+    "bulkRestoreSuccess": "Калыбына келтирилген буюмдар: {count}",
+    "bulkSetCategory": "Категория коюу",
+    "bulkCategoryTitle": "Тандалган буюмдардын категориясы",
+    "bulkCategorySubtitle": "Бир нече буюм үчүн категорияны бир заматта жаңыртыңыз.",
+    "bulkCategoryPlaceholder": "Мисалы, Бакалея",
+    "bulkCategoryHint": "Категорияны тазалоо үчүн талааны бош калтырыңыз.",
+    "bulkCategorySuccess": "Категория {count} буюм үчүн жаңыртылды.",
+    "bulkSetStorePrice": "Дүкөн баасы",
+    "bulkStorePriceTitle": "Тандалган буюмдар үчүн баа",
+    "bulkStorePriceSubtitle": "Бир нече буюм үчүн дүкөн баасын бир заматта коюңуз.",
+    "bulkStorePriceSuccess": "{count} буюм үчүн баалар жаңыртылды.",
     "allCategories": "Бардык категориялар",
     "importCsv": "CSV импорт",
     "hideImport": "Импортту жашыруу",
@@ -447,6 +532,11 @@
     "printQty": "Белги саны",
     "printQtyMin": "Саны 1ден аз болбошу керек.",
     "printDownload": "PDF жүктөө",
+    "printQueueTitle": "Басып чыгаруу кезеги",
+    "printQueueHint": "Тартипти өзгөртүү үчүн сүйрөңүз.",
+    "printQueueEmpty": "Кезек бош.",
+    "printQueueMoveUp": "Жогору көтөрүү",
+    "printQueueMoveDown": "Төмөн түшүрүү",
     "priceTagsFailed": "PDF түзүү мүмкүн болгон жок.",
     "selectAll": "Баарын тандоо",
     "selectProduct": "{name} тандоо",
@@ -545,7 +635,12 @@
     "trackExpiryLots": "Жарамдуулук мөөнөтүн көзөмөлдөө",
     "trackExpiryHint": "Кабыл алуу жана кыймылдарда мөөнөт партияларын эсепке алат.",
     "enableExpiryLots": "Мөөнөт көзөмөлүн күйгүзүү",
-    "disableExpiryLots": "Мөөнөт көзөмөлүн өчүрүү"
+    "disableExpiryLots": "Мөөнөт көзөмөлүн өчүрүү",
+    "complianceStatus": "KG compliance-ready",
+    "complianceDisabled": "Өчүк",
+    "complianceNeedsSetup": "Настройка керек",
+    "complianceReady": "Настройкаланды",
+    "complianceSettings": "KG compliance"
   },
   "purchaseOrders": {
     "title": "Жеткирүү заказдары",
@@ -592,6 +687,12 @@
     "cancelOrder": "Жокко чыгаруу",
     "confirmCancel": "Заказды жокко чыгарасызбы? Кайра кайтарылбайт.",
     "cancelSuccess": "Заказ жокко чыгарылды.",
+    "selectAll": "Баарын тандоо",
+    "selectPurchaseOrder": "{number} заказын тандоо",
+    "bulkCancel": "Тандалгандарды жокко чыгаруу",
+    "confirmBulkCancel": "Тандалган заказдарды жокко чыгарасызбы?",
+    "bulkCancelSuccess": "Жокко чыгарылган заказдар: {count}",
+    "bulkCancelUnavailable": "Жокко чыгарууга жарактуу тандалган заказдар жок.",
     "linesTitle": "Заказ позициялары",
     "linesRequired": "Кеминде бир позиция кошуңуз.",
     "addLine": "Позиция кошуу",
@@ -682,6 +783,11 @@
     "actions": "Аракеттер",
     "edit": "Түзөтүү",
     "confirmDelete": "Жеткирүүчүнү өчүрөсүзбү? Бул аракет артка кайтарылбайт.",
+    "selectAll": "Баарын тандоо",
+    "selectSupplier": "{name} тандоо",
+    "bulkDelete": "Тандалгандарды өчүрүү",
+    "confirmBulkDelete": "Тандалган жеткирүүчүлөрдү өчүрөсүзбү?",
+    "bulkDeleteSuccess": "Өчүрүлгөн жеткирүүчүлөр: {count}",
     "noSuppliers": "Жеткирүүчүлөр жок."
   },
   "users": {
@@ -891,7 +997,13 @@
     "planLimitReached": "План лимити жетти.",
     "trialExpired": "Сынак мөөнөтү аяктады.",
     "orgNotFound": "Уюм табылган жок.",
-    "unexpectedError": "Күтүлбөгөн ката кетти."
+    "unexpectedError": "Күтүлбөгөн ката кетти.",
+    "exportFailed": "Экспорт түзүү мүмкүн эмес.",
+    "exportTypeInvalid": "Экспорт түрү туура эмес.",
+    "periodAlreadyClosed": "Бул мезгил жабылган.",
+    "periodNotClosed": "Бул мезгил азырынча жабылган эмес.",
+    "kkmNotConfigured": "ККМ настройкасы жок.",
+    "copyFailed": "Көчүрүү мүмкүн эмес."
   },
   "adminJobs": {
     "title": "Фондук иштер",
@@ -1211,7 +1323,39 @@
       "qty": "Сумма",
       "user": "Кызматкер",
       "movements": "Кыймылдар"
-    }
+    },
+    "analyticsLink": "Аналитика",
+    "exportsLink": "Экспорттор",
+    "closeLink": "Мезгилди жабуу"
+  },
+  "analytics": {
+    "title": "Аналитика",
+    "subtitle": "Сатуу жана запастар боюнча негизги тренддер.",
+    "backToReports": "Отчётторго кайтуу",
+    "allStores": "Бардык дүкөндөр",
+    "rangeLabel": "Мөөнөт",
+    "range30": "Акыркы 30 күн",
+    "range90": "Акыркы 90 күн",
+    "granularityLabel": "Гранулярдуулук",
+    "granularityDay": "Күн боюнча",
+    "granularityWeek": "Жума боюнча",
+    "salesTrend": "Сатуу тренди",
+    "salesFallback": "Сатуу жеткиликсиз — кыймылдардын саны көрсөтүлдү.",
+    "topProducts": "Топ буюмдар",
+    "metricLabel": "Метрика",
+    "metricUnits": "Даана",
+    "metricRevenue": "Түшүм",
+    "metricProfit": "Пайда",
+    "lowStockTrend": "Аз калган запас",
+    "stockoutTrend": "Жетишсиздик окуялары",
+    "inventoryValue": "Запастын наркы",
+    "deadStock30": "30+ күн кыймыл жок",
+    "deadStock60": "60+ күн кыймыл жок",
+    "deadStock90": "90+ күн кыймыл жок",
+    "emptySales": "Бул мөөнөттө сатуу маалыматтары жок.",
+    "emptyTopProducts": "Буюмдар боюнча маалымат жок.",
+    "emptyLowStock": "Аз калган окуялар жок.",
+    "emptyInventory": "Запастар боюнча маалымат жок."
   },
   "onboarding": {
     "title": "Тез баштоо",
@@ -1376,6 +1520,167 @@
           "Дүкөн же жеткирүүчү боюнча ката адатта жогорудагы фильтр тандалбаганын билдирет.",
           "Штрихкод боюнча конфликт бул код сиздин уюмда мурунтан колдонулганын билдирет.",
           "Эгер тармактан улам аракет кайталанса, ошол эле idempotency ачкычын колдонуңуз — система кыймылды кайталабайт."
+        ]
+      }
+    }
+  },
+  "whatsNew": {
+    "title": "Эмне жаңылык",
+    "subtitle": "Платформадагы негизги жаңыртуулар.",
+    "sections": {
+      "v14": {
+        "title": "V1.4 — Онбординг жана миграциялар",
+        "items": [
+          "Биринчи ишке киргизүү үчүн кадам-кадам онбординг.",
+          "Каталогду алдын ала көрүү жана ката отчету менен импорттоо.",
+          "Импортту кайтаруу үчүн компенсациялык кыймылдар."
+        ]
+      },
+      "v15": {
+        "title": "V1.5 — Колдоо жана ишенимдүүлүк",
+        "items": [
+          "Админдер үчүн колдоо жана тапшырма панелдери.",
+          "Кайра аракет менен ишенимдүү фондук тапшырмалар.",
+          "Метрикалар жана health текшерүүлөрү."
+        ]
+      },
+      "v16": {
+        "title": "V1.6 — Катталуу жана чакыруулар",
+        "items": [
+          "Өз алдынча катталуу жана кирүү режимдери.",
+          "Email текшерүүсү менен кызматкер чакыруу.",
+          "Сынамык мөөнөт үчүн тарифтер жана чектөөлөр."
+        ]
+      }
+    }
+  },
+  "compliance": {
+    "title": "KG compliance-ready",
+    "subtitle": "Тандалган дүкөн үчүн ККМ, ЭСФ, ЭТТН жана маркировка режимдерин настройка кылыңыз.",
+    "subtitleStore": "«{store}» дүкөнү үчүн ККМ, ЭСФ, ЭТТН жана маркировка режимдерин настройка кылыңыз.",
+    "cardTitle": "KG compliance-ready",
+    "cardSubtitle": "Керектүү модулдарды гана күйгүзүңүз, калганы кеңейтилген бөлүмдө.",
+    "helpLink": "КР талаптары боюнча жардам",
+    "saved": "Орнотуулар сакталды",
+    "invalidJson": "JSON туура эмес",
+    "readOnlyHint": "Жөндөөлөрдү администратор гана өзгөртө алат.",
+    "kkmToggle": "ККМ",
+    "kkmHint": "Кассалык чек режими: экспорт же адаптер.",
+    "esfToggle": "ЭСФ",
+    "esfHint": "Электрондук эсеп-фактуралар үчүн экспорт.",
+    "ettnToggle": "ЭТТН",
+    "ettnHint": "Электрондук товар-транспорт накладнаялар үчүн экспорт.",
+    "markingToggle": "Маркировка",
+    "markingHint": "Маркировкаланган товарларды белгилеңиз.",
+    "advancedShow": "Кеңейтилген",
+    "advancedHide": "Жашыруу",
+    "advancedIntro": "Кошумча параметрлер керек болгондо гана көрүнөт.",
+    "defaultLocale": "Негизги тил",
+    "taxRegime": "Салык режими",
+    "kkmMode": "ККМ режими",
+    "kkmModeOff": "Өчүк",
+    "kkmModeExport": "Жөн гана экспорт",
+    "kkmModeAdapter": "Адаптер аркылуу",
+    "exportOnlyHint": "Чектерди бухгалтерге же ККМ провайдерине экспорт кылыңыз.",
+    "adapterHint": "Адаптер туташканда фискалдаштыруу жүргүзөт.",
+    "providerKey": "ККМ провайдер ачкычы",
+    "settingsJson": "Адаптер жөндөөлөрү (JSON)"
+  },
+  "exports": {
+    "title": "Бухгалтер үчүн экспорт",
+    "subtitle": "Мезгил боюнча отчетторду жана экспортторду түзүңүз.",
+    "requestTitle": "Экспорт түзүү",
+    "storeLabel": "Дүкөн",
+    "typeLabel": "Экспорт түрү",
+    "periodStart": "Башталышы",
+    "periodEnd": "Аягы",
+    "generate": "Түзүү",
+    "created": "Экспорт түзүлдү",
+    "jobsTitle": "Экспорттор",
+    "empty": "Экспорт жок.",
+    "download": "Жүктөө",
+    "copyJobId": "ID көчүрүү",
+    "copyFileName": "Файл атын көчүрүү",
+    "copiedJobId": "ID көчүрүлдү",
+    "copiedFileName": "Файл аты көчүрүлдү",
+    "types": {
+      "salesSummary": "Сатуу жыйынтыгы",
+      "stockMovements": "Кампа кыймылдары",
+      "purchases": "Сатып алуулар",
+      "inventoryOnHand": "Кампа калдыгы",
+      "periodClose": "Мезгилди жабуу",
+      "kkmReceipts": "ККМ үчүн чектер"
+    },
+    "status": {
+      "QUEUED": "Кезекте",
+      "RUNNING": "Иштеп жатат",
+      "DONE": "Даяр",
+      "FAILED": "Ката"
+    },
+    "columns": {
+      "createdAt": "Түзүлгөн",
+      "type": "Түрү",
+      "period": "Мезгил",
+      "status": "Статус",
+      "actions": "Аракеттер"
+    }
+  },
+  "periodClose": {
+    "title": "Мезгилди жабуу",
+    "subtitle": "Айлык жыйынтыктарды эсепке алуу үчүн бекитиңиз.",
+    "closeTitle": "Айды жабуу",
+    "storeLabel": "Дүкөн",
+    "monthLabel": "Ай",
+    "closeAction": "Мезгилди жабуу",
+    "closed": "Мезгил жабылды",
+    "exportCreated": "Отчет түзүлдү",
+    "historyTitle": "Жабылган мезгилдер",
+    "empty": "Азырынча жабылганы жок.",
+    "statusClosed": "Жабык",
+    "download": "Отчет жүктөө",
+    "columns": {
+      "period": "Мезгил",
+      "closedAt": "Жабылды",
+      "status": "Статус",
+      "actions": "Аракеттер"
+    }
+  },
+  "helpCompliance": {
+    "title": "KG compliance-ready",
+    "subtitle": "Режимдер жана экспорттор боюнча кыскача маалымат.",
+    "toggleArticle": "Макаланы ачуу: {title}",
+    "articles": {
+      "kkmModes": {
+        "title": "ККМ режимдери",
+        "summary": "Дүкөн үчүн ККМ режимин тандоо.",
+        "body": [
+          "OFF — ККМ колдонулбайт.",
+          "EXPORT_ONLY — бухгалтер же ККМ провайдери үчүн экспорт.",
+          "ADAPTER — адаптер аркылуу интеграцияга даярдоо."
+        ]
+      },
+      "exports": {
+        "title": "Бухгалтер үчүн экспорт",
+        "summary": "Кандай экспорттор бар жана кантип жөнөтүлөт.",
+        "body": [
+          "Дүкөндү, мезгилди жана экспорт түрүн тандаңыз.",
+          "Экспорттор журналда ID жана убакыт менен сакталат."
+        ]
+      },
+      "ettnMarking": {
+        "title": "ЭСФ, ЭТТН жана маркировка",
+        "summary": "Эмне белгиленет жана экспортко кирет.",
+        "body": [
+          "Модулдар керектүү болсо гана күйгүзүлөт.",
+          "Айрым товарлар үчүн маркировка жана ЭТТН талаптарын белгилөөгө болот."
+        ]
+      },
+      "periodClose": {
+        "title": "Мезгилди жабуу",
+        "summary": "Айлык жыйынтыкты бекитүү, кампаны токтотпой.",
+        "body": [
+          "Мезгилди жабуу бухгалтерия үчүн жыйынтыкты сактайт.",
+          "Кампа кыймылдары токтобой уланат."
         ]
       }
     }

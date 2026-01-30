@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import {
   Table,
   TableBody,
@@ -56,10 +57,17 @@ import {
 import { FormActions } from "@/components/form-layout";
 import {
   AddIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ArchiveIcon,
   DownloadIcon,
   EditIcon,
   EmptyIcon,
+  GripIcon,
   MoreIcon,
+  PriceIcon,
+  RestoreIcon,
+  TagIcon,
   UploadIcon,
   ViewIcon,
 } from "@/components/icons";
@@ -113,8 +121,13 @@ const ProductsPage = () => {
     effectivePriceKgs: number | null;
   } | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkCategoryValue, setBulkCategoryValue] = useState("");
+  const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [printOpen, setPrintOpen] = useState(false);
+  const [printQueue, setPrintQueue] = useState<string[]>([]);
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
 
   const storesQuery = trpc.stores.list.useQuery();
   const productsQuery = trpc.products.list.useQuery({
@@ -153,6 +166,9 @@ const ProductsPage = () => {
     },
   });
 
+  const bulkArchiveMutation = trpc.products.archive.useMutation();
+  const bulkRestoreMutation = trpc.products.restore.useMutation();
+
   const storePriceMutation = trpc.storePrices.upsert.useMutation({
     onSuccess: () => {
       productsQuery.refetch();
@@ -178,11 +194,38 @@ const ProductsPage = () => {
     },
   });
 
+  const bulkCategoryMutation = trpc.products.bulkUpdateCategory.useMutation({
+    onSuccess: (result) => {
+      productsQuery.refetch();
+      toast({
+        variant: "success",
+        description: t("bulkCategorySuccess", { count: result.updated }),
+      });
+      setBulkCategoryOpen(false);
+      setSelectedIds(new Set());
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const bulkStorePriceMutation = trpc.storePrices.upsert.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   useEffect(() => {
     if (!storeId && storesQuery.data?.length === 1) {
       setStoreId(storesQuery.data[0].id);
     }
   }, [storeId, storesQuery.data]);
+
+  useEffect(() => {
+    if (bulkCategoryOpen) {
+      setBulkCategoryValue("");
+    }
+  }, [bulkCategoryOpen]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -282,20 +325,44 @@ const ProductsPage = () => {
     },
   });
 
-  useEffect(() => {
-    if (printOpen) {
-      printForm.reset({
-        template: "3x8",
-        storeId: storeId || "",
-        quantity: 1,
-      });
-    }
-  }, [printOpen, printForm, storeId]);
+  const bulkStorePriceSchema = useMemo(
+    () =>
+      z.object({
+        storeId: z.string().min(1, tErrors("storeRequired")),
+        priceKgs: z.coerce.number().min(0, t("priceNonNegative")),
+      }),
+    [t, tErrors],
+  );
 
-  const selectedList = Array.from(selectedIds);
+  const bulkStorePriceForm = useForm<z.infer<typeof bulkStorePriceSchema>>({
+    resolver: zodResolver(bulkStorePriceSchema),
+    defaultValues: {
+      storeId: storeId || "",
+      priceKgs: 0,
+    },
+  });
+
+  const selectedList = useMemo(
+    () =>
+      (productsQuery.data ?? [])
+        .filter((product) => selectedIds.has(product.id))
+        .map((product) => product.id),
+    [productsQuery.data, selectedIds],
+  );
   const allSelected =
     Boolean(productsQuery.data?.length) &&
     selectedIds.size === (productsQuery.data?.length ?? 0);
+
+  const productById = useMemo(
+    () => new Map((productsQuery.data ?? []).map((product) => [product.id, product])),
+    [productsQuery.data],
+  );
+  const selectedProducts = useMemo(
+    () => (productsQuery.data ?? []).filter((product) => selectedIds.has(product.id)),
+    [productsQuery.data, selectedIds],
+  );
+  const hasActiveSelected = selectedProducts.some((product) => !product.isDeleted);
+  const hasArchivedSelected = selectedProducts.some((product) => product.isDeleted);
 
   const toggleSelectAll = () => {
     if (!productsQuery.data?.length) {
@@ -320,6 +387,29 @@ const ProductsPage = () => {
       return next;
     });
   };
+
+  useEffect(() => {
+    if (printOpen) {
+      printForm.reset({
+        template: "3x8",
+        storeId: storeId || "",
+        quantity: 1,
+      });
+      setPrintQueue(selectedList);
+      setDraggedQueueIndex(null);
+    } else {
+      setPrintQueue([]);
+    }
+  }, [printOpen, printForm, storeId, selectedList]);
+
+  useEffect(() => {
+    if (bulkStorePriceOpen) {
+      bulkStorePriceForm.reset({
+        storeId: storeId || "",
+        priceKgs: 0,
+      });
+    }
+  }, [bulkStorePriceOpen, bulkStorePriceForm, storeId]);
 
   const storeNameById = useMemo(
     () => new Map((storesQuery.data ?? []).map((store) => [store.id, store.name])),
@@ -408,8 +498,21 @@ const ProductsPage = () => {
     URL.revokeObjectURL(url);
   };
 
+  const movePrintQueueItem = (fromIndex: number, toIndex: number) => {
+    setPrintQueue((prev) => {
+      if (fromIndex === toIndex) {
+        return prev;
+      }
+      const next = [...prev];
+      const [item] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, item);
+      return next;
+    });
+  };
+
   const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
-    if (!selectedList.length) {
+    const queue = printQueue.length ? printQueue : selectedList;
+    if (!queue.length) {
       return;
     }
     try {
@@ -419,7 +522,7 @@ const ProductsPage = () => {
         body: JSON.stringify({
           template: values.template,
           storeId: values.storeId || undefined,
-          items: selectedList.map((productId) => ({
+          items: queue.map((productId) => ({
             productId,
             quantity: values.quantity,
           })),
@@ -438,8 +541,102 @@ const ProductsPage = () => {
       URL.revokeObjectURL(url);
       setPrintOpen(false);
       setSelectedIds(new Set());
+      setPrintQueue([]);
     } catch (error) {
       toast({ variant: "error", description: t("priceTagsFailed") });
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (!selectedList.length || !hasActiveSelected) {
+      return;
+    }
+    if (!window.confirm(t("confirmBulkArchive"))) {
+      return;
+    }
+    const targets = selectedProducts.filter((product) => !product.isDeleted);
+    try {
+      await Promise.all(
+        targets.map((product) => bulkArchiveMutation.mutateAsync({ productId: product.id })),
+      );
+      productsQuery.refetch();
+      toast({
+        variant: "success",
+        description: t("bulkArchiveSuccess", { count: targets.length }),
+      });
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    if (!selectedList.length || !hasArchivedSelected) {
+      return;
+    }
+    if (!window.confirm(t("confirmBulkRestore"))) {
+      return;
+    }
+    const targets = selectedProducts.filter((product) => product.isDeleted);
+    try {
+      await Promise.all(
+        targets.map((product) => bulkRestoreMutation.mutateAsync({ productId: product.id })),
+      );
+      productsQuery.refetch();
+      toast({
+        variant: "success",
+        description: t("bulkRestoreSuccess", { count: targets.length }),
+      });
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    }
+  };
+
+  const handleBulkCategoryApply = () => {
+    if (!selectedList.length) {
+      return;
+    }
+    const trimmed = bulkCategoryValue.trim();
+    bulkCategoryMutation.mutate({
+      productIds: selectedList,
+      category: trimmed ? trimmed : null,
+    });
+  };
+
+  const handleBulkStorePriceApply = async (values: z.infer<typeof bulkStorePriceSchema>) => {
+    if (!selectedList.length) {
+      return;
+    }
+    try {
+      await Promise.all(
+        selectedList.map((productId) =>
+          bulkStorePriceMutation.mutateAsync({
+            storeId: values.storeId,
+            productId,
+            priceKgs: values.priceKgs,
+            variantId: null,
+          }),
+        ),
+      );
+      productsQuery.refetch();
+      toast({
+        variant: "success",
+        description: t("bulkStorePriceSuccess", { count: selectedList.length }),
+      });
+      setBulkStorePriceOpen(false);
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
     }
   };
 
@@ -642,6 +839,102 @@ const ProductsPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {selectedList.length ? (
+            <div className="mb-3">
+              <TooltipProvider>
+                <SelectionToolbar
+                  count={selectedList.length}
+                  label={tCommon("selectedCount", { count: selectedList.length })}
+                  clearLabel={tCommon("clearSelection")}
+                  onClear={() => setSelectedIds(new Set())}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shadow-none"
+                        aria-label={t("printPriceTags")}
+                        onClick={() => setPrintOpen(true)}
+                      >
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("printPriceTags")}</TooltipContent>
+                  </Tooltip>
+                  {hasActiveSelected && isAdmin ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-danger shadow-none hover:text-danger"
+                          aria-label={t("bulkArchive")}
+                          onClick={handleBulkArchive}
+                        >
+                          <ArchiveIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("bulkArchive")}</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  {hasArchivedSelected && isAdmin ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shadow-none"
+                          aria-label={t("bulkRestore")}
+                          onClick={handleBulkRestore}
+                        >
+                          <RestoreIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("bulkRestore")}</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  {isAdmin ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shadow-none"
+                          aria-label={t("bulkSetCategory")}
+                          onClick={() => setBulkCategoryOpen(true)}
+                        >
+                          <TagIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("bulkSetCategory")}</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  {canManagePrices ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shadow-none"
+                          aria-label={t("bulkSetStorePrice")}
+                          onClick={() => setBulkStorePriceOpen(true)}
+                        >
+                          <PriceIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("bulkSetStorePrice")}</TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                </SelectionToolbar>
+              </TooltipProvider>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <TooltipProvider>
               <Table className="min-w-[720px]">
@@ -1129,6 +1422,147 @@ const ProductsPage = () => {
       </Modal>
 
       <Modal
+        open={bulkCategoryOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBulkCategoryOpen(false);
+          }
+        }}
+        title={t("bulkCategoryTitle")}
+        subtitle={t("bulkCategorySubtitle")}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleBulkCategoryApply();
+          }}
+        >
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-ink">{t("category")}</label>
+            <Input
+              value={bulkCategoryValue}
+              onChange={(event) => setBulkCategoryValue(event.target.value)}
+              placeholder={t("bulkCategoryPlaceholder")}
+              list="bulk-category-options"
+            />
+            <p className="text-xs text-gray-500">{t("bulkCategoryHint")}</p>
+            <datalist id="bulk-category-options">
+              {categories.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
+          </div>
+          <FormActions>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setBulkCategoryOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={bulkCategoryMutation.isLoading}
+            >
+              {bulkCategoryMutation.isLoading ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <TagIcon className="h-4 w-4" aria-hidden />
+              )}
+              {bulkCategoryMutation.isLoading ? tCommon("loading") : tCommon("save")}
+            </Button>
+          </FormActions>
+        </form>
+      </Modal>
+
+      <Modal
+        open={bulkStorePriceOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBulkStorePriceOpen(false);
+          }
+        }}
+        title={t("bulkStorePriceTitle")}
+        subtitle={t("bulkStorePriceSubtitle")}
+      >
+        <Form {...bulkStorePriceForm}>
+          <form
+            className="space-y-4"
+            onSubmit={bulkStorePriceForm.handleSubmit(handleBulkStorePriceApply)}
+          >
+            <FormField
+              control={bulkStorePriceForm.control}
+              name="storeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tCommon("store")}</FormLabel>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={tCommon("selectStore")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {storesQuery.data?.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={bulkStorePriceForm.control}
+              name="priceKgs"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("effectivePrice")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      placeholder={t("pricePlaceholder")}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormActions>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setBulkStorePriceOpen(false)}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={bulkStorePriceMutation.isLoading}
+              >
+                {bulkStorePriceMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <PriceIcon className="h-4 w-4" aria-hidden />
+                )}
+                {bulkStorePriceMutation.isLoading ? tCommon("loading") : t("savePrice")}
+              </Button>
+            </FormActions>
+          </form>
+        </Form>
+      </Modal>
+
+      <Modal
         open={printOpen}
         onOpenChange={(open) => {
           if (!open) {
@@ -1136,7 +1570,7 @@ const ProductsPage = () => {
           }
         }}
         title={t("printPriceTags")}
-        subtitle={t("printSubtitle", { count: selectedList.length })}
+        subtitle={t("printSubtitle", { count: printQueue.length || selectedList.length })}
       >
         <Form {...printForm}>
           <form
@@ -1205,6 +1639,94 @@ const ProductsPage = () => {
                 </FormItem>
               )}
             />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-ink">{t("printQueueTitle")}</span>
+                <span className="text-xs text-gray-500">{t("printQueueHint")}</span>
+              </div>
+              {printQueue.length ? (
+                <div className="space-y-2">
+                  {printQueue.map((productId, index) => {
+                    const product = productById.get(productId);
+                    const canMoveUp = index > 0;
+                    const canMoveDown = index < printQueue.length - 1;
+                    return (
+                      <div
+                        key={productId}
+                        className={`flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 ${
+                          draggedQueueIndex === index ? "opacity-60" : ""
+                        }`}
+                        draggable
+                        onDragStart={() => setDraggedQueueIndex(index)}
+                        onDragEnd={() => setDraggedQueueIndex(null)}
+                        onDragOver={(event) => {
+                          if (draggedQueueIndex === null) {
+                            return;
+                          }
+                          event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (draggedQueueIndex === null || draggedQueueIndex === index) {
+                            return;
+                          }
+                          movePrintQueueItem(draggedQueueIndex, index);
+                          setDraggedQueueIndex(null);
+                        }}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <GripIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-ink">
+                              {product?.name ?? tCommon("notAvailable")}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {product?.sku ?? productId.slice(0, 8).toUpperCase()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shadow-none"
+                                aria-label={t("printQueueMoveUp")}
+                                onClick={() => canMoveUp && movePrintQueueItem(index, index - 1)}
+                                disabled={!canMoveUp}
+                              >
+                                <ArrowUpIcon className="h-4 w-4" aria-hidden />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t("printQueueMoveUp")}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shadow-none"
+                                aria-label={t("printQueueMoveDown")}
+                                onClick={() => canMoveDown && movePrintQueueItem(index, index + 1)}
+                                disabled={!canMoveDown}
+                              >
+                                <ArrowDownIcon className="h-4 w-4" aria-hidden />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t("printQueueMoveDown")}</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">{t("printQueueEmpty")}</p>
+              )}
+            </div>
             <FormActions>
               <Button
                 type="button"

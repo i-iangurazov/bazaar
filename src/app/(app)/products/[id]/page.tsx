@@ -218,6 +218,16 @@ const ProductDetailPage = () => {
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
       description: productQuery.data.description ?? "",
       photoUrl: productQuery.data.photoUrl ?? "",
+      images: (productQuery.data.images?.length
+        ? productQuery.data.images
+        : productQuery.data.photoUrl
+          ? [{ id: undefined, url: productQuery.data.photoUrl, position: 0 }]
+          : []
+      ).map((image) => ({
+        id: image.id,
+        url: image.url,
+        position: image.position ?? 0,
+      })),
       barcodes: productQuery.data.barcodes ?? [],
       packs: (productQuery.data.packs ?? []).map((pack) => ({
         id: pack.id,

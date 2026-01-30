@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { trpc } from "@/lib/trpc";
 
 const VerifyPage = () => {
@@ -28,7 +29,10 @@ const VerifyPage = () => {
   }, [token, verifyMutation]);
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4">
+    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-end">
+        <LanguageSwitcher />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>

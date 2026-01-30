@@ -2,7 +2,12 @@ import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { createSupplier, deleteSupplier, updateSupplier } from "@/server/services/suppliers";
+import {
+  bulkDeleteSuppliers,
+  createSupplier,
+  deleteSupplier,
+  updateSupplier,
+} from "@/server/services/suppliers";
 
 export const suppliersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -70,6 +75,21 @@ export const suppliersRouter = router({
       try {
         return await deleteSupplier({
           supplierId: input.supplierId,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkDelete: managerProcedure
+    .input(z.object({ supplierIds: z.array(z.string()).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await bulkDeleteSuppliers({
+          supplierIds: input.supplierIds,
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,

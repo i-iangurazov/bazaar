@@ -53,6 +53,7 @@ const NewProductPage = () => {
           basePriceKgs: undefined,
           description: "",
           photoUrl: "",
+          images: [],
           barcodes: barcode ? [barcode] : [],
           packs: [],
           variants: [],

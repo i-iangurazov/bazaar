@@ -1,15 +1,17 @@
 import { prisma } from "@/server/db/prisma";
 import { getRedisPublisher } from "@/server/redis";
 import { incrementCounter, httpRequestsTotal } from "@/server/metrics/metrics";
+import { getKkmAdapter } from "@/server/kkm/registry";
 
 export const runtime = "nodejs";
 
-export const GET = async () => {
+export const GET = async (request: Request) => {
   incrementCounter(httpRequestsTotal, { path: "/api/health" });
 
   let db = "unknown";
   let migrations = "unknown";
   let redis = "unknown";
+  let kkm: string | undefined;
 
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -41,7 +43,30 @@ export const GET = async () => {
     redis = "down";
   }
 
-  const status = db === "up" && migrations === "ok" && redis === "up" ? "ok" : "degraded";
+  try {
+    const url = new URL(request.url);
+    const storeId = url.searchParams.get("storeId");
+    if (storeId) {
+      const profile = await prisma.storeComplianceProfile.findFirst({
+        where: { storeId },
+        select: { enableKkm: true, kkmMode: true, kkmProviderKey: true },
+      });
+      if (profile?.enableKkm && profile.kkmMode === "ADAPTER") {
+        const adapter = getKkmAdapter(profile.kkmProviderKey);
+        const health = await adapter.health();
+        kkm = health.ok ? "up" : "down";
+      } else {
+        kkm = "disabled";
+      }
+    }
+  } catch {
+    kkm = "down";
+  }
 
-  return Response.json({ status, db, migrations, redis });
+  const status =
+    db === "up" && migrations === "ok" && redis === "up" && (!kkm || kkm === "up" || kkm === "disabled")
+      ? "ok"
+      : "degraded";
+
+  return Response.json({ status, db, migrations, redis, ...(kkm ? { kkm } : {}) });
 };

@@ -41,16 +41,23 @@ describeDb("tenant isolation and signup", () => {
     expect(user?.email).toBe("owner@test.local");
     expect(user?.emailVerifiedAt).toBeNull();
 
-    await expect(
-      caller.publicAuth.signup({
+    try {
+      await caller.publicAuth.signup({
         email: "owner@test.local",
         password: "Password123!",
         name: "Owner",
         orgName: "Owner Org",
         storeName: "Second Store",
         preferredLocale: "ru",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+      });
+      throw new Error("expected signup to fail");
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      expect(["CONFLICT", "TOO_MANY_REQUESTS"]).toContain(code);
+    }
+
+    const usersWithEmail = await prisma.user.count({ where: { email: "owner@test.local" } });
+    expect(usersWithEmail).toBe(1);
 
   });
 

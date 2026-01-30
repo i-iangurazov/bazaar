@@ -52,6 +52,7 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   AddIcon,
   AdjustIcon,
+  DownloadIcon,
   ReceiveIcon,
   TransferIcon,
   StatusWarningIcon,
@@ -72,6 +73,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
 import { useToast } from "@/components/ui/toast";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 
 const InventoryPage = () => {
   const t = useTranslations("inventory");
@@ -114,6 +116,8 @@ const InventoryPage = () => {
       selected: boolean;
     }[]
   >([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [printOpen, setPrintOpen] = useState(false);
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
 
   const receiveSchema = useMemo(
@@ -174,6 +178,16 @@ const InventoryPage = () => {
     [t],
   );
 
+  const printSchema = useMemo(
+    () =>
+      z.object({
+        template: z.enum(["3x8", "2x5"]),
+        storeId: z.string().optional(),
+        quantity: z.coerce.number().int().min(1, t("printQtyMin")),
+      }),
+    [t],
+  );
+
   const receiveForm = useForm<z.infer<typeof receiveSchema>>({
     resolver: zodResolver(receiveSchema),
     defaultValues: {
@@ -218,6 +232,15 @@ const InventoryPage = () => {
     defaultValues: {
       productId: "",
       minStock: 0,
+    },
+  });
+
+  const printForm = useForm<z.infer<typeof printSchema>>({
+    resolver: zodResolver(printSchema),
+    defaultValues: {
+      template: "3x8",
+      storeId: storeId || "",
+      quantity: 1,
     },
   });
 
@@ -366,6 +389,43 @@ const InventoryPage = () => {
     return Array.from(map.values());
   }, [inventoryQuery.data]);
 
+  const selectedItems = useMemo(
+    () => (inventoryQuery.data ?? []).filter((item) => selectedIds.has(item.snapshot.id)),
+    [inventoryQuery.data, selectedIds],
+  );
+  const selectedProductIds = useMemo(() => {
+    const ids = new Set<string>();
+    selectedItems.forEach((item) => ids.add(item.product.id));
+    return Array.from(ids);
+  }, [selectedItems]);
+  const allSelected =
+    Boolean(inventoryQuery.data?.length) &&
+    selectedIds.size === (inventoryQuery.data?.length ?? 0);
+
+  const toggleSelectAll = () => {
+    if (!inventoryQuery.data?.length) {
+      return;
+    }
+    setSelectedIds(() => {
+      if (allSelected) {
+        return new Set();
+      }
+      return new Set(inventoryQuery.data.map((item) => item.snapshot.id));
+    });
+  };
+
+  const toggleSelect = (snapshotId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(snapshotId)) {
+        next.delete(snapshotId);
+      } else {
+        next.add(snapshotId);
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
       setStoreId(storesQuery.data[0].id);
@@ -383,6 +443,21 @@ const InventoryPage = () => {
       })),
     );
   }, [poDraftOpen, reorderCandidates]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [storeId, inventoryQuery.data]);
+
+  useEffect(() => {
+    if (!printOpen) {
+      return;
+    }
+    printForm.reset({
+      template: "3x8",
+      storeId: storeId || "",
+      quantity: 1,
+    });
+  }, [printOpen, printForm, storeId]);
 
   const receiveProductId = receiveForm.watch("productId");
   const receiveVariantId = receiveForm.watch("variantId");
@@ -462,6 +537,41 @@ const InventoryPage = () => {
       minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
     }
   }, [minStockProductId, inventoryQuery.data, minStockForm]);
+
+  const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
+    if (!selectedProductIds.length) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/price-tags/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template: values.template,
+          storeId: values.storeId || undefined,
+          items: selectedProductIds.map((productId) => ({
+            productId,
+            quantity: values.quantity,
+          })),
+        }),
+      });
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "priceTagsFailed");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `price-tags-${values.template}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setPrintOpen(false);
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast({ variant: "error", description: t("priceTagsFailed") });
+    }
+  };
 
   const openActionDialog = (
     type: "receive" | "adjust" | "transfer" | "minStock",
@@ -620,7 +730,7 @@ const InventoryPage = () => {
   const transferSelectionKey = transferProductId
     ? buildSelectionKey(transferProductId, transferVariantId)
     : "";
-  const tableColumnCount = showPlanning ? 8 : 7;
+  const tableColumnCount = showPlanning ? 9 : 8;
   const selectedDraftItems = poDraftItems.filter((item) => item.selected);
   const groupedDraftItems = useMemo(() => {
     const groups = new Map<string, typeof poDraftItems>();
@@ -792,11 +902,48 @@ const InventoryPage = () => {
           <CardTitle>{t("inventoryOverview")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {selectedItems.length ? (
+            <div className="mb-3">
+              <TooltipProvider>
+                <SelectionToolbar
+                  count={selectedItems.length}
+                  label={tCommon("selectedCount", { count: selectedItems.length })}
+                  clearLabel={tCommon("clearSelection")}
+                  onClear={() => setSelectedIds(new Set())}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shadow-none"
+                        aria-label={t("printPriceTags")}
+                        onClick={() => setPrintOpen(true)}
+                      >
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("printPriceTags")}</TooltipContent>
+                  </Tooltip>
+                </SelectionToolbar>
+              </TooltipProvider>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <TooltipProvider>
               <Table className="min-w-[520px]">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-ink"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        aria-label={t("selectAll")}
+                      />
+                    </TableHead>
                     <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
                     <TableHead>{tCommon("product")}</TableHead>
                     <TableHead>{t("onHand")}</TableHead>
@@ -817,6 +964,19 @@ const InventoryPage = () => {
                     return (
                       <Fragment key={item.snapshot.id}>
                         <TableRow>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-ink"
+                              checked={selectedIds.has(item.snapshot.id)}
+                              onChange={() => toggleSelect(item.snapshot.id)}
+                              aria-label={t("selectInventoryItem", {
+                                name: item.variant?.name
+                                  ? `${item.product.name} • ${item.variant.name}`
+                                  : item.product.name,
+                              })}
+                            />
+                          </TableCell>
                           <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
                             {item.product.sku}
                           </TableCell>
@@ -1191,6 +1351,98 @@ const InventoryPage = () => {
             {t("noReorderSuggestions")}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={printOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPrintOpen(false);
+          }
+        }}
+        title={t("printPriceTags")}
+        subtitle={t("printSubtitle", { count: selectedItems.length })}
+      >
+        <Form {...printForm}>
+          <form className="space-y-4" onSubmit={printForm.handleSubmit(handlePrintTags)}>
+            <FormField
+              control={printForm.control}
+              name="template"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("template")}</FormLabel>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("template")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3x8">{t("template3x8")}</SelectItem>
+                        <SelectItem value="2x5">{t("template2x5")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={printForm.control}
+              name="storeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{tCommon("store")}</FormLabel>
+                  <FormControl>
+                    <Select
+                      value={field.value || "all"}
+                      onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={tCommon("selectStore")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("allStores")}</SelectItem>
+                        {storesQuery.data?.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={printForm.control}
+              name="quantity"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("printQty")}</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" inputMode="numeric" min={1} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormActions>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setPrintOpen(false)}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button type="submit" className="w-full sm:w-auto">
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+                {t("printDownload")}
+              </Button>
+            </FormActions>
+          </form>
+        </Form>
       </Modal>
 
       <Modal
