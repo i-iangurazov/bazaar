@@ -106,6 +106,22 @@ type AttributeDefinition = {
   required?: boolean | null;
 };
 
+const isPhotoUrlValid = (value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return true;
+  }
+  if (normalized.startsWith("/uploads/") || normalized.startsWith("data:image/")) {
+    return true;
+  }
+  try {
+    const parsed = new URL(normalized);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 
 export const ProductForm = ({
   initialValues,
@@ -165,9 +181,8 @@ export const ProductForm = ({
         description: z.string().optional(),
         photoUrl: z
           .string()
-          .url(t("photoUrlInvalid"))
           .optional()
-          .or(z.literal("")),
+          .refine((value) => isPhotoUrlValid(value), t("photoUrlInvalid")),
         images: z
           .array(
             z.object({
@@ -816,7 +831,7 @@ export const ProductForm = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-8 px-3"
+                  size="sm"
                   onClick={() => setShowDetails((prev) => !prev)}
                 >
                   {showDetails ? t("hideDetails") : t("showDetails")}
@@ -1015,7 +1030,7 @@ export const ProductForm = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-8 px-3"
+                  size="sm"
                   onClick={() => setShowAdvanced((prev) => !prev)}
                 >
                   {showAdvanced ? t("hideAdvanced") : t("showAdvanced")}

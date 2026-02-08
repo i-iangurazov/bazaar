@@ -55,6 +55,8 @@ import {
   StatusWarningIcon,
   MoreIcon,
   ViewIcon,
+  EditIcon,
+  AdjustIcon,
 } from "@/components/icons";
 import {
   Tooltip,
@@ -62,6 +64,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -264,163 +268,265 @@ const StoresPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <TooltipProvider>
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("name")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("code")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("legalType")}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t("inn")}</TableHead>
-                    <TableHead>{t("allowNegativeStock")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("trackExpiryLots")}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t("complianceStatus")}</TableHead>
-                    <TableHead>{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {storesQuery.data?.map((store) => {
-                    const isUpdating =
-                      updatePolicyMutation.isLoading &&
-                      updatePolicyMutation.variables?.storeId === store.id;
-                    const complianceBadge = resolveComplianceBadge(store);
-                    return (
-                      <TableRow key={store.id}>
-                        <TableCell className="font-medium">{store.name}</TableCell>
-                        <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                          {store.code}
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500 hidden md:table-cell">
-                          {store.legalEntityType ? (
-                            <Badge variant="muted">{legalTypeLabels[store.legalEntityType]}</Badge>
-                          ) : (
-                            tCommon("notAvailable")
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500 hidden lg:table-cell">
-                          {store.inn ?? tCommon("notAvailable")}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={store.allowNegativeStock ? "success" : "warning"}>
-                            {store.allowNegativeStock ? (
-                              <StatusSuccessIcon className="h-3 w-3" aria-hidden />
-                            ) : (
-                              <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                            )}
-                            {store.allowNegativeStock ? tCommon("yes") : tCommon("no")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <Badge variant={store.trackExpiryLots ? "success" : "warning"}>
-                            {store.trackExpiryLots ? (
-                              <StatusSuccessIcon className="h-3 w-3" aria-hidden />
-                            ) : (
-                              <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                            )}
-                            {store.trackExpiryLots ? tCommon("yes") : tCommon("no")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <Badge variant={complianceBadge.variant}>
-                            {complianceBadge.icon}
-                            {complianceBadge.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {canManage ? (
-                            <DropdownMenu>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-flex">
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shadow-none"
-                                        aria-label={tCommon("actions")}
-                                      >
-                                        <MoreIcon className="h-4 w-4" aria-hidden />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>{tCommon("actions")}</TooltipContent>
-                              </Tooltip>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => setViewingStore(store)}>
-                                  {tCommon("view")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                  <Link href={`/stores/${store.id}/compliance`}>
-                                    {t("complianceSettings")}
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => openEditDialog(store)}>
-                                  {t("edit")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() =>
-                                    updatePolicyMutation.mutate({
-                                      storeId: store.id,
-                                      allowNegativeStock: !store.allowNegativeStock,
-                                      trackExpiryLots: store.trackExpiryLots,
-                                    })
-                                  }
-                                  disabled={isUpdating}
-                                >
-                                  {isUpdating ? <Spinner className="h-3 w-3" /> : null}
-                                  {isUpdating
-                                    ? tCommon("loading")
-                                    : store.allowNegativeStock
-                                    ? t("disableNegative")
-                                    : t("enableNegative")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() =>
-                                    updatePolicyMutation.mutate({
-                                      storeId: store.id,
-                                      allowNegativeStock: store.allowNegativeStock,
-                                      trackExpiryLots: !store.trackExpiryLots,
-                                    })
-                                  }
-                                  disabled={isUpdating}
-                                >
-                                  {isUpdating ? <Spinner className="h-3 w-3" /> : null}
-                                  {isUpdating
-                                    ? tCommon("loading")
-                                    : store.trackExpiryLots
-                                      ? t("disableExpiryLots")
-                                      : t("enableExpiryLots")}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="shadow-none"
-                                  aria-label={tCommon("view")}
-                                  onClick={() => setViewingStore(store)}
-                                >
-                                  <ViewIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{tCommon("view")}</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </TableCell>
+          <ResponsiveDataList
+            items={storesQuery.data ?? []}
+            getKey={(store) => store.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <TooltipProvider>
+                  <Table className="min-w-[760px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("name")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("code")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("legalType")}</TableHead>
+                        <TableHead className="hidden lg:table-cell">{t("inn")}</TableHead>
+                        <TableHead>{t("allowNegativeStock")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("trackExpiryLots")}</TableHead>
+                        <TableHead className="hidden lg:table-cell">{t("complianceStatus")}</TableHead>
+                        <TableHead>{tCommon("actions")}</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TooltipProvider>
-          </div>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((store) => {
+                        const isUpdating =
+                          updatePolicyMutation.isLoading &&
+                          updatePolicyMutation.variables?.storeId === store.id;
+                        const complianceBadge = resolveComplianceBadge(store);
+                        return (
+                          <TableRow key={store.id}>
+                            <TableCell className="font-medium">{store.name}</TableCell>
+                            <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                              {store.code}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                              {store.legalEntityType ? (
+                                <Badge variant="muted">{legalTypeLabels[store.legalEntityType]}</Badge>
+                              ) : (
+                                tCommon("notAvailable")
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500 hidden lg:table-cell">
+                              {store.inn ?? tCommon("notAvailable")}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={store.allowNegativeStock ? "success" : "warning"}>
+                                {store.allowNegativeStock ? (
+                                  <StatusSuccessIcon className="h-3 w-3" aria-hidden />
+                                ) : (
+                                  <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                                )}
+                                {store.allowNegativeStock ? tCommon("yes") : tCommon("no")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <Badge variant={store.trackExpiryLots ? "success" : "warning"}>
+                                {store.trackExpiryLots ? (
+                                  <StatusSuccessIcon className="h-3 w-3" aria-hidden />
+                                ) : (
+                                  <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                                )}
+                                {store.trackExpiryLots ? tCommon("yes") : tCommon("no")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">
+                              <Badge variant={complianceBadge.variant}>
+                                {complianceBadge.icon}
+                                {complianceBadge.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {canManage ? (
+                                <DropdownMenu>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex">
+                                        <DropdownMenuTrigger asChild>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="shadow-none"
+                                            aria-label={tCommon("actions")}
+                                          >
+                                            <MoreIcon className="h-4 w-4" aria-hidden />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tCommon("actions")}</TooltipContent>
+                                  </Tooltip>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onSelect={() => setViewingStore(store)}>
+                                      {tCommon("view")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/stores/${store.id}/compliance`}>
+                                        {t("complianceSettings")}
+                                      </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => openEditDialog(store)}>
+                                      {t("edit")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        updatePolicyMutation.mutate({
+                                          storeId: store.id,
+                                          allowNegativeStock: !store.allowNegativeStock,
+                                          trackExpiryLots: store.trackExpiryLots,
+                                        })
+                                      }
+                                      disabled={isUpdating}
+                                    >
+                                      {isUpdating ? <Spinner className="h-3 w-3" /> : null}
+                                      {isUpdating
+                                        ? tCommon("loading")
+                                        : store.allowNegativeStock
+                                        ? t("disableNegative")
+                                        : t("enableNegative")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        updatePolicyMutation.mutate({
+                                          storeId: store.id,
+                                          allowNegativeStock: store.allowNegativeStock,
+                                          trackExpiryLots: !store.trackExpiryLots,
+                                        })
+                                      }
+                                      disabled={isUpdating}
+                                    >
+                                      {isUpdating ? <Spinner className="h-3 w-3" /> : null}
+                                      {isUpdating
+                                        ? tCommon("loading")
+                                        : store.trackExpiryLots
+                                          ? t("disableExpiryLots")
+                                          : t("enableExpiryLots")}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={tCommon("view")}
+                                      onClick={() => setViewingStore(store)}
+                                    >
+                                      <ViewIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{tCommon("view")}</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              </div>
+            )}
+            renderMobile={(store) => {
+              const complianceBadge = resolveComplianceBadge(store);
+              const isUpdating =
+                updatePolicyMutation.isLoading &&
+                updatePolicyMutation.variables?.storeId === store.id;
+              const actions = [
+                {
+                  key: "view",
+                  label: tCommon("view"),
+                  icon: ViewIcon,
+                  onSelect: () => setViewingStore(store),
+                },
+                ...(canManage
+                  ? [
+                      {
+                        key: "compliance",
+                        label: t("complianceSettings"),
+                        icon: AdjustIcon,
+                        href: `/stores/${store.id}/compliance`,
+                      },
+                      {
+                        key: "edit",
+                        label: t("edit"),
+                        icon: EditIcon,
+                        onSelect: () => openEditDialog(store),
+                      },
+                      {
+                        key: "toggle-negative",
+                        label: store.allowNegativeStock ? t("disableNegative") : t("enableNegative"),
+                        icon: StatusWarningIcon,
+                        disabled: isUpdating,
+                        onSelect: () =>
+                          updatePolicyMutation.mutate({
+                            storeId: store.id,
+                            allowNegativeStock: !store.allowNegativeStock,
+                            trackExpiryLots: store.trackExpiryLots,
+                          }),
+                      },
+                      {
+                        key: "toggle-expiry",
+                        label: store.trackExpiryLots ? t("disableExpiryLots") : t("enableExpiryLots"),
+                        icon: StatusWarningIcon,
+                        disabled: isUpdating,
+                        onSelect: () =>
+                          updatePolicyMutation.mutate({
+                            storeId: store.id,
+                            allowNegativeStock: store.allowNegativeStock,
+                            trackExpiryLots: !store.trackExpiryLots,
+                          }),
+                      },
+                    ]
+                  : []),
+              ];
+
+              return (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">{store.name}</p>
+                      <p className="text-xs text-gray-500">{store.code}</p>
+                    </div>
+                    <RowActions
+                      actions={actions}
+                      maxInline={1}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant={store.allowNegativeStock ? "success" : "warning"}>
+                      {store.allowNegativeStock ? (
+                        <StatusSuccessIcon className="h-3 w-3" aria-hidden />
+                      ) : (
+                        <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                      )}
+                      {store.allowNegativeStock ? tCommon("yes") : tCommon("no")}
+                    </Badge>
+                    <Badge variant={store.trackExpiryLots ? "success" : "warning"}>
+                      {store.trackExpiryLots ? (
+                        <StatusSuccessIcon className="h-3 w-3" aria-hidden />
+                      ) : (
+                        <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                      )}
+                      {store.trackExpiryLots ? tCommon("yes") : tCommon("no")}
+                    </Badge>
+                    <Badge variant={complianceBadge.variant}>
+                      {complianceBadge.icon}
+                      {complianceBadge.label}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500">
+                    {store.legalEntityType ? legalTypeLabels[store.legalEntityType] : tCommon("notAvailable")}
+                    {store.inn ? ` · ${store.inn}` : ""}
+                  </div>
+                </div>
+              );
+            }}
+          />
           {storesQuery.isLoading ? (
             <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
           ) : !storesQuery.data?.length ? (
@@ -429,11 +535,6 @@ const StoresPage = () => {
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noStores")}
               </div>
-              {canManage ? (
-                <Button className="w-full sm:w-auto" onClick={openCreateDialog}>
-                  {t("addStore")}
-                </Button>
-              ) : null}
             </div>
           ) : null}
           {storesQuery.error ? (
@@ -442,7 +543,7 @@ const StoresPage = () => {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-3"
+                size="sm"
                 onClick={() => storesQuery.refetch()}
               >
                 {tErrors("tryAgain")}

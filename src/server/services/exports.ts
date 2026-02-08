@@ -2,17 +2,20 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ExportJobStatus, ExportType, Prisma, StockMovementType } from "@prisma/client";
+import * as XLSX from "xlsx";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toCsv } from "@/server/services/csv";
 import { toJson } from "@/server/services/json";
+import { registerJob, runJob, type JobPayload } from "@/server/jobs";
 
 type ExportRequestInput = {
   organizationId: string;
   storeId: string;
   type: ExportType;
+  format?: ExportFormat;
   periodStart: Date;
   periodEnd: Date;
   requestedById: string;
@@ -24,6 +27,17 @@ type ComplianceFlags = {
   enableEttn: boolean;
 };
 
+type StoreSummary = {
+  id: string;
+  name: string;
+  code: string;
+};
+
+export type ExportFormat = "csv" | "xlsx";
+
+const EXPORT_SCHEMA_VERSION = "v1";
+const DEFAULT_EXPORT_FORMAT: ExportFormat = "csv";
+
 const formatDay = (date: Date) => date.toISOString().slice(0, 10);
 
 const ensureExportDir = async () => {
@@ -32,8 +46,43 @@ const ensureExportDir = async () => {
   return directory;
 };
 
-const buildFileName = (type: ExportType, jobId: string) =>
-  `${type.toLowerCase()}-${jobId}.csv`;
+const normalizeExportFormat = (value: unknown): ExportFormat =>
+  value === "xlsx" ? "xlsx" : DEFAULT_EXPORT_FORMAT;
+
+const readJobFormat = (paramsJson: Prisma.JsonValue | null | undefined): ExportFormat => {
+  if (!paramsJson || typeof paramsJson !== "object" || Array.isArray(paramsJson)) {
+    return DEFAULT_EXPORT_FORMAT;
+  }
+  return normalizeExportFormat((paramsJson as Record<string, unknown>).format);
+};
+
+const buildFileName = (type: ExportType, jobId: string, format: ExportFormat) =>
+  `${type.toLowerCase()}-${jobId}.${format}`;
+
+const buildExportFile = (
+  format: ExportFormat,
+  header: string[],
+  keys: string[],
+  rows: Array<Record<string, unknown>>,
+) => {
+  if (format === "xlsx") {
+    const workbook = XLSX.utils.book_new();
+    const values = [header, ...rows.map((row) => keys.map((key) => row[key] ?? ""))];
+    const worksheet = XLSX.utils.aoa_to_sheet(values);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "export");
+    const content = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    return {
+      content,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+  }
+
+  const csv = toCsv(header, rows, keys);
+  return {
+    content: Buffer.from(csv, "utf8"),
+    mimeType: "text/csv;charset=utf-8",
+  };
+};
 
 const resolveComplianceFlags = async (
   organizationId: string,
@@ -58,6 +107,35 @@ const loadComplianceFlags = async (organizationId: string, productIds: string[])
     select: { productId: true, requiresMarking: true, requiresEttn: true, markingType: true },
   });
   return new Map(flags.map((flag) => [flag.productId, flag]));
+};
+
+const buildKey = (productId: string, variantId?: string | null) =>
+  `${productId}:${variantId ?? "BASE"}`;
+
+const loadPriceMap = async (storeId: string, productIds: string[]) => {
+  if (!productIds.length) {
+    return new Map<string, number>();
+  }
+  const prices = await prisma.storePrice.findMany({
+    where: { storeId, productId: { in: productIds } },
+    select: { productId: true, variantId: true, priceKgs: true },
+  });
+  return new Map(
+    prices.map((price) => [buildKey(price.productId, price.variantId), Number(price.priceKgs)]),
+  );
+};
+
+const loadCostMap = async (organizationId: string, productIds: string[]) => {
+  if (!productIds.length) {
+    return new Map<string, number>();
+  }
+  const costs = await prisma.productCost.findMany({
+    where: { organizationId, productId: { in: productIds } },
+    select: { productId: true, variantId: true, avgCostKgs: true },
+  });
+  return new Map(
+    costs.map((cost) => [buildKey(cost.productId, cost.variantId), Number(cost.avgCostKgs)]),
+  );
 };
 
 const buildSalesSummaryRows = async (
@@ -327,16 +405,325 @@ const buildReceiptsRows = async (
   });
 };
 
+const buildInventoryMovementsLedgerRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+  compliance: ComplianceFlags,
+) => {
+  const movements = await prisma.stockMovement.findMany({
+    where: { storeId: store.id, createdAt: { gte: periodStart, lte: periodEnd } },
+    include: {
+      product: { select: { id: true, sku: true, name: true, unit: true, basePriceKgs: true, barcodes: { select: { value: true } } } },
+      variant: { select: { id: true, name: true, sku: true } },
+      createdBy: { select: { email: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const productIds = movements.map((movement) => movement.product.id);
+  const flagsMap = await loadComplianceFlags(organizationId, productIds);
+  const priceMap = await loadPriceMap(store.id, productIds);
+  const costMap = await loadCostMap(organizationId, productIds);
+
+  return movements.map((movement) => {
+    const flags = flagsMap.get(movement.product.id);
+    const key = buildKey(movement.product.id, movement.variant?.id ?? null);
+    const override = priceMap.get(key) ?? priceMap.get(buildKey(movement.product.id, null));
+    const basePrice = movement.product.basePriceKgs ? Number(movement.product.basePriceKgs) : null;
+    const effectivePrice = override ?? basePrice;
+    const avgCost = costMap.get(key) ?? costMap.get(buildKey(movement.product.id, null)) ?? null;
+    const totalCost = avgCost !== null ? avgCost * Math.abs(movement.qtyDelta) : null;
+    const barcode = movement.product.barcodes?.[0]?.value ?? "";
+    const row: Record<string, unknown> = {
+      orgId: organizationId,
+      storeCode: store.code,
+      storeName: store.name,
+      movementId: movement.id,
+      movementType: movement.type,
+      occurredAt: movement.createdAt.toISOString(),
+      sku: movement.product.sku,
+      variantSku: movement.variant?.sku ?? "",
+      productName: movement.product.name,
+      variantName: movement.variant?.name ?? "",
+      barcode,
+      qtyDelta: movement.qtyDelta,
+      unit: movement.product.unit,
+      unitCostKgs: avgCost ?? "",
+      totalCostKgs: totalCost ?? "",
+      effectivePriceKgs: effectivePrice ?? "",
+      reason: movement.note ?? "",
+      docType: movement.referenceType ?? "",
+      docNumber: movement.referenceId ?? "",
+      userEmail: movement.createdBy?.email ?? "",
+      requestId: "",
+    };
+    if (compliance.enableMarking) {
+      row.markingRequired = flags?.requiresMarking ?? false;
+      row.markingType = flags?.markingType ?? "";
+    }
+    if (compliance.enableEttn) {
+      row.ettnRequired = flags?.requiresEttn ?? false;
+    }
+    return row;
+  });
+};
+
+const buildInventoryBalancesRows = async (organizationId: string, store: StoreSummary) => {
+  const snapshots = await prisma.inventorySnapshot.findMany({
+    where: { storeId: store.id },
+    include: {
+      product: { select: { id: true, sku: true, name: true, unit: true } },
+      variant: { select: { id: true, sku: true } },
+    },
+  });
+  const productIds = snapshots.map((snapshot) => snapshot.product.id);
+  const costMap = await loadCostMap(organizationId, productIds);
+
+  return snapshots.map((snapshot) => {
+    const key = buildKey(snapshot.product.id, snapshot.variant?.id ?? null);
+    const avgCost = costMap.get(key) ?? costMap.get(buildKey(snapshot.product.id, null)) ?? null;
+    const inventoryValue = avgCost !== null ? avgCost * snapshot.onHand : null;
+    return {
+      orgId: organizationId,
+      storeCode: store.code,
+      sku: snapshot.product.sku,
+      variantSku: snapshot.variant?.sku ?? "",
+      productName: snapshot.product.name,
+      onHand: snapshot.onHand,
+      unit: snapshot.product.unit,
+      avgCostKgs: avgCost ?? "",
+      inventoryValueKgs: inventoryValue ?? "",
+    };
+  });
+};
+
+const buildPurchasesReceiptsRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const orders = await prisma.purchaseOrder.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      receivedAt: { gte: periodStart, lte: periodEnd },
+    },
+    include: {
+      supplier: true,
+      lines: { include: { product: { select: { sku: true, name: true, unit: true } }, variant: { select: { sku: true } } } },
+    },
+  });
+
+  return orders.flatMap((order) =>
+    order.lines
+      .filter((line) => line.qtyReceived > 0)
+      .map((line) => {
+        const unitCost = line.unitCost ? Number(line.unitCost) : null;
+        return {
+          orgId: organizationId,
+          storeCode: store.code,
+          supplierName: order.supplier.name,
+          supplierInn: "",
+          poNumber: order.id,
+          receivedAt: order.receivedAt ? order.receivedAt.toISOString() : "",
+          sku: line.product.sku,
+          qty: line.qtyReceived,
+          unit: line.product.unit,
+          unitCostKgs: unitCost ?? "",
+          lineTotalKgs: unitCost ? unitCost * line.qtyReceived : "",
+        };
+      }),
+  );
+};
+
+const buildPriceListRows = async (organizationId: string, store: StoreSummary) => {
+  const products = await prisma.product.findMany({
+    where: { organizationId, isDeleted: false },
+    select: { id: true, sku: true, name: true, basePriceKgs: true },
+  });
+  const productIds = products.map((product) => product.id);
+  const priceMap = await loadPriceMap(store.id, productIds);
+  const costMap = await loadCostMap(organizationId, productIds);
+
+  return products.map((product) => {
+    const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : null;
+    const override = priceMap.get(buildKey(product.id, null)) ?? null;
+    const effectivePrice = override ?? basePrice;
+    const avgCost = costMap.get(buildKey(product.id, null)) ?? null;
+    const marginPct =
+      effectivePrice && avgCost !== null && effectivePrice > 0
+        ? ((effectivePrice - avgCost) / effectivePrice) * 100
+        : null;
+    const markupPct =
+      avgCost && avgCost > 0 && effectivePrice !== null
+        ? ((effectivePrice - avgCost) / avgCost) * 100
+        : null;
+
+    return {
+      orgId: organizationId,
+      storeCode: store.code,
+      sku: product.sku,
+      productName: product.name,
+      basePriceKgs: basePrice ?? "",
+      storeOverridePriceKgs: override ?? "",
+      effectivePriceKgs: effectivePrice ?? "",
+      avgCostKgs: avgCost ?? "",
+      marginPct: marginPct !== null ? Number(marginPct.toFixed(2)) : "",
+      markupPct: markupPct !== null ? Number(markupPct.toFixed(2)) : "",
+    };
+  });
+};
+
 const buildExportData = async (
   input: ExportRequestInput,
-  storeName: string,
+  store: StoreSummary,
   compliance: ComplianceFlags,
 ) => {
   switch (input.type) {
+    case ExportType.INVENTORY_MOVEMENTS_LEDGER: {
+      const rows = await buildInventoryMovementsLedgerRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+        compliance,
+      );
+      const header = [
+        "orgId",
+        "storeCode",
+        "storeName",
+        "movementId",
+        "movementType",
+        "occurredAt",
+        "sku",
+        "variantSku",
+        "productName",
+        "variantName",
+        "barcode",
+        "qtyDelta",
+        "unit",
+        "unitCostKgs",
+        "totalCostKgs",
+        "effectivePriceKgs",
+        "reason",
+        "docType",
+        "docNumber",
+        "userEmail",
+        "requestId",
+      ];
+      const keys = [...header];
+      if (compliance.enableMarking) {
+        header.push("markingRequired", "markingType");
+        keys.push("markingRequired", "markingType");
+      }
+      if (compliance.enableEttn) {
+        header.push("ettnRequired");
+        keys.push("ettnRequired");
+      }
+      return { header, keys, rows };
+    }
+    case ExportType.INVENTORY_BALANCES_AT_DATE: {
+      const rows = await buildInventoryBalancesRows(input.organizationId, store);
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "variantSku",
+          "productName",
+          "onHand",
+          "unit",
+          "avgCostKgs",
+          "inventoryValueKgs",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "variantSku",
+          "productName",
+          "onHand",
+          "unit",
+          "avgCostKgs",
+          "inventoryValueKgs",
+        ],
+        rows,
+      };
+    }
+    case ExportType.PURCHASES_RECEIPTS: {
+      const rows = await buildPurchasesReceiptsRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "supplierName",
+          "supplierInn",
+          "poNumber",
+          "receivedAt",
+          "sku",
+          "qty",
+          "unit",
+          "unitCostKgs",
+          "lineTotalKgs",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "supplierName",
+          "supplierInn",
+          "poNumber",
+          "receivedAt",
+          "sku",
+          "qty",
+          "unit",
+          "unitCostKgs",
+          "lineTotalKgs",
+        ],
+        rows,
+      };
+    }
+    case ExportType.PRICE_LIST: {
+      const rows = await buildPriceListRows(input.organizationId, store);
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "productName",
+          "basePriceKgs",
+          "storeOverridePriceKgs",
+          "effectivePriceKgs",
+          "avgCostKgs",
+          "marginPct",
+          "markupPct",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "productName",
+          "basePriceKgs",
+          "storeOverridePriceKgs",
+          "effectivePriceKgs",
+          "avgCostKgs",
+          "marginPct",
+          "markupPct",
+        ],
+        rows,
+      };
+    }
     case ExportType.SALES_SUMMARY: {
       const rows = await buildSalesSummaryRows(
         input.storeId,
-        storeName,
+        store.name,
         input.periodStart,
         input.periodEnd,
       );
@@ -350,7 +737,7 @@ const buildExportData = async (
       const rows = await buildStockMovementsRows(
         input.organizationId,
         input.storeId,
-        storeName,
+        store.name,
         input.periodStart,
         input.periodEnd,
         compliance,
@@ -391,7 +778,7 @@ const buildExportData = async (
       const rows = await buildPurchasesRows(
         input.organizationId,
         input.storeId,
-        storeName,
+        store.name,
         input.periodStart,
         input.periodEnd,
         compliance,
@@ -440,7 +827,7 @@ const buildExportData = async (
       const rows = await buildInventoryRows(
         input.organizationId,
         input.storeId,
-        storeName,
+        store.name,
         compliance,
       );
       const header = [
@@ -479,7 +866,7 @@ const buildExportData = async (
       const rows = await buildPeriodCloseRows(
         input.organizationId,
         input.storeId,
-        storeName,
+        store.name,
         input.periodStart,
         input.periodEnd,
       );
@@ -511,7 +898,7 @@ const buildExportData = async (
       const rows = await buildReceiptsRows(
         input.organizationId,
         input.storeId,
-        storeName,
+        store.name,
         input.periodStart,
         input.periodEnd,
         compliance,
@@ -546,10 +933,60 @@ export const getExportJob = async (organizationId: string, jobId: string) => {
   });
 };
 
+export const retryExportJob = async (input: {
+  organizationId: string;
+  jobId: string;
+  actorId: string;
+  requestId: string;
+}) => {
+  const job = await prisma.exportJob.findFirst({
+    where: { id: input.jobId, organizationId: input.organizationId },
+  });
+  if (!job) {
+    throw new AppError("exportJobNotFound", "NOT_FOUND", 404);
+  }
+  if (job.status !== ExportJobStatus.FAILED) {
+    throw new AppError("exportRetryUnavailable", "CONFLICT", 409);
+  }
+
+  const updated = await prisma.exportJob.update({
+    where: { id: job.id },
+    data: {
+      status: ExportJobStatus.QUEUED,
+      startedAt: null,
+      finishedAt: null,
+      errorMessage: null,
+      errorJson: Prisma.DbNull,
+    },
+  });
+
+  await writeAuditLog(prisma, {
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    action: "EXPORT_RETRIED",
+    entity: "ExportJob",
+    entityId: updated.id,
+    before: toJson(job),
+    after: toJson(updated),
+    requestId: input.requestId,
+  });
+
+  if (process.env.NODE_ENV !== "test") {
+    void runJob("export-job", {
+      jobId: updated.id,
+      organizationId: input.organizationId,
+      requestId: input.requestId,
+    }).catch(() => null);
+  }
+
+  return updated;
+};
+
 export const requestExport = async (input: ExportRequestInput) => {
+  const format = input.format ?? DEFAULT_EXPORT_FORMAT;
   const store = await prisma.store.findFirst({
     where: { id: input.storeId, organizationId: input.organizationId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, code: true },
   });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -560,10 +997,18 @@ export const requestExport = async (input: ExportRequestInput) => {
       organizationId: input.organizationId,
       storeId: input.storeId,
       type: input.type,
-      status: ExportJobStatus.RUNNING,
+      status: ExportJobStatus.QUEUED,
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       requestedById: input.requestedById,
+      paramsJson: {
+        schemaVersion: EXPORT_SCHEMA_VERSION,
+        type: input.type,
+        format,
+        storeId: input.storeId,
+        periodStart: input.periodStart.toISOString(),
+        periodEnd: input.periodEnd.toISOString(),
+      },
     },
   });
 
@@ -578,15 +1023,71 @@ export const requestExport = async (input: ExportRequestInput) => {
     requestId: input.requestId,
   });
 
+  if (process.env.NODE_ENV !== "test") {
+    void runJob("export-job", {
+      jobId: job.id,
+      organizationId: input.organizationId,
+      requestId: input.requestId,
+    }).catch(() => null);
+  }
+
+  return job;
+};
+
+const runExportJob = async (payload?: JobPayload): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
+  const jobId =
+    payload && typeof payload === "object" && payload !== null && "jobId" in payload
+      ? String((payload as Record<string, unknown>).jobId ?? "")
+      : "";
+
+  const job = jobId
+    ? await prisma.exportJob.findFirst({ where: { id: jobId } })
+    : await prisma.exportJob.findFirst({
+        where: { status: ExportJobStatus.QUEUED },
+        orderBy: { createdAt: "asc" },
+      });
+
+  if (!job) {
+    return { job: "export-job", status: "skipped", details: { reason: "empty" } };
+  }
+
+  const store = await prisma.store.findFirst({
+    where: { id: job.storeId, organizationId: job.organizationId },
+    select: { id: true, name: true, code: true },
+  });
+  if (!store) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
+
+  const input: ExportRequestInput = {
+    organizationId: job.organizationId,
+    storeId: job.storeId,
+    type: job.type,
+    format: readJobFormat(job.paramsJson),
+    periodStart: job.periodStart,
+    periodEnd: job.periodEnd,
+    requestedById: job.requestedById,
+    requestId:
+      payload && typeof payload === "object" && payload !== null && "requestId" in payload
+        ? String((payload as Record<string, unknown>).requestId ?? "")
+        : "",
+  };
+
+  const running = await prisma.exportJob.update({
+    where: { id: job.id },
+    data: { status: ExportJobStatus.RUNNING, startedAt: new Date(), errorMessage: null, errorJson: Prisma.DbNull },
+  });
+
   try {
     const compliance = await resolveComplianceFlags(input.organizationId, input.storeId);
-    const { header, keys, rows } = await buildExportData(input, store.name, compliance);
-    const csv = toCsv(header, rows, keys);
+    const { header, keys, rows } = await buildExportData(input, store, compliance);
+    const format = input.format ?? DEFAULT_EXPORT_FORMAT;
+    const file = buildExportFile(format, header, keys, rows);
     const directory = await ensureExportDir();
-    const fileName = buildFileName(input.type, job.id);
+    const fileName = buildFileName(input.type, job.id, format);
     const storagePath = join(directory, fileName);
 
-    await fs.writeFile(storagePath, csv, "utf8");
+    await fs.writeFile(storagePath, file.content);
 
     const updated = await prisma.exportJob.update({
       where: { id: job.id },
@@ -594,8 +1095,8 @@ export const requestExport = async (input: ExportRequestInput) => {
         status: ExportJobStatus.DONE,
         finishedAt: new Date(),
         fileName,
-        mimeType: "text/csv",
-        fileSize: Buffer.byteLength(csv),
+        mimeType: file.mimeType,
+        fileSize: file.content.byteLength,
         storagePath,
       },
     });
@@ -606,12 +1107,12 @@ export const requestExport = async (input: ExportRequestInput) => {
       action: "EXPORT_FINISHED",
       entity: "ExportJob",
       entityId: updated.id,
-      before: toJson(job),
+      before: toJson(running),
       after: toJson(updated),
       requestId: input.requestId,
     });
 
-    return updated;
+    return { job: "export-job", status: "ok", details: { jobId: updated.id } };
   } catch (error) {
     const message = error instanceof Error ? error.message : "exportFailed";
     const failed = await prisma.exportJob.update({
@@ -620,6 +1121,7 @@ export const requestExport = async (input: ExportRequestInput) => {
         status: ExportJobStatus.FAILED,
         finishedAt: new Date(),
         errorMessage: message,
+        errorJson: toJson({ message }),
       },
     });
 
@@ -629,7 +1131,7 @@ export const requestExport = async (input: ExportRequestInput) => {
       action: "EXPORT_FAILED",
       entity: "ExportJob",
       entityId: failed.id,
-      before: toJson(job),
+      before: toJson(running),
       after: toJson(failed),
       requestId: input.requestId,
     });
@@ -640,3 +1142,9 @@ export const requestExport = async (input: ExportRequestInput) => {
     throw new AppError("exportFailed", "INTERNAL_SERVER_ERROR", 500);
   }
 };
+
+registerJob("export-job", {
+  handler: runExportJob,
+  maxAttempts: 3,
+  baseDelayMs: 1000,
+});

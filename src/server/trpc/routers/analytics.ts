@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 
 import { protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   getInventoryValue,
   getSalesTrend,
@@ -36,6 +37,7 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       ensureScope(ctx.user.role, input.storeId);
       try {
+        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
         return await getSalesTrend({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -57,6 +59,7 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       ensureScope(ctx.user.role, input.storeId);
       try {
+        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
         return await getTopProducts({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -77,6 +80,7 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       ensureScope(ctx.user.role, input.storeId);
       try {
+        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
         return await getStockoutsLowStockSeries({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -92,6 +96,7 @@ export const analyticsRouter = router({
       const storeId = input?.storeId;
       ensureScope(ctx.user.role, storeId);
       try {
+        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
         return await getInventoryValue({
           organizationId: ctx.user.organizationId,
           storeId,

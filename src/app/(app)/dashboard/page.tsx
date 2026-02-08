@@ -234,7 +234,7 @@ const DashboardPage = () => {
             </CardTitle>
             <p className="text-sm text-gray-500">{t("chartsSubtitle")}</p>
           </div>
-          <Button asChild variant="ghost">
+          <Button asChild variant="secondary">
             <Link href="/reports/analytics">{t("chartsAction")}</Link>
           </Button>
         </CardHeader>

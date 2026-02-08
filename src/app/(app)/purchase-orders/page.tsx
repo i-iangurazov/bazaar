@@ -36,6 +36,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -210,132 +212,218 @@ const PurchaseOrdersPage = () => {
               </TooltipProvider>
             </div>
           ) : null}
-          <div className="overflow-x-auto">
-            <TooltipProvider>
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    {canManage ? (
-                      <TableHead className="w-10">
+          <ResponsiveDataList
+            items={listQuery.data ?? []}
+            getKey={(po) => po.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <TooltipProvider>
+                  <Table className="min-w-[760px]">
+                    <TableHeader>
+                      <TableRow>
+                        {canManage ? (
+                          <TableHead className="w-10">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-ink"
+                              checked={allSelected}
+                              onChange={toggleSelectAll}
+                              aria-label={t("selectAll")}
+                            />
+                          </TableHead>
+                        ) : null}
+                        <TableHead>{t("number")}</TableHead>
+                        <TableHead>{t("supplier")}</TableHead>
+                        <TableHead>{t("store")}</TableHead>
+                        <TableHead>{t("statusLabel")}</TableHead>
+                        <TableHead>{t("total")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("created")}</TableHead>
+                        <TableHead>{tCommon("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((po) => (
+                        <TableRow key={po.id}>
+                          {canManage ? (
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-ink"
+                                checked={selectedIds.has(po.id)}
+                                onChange={() => toggleSelect(po.id)}
+                                aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
+                              />
+                            </TableCell>
+                          ) : null}
+                          <TableCell className="text-xs text-gray-500" title={po.id}>
+                            {po.id.slice(0, 8).toUpperCase()}
+                          </TableCell>
+                          <TableCell>
+                            <Link className="font-medium text-ink" href={`/purchase-orders/${po.id}`}>
+                              {po.supplier.name}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500">{po.store.name}</TableCell>
+                          <TableCell>
+                              <Badge
+                                variant={
+                                  po.status === "RECEIVED"
+                                    ? "success"
+                                    : po.status === "PARTIALLY_RECEIVED"
+                                      ? "warning"
+                                      : po.status === "CANCELLED"
+                                        ? "danger"
+                                        : "warning"
+                                }
+                              >
+                              {(() => {
+                                const Icon = statusIcon(po.status);
+                                return <Icon className="h-3 w-3" aria-hidden />;
+                              })()}
+                              {statusLabel(po.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500">
+                            {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                            {formatDate(po.createdAt, locale)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="shadow-none"
+                                    aria-label={tCommon("view")}
+                                    onClick={() => router.push(`/purchase-orders/${po.id}`)}
+                                  >
+                                    <ViewIcon className="h-4 w-4" aria-hidden />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{tCommon("view")}</TooltipContent>
+                              </Tooltip>
+                              {canManage && (po.status === "DRAFT" || po.status === "SUBMITTED") ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-danger shadow-none hover:text-danger"
+                                      aria-label={t("cancelOrder")}
+                                      onClick={() => {
+                                        const confirmed = window.confirm(t("confirmCancel"));
+                                        if (!confirmed) {
+                                          return;
+                                        }
+                                        cancelMutation.mutate({ purchaseOrderId: po.id });
+                                      }}
+                                      disabled={cancelingId === po.id}
+                                    >
+                                      {cancelingId === po.id ? (
+                                        <Spinner className="h-4 w-4" />
+                                      ) : (
+                                        <CloseIcon className="h-4 w-4" aria-hidden />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("cancelOrder")}</TooltipContent>
+                                </Tooltip>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              </div>
+            )}
+            renderMobile={(po) => {
+              const status = statusLabel(po.status);
+              const StatusIcon = statusIcon(po.status);
+              const actions = [
+                {
+                  key: "view",
+                  label: tCommon("view"),
+                  icon: ViewIcon,
+                  onSelect: () => router.push(`/purchase-orders/${po.id}`),
+                },
+                ...(canManage && (po.status === "DRAFT" || po.status === "SUBMITTED")
+                  ? [
+                      {
+                        key: "cancel",
+                        label: t("cancelOrder"),
+                        icon: CloseIcon,
+                        variant: "danger",
+                        disabled: cancelingId === po.id,
+                        onSelect: () => {
+                          const confirmed = window.confirm(t("confirmCancel"));
+                          if (!confirmed) {
+                            return;
+                          }
+                          cancelMutation.mutate({ purchaseOrderId: po.id });
+                        },
+                      },
+                    ]
+                  : []),
+              ];
+
+              return (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-start gap-2">
+                      {canManage ? (
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-ink"
-                          checked={allSelected}
-                          onChange={toggleSelectAll}
-                          aria-label={t("selectAll")}
+                          className="mt-1 h-4 w-4 accent-ink"
+                          checked={selectedIds.has(po.id)}
+                          onChange={() => toggleSelect(po.id)}
+                          aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
                         />
-                      </TableHead>
-                    ) : null}
-                    <TableHead>{t("number")}</TableHead>
-                    <TableHead>{t("supplier")}</TableHead>
-                    <TableHead>{t("store")}</TableHead>
-                    <TableHead>{t("statusLabel")}</TableHead>
-                    <TableHead>{t("total")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("created")}</TableHead>
-                    <TableHead>{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {listQuery.data?.map((po) => (
-                    <TableRow key={po.id}>
-                      {canManage ? (
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-ink"
-                            checked={selectedIds.has(po.id)}
-                            onChange={() => toggleSelect(po.id)}
-                            aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
-                          />
-                        </TableCell>
                       ) : null}
-                      <TableCell className="text-xs text-gray-500" title={po.id}>
-                        {po.id.slice(0, 8).toUpperCase()}
-                      </TableCell>
-                      <TableCell>
-                        <Link className="font-medium text-ink" href={`/purchase-orders/${po.id}`}>
-                          {po.supplier.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500">{po.store.name}</TableCell>
-                      <TableCell>
-                          <Badge
-                            variant={
-                              po.status === "RECEIVED"
-                                ? "success"
-                                : po.status === "PARTIALLY_RECEIVED"
-                                  ? "warning"
-                                  : po.status === "CANCELLED"
-                                    ? "danger"
-                                    : "warning"
-                            }
-                          >
-                          {(() => {
-                            const Icon = statusIcon(po.status);
-                            return <Icon className="h-3 w-3" aria-hidden />;
-                          })()}
-                          {statusLabel(po.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500">
-                        {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden md:table-cell">
-                        {formatDate(po.createdAt, locale)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="shadow-none"
-                                aria-label={tCommon("view")}
-                                onClick={() => router.push(`/purchase-orders/${po.id}`)}
-                              >
-                                <ViewIcon className="h-4 w-4" aria-hidden />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{tCommon("view")}</TooltipContent>
-                          </Tooltip>
-                          {canManage && (po.status === "DRAFT" || po.status === "SUBMITTED") ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-danger shadow-none hover:text-danger"
-                                  aria-label={t("cancelOrder")}
-                                  onClick={() => {
-                                    const confirmed = window.confirm(t("confirmCancel"));
-                                    if (!confirmed) {
-                                      return;
-                                    }
-                                    cancelMutation.mutate({ purchaseOrderId: po.id });
-                                  }}
-                                  disabled={cancelingId === po.id}
-                                >
-                                  {cancelingId === po.id ? (
-                                    <Spinner className="h-4 w-4" />
-                                  ) : (
-                                    <CloseIcon className="h-4 w-4" aria-hidden />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t("cancelOrder")}</TooltipContent>
-                            </Tooltip>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TooltipProvider>
-          </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-gray-500">{po.id.slice(0, 8).toUpperCase()}</p>
+                        <p className="truncate text-sm font-medium text-ink">{po.supplier.name}</p>
+                        <p className="text-xs text-gray-500">{po.store.name}</p>
+                      </div>
+                    </div>
+                    <RowActions
+                      actions={actions}
+                      maxInline={1}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge
+                      variant={
+                        po.status === "RECEIVED"
+                          ? "success"
+                          : po.status === "PARTIALLY_RECEIVED"
+                            ? "warning"
+                            : po.status === "CANCELLED"
+                              ? "danger"
+                              : "warning"
+                      }
+                    >
+                      <StatusIcon className="h-3 w-3" aria-hidden />
+                      {status}
+                    </Badge>
+                    <span className="text-xs text-gray-500">
+                      {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {formatDate(po.createdAt, locale)}
+                    </span>
+                  </div>
+                </div>
+              );
+            }}
+          />
           {listQuery.isLoading ? (
             <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
           ) : !listQuery.data?.length ? (
@@ -344,14 +432,6 @@ const PurchaseOrdersPage = () => {
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noOrders")}
               </div>
-              {canManage ? (
-                <Link href="/purchase-orders/new" className="w-full sm:w-auto">
-                  <Button className="w-full sm:w-auto">
-                    <AddIcon className="h-4 w-4" aria-hidden />
-                    {t("new")}
-                  </Button>
-                </Link>
-              ) : null}
             </div>
           ) : null}
           {listQuery.error ? (

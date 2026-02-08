@@ -1,3 +1,4 @@
+import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
 import { getRedisPublisher } from "@/server/redis";
 
@@ -50,6 +51,9 @@ class RedisRateLimiter implements RateLimiter {
   async consume(key: string) {
     const redis = getRedisPublisher();
     if (!redis) {
+      if (isProductionRuntime()) {
+        throw new Error("redisUnavailable");
+      }
       return new MemoryRateLimiter({ windowMs: this.windowMs, max: this.max, prefix: this.prefix }).consume(
         key,
       );

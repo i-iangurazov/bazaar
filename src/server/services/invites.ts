@@ -6,6 +6,7 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { assertWithinLimits } from "@/server/services/planLimits";
+import { isEmailVerificationRequired } from "@/server/config/auth";
 
 const INVITE_TTL_DAYS = 7;
 
@@ -20,8 +21,9 @@ export const createInvite = async (input: {
   requestId: string;
   email: string;
   role: "ADMIN" | "MANAGER" | "STAFF";
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  await assertWithinLimits({ organizationId: input.organizationId, kind: "users" });
+  return prisma.$transaction(async (tx) => {
     const existingUser = await tx.user.findUnique({ where: { email: input.email } });
     if (existingUser) {
       throw new AppError("emailInUse", "CONFLICT", 409);
@@ -54,6 +56,7 @@ export const createInvite = async (input: {
 
     return { invite, token: rawToken };
   });
+};
 
 export const getInviteByToken = async (token: string) => {
   const tokenHash = hashToken(token);
@@ -94,6 +97,7 @@ export const acceptInvite = async (input: {
     await assertWithinLimits({ organizationId: invite.organizationId, kind: "users" });
 
     const passwordHash = await bcrypt.hash(input.password, 10);
+    const emailVerifiedAt = isEmailVerificationRequired() ? null : new Date();
     const user = await tx.user.create({
       data: {
         organizationId: invite.organizationId,
@@ -102,7 +106,7 @@ export const acceptInvite = async (input: {
         role: invite.role,
         passwordHash,
         preferredLocale: input.preferredLocale,
-        emailVerifiedAt: new Date(),
+        emailVerifiedAt,
       },
     });
 

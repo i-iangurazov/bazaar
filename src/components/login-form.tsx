@@ -75,6 +75,8 @@ export const LoginForm = () => {
         setError("loginRateLimited");
       } else if (result.error === "emailNotVerified") {
         setError("emailNotVerified");
+      } else if (result.error === "registrationNotCompleted") {
+        setError("registrationNotCompleted");
       } else {
         setError("invalidCredentials");
       }

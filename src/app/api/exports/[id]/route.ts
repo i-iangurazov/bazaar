@@ -26,13 +26,22 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
     return new Response(null, { status: 404 });
   }
 
-  const file = await readFile(job.storagePath);
-  const fileName = job.fileName ?? `export-${job.id}.csv`;
+  let file: Buffer;
+  try {
+    file = await readFile(job.storagePath);
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+  const defaultExtension =
+    job.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ? "xlsx"
+      : "csv";
+  const fileName = job.fileName ?? `export-${job.id}.${defaultExtension}`;
 
-  return new Response(file, {
+  return new Response(new Uint8Array(file), {
     status: 200,
     headers: {
-      "Content-Type": job.mimeType ?? "text/csv",
+      "Content-Type": job.mimeType ?? "text/csv;charset=utf-8",
       "Content-Disposition": `attachment; filename=\"${fileName}\"`,
     },
   });

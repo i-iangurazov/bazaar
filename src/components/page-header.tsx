@@ -1,5 +1,17 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
+export const PageHeaderActions = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) => (
+  <div className={cn("flex flex-wrap items-center gap-2", className)}>{children}</div>
+);
+
 export const PageHeader = ({
   title,
   subtitle,
@@ -17,7 +29,7 @@ export const PageHeader = ({
         <h2 className="text-2xl font-semibold text-ink">{title}</h2>
         {subtitle ? <p className="text-sm text-gray-500">{subtitle}</p> : null}
       </div>
-      {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
+      {action ? <PageHeaderActions>{action}</PageHeaderActions> : null}
     </div>
     {filters ? <div className="flex flex-wrap gap-3">{filters}</div> : null}
   </div>

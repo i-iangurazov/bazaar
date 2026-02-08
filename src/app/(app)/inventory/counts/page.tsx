@@ -28,6 +28,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import {
   Form,
   FormControl,
@@ -193,50 +195,95 @@ const StockCountsPage = () => {
           {countsQuery.isLoading ? (
             <p className="text-sm text-gray-500">{tCommon("loading")}</p>
           ) : counts.length ? (
-            <div className="overflow-x-auto">
-              <Table className="min-w-[720px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("code")}</TableHead>
-                    <TableHead>{t("status")}</TableHead>
-                    <TableHead>{t("lines")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("startedAt")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("appliedAt")}</TableHead>
-                    <TableHead>{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {counts.map((count) => (
-                    <TableRow key={count.id}>
-                      <TableCell className="font-medium">{count.code}</TableCell>
-                      <TableCell>
-                        <Badge variant={statusVariants[count.status] ?? "default"}>
-                          {statusLabel(count.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{count._count.lines}</TableCell>
-                      <TableCell className="hidden md:table-cell">
+            <ResponsiveDataList
+              items={counts}
+              getKey={(count) => count.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[720px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("code")}</TableHead>
+                        <TableHead>{t("status")}</TableHead>
+                        <TableHead>{t("lines")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("startedAt")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("appliedAt")}</TableHead>
+                        <TableHead>{tCommon("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((count) => (
+                        <TableRow key={count.id}>
+                          <TableCell className="font-medium">{count.code}</TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariants[count.status] ?? "default"}>
+                              {statusLabel(count.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{count._count.lines}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {count.startedAt
+                              ? formatDateTime(count.startedAt, locale)
+                              : tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {count.appliedAt
+                              ? formatDateTime(count.appliedAt, locale)
+                              : tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" asChild aria-label={tCommon("view")}>
+                              <Link href={`/inventory/counts/${count.id}`}>
+                                <ViewIcon className="h-4 w-4" aria-hidden />
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              renderMobile={(count) => (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-ink">{count.code}</p>
+                      <Badge variant={statusVariants[count.status] ?? "default"}>
+                        {statusLabel(count.status)}
+                      </Badge>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {t("lines")}: {count._count.lines}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t("startedAt")}:{" "}
                         {count.startedAt
                           ? formatDateTime(count.startedAt, locale)
                           : tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t("appliedAt")}:{" "}
                         {count.appliedAt
                           ? formatDateTime(count.appliedAt, locale)
                           : tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" asChild aria-label={tCommon("view")}>
-                          <Link href={`/inventory/counts/${count.id}`}>
-                            <ViewIcon className="h-4 w-4" aria-hidden />
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </p>
+                    </div>
+                    <RowActions
+                      actions={[
+                        {
+                          key: "view",
+                          label: tCommon("view"),
+                          icon: ViewIcon,
+                          href: `/inventory/counts/${count.id}`,
+                        },
+                      ]}
+                      maxInline={1}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                    />
+                  </div>
+                </div>
+              )}
+            />
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <EmptyIcon className="h-4 w-4" aria-hidden />

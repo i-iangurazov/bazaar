@@ -10,7 +10,7 @@ export const SignOutButton = () => {
 
   return (
     <Button
-      variant="ghost"
+      variant="secondary"
       className="w-full justify-start gap-2 text-left"
       onClick={() => signOut({ callbackUrl: "/login" })}
     >

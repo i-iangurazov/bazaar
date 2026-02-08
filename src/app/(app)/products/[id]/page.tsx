@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
+import { RowActions } from "@/components/row-actions";
 
 const ProductDetailPage = () => {
   const params = useParams();
@@ -326,7 +328,7 @@ const ProductDetailPage = () => {
           <Button
             type="button"
             variant="ghost"
-            className="h-8 px-3"
+            size="sm"
             onClick={() => productQuery.refetch()}
           >
             {tErrors("tryAgain")}
@@ -465,7 +467,7 @@ const ProductDetailPage = () => {
             ) : null}
             <Button
               variant="ghost"
-              className="h-8 px-3"
+              size="sm"
               onClick={() => setShowBundle((prev) => !prev)}
             >
               {showBundle ? t("hideBundle") : t("showBundle")}
@@ -477,52 +479,114 @@ const ProductDetailPage = () => {
             bundleComponentsQuery.isLoading ? (
               <p className="text-sm text-gray-500">{tCommon("loading")}</p>
             ) : bundleComponents.length ? (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[520px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{tCommon("product")}</TableHead>
-                      <TableHead>{t("variant")}</TableHead>
-                      <TableHead>{t("bundleQty")}</TableHead>
-                      <TableHead>{tCommon("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bundleComponents.map((component) => (
-                      <TableRow key={component.id}>
-                        <TableCell>{component.componentProduct.name}</TableCell>
-                        <TableCell>
-                          {component.componentVariant?.name ?? tCommon("notAvailable")}
-                        </TableCell>
-                        <TableCell>{formatNumber(component.qty, locale)}</TableCell>
-                        <TableCell>
-                          {canManageBundles ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="text-danger shadow-none hover:text-danger"
-                              aria-label={t("bundleRemoveComponent")}
-                              onClick={() => {
+              <ResponsiveDataList
+                items={bundleComponents}
+                getKey={(component) => component.id}
+                renderDesktop={(visibleItems) => (
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[520px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{tCommon("product")}</TableHead>
+                          <TableHead>{t("variant")}</TableHead>
+                          <TableHead>{t("bundleQty")}</TableHead>
+                          <TableHead>{tCommon("actions")}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((component) => {
+                          const actions = [
+                            {
+                              key: "remove",
+                              label: t("bundleRemoveComponent"),
+                              icon: DeleteIcon,
+                              variant: "danger" as const,
+                              onSelect: () => {
                                 if (!window.confirm(t("bundleRemoveConfirm"))) {
                                   return;
                                 }
                                 removeComponentMutation.mutate({ componentId: component.id });
-                              }}
-                            >
-                              <DeleteIcon className="h-4 w-4" aria-hidden />
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-gray-400">
-                              {tCommon("notAvailable")}
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                              },
+                              disabled: !canManageBundles,
+                            },
+                          ];
+
+                          return (
+                            <TableRow key={component.id}>
+                              <TableCell>{component.componentProduct.name}</TableCell>
+                              <TableCell>
+                                {component.componentVariant?.name ?? tCommon("notAvailable")}
+                              </TableCell>
+                              <TableCell>{formatNumber(component.qty, locale)}</TableCell>
+                              <TableCell>
+                                {canManageBundles ? (
+                                  <RowActions
+                                    actions={actions}
+                                    maxInline={1}
+                                    moreLabel={tCommon("tooltips.moreActions")}
+                                  />
+                                ) : (
+                                  <span className="text-xs text-gray-400">
+                                    {tCommon("notAvailable")}
+                                  </span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                renderMobile={(component) => {
+                  const actions = [
+                    {
+                      key: "remove",
+                      label: t("bundleRemoveComponent"),
+                      icon: DeleteIcon,
+                      variant: "danger" as const,
+                      onSelect: () => {
+                        if (!window.confirm(t("bundleRemoveConfirm"))) {
+                          return;
+                        }
+                        removeComponentMutation.mutate({ componentId: component.id });
+                      },
+                      disabled: !canManageBundles,
+                    },
+                  ];
+
+                  return (
+                    <div className="rounded-md border border-gray-200 bg-white p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-ink">
+                            {component.componentProduct.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {component.componentVariant?.name ?? tCommon("notAvailable")}
+                          </p>
+                        </div>
+                        <div className="text-sm font-semibold text-ink">
+                          {formatNumber(component.qty, locale)}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-end">
+                        {canManageBundles ? (
+                          <RowActions
+                            actions={actions}
+                            maxInline={1}
+                            moreLabel={tCommon("tooltips.moreActions")}
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            {tCommon("notAvailable")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
             ) : (
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -553,7 +617,7 @@ const ProductDetailPage = () => {
           <CardTitle>{t("expiryLotsTitle")}</CardTitle>
           <Button
             variant="ghost"
-            className="h-8 px-3"
+            size="sm"
             onClick={() => setShowLots((prev) => !prev)}
             disabled={!lotsEnabled}
           >
@@ -567,28 +631,54 @@ const ProductDetailPage = () => {
             lotsQuery.isLoading ? (
               <p className="text-sm text-gray-500">{tCommon("loading")}</p>
             ) : lots.length ? (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[420px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("expiryDate")}</TableHead>
-                      <TableHead>{tInventory("onHand")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lots.map((lot) => (
-                      <TableRow key={lot.id}>
-                        <TableCell>
+              <ResponsiveDataList
+                items={lots}
+                getKey={(lot) => lot.id}
+                renderDesktop={(visibleItems) => (
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[420px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("expiryDate")}</TableHead>
+                          <TableHead>{tInventory("onHand")}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((lot) => (
+                          <TableRow key={lot.id}>
+                            <TableCell>
+                              {lot.expiryDate
+                                ? formatDateTime(lot.expiryDate, locale)
+                                : t("noExpiry")}
+                            </TableCell>
+                            <TableCell>{formatNumber(lot.onHandQty, locale)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+                renderMobile={(lot) => (
+                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs text-gray-500">{t("expiryDate")}</p>
+                        <p className="text-sm font-medium text-ink">
                           {lot.expiryDate
                             ? formatDateTime(lot.expiryDate, locale)
                             : t("noExpiry")}
-                        </TableCell>
-                        <TableCell>{formatNumber(lot.onHandQty, locale)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">{tInventory("onHand")}</p>
+                        <p className="text-sm font-semibold text-ink">
+                          {formatNumber(lot.onHandQty, locale)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              />
             ) : (
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -845,49 +935,95 @@ const ProductDetailPage = () => {
               </Button>
             </div>
           ) : movementsQuery.data?.length ? (
-            <div className="overflow-x-auto">
-              <Table className="min-w-[520px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{tInventory("movementDate")}</TableHead>
-                    <TableHead>{tInventory("movementTypeLabel")}</TableHead>
-                    <TableHead>{tInventory("movementQty")}</TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      {tInventory("movementUser")}
-                    </TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      {tInventory("movementNote")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {movementsQuery.data.map((movement) => (
-                    <TableRow key={movement.id}>
-                      <TableCell className="text-xs text-gray-500">
+            <ResponsiveDataList
+              items={movementsQuery.data}
+              getKey={(movement) => movement.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[520px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{tInventory("movementDate")}</TableHead>
+                        <TableHead>{tInventory("movementTypeLabel")}</TableHead>
+                        <TableHead>{tInventory("movementQty")}</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {tInventory("movementUser")}
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {tInventory("movementNote")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((movement) => (
+                        <TableRow key={movement.id}>
+                          <TableCell className="text-xs text-gray-500">
+                            {formatDateTime(movement.createdAt, locale)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={movementBadgeVariant(movement.type)}>
+                              {movementTypeLabel(movement.type)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {movement.qtyDelta > 0 ? "+" : ""}
+                            {formatNumber(movement.qtyDelta, locale)}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                            {movement.createdBy?.name ??
+                              movement.createdBy?.email ??
+                              tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                            {formatMovementNote(tInventory, movement.note) || tCommon("notAvailable")}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              renderMobile={(movement) => (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-500">
                         {formatDateTime(movement.createdAt, locale)}
-                      </TableCell>
-                      <TableCell>
+                      </p>
+                      <div className="mt-1">
                         <Badge variant={movementBadgeVariant(movement.type)}>
                           {movementTypeLabel(movement.type)}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {movement.qtyDelta > 0 ? "+" : ""}
-                        {formatNumber(movement.qtyDelta, locale)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-ink">
+                      {movement.qtyDelta > 0 ? "+" : ""}
+                      {formatNumber(movement.qtyDelta, locale)}
+                    </p>
+                  </div>
+                  <div className="mt-2 grid gap-2 text-xs text-gray-500">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                        {tInventory("movementUser")}
+                      </p>
+                      <p className="text-gray-700">
                         {movement.createdBy?.name ??
                           movement.createdBy?.email ??
                           tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                        {tInventory("movementNote")}
+                      </p>
+                      <p className="text-gray-700">
                         {formatMovementNote(tInventory, movement.note) || tCommon("notAvailable")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            />
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <EmptyIcon className="h-4 w-4" aria-hidden />

@@ -48,7 +48,7 @@ export type JobResult = {
 
 export type JobPayload = Prisma.InputJsonValue | null | undefined;
 
-type JobDefinition = {
+export type JobDefinition = {
   handler: (payload?: JobPayload) => Promise<JobResult>;
   maxAttempts?: number;
   baseDelayMs?: number;
@@ -72,6 +72,10 @@ const jobs: Record<string, JobDefinition> = {
     maxAttempts: 3,
     baseDelayMs: 1000,
   },
+};
+
+export const registerJob = (name: string, definition: JobDefinition) => {
+  jobs[name] = definition;
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

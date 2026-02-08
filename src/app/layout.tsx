@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 
 import "./globals.css";
@@ -7,9 +7,16 @@ import { Providers } from "./providers";
 import { defaultLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
 
-const openSans = Open_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const notoSans = localFont({
+  src: [
+    {
+      path: "../../assets/fonts/NotoSans-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-sans",
+  display: "swap",
 });
 
 export const generateMetadata = async (): Promise<Metadata> => {
@@ -27,7 +34,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   return (
     <html lang={locale}>
       <body
-        className={`${openSans.className} min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100`}
+        className={`${notoSans.variable} font-sans min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100`}
       >
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           {children}

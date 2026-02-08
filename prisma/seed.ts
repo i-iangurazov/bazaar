@@ -14,6 +14,9 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 const RESET_PASSWORDS = process.env.SEED_RESET_PASSWORDS === "1";
+const PLATFORM_OWNER_EMAIL = process.env.SEED_PLATFORM_OWNER_EMAIL?.trim() || "owner@example.com";
+const PLATFORM_OWNER_PASSWORD = process.env.SEED_PLATFORM_OWNER_PASSWORD || "Owner123!";
+const PLATFORM_OWNER_NAME = process.env.SEED_PLATFORM_OWNER_NAME || "Platform Owner";
 
 const seededRandom = (seed: number) => {
   let state = seed;
@@ -43,14 +46,14 @@ const ensureInventoryConstraints = async () => {
 
 const getOrCreateOrganization = async () => {
   const existing = await prisma.organization.findFirst({
-    where: { name: "Northstar Retail" },
+    where: { name: "BAZAAR Retail" },
   });
   if (existing) {
     return existing;
   }
   return prisma.organization.create({
     data: {
-      name: "Northstar Retail",
+      name: "BAZAAR Retail",
     },
   });
 };
@@ -463,6 +466,13 @@ const main = async () => {
       password: "Staff123!",
     }),
   ]);
+
+  await getOrCreateUser(org, {
+    email: PLATFORM_OWNER_EMAIL,
+    name: PLATFORM_OWNER_NAME,
+    role: Role.ADMIN,
+    password: PLATFORM_OWNER_PASSWORD,
+  });
 
   const stores = await upsertStores(org.id);
   const [storeA] = stores;

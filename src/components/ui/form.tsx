@@ -153,6 +153,27 @@ const FormMessage = React.forwardRef<HTMLParagraphElement, React.ComponentPropsW
 
 FormMessage.displayName = "FormMessage";
 
+const Field = ({
+  label,
+  description,
+  className,
+  labelClassName,
+  children,
+}: {
+  label?: React.ReactNode;
+  description?: React.ReactNode;
+  className?: string;
+  labelClassName?: string;
+  children: React.ReactNode;
+}) => (
+  <FormItem className={cn("space-y-2", className)}>
+    {label ? <FormLabel className={labelClassName}>{label}</FormLabel> : null}
+    {children}
+    {description ? <FormDescription>{description}</FormDescription> : null}
+    <FormMessage />
+  </FormItem>
+);
+
 export {
   Form,
   FormField,
@@ -161,5 +182,6 @@ export {
   FormControl,
   FormDescription,
   FormMessage,
+  Field,
   useFormField,
 };

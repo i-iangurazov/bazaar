@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { ExportType } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DownloadIcon } from "@/components/icons";
+import { RowActions } from "@/components/row-actions";
 import { useToast } from "@/components/ui/toast";
+import { Field, FormActions, FormGrid } from "@/components/form-layout";
 import { formatDate, formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -107,10 +110,9 @@ const PeriodClosePage = () => {
         <CardHeader>
           <CardTitle>{t("closeTitle")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="text-xs text-gray-500">{t("storeLabel")}</label>
+        <CardContent className="space-y-6">
+          <FormGrid>
+            <Field label={t("storeLabel")}>
               <Select value={storeId} onValueChange={setStoreId}>
                 <SelectTrigger>
                   <SelectValue placeholder={tCommon("selectStore")} />
@@ -123,15 +125,16 @@ const PeriodClosePage = () => {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">{t("monthLabel")}</label>
+            </Field>
+            <Field label={t("monthLabel")}>
               <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
-            </div>
-          </div>
-          <Button type="button" onClick={handleClose} disabled={closeMutation.isLoading}>
-            {closeMutation.isLoading ? tCommon("loading") : t("closeAction")}
-          </Button>
+            </Field>
+          </FormGrid>
+          <FormActions>
+            <Button type="button" onClick={handleClose} disabled={closeMutation.isLoading}>
+              {closeMutation.isLoading ? tCommon("loading") : t("closeAction")}
+            </Button>
+          </FormActions>
         </CardContent>
       </Card>
 
@@ -145,57 +148,105 @@ const PeriodClosePage = () => {
           ) : closesQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
               <span>{translateError(tErrors, closesQuery.error)}</span>
-              <Button type="button" variant="ghost" className="h-8 px-3" onClick={() => closesQuery.refetch()}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => closesQuery.refetch()}>
                 {tErrors("tryAgain")}
               </Button>
             </div>
           ) : closesQuery.data?.length ? (
-            <div className="overflow-x-auto">
-              <Table className="min-w-[640px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("columns.period")}</TableHead>
-                    <TableHead>{t("columns.closedAt")}</TableHead>
-                    <TableHead>{t("columns.status")}</TableHead>
-                    <TableHead>{t("columns.actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {closesQuery.data.map((close) => (
-                    <TableRow key={close.id}>
-                      <TableCell className="text-xs text-gray-500">
+            <ResponsiveDataList
+              items={closesQuery.data}
+              getKey={(close) => close.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[640px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("columns.period")}</TableHead>
+                        <TableHead>{t("columns.closedAt")}</TableHead>
+                        <TableHead>{t("columns.status")}</TableHead>
+                        <TableHead>{t("columns.actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((close) => {
+                        const actions = [
+                          {
+                            key: "download",
+                            label: t("download"),
+                            icon: DownloadIcon,
+                            onSelect: () =>
+                              exportMutation.mutate({
+                                storeId: close.storeId,
+                                type: ExportType.PERIOD_CLOSE_REPORT,
+                                periodStart: close.periodStart,
+                                periodEnd: close.periodEnd,
+                              }),
+                            disabled: exportMutation.isLoading,
+                          },
+                        ];
+
+                        return (
+                          <TableRow key={close.id}>
+                            <TableCell className="text-xs text-gray-500">
+                              {formatDate(close.periodStart, locale)} — {formatDate(close.periodEnd, locale)}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {formatDateTime(close.closedAt, locale)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="success">{t("statusClosed")}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <RowActions
+                                actions={actions}
+                                maxInline={1}
+                                moreLabel={tCommon("tooltips.moreActions")}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              renderMobile={(close) => (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink">
                         {formatDate(close.periodStart, locale)} — {formatDate(close.periodEnd, locale)}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500">
+                      </p>
+                      <p className="text-xs text-gray-500">
                         {formatDateTime(close.closedAt, locale)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="success">{t("statusClosed")}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t("download")}
-                          onClick={() =>
+                      </p>
+                    </div>
+                    <Badge variant="success">{t("statusClosed")}</Badge>
+                  </div>
+                  <div className="mt-3 flex items-center justify-end">
+                    <RowActions
+                      actions={[
+                        {
+                          key: "download",
+                          label: t("download"),
+                          icon: DownloadIcon,
+                          onSelect: () =>
                             exportMutation.mutate({
                               storeId: close.storeId,
                               type: ExportType.PERIOD_CLOSE_REPORT,
                               periodStart: close.periodStart,
                               periodEnd: close.periodEnd,
-                            })
-                          }
-                          disabled={exportMutation.isLoading}
-                        >
-                          <DownloadIcon className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                            }),
+                          disabled: exportMutation.isLoading,
+                        },
+                      ]}
+                      maxInline={1}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                    />
+                  </div>
+                </div>
+              )}
+            />
           ) : (
             <p className="text-sm text-gray-500">{t("empty")}</p>
           )}

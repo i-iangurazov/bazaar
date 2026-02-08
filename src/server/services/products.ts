@@ -6,6 +6,12 @@ import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertWithinLimits } from "@/server/services/planLimits";
+import {
+  isManagedProductImageUrl,
+  normalizeProductImageUrl,
+  resolveProductImageUrl,
+  type ResolveProductImageUrlResult,
+} from "@/server/services/productImageStorage";
 
 export type CreateProductInput = {
   organizationId: string;
@@ -106,6 +112,30 @@ const ensureUnitByCode = async (
     update: { labelRu: code, labelKg: code },
     create: { organizationId, code, labelRu: code, labelKg: code },
   });
+
+const normalizeImportPhotoUrl = normalizeProductImageUrl;
+
+const resolveRemoteImportPhotoUrl = async (
+  value: string,
+  organizationId: string | undefined,
+  cache: Map<string, ResolveProductImageUrlResult>,
+) => {
+  if (!organizationId) {
+    return value;
+  }
+
+  const resolved = await resolveProductImageUrl({
+    value,
+    organizationId,
+    cache,
+  });
+
+  if (!resolved.url) {
+    return value;
+  }
+
+  return resolved.url;
+};
 
 const normalizePacks = (
   packs?: CreateProductInput["packs"],
@@ -420,8 +450,58 @@ const syncProductImages = async (
   });
 };
 
-export const createProduct = async (input: CreateProductInput) =>
-  prisma.$transaction(async (tx) => {
+const resolveIncomingProductImages = async (input: {
+  organizationId: string;
+  photoUrl?: string | null;
+  images?: CreateProductInput["images"];
+}) => {
+  const cache = new Map<string, ResolveProductImageUrlResult>();
+  const normalizedImages = normalizeImages(input.images);
+  const resolvedImages: NormalizedImage[] = [];
+
+  for (const image of normalizedImages) {
+    const resolved = await resolveProductImageUrl({
+      value: image.url,
+      organizationId: input.organizationId,
+      cache,
+    });
+    if (!resolved.url) {
+      continue;
+    }
+    resolvedImages.push({ ...image, url: resolved.url });
+  }
+
+  const explicitPhotoResolved =
+    input.photoUrl !== undefined
+      ? await resolveProductImageUrl({
+          value: input.photoUrl,
+          organizationId: input.organizationId,
+          cache,
+        })
+      : undefined;
+
+  const resolvedPhotoUrl =
+    explicitPhotoResolved?.url ??
+    (resolvedImages.length ? resolvedImages[0].url : null);
+
+  if (!resolvedImages.length && resolvedPhotoUrl) {
+    resolvedImages.push({ id: undefined, url: resolvedPhotoUrl, position: 0 });
+  }
+
+  return {
+    images: resolvedImages,
+    photoUrl: resolvedPhotoUrl,
+  };
+};
+
+export const createProduct = async (input: CreateProductInput) => {
+  const resolvedMedia = await resolveIncomingProductImages({
+    organizationId: input.organizationId,
+    photoUrl: input.photoUrl,
+    images: input.images,
+  });
+
+  return prisma.$transaction(async (tx) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
     await ensureSupplier(tx, input.organizationId, input.supplierId);
     const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
@@ -434,7 +514,7 @@ export const createProduct = async (input: CreateProductInput) =>
       .map((pack) => pack.packBarcode)
       .filter(Boolean) as string[];
     await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
-    const normalizedImages = normalizeImages(input.images);
+    const normalizedImages = resolvedMedia.images;
 
     const product = await tx.product.create({
       data: {
@@ -446,9 +526,7 @@ export const createProduct = async (input: CreateProductInput) =>
         baseUnitId: baseUnit.id,
         basePriceKgs: input.basePriceKgs ?? null,
         description: input.description ?? null,
-        photoUrl:
-          input.photoUrl ??
-          (normalizedImages.length ? normalizedImages[0].url : null),
+        photoUrl: resolvedMedia.photoUrl,
         supplierId: input.supplierId,
         barcodes: barcodes.length
           ? {
@@ -509,6 +587,7 @@ export const createProduct = async (input: CreateProductInput) =>
 
     return product;
   });
+};
 
 export type UpdateProductInput = {
   productId: string;
@@ -529,8 +608,14 @@ export type UpdateProductInput = {
   variants?: { id?: string; name?: string | null; sku?: string | null; attributes?: Record<string, unknown> }[];
 };
 
-export const updateProduct = async (input: UpdateProductInput) =>
-  prisma.$transaction(async (tx) => {
+export const updateProduct = async (input: UpdateProductInput) => {
+  const resolvedMedia = await resolveIncomingProductImages({
+    organizationId: input.organizationId,
+    photoUrl: input.photoUrl,
+    images: input.images,
+  });
+
+  return prisma.$transaction(async (tx) => {
     const before = await tx.product.findUnique({ where: { id: input.productId } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
@@ -551,7 +636,7 @@ export const updateProduct = async (input: UpdateProductInput) =>
       }
     }
 
-    const normalizedImages = input.images ? normalizeImages(input.images) : undefined;
+    const normalizedImages = input.images ? resolvedMedia.images : undefined;
     const product = await tx.product.update({
       where: { id: input.productId },
       data: {
@@ -563,7 +648,8 @@ export const updateProduct = async (input: UpdateProductInput) =>
         basePriceKgs: input.basePriceKgs ?? null,
         description: input.description ?? null,
         photoUrl:
-          input.photoUrl ?? (normalizedImages?.length ? normalizedImages[0].url : null),
+          resolvedMedia.photoUrl ??
+          (normalizedImages?.length ? normalizedImages[0].url : null),
         supplierId: input.supplierId ?? null,
       },
     });
@@ -687,6 +773,7 @@ export const updateProduct = async (input: UpdateProductInput) =>
 
     return product;
   });
+};
 
 export const bulkUpdateProductCategory = async (input: {
   organizationId: string;
@@ -741,6 +828,97 @@ export type ImportProductRow = {
   description?: string | null;
   photoUrl?: string | null;
   barcodes?: string[];
+  basePriceKgs?: number;
+  purchasePriceKgs?: number;
+  avgCostKgs?: number;
+};
+
+export type ImportPhotoResolutionSummary = {
+  downloaded: number;
+  fallback: number;
+  missing: number;
+};
+
+export const resolveImportRowsPhotoUrls = async (rows: ImportProductRow[]) => {
+  const cache = new Map<string, ResolveProductImageUrlResult>();
+  const resolvedRows: ImportProductRow[] = new Array(rows.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(6, rows.length));
+
+  const runWorker = async () => {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= rows.length) {
+        return;
+      }
+
+      const row = rows[index];
+      const normalized = normalizeImportPhotoUrl(row.photoUrl);
+      if (!normalized) {
+        resolvedRows[index] = { ...row, photoUrl: undefined };
+        continue;
+      }
+
+      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(
+        normalized,
+        undefined,
+        cache,
+      );
+      resolvedRows[index] = { ...row, photoUrl: resolvedPhotoUrl };
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return resolvedRows;
+};
+
+export const resolveImportRowsPhotoUrlsForOrganization = async (
+  rows: ImportProductRow[],
+  organizationId: string,
+) => {
+  const cache = new Map<string, ResolveProductImageUrlResult>();
+  const resolvedRows: ImportProductRow[] = new Array(rows.length);
+  const summary: ImportPhotoResolutionSummary = {
+    downloaded: 0,
+    fallback: 0,
+    missing: 0,
+  };
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(6, rows.length));
+
+  const runWorker = async () => {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= rows.length) {
+        return;
+      }
+
+      const row = rows[index];
+      const normalized = normalizeImportPhotoUrl(row.photoUrl);
+      if (!normalized) {
+        summary.missing += 1;
+        resolvedRows[index] = { ...row, photoUrl: undefined };
+        continue;
+      }
+
+      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(
+        normalized,
+        organizationId,
+        cache,
+      );
+      if (isManagedProductImageUrl(resolvedPhotoUrl)) {
+        summary.downloaded += 1;
+      } else {
+        summary.fallback += 1;
+      }
+      resolvedRows[index] = { ...row, photoUrl: resolvedPhotoUrl };
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return { rows: resolvedRows, summary };
 };
 
 export type ImportProductsInput = {
@@ -749,6 +927,14 @@ export type ImportProductsInput = {
   requestId: string;
   rows: ImportProductRow[];
   batchId?: string;
+};
+
+const resolveImportTransactionTimeout = () => {
+  const parsed = Number(process.env.IMPORT_TRANSACTION_TIMEOUT_MS);
+  if (Number.isFinite(parsed) && parsed >= 5_000) {
+    return parsed;
+  }
+  return 120_000;
 };
 
 export const importProductsTx = async (
@@ -774,8 +960,57 @@ export const importProductsTx = async (
     });
   };
 
+  const resolveOptionalPrice = (value?: number) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (!Number.isFinite(value) || value < 0) {
+      throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+    }
+    return value;
+  };
+
+  const setBaseCost = async (productId: string, avgCostKgs: number) => {
+    const existing = await tx.productCost.findUnique({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: input.organizationId,
+          productId,
+          variantKey: "BASE",
+        },
+      },
+      select: { id: true, costBasisQty: true },
+    });
+
+    if (existing) {
+      await tx.productCost.update({
+        where: { id: existing.id },
+        data: {
+          avgCostKgs,
+          costBasisQty: Math.max(existing.costBasisQty, 1),
+        },
+      });
+      return;
+    }
+
+    await tx.productCost.create({
+      data: {
+        organizationId: input.organizationId,
+        productId,
+        variantKey: "BASE",
+        avgCostKgs,
+        costBasisQty: 1,
+      },
+    });
+  };
+
   for (const row of input.rows) {
     const barcodes = normalizeBarcodes(row.barcodes);
+    const photoUrl = normalizeImportPhotoUrl(row.photoUrl);
+    const basePriceKgs = resolveOptionalPrice(row.basePriceKgs);
+    const avgCostKgs = resolveOptionalPrice(row.avgCostKgs);
+    const purchasePriceKgs = resolveOptionalPrice(row.purchasePriceKgs);
+    const resolvedBaseCost = avgCostKgs ?? purchasePriceKgs;
     const baseUnit = await ensureUnitByCode(tx, input.organizationId, row.unit.trim());
     const existing = await tx.product.findUnique({
       where: { organizationId_sku: { organizationId: input.organizationId, sku: row.sku } },
@@ -796,10 +1031,18 @@ export const importProductsTx = async (
           category: row.category ?? null,
           unit: baseUnit.code,
           baseUnitId: baseUnit.id,
+          ...(basePriceKgs !== undefined ? { basePriceKgs } : {}),
           description: row.description ?? null,
-          photoUrl: row.photoUrl ?? null,
+          photoUrl: photoUrl ?? existing.photoUrl,
+          isDeleted: false,
         },
       });
+
+      if (photoUrl) {
+        await syncProductImages(tx, input.organizationId, existing.id, [
+          { url: photoUrl, position: 0 },
+        ]);
+      }
 
       const existingBarcodes = await tx.productBarcode.findMany({
         where: { productId: existing.id },
@@ -829,6 +1072,9 @@ export const importProductsTx = async (
       }
 
       await ensureBaseSnapshots(tx, input.organizationId, existing.id, stores);
+      if (resolvedBaseCost !== undefined) {
+        await setBaseCost(existing.id, resolvedBaseCost);
+      }
 
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
@@ -851,12 +1097,24 @@ export const importProductsTx = async (
           category: row.category ?? null,
           unit: baseUnit.code,
           baseUnitId: baseUnit.id,
+          basePriceKgs: basePriceKgs ?? null,
           description: row.description ?? null,
-          photoUrl: row.photoUrl ?? null,
+          photoUrl,
         },
       });
 
       await recordImportedEntity("Product", product.id);
+
+      if (photoUrl) {
+        await tx.productImage.create({
+          data: {
+            organizationId: input.organizationId,
+            productId: product.id,
+            url: photoUrl,
+            position: 0,
+          },
+        });
+      }
 
       for (const value of barcodes) {
         const barcode = await tx.productBarcode.create({
@@ -870,6 +1128,9 @@ export const importProductsTx = async (
       }
 
       await ensureBaseSnapshots(tx, input.organizationId, product.id, stores);
+      if (resolvedBaseCost !== undefined) {
+        await setBaseCost(product.id, resolvedBaseCost);
+      }
 
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
@@ -890,7 +1151,13 @@ export const importProductsTx = async (
 };
 
 export const importProducts = async (input: ImportProductsInput) =>
-  prisma.$transaction(async (tx) => importProductsTx(tx, input));
+  prisma.$transaction(
+    async (tx) => importProductsTx(tx, input),
+    {
+      maxWait: 10_000,
+      timeout: resolveImportTransactionTimeout(),
+    },
+  );
 
 export type ArchiveProductInput = {
   productId: string;

@@ -10,6 +10,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { trpc, getBaseUrl } from "@/lib/trpc";
 import { createMessageFallback } from "@/lib/i18nFallback";
 import { ToastProvider } from "@/components/ui/toast";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 type IntlMessages = ComponentProps<typeof NextIntlClientProvider>["messages"];
 
@@ -59,7 +60,9 @@ export const Providers = ({
             timeZone={timeZone}
             getMessageFallback={createMessageFallback(locale)}
           >
-            <ToastProvider>{children}</ToastProvider>
+            <TooltipProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </TooltipProvider>
           </NextIntlClientProvider>
         </QueryClientProvider>
       </trpc.Provider>

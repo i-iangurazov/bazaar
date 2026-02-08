@@ -48,6 +48,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
         email: displayEmail,
         role,
         organizationId: (token as { organizationId?: string | null } | null)?.organizationId ?? null,
+        isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean } | null)?.isPlatformOwner),
       }}
       impersonation={impersonation}
     >

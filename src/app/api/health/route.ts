@@ -1,3 +1,4 @@
+import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { getRedisPublisher } from "@/server/redis";
 import { incrementCounter, httpRequestsTotal } from "@/server/metrics/metrics";
@@ -7,6 +8,15 @@ export const runtime = "nodejs";
 
 export const GET = async (request: Request) => {
   incrementCounter(httpRequestsTotal, { path: "/api/health" });
+  const configuredSecret = process.env.HEALTHCHECK_SECRET;
+  const providedSecret = request.headers.get("x-health-secret");
+  const token = await getServerAuthToken();
+  const isAdmin = Boolean(token?.sub && token.role === "ADMIN");
+  const internalAccess = configuredSecret ? providedSecret === configuredSecret : isAdmin;
+
+  if (!internalAccess) {
+    return Response.json({ status: "ok" });
+  }
 
   let db = "unknown";
   let migrations = "unknown";

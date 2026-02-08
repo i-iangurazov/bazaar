@@ -1,11 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,14 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
@@ -33,22 +23,20 @@ const InvitePage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
+  const [accepted, setAccepted] = useState(false);
+  const [values, setValues] = useState<{ name: string; password: string; preferredLocale: "ru" | "kg" }>({
+    name: "",
+    password: "",
+    preferredLocale: "ru",
+  });
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"name" | "password" | "preferredLocale", string>>>({});
 
   const inviteQuery = trpc.publicAuth.inviteDetails.useQuery({ token }, { enabled: Boolean(token) });
 
-  const schema = useMemo(
-    () =>
-      z.object({
-        name: z.string().min(2, t("nameRequired")),
-        password: z.string().min(8, t("passwordMin")),
-        preferredLocale: z.enum(["ru", "kg"]),
-      }),
-    [t],
-  );
-
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: "", password: "", preferredLocale: "ru" },
+  const schema = z.object({
+    name: z.string().min(2, t("nameRequired")),
+    password: z.string().min(8, t("passwordMin")),
+    preferredLocale: z.enum(["ru", "kg"]),
   });
 
   const acceptMutation = trpc.publicAuth.acceptInvite.useMutation({
@@ -66,7 +54,23 @@ const InvitePage = () => {
     },
   });
 
-  const [accepted, setAccepted] = useState(false);
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsed = schema.safeParse(values);
+    if (!parsed.success) {
+      const nextErrors: Partial<Record<"name" | "password" | "preferredLocale", string>> = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0];
+        if (typeof key === "string" && (key === "name" || key === "password" || key === "preferredLocale")) {
+          nextErrors[key] = issue.message;
+        }
+      }
+      setFieldErrors(nextErrors);
+      return;
+    }
+    setFieldErrors({});
+    acceptMutation.mutate({ token, ...parsed.data });
+  };
 
   if (accepted) {
     return (
@@ -111,66 +115,75 @@ const InvitePage = () => {
                 <p>{t("inviteEmail", { email: inviteQuery.data.email })}</p>
                 <p>{t("inviteRole", { role: inviteQuery.data.role })}</p>
               </div>
-              <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit((values) =>
-                    acceptMutation.mutate({ token, ...values }),
-                  )}
-                >
-                  <FormStack>
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("name")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder={t("namePlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+              <form onSubmit={handleSubmit}>
+                <FormStack>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-ink" htmlFor="invite-name">
+                      {t("name")}
+                    </label>
+                    <Input
+                      id="invite-name"
+                      placeholder={t("namePlaceholder")}
+                      value={values.name}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setValues((prev) => ({ ...prev, name: next }));
+                        if (fieldErrors.name) {
+                          setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                        }
+                      }}
                     />
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("password")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                    {fieldErrors.name ? <p className="text-xs font-medium text-danger">{fieldErrors.name}</p> : null}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-ink" htmlFor="invite-password">
+                      {t("password")}
+                    </label>
+                    <Input
+                      id="invite-password"
+                      type="password"
+                      placeholder={t("passwordPlaceholder")}
+                      value={values.password}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setValues((prev) => ({ ...prev, password: next }));
+                        if (fieldErrors.password) {
+                          setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                        }
+                      }}
                     />
-                    <FormField
-                      control={form.control}
-                      name="preferredLocale"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("preferredLocale")}</FormLabel>
-                          <FormControl>
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t("selectLocale")} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                                <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full" disabled={acceptMutation.isLoading}>
-                      {acceptMutation.isLoading ? tCommon("loading") : t("accept")}
-                    </Button>
-                  </FormStack>
-                </form>
-              </Form>
+                    {fieldErrors.password ? (
+                      <p className="text-xs font-medium text-danger">{fieldErrors.password}</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-ink">{t("preferredLocale")}</label>
+                    <Select
+                      value={values.preferredLocale}
+                      onValueChange={(value) => {
+                        setValues((prev) => ({ ...prev, preferredLocale: value as "ru" | "kg" }));
+                        if (fieldErrors.preferredLocale) {
+                          setFieldErrors((prev) => ({ ...prev, preferredLocale: undefined }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("selectLocale")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
+                        <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {fieldErrors.preferredLocale ? (
+                      <p className="text-xs font-medium text-danger">{fieldErrors.preferredLocale}</p>
+                    ) : null}
+                  </div>
+                  <Button type="submit" className="w-full" disabled={acceptMutation.isLoading}>
+                    {acceptMutation.isLoading ? tCommon("loading") : t("accept")}
+                  </Button>
+                </FormStack>
+              </form>
             </>
           ) : (
             <p className="text-sm text-gray-500">{t("invalidInvite")}</p>

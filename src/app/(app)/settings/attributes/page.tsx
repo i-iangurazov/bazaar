@@ -42,6 +42,8 @@ import {
 import { FormActions, FormGrid, FormRow, FormSection } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { AddIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import {
   Tooltip,
   TooltipContent,
@@ -350,97 +352,145 @@ const AttributesPage = () => {
           <Button
             type="button"
             variant="ghost"
-            className="h-8 px-3"
+            size="sm"
             onClick={() => attributesQuery.refetch()}
           >
             {tErrors("tryAgain")}
           </Button>
         </div>
       ) : attributesQuery.data?.length ? (
-        <div className="mt-4 overflow-x-auto">
-          <Table className="min-w-[640px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("key")}</TableHead>
-                <TableHead>{t("labelRu")}</TableHead>
-                <TableHead>{t("labelKg")}</TableHead>
-                <TableHead>{t("type")}</TableHead>
-                <TableHead>{t("required")}</TableHead>
-                <TableHead>{tCommon("actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {attributesQuery.data.map((attribute: AttributeRow) => (
-                <TableRow key={attribute.id}>
-                  <TableCell className="font-mono text-xs">{attribute.key}</TableCell>
-                  <TableCell>{attribute.labelRu}</TableCell>
-                  <TableCell>{attribute.labelKg}</TableCell>
-                  <TableCell>{t(`types.${attribute.type}`)}</TableCell>
-                  <TableCell>
-                    {attribute.required ? (
-                      <Badge variant="muted">{t("requiredYes")}</Badge>
-                    ) : (
-                      <span className="text-xs text-gray-500">{t("requiredNo")}</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              aria-label={t("edit")}
-                              onClick={() => openEdit(attribute)}
-                            >
-                              <EditIcon className="h-4 w-4" aria-hidden />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{t("edit")}</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-danger hover:text-danger"
-                              aria-label={t("remove")}
-                              onClick={() => {
-                                if (!window.confirm(t("confirmRemove"))) {
-                                  return;
-                                }
-                                removeMutation.mutate({ id: attribute.id });
-                              }}
-                              disabled={removeMutation.isLoading}
-                            >
-                              <DeleteIcon className="h-4 w-4" aria-hidden />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{t("remove")}</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+        <div className="mt-4">
+          <ResponsiveDataList
+            items={attributesQuery.data}
+            getKey={(attribute) => attribute.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <Table className="min-w-[640px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("key")}</TableHead>
+                      <TableHead>{t("labelRu")}</TableHead>
+                      <TableHead>{t("labelKg")}</TableHead>
+                      <TableHead>{t("type")}</TableHead>
+                      <TableHead>{t("required")}</TableHead>
+                      <TableHead>{tCommon("actions")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleItems.map((attribute: AttributeRow) => (
+                      <TableRow key={attribute.id}>
+                        <TableCell className="font-mono text-xs">{attribute.key}</TableCell>
+                        <TableCell>{attribute.labelRu}</TableCell>
+                        <TableCell>{attribute.labelKg}</TableCell>
+                        <TableCell>{t(`types.${attribute.type}`)}</TableCell>
+                        <TableCell>
+                          {attribute.required ? (
+                            <Badge variant="muted">{t("requiredYes")}</Badge>
+                          ) : (
+                            <span className="text-xs text-gray-500">{t("requiredNo")}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    aria-label={t("edit")}
+                                    onClick={() => openEdit(attribute)}
+                                  >
+                                    <EditIcon className="h-4 w-4" aria-hidden />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t("edit")}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-danger hover:text-danger"
+                                    aria-label={t("remove")}
+                                    onClick={() => {
+                                      if (!window.confirm(t("confirmRemove"))) {
+                                        return;
+                                      }
+                                      removeMutation.mutate({ id: attribute.id });
+                                    }}
+                                    disabled={removeMutation.isLoading}
+                                  >
+                                    <DeleteIcon className="h-4 w-4" aria-hidden />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t("remove")}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            renderMobile={(attribute) => (
+              <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-gray-500">{attribute.key}</p>
+                    <p className="text-sm font-medium text-ink">{attribute.labelRu}</p>
+                    <p className="text-xs text-gray-500">{attribute.labelKg}</p>
+                    <p className="mt-1 text-xs text-gray-500">{t(`types.${attribute.type}`)}</p>
+                    <div className="mt-1">
+                      {attribute.required ? (
+                        <Badge variant="muted">{t("requiredYes")}</Badge>
+                      ) : (
+                        <span className="text-xs text-gray-500">{t("requiredNo")}</span>
+                      )}
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </div>
+                  <RowActions
+                    actions={[
+                      {
+                        key: "edit",
+                        label: t("edit"),
+                        icon: EditIcon,
+                        onSelect: () => openEdit(attribute),
+                      },
+                      {
+                        key: "remove",
+                        label: t("remove"),
+                        icon: DeleteIcon,
+                        variant: "danger",
+                        disabled: removeMutation.isLoading,
+                        onSelect: () => {
+                          if (!window.confirm(t("confirmRemove"))) {
+                            return;
+                          }
+                          removeMutation.mutate({ id: attribute.id });
+                        },
+                      },
+                    ]}
+                    maxInline={1}
+                    moreLabel={tCommon("tooltips.moreActions")}
+                  />
+                </div>
+              </div>
+            )}
+          />
         </div>
       ) : (
         <div className="mt-6 rounded-lg border border-dashed border-gray-200 p-6 text-center">
           <EmptyIcon className="mx-auto h-6 w-6 text-gray-400" aria-hidden />
           <p className="mt-2 text-sm font-semibold text-ink">{t("emptyTitle")}</p>
           <p className="mt-1 text-xs text-gray-500">{t("emptySubtitle")}</p>
-          <Button className="mt-4" onClick={openCreate} disabled={!isAdmin}>
-            <AddIcon className="h-4 w-4" aria-hidden />
-            {t("addFirst")}
-          </Button>
         </div>
       )}
 
@@ -472,7 +522,7 @@ const AttributesPage = () => {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-3"
+                size="sm"
                 onClick={() => templatesQuery.refetch()}
               >
                 {tErrors("tryAgain")}

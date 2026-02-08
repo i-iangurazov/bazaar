@@ -59,6 +59,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -561,101 +563,174 @@ const PurchaseOrderDetailPage = () => {
           ) : null}
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <TooltipProvider>
-              <Table className="min-w-[640px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{tCommon("product")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
-                    <TableHead>{t("ordered")}</TableHead>
-                    <TableHead>{t("received")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("unitCost")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("lineTotal")}</TableHead>
-                    {canEditLines ? <TableHead>{tCommon("actions")}</TableHead> : null}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {po.lines.map((line) => (
-                    <TableRow key={line.id}>
-                      <TableCell className="font-medium">{line.product.name}</TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+          <ResponsiveDataList
+            items={po.lines}
+            getKey={(line) => line.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <TooltipProvider>
+                  <Table className="min-w-[640px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{tCommon("product")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
+                        <TableHead>{t("ordered")}</TableHead>
+                        <TableHead>{t("received")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("unitCost")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("lineTotal")}</TableHead>
+                        {canEditLines ? <TableHead>{tCommon("actions")}</TableHead> : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell className="font-medium">{line.product.name}</TableCell>
+                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                            {line.variant?.name ?? tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell>
+                            {formatNumber(line.qtyOrdered, locale)}{" "}
+                            {resolveUnitLabel(line.product.baseUnit ?? null)}
+                          </TableCell>
+                          <TableCell>
+                            {formatNumber(line.qtyReceived, locale)}{" "}
+                            {resolveUnitLabel(line.product.baseUnit ?? null)}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {line.unitCost === null
+                              ? tCommon("notAvailable")
+                              : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {line.unitCost === null
+                              ? tCommon("notAvailable")
+                              : formatCurrencyKGS(
+                                  totals.lines.find((item) => item.id === line.id)?.total ?? 0,
+                                  locale,
+                                )}
+                          </TableCell>
+                          {canEditLines ? (
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={t("editLine")}
+                                      onClick={() => openEditLine(line)}
+                                    >
+                                      <EditIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("editLine")}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-danger shadow-none hover:text-danger"
+                                      aria-label={t("removeLine")}
+                                      onClick={() => {
+                                        const confirmed = window.confirm(t("confirmRemoveLine"));
+                                        if (!confirmed) {
+                                          return;
+                                        }
+                                        removeLineMutation.mutate({ lineId: line.id });
+                                      }}
+                                      disabled={removingLineId === line.id}
+                                    >
+                                      {removingLineId === line.id ? (
+                                        <Spinner className="h-4 w-4" />
+                                      ) : (
+                                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("removeLine")}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              </div>
+            )}
+            renderMobile={(line) => {
+              const total = totals.lines.find((item) => item.id === line.id)?.total ?? 0;
+              const actions = canEditLines
+                ? [
+                    {
+                      key: "edit",
+                      label: t("editLine"),
+                      icon: EditIcon,
+                      onSelect: () => openEditLine(line),
+                    },
+                    {
+                      key: "remove",
+                      label: t("removeLine"),
+                      icon: DeleteIcon,
+                      variant: "danger",
+                      disabled: removingLineId === line.id,
+                      onSelect: () => {
+                        const confirmed = window.confirm(t("confirmRemoveLine"));
+                        if (!confirmed) {
+                          return;
+                        }
+                        removeLineMutation.mutate({ lineId: line.id });
+                      },
+                    },
+                  ]
+                : [];
+
+              return (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">{line.product.name}</p>
+                      <p className="text-xs text-gray-500">
                         {line.variant?.name ?? tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell>
-                        {formatNumber(line.qtyOrdered, locale)}{" "}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t("ordered")}: {formatNumber(line.qtyOrdered, locale)}{" "}
                         {resolveUnitLabel(line.product.baseUnit ?? null)}
-                      </TableCell>
-                      <TableCell>
-                        {formatNumber(line.qtyReceived, locale)}{" "}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t("received")}: {formatNumber(line.qtyReceived, locale)}{" "}
                         {resolveUnitLabel(line.product.baseUnit ?? null)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t("unitCost")}{" "}
                         {line.unitCost === null
                           ? tCommon("notAvailable")
                           : formatCurrencyKGS(line.unitCost ?? 0, locale)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t("lineTotal")}{" "}
                         {line.unitCost === null
                           ? tCommon("notAvailable")
-                          : formatCurrencyKGS(
-                              totals.lines.find((item) => item.id === line.id)?.total ?? 0,
-                              locale,
-                            )}
-                      </TableCell>
-                      {canEditLines ? (
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="shadow-none"
-                                  aria-label={t("editLine")}
-                                  onClick={() => openEditLine(line)}
-                                >
-                                  <EditIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t("editLine")}</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-danger shadow-none hover:text-danger"
-                                  aria-label={t("removeLine")}
-                                  onClick={() => {
-                                    const confirmed = window.confirm(t("confirmRemoveLine"));
-                                    if (!confirmed) {
-                                      return;
-                                    }
-                                    removeLineMutation.mutate({ lineId: line.id });
-                                  }}
-                                  disabled={removingLineId === line.id}
-                                >
-                                  {removingLineId === line.id ? (
-                                    <Spinner className="h-4 w-4" />
-                                  ) : (
-                                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t("removeLine")}</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TooltipProvider>
-          </div>
+                          : formatCurrencyKGS(total, locale)}
+                      </p>
+                    </div>
+                    {canEditLines ? (
+                      <RowActions
+                        actions={actions}
+                        maxInline={1}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              );
+            }}
+          />
           {!po.lines.length ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
               <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -707,100 +782,176 @@ const PurchaseOrderDetailPage = () => {
               setReceiveDialogOpen(false);
             }}
           >
-            <div className="overflow-x-auto">
-              <Table className="min-w-[520px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{tCommon("product")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
-                    <TableHead>{t("remaining")}</TableHead>
-                    <TableHead>{t("receiveQty")}</TableHead>
-                    <TableHead>{t("unit")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {receiveLines.map((line) => (
-                    <TableRow key={line.lineId}>
-                      <TableCell className="font-medium">{line.productName}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-xs text-gray-500">
-                        {line.variantName}
-                      </TableCell>
-                      <TableCell>{formatNumber(line.remaining, locale)}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          value={line.qtyReceived}
-                          onChange={(event) => {
-                            const nextValue = Number(event.target.value);
+            <ResponsiveDataList
+              items={receiveLines}
+              getKey={(line) => line.lineId}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[520px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{tCommon("product")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
+                        <TableHead>{t("remaining")}</TableHead>
+                        <TableHead>{t("receiveQty")}</TableHead>
+                        <TableHead>{t("unit")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((line) => (
+                        <TableRow key={line.lineId}>
+                          <TableCell className="font-medium">{line.productName}</TableCell>
+                          <TableCell className="hidden sm:table-cell text-xs text-gray-500">
+                            {line.variantName}
+                          </TableCell>
+                          <TableCell>{formatNumber(line.remaining, locale)}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              value={line.qtyReceived}
+                              onChange={(event) => {
+                                const nextValue = Number(event.target.value);
+                                setReceiveLines((prev) =>
+                                  prev.map((item) =>
+                                    item.lineId === line.lineId
+                                      ? { ...item, qtyReceived: Number.isFinite(nextValue) ? nextValue : 0 }
+                                      : item,
+                                  ),
+                                );
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Select
+                                value={line.unitSelection}
+                                onValueChange={(value) => {
+                                  setReceiveLines((prev) =>
+                                    prev.map((item) =>
+                                      item.lineId === line.lineId
+                                        ? { ...item, unitSelection: value }
+                                        : item,
+                                    ),
+                                  );
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={t("unitPlaceholder")} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {buildUnitOptions(lineProductMap.get(line.lineId) ?? null, "receiving").map(
+                                    (option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ),
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              {line.unitSelection !== "BASE" ? (
+                                (() => {
+                                  const product = lineProductMap.get(line.lineId) ?? null;
+                                  const baseQty = resolveBasePreview(
+                                    product,
+                                    line.unitSelection,
+                                    line.qtyReceived,
+                                  );
+                                  if (baseQty === null) {
+                                    return null;
+                                  }
+                                  return (
+                                    <span className="text-xs text-gray-500">
+                                      {t("baseQtyPreview", {
+                                        qty: formatNumber(baseQty, locale),
+                                        unit: resolveUnitLabel(product?.baseUnit ?? null),
+                                      })}
+                                    </span>
+                                  );
+                                })()
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              renderMobile={(line) => {
+                const product = lineProductMap.get(line.lineId) ?? null;
+                const baseQty =
+                  line.unitSelection === "BASE"
+                    ? null
+                    : resolveBasePreview(product, line.unitSelection, line.qtyReceived);
+
+                return (
+                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-ink">{line.productName}</p>
+                        <p className="text-xs text-gray-500">{line.variantName}</p>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {t("remaining")}: {formatNumber(line.remaining, locale)}
+                      </div>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        value={line.qtyReceived}
+                        onChange={(event) => {
+                          const nextValue = Number(event.target.value);
+                          setReceiveLines((prev) =>
+                            prev.map((item) =>
+                              item.lineId === line.lineId
+                                ? { ...item, qtyReceived: Number.isFinite(nextValue) ? nextValue : 0 }
+                                : item,
+                            ),
+                          );
+                        }}
+                      />
+                      <div className="flex flex-col gap-1">
+                        <Select
+                          value={line.unitSelection}
+                          onValueChange={(value) => {
                             setReceiveLines((prev) =>
                               prev.map((item) =>
-                                item.lineId === line.lineId
-                                  ? { ...item, qtyReceived: Number.isFinite(nextValue) ? nextValue : 0 }
-                                  : item,
+                                item.lineId === line.lineId ? { ...item, unitSelection: value } : item,
                               ),
                             );
                           }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <Select
-                            value={line.unitSelection}
-                            onValueChange={(value) => {
-                              setReceiveLines((prev) =>
-                                prev.map((item) =>
-                                  item.lineId === line.lineId
-                                    ? { ...item, unitSelection: value }
-                                    : item,
-                                ),
-                              );
-                            }}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t("unitPlaceholder")} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {buildUnitOptions(lineProductMap.get(line.lineId) ?? null, "receiving").map(
-                                (option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ),
-                              )}
-                            </SelectContent>
-                          </Select>
-                          {line.unitSelection !== "BASE" ? (
-                            (() => {
-                              const product = lineProductMap.get(line.lineId) ?? null;
-                              const baseQty = resolveBasePreview(
-                                product,
-                                line.unitSelection,
-                                line.qtyReceived,
-                              );
-                              if (baseQty === null) {
-                                return null;
-                              }
-                              return (
-                                <span className="text-xs text-gray-500">
-                                  {t("baseQtyPreview", {
-                                    qty: formatNumber(baseQty, locale),
-                                    unit: resolveUnitLabel(product?.baseUnit ?? null),
-                                  })}
-                                </span>
-                              );
-                            })()
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t("unitPlaceholder")} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {buildUnitOptions(product, "receiving").map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {baseQty !== null ? (
+                          <span className="text-xs text-gray-500">
+                            {t("baseQtyPreview", {
+                              qty: formatNumber(baseQty, locale),
+                              unit: resolveUnitLabel(product?.baseUnit ?? null),
+                            })}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
             <div className="flex flex-col gap-2 text-sm text-gray-500">
               <div className="flex items-center justify-between">
                 <span>{t("remainingTotal")}</span>

@@ -29,6 +29,7 @@ import { invitesRouter } from "@/server/trpc/routers/invites";
 import { billingRouter } from "@/server/trpc/routers/billing";
 import { searchRouter } from "@/server/trpc/routers/search";
 import { analyticsRouter } from "@/server/trpc/routers/analytics";
+import { platformOwnerRouter } from "@/server/trpc/routers/platformOwner";
 
 export const appRouter = router({
   inventory: inventoryRouter,
@@ -61,6 +62,7 @@ export const appRouter = router({
   billing: billingRouter,
   search: searchRouter,
   analytics: analyticsRouter,
+  platformOwner: platformOwnerRouter,
 });
 
 export type AppRouter = typeof appRouter;

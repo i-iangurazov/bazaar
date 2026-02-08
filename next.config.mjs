@@ -6,6 +6,9 @@ const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  experimental: {
+    serverComponentsExternalPackages: ["pdfkit"],
+  },
 };
 
 export default withNextIntl(nextConfig);

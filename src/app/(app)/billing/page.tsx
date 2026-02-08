@@ -20,6 +20,16 @@ const BillingPage = () => {
   const isForbidden = status === "authenticated" && !isAdmin;
 
   const billingQuery = trpc.billing.get.useQuery(undefined, { enabled: status === "authenticated" });
+  const statusKeyMap = {
+    ACTIVE: "active",
+    PAST_DUE: "past_due",
+    CANCELED: "canceled",
+  } as const;
+  const planBadgeVariant = {
+    STARTER: "warning",
+    BUSINESS: "muted",
+    ENTERPRISE: "success",
+  } as const;
 
   if (isForbidden) {
     return (
@@ -47,8 +57,11 @@ const BillingPage = () => {
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-gray-600">
               <div className="flex items-center gap-2">
-                <Badge variant={billingQuery.data.plan === "PRO" ? "success" : "warning"}>
-                  {t(`plans.${billingQuery.data.plan.toLowerCase()}`)}
+                <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
+                  {t(`plans.${billingQuery.data.planTier.toLowerCase()}`)}
+                </Badge>
+                <Badge variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}>
+                  {t(`subscriptionStatuses.${statusKeyMap[billingQuery.data.subscriptionStatus]}`)}
                 </Badge>
                 {billingQuery.data.trialEndsAt ? (
                   <span>
@@ -58,6 +71,13 @@ const BillingPage = () => {
                   </span>
                 ) : null}
               </div>
+              {billingQuery.data.currentPeriodEndsAt ? (
+                <p>
+                  {t("currentPeriodEndsAt", {
+                    date: formatDateTime(billingQuery.data.currentPeriodEndsAt, locale),
+                  })}
+                </p>
+              ) : null}
               {billingQuery.data.trialExpired ? (
                 <p className="text-sm text-amber-700">{t("trialExpired")}</p>
               ) : (
@@ -89,6 +109,24 @@ const BillingPage = () => {
                   limit: billingQuery.data.limits.maxProducts,
                 })}
               </p>
+              <p>
+                {t("planPrice", {
+                  amount: new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
+                    billingQuery.data.monthlyPriceKgs,
+                  ),
+                })}
+              </p>
+              {billingQuery.data.features.length ? (
+                <p className="text-xs text-gray-500">
+                  {t("featuresEnabled", {
+                    value: billingQuery.data.features
+                      .map((feature) => t(`features.${feature}`))
+                      .join(", "),
+                  })}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500">{t("featuresNone")}</p>
+              )}
             </CardContent>
           </Card>
 

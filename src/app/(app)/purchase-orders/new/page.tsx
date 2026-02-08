@@ -40,6 +40,8 @@ import {
 import { FormActions, FormGrid } from "@/components/form-layout";
 import { Spinner } from "@/components/ui/spinner";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon, UploadIcon } from "@/components/icons";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import {
   Tooltip,
   TooltipContent,
@@ -410,124 +412,212 @@ const NewPurchaseOrderPage = () => {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <TooltipProvider>
-                <Table className="min-w-[640px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{tCommon("product")}</TableHead>
-                      <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
-                      <TableHead>{t("orderQty")}</TableHead>
-                      <TableHead className="hidden md:table-cell">{t("unitCost")}</TableHead>
-                      <TableHead className="hidden md:table-cell">{t("lineTotal")}</TableHead>
-                      <TableHead>{tCommon("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fields.map((field, index) => {
-                      const line = lines[index];
-                      if (!line) {
-                        return null;
-                      }
-                      const product = productCache[line.productId];
-                      const baseUnitLabel = resolveUnitLabel(product?.baseUnit ?? null);
-                      const unitLabel =
-                        line.unitSelection === "BASE"
-                          ? baseUnitLabel
-                          : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
-                            baseUnitLabel;
-                      const baseQty = resolveBasePreview(
-                        product,
-                        line.unitSelection,
-                        line.qtyOrdered,
-                      );
-                      const variantLabel =
-                        line.variantId && variantCache[line.variantId]
-                          ? variantCache[line.variantId]
-                          : tCommon("notAvailable");
-                      return (
-                        <TableRow key={field.id}>
-                          <TableCell className="font-medium">
-                            {product?.name ?? tCommon("notAvailable")}
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                            {variantLabel}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span>
-                                {formatNumber(line.qtyOrdered, locale)} {unitLabel}
-                              </span>
-                              {line.unitSelection !== "BASE" && baseQty !== null ? (
-                                <span className="text-xs text-gray-500">
-                                  {t("baseQtyPreview", {
-                                    qty: formatNumber(baseQty, locale),
-                                    unit: baseUnitLabel,
-                                  })}
-                                </span>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {line.unitCost === undefined
-                              ? tCommon("notAvailable")
-                              : formatCurrencyKGS(line.unitCost ?? 0, locale)}
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {line.unitCost === undefined
-                              ? tCommon("notAvailable")
-                              : formatCurrencyKGS(
-                                  (line.unitCost ?? 0) * resolveLineBaseQty(line),
-                                  locale,
-                                )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    aria-label={t("editLine")}
-                                    onClick={() => openEditLine(index)}
-                                  >
-                                    <EditIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t("editLine")}</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-danger shadow-none hover:text-danger"
-                                    aria-label={t("removeLine")}
-                                    onClick={() => {
-                                      const confirmed = window.confirm(t("confirmRemoveLine"));
-                                      if (!confirmed) {
-                                        return;
-                                      }
-                                      remove(index);
-                                    }}
-                                  >
-                                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t("removeLine")}</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TableCell>
+            <ResponsiveDataList
+              items={fields}
+              getKey={(field) => field.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <TooltipProvider>
+                    <Table className="min-w-[640px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{tCommon("product")}</TableHead>
+                          <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
+                          <TableHead>{t("orderQty")}</TableHead>
+                          <TableHead className="hidden md:table-cell">{t("unitCost")}</TableHead>
+                          <TableHead className="hidden md:table-cell">{t("lineTotal")}</TableHead>
+                          <TableHead>{tCommon("actions")}</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TooltipProvider>
-            </div>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((field) => {
+                          const absoluteIndex = fields.findIndex((entry) => entry.id === field.id);
+                          const line = absoluteIndex >= 0 ? lines[absoluteIndex] : null;
+                          if (!line || absoluteIndex < 0) {
+                            return null;
+                          }
+                          const product = productCache[line.productId];
+                          const baseUnitLabel = resolveUnitLabel(product?.baseUnit ?? null);
+                          const unitLabel =
+                            line.unitSelection === "BASE"
+                              ? baseUnitLabel
+                              : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
+                                baseUnitLabel;
+                          const baseQty = resolveBasePreview(
+                            product,
+                            line.unitSelection,
+                            line.qtyOrdered,
+                          );
+                          const variantLabel =
+                            line.variantId && variantCache[line.variantId]
+                              ? variantCache[line.variantId]
+                              : tCommon("notAvailable");
+                          return (
+                            <TableRow key={field.id}>
+                              <TableCell className="font-medium">
+                                {product?.name ?? tCommon("notAvailable")}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                                {variantLabel}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span>
+                                    {formatNumber(line.qtyOrdered, locale)} {unitLabel}
+                                  </span>
+                                  {line.unitSelection !== "BASE" && baseQty !== null ? (
+                                    <span className="text-xs text-gray-500">
+                                      {t("baseQtyPreview", {
+                                        qty: formatNumber(baseQty, locale),
+                                        unit: baseUnitLabel,
+                                      })}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                {line.unitCost === undefined
+                                  ? tCommon("notAvailable")
+                                  : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                {line.unitCost === undefined
+                                  ? tCommon("notAvailable")
+                                  : formatCurrencyKGS(
+                                      (line.unitCost ?? 0) * resolveLineBaseQty(line),
+                                      locale,
+                                    )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shadow-none"
+                                        aria-label={t("editLine")}
+                                        onClick={() => openEditLine(absoluteIndex)}
+                                      >
+                                        <EditIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{t("editLine")}</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-danger shadow-none hover:text-danger"
+                                        aria-label={t("removeLine")}
+                                        onClick={() => {
+                                          const confirmed = window.confirm(t("confirmRemoveLine"));
+                                          if (!confirmed) {
+                                            return;
+                                          }
+                                          remove(absoluteIndex);
+                                        }}
+                                      >
+                                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{t("removeLine")}</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TooltipProvider>
+                </div>
+              )}
+              renderMobile={(_, index) => {
+                const line = lines[index];
+                if (!line) {
+                  return null;
+                }
+                const product = productCache[line.productId];
+                const baseUnitLabel = resolveUnitLabel(product?.baseUnit ?? null);
+                const unitLabel =
+                  line.unitSelection === "BASE"
+                    ? baseUnitLabel
+                    : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
+                      baseUnitLabel;
+                const baseQty = resolveBasePreview(product, line.unitSelection, line.qtyOrdered);
+                const variantLabel =
+                  line.variantId && variantCache[line.variantId]
+                    ? variantCache[line.variantId]
+                    : tCommon("notAvailable");
+                const lineTotal =
+                  line.unitCost === undefined
+                    ? null
+                    : (line.unitCost ?? 0) * resolveLineBaseQty(line);
+
+                return (
+                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink">
+                          {product?.name ?? tCommon("notAvailable")}
+                        </p>
+                        <p className="text-xs text-gray-500">{variantLabel}</p>
+                        <p className="text-xs text-gray-500">
+                          {t("orderQty")}: {formatNumber(line.qtyOrdered, locale)} {unitLabel}
+                        </p>
+                        {line.unitSelection !== "BASE" && baseQty !== null ? (
+                          <p className="text-xs text-gray-500">
+                            {t("baseQtyPreview", {
+                              qty: formatNumber(baseQty, locale),
+                              unit: baseUnitLabel,
+                            })}
+                          </p>
+                        ) : null}
+                        <p className="text-xs text-gray-500">
+                          {t("unitCost")}{" "}
+                          {line.unitCost === undefined
+                            ? tCommon("notAvailable")
+                            : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t("lineTotal")}{" "}
+                          {lineTotal === null ? tCommon("notAvailable") : formatCurrencyKGS(lineTotal, locale)}
+                        </p>
+                      </div>
+                      <RowActions
+                        actions={[
+                          {
+                            key: "edit",
+                            label: t("editLine"),
+                            icon: EditIcon,
+                            onSelect: () => openEditLine(index),
+                          },
+                          {
+                            key: "remove",
+                            label: t("removeLine"),
+                            icon: DeleteIcon,
+                            variant: "danger",
+                            onSelect: () => {
+                              const confirmed = window.confirm(t("confirmRemoveLine"));
+                              if (!confirmed) {
+                                return;
+                              }
+                              remove(index);
+                            },
+                          },
+                        ]}
+                        maxInline={1}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            />
             {!fields.length ? (
               <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
                 <EmptyIcon className="h-4 w-4" aria-hidden />

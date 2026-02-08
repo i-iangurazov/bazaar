@@ -117,7 +117,7 @@ const AnalyticsPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <Button asChild variant="ghost">
+          <Button asChild variant="secondary">
             <Link href="/reports">{t("backToReports")}</Link>
           </Button>
         }

@@ -13,6 +13,8 @@ import { HelpLink } from "@/components/help-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
@@ -930,267 +932,391 @@ const InventoryPage = () => {
               </TooltipProvider>
             </div>
           ) : null}
-          <div className="overflow-x-auto">
-            <TooltipProvider>
-              <Table className="min-w-[520px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-ink"
-                        checked={allSelected}
-                        onChange={toggleSelectAll}
-                        aria-label={t("selectAll")}
-                      />
-                    </TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
-                    <TableHead>{tCommon("product")}</TableHead>
-                    <TableHead>{t("onHand")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
-                    <TableHead>{t("lowStock")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
-                    {showPlanning ? (
-                      <TableHead>{t("suggestedOrder")}</TableHead>
-                    ) : null}
-                    <TableHead>{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inventoryQuery.data?.map((item) => {
-                    const isExpanded = expandedReorderId === item.snapshot.id;
-                    const reorder = item.reorder;
-                    const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
-                    return (
-                      <Fragment key={item.snapshot.id}>
-                        <TableRow>
-                          <TableCell>
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-ink"
-                              checked={selectedIds.has(item.snapshot.id)}
-                              onChange={() => toggleSelect(item.snapshot.id)}
-                              aria-label={t("selectInventoryItem", {
-                                name: item.variant?.name
-                                  ? `${item.product.name} • ${item.variant.name}`
-                                  : item.product.name,
-                              })}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                            {item.product.sku}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span>
-                                {item.product.name}
-                                {item.variant?.name ? ` • ${item.variant.name}` : ""}
-                              </span>
-                              {trackExpiryLots && expiringSet.has(expiryKey) ? (
-                                <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
-                          <TableCell className="hidden sm:table-cell">
-                            {formatNumber(item.minStock, locale)}
-                          </TableCell>
-                          <TableCell>
-                            {item.lowStock ? (
-                              <Badge variant="danger">
-                                <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                {t("lowStockBadge")}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-gray-400">
-                                {tCommon("notAvailable")}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {formatNumber(item.snapshot.onOrder, locale)}
-                          </TableCell>
-                          {showPlanning ? (
-                            <TableCell>
-                              {reorder ? (
-                                <div className="space-y-1">
-                                  <div className="font-medium">
-                                    {formatNumber(reorder.suggestedOrderQty, locale)}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-8 px-2 text-xs"
-                                    onClick={() =>
-                                      setExpandedReorderId(
-                                        isExpanded ? null : item.snapshot.id,
-                                      )
-                                    }
-                                  >
-                                    {isExpanded ? t("hideWhy") : t("why")}
-                                  </Button>
+          <ResponsiveDataList
+            items={inventoryQuery.data ?? []}
+            getKey={(item) => item.snapshot.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <TooltipProvider>
+                  <Table className="min-w-[520px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-ink"
+                            checked={allSelected}
+                            onChange={toggleSelectAll}
+                            aria-label={t("selectAll")}
+                          />
+                        </TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
+                        <TableHead>{tCommon("product")}</TableHead>
+                        <TableHead>{t("onHand")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
+                        <TableHead>{t("lowStock")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
+                        {showPlanning ? <TableHead>{t("suggestedOrder")}</TableHead> : null}
+                        <TableHead>{tCommon("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((item) => {
+                        const isExpanded = expandedReorderId === item.snapshot.id;
+                        const reorder = item.reorder;
+                        const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
+                        return (
+                          <Fragment key={item.snapshot.id}>
+                            <TableRow>
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 accent-ink"
+                                  checked={selectedIds.has(item.snapshot.id)}
+                                  onChange={() => toggleSelect(item.snapshot.id)}
+                                  aria-label={t("selectInventoryItem", {
+                                    name: item.variant?.name
+                                      ? `${item.product.name} • ${item.variant.name}`
+                                      : item.product.name,
+                                  })}
+                                />
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                                {item.product.sku}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span>
+                                    {item.product.name}
+                                    {item.variant?.name ? ` • ${item.variant.name}` : ""}
+                                  </span>
+                                  {trackExpiryLots && expiringSet.has(expiryKey) ? (
+                                    <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
+                                  ) : null}
                                 </div>
-                              ) : (
-                                <span className="text-xs text-gray-400">
-                                  {t("planningUnavailable")}
-                                </span>
-                              )}
-                            </TableCell>
-                          ) : null}
-                          <TableCell>
-                            {canManage ? (
-                              <DropdownMenu>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex">
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="shadow-none"
-                                          aria-label={tCommon("actions")}
-                                        >
-                                          <MoreIcon className="h-4 w-4" aria-hidden />
-                                        </Button>
-                                      </DropdownMenuTrigger>
+                              </TableCell>
+                              <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
+                              <TableCell className="hidden sm:table-cell">
+                                {formatNumber(item.minStock, locale)}
+                              </TableCell>
+                              <TableCell>
+                                {item.lowStock ? (
+                                  <Badge variant="danger">
+                                    <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                                    {t("lowStockBadge")}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-gray-400">
+                                    {tCommon("notAvailable")}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                {formatNumber(item.snapshot.onOrder, locale)}
+                              </TableCell>
+                              {showPlanning ? (
+                                <TableCell>
+                                  {reorder ? (
+                                    <div className="space-y-1">
+                                      <div className="font-medium">
+                                        {formatNumber(reorder.suggestedOrderQty, locale)}
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-8 px-2 text-xs"
+                                        onClick={() =>
+                                          setExpandedReorderId(
+                                            isExpanded ? null : item.snapshot.id,
+                                          )
+                                        }
+                                      >
+                                        {isExpanded ? t("hideWhy") : t("why")}
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">
+                                      {t("planningUnavailable")}
                                     </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("actions")}</TooltipContent>
-                                </Tooltip>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onSelect={() => openActionDialog("receive", item)}
-                                  >
-                                    {t("receiveStock")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onSelect={() => openActionDialog("adjust", item)}>
-                                    {t("stockAdjustment")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onSelect={() => openActionDialog("transfer", item)}
-                                  >
-                                    {t("transferStock")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onSelect={() => openActionDialog("minStock", item)}
-                                  >
-                                    {t("minStockTitle")}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onSelect={() => openMovements(item)}>
-                                    {t("viewMovements")}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    onClick={() => openMovements(item)}
-                                    aria-label={tCommon("view")}
-                                  >
-                                    <ViewIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{tCommon("view")}</TooltipContent>
-                              </Tooltip>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        {showPlanning && isExpanded && reorder ? (
-                          <TableRow>
-                            <TableCell colSpan={tableColumnCount}>
-                              <div className="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm">
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                  <div>
-                                    <p className="text-xs text-gray-500">
-                                      {t("demandDuringLeadTime")}
-                                    </p>
-                                    <p className="font-semibold">
-                                      {formatNumber(reorder.demandDuringLeadTime, locale)}
-                                    </p>
+                                  )}
+                                </TableCell>
+                              ) : null}
+                              <TableCell>
+                                {canManage ? (
+                                  <DropdownMenu>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex">
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="shadow-none"
+                                              aria-label={tCommon("actions")}
+                                            >
+                                              <MoreIcon className="h-4 w-4" aria-hidden />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{tCommon("actions")}</TooltipContent>
+                                    </Tooltip>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onSelect={() => openActionDialog("receive", item)}
+                                      >
+                                        {t("receiveStock")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onSelect={() => openActionDialog("adjust", item)}
+                                      >
+                                        {t("stockAdjustment")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onSelect={() => openActionDialog("transfer", item)}
+                                      >
+                                        {t("transferStock")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onSelect={() => openActionDialog("minStock", item)}
+                                      >
+                                        {t("minStockTitle")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onSelect={() => openMovements(item)}>
+                                        {t("viewMovements")}
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shadow-none"
+                                        onClick={() => openMovements(item)}
+                                        aria-label={tCommon("view")}
+                                      >
+                                        <ViewIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tCommon("view")}</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            {showPlanning && isExpanded && reorder ? (
+                              <TableRow>
+                                <TableCell colSpan={tableColumnCount}>
+                                  <div className="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm">
+                                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                      <div>
+                                        <p className="text-xs text-gray-500">
+                                          {t("demandDuringLeadTime")}
+                                        </p>
+                                        <p className="font-semibold">
+                                          {formatNumber(reorder.demandDuringLeadTime, locale)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500">{t("safetyStock")}</p>
+                                        <p className="font-semibold">
+                                          {formatNumber(reorder.safetyStock, locale)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500">{t("reorderPoint")}</p>
+                                        <p className="font-semibold">
+                                          {formatNumber(reorder.reorderPoint, locale)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500">{t("targetLevel")}</p>
+                                        <p className="font-semibold">
+                                          {formatNumber(reorder.targetLevel, locale)}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500">
+                                          {t("suggestedOrder")}
+                                        </p>
+                                        <p className="font-semibold">
+                                          {formatNumber(reorder.suggestedOrderQty, locale)}
+                                        </p>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">{t("safetyStock")}</p>
-                                    <p className="font-semibold">
-                                      {formatNumber(reorder.safetyStock, locale)}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">{t("reorderPoint")}</p>
-                                    <p className="font-semibold">
-                                      {formatNumber(reorder.reorderPoint, locale)}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">{t("targetLevel")}</p>
-                                    <p className="font-semibold">
-                                      {formatNumber(reorder.targetLevel, locale)}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">
-                                      {t("suggestedOrder")}
-                                    </p>
-                                    <p className="font-semibold">
-                                      {formatNumber(reorder.suggestedOrderQty, locale)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              </div>
+            )}
+            renderMobile={(item) => {
+              const reorder = item.reorder;
+              const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
+              const label = item.variant?.name
+                ? `${item.product.name} • ${item.variant.name}`
+                : item.product.name;
+              const actions = canManage
+                ? [
+                    {
+                      key: "receive",
+                      label: t("receiveStock"),
+                      icon: ReceiveIcon,
+                      onSelect: () => openActionDialog("receive", item),
+                    },
+                    {
+                      key: "adjust",
+                      label: t("stockAdjustment"),
+                      icon: AdjustIcon,
+                      onSelect: () => openActionDialog("adjust", item),
+                    },
+                    {
+                      key: "transfer",
+                      label: t("transferStock"),
+                      icon: TransferIcon,
+                      onSelect: () => openActionDialog("transfer", item),
+                    },
+                    {
+                      key: "minStock",
+                      label: t("minStockTitle"),
+                      icon: AddIcon,
+                      onSelect: () => openActionDialog("minStock", item),
+                    },
+                    {
+                      key: "movements",
+                      label: t("viewMovements"),
+                      icon: ViewIcon,
+                      onSelect: () => openMovements(item),
+                    },
+                  ]
+                : [
+                    {
+                      key: "view",
+                      label: tCommon("view"),
+                      icon: ViewIcon,
+                      onSelect: () => openMovements(item),
+                    },
+                  ];
+
+              return (
+                <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 accent-ink"
+                      checked={selectedIds.has(item.snapshot.id)}
+                      onChange={() => toggleSelect(item.snapshot.id)}
+                      aria-label={t("selectInventoryItem", { name: label })}
+                    />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-ink">{label}</p>
+                        {trackExpiryLots && expiringSet.has(expiryKey) ? (
+                          <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
                         ) : null}
-                      </Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TooltipProvider>
-            {inventoryQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-                <Spinner className="h-4 w-4" />
-                {tCommon("loading")}
-              </div>
-            ) : !storeId ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("selectStoreHint")}
-              </div>
-            ) : !inventoryQuery.data?.length ? (
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-                <div className="flex items-center gap-2">
-                  <EmptyIcon className="h-4 w-4" aria-hidden />
-                  {t("noInventory")}
+                      </div>
+                      <p className="text-xs text-gray-500">{item.product.sku}</p>
+                      <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                        <div>
+                          <p>{t("onHand")}</p>
+                          <p className="text-sm font-semibold text-ink">
+                            {formatNumber(item.snapshot.onHand, locale)}
+                          </p>
+                        </div>
+                        <div>
+                          <p>{t("minStock")}</p>
+                          <p className="text-sm font-semibold text-ink">
+                            {formatNumber(item.minStock, locale)}
+                          </p>
+                        </div>
+                        <div>
+                          <p>{t("onOrder")}</p>
+                          <p className="text-sm font-semibold text-ink">
+                            {formatNumber(item.snapshot.onOrder, locale)}
+                          </p>
+                        </div>
+                        {showPlanning ? (
+                          <div>
+                            <p>{t("suggestedOrder")}</p>
+                            <p className="text-sm font-semibold text-ink">
+                              {reorder
+                                ? formatNumber(reorder.suggestedOrderQty, locale)
+                                : t("planningUnavailable")}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.lowStock ? (
+                          <Badge variant="danger">
+                            <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                            {t("lowStockBadge")}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            {tCommon("notAvailable")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <RowActions
+                      actions={actions}
+                      maxInline={2}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                    />
+                  </div>
                 </div>
-                {isAdmin ? (
-                  <Link href="/products/new" className="w-full sm:w-auto">
-                    <Button className="w-full sm:w-auto">
-                      <AddIcon className="h-4 w-4" aria-hidden />
-                      {t("addProduct")}
-                    </Button>
-                  </Link>
-                ) : null}
+              );
+            }}
+          />
+          {inventoryQuery.isLoading ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : !storeId ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <EmptyIcon className="h-4 w-4" aria-hidden />
+              {t("selectStoreHint")}
+            </div>
+          ) : !inventoryQuery.data?.length ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+              <div className="flex items-center gap-2">
+                <EmptyIcon className="h-4 w-4" aria-hidden />
+                {t("noInventory")}
               </div>
-            ) : null}
-            {inventoryQuery.error ? (
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-500">
-                <span>{translateError(tErrors, inventoryQuery.error)}</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full sm:w-auto"
-                  onClick={() => inventoryQuery.refetch()}
-                >
-                  {tCommon("tryAgain")}
-                </Button>
-              </div>
-            ) : null}
-          </div>
+              {isAdmin ? (
+                <Link href="/products/new" className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto">
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {t("addProduct")}
+                  </Button>
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+          {inventoryQuery.error ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-500">
+              <span>{translateError(tErrors, inventoryQuery.error)}</span>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => inventoryQuery.refetch()}
+              >
+                {tCommon("tryAgain")}
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -2221,45 +2347,91 @@ const InventoryPage = () => {
             </Button>
           </div>
         ) : movementsQuery.data?.length ? (
-          <div className="overflow-x-auto">
-            <Table className="min-w-[520px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("movementDate")}</TableHead>
-                  <TableHead>{t("movementTypeLabel")}</TableHead>
-                  <TableHead>{t("movementQty")}</TableHead>
-                  <TableHead className="hidden md:table-cell">{t("movementUser")}</TableHead>
-                  <TableHead className="hidden md:table-cell">{t("movementNote")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movementsQuery.data.map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell className="text-xs text-gray-500">
+          <ResponsiveDataList
+            items={movementsQuery.data}
+            getKey={(movement) => movement.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <Table className="min-w-[520px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("movementDate")}</TableHead>
+                      <TableHead>{t("movementTypeLabel")}</TableHead>
+                      <TableHead>{t("movementQty")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t("movementUser")}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t("movementNote")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleItems.map((movement) => (
+                      <TableRow key={movement.id}>
+                        <TableCell className="text-xs text-gray-500">
+                          {formatDateTime(movement.createdAt, locale)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={movementBadgeVariant(movement.type)}>
+                            {movementTypeLabel(movement.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {movement.qtyDelta > 0 ? "+" : ""}
+                          {formatNumber(movement.qtyDelta, locale)}
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                          {movement.createdBy?.name ??
+                            movement.createdBy?.email ??
+                            tCommon("notAvailable")}
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                          {formatMovementNote(t, movement.note) || tCommon("notAvailable")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            renderMobile={(movement) => (
+              <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500">
                       {formatDateTime(movement.createdAt, locale)}
-                    </TableCell>
-                    <TableCell>
+                    </p>
+                    <div className="mt-1">
                       <Badge variant={movementBadgeVariant(movement.type)}>
                         {movementTypeLabel(movement.type)}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {movement.qtyDelta > 0 ? "+" : ""}
-                      {formatNumber(movement.qtyDelta, locale)}
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold text-ink">
+                    {movement.qtyDelta > 0 ? "+" : ""}
+                    {formatNumber(movement.qtyDelta, locale)}
+                  </p>
+                </div>
+                <div className="mt-2 grid gap-2 text-xs text-gray-500">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      {t("movementUser")}
+                    </p>
+                    <p className="text-gray-700">
                       {movement.createdBy?.name ??
                         movement.createdBy?.email ??
                         tCommon("notAvailable")}
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      {t("movementNote")}
+                    </p>
+                    <p className="text-gray-700">
                       {formatMovementNote(t, movement.note) || tCommon("notAvailable")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          />
         ) : (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <EmptyIcon className="h-4 w-4" aria-hidden />

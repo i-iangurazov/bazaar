@@ -40,6 +40,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -364,115 +366,193 @@ const SuppliersPage = () => {
               </TooltipProvider>
             </div>
           ) : null}
-          <div className="overflow-x-auto">
-            <TooltipProvider>
-              <Table className="min-w-[560px]">
-                <TableHeader>
-                  <TableRow>
-                    {canManage ? (
-                      <TableHead className="w-10">
+          <ResponsiveDataList
+            items={suppliersQuery.data ?? []}
+            getKey={(supplier) => supplier.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <TooltipProvider>
+                  <Table className="min-w-[560px]">
+                    <TableHeader>
+                      <TableRow>
+                        {canManage ? (
+                          <TableHead className="w-10">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-ink"
+                              checked={allSelected}
+                              onChange={toggleSelectAll}
+                              aria-label={t("selectAll")}
+                            />
+                          </TableHead>
+                        ) : null}
+                        <TableHead>{t("name")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("email")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("phone")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("notes")}</TableHead>
+                        {canManage ? <TableHead>{t("actions")}</TableHead> : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((supplier) => (
+                        <TableRow key={supplier.id}>
+                          {canManage ? (
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-ink"
+                                checked={selectedIds.has(supplier.id)}
+                                onChange={() => toggleSelect(supplier.id)}
+                                aria-label={t("selectSupplier", { name: supplier.name })}
+                              />
+                            </TableCell>
+                          ) : null}
+                          <TableCell className="font-medium">{supplier.name}</TableCell>
+                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                            {supplier.email ?? tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                            {supplier.phone ?? tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                            {supplier.notes ?? tCommon("notAvailable")}
+                          </TableCell>
+                          {canManage ? (
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={tCommon("edit")}
+                                      onClick={() => {
+                                        setEditingId(supplier.id);
+                                        form.reset({
+                                          name: supplier.name,
+                                          email: supplier.email ?? "",
+                                          phone: supplier.phone ?? "",
+                                          notes: supplier.notes ?? "",
+                                        });
+                                        setFormOpen(true);
+                                      }}
+                                    >
+                                      <EditIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{tCommon("edit")}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-danger shadow-none hover:text-danger"
+                                      aria-label={tCommon("delete")}
+                                      onClick={() => {
+                                        const confirmed = window.confirm(t("confirmDelete"));
+                                        if (!confirmed) {
+                                          return;
+                                        }
+                                        deleteMutation.mutate({ supplierId: supplier.id });
+                                      }}
+                                      disabled={deletingId === supplier.id}
+                                    >
+                                      {deletingId === supplier.id ? (
+                                        <Spinner className="h-4 w-4" />
+                                      ) : (
+                                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{tCommon("delete")}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              </div>
+            )}
+            renderMobile={(supplier) => {
+              const actions = canManage
+                ? [
+                    {
+                      key: "edit",
+                      label: tCommon("edit"),
+                      icon: EditIcon,
+                      onSelect: () => {
+                        setEditingId(supplier.id);
+                        form.reset({
+                          name: supplier.name,
+                          email: supplier.email ?? "",
+                          phone: supplier.phone ?? "",
+                          notes: supplier.notes ?? "",
+                        });
+                        setFormOpen(true);
+                      },
+                    },
+                    {
+                      key: "delete",
+                      label: tCommon("delete"),
+                      icon: DeleteIcon,
+                      variant: "danger",
+                      disabled: deletingId === supplier.id,
+                      onSelect: () => {
+                        const confirmed = window.confirm(t("confirmDelete"));
+                        if (!confirmed) {
+                          return;
+                        }
+                        deleteMutation.mutate({ supplierId: supplier.id });
+                      },
+                    },
+                  ]
+                : [];
+
+              return (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-start gap-2">
+                      {canManage ? (
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-ink"
-                          checked={allSelected}
-                          onChange={toggleSelectAll}
-                          aria-label={t("selectAll")}
+                          className="mt-1 h-4 w-4 accent-ink"
+                          checked={selectedIds.has(supplier.id)}
+                          onChange={() => toggleSelect(supplier.id)}
+                          aria-label={t("selectSupplier", { name: supplier.name })}
                         />
-                      </TableHead>
+                      ) : null}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink">{supplier.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {supplier.email ?? tCommon("notAvailable")}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {supplier.phone ?? tCommon("notAvailable")}
+                        </p>
+                      </div>
+                    </div>
+                    {canManage ? (
+                      <RowActions
+                        actions={actions}
+                        maxInline={1}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                      />
                     ) : null}
-                    <TableHead>{t("name")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("email")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("phone")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("notes")}</TableHead>
-                    {canManage ? <TableHead>{t("actions")}</TableHead> : null}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {suppliersQuery.data?.map((supplier) => (
-                    <TableRow key={supplier.id}>
-                      {canManage ? (
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-ink"
-                            checked={selectedIds.has(supplier.id)}
-                            onChange={() => toggleSelect(supplier.id)}
-                            aria-label={t("selectSupplier", { name: supplier.name })}
-                          />
-                        </TableCell>
-                      ) : null}
-                      <TableCell className="font-medium">{supplier.name}</TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                        {supplier.email ?? tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                        {supplier.phone ?? tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500 hidden md:table-cell">
-                        {supplier.notes ?? tCommon("notAvailable")}
-                      </TableCell>
-                      {canManage ? (
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="shadow-none"
-                                  aria-label={tCommon("edit")}
-                                  onClick={() => {
-                                    setEditingId(supplier.id);
-                                    form.reset({
-                                      name: supplier.name,
-                                      email: supplier.email ?? "",
-                                      phone: supplier.phone ?? "",
-                                      notes: supplier.notes ?? "",
-                                    });
-                                    setFormOpen(true);
-                                  }}
-                                >
-                                  <EditIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{tCommon("edit")}</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-danger shadow-none hover:text-danger"
-                                  aria-label={tCommon("delete")}
-                                  onClick={() => {
-                                    const confirmed = window.confirm(t("confirmDelete"));
-                                    if (!confirmed) {
-                                      return;
-                                    }
-                                    deleteMutation.mutate({ supplierId: supplier.id });
-                                  }}
-                                  disabled={deletingId === supplier.id}
-                                >
-                                  {deletingId === supplier.id ? (
-                                    <Spinner className="h-4 w-4" />
-                                  ) : (
-                                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{tCommon("delete")}</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TooltipProvider>
-          </div>
+                  </div>
+                  {supplier.notes ? (
+                    <p className="mt-2 text-xs text-gray-500">{supplier.notes}</p>
+                  ) : null}
+                </div>
+              );
+            }}
+          />
           {suppliersQuery.isLoading ? (
             <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
           ) : !suppliersQuery.data?.length ? (
@@ -481,24 +561,6 @@ const SuppliersPage = () => {
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noSuppliers")}
               </div>
-              {canManage ? (
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    setEditingId(null);
-                  form.reset({
-                    name: "",
-                    email: "",
-                    phone: "",
-                    notes: "",
-                  });
-                  setFormOpen(true);
-                }}
-              >
-                  <AddIcon className="h-4 w-4" aria-hidden />
-                  {t("addSupplier")}
-                </Button>
-              ) : null}
             </div>
           ) : null}
           {suppliersQuery.error ? (
@@ -507,7 +569,7 @@ const SuppliersPage = () => {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-3"
+                size="sm"
                 onClick={() => suppliersQuery.refetch()}
               >
                 {tErrors("tryAgain")}

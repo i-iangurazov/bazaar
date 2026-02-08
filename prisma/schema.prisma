@@ -52,13 +52,21 @@ enum AttributeType {
 }
 
 enum OrganizationPlan {
-  TRIAL
-  PRO
+  STARTER
+  BUSINESS
+  ENTERPRISE
+}
+
+enum OrganizationSubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
 }
 
 enum AuthTokenType {
   EMAIL_VERIFY
   PASSWORD_RESET
+  REGISTRATION
 }
 
 enum KkmMode {
@@ -75,6 +83,10 @@ enum ExportJobStatus {
 }
 
 enum ExportType {
+  INVENTORY_MOVEMENTS_LEDGER
+  INVENTORY_BALANCES_AT_DATE
+  PURCHASES_RECEIPTS
+  PRICE_LIST
   SALES_SUMMARY
   STOCK_MOVEMENTS
   PURCHASES
@@ -86,8 +98,10 @@ enum ExportType {
 model Organization {
   id        String   @id @default(cuid())
   name      String
-  plan      OrganizationPlan @default(TRIAL)
+  plan      OrganizationPlan @default(STARTER)
+  subscriptionStatus OrganizationSubscriptionStatus @default(ACTIVE)
   trialEndsAt DateTime?
+  currentPeriodEndsAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -124,7 +138,7 @@ model Organization {
 
 model User {
   id           String   @id @default(cuid())
-  organizationId String
+  organizationId String?
   email        String   @unique
   name         String
   passwordHash String
@@ -135,7 +149,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
   auditLogs    AuditLog[]
   idempotencyKeys IdempotencyKey[]
   purchaseOrdersCreated PurchaseOrder[] @relation("purchaseOrdersCreated")
@@ -243,12 +257,15 @@ model ExportJob {
   periodEnd      DateTime
   requestedById  String
   createdAt      DateTime @default(now())
+  startedAt      DateTime?
   finishedAt     DateTime?
   fileName       String?
   mimeType       String?
   fileSize       Int?
   storagePath    String?
+  paramsJson     Json?
   errorMessage   String?
+  errorJson      Json?
 
   organization Organization @relation(fields: [organizationId], references: [id])
   store        Store @relation(fields: [storeId], references: [id])

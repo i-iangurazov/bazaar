@@ -5,12 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CloseIcon, StatusDangerIcon, StatusSuccessIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
@@ -76,65 +71,63 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     <ToastContext.Provider value={value}>
       {children}
       {toasts.length ? (
-        <TooltipProvider>
-          <div className="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-3 sm:left-auto sm:right-6 sm:w-96">
-            {toasts.map((toast) => {
-              const Icon = getToastIcon(toast.variant);
-              return (
-                <div
-                  key={toast.id}
-                  role={toast.variant === "error" ? "alert" : "status"}
-                  className={cn(
-                    "rounded-lg border bg-white p-4 shadow-lg",
-                    toast.variant === "error" ? "border-red-200" : "border-gray-200",
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    {Icon ? (
-                      <span
-                        className={cn(
-                          "mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full",
-                          toast.variant === "error"
-                            ? "bg-red-100 text-red-600"
-                            : "bg-green-100 text-green-700",
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5" aria-hidden />
-                      </span>
-                    ) : null}
-                    <div className="flex-1 space-y-1">
-                      {toast.title ? (
-                        <p className="text-sm font-semibold text-ink">{toast.title}</p>
-                      ) : null}
-                      <p className="text-sm text-gray-600">{toast.description}</p>
-                    </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => remove(toast.id)}
-                          aria-label={tCommon("close")}
-                        >
-                          <CloseIcon className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{tCommon("close")}</TooltipContent>
-                    </Tooltip>
-                  </div>
-                  {toast.actionLabel && toast.actionHref ? (
-                    <div className="mt-3">
-                      <Link href={toast.actionHref}>
-                        <Button variant="secondary">{toast.actionLabel}</Button>
-                      </Link>
-                    </div>
+        <div className="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-3 sm:left-auto sm:right-6 sm:w-96">
+          {toasts.map((toast) => {
+            const Icon = getToastIcon(toast.variant);
+            return (
+              <div
+                key={toast.id}
+                role={toast.variant === "error" ? "alert" : "status"}
+                className={cn(
+                  "rounded-lg border bg-white p-4 shadow-lg",
+                  toast.variant === "error" ? "border-red-200" : "border-gray-200",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  {Icon ? (
+                    <span
+                      className={cn(
+                        "mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full",
+                        toast.variant === "error"
+                          ? "bg-red-100 text-red-600"
+                          : "bg-green-100 text-green-700",
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" aria-hidden />
+                    </span>
                   ) : null}
+                  <div className="flex-1 space-y-1">
+                    {toast.title ? (
+                      <p className="text-sm font-semibold text-ink">{toast.title}</p>
+                    ) : null}
+                    <p className="text-sm text-gray-600">{toast.description}</p>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => remove(toast.id)}
+                        aria-label={tCommon("close")}
+                      >
+                        <CloseIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{tCommon("close")}</TooltipContent>
+                  </Tooltip>
                 </div>
-              );
-            })}
-          </div>
-        </TooltipProvider>
+                {toast.actionLabel && toast.actionHref ? (
+                  <div className="mt-3">
+                    <Button asChild variant="secondary">
+                      <Link href={toast.actionHref}>{toast.actionLabel}</Link>
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       ) : null}
     </ToastContext.Provider>
   );

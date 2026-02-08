@@ -19,7 +19,7 @@ describeDb("import batches", () => {
   });
 
   it("records import batches and mappings for product imports", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
 
     const result = await runProductImport({
       organizationId: org.id,
@@ -54,8 +54,50 @@ describeDb("import batches", () => {
     expect(product?.isDeleted).toBe(false);
   });
 
+  it("imports pricing fields and keeps imported local product image url", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+
+    await runProductImport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-pricing-1",
+      source: "cloudshop",
+      rows: [
+        {
+          sku: "IMP-PRICE-1",
+          name: "Imported With Pricing",
+          unit: baseUnit.code,
+          photoUrl: "/uploads/imported-products/test-org/hash.jpg",
+          basePriceKgs: 150,
+          purchasePriceKgs: 120,
+          avgCostKgs: 118,
+        },
+      ],
+    });
+
+    const product = await prisma.product.findUnique({
+      where: { organizationId_sku: { organizationId: org.id, sku: "IMP-PRICE-1" } },
+      include: { images: true },
+    });
+    expect(product).not.toBeNull();
+    expect(product?.basePriceKgs ? Number(product.basePriceKgs) : null).toBe(150);
+    expect(product?.photoUrl).toBe("/uploads/imported-products/test-org/hash.jpg");
+    expect(product?.images[0]?.url).toBe("/uploads/imported-products/test-org/hash.jpg");
+
+    const baseCost = await prisma.productCost.findUnique({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product!.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(baseCost?.avgCostKgs ? Number(baseCost.avgCostKgs) : null).toBe(118);
+  });
+
   it("rolls back imported products by archiving and removing barcodes", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
 
     const result = await runProductImport({
       organizationId: org.id,
@@ -99,8 +141,63 @@ describeDb("import batches", () => {
     expect(report?.summary).toBeTruthy();
   });
 
+  it("restores archived products when the same SKU is imported again", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+
+    const firstImport = await runProductImport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-batch-restore-1",
+      rows: [
+        {
+          sku: "IMP-RESTORE-1",
+          name: "Archived Product",
+          unit: baseUnit.code,
+          barcodes: ["IMP-RESTORE-BC-1"],
+        },
+      ],
+    });
+
+    await rollbackImportBatch({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-batch-restore-rollback",
+      batchId: firstImport.batch.id,
+    });
+
+    const archivedProduct = await prisma.product.findUnique({
+      where: { organizationId_sku: { organizationId: org.id, sku: "IMP-RESTORE-1" } },
+    });
+    expect(archivedProduct?.isDeleted).toBe(true);
+
+    await runProductImport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-batch-restore-2",
+      rows: [
+        {
+          sku: "IMP-RESTORE-1",
+          name: "Restored Product",
+          unit: baseUnit.code,
+          barcodes: ["IMP-RESTORE-BC-1"],
+        },
+      ],
+    });
+
+    const restoredProduct = await prisma.product.findUnique({
+      where: { organizationId_sku: { organizationId: org.id, sku: "IMP-RESTORE-1" } },
+    });
+    expect(restoredProduct?.isDeleted).toBe(false);
+    expect(restoredProduct?.name).toBe("Restored Product");
+
+    const restoredBarcode = await prisma.productBarcode.findUnique({
+      where: { organizationId_value: { organizationId: org.id, value: "IMP-RESTORE-BC-1" } },
+    });
+    expect(restoredBarcode).not.toBeNull();
+  });
+
   it("creates compensating movements when rolling back received purchase orders", async () => {
-    const { org, store, supplier, product, adminUser } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     const po = await createPurchaseOrder({
       organizationId: org.id,
@@ -170,7 +267,7 @@ describeDb("import batches", () => {
   });
 
   it("enforces admin-only rollback via tRPC", async () => {
-    const { org, adminUser, managerUser, baseUnit } = await seedBase();
+    const { org, adminUser, managerUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
 
     const result = await runProductImport({
       organizationId: org.id,
@@ -189,7 +286,7 @@ describeDb("import batches", () => {
       id: managerUser.id,
       email: managerUser.email,
       role: managerUser.role,
-      organizationId: managerUser.organizationId,
+      organizationId: managerUser.organizationId!,
     });
 
     await expect(caller.imports.rollback({ batchId: result.batch.id })).rejects.toMatchObject({
@@ -197,4 +294,3 @@ describeDb("import batches", () => {
     });
   });
 });
-

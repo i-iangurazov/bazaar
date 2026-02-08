@@ -33,6 +33,8 @@ import {
 import { FormActions, FormGrid } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import {
   Tooltip,
   TooltipContent,
@@ -183,64 +185,101 @@ const UnitsPage = () => {
               {t("empty")}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <TooltipProvider>
-                <Table className="min-w-[520px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("code")}</TableHead>
-                      <TableHead>{t("labelRu")}</TableHead>
-                      <TableHead>{t("labelKg")}</TableHead>
-                      <TableHead className="text-right">{tCommon("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unitsQuery.data.map((unit) => (
-                      <TableRow key={unit.id}>
-                        <TableCell className="font-medium">{unit.code}</TableCell>
-                        <TableCell>{unit.labelRu}</TableCell>
-                        <TableCell>{unit.labelKg}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  aria-label={tCommon("edit")}
-                                  onClick={() => openEdit(unit)}
-                                >
-                                  <EditIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{tCommon("edit")}</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-danger"
-                                  aria-label={tCommon("delete")}
-                                  onClick={() => removeMutation.mutate({ unitId: unit.id })}
-                                  disabled={removeMutation.isLoading}
-                                >
-                                  <DeleteIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{tCommon("delete")}</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TooltipProvider>
-            </div>
+            <ResponsiveDataList
+              items={unitsQuery.data}
+              getKey={(unit) => unit.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <TooltipProvider>
+                    <Table className="min-w-[520px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("code")}</TableHead>
+                          <TableHead>{t("labelRu")}</TableHead>
+                          <TableHead>{t("labelKg")}</TableHead>
+                          <TableHead className="text-right">{tCommon("actions")}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((unit) => (
+                          <TableRow key={unit.id}>
+                            <TableCell className="font-medium">{unit.code}</TableCell>
+                            <TableCell>{unit.labelRu}</TableCell>
+                            <TableCell>{unit.labelKg}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      aria-label={tCommon("edit")}
+                                      onClick={() => openEdit(unit)}
+                                    >
+                                      <EditIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{tCommon("edit")}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-danger"
+                                      aria-label={tCommon("delete")}
+                                      onClick={() => removeMutation.mutate({ unitId: unit.id })}
+                                      disabled={removeMutation.isLoading}
+                                    >
+                                      <DeleteIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{tCommon("delete")}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TooltipProvider>
+                </div>
+              )}
+              renderMobile={(unit) => (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink">{unit.code}</p>
+                      <p className="text-xs text-gray-500">{unit.labelRu}</p>
+                      <p className="text-xs text-gray-500">{unit.labelKg}</p>
+                    </div>
+                    <RowActions
+                      actions={[
+                        {
+                          key: "edit",
+                          label: tCommon("edit"),
+                          icon: EditIcon,
+                          onSelect: () => openEdit(unit),
+                        },
+                        {
+                          key: "delete",
+                          label: tCommon("delete"),
+                          icon: DeleteIcon,
+                          variant: "danger",
+                          disabled: removeMutation.isLoading,
+                          onSelect: () => removeMutation.mutate({ unitId: unit.id }),
+                        },
+                      ]}
+                      maxInline={1}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                    />
+                  </div>
+                </div>
+              )}
+            />
           )}
           {unitsQuery.error ? (
             <p className="mt-3 text-sm text-red-500">

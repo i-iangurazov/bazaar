@@ -1,4 +1,5 @@
 import { Role } from "@prisma/client";
+import type { OrganizationPlan } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 
@@ -37,6 +38,7 @@ export const resetDatabase = async () => {
   await prisma.categoryAttributeTemplate.deleteMany();
   await prisma.attributeDefinition.deleteMany();
   await prisma.productBarcode.deleteMany();
+  await prisma.productImage.deleteMany();
   await prisma.productPack.deleteMany();
   await prisma.productBundleComponent.deleteMany();
   await prisma.productVariant.deleteMany();
@@ -49,8 +51,16 @@ export const resetDatabase = async () => {
   await prisma.organization.deleteMany();
 };
 
-export const seedBase = async (options?: { allowNegativeStock?: boolean }) => {
-  const org = await prisma.organization.create({ data: { name: "Test Org" } });
+export const seedBase = async (options?: {
+  allowNegativeStock?: boolean;
+  plan?: OrganizationPlan;
+}) => {
+  const org = await prisma.organization.create({
+    data: {
+      name: "Test Org",
+      plan: options?.plan ?? "STARTER",
+    },
+  });
   const baseUnit = await prisma.unit.create({
     data: {
       organizationId: org.id,

@@ -11,7 +11,7 @@ describeDb("users management", () => {
   });
 
   it("allows admins to create users", async () => {
-    const { org, adminUser } = await seedBase();
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -35,7 +35,7 @@ describeDb("users management", () => {
   });
 
   it("blocks non-admins from creating users", async () => {
-    const { org, managerUser } = await seedBase();
+    const { org, managerUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -55,7 +55,7 @@ describeDb("users management", () => {
   });
 
   it("allows admins to update users", async () => {
-    const { org, adminUser, staffUser } = await seedBase();
+    const { org, adminUser, staffUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -80,7 +80,7 @@ describeDb("users management", () => {
   });
 
   it("blocks non-admins from updating users", async () => {
-    const { org, managerUser, staffUser } = await seedBase();
+    const { org, managerUser, staffUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,

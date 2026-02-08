@@ -13,7 +13,7 @@ describeDb("analytics", () => {
   });
 
   it("returns analytics series for admin and allows org scope", async () => {
-    const { store, product, adminUser } = await seedBase();
+    const { store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -44,7 +44,7 @@ describeDb("analytics", () => {
       id: adminUser.id,
       email: adminUser.email,
       role: adminUser.role,
-      organizationId: adminUser.organizationId,
+      organizationId: adminUser.organizationId!,
     });
 
     const sales = await adminCaller.analytics.salesTrend({
@@ -72,12 +72,12 @@ describeDb("analytics", () => {
   });
 
   it("blocks org-wide charts for staff", async () => {
-    const { store, staffUser } = await seedBase();
+    const { store, staffUser } = await seedBase({ plan: "BUSINESS" });
     const staffCaller = createTestCaller({
       id: staffUser.id,
       email: staffUser.email,
       role: staffUser.role,
-      organizationId: staffUser.organizationId,
+      organizationId: staffUser.organizationId!,
     });
 
     await expect(

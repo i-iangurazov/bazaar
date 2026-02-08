@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
+import { RestoreIcon, CheckIcon } from "@/components/icons";
 import {
   Table,
   TableBody,
@@ -80,65 +83,118 @@ const AdminJobsPage = () => {
           ) : !(jobsQuery.data ?? []).length ? (
             <p className="text-sm text-gray-500">{t("empty")}</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table className="min-w-[720px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("columns.job")}</TableHead>
-                    <TableHead>{t("columns.attempts")}</TableHead>
-                    <TableHead>{t("columns.lastError")}</TableHead>
-                    <TableHead>{t("columns.lastErrorAt")}</TableHead>
-                    <TableHead>{t("columns.status")}</TableHead>
-                    <TableHead className="text-right">{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(jobsQuery.data ?? []).map((job: JobRow) => (
-                    <TableRow key={job.id}>
-                      <TableCell className="font-medium">{job.jobName}</TableCell>
-                      <TableCell className="text-xs text-gray-500">{job.attempts}</TableCell>
-                      <TableCell className="text-xs text-gray-500">{job.lastError}</TableCell>
-                      <TableCell className="text-xs text-gray-500">
+            <ResponsiveDataList
+              items={jobsQuery.data ?? []}
+              getKey={(job) => job.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[720px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("columns.job")}</TableHead>
+                        <TableHead>{t("columns.attempts")}</TableHead>
+                        <TableHead>{t("columns.lastError")}</TableHead>
+                        <TableHead>{t("columns.lastErrorAt")}</TableHead>
+                        <TableHead>{t("columns.status")}</TableHead>
+                        <TableHead className="text-right">{tCommon("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((job: JobRow) => (
+                        <TableRow key={job.id}>
+                          <TableCell className="font-medium">{job.jobName}</TableCell>
+                          <TableCell className="text-xs text-gray-500">{job.attempts}</TableCell>
+                          <TableCell className="text-xs text-gray-500">{job.lastError}</TableCell>
+                          <TableCell className="text-xs text-gray-500">
+                            {formatDateTime(job.lastErrorAt, locale)}
+                          </TableCell>
+                          <TableCell>
+                            {job.resolvedAt ? (
+                              <Badge variant="success">{t("statusResolved")}</Badge>
+                            ) : (
+                              <Badge variant="warning">{t("statusOpen")}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {job.resolvedAt ? (
+                              <span className="text-xs text-gray-400">{t("resolved")}</span>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => retryMutation.mutate({ jobId: job.id })}
+                                  disabled={retryMutation.isLoading}
+                                >
+                                  {t("retry")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => resolveMutation.mutate({ jobId: job.id })}
+                                  disabled={resolveMutation.isLoading}
+                                >
+                                  {t("resolve")}
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              renderMobile={(job) => (
+                <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">{job.jobName}</p>
+                      <p className="text-xs text-gray-500">
+                        {t("columns.attempts")}: {job.attempts}
+                      </p>
+                      <p className="text-xs text-gray-500">{job.lastError}</p>
+                      <p className="text-xs text-gray-500">
                         {formatDateTime(job.lastErrorAt, locale)}
-                      </TableCell>
-                      <TableCell>
-                        {job.resolvedAt ? (
-                          <Badge variant="success">{t("statusResolved")}</Badge>
-                        ) : (
-                          <Badge variant="warning">{t("statusOpen")}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {job.resolvedAt ? (
-                          <span className="text-xs text-gray-400">{t("resolved")}</span>
-                        ) : (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => retryMutation.mutate({ jobId: job.id })}
-                              disabled={retryMutation.isLoading}
-                            >
-                              {t("retry")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => resolveMutation.mutate({ jobId: job.id })}
-                              disabled={resolveMutation.isLoading}
-                            >
-                              {t("resolve")}
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </p>
+                    </div>
+                    {job.resolvedAt ? (
+                      <Badge variant="success">{t("statusResolved")}</Badge>
+                    ) : (
+                      <Badge variant="warning">{t("statusOpen")}</Badge>
+                    )}
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    {job.resolvedAt ? (
+                      <span className="text-xs text-gray-400">{t("resolved")}</span>
+                    ) : (
+                      <RowActions
+                        actions={[
+                          {
+                            key: "retry",
+                            label: t("retry"),
+                            icon: RestoreIcon,
+                            onSelect: () => retryMutation.mutate({ jobId: job.id }),
+                            disabled: retryMutation.isLoading,
+                          },
+                          {
+                            key: "resolve",
+                            label: t("resolve"),
+                            icon: CheckIcon,
+                            onSelect: () => resolveMutation.mutate({ jobId: job.id }),
+                            disabled: resolveMutation.isLoading,
+                          },
+                        ]}
+                        maxInline={2}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            />
           )}
         </CardContent>
       </Card>

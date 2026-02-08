@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,14 +11,19 @@ import { trpc } from "@/lib/trpc";
 
 const VerifyPage = () => {
   const params = useParams();
+  const router = useRouter();
   const token = String(params?.token ?? "");
   const t = useTranslations("verify");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const [done, setDone] = useState(false);
+  const [nextPath, setNextPath] = useState("/login");
 
   const verifyMutation = trpc.publicAuth.verifyEmail.useMutation({
-    onSuccess: () => setDone(true),
+    onSuccess: (result) => {
+      setNextPath(result.nextPath ?? "/login");
+      setDone(true);
+    },
     onError: () => setDone(true),
   });
 
@@ -48,9 +53,13 @@ const VerifyPage = () => {
           ) : (
             <p>{t("success")}</p>
           )}
-          <a href="/login" className="text-sm font-semibold text-ink underline">
-            {t("goToLogin")}
-          </a>
+          <button
+            type="button"
+            className="text-left text-sm font-semibold text-ink underline"
+            onClick={() => router.push(nextPath)}
+          >
+            {nextPath.startsWith("/register-business") ? t("goToRegisterBusiness") : t("goToLogin")}
+          </button>
         </CardContent>
       </Card>
     </div>

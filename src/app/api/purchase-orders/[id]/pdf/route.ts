@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { cookies } from "next/headers";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { prisma } from "@/server/db/prisma";
@@ -149,6 +150,13 @@ export const GET = async (
   }
 
   const doc = new PDFDocument({ size: "A4", margin: 40 });
+  const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
+  const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
+  const resolvedFont = existsSync(fontPath) ? fontPath : existsSync(fallbackPath) ? fallbackPath : null;
+  if (resolvedFont) {
+    doc.registerFont("Body", resolvedFont);
+    doc.font("Body");
+  }
   const chunks: Buffer[] = [];
 
   doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));

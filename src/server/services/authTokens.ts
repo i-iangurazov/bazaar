@@ -5,7 +5,7 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 
-export type AuthTokenPurpose = "EMAIL_VERIFY" | "PASSWORD_RESET";
+export type AuthTokenPurpose = "EMAIL_VERIFY" | "PASSWORD_RESET" | "REGISTRATION";
 
 const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");

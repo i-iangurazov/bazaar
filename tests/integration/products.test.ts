@@ -127,6 +127,31 @@ describeDb("products", () => {
     expect(notFound).toBeNull();
   });
 
+  it("resolves scan lookup by exact barcode", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-scan",
+      sku: "SKU-SCAN-1",
+      name: "Scan Product",
+      baseUnitId: baseUnit.id,
+      barcodes: ["SCAN-001"],
+    });
+
+    const result = await caller.products.lookupScan({ q: "SCAN-001" });
+    expect(result.exactMatch).toBe(true);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ id: product.id, matchType: "barcode" });
+  });
+
   it("initializes base snapshots for create and import across stores", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase();
 

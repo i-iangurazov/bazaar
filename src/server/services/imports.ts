@@ -6,55 +6,106 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { applyStockMovement } from "@/server/services/inventory";
-import { importProductsTx, type ImportProductsInput } from "@/server/services/products";
+import {
+  importProductsTx,
+  resolveImportRowsPhotoUrlsForOrganization,
+  type ImportProductsInput,
+} from "@/server/services/products";
 import { recordFirstEvent } from "@/server/services/productEvents";
-import { assertCapacity } from "@/server/services/planLimits";
+import { assertCapacity, assertFeatureEnabled } from "@/server/services/planLimits";
 
 export type RunProductImportInput = Omit<ImportProductsInput, "batchId"> & {
   source?: string;
 };
 
+const resolveImportTransactionTimeout = () => {
+  const parsed = Number(process.env.IMPORT_TRANSACTION_TIMEOUT_MS);
+  if (Number.isFinite(parsed) && parsed >= 5_000) {
+    return parsed;
+  }
+  return 120_000;
+};
+
+const importTransactionOptions = {
+  maxWait: 10_000,
+  timeout: resolveImportTransactionTimeout(),
+} as const;
+
 export const runProductImport = async (input: RunProductImportInput) => {
-  await assertCapacity({
-    organizationId: input.organizationId,
-    kind: "products",
-    add: input.rows.length,
-  });
-  const result = await prisma.$transaction(async (tx) => {
-    const batch = await tx.importBatch.create({
-      data: {
-        organizationId: input.organizationId,
-        type: "products",
-        createdById: input.actorId,
-        summary: {
-          source: input.source ?? "csv",
-          rows: input.rows.length,
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  const photoResolution = await resolveImportRowsPhotoUrlsForOrganization(
+    input.rows,
+    input.organizationId,
+  );
+  const rows = photoResolution.rows;
+  const uniqueSkus = Array.from(
+    new Set(
+      rows
+        .map((row) => row.sku.trim())
+        .filter((sku) => sku.length > 0),
+    ),
+  );
+  const existingCount = uniqueSkus.length
+    ? await prisma.product.count({
+        where: {
+          organizationId: input.organizationId,
+          sku: { in: uniqueSkus },
         },
-      },
+      })
+    : 0;
+  const netNewProducts = Math.max(0, uniqueSkus.length - existingCount);
+
+  if (netNewProducts > 0) {
+    await assertCapacity({
+      organizationId: input.organizationId,
+      kind: "products",
+      add: netNewProducts,
     });
+  }
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const batch = await tx.importBatch.create({
+        data: {
+          organizationId: input.organizationId,
+          type: "products",
+          createdById: input.actorId,
+          summary: {
+            source: input.source ?? "csv",
+            rows: rows.length,
+          },
+        },
+      });
 
-    const results = await importProductsTx(tx, {
-      ...input,
-      batchId: batch.id,
-    });
+      const results = await importProductsTx(tx, {
+        ...input,
+        rows,
+        batchId: batch.id,
+      });
 
-    const created = results.filter((row) => row.action === "created").length;
-    const updated = results.length - created;
+      const created = results.filter((row) => row.action === "created").length;
+      const updated = results.length - created;
 
-    const summary = {
-      source: input.source ?? "csv",
-      rows: input.rows.length,
-      created,
-      updated,
-    };
+      const summary = {
+        source: input.source ?? "csv",
+        rows: rows.length,
+        created,
+        updated,
+        images: {
+          downloaded: photoResolution.summary.downloaded,
+          fallback: photoResolution.summary.fallback,
+          missing: photoResolution.summary.missing,
+        },
+      };
 
-    const updatedBatch = await tx.importBatch.update({
-      where: { id: batch.id },
-      data: { summary },
-    });
+      const updatedBatch = await tx.importBatch.update({
+        where: { id: batch.id },
+        data: { summary },
+      });
 
-    return { batch: updatedBatch, results, summary };
-  });
+      return { batch: updatedBatch, results, summary };
+    },
+    importTransactionOptions,
+  );
 
   await recordFirstEvent({
     organizationId: input.organizationId,
@@ -66,8 +117,9 @@ export const runProductImport = async (input: RunProductImportInput) => {
   return result;
 };
 
-export const listImportBatches = async (input: { organizationId: string }) =>
-  prisma.importBatch.findMany({
+export const listImportBatches = async (input: { organizationId: string }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  return prisma.importBatch.findMany({
     where: { organizationId: input.organizationId },
     include: {
       createdBy: { select: { id: true, name: true, email: true } },
@@ -76,8 +128,10 @@ export const listImportBatches = async (input: { organizationId: string }) =>
     },
     orderBy: { createdAt: "desc" },
   });
+};
 
 export const getImportBatch = async (input: { organizationId: string; batchId: string }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
   const batch = await prisma.importBatch.findUnique({
     where: { id: input.batchId },
     include: {
@@ -165,8 +219,9 @@ export const rollbackImportBatch = async (input: {
   actorId: string;
   requestId: string;
   batchId: string;
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  return prisma.$transaction(async (tx) => {
     const batch = await tx.importBatch.findUnique({
       where: { id: input.batchId },
       include: { entities: true },
@@ -359,3 +414,4 @@ export const rollbackImportBatch = async (input: {
 
     return { batchId: batch.id, reportId: report.id, summary };
   });
+};

@@ -4,9 +4,12 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/server/db/prisma";
+import { assertStartupConfigured } from "@/server/config/startupChecks";
 import { loginRateLimiter } from "@/server/auth/rateLimiter";
+import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { getLogger } from "@/server/logging";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
+import { isEmailVerificationRequired } from "@/server/config/auth";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -56,16 +59,21 @@ const resolvePreferredLocale = (value?: string | null): Locale | undefined =>
 
 const extractUserClaims = (
   user: unknown,
-): { role: string; organizationId: string; preferredLocale?: string } | null => {
+): { role: string; organizationId: string; preferredLocale?: string; isPlatformOwner?: boolean } | null => {
   if (!user || typeof user !== "object") {
     return null;
   }
-  const candidate = user as { role?: string; organizationId?: string; preferredLocale?: string };
-  const { role, organizationId, preferredLocale } = candidate;
+  const candidate = user as {
+    role?: string;
+    organizationId?: string;
+    preferredLocale?: string;
+    isPlatformOwner?: boolean;
+  };
+  const { role, organizationId, preferredLocale, isPlatformOwner } = candidate;
   if (!role || !organizationId) {
     return null;
   }
-  return { role, organizationId, preferredLocale };
+  return { role, organizationId, preferredLocale, isPlatformOwner };
 };
 
 export const authOptions: NextAuthOptions = {
@@ -83,6 +91,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials, req) => {
+        assertStartupConfigured();
         const logger = getLogger();
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) {
@@ -103,8 +112,11 @@ export const authOptions: NextAuthOptions = {
         if (!user || !user.isActive) {
           return null;
         }
-        if (!user.emailVerifiedAt) {
+        if (isEmailVerificationRequired() && !user.emailVerifiedAt) {
           throw new Error("emailNotVerified");
+        }
+        if (!user.organizationId) {
+          throw new Error("registrationNotCompleted");
         }
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
@@ -132,6 +144,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           organizationId: user.organizationId,
           preferredLocale,
+          isPlatformOwner: isPlatformOwnerEmail(user.email),
         };
       },
     }),
@@ -143,6 +156,7 @@ export const authOptions: NextAuthOptions = {
         token.role = claims.role;
         token.organizationId = claims.organizationId;
         token.preferredLocale = claims.preferredLocale ?? defaultLocale;
+        token.isPlatformOwner = claims.isPlatformOwner ?? false;
       }
       return token;
     },
@@ -152,6 +166,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string;
         session.user.organizationId = token.organizationId as string;
         session.user.preferredLocale = (token.preferredLocale as string) ?? defaultLocale;
+        session.user.isPlatformOwner = Boolean(token.isPlatformOwner);
       }
       return session;
     },

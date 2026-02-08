@@ -7,7 +7,7 @@ export const Card = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) =>
 );
 
 export const CardHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("border-b border-gray-100 px-6 py-4", className)} {...props} />
+  <div className={cn("border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-6", className)} {...props} />
 );
 
 export const CardTitle = ({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) => (
@@ -15,5 +15,5 @@ export const CardTitle = ({ className, ...props }: HTMLAttributes<HTMLHeadingEle
 );
 
 export const CardContent = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("px-6 py-4", className)} {...props} />
+  <div className={cn("px-4 py-4 sm:px-6 sm:py-6", className)} {...props} />
 );

@@ -14,5 +14,6 @@ export const toCsv = (header: string[], rows: Array<Record<string, unknown>>, ke
     header.map(escapeValue).join(","),
     ...rows.map((row) => keys.map((key) => escapeValue(row[key])).join(",")),
   ];
-  return lines.join("\n");
+  const bom = "\ufeff";
+  return `${bom}${lines.join("\r\n")}`;
 };

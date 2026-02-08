@@ -1,18 +1,33 @@
 import { z } from "zod";
+import type { LegalEntityType } from "@prisma/client";
 
 import { publicProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { createSignup, requestAccess } from "@/server/services/signup";
+import {
+  createSignup,
+  registerBusinessFromToken,
+  requestAccess,
+  sendEmailVerificationToken,
+} from "@/server/services/signup";
 import { consumeAuthToken, createAuthToken } from "@/server/services/authTokens";
-import { sendResetEmail, sendVerificationEmail } from "@/server/services/email";
+import { sendResetEmail } from "@/server/services/email";
 import { getInviteByToken, acceptInvite } from "@/server/services/invites";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import bcrypt from "bcryptjs";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
+import { isEmailVerificationRequired } from "@/server/config/auth";
 
 const emailSchema = z.string().email();
+const sanitizeUserAudit = <T extends { passwordHash?: string }>(user: T | null) => {
+  if (!user) {
+    return null;
+  }
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  void _passwordHash;
+  return safeUser;
+};
 
 export const publicAuthRouter = router({
   signupMode: publicProcedure.query(() => ({
@@ -37,9 +52,6 @@ export const publicAuthRouter = router({
         email: emailSchema,
         password: z.string().min(8),
         name: z.string().min(2),
-        orgName: z.string().min(2),
-        storeName: z.string().min(2),
-        phone: z.string().optional(),
         preferredLocale: z.enum(["ru", "kg"]),
       }),
     )
@@ -49,9 +61,6 @@ export const publicAuthRouter = router({
           email: input.email,
           password: input.password,
           name: input.name,
-          orgName: input.orgName,
-          storeName: input.storeName,
-          phone: input.phone,
           preferredLocale: input.preferredLocale,
           requestId: ctx.requestId,
         });
@@ -78,18 +87,76 @@ export const publicAuthRouter = router({
           data: { emailVerifiedAt: new Date() },
         });
 
-        await writeAuditLog(prisma, {
-          organizationId: updated.organizationId,
-          actorId: updated.id,
-          action: "EMAIL_VERIFY",
-          entity: "User",
-          entityId: updated.id,
-          before: toJson(user),
-          after: toJson(updated),
+        const storeCount = updated.organizationId
+          ? await prisma.store.count({
+              where: { organizationId: updated.organizationId },
+            })
+          : 0;
+
+        let nextPath = "/login";
+        let registrationToken: string | null = null;
+        if (!updated.organizationId || storeCount === 0) {
+          const registration = await createAuthToken({
+            userId: updated.id,
+            email: updated.email,
+            purpose: "REGISTRATION",
+            expiresInMinutes: 60,
+            organizationId: updated.organizationId,
+            actorId: updated.id,
+            requestId: ctx.requestId,
+          });
+          registrationToken = registration.raw;
+          nextPath = `/register-business/${registration.raw}`;
+        }
+
+        if (updated.organizationId) {
+          await writeAuditLog(prisma, {
+            organizationId: updated.organizationId,
+            actorId: updated.id,
+            action: "EMAIL_VERIFY",
+            entity: "User",
+            entityId: updated.id,
+            before: toJson(sanitizeUserAudit(user)),
+            after: toJson(updated),
+            requestId: ctx.requestId,
+          });
+        }
+
+        return { verified: true, nextPath, registrationToken };
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  registerBusiness: publicProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 5, prefix: "register-business" }))
+    .input(
+      z.object({
+        token: z.string().min(10),
+        orgName: z.string().min(2),
+        storeName: z.string().min(2),
+        storeCode: z.string().min(2),
+        legalEntityType: z.enum(["IP", "OSOO", "AO", "OTHER"] as const).optional(),
+        legalName: z.string().optional(),
+        inn: z.string().optional(),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await registerBusinessFromToken({
+          token: input.token,
+          orgName: input.orgName,
+          storeName: input.storeName,
+          storeCode: input.storeCode,
+          legalEntityType: (input.legalEntityType as LegalEntityType | undefined) ?? null,
+          legalName: input.legalName,
+          inn: input.inn,
+          address: input.address,
+          phone: input.phone,
           requestId: ctx.requestId,
         });
-
-        return { verified: true };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -139,16 +206,18 @@ export const publicAuthRouter = router({
           data: { passwordHash },
         });
 
-        await writeAuditLog(prisma, {
-          organizationId: updated.organizationId,
-          actorId: updated.id,
-          action: "USER_PASSWORD_RESET",
-          entity: "User",
-          entityId: updated.id,
-          before: toJson(user),
-          after: toJson(updated),
-          requestId: ctx.requestId,
-        });
+        if (updated.organizationId) {
+          await writeAuditLog(prisma, {
+            organizationId: updated.organizationId,
+            actorId: updated.id,
+            action: "USER_PASSWORD_RESET",
+            entity: "User",
+            entityId: updated.id,
+            before: toJson(sanitizeUserAudit(user)),
+            after: toJson(updated),
+            requestId: ctx.requestId,
+          });
+        }
 
         return { reset: true };
       } catch (error) {
@@ -192,7 +261,17 @@ export const publicAuthRouter = router({
           preferredLocale: input.preferredLocale,
           requestId: ctx.requestId,
         });
-        return user;
+        if (!isEmailVerificationRequired()) {
+          return { user, verifyLink: null };
+        }
+
+        const verifyLink = await sendEmailVerificationToken({
+          userId: user.id,
+          email: user.email,
+          organizationId: user.organizationId,
+          requestId: ctx.requestId,
+        });
+        return { user, verifyLink };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -203,6 +282,9 @@ export const publicAuthRouter = router({
     .input(z.object({ email: emailSchema }))
     .mutation(async ({ ctx, input }) => {
       try {
+        if (!isEmailVerificationRequired()) {
+          return { sent: true };
+        }
         const user = await prisma.user.findUnique({ where: { email: input.email } });
         if (!user) {
           return { sent: true };
@@ -211,17 +293,12 @@ export const publicAuthRouter = router({
           return { sent: true };
         }
 
-        const { raw } = await createAuthToken({
+        await sendEmailVerificationToken({
           userId: user.id,
           email: user.email,
-          purpose: "EMAIL_VERIFY",
-          expiresInMinutes: 60 * 24,
           organizationId: user.organizationId,
-          actorId: user.id,
           requestId: ctx.requestId,
         });
-        const verifyLink = `${process.env.NEXTAUTH_URL ?? ""}/verify/${raw}`;
-        await sendVerificationEmail({ email: user.email, verifyLink });
         return { sent: true };
       } catch (error) {
         throw toTRPCError(error);

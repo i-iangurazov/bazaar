@@ -34,19 +34,30 @@ SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
+>(({ className, children, position = "popper", sideOffset = 6, align = "start", ...props }, ref) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-md border border-gray-200 bg-white text-ink shadow-md",
-        position === "popper" && "translate-y-1",
+        "z-50 w-[var(--radix-select-trigger-width)] min-w-[8rem] overflow-hidden rounded-md border border-gray-200 bg-white text-ink shadow-md",
+        position === "popper" && "translate-y-1 data-[side=top]:-translate-y-1",
         className,
       )}
       position={position}
+      sideOffset={sideOffset}
+      align={align}
+      collisionPadding={8}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
+      <SelectPrimitive.ScrollUpButton className="flex h-6 items-center justify-center bg-white text-gray-500">
+        <ChevronDownIcon className="h-4 w-4 rotate-180" aria-hidden />
+      </SelectPrimitive.ScrollUpButton>
+      <SelectPrimitive.Viewport className="max-h-[min(20rem,var(--radix-select-content-available-height,20rem))] overflow-y-auto p-1">
+        {children}
+      </SelectPrimitive.Viewport>
+      <SelectPrimitive.ScrollDownButton className="flex h-6 items-center justify-center bg-white text-gray-500">
+        <ChevronDownIcon className="h-4 w-4" aria-hidden />
+      </SelectPrimitive.ScrollDownButton>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));

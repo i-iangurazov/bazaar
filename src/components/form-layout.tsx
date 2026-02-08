@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 export const FormSection = ({
@@ -33,6 +34,29 @@ export const FormGrid = ({
   className?: string;
   children: ReactNode;
 }) => <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2", className)}>{children}</div>;
+
+export const Field = ({
+  label,
+  helper,
+  error,
+  children,
+  className,
+  labelClassName,
+}: {
+  label?: ReactNode;
+  helper?: ReactNode;
+  error?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  labelClassName?: string;
+}) => (
+  <div className={cn("flex flex-col gap-1.5", className)}>
+    {label ? <Label className={cn("text-xs text-gray-500", labelClassName)}>{label}</Label> : null}
+    {children}
+    {helper ? <p className="text-xs text-gray-500">{helper}</p> : null}
+    {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
+  </div>
+);
 
 export const FormStack = ({
   className,

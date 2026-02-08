@@ -7,8 +7,24 @@ import { createTestCaller } from "../helpers/context";
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
 describeDb("tenant isolation and signup", () => {
+  const getTokenFromPath = (path?: string | null) => path?.split("/").pop() ?? null;
+
   beforeEach(async () => {
     await resetDatabase();
+  });
+
+  it("blocks open signup when invite-only mode is enabled", async () => {
+    vi.stubEnv("SIGNUP_MODE", "invite_only");
+    const caller = createTestCaller();
+
+    await expect(
+      caller.publicAuth.signup({
+        email: "blocked-signup@test.local",
+        password: "Password123!",
+        name: "Blocked User",
+        preferredLocale: "ru",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "signupInviteOnly" });
   });
 
   afterEach(() => {
@@ -19,50 +35,79 @@ describeDb("tenant isolation and signup", () => {
     vi.stubEnv("SIGNUP_MODE", "open");
     const caller = createTestCaller();
 
-    const result = await caller.publicAuth.signup({
+    const signup = await caller.publicAuth.signup({
       email: "owner@test.local",
       password: "Password123!",
       name: "Owner",
-      orgName: "Owner Org",
-      storeName: "First Store",
-      phone: "+996555010200",
       preferredLocale: "ru",
     });
 
-    const org = await prisma.organization.findUnique({ where: { id: result.organizationId } });
-    expect(org?.plan).toBe("TRIAL");
+    expect(signup.sent).toBe(true);
+    expect(Boolean(signup.verifyLink) || Boolean(signup.nextPath)).toBe(true);
 
-    const store = await prisma.store.findFirst({
-      where: { organizationId: result.organizationId, name: "First Store" },
+    const userBeforeVerify = await prisma.user.findUnique({
+      where: { email: "owner@test.local" },
     });
-    expect(store).not.toBeNull();
-
-    const user = await prisma.user.findUnique({ where: { id: result.userId } });
-    expect(user?.email).toBe("owner@test.local");
-    expect(user?.emailVerifiedAt).toBeNull();
-
-    try {
-      await caller.publicAuth.signup({
-        email: "owner@test.local",
-        password: "Password123!",
-        name: "Owner",
-        orgName: "Owner Org",
-        storeName: "Second Store",
-        preferredLocale: "ru",
-      });
-      throw new Error("expected signup to fail");
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      expect(["CONFLICT", "TOO_MANY_REQUESTS"]).toContain(code);
+    expect(userBeforeVerify).not.toBeNull();
+    expect(userBeforeVerify?.organizationId).toBeNull();
+    if (signup.verifyLink) {
+      expect(userBeforeVerify?.emailVerifiedAt).toBeNull();
+    } else {
+      expect(userBeforeVerify?.emailVerifiedAt).not.toBeNull();
     }
+
+    let registrationToken: string | null = null;
+    if (signup.verifyLink) {
+      const verifyToken = getTokenFromPath(signup.verifyLink);
+      expect(verifyToken).toBeTruthy();
+      const verify = await caller.publicAuth.verifyEmail({ token: verifyToken ?? "" });
+      expect(verify.verified).toBe(true);
+      expect(verify.registrationToken).toBeTruthy();
+      registrationToken = verify.registrationToken;
+    } else {
+      registrationToken = getTokenFromPath(signup.nextPath);
+    }
+    expect(registrationToken).toBeTruthy();
+
+    const register = await caller.publicAuth.registerBusiness({
+      token: registrationToken ?? "",
+      orgName: "Owner Org",
+      storeName: "First Store",
+      storeCode: "OWN1",
+      legalEntityType: "IP",
+      inn: "1234567890",
+      phone: "+996555010200",
+    });
+    expect(register.organizationId).toBeTruthy();
+    expect(register.storeId).toBeTruthy();
+
+    const org = await prisma.organization.findUnique({ where: { id: register.organizationId } });
+    expect(org?.name).toBe("Owner Org");
+    expect(org?.plan).toBe("STARTER");
+
+    const store = await prisma.store.findUnique({ where: { id: register.storeId } });
+    expect(store?.name).toBe("First Store");
+
+    const user = await prisma.user.findUnique({ where: { id: register.userId } });
+    expect(user?.email).toBe("owner@test.local");
+    expect(user?.role).toBe("ADMIN");
+    expect(user?.emailVerifiedAt).not.toBeNull();
+
+    const anotherCaller = createTestCaller();
+    const duplicate = await anotherCaller.publicAuth.signup({
+      email: "owner@test.local",
+      password: "Password123!",
+      name: "Owner",
+      preferredLocale: "ru",
+    });
+    expect(duplicate.sent).toBe(true);
 
     const usersWithEmail = await prisma.user.count({ where: { email: "owner@test.local" } });
     expect(usersWithEmail).toBe(1);
-
   });
 
   it("accepts invite within the correct organization", async () => {
-    const { org, adminUser } = await seedBase();
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
     const adminCaller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -83,8 +128,19 @@ describeDb("tenant isolation and signup", () => {
       preferredLocale: "ru",
     });
 
-    const created = await prisma.user.findUnique({ where: { id: accepted.id } });
+    expect(Boolean(accepted.verifyLink) || Boolean(accepted.user?.emailVerifiedAt)).toBe(true);
+    const created = await prisma.user.findUnique({ where: { email: "new.user@test.local" } });
     expect(created?.organizationId).toBe(org.id);
+    if (accepted.verifyLink) {
+      expect(created?.emailVerifiedAt).toBeNull();
+      const verifyToken = getTokenFromPath(accepted.verifyLink);
+      expect(verifyToken).toBeTruthy();
+      const verifyResult = await publicCaller.publicAuth.verifyEmail({ token: verifyToken ?? "" });
+      expect(verifyResult.verified).toBe(true);
+      expect(verifyResult.nextPath).toBe("/login");
+    } else {
+      expect(created?.emailVerifiedAt).not.toBeNull();
+    }
   });
 
   it("blocks cross-org access for stores, products, inventory, and POs", async () => {

@@ -4,8 +4,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const getSecret = (request: Request) => {
-  const url = new URL(request.url);
-  return request.headers.get("x-job-secret") ?? url.searchParams.get("secret") ?? "";
+  return request.headers.get("x-job-secret") ?? "";
 };
 
 const getJobName = async (request: Request) => {

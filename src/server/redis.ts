@@ -1,17 +1,17 @@
 import Redis from "ioredis";
 
+import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
 
 let publisher: Redis | null = null;
 let subscriber: Redis | null = null;
 let warnedMissing = false;
 let warnedError = false;
-
-const isProduction = process.env.NODE_ENV === "production";
+let fatalRedisError: Error | null = null;
 
 const getRedisUrl = () => {
   const url = process.env.REDIS_URL ?? "";
-  if (!url && isProduction) {
+  if (!url && isProductionRuntime()) {
     throw new Error("REDIS_URL is required in production.");
   }
   return url;
@@ -40,21 +40,26 @@ const createClient = (role: "publisher" | "subscriber") => {
     });
 
     client.on("error", (error) => {
+      fatalRedisError = error instanceof Error ? error : new Error(String(error));
       if (!warnedError) {
         warnedError = true;
-        logger.warn({ error, role }, "Redis connection error; falling back to in-memory behavior.");
+        logger.warn({ error, role }, "Redis connection error.");
       }
     });
 
     client.connect().catch((error) => {
+      fatalRedisError = error instanceof Error ? error : new Error(String(error));
       if (!warnedError) {
         warnedError = true;
-        logger.warn({ error, role }, "Redis connection failed; falling back to in-memory behavior.");
+        logger.warn({ error, role }, "Redis connection failed.");
       }
     });
 
     return client;
   } catch (error) {
+    if (isProductionRuntime()) {
+      throw error;
+    }
     if (!warnedError) {
       warnedError = true;
       logger.warn({ error, role }, "Redis client init failed; falling back to in-memory behavior.");
@@ -64,6 +69,9 @@ const createClient = (role: "publisher" | "subscriber") => {
 };
 
 export const getRedisPublisher = () => {
+  if (isProductionRuntime() && fatalRedisError) {
+    throw fatalRedisError;
+  }
   if (!publisher) {
     publisher = createClient("publisher");
   }
@@ -71,6 +79,9 @@ export const getRedisPublisher = () => {
 };
 
 export const getRedisSubscriber = () => {
+  if (isProductionRuntime() && fatalRedisError) {
+    throw fatalRedisError;
+  }
   if (!subscriber) {
     subscriber = createClient("subscriber");
   }

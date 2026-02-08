@@ -17,6 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,6 +31,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import {
   Form,
   FormControl,
@@ -43,6 +52,7 @@ import {
   ViewIcon,
 } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
+import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -62,6 +72,7 @@ const StockCountDetailPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const tInventory = useTranslations("inventory");
+  const tExports = useTranslations("exports");
   const locale = useLocale();
   const { data: session } = useSession();
   const role = session?.user?.role;
@@ -81,6 +92,7 @@ const StockCountDetailPage = () => {
   const [scanValue, setScanValue] = useState("");
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
+  const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [movementTarget, setMovementTarget] = useState<
     | {
         productId: string;
@@ -189,7 +201,7 @@ const StockCountDetailPage = () => {
     { enabled: Boolean(movementTarget && count?.storeId) },
   );
 
-  const downloadCsv = () => {
+  const downloadCount = () => {
     if (!count) {
       return;
     }
@@ -200,21 +212,17 @@ const StockCountDetailPage = () => {
         line.product.sku,
         line.product.name,
         variantLabel,
-        line.expectedOnHand,
-        line.countedQty,
-        line.deltaQty,
-      ]
-        .map((value) => `"${String(value).replace(/\"/g, '""')}"`)
-        .join(",");
+        String(line.expectedOnHand),
+        String(line.countedQty),
+        String(line.deltaQty),
+      ];
     });
-    const csv = [header.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `stock-count-${count.code}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadTableFile({
+      format: exportFormat,
+      fileNameBase: `stock-count-${count.code}`,
+      header,
+      rows,
+    });
   };
 
   const movementLabel = (type: string) => getStockMovementLabel(tInventory, type);
@@ -348,102 +356,186 @@ const StockCountDetailPage = () => {
             <CardTitle>{t("linesTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table className="min-w-[800px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{tCommon("product")}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
-                    <TableHead>{t("expected")}</TableHead>
-                    <TableHead>{t("counted")}</TableHead>
-                    <TableHead>{t("delta")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("lastScanned")}</TableHead>
-                    <TableHead>{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lines.map((line) => (
-                    <TableRow key={line.id}>
-                      <TableCell className="font-medium">
-                        {line.product.name}
-                        <div className="text-xs text-gray-500">{line.product.sku}</div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {line.variant?.name ?? tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell>{formatNumber(line.expectedOnHand, locale)}</TableCell>
-                      <TableCell>{formatNumber(line.countedQty, locale)}</TableCell>
-                      <TableCell
-                        className={
-                          line.deltaQty === 0
-                            ? ""
-                            : line.deltaQty > 0
-                              ? "text-emerald-600"
-                              : "text-red-600"
-                        }
-                      >
-                        {formatNumber(line.deltaQty, locale)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {line.lastScannedAt
-                          ? formatDateTime(line.lastScannedAt, locale)
-                          : tCommon("notAvailable")}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="shadow-none"
-                            aria-label={t("editCounted")}
-                            disabled={isLocked}
-                            onClick={() => setEditingLine(line)}
-                          >
-                            <EditIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="shadow-none"
-                            aria-label={t("viewMovements")}
-                            onClick={() =>
-                              setMovementTarget({
-                                productId: line.productId,
-                                variantId: line.variantId,
-                                label: line.variant?.name
-                                  ? `${line.product.name} • ${line.variant.name}`
-                                  : line.product.name,
-                              })
+            <ResponsiveDataList
+              items={lines}
+              getKey={(line) => line.id}
+              renderDesktop={(visibleItems) => (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[800px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{tCommon("product")}</TableHead>
+                        <TableHead className="hidden sm:table-cell">{t("variant")}</TableHead>
+                        <TableHead>{t("expected")}</TableHead>
+                        <TableHead>{t("counted")}</TableHead>
+                        <TableHead>{t("delta")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("lastScanned")}</TableHead>
+                        <TableHead>{tCommon("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell className="font-medium">
+                            {line.product.name}
+                            <div className="text-xs text-gray-500">{line.product.sku}</div>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            {line.variant?.name ?? tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell>{formatNumber(line.expectedOnHand, locale)}</TableCell>
+                          <TableCell>{formatNumber(line.countedQty, locale)}</TableCell>
+                          <TableCell
+                            className={
+                              line.deltaQty === 0
+                                ? ""
+                                : line.deltaQty > 0
+                                  ? "text-emerald-600"
+                                  : "text-red-600"
                             }
                           >
-                            <ViewIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="text-danger shadow-none hover:text-danger"
-                            aria-label={t("removeLine")}
-                            disabled={isLocked || removeLineMutation.isLoading}
-                            onClick={() => {
-                              const confirmed = window.confirm(t("confirmRemoveLine"));
-                              if (!confirmed) {
-                                return;
-                              }
-                              removeLineMutation.mutate({ lineId: line.id });
-                            }}
-                          >
-                            <DeleteIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                            {formatNumber(line.deltaQty, locale)}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {line.lastScannedAt
+                              ? formatDateTime(line.lastScannedAt, locale)
+                              : tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shadow-none"
+                                aria-label={t("editCounted")}
+                                disabled={isLocked}
+                                onClick={() => setEditingLine(line)}
+                              >
+                                <EditIcon className="h-4 w-4" aria-hidden />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shadow-none"
+                                aria-label={t("viewMovements")}
+                                onClick={() =>
+                                  setMovementTarget({
+                                    productId: line.productId,
+                                    variantId: line.variantId,
+                                    label: line.variant?.name
+                                      ? `${line.product.name} • ${line.variant.name}`
+                                      : line.product.name,
+                                  })
+                                }
+                              >
+                                <ViewIcon className="h-4 w-4" aria-hidden />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="text-danger shadow-none hover:text-danger"
+                                aria-label={t("removeLine")}
+                                disabled={isLocked || removeLineMutation.isLoading}
+                                onClick={() => {
+                                  const confirmed = window.confirm(t("confirmRemoveLine"));
+                                  if (!confirmed) {
+                                    return;
+                                  }
+                                  removeLineMutation.mutate({ lineId: line.id });
+                                }}
+                              >
+                                <DeleteIcon className="h-4 w-4" aria-hidden />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              renderMobile={(line) => {
+                const deltaClass =
+                  line.deltaQty === 0
+                    ? "text-gray-500"
+                    : line.deltaQty > 0
+                      ? "text-emerald-600"
+                      : "text-red-600";
+                const actions = [
+                  {
+                    key: "edit",
+                    label: t("editCounted"),
+                    icon: EditIcon,
+                    disabled: isLocked,
+                    onSelect: () => setEditingLine(line),
+                  },
+                  {
+                    key: "movements",
+                    label: t("viewMovements"),
+                    icon: ViewIcon,
+                    onSelect: () =>
+                      setMovementTarget({
+                        productId: line.productId,
+                        variantId: line.variantId,
+                        label: line.variant?.name
+                          ? `${line.product.name} • ${line.variant.name}`
+                          : line.product.name,
+                      }),
+                  },
+                  {
+                    key: "remove",
+                    label: t("removeLine"),
+                    icon: DeleteIcon,
+                    variant: "danger",
+                    disabled: isLocked || removeLineMutation.isLoading,
+                    onSelect: () => {
+                      const confirmed = window.confirm(t("confirmRemoveLine"));
+                      if (!confirmed) {
+                        return;
+                      }
+                      removeLineMutation.mutate({ lineId: line.id });
+                    },
+                  },
+                ];
+
+                return (
+                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink">{line.product.name}</p>
+                        <p className="text-xs text-gray-500">{line.product.sku}</p>
+                        <p className="text-xs text-gray-500">
+                          {line.variant?.name ?? tCommon("notAvailable")}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t("expected")}: {formatNumber(line.expectedOnHand, locale)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t("counted")}: {formatNumber(line.countedQty, locale)}
+                        </p>
+                        <p className={`text-xs ${deltaClass}`}>
+                          {t("delta")}: {formatNumber(line.deltaQty, locale)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t("lastScanned")}:{" "}
+                          {line.lastScannedAt
+                            ? formatDateTime(line.lastScannedAt, locale)
+                            : tCommon("notAvailable")}
+                        </p>
+                      </div>
+                      <RowActions
+                        actions={actions}
+                        maxInline={1}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            />
             {!lines.length ? (
               <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -510,10 +602,26 @@ const StockCountDetailPage = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("shortagesTitle")}</CardTitle>
-              <Button variant="secondary" size="sm" onClick={downloadCsv}>
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-                {t("exportCsv")}
-              </Button>
+              <div className="flex items-center gap-2">
+                <div className="w-[140px]">
+                  <Select
+                    value={exportFormat}
+                    onValueChange={(value) => setExportFormat(value as DownloadFormat)}
+                  >
+                    <SelectTrigger aria-label={tExports("formatLabel")}>
+                      <SelectValue placeholder={tExports("formatLabel")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="csv">{tExports("formats.csv")}</SelectItem>
+                      <SelectItem value="xlsx">{tExports("formats.xlsx")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="secondary" size="sm" onClick={downloadCount}>
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                  {exportFormat === "csv" ? t("exportCsv") : t("exportXlsx")}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {shortageLines.length ? (
@@ -609,32 +717,65 @@ const StockCountDetailPage = () => {
             {tCommon("loading")}
           </div>
         ) : movementQuery.data?.length ? (
-          <div className="overflow-x-auto">
-            <Table className="min-w-[560px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{tInventory("movementTypeLabel")}</TableHead>
-                  <TableHead>{tInventory("qtyDelta")}</TableHead>
-                  <TableHead>{tInventory("movementDate")}</TableHead>
-                  <TableHead>{tInventory("movementUser")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movementQuery.data.map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell>{movementLabel(movement.type)}</TableCell>
-                    <TableCell>{formatNumber(movement.qtyDelta, locale)}</TableCell>
-                    <TableCell>{formatDateTime(movement.createdAt, locale)}</TableCell>
-                    <TableCell>
-                      {movement.createdBy?.name ??
-                        movement.createdBy?.email ??
-                        tCommon("notAvailable")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <ResponsiveDataList
+            items={movementQuery.data}
+            getKey={(movement) => movement.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <Table className="min-w-[560px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{tInventory("movementTypeLabel")}</TableHead>
+                      <TableHead>{tInventory("qtyDelta")}</TableHead>
+                      <TableHead>{tInventory("movementDate")}</TableHead>
+                      <TableHead>{tInventory("movementUser")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleItems.map((movement) => (
+                      <TableRow key={movement.id}>
+                        <TableCell>{movementLabel(movement.type)}</TableCell>
+                        <TableCell>{formatNumber(movement.qtyDelta, locale)}</TableCell>
+                        <TableCell>{formatDateTime(movement.createdAt, locale)}</TableCell>
+                        <TableCell>
+                          {movement.createdBy?.name ??
+                            movement.createdBy?.email ??
+                            tCommon("notAvailable")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            renderMobile={(movement) => (
+              <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink">
+                      {movementLabel(movement.type)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatDateTime(movement.createdAt, locale)}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-ink">
+                    {formatNumber(movement.qtyDelta, locale)}
+                  </p>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  <span className="text-[11px] uppercase tracking-wide text-gray-400">
+                    {tInventory("movementUser")}
+                  </span>
+                  <div className="text-gray-700">
+                    {movement.createdBy?.name ??
+                      movement.createdBy?.email ??
+                      tCommon("notAvailable")}
+                  </div>
+                </div>
+              </div>
+            )}
+          />
         ) : (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <EmptyIcon className="h-4 w-4" aria-hidden />

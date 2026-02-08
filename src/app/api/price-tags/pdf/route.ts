@@ -1,4 +1,3 @@
-import PDFDocument from "pdfkit";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -8,6 +7,7 @@ import { normalizeLocale, toIntlLocale, defaultLocale } from "@/lib/locales";
 import { getMessageFromFallback } from "@/lib/i18nFallback";
 import { cookies } from "next/headers";
 import { recordFirstEvent } from "@/server/services/productEvents";
+import { buildPriceTagsPdf, type PriceTagLabel } from "@/server/services/priceTagsPdf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,8 +46,6 @@ const createTranslator = (messages: MessageTree | undefined, namespace?: string)
   return (key: string) => getMessage(messages, `${namespace}.${key}`);
 };
 
-const formatCurrency = (amount: number, locale: string) =>
-  new Intl.NumberFormat(locale, { style: "currency", currency: "KGS" }).format(amount);
 
 export const POST = async (request: Request) => {
   const localeCookie = cookies().get("NEXT_LOCALE")?.value;
@@ -132,11 +130,10 @@ export const POST = async (request: Request) => {
     storePrices.map((price: StorePriceRow) => [price.productId, price]),
   );
 
-  type LabelRow = { name: string; sku: string; barcode: string; price: number | null };
-  const labels: LabelRow[] = parsedItems.flatMap((item: PriceTagItem) => {
+  const labels: PriceTagLabel[] = parsedItems.flatMap((item: PriceTagItem) => {
     const product = productMap.get(item.productId);
     if (!product) {
-      return [] as LabelRow[];
+      return [] as PriceTagLabel[];
     }
     const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : null;
     const override = priceMap.get(product.id);
@@ -155,65 +152,14 @@ export const POST = async (request: Request) => {
     return new Response(tErrors("invalidInput"), { status: 400 });
   }
 
-  const doc = new PDFDocument({ size: "A4", margin: 20 });
-  const chunks: Buffer[] = [];
-  doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-
-  const { width: pageWidth, height: pageHeight } = doc.page;
-  const cols = template === "3x8" ? 3 : 2;
-  const rows = template === "3x8" ? 8 : 5;
-  const labelWidth = (pageWidth - doc.page.margins.left - doc.page.margins.right) / cols;
-  const labelHeight = (pageHeight - doc.page.margins.top - doc.page.margins.bottom) / rows;
-
-  labels.forEach((label: LabelRow, index: number) => {
-    const position = index % (cols * rows);
-    const row = Math.floor(position / cols);
-    const col = position % cols;
-
-    if (position === 0 && index > 0) {
-      doc.addPage();
-    }
-
-    const x = doc.page.margins.left + col * labelWidth;
-    const y = doc.page.margins.top + row * labelHeight;
-
-    doc.rect(x, y, labelWidth, labelHeight).strokeColor("#EEEEEE").stroke();
-
-    const padding = 6;
-    const contentWidth = labelWidth - padding * 2;
-    const textY = y + padding;
-
-    doc.fontSize(9).fillColor("#111111");
-    doc.text(label.name, x + padding, textY, {
-      width: contentWidth,
-      height: labelHeight / 2,
-      ellipsis: true,
-    });
-
-    const priceText =
-      label.price !== null ? formatCurrency(label.price, toIntlLocale(locale)) : tPriceTags("noPrice");
-    doc.fontSize(12).fillColor("#000000").text(priceText, x + padding, y + labelHeight / 2, {
-      width: contentWidth,
-    });
-
-    doc.fontSize(7).fillColor("#444444");
-    const skuText = `${tPriceTags("sku")}: ${label.sku}`;
-    doc.text(skuText, x + padding, y + labelHeight - 30, { width: contentWidth });
-
-    if (label.barcode) {
-      doc.text(label.barcode, x + padding, y + labelHeight - 20, { width: contentWidth });
-    }
-
-    if (storeName) {
-      doc.text(storeName, x + padding, y + labelHeight - 10, { width: contentWidth });
-    }
+  const pdf = await buildPriceTagsPdf({
+    labels,
+    template,
+    locale: toIntlLocale(locale),
+    storeName,
+    noPriceLabel: tPriceTags("noPrice"),
+    skuLabel: tPriceTags("sku"),
   });
-
-  doc.end();
-
-  await new Promise((resolve) => doc.on("end", resolve));
-
-  const pdf = Buffer.concat(chunks);
   const response = new Response(pdf, {
     headers: {
       "Content-Type": "application/pdf",

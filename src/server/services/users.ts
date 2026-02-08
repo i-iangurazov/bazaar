@@ -6,6 +6,15 @@ import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { assertWithinLimits } from "@/server/services/planLimits";
 
+const sanitizeUserAudit = <T extends { passwordHash?: string }>(user: T | null) => {
+  if (!user) {
+    return null;
+  }
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  void _passwordHash;
+  return safeUser;
+};
+
 export type CreateUserInput = {
   organizationId: string;
   actorId: string;
@@ -79,7 +88,7 @@ export const updatePreferredLocale = async (input: UpdatePreferredLocaleInput) =
       action: "USER_LOCALE_UPDATE",
       entity: "User",
       entityId: updated.id,
-      before: toJson(before),
+      before: toJson(sanitizeUserAudit(before)),
       after: toJson(safeUser),
       requestId: input.requestId,
     });
@@ -128,7 +137,7 @@ export const updateUser = async (input: UpdateUserInput) =>
       action: "USER_UPDATE",
       entity: "User",
       entityId: updated.id,
-      before: toJson(before),
+      before: toJson(sanitizeUserAudit(before)),
       after: toJson(safeUser),
       requestId: input.requestId,
     });
@@ -169,7 +178,7 @@ export const setUserActive = async (input: SetUserActiveInput) =>
       action: "USER_STATUS_UPDATE",
       entity: "User",
       entityId: updated.id,
-      before: toJson(before),
+      before: toJson(sanitizeUserAudit(before)),
       after: toJson(safeUser),
       requestId: input.requestId,
     });
@@ -207,7 +216,7 @@ export const resetUserPassword = async (input: ResetUserPasswordInput) =>
       action: "USER_PASSWORD_RESET",
       entity: "User",
       entityId: updated.id,
-      before: toJson(before),
+      before: toJson(sanitizeUserAudit(before)),
       after: toJson(safeUser),
       requestId: input.requestId,
     });

@@ -52,6 +52,7 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
   adminOnly?: boolean;
   managerOnly?: boolean;
+  platformOwnerOnly?: boolean;
 };
 
 type NavGroupId = "core" | "operations" | "insights" | "admin" | "help";
@@ -62,6 +63,7 @@ type NavGroup = {
   items: NavItem[];
   adminOnly?: boolean;
   managerOnly?: boolean;
+  platformOwnerOnly?: boolean;
 };
 
 const defaultGroupState: Record<NavGroupId, boolean> = {
@@ -79,6 +81,7 @@ type AppShellProps = {
     email?: string | null;
     role: string;
     organizationId?: string | null;
+    isPlatformOwner?: boolean;
   };
   impersonation?: {
     targetName?: string | null;
@@ -108,9 +111,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const normalizedPath = stripLocaleFromPath(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
   const [scanValue, setScanValue] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [scanResults, setScanResults] = useState<
+    Array<{ id: string; name: string; sku: string; matchType: "barcode" | "sku" | "name" }>
+  >([]);
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
   const { toast } = useToast();
   const storageKey = useMemo(
@@ -159,6 +166,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           { key: "units", href: "/settings/units", icon: UnitsIcon, adminOnly: true },
           { key: "adminJobs", href: "/admin/jobs", icon: JobsIcon, adminOnly: true },
           { key: "billing", href: "/billing", icon: BillingIcon, adminOnly: true },
+          {
+            key: "platformOwner",
+            href: "/platform",
+            icon: MetricsIcon,
+            adminOnly: true,
+            platformOwnerOnly: true,
+          },
         ],
       },
       {
@@ -275,47 +289,99 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     { enabled: debouncedQuery.length >= 2 },
   );
 
-  const findByBarcodeMutation = trpc.products.findByBarcode.useMutation({
-    onSuccess: (product, variables) => {
-      if (product) {
-        router.push(`/products/${product.id}`);
-        setScanValue("");
-        setShowResults(false);
-        return;
-      }
-      const normalized = variables.value.trim();
-      if (!normalized) {
-        return;
-      }
+  const canCreateProduct = user.role !== "STAFF";
+
+  const focusScanInput = () => {
+    scanInputRef.current?.focus();
+  };
+
+  type ScanLookupResult = {
+    exactMatch: boolean;
+    items: Array<{ id: string; name: string; sku: string; matchType: "barcode" | "sku" | "name" }>;
+  };
+
+  const lookupScanQuery = trpc.products.lookupScan.useQuery(
+    { q: scanValue.trim() },
+    { enabled: false, refetchOnWindowFocus: false },
+  );
+
+  const handleLookupResult = (result: ScanLookupResult, normalized: string) => {
+    if (result.exactMatch && result.items.length === 1) {
+      router.push(`/products/${result.items[0].id}`);
+      setScanValue("");
+      setScanResults([]);
+      setShowResults(false);
+      return;
+    }
+    if (!result.items.length) {
       toast({
         variant: "info",
         description: tHeader("barcodeNotFound", { value: normalized }),
-        actionLabel: tHeader("createWithBarcode"),
-        actionHref: `/products/new?barcode=${encodeURIComponent(normalized)}`,
+        ...(canCreateProduct
+          ? {
+              actionLabel: tHeader("createWithBarcode"),
+              actionHref: `/products/new?barcode=${encodeURIComponent(normalized)}`,
+            }
+          : {}),
       });
       setScanValue("");
+      setScanResults([]);
       setShowResults(false);
-    },
-    onError: (error) => {
-      toast({
-        variant: "error",
-        description: translateError(tErrors, error),
-      });
-    },
-  });
-
-  const handleScanSubmit = () => {
-    if (!scanValue.trim() || findByBarcodeMutation.isLoading) {
+      focusScanInput();
       return;
     }
-    findByBarcodeMutation.mutate({ value: scanValue });
+    setScanResults(result.items);
+    setShowResults(true);
+    focusScanInput();
   };
+
+  const handleScanSubmit = () => {
+    const normalized = scanValue.trim();
+    if (!normalized || lookupScanQuery.isFetching) {
+      return;
+    }
+    lookupScanQuery
+      .refetch()
+      .then((result) => {
+        if (result.data) {
+          handleLookupResult(result.data, normalized);
+          return;
+        }
+        if (result.error) {
+          toast({
+            variant: "error",
+            description: translateError(tErrors, result.error),
+          });
+          focusScanInput();
+        }
+      })
+      .catch((error) => {
+        toast({
+          variant: "error",
+          description: translateError(tErrors, error),
+        });
+        focusScanInput();
+      });
+  };
+
+  const dropdownItems =
+    scanResults.length > 0
+      ? scanResults
+      : (quickSearchQuery.data ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          sku: item.sku,
+          matchType: "name" as const,
+        }));
 
   const isItemVisible = (item: NavItem) => {
     if (item.adminOnly && user.role !== "ADMIN") {
       return false;
     }
     if (item.managerOnly && user.role === "STAFF") {
+      return false;
+    }
+    if (item.platformOwnerOnly && !user.isPlatformOwner) {
       return false;
     }
     return true;
@@ -338,6 +404,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           return false;
         }
         if (group.managerOnly && user.role === "STAFF") {
+          return false;
+        }
+        if (group.platformOwnerOnly && !user.isPlatformOwner) {
           return false;
         }
         return group.items.some((item) => isItemVisible(item));
@@ -375,7 +444,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       href={item.href}
                       onClick={onNavigate}
                       className={cn(
-                        "flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold transition",
+                        "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold transition",
                         isActive ? "bg-gray-100 text-ink" : "text-gray-600 hover:bg-gray-50",
                       )}
                     >
@@ -470,7 +539,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   type="search"
                   placeholder={tHeader("scanPlaceholder")}
                   value={scanValue}
-                  onChange={(event) => setScanValue(event.target.value)}
+                  onChange={(event) => {
+                    setScanValue(event.target.value);
+                    if (scanResults.length) {
+                      setScanResults([]);
+                    }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -483,11 +557,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   }}
                   inputMode="search"
                   aria-label={tHeader("scanLabel")}
+                  ref={scanInputRef}
                 />
-                {showResults && quickSearchQuery.data?.length ? (
+                {showResults && dropdownItems.length ? (
                   <div className="absolute z-20 mt-2 w-full rounded-md border border-gray-200 bg-white shadow-lg">
                     <div className="max-h-64 overflow-y-auto py-1">
-                      {quickSearchQuery.data.map((item) => (
+                      {dropdownItems.map((item) => (
                         <button
                           key={item.id}
                           type="button"
@@ -496,7 +571,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                           onClick={() => {
                             router.push(`/products/${item.id}`);
                             setScanValue("");
+                            setScanResults([]);
                             setShowResults(false);
+                            focusScanInput();
                           }}
                         >
                           <span className="font-medium text-ink">{item.name}</span>

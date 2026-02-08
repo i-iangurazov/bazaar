@@ -10,13 +10,20 @@ export const createTestCaller = (user?: {
   email: string;
   role: Role;
   organizationId: string;
+  isPlatformOwner?: boolean;
 }) => {
   const requestId = randomUUID();
   const ctx = {
     prisma,
-    user: user ?? null,
+    user: user
+      ? {
+          ...user,
+          isPlatformOwner: Boolean(user.isPlatformOwner),
+        }
+      : null,
     impersonator: null,
     impersonationSessionId: null,
+    ip: null,
     requestId,
     logger: getLogger(requestId),
   };

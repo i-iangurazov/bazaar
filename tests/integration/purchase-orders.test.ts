@@ -184,7 +184,7 @@ describeDb("purchase orders", () => {
       id: staffUser.id,
       email: staffUser.email,
       role: staffUser.role,
-      organizationId: staffUser.organizationId,
+      organizationId: staffUser.organizationId!,
     });
 
     await expect(caller.purchaseOrders.approve({ purchaseOrderId: po.id })).rejects.toMatchObject({

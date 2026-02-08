@@ -5,6 +5,7 @@ import type { NextApiRequest } from "next";
 import superjson from "superjson";
 
 import { prisma } from "@/server/db/prisma";
+import { assertStartupConfigured } from "@/server/config/startupChecks";
 import { getLogger } from "@/server/logging";
 import { ensureRequestId } from "@/server/middleware/requestContext";
 import { createRateLimiter, type RateLimitConfig } from "@/server/middleware/rateLimiter";
@@ -17,6 +18,7 @@ export type AuthUser = {
   email: string;
   role: Role;
   organizationId: string;
+  isPlatformOwner: boolean;
 };
 
 export type ImpersonationContext = {
@@ -39,20 +41,25 @@ const parseCookies = (cookieHeader?: string | null) => {
 };
 
 export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
+  assertStartupConfigured();
   const requestId = ensureRequestId(req.headers.get("x-request-id"));
   const cookieHeader = req.headers.get("cookie") ?? "";
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const realIp = req.headers.get("x-real-ip");
+  const ip = forwardedFor?.split(",")[0]?.trim() ?? realIp ?? null;
   const cookies = parseCookies(cookieHeader);
   const token = await getToken({
     req: { headers: { cookie: cookieHeader }, cookies } as unknown as NextApiRequest,
     secret: process.env.NEXTAUTH_SECRET,
   });
   const user = token
-    ? {
-        id: token.sub ?? "",
-        email: token.email ?? "",
-        role: token.role as Role,
-        organizationId: token.organizationId as string,
-      }
+      ? {
+          id: token.sub ?? "",
+          email: token.email ?? "",
+          role: token.role as Role,
+          organizationId: token.organizationId as string,
+          isPlatformOwner: Boolean(token.isPlatformOwner),
+        }
     : null;
 
   let impersonation: ImpersonationContext | null = null;
@@ -82,6 +89,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
         email: session.targetUser.email ?? "",
         role: session.targetUser.role,
         organizationId: session.targetUser.organizationId,
+        isPlatformOwner: false,
       };
     }
   }
@@ -91,6 +99,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
     user: resolvedUser,
     impersonator: impersonation?.impersonator ?? null,
     impersonationSessionId: impersonation?.impersonationSessionId ?? null,
+    ip,
     requestId,
     logger: getLogger(requestId),
   };
@@ -117,7 +126,10 @@ export const rateLimit = (config: RateLimitConfig) => {
   const limiter = createRateLimiter(config);
   return t.middleware(async ({ ctx, next, path }) => {
     const isTest = process.env.NODE_ENV === "test" || process.env.CI === "1" || process.env.CI === "true";
-    const key = isTest && !ctx.user ? `${ctx.requestId}:${path}` : `${ctx.user?.id ?? "anon"}:${path}`;
+    if (isTest) {
+      return next();
+    }
+    const key = `${ctx.user?.id ?? ctx.ip ?? "anon"}:${path}`;
     try {
       await limiter.consume(key);
     } catch {
@@ -134,8 +146,11 @@ const isAuthed = t.middleware(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-const ensureActivePlan = t.middleware(async ({ ctx, next, type }) => {
+const ensureActivePlan = t.middleware(async ({ ctx, next, type, path }) => {
   if (!ctx.user || type !== "mutation") {
+    return next();
+  }
+  if (path.startsWith("billing.")) {
     return next();
   }
   try {
@@ -157,5 +172,14 @@ const hasRole = (roles: Role[]) =>
 export const router = t.router;
 export const publicProcedure = t.procedure;
 export const protectedProcedure = t.procedure.use(isAuthed).use(ensureActivePlan);
-export const managerProcedure = t.procedure.use(hasRole([Role.ADMIN, Role.MANAGER]));
-export const adminProcedure = t.procedure.use(hasRole([Role.ADMIN]));
+export const managerProcedure = t.procedure.use(hasRole([Role.ADMIN, Role.MANAGER])).use(ensureActivePlan);
+export const adminProcedure = t.procedure.use(hasRole([Role.ADMIN])).use(ensureActivePlan);
+
+const isPlatformOwner = t.middleware(({ ctx, next }) => {
+  if (!ctx.user || !ctx.user.isPlatformOwner) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+export const platformOwnerProcedure = t.procedure.use(isAuthed).use(isPlatformOwner);

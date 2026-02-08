@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import Papa from "papaparse";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -18,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { RowActions } from "@/components/row-actions";
 import {
   Table,
   TableBody,
@@ -60,6 +61,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   ArchiveIcon,
+  DeleteIcon,
   DownloadIcon,
   EditIcon,
   EmptyIcon,
@@ -68,37 +70,19 @@ import {
   PriceIcon,
   RestoreIcon,
   TagIcon,
-  UploadIcon,
   ViewIcon,
 } from "@/components/icons";
+import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
 
-type ImportRow = {
-  sku: string;
-  name: string;
-  category?: string;
-  unit: string;
-  description?: string;
-  photoUrl?: string;
-  barcodes?: string[];
-};
-
-const normalizeValue = (value: unknown) =>
-  typeof value === "string" ? value.trim() : String(value ?? "").trim();
-
-const parseBarcodes = (value: string) =>
-  value
-    .split(/[|,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
 const ProductsPage = () => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tExports = useTranslations("exports");
   const locale = useLocale();
   const router = useRouter();
   const { data: session } = useSession();
@@ -110,10 +94,8 @@ const ProductsPage = () => {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [storeId, setStoreId] = useState("");
-  const [importRows, setImportRows] = useState<ImportRow[]>([]);
-  const [importError, setImportError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [priceTarget, setPriceTarget] = useState<{
     id: string;
     name: string;
@@ -128,6 +110,10 @@ const ProductsPage = () => {
   const [printOpen, setPrintOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueScrollTop, setQueueScrollTop] = useState(0);
+  const [queueViewportHeight, setQueueViewportHeight] = useState(0);
+  const queueListRef = useRef<HTMLDivElement | null>(null);
 
   const storesQuery = trpc.stores.list.useQuery();
   const productsQuery = trpc.products.list.useQuery({
@@ -135,16 +121,6 @@ const ProductsPage = () => {
     category: category || undefined,
     includeArchived: isAdmin ? showArchived : undefined,
     storeId: storeId || undefined,
-  });
-  const importMutation = trpc.products.importCsv.useMutation({
-    onSuccess: () => {
-      productsQuery.refetch();
-      setImportRows([]);
-      toast({ variant: "success", description: t("importSuccess") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
   });
   const exportQuery = trpc.products.exportCsv.useQuery(undefined, { enabled: false });
   const archiveMutation = trpc.products.archive.useMutation({
@@ -342,21 +318,78 @@ const ProductsPage = () => {
     },
   });
 
-  const selectedList = useMemo(
-    () =>
-      (productsQuery.data ?? [])
-        .filter((product) => selectedIds.has(product.id))
-        .map((product) => product.id),
-    [productsQuery.data, selectedIds],
-  );
+  const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
   const allSelected =
     Boolean(productsQuery.data?.length) &&
     selectedIds.size === (productsQuery.data?.length ?? 0);
 
-  const productById = useMemo(
-    () => new Map((productsQuery.data ?? []).map((product) => [product.id, product])),
-    [productsQuery.data],
+  const queueIdsForQuery = useMemo(
+    () => Array.from(new Set(printQueue)).sort(),
+    [printQueue],
   );
+  const queueProductsQuery = trpc.products.byIds.useQuery(
+    { ids: queueIdsForQuery },
+    { enabled: printOpen && queueIdsForQuery.length > 0 },
+  );
+  type QueueProductLite = {
+    id: string;
+    name: string;
+    sku: string;
+    isDeleted: boolean;
+    barcodes: { value: string }[];
+  };
+  const productById = useMemo(() => {
+    const map = new Map<string, QueueProductLite>();
+    (productsQuery.data ?? []).forEach((product) => {
+      map.set(product.id, {
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        isDeleted: product.isDeleted,
+        barcodes: product.barcodes,
+      });
+    });
+    (queueProductsQuery.data ?? []).forEach((product) => {
+      map.set(product.id, product);
+    });
+    return map;
+  }, [productsQuery.data, queueProductsQuery.data]);
+  const queueRowHeight = 72;
+  const queueOverscan = 6;
+  const canDragQueue = printQueue.length <= 50;
+  const queueIndexById = useMemo(
+    () => new Map(printQueue.map((id, index) => [id, index])),
+    [printQueue],
+  );
+  const filteredQueue = useMemo(() => {
+    if (!queueSearch.trim()) {
+      return printQueue;
+    }
+    const query = queueSearch.trim().toLowerCase();
+    return printQueue.filter((productId) => {
+      const product = productById.get(productId);
+      const name = product?.name ?? "";
+      const sku = product?.sku ?? "";
+      const barcodes =
+        product?.barcodes?.map((barcode) => barcode.value).join(" ") ?? "";
+      return [name, sku, barcodes].some((value) =>
+        value.toLowerCase().includes(query),
+      );
+    });
+  }, [printQueue, productById, queueSearch]);
+  const queueTotalHeight = filteredQueue.length * queueRowHeight;
+  const effectiveViewportHeight =
+    queueViewportHeight || queueRowHeight * Math.max(filteredQueue.length, 1);
+  const queueStartIndex = Math.max(
+    0,
+    Math.floor(queueScrollTop / queueRowHeight) - queueOverscan,
+  );
+  const queueEndIndex = Math.min(
+    filteredQueue.length,
+    Math.ceil((queueScrollTop + effectiveViewportHeight) / queueRowHeight) + queueOverscan,
+  );
+  const queueVisibleItems = filteredQueue.slice(queueStartIndex, queueEndIndex);
+  const queueOffsetTop = queueStartIndex * queueRowHeight;
   const selectedProducts = useMemo(
     () => (productsQuery.data ?? []).filter((product) => selectedIds.has(product.id)),
     [productsQuery.data, selectedIds],
@@ -397,10 +430,32 @@ const ProductsPage = () => {
       });
       setPrintQueue(selectedList);
       setDraggedQueueIndex(null);
+      setQueueSearch("");
+      setQueueScrollTop(0);
     } else {
       setPrintQueue([]);
+      setQueueSearch("");
+      setQueueScrollTop(0);
     }
   }, [printOpen, printForm, storeId, selectedList]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") {
+      return;
+    }
+    const target = window as typeof window & {
+      __seedPrintQueue?: (count?: number) => void;
+    };
+    target.__seedPrintQueue = (count = 500) => {
+      const ids = (productsQuery.data ?? []).slice(0, count).map((product) => product.id);
+      setSelectedIds(new Set(ids));
+      setPrintQueue(ids);
+      setPrintOpen(true);
+    };
+    return () => {
+      delete target.__seedPrintQueue;
+    };
+  }, [productsQuery.data]);
 
   useEffect(() => {
     if (bulkStorePriceOpen) {
@@ -410,6 +465,36 @@ const ProductsPage = () => {
       });
     }
   }, [bulkStorePriceOpen, bulkStorePriceForm, storeId]);
+
+  useLayoutEffect(() => {
+    if (!printOpen) {
+      return;
+    }
+    const container = queueListRef.current;
+    if (!container) {
+      return;
+    }
+    const updateHeight = () => {
+      const height = container.getBoundingClientRect().height;
+      if (height > 0) {
+        setQueueViewportHeight(height);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [printOpen, filteredQueue.length]);
+
+  useEffect(() => {
+    if (!queueSearch.trim()) {
+      return;
+    }
+    if (queueListRef.current) {
+      queueListRef.current.scrollTop = 0;
+    }
+    setQueueScrollTop(0);
+  }, [queueSearch]);
 
   const storeNameById = useMemo(
     () => new Map((storesQuery.data ?? []).map((store) => [store.id, store.name])),
@@ -442,43 +527,10 @@ const ProductsPage = () => {
     return { summary, names };
   };
 
-  const handleImportFile = (file: File) => {
-    setImportError(null);
-    Papa.parse<Record<string, unknown>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const rows: ImportRow[] = [];
-        const errors: string[] = [];
-        results.data.forEach((row, index) => {
-          const sku = normalizeValue(row.sku ?? row.SKU);
-          const name = normalizeValue(row.name ?? row.Name);
-          const unit = normalizeValue(row.unit ?? row.Unit);
-          if (!sku || !name || !unit) {
-            errors.push(`${t("rowInvalid")} #${index + 1}`);
-            return;
-          }
-          const barcodesValue = normalizeValue(row.barcodes ?? row.Barcodes ?? "");
-          rows.push({
-            sku,
-            name,
-            unit,
-            category: normalizeValue(row.category ?? row.Category) || undefined,
-            description: normalizeValue(row.description ?? row.Description) || undefined,
-            photoUrl: normalizeValue(row.photoUrl ?? row.PhotoUrl) || undefined,
-            barcodes: barcodesValue ? parseBarcodes(barcodesValue) : undefined,
-          });
-        });
-        if (errors.length) {
-          setImportError(errors[0]);
-        }
-        setImportRows(rows);
-      },
-      error: () => {
-        setImportError(t("importParseError"));
-      },
-    });
-  };
+  const getProductPreviewUrl = (product: {
+    photoUrl?: string | null;
+    images?: { url: string }[];
+  }) => product.images?.[0]?.url ?? product.photoUrl ?? null;
 
   const handleExport = async () => {
     const { data, error } = await exportQuery.refetch();
@@ -489,13 +541,17 @@ const ProductsPage = () => {
     if (!data) {
       return;
     }
-    const blob = new Blob([data], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `products-${locale}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const rows = parseCsvTextRows(data);
+    const [header, ...body] = rows;
+    if (!header) {
+      return;
+    }
+    downloadTableFile({
+      format: exportFormat,
+      fileNameBase: `products-${locale}`,
+      header,
+      rows: body,
+    });
   };
 
   const movePrintQueueItem = (fromIndex: number, toIndex: number) => {
@@ -511,7 +567,7 @@ const ProductsPage = () => {
   };
 
   const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
-    const queue = printQueue.length ? printQueue : selectedList;
+    const queue = printQueue;
     if (!queue.length) {
       return;
     }
@@ -666,8 +722,26 @@ const ProductsPage = () => {
               ) : (
                 <DownloadIcon className="h-4 w-4" aria-hidden />
               )}
-              {exportQuery.isFetching ? tCommon("loading") : t("exportCsv")}
+              {exportQuery.isFetching
+                ? tCommon("loading")
+                : exportFormat === "csv"
+                  ? t("exportCsv")
+                  : t("exportXlsx")}
             </Button>
+            <div className="w-full sm:w-[170px]">
+              <Select
+                value={exportFormat}
+                onValueChange={(value) => setExportFormat(value as DownloadFormat)}
+              >
+                <SelectTrigger aria-label={tExports("formatLabel")}>
+                  <SelectValue placeholder={tExports("formatLabel")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">{tExports("formats.csv")}</SelectItem>
+                  <SelectItem value="xlsx">{tExports("formats.xlsx")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {canManagePrices ? (
               <Button
                 variant="secondary"
@@ -687,16 +761,6 @@ const ProductsPage = () => {
               >
                 <DownloadIcon className="h-4 w-4" aria-hidden />
                 {t("printPriceTags")}
-              </Button>
-            ) : null}
-            {isAdmin ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setShowImport((prev) => !prev)}
-              >
-                <UploadIcon className="h-4 w-4" aria-hidden />
-                {showImport ? t("hideImport") : t("importCsv")}
               </Button>
             ) : null}
           </>
@@ -758,81 +822,6 @@ const ProductsPage = () => {
           </>
         }
       />
-
-      {isAdmin && showImport ? (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>{t("importCsv")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  handleImportFile(file);
-                }
-              }}
-            />
-            {importRows.length ? (
-              <div className="space-y-3">
-                <p className="text-xs text-gray-500">
-                  {t("importPreview", { count: importRows.length })}
-                </p>
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[520px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("sku")}</TableHead>
-                        <TableHead>{t("name")}</TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("category")}</TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("unit")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {importRows.slice(0, 5).map((row) => (
-                        <TableRow key={`${row.sku}-${row.name}`}>
-                          <TableCell className="text-xs text-gray-500">{row.sku}</TableCell>
-                          <TableCell className="font-medium">{row.name}</TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                            {row.category ?? tCommon("notAvailable")}
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
-                            {row.unit}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                <Button
-                  onClick={() => importMutation.mutate({ rows: importRows })}
-                  disabled={importMutation.isLoading}
-                >
-                  {importMutation.isLoading ? (
-                    <Spinner className="h-4 w-4" />
-                  ) : (
-                    <UploadIcon className="h-4 w-4" aria-hidden />
-                  )}
-                  {importMutation.isLoading ? tCommon("loading") : t("confirmImport")}
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("importHint")}
-              </div>
-            )}
-            {importError ? <p className="text-sm text-red-500">{importError}</p> : null}
-            {importMutation.error ? (
-              <p className="text-sm text-red-500">
-                {translateError(tErrors, importMutation.error)}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader>
@@ -935,228 +924,422 @@ const ProductsPage = () => {
               </TooltipProvider>
             </div>
           ) : null}
-          <div className="overflow-x-auto">
-            <TooltipProvider>
-              <Table className="min-w-[720px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-ink"
-                        checked={allSelected}
-                        onChange={toggleSelectAll}
-                        aria-label={t("selectAll")}
-                      />
-                    </TableHead>
-                    <TableHead>{t("sku")}</TableHead>
-                    <TableHead>{t("name")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("category")}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t("unit")}</TableHead>
-                    <TableHead>{t("basePrice")}</TableHead>
-                    {showEffectivePrice ? <TableHead>{t("effectivePrice")}</TableHead> : null}
-                    <TableHead>{t("barcodes")}</TableHead>
-                    <TableHead>{t("stores")}</TableHead>
-                    <TableHead>{tCommon("actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {productsQuery.data?.map((product) => {
-                    const barcodeSummary = getBarcodeSummary(product.barcodes);
-                    const storeInfo = getStoreInfo(
-                      product.inventorySnapshots.map((snapshot) => snapshot.storeId),
-                    );
-                    return (
-                      <TableRow key={product.id}>
-                        <TableCell>
+          <ResponsiveDataList
+            items={productsQuery.data ?? []}
+            getKey={(product) => product.id}
+            renderDesktop={(visibleItems) => (
+              <div className="overflow-x-auto">
+                <TooltipProvider>
+                  <Table className="min-w-[720px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">
                           <input
                             type="checkbox"
                             className="h-4 w-4 accent-ink"
-                            checked={selectedIds.has(product.id)}
-                            onChange={() => toggleSelect(product.id)}
-                            aria-label={t("selectProduct", { name: product.name })}
+                            checked={allSelected}
+                            onChange={toggleSelectAll}
+                            aria-label={t("selectAll")}
                           />
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500">{product.sku}</TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span>{product.name}</span>
-                            {product.isDeleted ? (
-                              <Badge variant="muted">{t("archived")}</Badge>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500 hidden md:table-cell">
-                          {product.category ?? tCommon("notAvailable")}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">{product.unit}</TableCell>
-                        <TableCell className="text-xs text-gray-500">
-                          {product.basePriceKgs !== null && product.basePriceKgs !== undefined
+                        </TableHead>
+                        <TableHead>{t("sku")}</TableHead>
+                        <TableHead>{t("imageLabel")}</TableHead>
+                        <TableHead>{t("name")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("category")}</TableHead>
+                        <TableHead className="hidden lg:table-cell">{t("unit")}</TableHead>
+                        <TableHead>{t("salePrice")}</TableHead>
+                        <TableHead>{t("purchasePrice")}</TableHead>
+                        <TableHead>{t("avgCost")}</TableHead>
+                        <TableHead>{t("barcodes")}</TableHead>
+                        <TableHead>{t("stores")}</TableHead>
+                        <TableHead>{tCommon("actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((product) => {
+                        const barcodeSummary = getBarcodeSummary(product.barcodes);
+                        const previewImageUrl = getProductPreviewUrl(product);
+                        const storeInfo = getStoreInfo(
+                          product.inventorySnapshots.map((snapshot) => snapshot.storeId),
+                        );
+                        return (
+                          <TableRow key={product.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-ink"
+                                checked={selectedIds.has(product.id)}
+                                onChange={() => toggleSelect(product.id)}
+                                aria-label={t("selectProduct", { name: product.name })}
+                              />
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">{product.sku}</TableCell>
+                            <TableCell>
+                              {previewImageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={previewImageUrl}
+                                  alt={product.name}
+                                  className="h-10 w-10 rounded-md border border-gray-200 object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50">
+                                  <EmptyIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span>{product.name}</span>
+                                {product.isDeleted ? (
+                                  <Badge variant="muted">{t("archived")}</Badge>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                              {product.category ?? tCommon("notAvailable")}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">{product.unit}</TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span>
+                                  {showEffectivePrice
+                                    ? product.effectivePriceKgs !== null &&
+                                      product.effectivePriceKgs !== undefined
+                                      ? formatCurrencyKGS(product.effectivePriceKgs, locale)
+                                      : tCommon("notAvailable")
+                                    : product.basePriceKgs !== null &&
+                                        product.basePriceKgs !== undefined
+                                      ? formatCurrencyKGS(product.basePriceKgs, locale)
+                                      : tCommon("notAvailable")}
+                                </span>
+                                {showEffectivePrice && product.priceOverridden ? (
+                                  <Badge variant="muted">{t("priceOverridden")}</Badge>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {product.purchasePriceKgs !== null &&
+                              product.purchasePriceKgs !== undefined
+                                ? formatCurrencyKGS(product.purchasePriceKgs, locale)
+                                : tCommon("notAvailable")}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {product.avgCostKgs !== null && product.avgCostKgs !== undefined
+                                ? formatCurrencyKGS(product.avgCostKgs, locale)
+                                : tCommon("notAvailable")}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {barcodeSummary.label}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {storeInfo.names.length ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="cursor-help text-ink">
+                                      {storeInfo.summary}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{storeInfo.names.join(", ")}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                storeInfo.summary
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {isAdmin ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shadow-none"
+                                        aria-label={tCommon("actions")}
+                                      >
+                                        <MoreIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      {showPriceAction ? (
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            setPriceTarget({
+                                              id: product.id,
+                                              name: product.name,
+                                              basePriceKgs: product.basePriceKgs ?? null,
+                                              effectivePriceKgs: product.effectivePriceKgs ?? null,
+                                            })
+                                          }
+                                        >
+                                          {t("setStorePrice")}
+                                        </DropdownMenuItem>
+                                      ) : null}
+                                      {product.isDeleted ? (
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            if (!window.confirm(t("confirmRestore"))) {
+                                              return;
+                                            }
+                                            restoreMutation.mutate({ productId: product.id });
+                                          }}
+                                        >
+                                          {t("restore")}
+                                        </DropdownMenuItem>
+                                      ) : (
+                                        <>
+                                          <DropdownMenuItem
+                                            onClick={() => router.push(`/products/${product.id}`)}
+                                          >
+                                            {tCommon("edit")}
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              if (!window.confirm(t("confirmArchive"))) {
+                                                return;
+                                              }
+                                              archiveMutation.mutate({ productId: product.id });
+                                            }}
+                                          >
+                                            {tCommon("archive")}
+                                          </DropdownMenuItem>
+                                        </>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : showPriceAction ? (
+                                  <>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="shadow-none"
+                                          onClick={() => router.push(`/products/${product.id}`)}
+                                          aria-label={tCommon("view")}
+                                        >
+                                          <ViewIcon className="h-4 w-4" aria-hidden />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{tCommon("view")}</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="shadow-none"
+                                          onClick={() =>
+                                            setPriceTarget({
+                                              id: product.id,
+                                              name: product.name,
+                                              basePriceKgs: product.basePriceKgs ?? null,
+                                              effectivePriceKgs: product.effectivePriceKgs ?? null,
+                                            })
+                                          }
+                                          aria-label={t("setStorePrice")}
+                                        >
+                                          <EditIcon className="h-4 w-4" aria-hidden />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{t("setStorePrice")}</TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shadow-none"
+                                        onClick={() => router.push(`/products/${product.id}`)}
+                                        aria-label={tCommon("view")}
+                                      >
+                                        <ViewIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tCommon("view")}</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TooltipProvider>
+              </div>
+            )}
+            renderMobile={(product) => {
+              const barcodeSummary = getBarcodeSummary(product.barcodes);
+              const previewImageUrl = getProductPreviewUrl(product);
+              const storeInfo = getStoreInfo(
+                product.inventorySnapshots.map((snapshot) => snapshot.storeId),
+              );
+              const actions = [
+                ...(showPriceAction
+                  ? [
+                      {
+                        key: "set-price",
+                        label: t("setStorePrice"),
+                        icon: PriceIcon,
+                        onSelect: () =>
+                          setPriceTarget({
+                            id: product.id,
+                            name: product.name,
+                            basePriceKgs: product.basePriceKgs ?? null,
+                            effectivePriceKgs: product.effectivePriceKgs ?? null,
+                          }),
+                      },
+                    ]
+                  : []),
+                ...(isAdmin
+                  ? product.isDeleted
+                    ? [
+                        {
+                          key: "restore",
+                          label: t("restore"),
+                          icon: RestoreIcon,
+                          onSelect: () => {
+                            if (!window.confirm(t("confirmRestore"))) {
+                              return;
+                            }
+                            restoreMutation.mutate({ productId: product.id });
+                          },
+                        },
+                      ]
+                    : [
+                        {
+                          key: "edit",
+                          label: tCommon("edit"),
+                          icon: EditIcon,
+                          href: `/products/${product.id}`,
+                        },
+                        {
+                          key: "archive",
+                          label: tCommon("archive"),
+                          icon: ArchiveIcon,
+                          variant: "danger",
+                          onSelect: () => {
+                            if (!window.confirm(t("confirmArchive"))) {
+                              return;
+                            }
+                            archiveMutation.mutate({ productId: product.id });
+                          },
+                        },
+                      ]
+                  : [
+                      {
+                        key: "view",
+                        label: tCommon("view"),
+                        icon: ViewIcon,
+                        href: `/products/${product.id}`,
+                      },
+                    ]),
+              ];
+
+              return (
+                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-ink"
+                        checked={selectedIds.has(product.id)}
+                        onChange={() => toggleSelect(product.id)}
+                        aria-label={t("selectProduct", { name: product.name })}
+                      />
+                      {previewImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={previewImageUrl}
+                          alt={product.name}
+                          className="h-10 w-10 rounded-md border border-gray-200 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50">
+                          <EmptyIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-ink">{product.name}</span>
+                          {product.isDeleted ? (
+                            <Badge variant="muted">{t("archived")}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {t("sku")}: {product.sku}
+                        </p>
+                      </div>
+                    </label>
+                    <RowActions
+                      actions={actions}
+                      moreLabel={tCommon("tooltips.moreActions")}
+                      className="shrink-0"
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("category")}</span>
+                      <span className="text-ink">
+                        {product.category ?? tCommon("notAvailable")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("unit")}</span>
+                      <span className="text-ink">{product.unit}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("salePrice")}</span>
+                      <span className="text-ink">
+                        {showEffectivePrice
+                          ? product.effectivePriceKgs !== null &&
+                            product.effectivePriceKgs !== undefined
+                            ? formatCurrencyKGS(product.effectivePriceKgs, locale)
+                            : tCommon("notAvailable")
+                          : product.basePriceKgs !== null && product.basePriceKgs !== undefined
                             ? formatCurrencyKGS(product.basePriceKgs, locale)
                             : tCommon("notAvailable")}
-                        </TableCell>
-                        {showEffectivePrice ? (
-                          <TableCell className="text-xs text-gray-500">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span>
-                                {product.effectivePriceKgs !== null &&
-                                product.effectivePriceKgs !== undefined
-                                  ? formatCurrencyKGS(product.effectivePriceKgs, locale)
-                                  : tCommon("notAvailable")}
-                              </span>
-                              {product.priceOverridden ? (
-                                <Badge variant="muted">{t("priceOverridden")}</Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        ) : null}
-                        <TableCell className="text-xs text-gray-500">
-                          {barcodeSummary.label}
-                        </TableCell>
-                        <TableCell className="text-xs text-gray-500">
-                          {storeInfo.names.length ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help text-ink">
-                                  {storeInfo.summary}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{storeInfo.names.join(", ")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            storeInfo.summary
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {isAdmin ? (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    aria-label={tCommon("actions")}
-                                  >
-                                    <MoreIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  {showPriceAction ? (
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        setPriceTarget({
-                                          id: product.id,
-                                          name: product.name,
-                                          basePriceKgs: product.basePriceKgs ?? null,
-                                          effectivePriceKgs: product.effectivePriceKgs ?? null,
-                                        })
-                                      }
-                                    >
-                                      {t("setStorePrice")}
-                                    </DropdownMenuItem>
-                                  ) : null}
-                                  {product.isDeleted ? (
-                                    <DropdownMenuItem
-                                      onClick={() => {
-                                        if (!window.confirm(t("confirmRestore"))) {
-                                          return;
-                                        }
-                                        restoreMutation.mutate({ productId: product.id });
-                                      }}
-                                    >
-                                      {t("restore")}
-                                    </DropdownMenuItem>
-                                  ) : (
-                                    <>
-                                      <DropdownMenuItem
-                                        onClick={() => router.push(`/products/${product.id}`)}
-                                      >
-                                        {tCommon("edit")}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() => {
-                                          if (!window.confirm(t("confirmArchive"))) {
-                                            return;
-                                          }
-                                          archiveMutation.mutate({ productId: product.id });
-                                        }}
-                                      >
-                                        {tCommon("archive")}
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            ) : showPriceAction ? (
-                              <>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      onClick={() => router.push(`/products/${product.id}`)}
-                                      aria-label={tCommon("view")}
-                                    >
-                                      <ViewIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("view")}</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      onClick={() =>
-                                        setPriceTarget({
-                                          id: product.id,
-                                          name: product.name,
-                                          basePriceKgs: product.basePriceKgs ?? null,
-                                          effectivePriceKgs: product.effectivePriceKgs ?? null,
-                                        })
-                                      }
-                                      aria-label={t("setStorePrice")}
-                                    >
-                                      <EditIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t("setStorePrice")}</TooltipContent>
-                                </Tooltip>
-                              </>
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    onClick={() => router.push(`/products/${product.id}`)}
-                                    aria-label={tCommon("view")}
-                                  >
-                                    <ViewIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{tCommon("view")}</TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TooltipProvider>
-          </div>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("purchasePrice")}</span>
+                      <span className="text-ink">
+                        {product.purchasePriceKgs !== null &&
+                        product.purchasePriceKgs !== undefined
+                          ? formatCurrencyKGS(product.purchasePriceKgs, locale)
+                          : tCommon("notAvailable")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("avgCost")}</span>
+                      <span className="text-ink">
+                        {product.avgCostKgs !== null && product.avgCostKgs !== undefined
+                          ? formatCurrencyKGS(product.avgCostKgs, locale)
+                          : tCommon("notAvailable")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("barcodes")}</span>
+                      <span className="text-ink">{barcodeSummary.label}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{t("stores")}</span>
+                      <span className="text-ink">{storeInfo.summary}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }}
+          />
           {productsQuery.isLoading ? (
             <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
           ) : !productsQuery.data?.length ? (
@@ -1165,14 +1348,6 @@ const ProductsPage = () => {
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noProducts")}
               </div>
-              {isAdmin ? (
-                <Link href="/products/new" className="w-full sm:w-auto">
-                  <Button className="w-full sm:w-auto">
-                    <AddIcon className="h-4 w-4" aria-hidden />
-                    {t("newProduct")}
-                  </Button>
-                </Link>
-              ) : null}
             </div>
           ) : null}
           {productsQuery.error ? (
@@ -1181,7 +1356,7 @@ const ProductsPage = () => {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 px-3"
+                size="sm"
                 onClick={() => productsQuery.refetch()}
               >
                 {tErrors("tryAgain")}
@@ -1570,177 +1745,248 @@ const ProductsPage = () => {
           }
         }}
         title={t("printPriceTags")}
-        subtitle={t("printSubtitle", { count: printQueue.length || selectedList.length })}
+        subtitle={t("printSubtitle", { count: printQueue.length })}
+        className="sm:max-w-2xl h-[85dvh]"
+        bodyClassName="p-0 min-h-0 overflow-hidden"
       >
         <Form {...printForm}>
           <form
-            className="space-y-4"
+            className="flex h-full min-h-0 flex-col"
             onSubmit={printForm.handleSubmit((values) => handlePrintTags(values))}
           >
-            <FormField
-              control={printForm.control}
-              name="template"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("template")}</FormLabel>
-                  <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("template")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3x8">{t("template3x8")}</SelectItem>
-                        <SelectItem value="2x5">{t("template2x5")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={printForm.control}
-              name="storeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tCommon("store")}</FormLabel>
-                  <FormControl>
-                    <Select
-                      value={field.value || "all"}
-                      onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={tCommon("selectStore")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{t("allStores")}</SelectItem>
-                        {storesQuery.data?.map((store) => (
-                          <SelectItem key={store.id} value={store.id}>
-                            {store.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={printForm.control}
-              name="quantity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("printQty")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="number" inputMode="numeric" min={1} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-ink">{t("printQueueTitle")}</span>
-                <span className="text-xs text-gray-500">{t("printQueueHint")}</span>
+            <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 pt-6 pb-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <FormField
+                  control={printForm.control}
+                  name="template"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("template")}</FormLabel>
+                      <FormControl>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t("template")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="3x8">{t("template3x8")}</SelectItem>
+                            <SelectItem value="2x5">{t("template2x5")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={printForm.control}
+                  name="storeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{tCommon("store")}</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value || "all"}
+                          onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={tCommon("selectStore")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">{t("allStores")}</SelectItem>
+                            {storesQuery.data?.map((store) => (
+                              <SelectItem key={store.id} value={store.id}>
+                                {store.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={printForm.control}
+                  name="quantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("printQty")}</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" inputMode="numeric" min={1} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              {printQueue.length ? (
-                <div className="space-y-2">
-                  {printQueue.map((productId, index) => {
-                    const product = productById.get(productId);
-                    const canMoveUp = index > 0;
-                    const canMoveDown = index < printQueue.length - 1;
-                    return (
-                      <div
-                        key={productId}
-                        className={`flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 ${
-                          draggedQueueIndex === index ? "opacity-60" : ""
-                        }`}
-                        draggable
-                        onDragStart={() => setDraggedQueueIndex(index)}
-                        onDragEnd={() => setDraggedQueueIndex(null)}
-                        onDragOver={(event) => {
-                          if (draggedQueueIndex === null) {
-                            return;
-                          }
-                          event.preventDefault();
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          if (draggedQueueIndex === null || draggedQueueIndex === index) {
-                            return;
-                          }
-                          movePrintQueueItem(draggedQueueIndex, index);
-                          setDraggedQueueIndex(null);
-                        }}
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <GripIcon className="h-4 w-4 text-gray-400" aria-hidden />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-ink">
-                              {product?.name ?? tCommon("notAvailable")}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {product?.sku ?? productId.slice(0, 8).toUpperCase()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="shadow-none"
-                                aria-label={t("printQueueMoveUp")}
-                                onClick={() => canMoveUp && movePrintQueueItem(index, index - 1)}
-                                disabled={!canMoveUp}
-                              >
-                                <ArrowUpIcon className="h-4 w-4" aria-hidden />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t("printQueueMoveUp")}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="shadow-none"
-                                aria-label={t("printQueueMoveDown")}
-                                onClick={() => canMoveDown && movePrintQueueItem(index, index + 1)}
-                                disabled={!canMoveDown}
-                              >
-                                <ArrowDownIcon className="h-4 w-4" aria-hidden />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t("printQueueMoveDown")}</TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="w-full sm:max-w-xs">
+                  <Input
+                    value={queueSearch}
+                    onChange={(event) => setQueueSearch(event.target.value)}
+                    placeholder={t("printQueueSearchPlaceholder")}
+                    aria-label={t("printQueueSearchLabel")}
+                  />
                 </div>
+                <span className="text-xs text-gray-500">
+                  {queueSearch.trim()
+                    ? t("printQueueFiltered", {
+                        filtered: filteredQueue.length,
+                        total: printQueue.length,
+                      })
+                    : t("printQueueSelected", { count: printQueue.length })}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPrintQueue([])}
+                  disabled={!printQueue.length}
+                >
+                  <DeleteIcon className="h-4 w-4" aria-hidden />
+                  {t("printQueueClear")}
+                </Button>
+              </div>
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <span className="font-medium text-ink">{t("printQueueTitle")}</span>
+                <span className="text-xs text-gray-500">
+                  {canDragQueue ? t("printQueueHint") : t("printQueueNoDragHint")}
+                </span>
+              </div>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+              {printQueue.length ? (
+                filteredQueue.length ? (
+                  <div
+                    ref={queueListRef}
+                    className="h-[min(48dvh,32rem)] min-h-[12rem] overflow-y-auto"
+                    onScroll={(event) => setQueueScrollTop(event.currentTarget.scrollTop)}
+                  >
+                    <div className="relative" style={{ height: queueTotalHeight }}>
+                      <div
+                        className="absolute left-0 right-0"
+                        style={{ transform: `translateY(${queueOffsetTop}px)` }}
+                      >
+                        {queueVisibleItems.map((productId) => {
+                          const product = productById.get(productId);
+                          const queueIndex = queueIndexById.get(productId) ?? 0;
+                          const canMoveUp = queueIndex > 0;
+                          const canMoveDown = queueIndex < printQueue.length - 1;
+                          const isDragging = draggedQueueIndex === queueIndex;
+                          return (
+                            <div
+                              key={productId}
+                              className={`flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 ${
+                                isDragging ? "opacity-60" : ""
+                              }`}
+                              style={{ height: queueRowHeight }}
+                              draggable={canDragQueue}
+                              onDragStart={() => {
+                                if (!canDragQueue) {
+                                  return;
+                                }
+                                setDraggedQueueIndex(queueIndex);
+                              }}
+                              onDragEnd={() => {
+                                if (!canDragQueue) {
+                                  return;
+                                }
+                                setDraggedQueueIndex(null);
+                              }}
+                              onDragOver={(event) => {
+                                if (!canDragQueue || draggedQueueIndex === null) {
+                                  return;
+                                }
+                                event.preventDefault();
+                              }}
+                              onDrop={(event) => {
+                                if (!canDragQueue) {
+                                  return;
+                                }
+                                event.preventDefault();
+                                if (draggedQueueIndex === null || draggedQueueIndex === queueIndex) {
+                                  return;
+                                }
+                                movePrintQueueItem(draggedQueueIndex, queueIndex);
+                                setDraggedQueueIndex(null);
+                              }}
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                {canDragQueue ? (
+                                  <GripIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                                ) : null}
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-ink">
+                                    {product?.name ?? tCommon("notAvailable")}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {product?.sku ?? productId.slice(0, 8).toUpperCase()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={t("printQueueMoveUp")}
+                                      onClick={() => canMoveUp && movePrintQueueItem(queueIndex, queueIndex - 1)}
+                                      disabled={!canMoveUp}
+                                    >
+                                      <ArrowUpIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("printQueueMoveUp")}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="shadow-none"
+                                      aria-label={t("printQueueMoveDown")}
+                                      onClick={() => canMoveDown && movePrintQueueItem(queueIndex, queueIndex + 1)}
+                                      disabled={!canMoveDown}
+                                    >
+                                      <ArrowDownIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("printQueueMoveDown")}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">{t("printQueueNoResults")}</p>
+                )
               ) : (
                 <p className="text-xs text-gray-500">{t("printQueueEmpty")}</p>
               )}
             </div>
-            <FormActions>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setPrintOpen(false)}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button type="submit" className="w-full sm:w-auto">
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-                {t("printDownload")}
-              </Button>
-            </FormActions>
+            <div className="sticky bottom-0 z-10 border-t border-gray-100 bg-white px-6 py-4">
+              <FormActions>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => setPrintOpen(false)}
+                >
+                  {tCommon("cancel")}
+                </Button>
+                <Button type="submit" className="w-full sm:w-auto">
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                  {t("printDownload")}
+                </Button>
+              </FormActions>
+            </div>
           </form>
         </Form>
       </Modal>

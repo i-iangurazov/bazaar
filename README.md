@@ -1,4 +1,4 @@
-# Northstar Inventory Platform
+# BAZAAR Inventory Platform
 
 A production-minded Retail Inventory Management Platform built for a single-country rollout. The system prioritizes inventory correctness, auditability, and straightforward operations for non-technical retail staff.
 
@@ -36,9 +36,29 @@ cp .env.example .env
 - `DATABASE_URL` (required)
 - `NEXTAUTH_SECRET` + `NEXTAUTH_URL` (required for auth)
 - `REDIS_URL` (required in production; enables multi-instance realtime, rate limiting, and job locks)
-- `JOBS_SECRET` (required to run `/api/jobs/run`)
+- `JOBS_SECRET` (required to run `/api/jobs/run` via `x-job-secret`)
+- `METRICS_SECRET` (recommended; protects `/api/metrics` via `x-metrics-secret`)
+- `HEALTHCHECK_SECRET` (recommended; protects detailed `/api/health` via `x-health-secret`)
 - `DATABASE_TEST_URL` (optional; used by integration tests)
 - `SIGNUP_MODE` (`invite_only` or `open`; defaults to `invite_only`)
+- `TRIAL_DAYS` (optional; defaults to `14` for self-serve organizations)
+- `PLAN_PRICE_STARTER_KGS`, `PLAN_PRICE_BUSINESS_KGS`, `PLAN_PRICE_ENTERPRISE_KGS` (optional pricing used in platform revenue analytics)
+- `PLATFORM_OWNER_EMAILS` (comma-separated emails allowed to access `/platform`)
+- `EMAIL_PROVIDER` (`log` for local/test, `resend` for production delivery)
+- `ALLOW_LOG_EMAIL_IN_PRODUCTION` (`0` by default; set to `1` only for temporary production fallback before SMTP/Resend is configured)
+- `EMAIL_FROM` (required when `EMAIL_PROVIDER=resend`)
+- `RESEND_API_KEY` (required when `EMAIL_PROVIDER=resend`)
+- `SEED_PLATFORM_OWNER_EMAIL` (optional, local seed only)
+- `SEED_PLATFORM_OWNER_PASSWORD` (optional, local seed only)
+- `SEED_PLATFORM_OWNER_NAME` (optional, local seed only)
+- `IMAGE_STORAGE_PROVIDER` (`local` or `r2`; use `r2` for Cloudflare R2 product images)
+- `R2_ACCOUNT_ID` (required when `IMAGE_STORAGE_PROVIDER=r2`)
+- `R2_ACCESS_KEY_ID` (required when `IMAGE_STORAGE_PROVIDER=r2`)
+- `R2_SECRET_ACCESS_KEY` (required when `IMAGE_STORAGE_PROVIDER=r2`)
+- `R2_BUCKET_NAME` (required when `IMAGE_STORAGE_PROVIDER=r2`, e.g. `bazaar`)
+- `R2_PUBLIC_BASE_URL` (required when `IMAGE_STORAGE_PROVIDER=r2`; public/custom domain or `*.r2.dev`)
+- `R2_ENDPOINT` (optional override; defaults to `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`)
+- `PRODUCT_IMAGE_MAX_BYTES` (optional max image payload; default `5242880`)
 
 ### 5) Create DB schema + seed
 ```bash
@@ -67,6 +87,13 @@ Open `http://localhost:3000`.
 - `admin@example.com / Admin123!`
 - `manager@example.com / Manager123!`
 - `staff@example.com / Staff123!`
+- `owner@example.com / Owner123!` (platform owner in seed)
+
+### Platform owner access
+- Add platform owner email to `PLATFORM_OWNER_EMAILS` (for local default: `owner@example.com`).
+- Sign in with the seeded platform owner credentials.
+- Open `/platform` to manage all organizations and subscription status/plan values.
+- Supported plans: `STARTER` (1 store / 3 users), `BUSINESS` (5 stores / 15 users), `ENTERPRISE` (20 stores / 60 users).
 
 ## Access Control & Users
 - Role-based access: ADMIN, MANAGER, STAFF with protected routes.
@@ -74,7 +101,9 @@ Open `http://localhost:3000`.
 
 ## Signup, Verification & Invites
 - `/signup` supports `invite_only` (request access) or `open` (self-signup) based on `SIGNUP_MODE`.
-- Email verification is required before login; verification and reset links are sent via the mailer stub.
+- By default, email verification is required before login; verification/reset/invite links are delivered via configured email provider.
+- Temporary dev bypass: set `SKIP_EMAIL_VERIFICATION=1` to allow signup/invite login without verification emails.
+- In `open` mode, verified users complete `/register-business/[token]` to set organization and first store.
 - Admins can create invite links from `/settings/users` to onboard staff safely.
 - `/billing` shows trial status, plan limits, and usage.
 
@@ -199,6 +228,8 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - `pnpm prisma:deploy` - apply migrations (production)
 - `pnpm prisma:push` - push schema to DB (development only)
 - `pnpm prisma:seed` - seed data
+- `pnpm ops:preflight` - production preflight checks (env + DB + Redis + startup guards)
+- `pnpm ops:email-check` - signup/verify/reset/invite email flow verification
 
 ## Testing
 
@@ -212,6 +243,9 @@ pnpm db:up
 export DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventory_test?schema=public"
 RUN_DB_TESTS=1 pnpm test
 ```
+
+## Production Runbook
+- `docs/production-readiness.md` contains the release checklist and operator runbook.
 
 CI-style run:
 ```bash
@@ -279,15 +313,16 @@ Each item in `/inventory` can reveal the calculation breakdown via the "Why" det
 
 ## Observability
 - **Structured logging** via pino with requestId.
-- **Health check**: `GET /api/health` (DB + migrations state).
-- **Metrics**: `GET /api/metrics` (Prometheus text format counters including SSE connections and event publish stats).
+- **Health check**: `GET /api/health` returns public liveness; detailed readiness requires `x-health-secret`.
+- **Preflight check**: `GET /api/preflight` returns `200 ready` or `503 not_ready` and verifies startup checks, DB, and Redis (internal access only via `x-health-secret` or ADMIN auth).
+- **Metrics**: `GET /api/metrics` requires `x-metrics-secret` when configured (Prometheus text format counters including SSE connections and event publish stats).
 
 ## Background Jobs
-- `POST /api/jobs/run?job=cleanup-idempotency-keys` (requires `JOBS_SECRET`).
+- `POST /api/jobs/run?job=cleanup-idempotency-keys` with header `x-job-secret` (requires `JOBS_SECRET`).
 - Uses Redis locks when available; falls back to in-memory locks in dev.
 
 ## Real-time (SSE)
-- `GET /api/sse`
+- `GET /api/sse` (authenticated; org-scoped stream)
 - Events:
   - `inventory.updated` (storeId, productId)
   - `purchaseOrder.updated` (poId, status)
@@ -297,6 +332,12 @@ Each item in `/inventory` can reveal the calculation breakdown via the "Why" det
 ## Known Limitations
 - Forecasting is intentionally simple for transparency.
 - Expiry lots do not include FEFO picking or depletion UI yet.
-- Price tags render barcode text only (no barcode image).
 - Background jobs are manual-trigger via `/api/jobs/run` (no scheduler UI).
 - No UI for snapshot recompute (API supports it).
+
+## CI Release Gate
+- `.github/workflows/ci.yml` includes `release-gate` job.
+- It runs in `NODE_ENV=production` with Postgres + Redis services and executes:
+  - `pnpm prisma:migrate`
+  - `pnpm ops:preflight`
+  - `pnpm build`
