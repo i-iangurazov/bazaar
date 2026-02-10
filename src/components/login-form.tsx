@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
@@ -84,7 +84,14 @@ export const LoginForm = () => {
     }
 
     const next = searchParams.get("next");
-    const destination = normalizeNext(next) ?? "/dashboard";
+    const normalizedNext = normalizeNext(next);
+    if (normalizedNext) {
+      router.replace(normalizedNext);
+      return;
+    }
+
+    const session = await getSession();
+    const destination = session?.user?.isPlatformOwner ? "/platform" : "/dashboard";
     router.replace(destination);
   };
 

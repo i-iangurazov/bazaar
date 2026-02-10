@@ -166,7 +166,9 @@ const DashboardPage = () => {
                 {summaryQuery.data.pendingPurchaseOrders.map((po) => (
                   <div key={po.id} className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold">{po.supplier.name}</p>
+                      <p className="text-sm font-semibold">
+                        {po.supplier?.name ?? tCommon("supplierUnassigned")}
+                      </p>
                       <p className="text-xs text-gray-500">
                         {formatDateTime(po.createdAt, locale)}
                       </p>

@@ -93,6 +93,7 @@ const resolveR2Config = (): { config: R2Config | null; missing: string[] } => {
 };
 
 let storageWarningShown = false;
+let uploadWarningShown = false;
 
 const resolveStorageProvider = (): { provider: ImageStorageProvider; config: R2Config | null } => {
   const requestedProvider = resolveRequestedProvider();
@@ -120,6 +121,16 @@ const resolveStorageProvider = (): { provider: ImageStorageProvider; config: R2C
   }
 
   return { provider: "local", config: null };
+};
+
+const warnUploadFailure = (error: unknown) => {
+  if (uploadWarningShown) {
+    return;
+  }
+  uploadWarningShown = true;
+  const message = error instanceof Error ? error.message : String(error);
+  // eslint-disable-next-line no-console
+  console.warn(`[image-storage] upload failed; using source URL fallback (${message})`);
 };
 
 let r2Client: S3Client | null = null;
@@ -366,13 +377,20 @@ export const resolveProductImageUrl = async (input: {
       input.cache?.set(normalized, result);
       return result;
     }
-    const uploaded = await uploadBufferToStorage({
-      organizationId: input.organizationId,
-      buffer: parsed.buffer,
-      contentType: parsed.contentType,
-    });
-    input.cache?.set(normalized, uploaded);
-    return uploaded;
+    try {
+      const uploaded = await uploadBufferToStorage({
+        organizationId: input.organizationId,
+        buffer: parsed.buffer,
+        contentType: parsed.contentType,
+      });
+      input.cache?.set(normalized, uploaded);
+      return uploaded;
+    } catch (error) {
+      warnUploadFailure(error);
+      const result = { url: null, managed: false } as ResolveProductImageUrlResult;
+      input.cache?.set(normalized, result);
+      return result;
+    }
   }
 
   const downloaded = await downloadRemoteImage(normalized);
@@ -382,14 +400,21 @@ export const resolveProductImageUrl = async (input: {
     return result;
   }
 
-  const uploaded = await uploadBufferToStorage({
-    organizationId: input.organizationId,
-    buffer: downloaded.buffer,
-    contentType: downloaded.contentType,
-    sourceUrl: normalized,
-  });
-  input.cache?.set(normalized, uploaded);
-  return uploaded;
+  try {
+    const uploaded = await uploadBufferToStorage({
+      organizationId: input.organizationId,
+      buffer: downloaded.buffer,
+      contentType: downloaded.contentType,
+      sourceUrl: normalized,
+    });
+    input.cache?.set(normalized, uploaded);
+    return uploaded;
+  } catch (error) {
+    warnUploadFailure(error);
+    const result = { url: normalized, managed: false } as ResolveProductImageUrlResult;
+    input.cache?.set(normalized, result);
+    return result;
+  }
 };
 
 export const assertProductImageStorageConfigured = () => {

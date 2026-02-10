@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { ExportType } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -35,6 +34,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const formatMonthInput = (value: Date) => value.toISOString().slice(0, 7);
+const PERIOD_CLOSE_EXPORT_TYPE = "PERIOD_CLOSE_REPORT" as const;
 
 const buildPeriod = (monthValue: string) => {
   const [year, month] = monthValue.split("-").map(Number);
@@ -177,7 +177,7 @@ const PeriodClosePage = () => {
                             onSelect: () =>
                               exportMutation.mutate({
                                 storeId: close.storeId,
-                                type: ExportType.PERIOD_CLOSE_REPORT,
+                                type: PERIOD_CLOSE_EXPORT_TYPE,
                                 periodStart: close.periodStart,
                                 periodEnd: close.periodEnd,
                               }),
@@ -233,7 +233,7 @@ const PeriodClosePage = () => {
                           onSelect: () =>
                             exportMutation.mutate({
                               storeId: close.storeId,
-                              type: ExportType.PERIOD_CLOSE_REPORT,
+                              type: PERIOD_CLOSE_EXPORT_TYPE,
                               periodStart: close.periodStart,
                               periodEnd: close.periodEnd,
                             }),

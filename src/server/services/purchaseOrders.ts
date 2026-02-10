@@ -112,7 +112,7 @@ const adjustOnOrder = async (
 export type CreatePurchaseOrderInput = {
   organizationId: string;
   storeId: string;
-  supplierId: string;
+  supplierId?: string | null;
   lines: {
     productId: string;
     variantId?: string | null;
@@ -156,9 +156,13 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
       throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
     }
 
-    const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
-    if (!supplier || supplier.organizationId !== input.organizationId) {
-      throw new AppError("supplierNotFound", "NOT_FOUND", 404);
+    let resolvedSupplierId: string | null = null;
+    if (input.supplierId) {
+      const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
+      if (!supplier || supplier.organizationId !== input.organizationId) {
+        throw new AppError("supplierNotFound", "NOT_FOUND", 404);
+      }
+      resolvedSupplierId = supplier.id;
     }
 
     const productIds = input.lines.map((line) => line.productId);
@@ -216,7 +220,7 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
       data: {
         organizationId: input.organizationId,
         storeId: input.storeId,
-        supplierId: input.supplierId,
+        supplierId: resolvedSupplierId,
         status: input.submit ? PurchaseOrderStatus.SUBMITTED : PurchaseOrderStatus.DRAFT,
         submittedAt: input.submit ? new Date() : null,
         createdById: input.actorId,

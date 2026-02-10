@@ -86,7 +86,7 @@ export const purchaseOrdersRouter = router({
     .input(
       z.object({
         storeId: z.string(),
-        supplierId: z.string(),
+        supplierId: z.string().optional().nullable(),
         lines: z
           .array(
             z.object({
@@ -107,7 +107,7 @@ export const purchaseOrdersRouter = router({
         const po = await createPurchaseOrder({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
-          supplierId: input.supplierId,
+          supplierId: input.supplierId ?? undefined,
           lines: input.lines,
           actorId: ctx.user.id,
           requestId: ctx.requestId,

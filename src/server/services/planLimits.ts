@@ -44,8 +44,12 @@ const PLAN_MONTHLY_PRICES: Record<PlanTier, number> = {
 };
 
 export const toPlanTier = (plan: OrganizationPlan): PlanTier => {
-  if (plan === "STARTER" || plan === "BUSINESS" || plan === "ENTERPRISE") {
-    return plan;
+  const value = String(plan);
+  if (value === "ENTERPRISE") {
+    return "ENTERPRISE";
+  }
+  if (value === "BUSINESS" || value === "PRO") {
+    return "BUSINESS";
   }
   return "STARTER";
 };

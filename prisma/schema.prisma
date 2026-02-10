@@ -494,7 +494,7 @@ model PurchaseOrder {
   id             String   @id @default(cuid())
   organizationId String
   storeId        String
-  supplierId     String
+  supplierId     String?
   status         PurchaseOrderStatus @default(DRAFT)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -507,7 +507,7 @@ model PurchaseOrder {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   store        Store @relation(fields: [storeId], references: [id])
-  supplier     Supplier @relation(fields: [supplierId], references: [id])
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
   lines        PurchaseOrderLine[]
   createdBy    User? @relation("purchaseOrdersCreated", fields: [createdById], references: [id])
   updatedBy    User? @relation("purchaseOrdersUpdated", fields: [updatedById], references: [id])

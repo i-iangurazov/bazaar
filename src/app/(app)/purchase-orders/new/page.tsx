@@ -86,7 +86,7 @@ const NewPurchaseOrderPage = () => {
     () =>
       z.object({
         storeId: z.string().min(1, t("storeRequired")),
-        supplierId: z.string().min(1, t("supplierRequired")),
+        supplierId: z.string().optional().nullable(),
         lines: z.array(lineSchema).min(1, t("linesRequired")),
       }),
     [t, lineSchema],
@@ -150,7 +150,7 @@ const NewPurchaseOrderPage = () => {
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch },
-    { enabled: !isForbidden && lineDialogOpen && lineSearch.trim().length >= 2 },
+    { enabled: !isForbidden && lineDialogOpen && lineSearch.trim().length >= 1 },
   );
   const lineProductQuery = trpc.products.getById.useQuery(
     { productId: lineProductId },
@@ -161,7 +161,6 @@ const NewPurchaseOrderPage = () => {
   const lineProduct = lineProductId ? productCache[lineProductId] : undefined;
 
   const storeId = form.watch("storeId");
-  const supplierId = form.watch("supplierId");
   const lines = form.watch("lines");
 
   const resolveUnitLabel = (unit?: ProductCacheEntry["baseUnit"]) => {
@@ -235,12 +234,6 @@ const NewPurchaseOrderPage = () => {
       form.setValue("storeId", storesQuery.data[0].id, { shouldValidate: true });
     }
   }, [storeId, storesQuery.data, form]);
-
-  useEffect(() => {
-    if (!supplierId && suppliersQuery.data?.[0]) {
-      form.setValue("supplierId", suppliersQuery.data[0].id, { shouldValidate: true });
-    }
-  }, [supplierId, suppliersQuery.data, form]);
 
   useEffect(() => {
     const product = lineProductQuery.data;
@@ -381,13 +374,17 @@ const NewPurchaseOrderPage = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("supplier")}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select
+                      value={field.value ?? "__none__"}
+                      onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={tCommon("selectSupplier")} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="__none__">{tCommon("supplierUnassigned")}</SelectItem>
                         {suppliersQuery.data?.map((supplier) => (
                           <SelectItem key={supplier.id} value={supplier.id}>
                             {supplier.name}
@@ -642,12 +639,15 @@ const NewPurchaseOrderPage = () => {
                 onClick={form.handleSubmit((values) => {
                   createMutation.mutate({
                     storeId: values.storeId,
-                    supplierId: values.supplierId,
+                    supplierId:
+                      values.supplierId && values.supplierId.trim().length
+                        ? values.supplierId
+                        : undefined,
                     lines: values.lines.map(buildLinePayload),
                     submit: false,
                   });
                 })}
-                disabled={createMutation.isLoading || !storeId || !supplierId || !fields.length}
+                disabled={createMutation.isLoading || !storeId || !fields.length}
               >
                 {createMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -661,12 +661,15 @@ const NewPurchaseOrderPage = () => {
                 onClick={form.handleSubmit((values) => {
                   createMutation.mutate({
                     storeId: values.storeId,
-                    supplierId: values.supplierId,
+                    supplierId:
+                      values.supplierId && values.supplierId.trim().length
+                        ? values.supplierId
+                        : undefined,
                     lines: values.lines.map(buildLinePayload),
                     submit: true,
                   });
                 })}
-                disabled={createMutation.isLoading || !storeId || !supplierId || !fields.length}
+                disabled={createMutation.isLoading || !storeId || !fields.length}
               >
                 {createMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -750,6 +753,7 @@ const NewPurchaseOrderPage = () => {
                         <FormControl>
                           <Input
                             value={lineSearch}
+                            autoFocus
                             onChange={(event) => {
                               const nextValue = event.target.value;
                               setLineSearch(nextValue);
@@ -775,6 +779,7 @@ const NewPurchaseOrderPage = () => {
                                   type="button"
                                   className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-gray-50"
                                   onMouseDown={(event) => event.preventDefault()}
+                                  onPointerDown={(event) => event.preventDefault()}
                                   onClick={() => {
                                     setSelectedProduct({
                                       id: product.id,

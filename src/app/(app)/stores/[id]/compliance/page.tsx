@@ -8,7 +8,6 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { KkmMode } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,7 @@ type FormValues = {
   defaultLocale: string;
   taxRegime: string;
   enableKkm: boolean;
-  kkmMode: KkmMode;
+  kkmMode: KkmModeValue;
   enableEsf: boolean;
   enableEttn: boolean;
   enableMarking: boolean;
@@ -42,11 +41,19 @@ type FormValues = {
   kkmSettingsText: string;
 };
 
+const KKM_MODE = {
+  OFF: "OFF",
+  EXPORT_ONLY: "EXPORT_ONLY",
+  ADAPTER: "ADAPTER",
+} as const;
+
+type KkmModeValue = (typeof KKM_MODE)[keyof typeof KKM_MODE];
+
 const emptyForm: FormValues = {
   defaultLocale: "",
   taxRegime: "",
   enableKkm: false,
-  kkmMode: KkmMode.OFF,
+  kkmMode: KKM_MODE.OFF,
   enableEsf: false,
   enableEttn: false,
   enableMarking: false,
@@ -80,7 +87,7 @@ const CompliancePage = () => {
         defaultLocale: z.string().optional(),
         taxRegime: z.string().optional(),
         enableKkm: z.boolean(),
-        kkmMode: z.nativeEnum(KkmMode),
+        kkmMode: z.enum([KKM_MODE.OFF, KKM_MODE.EXPORT_ONLY, KKM_MODE.ADAPTER]),
         enableEsf: z.boolean(),
         enableEttn: z.boolean(),
         enableMarking: z.boolean(),
@@ -308,16 +315,16 @@ const CompliancePage = () => {
                             <FormControl>
                               <Select
                                 value={field.value}
-                                onValueChange={(value) => field.onChange(value as KkmMode)}
+                                onValueChange={(value) => field.onChange(value as KkmModeValue)}
                                 disabled={!canEdit}
                               >
                                 <SelectTrigger>
                                   <SelectValue placeholder={t("kkmMode")} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value={KkmMode.OFF}>{t("kkmModeOff")}</SelectItem>
-                                  <SelectItem value={KkmMode.EXPORT_ONLY}>{t("kkmModeExport")}</SelectItem>
-                                  <SelectItem value={KkmMode.ADAPTER}>{t("kkmModeAdapter")}</SelectItem>
+                                  <SelectItem value={KKM_MODE.OFF}>{t("kkmModeOff")}</SelectItem>
+                                  <SelectItem value={KKM_MODE.EXPORT_ONLY}>{t("kkmModeExport")}</SelectItem>
+                                  <SelectItem value={KKM_MODE.ADAPTER}>{t("kkmModeAdapter")}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </FormControl>
@@ -326,10 +333,10 @@ const CompliancePage = () => {
                         )}
                       />
 
-                      {form.watch("enableKkm") && form.watch("kkmMode") === KkmMode.EXPORT_ONLY ? (
+                      {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.EXPORT_ONLY ? (
                         <p className="text-xs text-gray-500">{t("exportOnlyHint")}</p>
                       ) : null}
-                      {form.watch("enableKkm") && form.watch("kkmMode") === KkmMode.ADAPTER ? (
+                      {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.ADAPTER ? (
                         <p className="text-xs text-gray-500">{t("adapterHint")}</p>
                       ) : null}
 

@@ -252,7 +252,7 @@ const buildPurchasesRows = async (
         createdAt: order.createdAt.toISOString(),
         receivedAt: order.receivedAt ? order.receivedAt.toISOString() : "",
         store: storeName,
-        supplier: order.supplier.name,
+        supplier: order.supplier?.name ?? "",
         sku: line.product.sku,
         product: line.product.name,
         variant: line.variant?.name ?? "",
@@ -525,7 +525,7 @@ const buildPurchasesReceiptsRows = async (
         return {
           orgId: organizationId,
           storeCode: store.code,
-          supplierName: order.supplier.name,
+          supplierName: order.supplier?.name ?? "",
           supplierInn: "",
           poNumber: order.id,
           receivedAt: order.receivedAt ? order.receivedAt.toISOString() : "",

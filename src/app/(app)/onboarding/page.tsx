@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
-import { LegalEntityType } from "@prisma/client";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -44,6 +43,15 @@ const onboardingFallback = {
   procurement: "pending",
   receive: "pending",
 } as const;
+
+const LEGAL_ENTITY_TYPES = {
+  IP: "IP",
+  OSOO: "OSOO",
+  AO: "AO",
+  OTHER: "OTHER",
+} as const;
+
+type LegalEntityTypeValue = (typeof LEGAL_ENTITY_TYPES)[keyof typeof LEGAL_ENTITY_TYPES];
 
 const OnboardingPage = () => {
   const t = useTranslations("onboarding");
@@ -300,7 +308,7 @@ const OnboardingPage = () => {
                       code: values.code,
                       allowNegativeStock: false,
                       trackExpiryLots: false,
-                      legalEntityType: values.legalEntityType as LegalEntityType,
+                      legalEntityType: values.legalEntityType as LegalEntityTypeValue,
                       legalName: values.legalName,
                       inn: values.inn || null,
                       address: values.address || null,
@@ -348,10 +356,12 @@ const OnboardingPage = () => {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value={LegalEntityType.IP}>{tStores("legalTypeIp")}</SelectItem>
-                              <SelectItem value={LegalEntityType.OSOO}>{tStores("legalTypeOsoo")}</SelectItem>
-                              <SelectItem value={LegalEntityType.AO}>{tStores("legalTypeAo")}</SelectItem>
-                              <SelectItem value={LegalEntityType.OTHER}>{tStores("legalTypeOther")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.IP}>{tStores("legalTypeIp")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.OSOO}>{tStores("legalTypeOsoo")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.AO}>{tStores("legalTypeAo")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.OTHER}>
+                                {tStores("legalTypeOther")}
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -425,7 +435,7 @@ const OnboardingPage = () => {
                   onSubmit={legalForm.handleSubmit((values) => {
                     updateLegalMutation.mutate({
                       storeId: values.storeId,
-                      legalEntityType: values.legalEntityType as LegalEntityType,
+                      legalEntityType: values.legalEntityType as LegalEntityTypeValue,
                       legalName: values.legalName,
                       inn: values.inn || null,
                       address: values.address || null,
@@ -477,10 +487,12 @@ const OnboardingPage = () => {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value={LegalEntityType.IP}>{tStores("legalTypeIp")}</SelectItem>
-                              <SelectItem value={LegalEntityType.OSOO}>{tStores("legalTypeOsoo")}</SelectItem>
-                              <SelectItem value={LegalEntityType.AO}>{tStores("legalTypeAo")}</SelectItem>
-                              <SelectItem value={LegalEntityType.OTHER}>{tStores("legalTypeOther")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.IP}>{tStores("legalTypeIp")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.OSOO}>{tStores("legalTypeOsoo")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.AO}>{tStores("legalTypeAo")}</SelectItem>
+                              <SelectItem value={LEGAL_ENTITY_TYPES.OTHER}>
+                                {tStores("legalTypeOther")}
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

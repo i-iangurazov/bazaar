@@ -126,11 +126,12 @@ export const searchRouter = router({
       });
 
       purchaseOrders.forEach((order) => {
+        const supplierLabel = order.supplier?.name ? `${order.supplier.name} • ` : "";
         results.push({
           id: order.id,
           type: "purchaseOrder",
           label: order.id.slice(0, 8).toUpperCase(),
-          sublabel: `${order.supplier.name} • ${order.store.name}`,
+          sublabel: `${supplierLabel}${order.store.name}`,
           href: `/purchase-orders/${order.id}`,
         });
       });

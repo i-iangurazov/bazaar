@@ -260,7 +260,7 @@ const PurchaseOrdersPage = () => {
                           </TableCell>
                           <TableCell>
                             <Link className="font-medium text-ink" href={`/purchase-orders/${po.id}`}>
-                              {po.supplier.name}
+                              {po.supplier?.name ?? tCommon("supplierUnassigned")}
                             </Link>
                           </TableCell>
                           <TableCell className="text-xs text-gray-500">{po.store.name}</TableCell>
@@ -388,7 +388,9 @@ const PurchaseOrdersPage = () => {
                       ) : null}
                       <div className="min-w-0">
                         <p className="text-xs text-gray-500">{po.id.slice(0, 8).toUpperCase()}</p>
-                        <p className="truncate text-sm font-medium text-ink">{po.supplier.name}</p>
+                        <p className="truncate text-sm font-medium text-ink">
+                          {po.supplier?.name ?? tCommon("supplierUnassigned")}
+                        </p>
                         <p className="text-xs text-gray-500">{po.store.name}</p>
                       </div>
                     </div>

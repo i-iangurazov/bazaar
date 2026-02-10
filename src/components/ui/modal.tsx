@@ -38,7 +38,6 @@ export const Modal = ({
     }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    containerRef.current?.focus();
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onOpenChange(false);
@@ -59,7 +58,7 @@ export const Modal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center px-3 sm:px-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 z-0 bg-black/30"
         onClick={() => onOpenChange(false)}
         aria-label={tCommon("close")}
       />
@@ -71,7 +70,7 @@ export const Modal = ({
         aria-describedby={subtitle ? subtitleId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-lg flex-col rounded-lg bg-white shadow-xl",
+          "relative z-10 flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-lg flex-col rounded-lg bg-white shadow-xl",
           className,
         )}
       >

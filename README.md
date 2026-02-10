@@ -11,7 +11,7 @@ A production-minded Retail Inventory Management Platform built for a single-coun
 - **Tailwind + shadcn-style UI components**
 - **PDFKit** (PO PDF generation)
 - **PapaParse** (CSV import/export)
-- **xlsx** (Excel import)
+- **xlsx** (Excel import/export)
 - **Redis** (required in production for realtime, rate limiting, job locks)
 - **Vitest**
 
@@ -41,6 +41,8 @@ cp .env.example .env
 - `HEALTHCHECK_SECRET` (recommended; protects detailed `/api/health` via `x-health-secret`)
 - `DATABASE_TEST_URL` (optional; used by integration tests)
 - `SIGNUP_MODE` (`invite_only` or `open`; defaults to `invite_only`)
+- `SKIP_EMAIL_VERIFICATION` (`0` by default; set to `1` only for temporary local/dev bypass)
+- `IMPORT_TRANSACTION_TIMEOUT_MS` (optional; defaults to `120000` ms for large import batches)
 - `TRIAL_DAYS` (optional; defaults to `14` for self-serve organizations)
 - `PLAN_PRICE_STARTER_KGS`, `PLAN_PRICE_BUSINESS_KGS`, `PLAN_PRICE_ENTERPRISE_KGS` (optional pricing used in platform revenue analytics)
 - `PLATFORM_OWNER_EMAILS` (comma-separated emails allowed to access `/platform`)
@@ -92,8 +94,21 @@ Open `http://localhost:3000`.
 ### Platform owner access
 - Add platform owner email to `PLATFORM_OWNER_EMAILS` (for local default: `owner@example.com`).
 - Sign in with the seeded platform owner credentials.
-- Open `/platform` to manage all organizations and subscription status/plan values.
-- Supported plans: `STARTER` (1 store / 3 users), `BUSINESS` (5 stores / 15 users), `ENTERPRISE` (20 stores / 60 users).
+- Open `/platform` to manage all organizations and subscription billing values.
+- Platform owner panel includes: organization list, plan/status updates, trial/period dates, usage counters, and estimated MRR rollup.
+
+## Subscription Plans & Feature Gates
+The app enforces subscription rules server-side (not UI-only) and checks both limits and features before executing protected operations.
+
+| Plan | Limits | Enabled feature modules |
+| --- | --- | --- |
+| `STARTER` | `1` store, `3` active users, `1000` products | Core inventory/catalog/PO flows only |
+| `BUSINESS` | `5` stores, `15` active users, `50000` products | `imports`, `exports`, `analytics`, `compliance` |
+| `ENTERPRISE` | `20` stores, `60` active users, `200000` products | `imports`, `exports`, `analytics`, `compliance`, `supportToolkit` |
+
+- Billing state model: `ACTIVE`, `PAST_DUE`, `CANCELED` with `trialEndsAt` and `currentPeriodEndsAt`.
+- Hard checks are applied on create/invite/import flows (stores, users, products) and on feature routers (exports, analytics, imports, compliance).
+- `/billing` shows current tier, usage, limits, features, trial status, and monthly price in KGS.
 
 ## Access Control & Users
 - Role-based access: ADMIN, MANAGER, STAFF with protected routes.
@@ -106,6 +121,7 @@ Open `http://localhost:3000`.
 - In `open` mode, verified users complete `/register-business/[token]` to set organization and first store.
 - Admins can create invite links from `/settings/users` to onboard staff safely.
 - `/billing` shows trial status, plan limits, and usage.
+- `invite` flow works in both modes; accepted invite places user into inviter organization and keeps tenant isolation.
 
 ## Onboarding Wizard
 - Admin-only guided setup at `/onboarding` to reach first value fast.
@@ -145,6 +161,7 @@ Open `http://localhost:3000`.
 ## Catalog & CSV (Products)
 - Fields: `sku`, `name`, `category`, `unit`, `description`, `photoUrl`
 - Multiple barcodes per product; optional variants with JSON attributes
+- Product image gallery (`ProductImage`) with ordered positions, used by product page/edit flows
 - Base unit per product with optional packaging conversions for purchasing/receiving
 - Global scan/search: quick lookup by name/SKU/barcode with barcode create-on-miss
 - Search and category filters on `/products`; product archive/restore (soft delete)
@@ -180,10 +197,45 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - 1C-friendly CSV template download.
 - Import history includes per-batch summaries and safe rollback (admin-only).
 - Rollback never deletes ledger entries: products are archived, barcodes removed, and compensating movements are created when needed.
+- CloudShop/Excel image links are parsed (including `HYPERLINK(...)` formats), downloaded, and saved into managed image storage when possible.
+- Import batch summary tracks image resolution outcomes (`downloaded`, `fallback`, `missing`) and stores them per batch.
+
+## Product Image Storage (Local / Cloudflare R2)
+- Storage mode is controlled by `IMAGE_STORAGE_PROVIDER` (`local` or `r2`).
+- In `r2` mode, imported/uploaded product images are written to Cloudflare R2 and resolved via `R2_PUBLIC_BASE_URL`.
+- Object key pattern: `retails/<organizationId>/products/<sha1>.<ext>`.
+- In development, if `r2` variables are incomplete, storage falls back to local with warning.
+- In production, missing required `r2` variables fail fast.
 
 ## Operational Analytics
 - `/reports` includes stockouts, slow movers, and shrinkage summaries.
 - Store + date-range filters with CSV export.
+
+## Exports & Period Close
+- `/reports/exports` supports background export jobs with status tracking, retry, and secured download endpoint.
+- Supported formats: `csv` and `xlsx`.
+- Export types include:
+  - `INVENTORY_MOVEMENTS_LEDGER`
+  - `INVENTORY_BALANCES_AT_DATE`
+  - `PURCHASES_RECEIPTS`
+  - `PRICE_LIST`
+  - `SALES_SUMMARY`
+  - `STOCK_MOVEMENTS`
+  - `PURCHASES`
+  - `INVENTORY_ON_HAND`
+  - `PERIOD_CLOSE_REPORT`
+  - `RECEIPTS_FOR_KKM`
+- `/reports/close` creates monthly period-close snapshots with duplicate-period protection and audit logs.
+
+## KG Compliance-Ready Modules
+- Store-level compliance profile at `/stores/[id]/compliance` with progressive settings:
+  - KKM (`OFF` / `EXPORT_ONLY` / `ADAPTER`)
+  - ESF
+  - ETTN
+  - Marking
+- Product-level optional compliance flags for marking/ETTN.
+- Compliance status badges are shown in store lists.
+- Compliance export columns are included when modules are enabled.
 
 ## Inventory Operations
 - Receive stock, adjust stock with reason, and transfer stock between stores.
@@ -320,6 +372,7 @@ Each item in `/inventory` can reveal the calculation breakdown via the "Why" det
 ## Background Jobs
 - `POST /api/jobs/run?job=cleanup-idempotency-keys` with header `x-job-secret` (requires `JOBS_SECRET`).
 - Uses Redis locks when available; falls back to in-memory locks in dev.
+- Dead-letter queue support with retry/resolve UI in `/admin/jobs`.
 
 ## Real-time (SSE)
 - `GET /api/sse` (authenticated; org-scoped stream)
@@ -328,6 +381,10 @@ Each item in `/inventory` can reveal the calculation breakdown via the "Why" det
   - `purchaseOrder.updated` (poId, status)
   - `lowStock.triggered` (storeId, productId, onHand, minStock)
 - Redis pub/sub when `REDIS_URL` is set; falls back to in-memory in dev with a warning.
+
+## Search & Operator Productivity
+- Global scanner/search input in app shell supports Enter-to-lookup by barcode/SKU/name with fast redirect or result panel.
+- Command palette (`Cmd/Ctrl + K`) supports quick navigation and global search across products, stores, suppliers, and purchase orders.
 
 ## Known Limitations
 - Forecasting is intentionally simple for transparency.

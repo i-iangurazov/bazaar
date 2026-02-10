@@ -15,3 +15,4 @@ yarn-error.log
 !.env.example
 retail-system.zip
 uploads/
+.vercel

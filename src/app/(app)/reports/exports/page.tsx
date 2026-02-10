@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { ExportType, ExportJobStatus } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -36,6 +35,30 @@ import { translateError } from "@/lib/translateError";
 
 const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 type ExportFileFormat = "csv" | "xlsx";
+type ExportTypeValue =
+  | "INVENTORY_MOVEMENTS_LEDGER"
+  | "INVENTORY_BALANCES_AT_DATE"
+  | "PURCHASES_RECEIPTS"
+  | "PRICE_LIST"
+  | "SALES_SUMMARY"
+  | "STOCK_MOVEMENTS"
+  | "PURCHASES"
+  | "INVENTORY_ON_HAND"
+  | "PERIOD_CLOSE_REPORT"
+  | "RECEIPTS_FOR_KKM";
+
+const EXPORT_TYPES: readonly ExportTypeValue[] = [
+  "INVENTORY_MOVEMENTS_LEDGER",
+  "INVENTORY_BALANCES_AT_DATE",
+  "PURCHASES_RECEIPTS",
+  "PRICE_LIST",
+  "SALES_SUMMARY",
+  "STOCK_MOVEMENTS",
+  "PURCHASES",
+  "INVENTORY_ON_HAND",
+  "PERIOD_CLOSE_REPORT",
+  "RECEIPTS_FOR_KKM",
+];
 
 const ExportsPage = () => {
   const t = useTranslations("exports");
@@ -48,7 +71,7 @@ const ExportsPage = () => {
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
   const [storeId, setStoreId] = useState("");
-  const [exportType, setExportType] = useState<ExportType>(ExportType.INVENTORY_MOVEMENTS_LEDGER);
+  const [exportType, setExportType] = useState<ExportTypeValue>("INVENTORY_MOVEMENTS_LEDGER");
   const [format, setFormat] = useState<ExportFileFormat>("csv");
 
   const now = useMemo(() => new Date(), []);
@@ -83,16 +106,16 @@ const ExportsPage = () => {
   const storeOptions = storesQuery.data ?? [];
   const typeLabels = useMemo(
     () => ({
-      [ExportType.INVENTORY_MOVEMENTS_LEDGER]: t("types.inventoryMovementsLedger"),
-      [ExportType.INVENTORY_BALANCES_AT_DATE]: t("types.inventoryBalancesAtDate"),
-      [ExportType.PURCHASES_RECEIPTS]: t("types.purchasesReceipts"),
-      [ExportType.PRICE_LIST]: t("types.priceList"),
-      [ExportType.SALES_SUMMARY]: t("types.salesSummary"),
-      [ExportType.STOCK_MOVEMENTS]: t("types.stockMovements"),
-      [ExportType.PURCHASES]: t("types.purchases"),
-      [ExportType.INVENTORY_ON_HAND]: t("types.inventoryOnHand"),
-      [ExportType.PERIOD_CLOSE_REPORT]: t("types.periodClose"),
-      [ExportType.RECEIPTS_FOR_KKM]: t("types.kkmReceipts"),
+      INVENTORY_MOVEMENTS_LEDGER: t("types.inventoryMovementsLedger"),
+      INVENTORY_BALANCES_AT_DATE: t("types.inventoryBalancesAtDate"),
+      PURCHASES_RECEIPTS: t("types.purchasesReceipts"),
+      PRICE_LIST: t("types.priceList"),
+      SALES_SUMMARY: t("types.salesSummary"),
+      STOCK_MOVEMENTS: t("types.stockMovements"),
+      PURCHASES: t("types.purchases"),
+      INVENTORY_ON_HAND: t("types.inventoryOnHand"),
+      PERIOD_CLOSE_REPORT: t("types.periodClose"),
+      RECEIPTS_FOR_KKM: t("types.kkmReceipts"),
     }),
     [t],
   );
@@ -152,27 +175,16 @@ const ExportsPage = () => {
                 </Select>
               </Field>
               <Field label={t("typeLabel")}>
-                <Select value={exportType} onValueChange={(value) => setExportType(value as ExportType)}>
+                <Select value={exportType} onValueChange={(value) => setExportType(value as ExportTypeValue)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ExportType.INVENTORY_MOVEMENTS_LEDGER}>
-                      {t("types.inventoryMovementsLedger")}
-                    </SelectItem>
-                    <SelectItem value={ExportType.INVENTORY_BALANCES_AT_DATE}>
-                      {t("types.inventoryBalancesAtDate")}
-                    </SelectItem>
-                    <SelectItem value={ExportType.PURCHASES_RECEIPTS}>
-                      {t("types.purchasesReceipts")}
-                    </SelectItem>
-                    <SelectItem value={ExportType.PRICE_LIST}>{t("types.priceList")}</SelectItem>
-                    <SelectItem value={ExportType.SALES_SUMMARY}>{t("types.salesSummary")}</SelectItem>
-                    <SelectItem value={ExportType.STOCK_MOVEMENTS}>{t("types.stockMovements")}</SelectItem>
-                    <SelectItem value={ExportType.PURCHASES}>{t("types.purchases")}</SelectItem>
-                    <SelectItem value={ExportType.INVENTORY_ON_HAND}>{t("types.inventoryOnHand")}</SelectItem>
-                    <SelectItem value={ExportType.PERIOD_CLOSE_REPORT}>{t("types.periodClose")}</SelectItem>
-                    <SelectItem value={ExportType.RECEIPTS_FOR_KKM}>{t("types.kkmReceipts")}</SelectItem>
+                    {EXPORT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {typeLabels[type]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>
@@ -241,9 +253,9 @@ const ExportsPage = () => {
                             label: tCommon("tooltips.download"),
                             icon: DownloadIcon,
                             href: `/api/exports/${job.id}`,
-                            disabled: !job.storagePath || job.status !== ExportJobStatus.DONE,
+                            disabled: !job.storagePath || job.status !== "DONE",
                           },
-                          ...(job.status === ExportJobStatus.FAILED
+                          ...(job.status === "FAILED"
                             ? [
                                 {
                                   key: "retry",
@@ -284,7 +296,7 @@ const ExportsPage = () => {
                               {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
                             </TableCell>
                             <TableCell>
-                              <Badge variant={job.status === ExportJobStatus.DONE ? "success" : "muted"}>
+                              <Badge variant={job.status === "DONE" ? "success" : "muted"}>
                                 {t(`status.${job.status}`)}
                               </Badge>
                             </TableCell>
@@ -308,9 +320,9 @@ const ExportsPage = () => {
                     label: tCommon("tooltips.download"),
                     icon: DownloadIcon,
                     href: `/api/exports/${job.id}`,
-                    disabled: !job.storagePath || job.status !== ExportJobStatus.DONE,
+                    disabled: !job.storagePath || job.status !== "DONE",
                   },
-                  ...(job.status === ExportJobStatus.FAILED
+                  ...(job.status === "FAILED"
                     ? [
                         {
                           key: "retry",
@@ -350,7 +362,7 @@ const ExportsPage = () => {
                           {formatDateTime(job.createdAt, locale)}
                         </p>
                       </div>
-                      <Badge variant={job.status === ExportJobStatus.DONE ? "success" : "muted"}>
+                      <Badge variant={job.status === "DONE" ? "success" : "muted"}>
                         {t(`status.${job.status}`)}
                       </Badge>
                     </div>

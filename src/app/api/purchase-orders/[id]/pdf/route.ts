@@ -129,6 +129,7 @@ export const GET = async (
   const tPurchaseOrders = createTranslator(messages, "purchaseOrders");
   const tStores = createTranslator(messages, "stores");
   const tErrors = createTranslator(messages, "errors");
+  const tCommon = createTranslator(messages, "common");
   const labels = getPdfLabels(tPurchaseOrders);
   const token = await getServerAuthToken();
   if (!token) {
@@ -170,11 +171,11 @@ export const GET = async (
   doc.moveDown();
 
   doc.fontSize(11).fillColor("#000");
-  doc.text(`${labels.supplier}: ${po.supplier.name}`);
-  if (po.supplier.email) {
+  doc.text(`${labels.supplier}: ${po.supplier?.name ?? tCommon("supplierUnassigned")}`);
+  if (po.supplier?.email) {
     doc.text(`${labels.email}: ${po.supplier.email}`);
   }
-  if (po.supplier.phone) {
+  if (po.supplier?.phone) {
     doc.text(`${labels.phone}: ${po.supplier.phone}`);
   }
   doc.text(`${labels.store}: ${po.store.name}`);

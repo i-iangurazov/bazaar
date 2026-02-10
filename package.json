@@ -8,6 +8,7 @@
     "db:down": "docker compose down",
     "db:reset": "pnpm db:up && pnpm prisma:reset",
     "dev": "next dev",
+    "prebuild": "pnpm prisma:generate",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -445,7 +445,7 @@ const PurchaseOrderDetailPage = () => {
     <div>
       <PageHeader
         title={t("title")}
-        subtitle={po.supplier.name}
+        subtitle={po.supplier?.name ?? tCommon("supplierUnassigned")}
         action={
           <>
             <a
