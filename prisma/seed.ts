@@ -60,22 +60,55 @@ const getOrCreateOrganization = async () => {
 
 const getOrCreateUser = async (
   org: Organization,
-  input: { email: string; name: string; role: Role; password: string },
+  input: { email: string; name: string; role: Role; password: string; isOrgOwner?: boolean },
 ): Promise<User> => {
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  const baseEmail = input.email.trim().toLowerCase();
+  let targetEmail = baseEmail;
+  let existing = await prisma.user.findUnique({ where: { email: targetEmail } });
   const passwordHash = await bcrypt.hash(input.password, 10);
 
-  if (existing && existing.organizationId !== org.id) {
-    throw new Error(`User ${input.email} belongs to a different organization`);
+  if (existing && existing.organizationId && existing.organizationId !== org.id) {
+    const atIndex = baseEmail.indexOf("@");
+    if (atIndex <= 0 || atIndex === baseEmail.length - 1) {
+      throw new Error(`Seed email ${baseEmail} is invalid`);
+    }
+
+    const localPart = baseEmail.slice(0, atIndex);
+    const domain = baseEmail.slice(atIndex + 1);
+    const orgSuffix = org.id.slice(0, 8);
+
+    let resolved = false;
+    for (let attempt = 1; attempt <= 20; attempt += 1) {
+      const candidate =
+        attempt === 1
+          ? `${localPart}+seed-${orgSuffix}@${domain}`
+          : `${localPart}+seed-${orgSuffix}-${attempt}@${domain}`;
+      const candidateExisting = await prisma.user.findUnique({ where: { email: candidate } });
+      if (!candidateExisting || candidateExisting.organizationId === org.id) {
+        targetEmail = candidate;
+        existing = candidateExisting;
+        resolved = true;
+        break;
+      }
+    }
+
+    if (!resolved) {
+      throw new Error(`Unable to resolve seed email conflict for ${baseEmail}`);
+    }
+
+    console.warn(
+      `[seed] ${baseEmail} is used by another organization; seeding this org with ${targetEmail}`,
+    );
   }
 
   return prisma.user.upsert({
-    where: { email: input.email },
+    where: { email: targetEmail },
     update: RESET_PASSWORDS
       ? {
           passwordHash,
           name: input.name,
           role: input.role,
+          isOrgOwner: Boolean(input.isOrgOwner),
           isActive: true,
           preferredLocale: "ru",
           emailVerifiedAt: new Date(),
@@ -83,16 +116,18 @@ const getOrCreateUser = async (
       : {
           name: input.name,
           role: input.role,
+          isOrgOwner: input.isOrgOwner ?? existing?.isOrgOwner ?? false,
           isActive: true,
           preferredLocale: existing?.preferredLocale ?? "ru",
           emailVerifiedAt: existing?.emailVerifiedAt ?? new Date(),
         },
     create: {
       organizationId: org.id,
-      email: input.email,
+      email: targetEmail,
       name: input.name,
       passwordHash,
       role: input.role,
+      isOrgOwner: Boolean(input.isOrgOwner),
       preferredLocale: "ru",
       emailVerifiedAt: new Date(),
     },
@@ -452,6 +487,7 @@ const main = async () => {
       name: "Admin User",
       role: Role.ADMIN,
       password: "Admin123!",
+      isOrgOwner: true,
     }),
     getOrCreateUser(org, {
       email: "manager@example.com",

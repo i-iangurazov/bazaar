@@ -13,6 +13,11 @@ enum Role {
   STAFF
 }
 
+enum ThemePreference {
+  LIGHT
+  DARK
+}
+
 enum LegalEntityType {
   IP
   OSOO
@@ -35,6 +40,14 @@ enum PurchaseOrderStatus {
   PARTIALLY_RECEIVED
   RECEIVED
   CANCELLED
+}
+
+enum CustomerOrderStatus {
+  DRAFT
+  CONFIRMED
+  READY
+  COMPLETED
+  CANCELED
 }
 
 enum StockCountStatus {
@@ -114,6 +127,7 @@ model Organization {
   productImages   ProductImage[]
   productPacks    ProductPack[]
   purchaseOrders  PurchaseOrder[]
+  customerOrders  CustomerOrder[]
   auditLogs       AuditLog[]
   importBatches   ImportBatch[]
   stockCounts     StockCount[]
@@ -134,6 +148,8 @@ model Organization {
   productComplianceFlags ProductComplianceFlags[]
   exportJobs ExportJob[]
   periodCloses PeriodClose[]
+  diagnosticsReports DiagnosticsReport[]
+  counters OrganizationCounter?
 }
 
 model User {
@@ -141,9 +157,13 @@ model User {
   organizationId String?
   email        String   @unique
   name         String
+  phone        String?
+  jobTitle     String?
   passwordHash String
   role         Role
+  isOrgOwner   Boolean  @default(false)
   preferredLocale String @default("ru")
+  themePreference ThemePreference @default(LIGHT)
   isActive     Boolean  @default(true)
   emailVerifiedAt DateTime?
   createdAt    DateTime @default(now())
@@ -154,6 +174,8 @@ model User {
   idempotencyKeys IdempotencyKey[]
   purchaseOrdersCreated PurchaseOrder[] @relation("purchaseOrdersCreated")
   purchaseOrdersUpdated PurchaseOrder[] @relation("purchaseOrdersUpdated")
+  customerOrdersCreated CustomerOrder[] @relation("customerOrdersCreated")
+  customerOrdersUpdated CustomerOrder[] @relation("customerOrdersUpdated")
   stockCountsCreated StockCount[] @relation("stockCountCreatedBy")
   stockCountsApplied StockCount[] @relation("stockCountAppliedBy")
   storePricesUpdated StorePrice[] @relation("storePricesUpdated")
@@ -171,6 +193,29 @@ model User {
   complianceProfilesUpdated StoreComplianceProfile[] @relation("complianceUpdatedBy")
   exportJobsRequested ExportJob[] @relation("exportRequestedBy")
   periodClosesCreated PeriodClose[] @relation("periodClosedBy")
+  diagnosticsReportsCreated DiagnosticsReport[] @relation("diagnosticsCreatedBy")
+  guideState UserGuideState?
+}
+
+model OrganizationCounter {
+  organizationId    String  @id
+  salesOrderNumber  Int     @default(0)
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model UserGuideState {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  completedToursJson Json
+  dismissedTipsJson  Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
 }
 
 model Store {
@@ -194,6 +239,7 @@ model Store {
   reorderPolicies ReorderPolicy[]
   forecastSnapshots ForecastSnapshot[]
   purchaseOrders PurchaseOrder[]
+  customerOrders CustomerOrder[]
   stockCounts   StockCount[]
   stockCountLines StockCountLine[]
   stockLots     StockLot[]
@@ -294,6 +340,20 @@ model PeriodClose {
   @@index([organizationId, storeId, closedAt])
 }
 
+model DiagnosticsReport {
+  id             String   @id @default(cuid())
+  organizationId String
+  createdById    String
+  createdAt      DateTime @default(now())
+  resultsJson    Json
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User @relation("diagnosticsCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([createdById, createdAt])
+}
+
 model Supplier {
   id             String   @id @default(cuid())
   organizationId String
@@ -364,9 +424,12 @@ model Product {
   attributeValues  VariantAttributeValue[]
   images           ProductImage[]
   complianceFlags  ProductComplianceFlags?
+  customerOrderLines CustomerOrderLine[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
+  @@index([organizationId, isDeleted, name])
+  @@index([organizationId, category, isDeleted])
 }
 
 model ProductImage {
@@ -441,6 +504,7 @@ model ProductVariant {
   productCosts ProductCost[]
   attributeValues VariantAttributeValue[]
   bundleComponents ProductBundleComponent[] @relation("bundleComponentVariants")
+  customerOrderLines CustomerOrderLine[]
 
   @@index([productId])
   @@index([sku])
@@ -463,6 +527,7 @@ model InventorySnapshot {
 
   @@unique([storeId, productId, variantKey])
   @@index([storeId, productId, variantKey])
+  @@index([storeId, updatedAt])
   @@index([updatedAt])
 }
 
@@ -514,6 +579,8 @@ model PurchaseOrder {
 
   @@index([status, createdAt])
   @@index([storeId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
 }
 
 model PurchaseOrderLine {
@@ -531,7 +598,64 @@ model PurchaseOrderLine {
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@unique([purchaseOrderId, productId, variantKey])
+  @@index([purchaseOrderId])
   @@index([productId])
+  @@index([productId, variantId])
+}
+
+model CustomerOrder {
+  id               String              @id @default(cuid())
+  organizationId   String
+  storeId          String
+  number           String
+  status           CustomerOrderStatus @default(DRAFT)
+  customerName     String?
+  customerPhone    String?
+  subtotalKgs      Decimal             @default(0) @db.Decimal(12, 2)
+  totalKgs         Decimal             @default(0) @db.Decimal(12, 2)
+  notes            String?
+  confirmedAt      DateTime?
+  readyAt          DateTime?
+  completedAt      DateTime?
+  canceledAt       DateTime?
+  completedEventId String?             @unique
+  createdById      String?
+  updatedById      String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  store        Store                @relation(fields: [storeId], references: [id])
+  lines        CustomerOrderLine[]
+  createdBy    User?                @relation("customerOrdersCreated", fields: [createdById], references: [id])
+  updatedBy    User?                @relation("customerOrdersUpdated", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, number])
+  @@index([storeId, status, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model CustomerOrderLine {
+  id              String    @id @default(cuid())
+  customerOrderId String
+  productId       String
+  variantId       String?
+  variantKey      String    @default("BASE")
+  qty             Int
+  unitPriceKgs    Decimal   @db.Decimal(12, 2)
+  lineTotalKgs    Decimal   @db.Decimal(12, 2)
+  unitCostKgs     Decimal?  @db.Decimal(12, 2)
+  lineCostTotalKgs Decimal? @db.Decimal(12, 2)
+
+  customerOrder CustomerOrder  @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  product       Product        @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([customerOrderId, productId, variantKey])
+  @@index([customerOrderId])
+  @@index([productId])
+  @@index([productId, variantId])
 }
 
 model ReorderPolicy {
