@@ -19,6 +19,7 @@
     "search": "Издөө",
     "select": "Тандоо",
     "actions": "Аракеттер",
+    "optional": "Милдеттүү эмес",
     "tooltips": {
       "download": "Жүктөп алуу",
       "copyLink": "Шилтемени көчүрүү",
@@ -40,6 +41,7 @@
     "signOut": "Чыгуу",
     "store": "Дүкөн",
     "supplier": "Жеткирүүчү",
+    "supplierUnassigned": "Жеткирүүчү дайындалган эмес",
     "product": "Буюм",
     "selectStore": "Дүкөндү тандаңыз",
     "selectProduct": "Буюмду тандаңыз",
@@ -61,6 +63,9 @@
     "openHelpArticle": "Жардам макаласын ачуу: {article}",
     "selectedCount": "Тандалды: {count}",
     "clearSelection": "Тандоону тазалоо",
+    "allStores": "Бардык дүкөндөр",
+    "moreActions": "Дагы аракеттер",
+    "nothingFound": "Эч нерсе табылган жок",
     "selectLocale": "Тилди тандаңыз",
     "pagination": {
       "items": "{from}-{to} / {total}",
@@ -305,7 +310,9 @@
     "groupToggle": "{group} бөлүмүн жыйноо же ачуу",
     "dashboard": "Башкы панель",
     "inventory": "Запастар",
-    "purchaseOrders": "Заказдар",
+    "orders": "Заказдар",
+    "salesOrders": "Кардарлар",
+    "purchaseOrders": "Жеткирүүлөр",
     "suppliers": "Жеткирүүчүлөр",
     "products": "Буюмдар",
     "stores": "Дүкөндөр",
@@ -320,7 +327,98 @@
     "reports": "Отчёттор",
     "onboarding": "Онбординг",
     "help": "Жардам",
-    "billing": "Тарифтер"
+    "billing": "Тарифтер",
+    "profile": "Профиль",
+    "diagnostics": "Диагностика"
+  },
+  "ownerDiagnostics": {
+    "title": "Ээнин диагностикасы",
+    "subtitle": "Ишке киргизүүдөн мурун уюмуңуздун абалын текшерип, отчетту колдоого жөнөтүңүз.",
+    "overviewTitle": "Система текшерүүлөрү",
+    "runAll": "Бардык текшерүүнү баштоо",
+    "runCheck": "Баштоо",
+    "runAllSuccess": "Бардык текшерүүлөр аяктады.",
+    "runOneSuccess": "Текшерүү аяктады.",
+    "copyReport": "Отчётту көчүрүү",
+    "copySuccess": "Отчёт көчүрүлдү.",
+    "copyFailed": "Отчётту көчүрүү мүмкүн болгон жок.",
+    "lastGenerated": "Акыркы отчёт: {value}",
+    "neverRun": "Текшерүүлөр али иштетиле элек.",
+    "checkNotRunYet": "Текшерүү али иштетиле элек.",
+    "lastRun": "Акыркы иштетүү: {value}",
+    "durationMs": "Убакыт: {value} мс",
+    "sendEmailTest": "Тест катын жөнөтүү",
+    "emailConfirmTitle": "Продакшнда тест катка уруксат берүү",
+    "emailConfirmDescription": "Продакшнда тест кат кол менен ырасталганда гана жөнөтүлөт.",
+    "statuses": {
+      "ok": "ОК",
+      "warning": "Эскертүү",
+      "error": "Ката",
+      "notRun": "Иштетилген жок"
+    },
+    "checks": {
+      "database": {
+        "title": "Маалымат базасы",
+        "description": "Базага жеткиликтүүлүктү жана миграция абалын текшерет."
+      },
+      "redis": {
+        "title": "Redis",
+        "description": "Туташуу, ping жана pub/sub абалын текшерет."
+      },
+      "sse": {
+        "title": "SSE агымы",
+        "description": "Реалдуу убакыттагы окуя каналын текшерет."
+      },
+      "email": {
+        "title": "Email",
+        "description": "Провайдер конфигурациясын жана тест кат жөнөтүүнү текшерет."
+      },
+      "exports": {
+        "title": "Экспорттор",
+        "description": "Кичи экспортту иштетип, тапшырманын бүткөнүн текшерет."
+      },
+      "pdf": {
+        "title": "PDF генерациясы",
+        "description": "Баа кагаздары үчүн тест PDF түзүүнү текшерет."
+      },
+      "jobs": {
+        "title": "Фондук тапшырмалар",
+        "description": "Lock механизми жана коопсуз job иштетүү текшерилет."
+      },
+      "subscription": {
+        "title": "Жазылуу",
+        "description": "План, лимит жана учурдагы колдонуу көрсөтүлөт."
+      }
+    },
+    "codes": {
+      "databaseQueryFailed": "Маалымат базасына тест суроо ийгиликсиз аяктады.",
+      "databaseMigrationsWarning": "Базага жетүү бар, бирок миграцияга көңүл буруу керек.",
+      "databaseOk": "Маалымат базасы жеткиликтүү, миграциялар туура.",
+      "redisDisconnected": "Redis туташкан эмес.",
+      "redisPingFailed": "Redis жеткиликтүү, бирок ping өтпөдү.",
+      "redisPubSubFailed": "Redis жеткиликтүү, бирок pub/sub ырасталган жок.",
+      "redisOk": "Redis туура иштеп жатат.",
+      "sseStreamUnavailable": "Окуя агымы жеткиликсиз.",
+      "sseOk": "Окуя агымы иштеп жатат.",
+      "emailNotConfigured": "Email провайдери конфигурацияланган эмес.",
+      "emailConfigured": "Email провайдери конфигурацияланган.",
+      "emailTestConfirmationRequired": "Продакшнда тест кат үчүн кошумча ырастоо талап кылынат.",
+      "emailTestSent": "Тест кат жөнөтүлдү.",
+      "emailTestFailed": "Тест катты жөнөтүү мүмкүн болгон жок.",
+      "exportsNoStore": "Тест экспорт үчүн дүкөн табылган жок.",
+      "exportsOk": "Тест экспорт ийгиликтүү аяктады.",
+      "exportsFailed": "Тест экспорт ката менен аяктады.",
+      "exportsPending": "Тест экспорт дагы эле аткарылып жатат.",
+      "pdfFailed": "PDF генерациясы ката менен аяктады.",
+      "pdfOk": "PDF генерациясы туура иштеп жатат.",
+      "jobsOk": "Фондук тапшырма жана lock текшерүүсү ийгиликтүү.",
+      "jobsLockWarning": "Фондук тапшырманын lock текшерүүсү ырасталган жок.",
+      "subscriptionMissing": "Жазылуу маалыматы табылган жок.",
+      "subscriptionWarning": "Жазылуу кошумча көңүл бурууну талап кылат.",
+      "subscriptionOk": "Жазылуу активдүү.",
+      "planFeatureUnavailable": "Бул функция учурдагы планда жеткиликтүү эмес.",
+      "diagnosticsCheckFailed": "Текшерүү ката менен аяктады."
+    }
   },
   "appHeader": {
     "scanPlaceholder": "Сканерлөө же издөө",
@@ -337,7 +435,8 @@
     "resultsTitle": "Натыйжалар",
     "loading": "Издөө...",
     "noResults": "Эч нерсе табылган жок.",
-    "actionCreatePo": "Заказ түзүү",
+    "actionCreateSo": "Кардар заказы",
+    "actionCreatePo": "Жабдууучу заказы",
     "actionStartCount": "Ревизияны баштоо",
     "actionPrintTags": "Баа белгилерин басып чыгаруу"
   },
@@ -492,6 +591,7 @@
     "basicInfoTitle": "Негизги маалымат",
     "descriptionTitle": "Сүрөттөмө жана сүрөт",
     "newProduct": "Жаңы буюм",
+    "newBundle": "Жаңы топтом",
     "sku": "SKU",
     "skuRequired": "SKU милдеттүү.",
     "name": "Аталыш",
@@ -601,6 +701,11 @@
     "bulkStorePriceSubtitle": "Бир нече буюм үчүн дүкөн баасын бир заматта коюңуз.",
     "bulkStorePriceSuccess": "{count} буюм үчүн баалар жаңыртылды.",
     "allCategories": "Бардык категориялар",
+    "typeLabel": "Түрү",
+    "allTypes": "Бардык түрлөр",
+    "typeProduct": "Товар",
+    "typeBundle": "Топтом",
+    "bundleProductLabel": "Топтом",
     "imageLabel": "Сүрөт",
     "openImportCenter": "Импорт борбору",
     "importCsv": "CSV импорт",
@@ -676,6 +781,9 @@
     "bundleComponentAdded": "Компонент кошулду.",
     "bundleComponentRemoved": "Компонент алынды.",
     "bundleRemoveComponent": "Компонентти өчүрүү",
+    "bundleComponentDuplicate": "Бул компонент топтомго мурунтан эле кошулган.",
+    "bundleComponentsTitle": "Топтом курамы",
+    "bundleComponentsHint": "Товарларды тандап, ар бир компонент үчүн санын көрсөтүңүз.",
     "bundleRemoveConfirm": "Компонентти өчүрөсүзбү?",
     "bundleHiddenHint": "Топтом компоненттери жашырылган.",
     "bundleEmpty": "Компоненттер кошула элек.",
@@ -879,6 +987,103 @@
       "cancelled": "Жокко чыгарылган"
     }
   },
+  "salesOrders": {
+    "title": "Кардар заказдары",
+    "subtitle": "Черновик, ырастоо жана кардар заказы боюнча товарды чыгаруу.",
+    "metricsTitle": "Сатуу метрикалары",
+    "metricsSubtitle": "Кардар заказдары боюнча түшүм, өздүк нарк жана пайда.",
+    "metricsFiltersTitle": "Метрика чыпкалары",
+    "metricsGroupBy": "Топтоо",
+    "metricsGroupDay": "Күн боюнча",
+    "metricsGroupWeek": "Жума боюнча",
+    "dateFrom": "Башталышы",
+    "dateTo": "Аягы",
+    "metricsRevenue": "Түшүм",
+    "metricsCost": "Өздүк нарк",
+    "metricsProfit": "Пайда",
+    "metricsOrdersCount": "Заказ саны",
+    "metricsAvgOrder": "Орточо чек",
+    "metricsMargin": "Маржа",
+    "metricsTrendTitle": "Динамика",
+    "metricsTopProducts": "Топ товарлар",
+    "metricsTopBundles": "Топ топтомдор",
+    "metricsNoData": "Тандалган мезгил үчүн маалымат жок.",
+    "metricsNoBundles": "Бул мезгилде топтом сатылган жок.",
+    "date": "Күнү",
+    "new": "Жаңы кардар заказы",
+    "newSubtitle": "Кардар заказын түзүп, позицияларды кошуңуз.",
+    "create": "Заказ түзүү",
+    "createSuccess": "Кардар заказы түзүлдү.",
+    "detailsTitle": "Кардар заказы",
+    "detailsSubtitle": "Статус, кардар маалыматы жана позициялар менен иштөө.",
+    "number": "Номер",
+    "customer": "Кардар",
+    "customerName": "Кардардын аты",
+    "customerNamePlaceholder": "Кардардын аты",
+    "customerPhone": "Кардардын телефону",
+    "customerPhonePlaceholder": "+996 XXX XXX XXX",
+    "notes": "Комментарий",
+    "notesPlaceholder": "Заказ боюнча комментарий",
+    "store": "Дүкөн",
+    "storeRequired": "Дүкөндү тандаңыз.",
+    "statusLabel": "Статус",
+    "allStatuses": "Бардык статустар",
+    "totalLabel": "Жалпы заказдар: {count}",
+    "subtotal": "Аралык сумма",
+    "total": "Жалпы",
+    "created": "Түзүлгөн",
+    "searchPlaceholder": "Номер, аты же телефон боюнча издөө",
+    "noOrders": "Кардар заказдары азырынча жок.",
+    "notFound": "Кардар заказы табылган жок.",
+    "confirmOrder": "Ырастоо",
+    "confirmSuccess": "Заказ ырасталды.",
+    "markReady": "Берүүгө даяр",
+    "readySuccess": "Заказ даяр деп белгиленди.",
+    "complete": "Аяктоо",
+    "completeSuccess": "Заказ аяктап, товар запастан чыгарылды.",
+    "cancel": "Жокко чыгаруу",
+    "cancelSuccess": "Заказ жокко чыгарылды.",
+    "confirmSubmit": "Кардар заказын ырастайсызбы?",
+    "confirmMarkReady": "Заказды берүүгө даяр деп белгилейсизби?",
+    "confirmComplete": "Заказды аяктап, товарды кампадан чыгарасызбы?",
+    "confirmCancel": "Кардар заказын жокко чыгарасызбы?",
+    "customerSectionTitle": "Кардар маалыматы",
+    "customerUpdated": "Кардар маалыматы жаңыртылды.",
+    "saveCustomer": "Кардар маалыматын сактоо",
+    "linesTitle": "Заказ позициялары",
+    "noLines": "Заказ позициялары азырынча кошула элек.",
+    "addLine": "Позиция кошуу",
+    "editLine": "Санды өзгөртүү",
+    "removeLine": "Позицияны өчүрүү",
+    "confirmRemoveLine": "Кардар заказынын позициясын өчүрөсүзбү?",
+    "lineDialogAddTitle": "Жаңы позиция",
+    "lineDialogEditTitle": "Позицияны өзгөртүү",
+    "lineDialogSubtitle": "Товар, вариант жана санын көрсөтүңүз.",
+    "saveLine": "Позицияны сактоо",
+    "lineAdded": "Позиция кошулду.",
+    "lineUpdated": "Позиция жаңыртылды.",
+    "lineRemoved": "Позиция өчүрүлдү.",
+    "product": "Товар",
+    "productRequired": "Товарды тандаңыз.",
+    "productSearchPlaceholder": "Аталыш же SKU жаза баштаңыз",
+    "productSearchHint": "Тизмеден товар тандаңыз.",
+    "bundleProductLabel": "Топтом",
+    "selectedProduct": "Тандалган SKU: {sku}",
+    "variant": "Вариант",
+    "variantPlaceholder": "Вариантты тандаңыз",
+    "variantBase": "Вариантсыз",
+    "qty": "Саны",
+    "qtyPositive": "Саны нөлдөн чоң болушу керек.",
+    "unitPrice": "Бирдик баасы",
+    "lineTotal": "Сап суммасы",
+    "status": {
+      "draft": "Черновик",
+      "confirmed": "Ырасталды",
+      "ready": "Берүүгө даяр",
+      "completed": "Аяктады",
+      "canceled": "Жокко чыгарылды"
+    }
+  },
   "suppliers": {
     "title": "Жеткирүүчүлөр",
     "subtitle": "Жеткирүүчүлөрдүн байланыштары жана жазуулар.",
@@ -912,6 +1117,48 @@
     "confirmBulkDelete": "Тандалган жеткирүүчүлөрдү өчүрөсүзбү?",
     "bulkDeleteSuccess": "Өчүрүлгөн жеткирүүчүлөр: {count}",
     "noSuppliers": "Жеткирүүчүлөр жок."
+  },
+  "profile": {
+    "title": "Профиль",
+    "subtitle": "Жеке маалыматтар, интерфейс жөндөөлөрү жана бизнес реквизиттери.",
+    "personal": {
+      "title": "Жеке маалыматтар",
+      "name": "Аты-жөнү",
+      "email": "Email",
+      "phone": "Телефон",
+      "jobTitle": "Кызматы",
+      "saved": "Жеке маалыматтар сакталды.",
+      "validation": {
+        "nameRequired": "Аты-жөнү милдеттүү."
+      }
+    },
+    "preferences": {
+      "title": "Тандоолор",
+      "locale": "Тил",
+      "theme": "Тема",
+      "themes": {
+        "light": "Жарык",
+        "dark": "Караңгы"
+      },
+      "saved": "Жөндөөлөр сакталды."
+    },
+    "business": {
+      "title": "Бизнес маалыматы",
+      "organizationName": "Бизнес аталышы",
+      "store": "Дүкөн",
+      "selectStore": "Дүкөн тандаңыз",
+      "legalEntityType": "Юридикалык форма",
+      "legalName": "Юридикалык аталышы",
+      "inn": "ИНН",
+      "address": "Дарек",
+      "phone": "Телефон",
+      "none": "Көрсөтүлгөн эмес",
+      "saved": "Бизнес маалыматы сакталды.",
+      "validation": {
+        "organizationNameRequired": "Бизнес аталышы милдеттүү.",
+        "storeRequired": "Дүкөн тандаңыз."
+      }
+    }
   },
   "users": {
     "title": "Колдонуучулар",
@@ -1394,6 +1641,11 @@
     "defaultUnitTitle": "Демейки өлчөм бирдиги",
     "defaultUnitPlaceholder": "Өлчөм бирдигин тандаңыз",
     "defaultUnitHint": "Файлда өлчөм бирдиги бош болсо, ушул маани колдонулат.",
+    "targetStoreTitle": "Дүкөн баасы үчүн",
+    "targetStorePlaceholder": "Дүкөндү тандаңыз",
+    "targetStoreNone": "Дүкөнгө баа колдонбоо",
+    "targetStoreHint": "Эгер дүкөн тандалса, «Сатуу баасы» тилкеси ошол дүкөн үчүн бааны түзөт же жаңыртат.",
+    "targetStoreApplied": "Баалар ушул дүкөнгө колдонулду: {store}.",
     "previewTitle": "Алдын ала көрүү",
     "previewEmpty": "Алдын ала көрүү үчүн маалымат жок.",
     "validationTitle": "Текшерүү",
@@ -1456,6 +1708,7 @@
       "updated": "Жаңыртылган",
       "status": "Абалы"
     },
+    "historyStoreValue": "Дүкөн: {store}",
     "rollbackEntities": {
       "product": "Товарлар",
       "barcode": "Штрихкоддор",
@@ -1860,6 +2113,195 @@
           "Мезгилди жабуу бухгалтерия үчүн жыйынтыкты сактайт.",
           "Кампа кыймылдары токтобой уланат."
         ]
+      }
+    }
+  },
+  "guidance": {
+    "tipsButton": "Кеңештер",
+    "tipsPanelTitle": "Барак кеңештери",
+    "tipsPanelSubtitle": "Учурдагы экран боюнча кыска сунуштар.",
+    "tipsBadge": "Кеңеш",
+    "dismiss": "Жашыруу",
+    "nextTip": "Кийинкиси",
+    "showTip": "Көрсөтүү",
+    "replayTips": "Кеңештерди кайра көрсөтүү",
+    "startTour": "Турду баштоо",
+    "skip": "Өткөрүп жиберүү",
+    "back": "Артка",
+    "next": "Алга",
+    "finish": "Аяктоо",
+    "tourProgress": "{current}/{total} кадам",
+    "tourRunning": "Тур жүрүп жатат",
+    "tourCompleted": "Аяктады",
+    "tourPending": "Өтүлө элек",
+    "tipDismissed": "Жашырылган",
+    "tipPending": "Жаңы",
+    "tourLauncherTitle": "Тез турлар",
+    "openTipsPanel": "Кеңештерди ачуу",
+    "saveFailed": "Кеңештердин абалын сактоо ишке ашкан жок. Өзгөрүүлөр жергиликтүү бойдон калат.",
+    "disableToursLabel": "Турларды өчүрүү",
+    "disableToursHint": "Которгуч күйүп турганда турлар автоматтык башталбайт жана кол менен да иштетилбейт.",
+    "toursDisabledBadge": "Турлар өчүрүлгөн",
+    "resetTour": "Турду кайра орнотуу",
+    "tips": {
+      "dashboard": {
+        "storeFilter": {
+          "title": "Дүкөн фильтри",
+          "body": "Керектүү маалыматты көрүү үчүн дүкөндү тандаңыз."
+        },
+        "analytics": {
+          "title": "Аналитикага өтүү",
+          "body": "Сатуу жана калдыктар трендин көрүү үчүн аналитиканы ачыңыз."
+        }
+      },
+      "products": {
+        "create": {
+          "title": "Товар кошуу",
+          "body": "Импортто жок товарды кол менен түзүңүз."
+        },
+        "search": {
+          "title": "Каталог издөө",
+          "body": "Товарды аталышы, SKU же штрихкод боюнча табыңыз."
+        }
+      },
+      "inventory": {
+        "receive": {
+          "title": "Кабыл алуу",
+          "body": "Кабыл алуу аркылуу калдыктарды жана орточо өздүк бааны жаңыртыңыз."
+        },
+        "printTags": {
+          "title": "Баа тэгдерин басуу",
+          "body": "Тизмеден позицияларды тандап, басууга PDF түзүңүз."
+        }
+      },
+      "purchaseOrders": {
+        "create": {
+          "title": "Жаңы жеткирүү буйрутмасы",
+          "body": "Сатып алуу жана кабыл алууну статустар менен көзөмөлдөңүз."
+        }
+      },
+      "stockCounts": {
+        "create": {
+          "title": "Жаңы инвентаризация",
+          "body": "Дүкөн боюнча кайра саноону баштап, айырманы бекитиңиз."
+        }
+      },
+      "exports": {
+        "generate": {
+          "title": "Экспорт түзүү",
+          "body": "Түрүн, мезгилди жана форматты тандап, бухгалтер үчүн файл даярдаңыз."
+        }
+      },
+      "users": {
+        "invite": {
+          "title": "Кызматкер чакыруу",
+          "body": "Колдонуучуну email аркылуу чакырып, ролун алдын ала коюңуз."
+        }
+      }
+    },
+    "tours": {
+      "dashboard": {
+        "label": "Дашборд туру",
+        "steps": {
+          "scan": {
+            "title": "Сканер жана издөө",
+            "body": "Штрихкод же SKU киргизип Enter бассаңыз, товар карточкасы ачылат."
+          },
+          "storeFilter": {
+            "title": "Дүкөн алмаштыруу",
+            "body": "Көрсөткүчтөрдү керектүү дүкөнгө которуп талдаңыз."
+          },
+          "analytics": {
+            "title": "Толук аналитика",
+            "body": "Кеңейтилген графиктер жана тренддер үчүн аналитика барагын колдонуңуз."
+          }
+        }
+      },
+      "products": {
+        "label": "Товарлар туру",
+        "steps": {
+          "search": {
+            "title": "Товар издөө",
+            "body": "Издөө аркылуу товарды тез табыңыз."
+          },
+          "create": {
+            "title": "Товар түзүү",
+            "body": "Импортсуз эле жаңы позицияларды кол менен кошсоңуз болот."
+          },
+          "printTags": {
+            "title": "Баа тэгдери",
+            "body": "Тандалган товарлар үчүн баа тэгдерин PDFке чыгарыңыз."
+          }
+        }
+      },
+      "inventory": {
+        "label": "Кампа туру",
+        "steps": {
+          "receive": {
+            "title": "Товар кабыл алуу",
+            "body": "Келген көлөмдү жана бааны киргизип кампаны жаңыртыңыз."
+          },
+          "adjust": {
+            "title": "Түзөтүү",
+            "body": "Себеби көрсөтүлгөн оң/терс түзөтүүлөрдү коопсуз жазыңыз."
+          },
+          "transfer": {
+            "title": "Көчүрүү",
+            "body": "Товарды дүкөндөр ортосунда кыймыл тарыхын сактап өткөрүңүз."
+          }
+        }
+      },
+      "purchaseOrders": {
+        "label": "Жеткирүү буйрутмалары туру",
+        "steps": {
+          "create": {
+            "title": "Буйрутма түзүү",
+            "body": "Жеткирүү буйрутмасын түзүп, позицияларды кошуңуз."
+          },
+          "table": {
+            "title": "Буйрутма тизмеси",
+            "body": "Статустарды көрүп, деталь баракка өтүп кабыл алууну улантыңыз."
+          }
+        }
+      },
+      "stockCounts": {
+        "label": "Инвентаризация туру",
+        "steps": {
+          "create": {
+            "title": "Саноону баштоо",
+            "body": "Жаңы инвентаризация ачып, саноону этап менен жазыңыз."
+          },
+          "table": {
+            "title": "Саноо тарыхы",
+            "body": "Жабылган саноолорду ачып, айырма жыйынтыктарын текшериңиз."
+          }
+        }
+      },
+      "exports": {
+        "label": "Экспорт туру",
+        "steps": {
+          "generate": {
+            "title": "Экспорт параметрлери",
+            "body": "Дүкөндү, мезгилди, форматты жана отчет түрүн тандаңыз."
+          },
+          "jobs": {
+            "title": "Экспорт журналы",
+            "body": "Даяр файлдарды жүктөп, ийгиликсиз тапшырмаларды кайталаңыз."
+          }
+        }
+      },
+      "users": {
+        "label": "Колдонуучулар туру",
+        "steps": {
+          "invite": {
+            "title": "Email чакыруусу",
+            "body": "Кызматкерлерди коопсуз чакырып, ролдорун алдын ала дайындаңыз."
+          },
+          "table": {
+            "title": "Кирүүнү башкаруу",
+            "body": "Роль, тил жана активдүүлүктү бир жерден түздөңүз."
+          }
+        }
       }
     }
   }

@@ -256,6 +256,16 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - PDF export available per PO.
 - Role-based PO actions by status (submit/approve/cancel/receive).
 
+## Sales Orders (Customer Orders)
+- Dedicated customer order flow at `/sales/orders` (separate from supplier purchase orders).
+- Status workflow: `DRAFT -> CONFIRMED -> READY -> COMPLETED` (or `CANCELED`).
+- Sales lines support both regular products and bundles.
+- Line snapshots store both `unitPriceKgs` and `unitCostKgs` for stable historical profit analytics.
+- Completing an order creates immutable `SALE` stock movements and updates inventory snapshots through the ledger.
+- Completion is idempotent via request key to prevent double stock deduction.
+- RBAC: ADMIN/MANAGER can complete/cancel; staff can work with non-final steps.
+- Sales metrics page at `/sales/orders/metrics` provides revenue/cost/profit trends and top products/bundles.
+
 ## Replenishment -> PO Drafts
 - Create draft POs from inventory planning, grouped by supplier.
 - Missing supplier assignments are flagged before creation; quantities remain editable.
