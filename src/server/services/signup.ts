@@ -194,7 +194,7 @@ export const registerBusinessFromToken = async (input: {
       organizationId = createdOrg.id;
       await tx.user.update({
         where: { id: user.id },
-        data: { organizationId },
+        data: { organizationId, isOrgOwner: true },
       });
     }
 
@@ -202,6 +202,13 @@ export const registerBusinessFromToken = async (input: {
       where: { id: organizationId },
       data: { name: input.orgName.trim() },
     });
+
+    if (hasExistingOrganization) {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { isOrgOwner: true },
+      });
+    }
 
     const store = await tx.store.create({
       data: {

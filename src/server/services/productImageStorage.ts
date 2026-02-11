@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import { mkdir, writeFile } from "node:fs/promises";
+import { isIP } from "node:net";
 import { extname, join } from "node:path";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -37,6 +39,17 @@ const resolveMaxImageBytes = () => {
 };
 
 const maxImageBytes = resolveMaxImageBytes();
+
+const resolveRemoteImageFetchTimeoutMs = () => {
+  const parsed = Number(process.env.PRODUCT_IMAGE_FETCH_TIMEOUT_MS);
+  if (Number.isFinite(parsed) && parsed >= 1_000) {
+    return parsed;
+  }
+  return 4_000;
+};
+
+const remoteImageFetchTimeoutMs = resolveRemoteImageFetchTimeoutMs();
+const remoteHostAllowCache = new Map<string, boolean>();
 
 type ImageStorageProvider = "local" | "r2";
 
@@ -259,9 +272,105 @@ const parseDataImage = (value: string) => {
   return { buffer, contentType };
 };
 
+const isPrivateIPv4 = (address: string) => {
+  const [a, b] = address.split(".").map((part) => Number(part));
+  if (!Number.isFinite(a) || !Number.isFinite(b)) {
+    return true;
+  }
+  if (a === 10 || a === 127 || a === 0) {
+    return true;
+  }
+  if (a === 169 && b === 254) {
+    return true;
+  }
+  if (a === 172 && b >= 16 && b <= 31) {
+    return true;
+  }
+  if (a === 192 && b === 168) {
+    return true;
+  }
+  return false;
+};
+
+const isPrivateIPv6 = (address: string) => {
+  const normalized = address.toLowerCase();
+  return (
+    normalized === "::1" ||
+    normalized === "::" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe80")
+  );
+};
+
+const isBlockedIpAddress = (address: string) => {
+  const version = isIP(address);
+  if (version === 4) {
+    return isPrivateIPv4(address);
+  }
+  if (version === 6) {
+    return isPrivateIPv6(address);
+  }
+  return true;
+};
+
+const isBlockedHostName = (hostName: string) => {
+  const normalized = hostName.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal")
+  );
+};
+
+const isRemoteHostAllowed = async (hostName: string) => {
+  const cached = remoteHostAllowCache.get(hostName);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  if (isBlockedHostName(hostName)) {
+    remoteHostAllowCache.set(hostName, false);
+    return false;
+  }
+
+  if (isIP(hostName)) {
+    const allowed = !isBlockedIpAddress(hostName);
+    remoteHostAllowCache.set(hostName, allowed);
+    return allowed;
+  }
+
+  try {
+    const records = await lookup(hostName, { all: true, verbatim: true });
+    if (!records.length) {
+      remoteHostAllowCache.set(hostName, false);
+      return false;
+    }
+    const allowed = records.every((record) => !isBlockedIpAddress(record.address));
+    remoteHostAllowCache.set(hostName, allowed);
+    return allowed;
+  } catch {
+    remoteHostAllowCache.set(hostName, false);
+    return false;
+  }
+};
+
 const downloadRemoteImage = async (url: string) => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  const hostAllowed = await isRemoteHostAllowed(parsed.hostname);
+  if (!hostAllowed) {
+    return null;
+  }
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
   try {
     const response = await fetch(url, { signal: controller.signal });

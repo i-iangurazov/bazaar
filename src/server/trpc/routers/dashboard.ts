@@ -14,32 +14,101 @@ export const dashboardRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
       }
 
-      const snapshots = await ctx.prisma.inventorySnapshot.findMany({
-        where: { storeId: input.storeId, product: { isDeleted: false } },
-        include: { product: true, variant: true },
-        orderBy: { updatedAt: "desc" },
-      });
+      const lowStockCandidates = await ctx.prisma.$queryRaw<
+        { snapshotId: string; productId: string; minStock: number }[]
+      >`
+        SELECT
+          s.id AS "snapshotId",
+          s."productId" AS "productId",
+          p."minStock" AS "minStock"
+        FROM "InventorySnapshot" s
+        INNER JOIN "ReorderPolicy" p
+          ON p."storeId" = s."storeId"
+         AND p."productId" = s."productId"
+        INNER JOIN "Product" pr
+          ON pr.id = s."productId"
+        WHERE s."storeId" = ${input.storeId}
+          AND pr."isDeleted" = false
+          AND p."minStock" > 0
+          AND s."onHand" <= p."minStock"
+        ORDER BY s."updatedAt" DESC
+        LIMIT 5
+      `;
 
-      const productIds = snapshots.map((snapshot) => snapshot.productId);
-      const policies = await ctx.prisma.reorderPolicy.findMany({
-        where: { storeId: input.storeId, productId: { in: productIds } },
-      });
-      const forecasts = await ctx.prisma.forecastSnapshot.findMany({
-        where: { storeId: input.storeId, productId: { in: productIds } },
-        orderBy: { generatedAt: "desc" },
-        distinct: ["productId"],
-      });
-
-      const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
-      const forecastMap = new Map(
-        forecasts.map((forecast) => [forecast.productId, forecast]),
+      const lowStockSnapshotIds = lowStockCandidates.map((item) => item.snapshotId);
+      const lowStockProductIds = Array.from(
+        new Set(lowStockCandidates.map((item) => item.productId)),
       );
 
-      const lowStock = snapshots
-        .map((snapshot) => {
-          const policy = policyMap.get(snapshot.productId) ?? null;
-          const minStock = policy?.minStock ?? 0;
-          return {
+      const [lowStockSnapshots, policies, forecasts, recentMovements, pendingPurchaseOrders, recentActivityLogs] =
+        await Promise.all([
+          lowStockSnapshotIds.length
+            ? ctx.prisma.inventorySnapshot.findMany({
+                where: { id: { in: lowStockSnapshotIds } },
+                include: { product: true, variant: true },
+              })
+            : Promise.resolve([]),
+          lowStockProductIds.length
+            ? ctx.prisma.reorderPolicy.findMany({
+                where: { storeId: input.storeId, productId: { in: lowStockProductIds } },
+              })
+            : Promise.resolve([]),
+          lowStockProductIds.length
+            ? ctx.prisma.forecastSnapshot.findMany({
+                where: { storeId: input.storeId, productId: { in: lowStockProductIds } },
+                orderBy: { generatedAt: "desc" },
+                distinct: ["productId"],
+              })
+            : Promise.resolve([]),
+          ctx.prisma.stockMovement.findMany({
+            where: { storeId: input.storeId },
+            include: {
+              product: true,
+              variant: true,
+              createdBy: { select: { name: true, email: true } },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 8,
+          }),
+          ctx.prisma.purchaseOrder.findMany({
+            where: {
+              organizationId: ctx.user.organizationId,
+              status: { in: ["SUBMITTED", "APPROVED"] },
+            },
+            include: { supplier: true },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          }),
+          ctx.prisma.auditLog.findMany({
+            where: { organizationId: ctx.user.organizationId },
+            include: {
+              actor: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 8,
+          }),
+        ]);
+
+      const snapshotMap = new Map(
+        lowStockSnapshots.map((snapshot) => [snapshot.id, snapshot]),
+      );
+      const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
+      const forecastMap = new Map(forecasts.map((forecast) => [forecast.productId, forecast]));
+
+      const lowStock = lowStockCandidates.flatMap((candidate) => {
+        const snapshot = snapshotMap.get(candidate.snapshotId);
+        if (!snapshot) {
+          return [];
+        }
+        const policy = policyMap.get(candidate.productId) ?? null;
+        const minStock = Number(candidate.minStock);
+        return [
+          {
             snapshot,
             product: snapshot.product,
             variant: snapshot.variant,
@@ -50,44 +119,8 @@ export const dashboardRouter = router({
               policy,
               forecastMap.get(snapshot.productId) ?? null,
             ),
-          };
-        })
-        .filter((item) => item.lowStock)
-        .slice(0, 5);
-
-      const recentMovements = await ctx.prisma.stockMovement.findMany({
-        where: { storeId: input.storeId },
-        include: {
-          product: true,
-          variant: true,
-          createdBy: { select: { name: true, email: true } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 8,
-      });
-
-      const pendingPurchaseOrders = await ctx.prisma.purchaseOrder.findMany({
-        where: {
-          organizationId: ctx.user.organizationId,
-          status: { in: ["SUBMITTED", "APPROVED"] },
-        },
-        include: { supplier: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      });
-
-      const recentActivityLogs = await ctx.prisma.auditLog.findMany({
-        where: { organizationId: ctx.user.organizationId },
-        include: {
-          actor: {
-            select: {
-              name: true,
-              email: true,
-            },
           },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 8,
+        ];
       });
 
       const recentActivity = await enrichRecentActivity(ctx.prisma, recentActivityLogs);

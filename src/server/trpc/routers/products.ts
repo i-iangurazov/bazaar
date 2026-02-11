@@ -135,6 +135,7 @@ export const productsRouter = router({
           id: true,
           sku: true,
           name: true,
+          isBundle: true,
           barcodes: { select: { value: true } },
         },
         orderBy: { name: "asc" },
@@ -145,6 +146,7 @@ export const productsRouter = router({
         id: product.id,
         sku: product.sku,
         name: product.name,
+        isBundle: product.isBundle,
         barcodes: product.barcodes.map((barcode) => barcode.value),
       }));
     }),
@@ -155,8 +157,11 @@ export const productsRouter = router({
         .object({
           search: z.string().optional(),
           category: z.string().optional(),
+          type: z.enum(["all", "product", "bundle"]).optional(),
           includeArchived: z.boolean().optional(),
           storeId: z.string().optional(),
+          page: z.number().int().min(1).optional(),
+          pageSize: z.number().int().min(1).max(200).optional(),
         })
         .optional(),
     )
@@ -168,44 +173,61 @@ export const productsRouter = router({
         }
       }
 
-      return ctx.prisma.product.findMany({
-        where: {
-          ...(input?.includeArchived ? {} : { isDeleted: false }),
-          ...(input?.search
-            ? {
-                OR: [
-                  { name: { contains: input.search, mode: "insensitive" } },
-                  { sku: { contains: input.search, mode: "insensitive" } },
-                ],
-              }
+      const page = input?.page ?? 1;
+      const pageSize = input?.pageSize ?? 25;
+      const where = {
+        ...(input?.includeArchived ? {} : { isDeleted: false }),
+        ...(input?.search
+          ? {
+              OR: [
+                { name: { contains: input.search, mode: "insensitive" as const } },
+                { sku: { contains: input.search, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+        ...(input?.category ? { category: input.category } : {}),
+        ...(input?.type === "product"
+          ? { isBundle: false }
+          : input?.type === "bundle"
+            ? { isBundle: true }
             : {}),
-          ...(input?.category ? { category: input.category } : {}),
-          organizationId: ctx.user.organizationId,
-        },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          category: true,
-          unit: true,
-          isDeleted: true,
-          photoUrl: true,
-          basePriceKgs: true,
-          barcodes: { select: { value: true } },
-          inventorySnapshots: { select: { storeId: true } },
-          images: {
-            where: {
-              url: {
-                not: { startsWith: "data:image/" },
+        organizationId: ctx.user.organizationId,
+      };
+
+      const [total, products] = await Promise.all([
+        ctx.prisma.product.count({ where }),
+        ctx.prisma.product.findMany({
+          where,
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            category: true,
+            unit: true,
+            isBundle: true,
+            isDeleted: true,
+            photoUrl: true,
+            basePriceKgs: true,
+            barcodes: { select: { value: true } },
+            inventorySnapshots: { select: { storeId: true } },
+            images: {
+              where: {
+                url: {
+                  not: { startsWith: "data:image/" },
+                },
               },
+              select: { id: true, url: true, position: true },
+              orderBy: { position: "asc" },
+              take: 1,
             },
-            select: { id: true, url: true, position: true },
-            orderBy: { position: "asc" },
-            take: 1,
           },
-        },
-        orderBy: { name: "asc" },
-      }).then(async (products) => {
+          orderBy: { name: "asc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+
+      const items = await (async () => {
         const productIds = products.map((product) => product.id);
         const [baseCosts, latestPurchaseLines] = productIds.length
           ? await Promise.all([
@@ -299,7 +321,14 @@ export const productsRouter = router({
             priceOverridden: Boolean(override),
           };
         });
-      });
+      })();
+
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+      };
     }),
 
   byIds: protectedProcedure
@@ -454,6 +483,16 @@ export const productsRouter = router({
           .optional(),
         supplierId: z.string().optional(),
         barcodes: z.array(z.string()).optional(),
+        isBundle: z.boolean().optional(),
+        bundleComponents: z
+          .array(
+            z.object({
+              componentProductId: z.string().min(1),
+              componentVariantId: z.string().optional().nullable(),
+              qty: z.number().int().positive(),
+            }),
+          )
+          .optional(),
         packs: z
           .array(
             z.object({
@@ -494,6 +533,8 @@ export const productsRouter = router({
           images: input.images,
           supplierId: input.supplierId,
           barcodes: input.barcodes,
+          isBundle: input.isBundle,
+          bundleComponents: input.bundleComponents,
           packs: input.packs,
           variants: input.variants,
         });
@@ -524,6 +565,16 @@ export const productsRouter = router({
           .optional(),
         supplierId: z.string().nullable().optional(),
         barcodes: z.array(z.string()).optional(),
+        isBundle: z.boolean().optional(),
+        bundleComponents: z
+          .array(
+            z.object({
+              componentProductId: z.string().min(1),
+              componentVariantId: z.string().optional().nullable(),
+              qty: z.number().int().positive(),
+            }),
+          )
+          .optional(),
         packs: z
           .array(
             z.object({
@@ -565,6 +616,8 @@ export const productsRouter = router({
           images: input.images,
           supplierId: input.supplierId ?? undefined,
           barcodes: input.barcodes,
+          isBundle: input.isBundle,
+          bundleComponents: input.bundleComponents,
           packs: input.packs,
           variants: input.variants,
         });
@@ -615,6 +668,7 @@ export const productsRouter = router({
           )
           .min(1),
         source: z.enum(["cloudshop", "onec", "csv"]).optional(),
+        storeId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -628,6 +682,7 @@ export const productsRouter = router({
           requestId: ctx.requestId,
           rows: input.rows,
           source: input.source,
+          storeId: input.storeId,
         });
         return {
           batchId: result.batch.id,

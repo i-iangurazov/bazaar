@@ -6,6 +6,7 @@ import superjson from "superjson";
 
 import { prisma } from "@/server/db/prisma";
 import { assertStartupConfigured } from "@/server/config/startupChecks";
+import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
 import { ensureRequestId } from "@/server/middleware/requestContext";
 import { createRateLimiter, type RateLimitConfig } from "@/server/middleware/rateLimiter";
@@ -19,6 +20,7 @@ export type AuthUser = {
   role: Role;
   organizationId: string;
   isPlatformOwner: boolean;
+  isOrgOwner: boolean;
 };
 
 export type ImpersonationContext = {
@@ -59,6 +61,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
           role: token.role as Role,
           organizationId: token.organizationId as string,
           isPlatformOwner: Boolean(token.isPlatformOwner),
+          isOrgOwner: Boolean(token.isOrgOwner),
         }
     : null;
 
@@ -71,7 +74,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
       where: { id: impersonationId },
       include: {
         targetUser: {
-          select: { id: true, email: true, role: true, organizationId: true },
+          select: { id: true, email: true, role: true, organizationId: true, isOrgOwner: true },
         },
       },
     });
@@ -90,6 +93,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
         role: session.targetUser.role,
         organizationId: session.targetUser.organizationId,
         isPlatformOwner: false,
+        isOrgOwner: session.targetUser.isOrgOwner,
       };
     }
   }
@@ -122,6 +126,16 @@ const t = initTRPC.context<Context>().create({
   },
 });
 
+const withTiming = t.middleware(async ({ path, type, ctx, next }) => {
+  const startedAt = Date.now();
+  const result = await next();
+  const durationMs = Date.now() - startedAt;
+  if (durationMs >= 750) {
+    ctx.logger.warn({ path, type, durationMs }, "slow trpc procedure");
+  }
+  return result;
+});
+
 export const rateLimit = (config: RateLimitConfig) => {
   const limiter = createRateLimiter(config);
   return t.middleware(async ({ ctx, next, path }) => {
@@ -132,8 +146,15 @@ export const rateLimit = (config: RateLimitConfig) => {
     const key = `${ctx.user?.id ?? ctx.ip ?? "anon"}:${path}`;
     try {
       await limiter.consume(key);
-    } catch {
-      throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "rateLimited" });
+    } catch (error) {
+      if (error instanceof Error && error.message === "rateLimited") {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "rateLimited" });
+      }
+      ctx.logger.warn({ path, error }, "rate limiter unavailable");
+      if (isProductionRuntime()) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "genericMessage" });
+      }
+      return next();
     }
     return next();
   });
@@ -169,11 +190,13 @@ const hasRole = (roles: Role[]) =>
     return next({ ctx: { ...ctx, user: ctx.user } });
   });
 
+const baseProcedure = t.procedure.use(withTiming);
+
 export const router = t.router;
-export const publicProcedure = t.procedure;
-export const protectedProcedure = t.procedure.use(isAuthed).use(ensureActivePlan);
-export const managerProcedure = t.procedure.use(hasRole([Role.ADMIN, Role.MANAGER])).use(ensureActivePlan);
-export const adminProcedure = t.procedure.use(hasRole([Role.ADMIN])).use(ensureActivePlan);
+export const publicProcedure = baseProcedure;
+export const protectedProcedure = baseProcedure.use(isAuthed).use(ensureActivePlan);
+export const managerProcedure = baseProcedure.use(hasRole([Role.ADMIN, Role.MANAGER])).use(ensureActivePlan);
+export const adminProcedure = baseProcedure.use(hasRole([Role.ADMIN])).use(ensureActivePlan);
 
 const isPlatformOwner = t.middleware(({ ctx, next }) => {
   if (!ctx.user || !ctx.user.isPlatformOwner) {
@@ -182,4 +205,23 @@ const isPlatformOwner = t.middleware(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-export const platformOwnerProcedure = t.procedure.use(isAuthed).use(isPlatformOwner);
+const isOrgOwner = t.middleware(({ ctx, next }) => {
+  if (!ctx.user || !ctx.user.isOrgOwner) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+const isAdminOrOrgOwner = t.middleware(({ ctx, next }) => {
+  if (!ctx.user || (ctx.user.role !== Role.ADMIN && !ctx.user.isOrgOwner)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+export const platformOwnerProcedure = baseProcedure.use(isAuthed).use(isPlatformOwner);
+export const orgOwnerProcedure = baseProcedure.use(isAuthed).use(isOrgOwner).use(ensureActivePlan);
+export const adminOrOrgOwnerProcedure = baseProcedure
+  .use(isAuthed)
+  .use(isAdminOrOrgOwner)
+  .use(ensureActivePlan);

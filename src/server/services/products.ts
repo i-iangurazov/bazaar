@@ -40,6 +40,12 @@ export type CreateProductInput = {
     allowInReceiving?: boolean | null;
   }[];
   variants?: { id?: string; name?: string | null; sku?: string | null; attributes?: Record<string, unknown> }[];
+  isBundle?: boolean;
+  bundleComponents?: {
+    componentProductId: string;
+    componentVariantId?: string | null;
+    qty: number;
+  }[];
 };
 
 const normalizeBarcodes = (barcodes?: string[]) => {
@@ -171,6 +177,108 @@ const normalizePacks = (
   });
 
   return cleaned;
+};
+
+const normalizeBundleComponents = (
+  components?: CreateProductInput["bundleComponents"],
+) => {
+  if (!components) {
+    return [];
+  }
+  const normalized = components
+    .map((component) => ({
+      componentProductId: component.componentProductId.trim(),
+      componentVariantId: component.componentVariantId?.trim() || null,
+      qty: Math.trunc(component.qty),
+    }))
+    .filter((component) => component.componentProductId.length > 0);
+
+  const keys = normalized.map(
+    (component) =>
+      `${component.componentProductId}:${component.componentVariantId ?? "BASE"}`,
+  );
+  if (new Set(keys).size !== keys.length) {
+    throw new AppError("bundleComponentDuplicate", "CONFLICT", 409);
+  }
+  for (const component of normalized) {
+    if (!Number.isFinite(component.qty) || component.qty <= 0) {
+      throw new AppError("bundleQtyPositive", "BAD_REQUEST", 400);
+    }
+  }
+  return normalized;
+};
+
+const syncBundleComponents = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    productId: string;
+    components?: CreateProductInput["bundleComponents"];
+    mode: "replace" | "create-only";
+  },
+) => {
+  const normalized = normalizeBundleComponents(input.components);
+  if (!normalized.length) {
+    if (input.mode === "replace") {
+      await tx.productBundleComponent.deleteMany({ where: { bundleProductId: input.productId } });
+    }
+    return;
+  }
+
+  const componentProductIds = Array.from(
+    new Set(normalized.map((component) => component.componentProductId)),
+  );
+  const products = await tx.product.findMany({
+    where: {
+      id: { in: componentProductIds },
+      organizationId: input.organizationId,
+      isDeleted: false,
+    },
+    select: { id: true },
+  });
+  const validIds = new Set(products.map((product) => product.id));
+  for (const component of normalized) {
+    if (!validIds.has(component.componentProductId)) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+    if (component.componentProductId === input.productId) {
+      throw new AppError("bundleComponentInvalid", "BAD_REQUEST", 400);
+    }
+  }
+
+  const componentVariantIds = normalized
+    .map((component) => component.componentVariantId)
+    .filter((value): value is string => Boolean(value));
+  if (componentVariantIds.length) {
+    const variants = await tx.productVariant.findMany({
+      where: { id: { in: componentVariantIds }, isActive: true },
+      select: { id: true, productId: true },
+    });
+    const variantMap = new Map(variants.map((variant) => [variant.id, variant]));
+    for (const component of normalized) {
+      if (!component.componentVariantId) {
+        continue;
+      }
+      const variant = variantMap.get(component.componentVariantId);
+      if (!variant || variant.productId !== component.componentProductId) {
+        throw new AppError("variantNotFound", "NOT_FOUND", 404);
+      }
+    }
+  }
+
+  if (input.mode === "replace") {
+    await tx.productBundleComponent.deleteMany({ where: { bundleProductId: input.productId } });
+  }
+
+  await tx.productBundleComponent.createMany({
+    data: normalized.map((component) => ({
+      organizationId: input.organizationId,
+      bundleProductId: input.productId,
+      componentProductId: component.componentProductId,
+      componentVariantId: component.componentVariantId,
+      qty: component.qty,
+    })),
+  });
 };
 
 type NormalizedImage = {
@@ -500,6 +608,7 @@ export const createProduct = async (input: CreateProductInput) => {
     photoUrl: input.photoUrl,
     images: input.images,
   });
+  const normalizedBundleComponents = normalizeBundleComponents(input.bundleComponents);
 
   return prisma.$transaction(async (tx) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
@@ -515,6 +624,9 @@ export const createProduct = async (input: CreateProductInput) => {
       .filter(Boolean) as string[];
     await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
     const normalizedImages = resolvedMedia.images;
+    if (input.isBundle && normalizedBundleComponents.length < 1) {
+      throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
+    }
 
     const product = await tx.product.create({
       data: {
@@ -528,6 +640,7 @@ export const createProduct = async (input: CreateProductInput) => {
         description: input.description ?? null,
         photoUrl: resolvedMedia.photoUrl,
         supplierId: input.supplierId,
+        isBundle: Boolean(input.isBundle),
         barcodes: barcodes.length
           ? {
               create: barcodes.map((value) => ({
@@ -565,6 +678,14 @@ export const createProduct = async (input: CreateProductInput) => {
     }
 
     await createVariants(tx, product.id, input.variants, input.organizationId, attributeDefinitions);
+    if (normalizedBundleComponents.length) {
+      await syncBundleComponents(tx, {
+        organizationId: input.organizationId,
+        productId: product.id,
+        components: normalizedBundleComponents,
+        mode: "create-only",
+      });
+    }
     await ensureBaseSnapshots(tx, input.organizationId, product.id);
 
     await writeAuditLog(tx, {
@@ -606,6 +727,8 @@ export type UpdateProductInput = {
   barcodes?: string[];
   packs?: CreateProductInput["packs"];
   variants?: { id?: string; name?: string | null; sku?: string | null; attributes?: Record<string, unknown> }[];
+  isBundle?: boolean;
+  bundleComponents?: CreateProductInput["bundleComponents"];
 };
 
 export const updateProduct = async (input: UpdateProductInput) => {
@@ -614,6 +737,8 @@ export const updateProduct = async (input: UpdateProductInput) => {
     photoUrl: input.photoUrl,
     images: input.images,
   });
+  const normalizedBundleComponents =
+    input.bundleComponents !== undefined ? normalizeBundleComponents(input.bundleComponents) : undefined;
 
   return prisma.$transaction(async (tx) => {
     const before = await tx.product.findUnique({ where: { id: input.productId } });
@@ -637,6 +762,15 @@ export const updateProduct = async (input: UpdateProductInput) => {
     }
 
     const normalizedImages = input.images ? resolvedMedia.images : undefined;
+    const nextIsBundle = input.isBundle ?? before.isBundle;
+    if (
+      nextIsBundle &&
+      !before.isBundle &&
+      normalizedBundleComponents !== undefined &&
+      normalizedBundleComponents.length < 1
+    ) {
+      throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
+    }
     const product = await tx.product.update({
       where: { id: input.productId },
       data: {
@@ -651,6 +785,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
           resolvedMedia.photoUrl ??
           (normalizedImages?.length ? normalizedImages[0].url : null),
         supplierId: input.supplierId ?? null,
+        isBundle: nextIsBundle,
       },
     });
 
@@ -760,6 +895,20 @@ export const updateProduct = async (input: UpdateProductInput) => {
       }
     }
 
+    if (!nextIsBundle) {
+      await tx.productBundleComponent.deleteMany({ where: { bundleProductId: input.productId } });
+    } else if (normalizedBundleComponents !== undefined) {
+      if (normalizedBundleComponents.length < 1) {
+        throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
+      }
+      await syncBundleComponents(tx, {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        components: normalizedBundleComponents,
+        mode: "replace",
+      });
+    }
+
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -839,11 +988,28 @@ export type ImportPhotoResolutionSummary = {
   missing: number;
 };
 
+const resolveImportImageWorkerCount = (rowsCount: number) => {
+  const parsed = Number(process.env.IMPORT_IMAGE_WORKERS);
+  if (Number.isFinite(parsed) && parsed >= 1) {
+    return Math.max(1, Math.min(24, Math.trunc(parsed), rowsCount));
+  }
+  return Math.max(1, Math.min(12, rowsCount));
+};
+
+const resolveImportImageBudgetMs = () => {
+  const parsed = Number(process.env.IMPORT_IMAGE_RESOLVE_BUDGET_MS);
+  if (Number.isFinite(parsed) && parsed >= 5_000) {
+    return parsed;
+  }
+  return 30_000;
+};
+
 export const resolveImportRowsPhotoUrls = async (rows: ImportProductRow[]) => {
   const cache = new Map<string, ResolveProductImageUrlResult>();
   const resolvedRows: ImportProductRow[] = new Array(rows.length);
   let cursor = 0;
-  const workerCount = Math.max(1, Math.min(6, rows.length));
+  const workerCount = resolveImportImageWorkerCount(rows.length);
+  const deadline = Date.now() + resolveImportImageBudgetMs();
 
   const runWorker = async () => {
     for (;;) {
@@ -857,6 +1023,11 @@ export const resolveImportRowsPhotoUrls = async (rows: ImportProductRow[]) => {
       const normalized = normalizeImportPhotoUrl(row.photoUrl);
       if (!normalized) {
         resolvedRows[index] = { ...row, photoUrl: undefined };
+        continue;
+      }
+
+      if (Date.now() > deadline) {
+        resolvedRows[index] = { ...row, photoUrl: normalized };
         continue;
       }
 
@@ -885,7 +1056,8 @@ export const resolveImportRowsPhotoUrlsForOrganization = async (
     missing: 0,
   };
   let cursor = 0;
-  const workerCount = Math.max(1, Math.min(6, rows.length));
+  const workerCount = resolveImportImageWorkerCount(rows.length);
+  const deadline = Date.now() + resolveImportImageBudgetMs();
 
   const runWorker = async () => {
     for (;;) {
@@ -900,6 +1072,12 @@ export const resolveImportRowsPhotoUrlsForOrganization = async (
       if (!normalized) {
         summary.missing += 1;
         resolvedRows[index] = { ...row, photoUrl: undefined };
+        continue;
+      }
+
+      if (Date.now() > deadline) {
+        summary.fallback += 1;
+        resolvedRows[index] = { ...row, photoUrl: normalized };
         continue;
       }
 
@@ -926,6 +1104,7 @@ export type ImportProductsInput = {
   actorId: string;
   requestId: string;
   rows: ImportProductRow[];
+  storeId?: string;
   batchId?: string;
 };
 
@@ -1004,6 +1183,35 @@ export const importProductsTx = async (
     });
   };
 
+  const upsertStoreBasePrice = async (productId: string, priceKgs: number) => {
+    if (!input.storeId) {
+      return;
+    }
+
+    await tx.storePrice.upsert({
+      where: {
+        organizationId_storeId_productId_variantKey: {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          productId,
+          variantKey: "BASE",
+        },
+      },
+      create: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId,
+        variantKey: "BASE",
+        priceKgs,
+        updatedById: input.actorId,
+      },
+      update: {
+        priceKgs,
+        updatedById: input.actorId,
+      },
+    });
+  };
+
   for (const row of input.rows) {
     const barcodes = normalizeBarcodes(row.barcodes);
     const photoUrl = normalizeImportPhotoUrl(row.photoUrl);
@@ -1072,6 +1280,9 @@ export const importProductsTx = async (
       }
 
       await ensureBaseSnapshots(tx, input.organizationId, existing.id, stores);
+      if (basePriceKgs !== undefined) {
+        await upsertStoreBasePrice(existing.id, basePriceKgs);
+      }
       if (resolvedBaseCost !== undefined) {
         await setBaseCost(existing.id, resolvedBaseCost);
       }
@@ -1128,6 +1339,9 @@ export const importProductsTx = async (
       }
 
       await ensureBaseSnapshots(tx, input.organizationId, product.id, stores);
+      if (basePriceKgs !== undefined) {
+        await upsertStoreBasePrice(product.id, basePriceKgs);
+      }
       if (resolvedBaseCost !== undefined) {
         await setBaseCost(product.id, resolvedBaseCost);
       }

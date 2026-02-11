@@ -3,11 +3,40 @@ import Redis from "ioredis";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
 
-let publisher: Redis | null = null;
-let subscriber: Redis | null = null;
-let warnedMissing = false;
-let warnedError = false;
-let fatalRedisError: Error | null = null;
+type RedisState = {
+  publisher: Redis | null;
+  subscriber: Redis | null;
+  warnedMissing: boolean;
+  warnedError: boolean;
+  fatalRedisError: Error | null;
+};
+
+const globalForRedis = globalThis as typeof globalThis & {
+  __bazaarRedisState?: RedisState;
+};
+
+const state: RedisState = globalForRedis.__bazaarRedisState ?? {
+  publisher: null,
+  subscriber: null,
+  warnedMissing: false,
+  warnedError: false,
+  fatalRedisError: null,
+};
+
+if (!globalForRedis.__bazaarRedisState) {
+  globalForRedis.__bazaarRedisState = state;
+}
+
+const toLogError = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return { message: String(error) };
+};
 
 const getRedisUrl = () => {
   const url = process.env.REDIS_URL ?? "";
@@ -25,8 +54,8 @@ const createClient = (role: "publisher" | "subscriber") => {
   const url = getRedisUrl();
   const logger = getLogger();
   if (!url) {
-    if (!warnedMissing) {
-      warnedMissing = true;
+    if (!state.warnedMissing) {
+      state.warnedMissing = true;
       logger.warn("REDIS_URL is not set; falling back to in-memory realtime and rate limiting.");
     }
     return null;
@@ -34,24 +63,23 @@ const createClient = (role: "publisher" | "subscriber") => {
 
   try {
     const client = new Redis(url, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 2,
-      enableReadyCheck: true,
+      // Subscriber is connected explicitly before SUBSCRIBE to avoid INFO checks in subscriber mode.
+      lazyConnect: role === "subscriber",
+      maxRetriesPerRequest: role === "subscriber" ? null : 1,
+      connectTimeout: 1_000,
+      commandTimeout: 2_000,
+      // Subscriber connections should not run INFO-based ready checks after SUBSCRIBE.
+      enableReadyCheck: role !== "subscriber",
+      // Subscriber should queue SUBSCRIBE until ready; publisher remains fail-fast.
+      enableOfflineQueue: role === "subscriber",
+      retryStrategy: (attempt) => (attempt > 1 ? null : 100),
     });
 
     client.on("error", (error) => {
-      fatalRedisError = error instanceof Error ? error : new Error(String(error));
-      if (!warnedError) {
-        warnedError = true;
-        logger.warn({ error, role }, "Redis connection error.");
-      }
-    });
-
-    client.connect().catch((error) => {
-      fatalRedisError = error instanceof Error ? error : new Error(String(error));
-      if (!warnedError) {
-        warnedError = true;
-        logger.warn({ error, role }, "Redis connection failed.");
+      state.fatalRedisError = error instanceof Error ? error : new Error(String(error));
+      if (!state.warnedError) {
+        state.warnedError = true;
+        logger.warn({ error: toLogError(error), role }, "Redis connection error.");
       }
     });
 
@@ -60,32 +88,32 @@ const createClient = (role: "publisher" | "subscriber") => {
     if (isProductionRuntime()) {
       throw error;
     }
-    if (!warnedError) {
-      warnedError = true;
-      logger.warn({ error, role }, "Redis client init failed; falling back to in-memory behavior.");
+    if (!state.warnedError) {
+      state.warnedError = true;
+      logger.warn({ error: toLogError(error), role }, "Redis client init failed; falling back to in-memory behavior.");
     }
     return null;
   }
 };
 
 export const getRedisPublisher = () => {
-  if (isProductionRuntime() && fatalRedisError) {
-    throw fatalRedisError;
+  if (isProductionRuntime() && state.fatalRedisError) {
+    throw state.fatalRedisError;
   }
-  if (!publisher) {
-    publisher = createClient("publisher");
+  if (!state.publisher) {
+    state.publisher = createClient("publisher");
   }
-  return publisher;
+  return state.publisher;
 };
 
 export const getRedisSubscriber = () => {
-  if (isProductionRuntime() && fatalRedisError) {
-    throw fatalRedisError;
+  if (isProductionRuntime() && state.fatalRedisError) {
+    throw state.fatalRedisError;
   }
-  if (!subscriber) {
-    subscriber = createClient("subscriber");
+  if (!state.subscriber) {
+    state.subscriber = createClient("subscriber");
   }
-  return subscriber;
+  return state.subscriber;
 };
 
 export const redisConfigured = () => Boolean(getRedisUrl());

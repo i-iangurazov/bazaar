@@ -18,52 +18,67 @@ export const inventoryRouter = router({
       z.object({
         storeId: z.string(),
         search: z.string().optional(),
+        page: z.number().int().min(1).optional(),
+        pageSize: z.number().int().min(10).max(200).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
+      const page = input.page ?? 1;
+      const pageSize = input.pageSize ?? 25;
       const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
       if (!store || store.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
       }
 
-      const snapshots = await ctx.prisma.inventorySnapshot.findMany({
-        where: {
-          storeId: input.storeId,
-          product: {
-            isDeleted: false,
-            ...(input.search
-              ? {
-                  OR: [
-                    { name: { contains: input.search, mode: "insensitive" } },
-                    { sku: { contains: input.search, mode: "insensitive" } },
-                  ],
-                }
-              : {}),
+      const where = {
+        storeId: input.storeId,
+        product: {
+          isDeleted: false,
+          ...(input.search
+            ? {
+                OR: [
+                  { name: { contains: input.search, mode: "insensitive" as const } },
+                  { sku: { contains: input.search, mode: "insensitive" as const } },
+                ],
+              }
+            : {}),
+        },
+      };
+      const [total, snapshots] = await Promise.all([
+        ctx.prisma.inventorySnapshot.count({ where }),
+        ctx.prisma.inventorySnapshot.findMany({
+          where,
+          include: {
+            product: { include: { baseUnit: true, packs: true } },
+            variant: true,
           },
-        },
-        include: {
-          product: { include: { baseUnit: true, packs: true } },
-          variant: true,
-        },
-        orderBy: { product: { name: "asc" } },
-      });
+          orderBy: { product: { name: "asc" } },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
 
       const productIds = snapshots.map((snapshot) => snapshot.productId);
-      const policies = await ctx.prisma.reorderPolicy.findMany({
-        where: { storeId: input.storeId, productId: { in: productIds } },
-      });
-      const forecasts = await ctx.prisma.forecastSnapshot.findMany({
-        where: { storeId: input.storeId, productId: { in: productIds } },
-        orderBy: { generatedAt: "desc" },
-        distinct: ["productId"],
-      });
+      const [policies, forecasts] =
+        productIds.length > 0
+          ? await Promise.all([
+              ctx.prisma.reorderPolicy.findMany({
+                where: { storeId: input.storeId, productId: { in: productIds } },
+              }),
+              ctx.prisma.forecastSnapshot.findMany({
+                where: { storeId: input.storeId, productId: { in: productIds } },
+                orderBy: { generatedAt: "desc" },
+                distinct: ["productId"],
+              }),
+            ])
+          : [[], []];
 
       const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
       const forecastMap = new Map(
         forecasts.map((forecast) => [forecast.productId, forecast]),
       );
 
-      return snapshots.map((snapshot) => {
+      const items = snapshots.map((snapshot) => {
         const policy = policyMap.get(snapshot.productId) ?? null;
         const minStock = policy?.minStock ?? 0;
         return {
@@ -79,6 +94,8 @@ export const inventoryRouter = router({
           ),
         };
       });
+
+      return { items, total, page, pageSize };
     }),
 
   movements: protectedProcedure

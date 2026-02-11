@@ -16,12 +16,17 @@ const lockStore = new Map<string, number>();
 
 const acquireLock = async (name: string, ttlMs: number) => {
   const redis = getRedisPublisher();
+  const logger = getLogger();
   const now = Date.now();
 
   if (redis) {
     const lockKey = `job-lock:${name}`;
-    const result = await redis.set(lockKey, String(now), "PX", ttlMs, "NX");
-    return result === "OK";
+    try {
+      const result = await redis.set(lockKey, String(now), "PX", ttlMs, "NX");
+      return result === "OK";
+    } catch (error) {
+      logger.warn({ job: name, error }, "redis lock unavailable; falling back to in-memory lock");
+    }
   }
 
   const existing = lockStore.get(name);
@@ -34,8 +39,13 @@ const acquireLock = async (name: string, ttlMs: number) => {
 
 const releaseLock = async (name: string) => {
   const redis = getRedisPublisher();
+  const logger = getLogger();
   if (redis) {
-    await redis.del(`job-lock:${name}`);
+    try {
+      await redis.del(`job-lock:${name}`);
+    } catch (error) {
+      logger.warn({ job: name, error }, "redis unlock unavailable; releasing in-memory lock only");
+    }
   }
   lockStore.delete(name);
 };

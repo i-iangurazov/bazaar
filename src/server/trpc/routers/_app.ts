@@ -3,6 +3,7 @@ import { inventoryRouter } from "@/server/trpc/routers/inventory";
 import { productsRouter } from "@/server/trpc/routers/products";
 import { storesRouter } from "@/server/trpc/routers/stores";
 import { purchaseOrdersRouter } from "@/server/trpc/routers/purchaseOrders";
+import { salesOrdersRouter } from "@/server/trpc/routers/salesOrders";
 import { dashboardRouter } from "@/server/trpc/routers/dashboard";
 import { forecastRouter } from "@/server/trpc/routers/forecast";
 import { usersRouter } from "@/server/trpc/routers/users";
@@ -30,12 +31,17 @@ import { billingRouter } from "@/server/trpc/routers/billing";
 import { searchRouter } from "@/server/trpc/routers/search";
 import { analyticsRouter } from "@/server/trpc/routers/analytics";
 import { platformOwnerRouter } from "@/server/trpc/routers/platformOwner";
+import { diagnosticsRouter } from "@/server/trpc/routers/diagnostics";
+import { guidanceRouter } from "@/server/trpc/routers/guidance";
+import { userSettingsRouter } from "@/server/trpc/routers/userSettings";
+import { orgSettingsRouter } from "@/server/trpc/routers/orgSettings";
 
 export const appRouter = router({
   inventory: inventoryRouter,
   products: productsRouter,
   stores: storesRouter,
   purchaseOrders: purchaseOrdersRouter,
+  salesOrders: salesOrdersRouter,
   dashboard: dashboardRouter,
   forecast: forecastRouter,
   users: usersRouter,
@@ -63,6 +69,10 @@ export const appRouter = router({
   search: searchRouter,
   analytics: analyticsRouter,
   platformOwner: platformOwnerRouter,
+  diagnostics: diagnosticsRouter,
+  guidance: guidanceRouter,
+  userSettings: userSettingsRouter,
+  orgSettings: orgSettingsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
@@ -29,30 +30,66 @@ export const purchaseOrdersRouter = router({
               "CANCELLED",
             ])
             .optional(),
+          page: z.number().int().min(1).optional(),
+          pageSize: z.number().int().min(1).max(200).optional(),
         })
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const orders = await ctx.prisma.purchaseOrder.findMany({
-        where: {
-          organizationId: ctx.user.organizationId,
-          ...(input?.status ? { status: input.status } : {}),
-        },
-        include: {
-          supplier: true,
-          store: true,
-          lines: { select: { qtyOrdered: true, unitCost: true } },
-        },
-        orderBy: { createdAt: "desc" },
+      const page = input?.page ?? 1;
+      const pageSize = input?.pageSize ?? 25;
+      const where = {
+        organizationId: ctx.user.organizationId,
+        ...(input?.status ? { status: input.status } : {}),
+      };
+
+      const [total, orders] = await Promise.all([
+        ctx.prisma.purchaseOrder.count({ where }),
+        ctx.prisma.purchaseOrder.findMany({
+          where,
+          include: {
+            supplier: true,
+            store: true,
+          },
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+
+      const orderIds = orders.map((order) => order.id);
+      const totalsByOrderId =
+        orderIds.length > 0
+          ? await ctx.prisma.$queryRaw<Array<{ purchaseOrderId: string; total: Prisma.Decimal | null; hasCost: boolean }>>(
+              Prisma.sql`
+                SELECT
+                  "purchaseOrderId",
+                  COALESCE(SUM(COALESCE("unitCost", 0) * "qtyOrdered"), 0)::numeric AS total,
+                  BOOL_OR("unitCost" IS NOT NULL) AS "hasCost"
+                FROM "PurchaseOrderLine"
+                WHERE "purchaseOrderId" IN (${Prisma.join(orderIds)})
+                GROUP BY "purchaseOrderId"
+              `,
+            )
+          : [];
+
+      const totalsMap = new Map(
+        totalsByOrderId.map((entry) => [
+          entry.purchaseOrderId,
+          { total: entry.total ? Number(entry.total) : 0, hasCost: Boolean(entry.hasCost) },
+        ]),
+      );
+
+      const items = orders.map((order) => {
+        const summary = totalsMap.get(order.id) ?? { total: 0, hasCost: false };
+        return { ...order, total: summary.total, hasCost: summary.hasCost };
       });
-      return orders.map(({ lines, ...order }) => {
-        const total = lines.reduce(
-          (sum, line) => sum + (line.unitCost ? Number(line.unitCost) : 0) * line.qtyOrdered,
-          0,
-        );
-        const hasCost = lines.some((line) => line.unitCost !== null);
-        return { ...order, total, hasCost };
-      });
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+      };
     }),
 
   getById: protectedProcedure

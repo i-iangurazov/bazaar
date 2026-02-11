@@ -38,6 +38,7 @@ export const storePricesRouter = router({
           .object({
             search: z.string().optional(),
             category: z.string().optional(),
+            type: z.enum(["all", "product", "bundle"]).optional(),
             includeArchived: z.boolean().optional(),
           })
           .optional(),

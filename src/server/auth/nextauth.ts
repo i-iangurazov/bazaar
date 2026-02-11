@@ -10,6 +10,7 @@ import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { getLogger } from "@/server/logging";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 import { isEmailVerificationRequired } from "@/server/config/auth";
+import { ThemePreference } from "@prisma/client";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -59,7 +60,14 @@ const resolvePreferredLocale = (value?: string | null): Locale | undefined =>
 
 const extractUserClaims = (
   user: unknown,
-): { role: string; organizationId: string; preferredLocale?: string; isPlatformOwner?: boolean } | null => {
+): {
+  role: string;
+  organizationId: string;
+  preferredLocale?: string;
+  themePreference?: ThemePreference;
+  isPlatformOwner?: boolean;
+  isOrgOwner?: boolean;
+} | null => {
   if (!user || typeof user !== "object") {
     return null;
   }
@@ -67,13 +75,15 @@ const extractUserClaims = (
     role?: string;
     organizationId?: string;
     preferredLocale?: string;
+    themePreference?: ThemePreference;
     isPlatformOwner?: boolean;
+    isOrgOwner?: boolean;
   };
-  const { role, organizationId, preferredLocale, isPlatformOwner } = candidate;
+  const { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner } = candidate;
   if (!role || !organizationId) {
     return null;
   }
-  return { role, organizationId, preferredLocale, isPlatformOwner };
+  return { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner };
 };
 
 export const authOptions: NextAuthOptions = {
@@ -144,19 +154,46 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           organizationId: user.organizationId,
           preferredLocale,
+          themePreference: user.themePreference,
           isPlatformOwner: isPlatformOwnerEmail(user.email),
+          isOrgOwner: Boolean(user.isOrgOwner),
         };
       },
     }),
   ],
   callbacks: {
-    jwt: async ({ token, user }) => {
+    jwt: async ({ token, user, trigger, session }) => {
       const claims = extractUserClaims(user);
       if (claims) {
         token.role = claims.role;
         token.organizationId = claims.organizationId;
         token.preferredLocale = claims.preferredLocale ?? defaultLocale;
+        token.themePreference = claims.themePreference ?? ThemePreference.LIGHT;
         token.isPlatformOwner = claims.isPlatformOwner ?? false;
+        token.isOrgOwner = claims.isOrgOwner ?? false;
+      }
+      if (trigger === "update" && session && typeof session === "object") {
+        const updatePayload = session as {
+          preferredLocale?: string;
+          themePreference?: string;
+          isPlatformOwner?: boolean;
+          isOrgOwner?: boolean;
+        };
+        if (updatePayload.preferredLocale) {
+          token.preferredLocale = resolvePreferredLocale(updatePayload.preferredLocale) ?? defaultLocale;
+        }
+        if (updatePayload.themePreference) {
+          token.themePreference =
+            updatePayload.themePreference === ThemePreference.DARK
+              ? ThemePreference.DARK
+              : ThemePreference.LIGHT;
+        }
+        if (typeof updatePayload.isPlatformOwner === "boolean") {
+          token.isPlatformOwner = updatePayload.isPlatformOwner;
+        }
+        if (typeof updatePayload.isOrgOwner === "boolean") {
+          token.isOrgOwner = updatePayload.isOrgOwner;
+        }
       }
       return token;
     },
@@ -166,7 +203,9 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string;
         session.user.organizationId = token.organizationId as string;
         session.user.preferredLocale = (token.preferredLocale as string) ?? defaultLocale;
+        session.user.themePreference = (token.themePreference as string) ?? ThemePreference.LIGHT;
         session.user.isPlatformOwner = Boolean(token.isPlatformOwner);
+        session.user.isOrgOwner = Boolean(token.isOrgOwner);
       }
       return session;
     },

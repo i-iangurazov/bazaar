@@ -60,15 +60,24 @@ class RedisRateLimiter implements RateLimiter {
     }
 
     const bucketKey = `${this.prefix}:${key}`;
-    const result = await redis
-      .multi()
-      .incr(bucketKey)
-      .pexpire(bucketKey, this.windowMs, "NX")
-      .exec();
+    try {
+      const result = await redis
+        .multi()
+        .incr(bucketKey)
+        .pexpire(bucketKey, this.windowMs, "NX")
+        .exec();
 
-    const count = Array.isArray(result?.[0]) ? Number(result?.[0][1]) : 0;
-    if (count > this.max) {
-      throw new Error("rateLimited");
+      const count = Array.isArray(result?.[0]) ? Number(result?.[0][1]) : 0;
+      if (count > this.max) {
+        throw new Error("rateLimited");
+      }
+    } catch (error) {
+      if (isProductionRuntime()) {
+        throw new Error("redisUnavailable");
+      }
+      return new MemoryRateLimiter({ windowMs: this.windowMs, max: this.max, prefix: this.prefix }).consume(
+        key,
+      );
     }
   }
 }

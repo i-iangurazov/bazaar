@@ -86,7 +86,12 @@ export const bulkUpdateStorePrices = async (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
-  filter?: { search?: string; category?: string; includeArchived?: boolean };
+  filter?: {
+    search?: string;
+    category?: string;
+    type?: "all" | "product" | "bundle";
+    includeArchived?: boolean;
+  };
   mode: "set" | "increasePct" | "increaseAbs";
   value: number;
 }) =>
@@ -109,6 +114,11 @@ export const bulkUpdateStorePrices = async (input: {
             }
           : {}),
         ...(input.filter?.category ? { category: input.filter.category } : {}),
+        ...(input.filter?.type === "product"
+          ? { isBundle: false }
+          : input.filter?.type === "bundle"
+            ? { isBundle: true }
+            : {}),
       },
       select: { id: true, basePriceKgs: true },
       orderBy: { name: "asc" },

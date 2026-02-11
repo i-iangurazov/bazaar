@@ -7,7 +7,9 @@ declare module "next-auth" {
       role: string;
       organizationId: string;
       preferredLocale?: string;
+      themePreference?: string;
       isPlatformOwner?: boolean;
+      isOrgOwner?: boolean;
       name?: string | null;
       email?: string | null;
     };
@@ -19,6 +21,8 @@ declare module "next-auth/jwt" {
     role?: string;
     organizationId?: string;
     preferredLocale?: string;
+    themePreference?: string;
     isPlatformOwner?: boolean;
+    isOrgOwner?: boolean;
   }
 }

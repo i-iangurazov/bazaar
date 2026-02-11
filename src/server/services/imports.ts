@@ -33,6 +33,18 @@ const importTransactionOptions = {
 
 export const runProductImport = async (input: RunProductImportInput) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  const targetStore = input.storeId
+    ? await prisma.store.findFirst({
+        where: {
+          id: input.storeId,
+          organizationId: input.organizationId,
+        },
+        select: { id: true, name: true },
+      })
+    : null;
+  if (input.storeId && !targetStore) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
   const photoResolution = await resolveImportRowsPhotoUrlsForOrganization(
     input.rows,
     input.organizationId,
@@ -71,6 +83,8 @@ export const runProductImport = async (input: RunProductImportInput) => {
           createdById: input.actorId,
           summary: {
             source: input.source ?? "csv",
+            targetStoreId: targetStore?.id ?? null,
+            targetStoreName: targetStore?.name ?? null,
             rows: rows.length,
           },
         },
@@ -87,6 +101,8 @@ export const runProductImport = async (input: RunProductImportInput) => {
 
       const summary = {
         source: input.source ?? "csv",
+        targetStoreId: targetStore?.id ?? null,
+        targetStoreName: targetStore?.name ?? null,
         rows: rows.length,
         created,
         updated,
