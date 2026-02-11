@@ -7,6 +7,9 @@ export const shouldRunDbTests =
   process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1";
 
 export const resetDatabase = async () => {
+  await prisma.customerOrderLine.deleteMany();
+  await prisma.customerOrder.deleteMany();
+  await prisma.organizationCounter.deleteMany();
   await prisma.purchaseOrderLine.deleteMany();
   await prisma.purchaseOrder.deleteMany();
   await prisma.importedEntity.deleteMany();
@@ -25,6 +28,7 @@ export const resetDatabase = async () => {
   await prisma.reorderPolicy.deleteMany();
   await prisma.forecastSnapshot.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.diagnosticsReport.deleteMany();
   await prisma.idempotencyKey.deleteMany();
   await prisma.authToken.deleteMany();
   await prisma.productEvent.deleteMany();
@@ -97,6 +101,7 @@ export const seedBase = async (options?: {
       name: "Admin User",
       passwordHash: "hash",
       role: Role.ADMIN,
+      isOrgOwner: true,
       emailVerifiedAt: new Date(),
     },
   });

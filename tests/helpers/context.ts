@@ -11,6 +11,7 @@ export const createTestCaller = (user?: {
   role: Role;
   organizationId: string;
   isPlatformOwner?: boolean;
+  isOrgOwner?: boolean;
 }) => {
   const requestId = randomUUID();
   const ctx = {
@@ -19,6 +20,7 @@ export const createTestCaller = (user?: {
       ? {
           ...user,
           isPlatformOwner: Boolean(user.isPlatformOwner),
+          isOrgOwner: Boolean(user.isOrgOwner),
         }
       : null,
     impersonator: null,

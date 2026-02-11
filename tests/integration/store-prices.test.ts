@@ -42,7 +42,7 @@ describeDb("store prices", () => {
     });
 
     const list = await caller.products.list({ storeId: store.id });
-    const row = list.find((item) => item.id === product.id);
+    const row = list.items.find((item) => item.id === product.id);
 
     expect(row?.effectivePriceKgs).toBe(120);
     expect(row?.priceOverridden).toBe(true);
@@ -90,8 +90,8 @@ describeDb("store prices", () => {
     });
 
     const list = await caller.products.list({ storeId: store.id });
-    const rowA = list.find((item) => item.id === productA.id);
-    const rowB = list.find((item) => item.id === productB.id);
+    const rowA = list.items.find((item) => item.id === productA.id);
+    const rowB = list.items.find((item) => item.id === productB.id);
 
     expect(rowA?.effectivePriceKgs).toBeCloseTo(55, 2);
     expect(rowB?.effectivePriceKgs).toBeCloseTo(110, 2);
