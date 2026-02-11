@@ -93,6 +93,8 @@ const InventoryPage = () => {
   const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
   const [storeId, setStoreId] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryPageSize, setInventoryPageSize] = useState(25);
   const [showPlanning, setShowPlanning] = useState(false);
   const [expandedReorderId, setExpandedReorderId] = useState<string | null>(null);
   const [expiryWindow, setExpiryWindow] = useState<30 | 60 | 90>(30);
@@ -247,11 +249,21 @@ const InventoryPage = () => {
   });
 
   const inventoryQuery = trpc.inventory.list.useQuery(
-    { storeId: storeId ?? "", search: search || undefined },
+    {
+      storeId: storeId ?? "",
+      search: search || undefined,
+      page: inventoryPage,
+      pageSize: inventoryPageSize,
+    },
     { enabled: Boolean(storeId) },
   );
+  const inventoryItems = useMemo(
+    () => inventoryQuery.data?.items ?? [],
+    [inventoryQuery.data?.items],
+  );
+  const inventoryTotal = inventoryQuery.data?.total ?? 0;
   const reorderCandidates = useMemo(() => {
-    return (inventoryQuery.data ?? [])
+    return inventoryItems
       .filter((item) => (item.reorder?.suggestedOrderQty ?? 0) > 0)
       .map((item) => ({
         key: `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`,
@@ -263,7 +275,7 @@ const InventoryPage = () => {
         qtyOrdered: item.reorder?.suggestedOrderQty ?? 0,
         supplierId: item.product.supplierId ?? null,
       }));
-  }, [inventoryQuery.data, tCommon]);
+  }, [inventoryItems, tCommon]);
   const supplierMap = useMemo(
     () => new Map((suppliersQuery.data ?? []).map((supplier) => [supplier.id, supplier.name])),
     [suppliersQuery.data],
@@ -283,10 +295,10 @@ const InventoryPage = () => {
     { enabled: Boolean(movementTarget && storeId) },
   );
 
-  type InventoryRow = NonNullable<typeof inventoryQuery.data>[number];
+  type InventoryRow = NonNullable<typeof inventoryItems>[number];
 
   const productOptions = useMemo(() => {
-    return (inventoryQuery.data ?? []).map((item) => {
+    return inventoryItems.map((item) => {
       const label = item.variant?.name
         ? `${item.product.name} • ${item.variant.name}`
         : item.product.name;
@@ -298,11 +310,11 @@ const InventoryPage = () => {
         label: skuLabel,
       };
     });
-  }, [inventoryQuery.data]);
+  }, [inventoryItems]);
 
   const productMap = useMemo(
-    () => new Map((inventoryQuery.data ?? []).map((item) => [item.product.id, item.product])),
-    [inventoryQuery.data],
+    () => new Map(inventoryItems.map((item) => [item.product.id, item.product])),
+    [inventoryItems],
   );
 
   const resolveUnitLabel = (unit?: { labelRu: string; labelKg: string }) => {
@@ -379,7 +391,7 @@ const InventoryPage = () => {
 
   const minStockOptions = useMemo(() => {
     const map = new Map<string, { productId: string; label: string }>();
-    (inventoryQuery.data ?? []).forEach((item) => {
+    inventoryItems.forEach((item) => {
       if (map.has(item.product.id)) {
         return;
       }
@@ -389,30 +401,28 @@ const InventoryPage = () => {
       map.set(item.product.id, { productId: item.product.id, label });
     });
     return Array.from(map.values());
-  }, [inventoryQuery.data]);
+  }, [inventoryItems]);
 
   const selectedItems = useMemo(
-    () => (inventoryQuery.data ?? []).filter((item) => selectedIds.has(item.snapshot.id)),
-    [inventoryQuery.data, selectedIds],
+    () => inventoryItems.filter((item) => selectedIds.has(item.snapshot.id)),
+    [inventoryItems, selectedIds],
   );
   const selectedProductIds = useMemo(() => {
     const ids = new Set<string>();
     selectedItems.forEach((item) => ids.add(item.product.id));
     return Array.from(ids);
   }, [selectedItems]);
-  const allSelected =
-    Boolean(inventoryQuery.data?.length) &&
-    selectedIds.size === (inventoryQuery.data?.length ?? 0);
+  const allSelected = Boolean(inventoryItems.length) && selectedIds.size === inventoryItems.length;
 
   const toggleSelectAll = () => {
-    if (!inventoryQuery.data?.length) {
+    if (!inventoryItems.length) {
       return;
     }
     setSelectedIds(() => {
       if (allSelected) {
         return new Set();
       }
-      return new Set(inventoryQuery.data.map((item) => item.snapshot.id));
+      return new Set(inventoryItems.map((item) => item.snapshot.id));
     });
   };
 
@@ -435,6 +445,10 @@ const InventoryPage = () => {
   }, [storeId, storesQuery.data]);
 
   useEffect(() => {
+    setInventoryPage(1);
+  }, [storeId, search]);
+
+  useEffect(() => {
     if (!poDraftOpen) {
       return;
     }
@@ -448,7 +462,7 @@ const InventoryPage = () => {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [storeId, inventoryQuery.data]);
+  }, [storeId, inventoryPage, inventoryPageSize]);
 
   useEffect(() => {
     if (!printOpen) {
@@ -531,14 +545,14 @@ const InventoryPage = () => {
   }, [minStockOptions, minStockForm]);
 
   useEffect(() => {
-    if (!minStockProductId || !inventoryQuery.data) {
+    if (!minStockProductId) {
       return;
     }
-    const item = inventoryQuery.data.find((entry) => entry.product.id === minStockProductId);
+    const item = inventoryItems.find((entry) => entry.product.id === minStockProductId);
     if (item) {
       minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
     }
-  }, [minStockProductId, inventoryQuery.data, minStockForm]);
+  }, [minStockProductId, inventoryItems, minStockForm]);
 
   const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
     if (!selectedProductIds.length) {
@@ -764,6 +778,7 @@ const InventoryPage = () => {
                 className="w-full sm:w-auto"
                 onClick={() => openActionDialog("receive")}
                 disabled={!storeId}
+                data-tour="inventory-receive"
               >
                 <ReceiveIcon className="h-4 w-4" aria-hidden />
                 {t("receiveStock")}
@@ -773,6 +788,7 @@ const InventoryPage = () => {
                 className="w-full sm:w-auto"
                 onClick={() => openActionDialog("adjust")}
                 disabled={!storeId}
+                data-tour="inventory-adjust"
               >
                 <AdjustIcon className="h-4 w-4" aria-hidden />
                 {t("stockAdjustment")}
@@ -782,6 +798,7 @@ const InventoryPage = () => {
                 className="w-full sm:w-auto"
                 onClick={() => openActionDialog("transfer")}
                 disabled={!storeId}
+                data-tour="inventory-transfer"
               >
                 <TransferIcon className="h-4 w-4" aria-hidden />
                 {t("transferStock")}
@@ -874,7 +891,10 @@ const InventoryPage = () => {
           </CardHeader>
           <CardContent>
             {expiringQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : expiringLots.length ? (
               <div className="space-y-2 text-sm">
                 {expiringLots.map((lot) => (
@@ -904,6 +924,23 @@ const InventoryPage = () => {
           <CardTitle>{t("inventoryOverview")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {inventoryItems.length ? (
+            <div className="mb-3 sm:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                {!allSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={toggleSelectAll}
+                  >
+                    {t("selectAll")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {selectedItems.length ? (
             <div className="mb-3">
               <TooltipProvider>
@@ -916,6 +953,7 @@ const InventoryPage = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
+                        data-tour="inventory-print-tags"
                         type="button"
                         variant="ghost"
                         size="icon"
@@ -933,8 +971,13 @@ const InventoryPage = () => {
             </div>
           ) : null}
           <ResponsiveDataList
-            items={inventoryQuery.data ?? []}
+            items={inventoryItems}
             getKey={(item) => item.snapshot.id}
+            paginationKey="inventory-overview"
+            page={inventoryPage}
+            totalItems={inventoryTotal}
+            onPageChange={setInventoryPage}
+            onPageSizeChange={setInventoryPageSize}
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
                 <TooltipProvider>
@@ -944,7 +987,7 @@ const InventoryPage = () => {
                         <TableHead className="w-10">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 accent-ink"
+                            className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             checked={allSelected}
                             onChange={toggleSelectAll}
                             aria-label={t("selectAll")}
@@ -971,7 +1014,7 @@ const InventoryPage = () => {
                               <TableCell>
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 accent-ink"
+                                  className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   checked={selectedIds.has(item.snapshot.id)}
                                   onChange={() => toggleSelect(item.snapshot.id)}
                                   aria-label={t("selectInventoryItem", {
@@ -1212,7 +1255,7 @@ const InventoryPage = () => {
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
-                      className="mt-1 h-4 w-4 accent-ink"
+                      className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       checked={selectedIds.has(item.snapshot.id)}
                       onChange={() => toggleSelect(item.snapshot.id)}
                       aria-label={t("selectInventoryItem", { name: label })}
@@ -1288,7 +1331,7 @@ const InventoryPage = () => {
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("selectStoreHint")}
             </div>
-          ) : !inventoryQuery.data?.length ? (
+          ) : inventoryTotal === 0 ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />

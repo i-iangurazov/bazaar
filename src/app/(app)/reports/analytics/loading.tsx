@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/components/page-skeleton";
+import { PageLoading } from "@/components/page-loading";
 
 export default function Loading() {
-  return <PageSkeleton blocks={4} />;
+  return <PageLoading />;
 }

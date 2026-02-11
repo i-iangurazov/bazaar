@@ -48,6 +48,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
 import { RowActions } from "@/components/row-actions";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const ProductDetailPage = () => {
   const params = useParams();
@@ -63,6 +64,7 @@ const ProductDetailPage = () => {
   const isAdmin = role === "ADMIN";
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [movementsOpen, setMovementsOpen] = useState(false);
   const [movementStoreId, setMovementStoreId] = useState("");
   const [pricingStoreId, setPricingStoreId] = useState("");
@@ -215,6 +217,7 @@ const ProductDetailPage = () => {
     return {
       sku: productQuery.data.sku,
       name: productQuery.data.name,
+      isBundle: productQuery.data.isBundle,
       category: productQuery.data.category ?? "",
       baseUnitId: productQuery.data.baseUnitId,
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
@@ -246,8 +249,15 @@ const ProductDetailPage = () => {
         attributes: (variant.attributes as Record<string, unknown>) ?? {},
         canDelete: variant.canDelete ?? true,
       })),
+      bundleComponents: (bundleComponentsQuery.data ?? []).map((component) => ({
+        componentProductId: component.componentProductId,
+        componentVariantId: component.componentVariantId ?? null,
+        qty: component.qty,
+        componentName: component.componentProduct.name,
+        componentSku: component.componentProduct.sku,
+      })),
     };
-  }, [productQuery.data]);
+  }, [productQuery.data, bundleComponentsQuery.data]);
 
   type BundleComponent = NonNullable<typeof bundleComponentsQuery.data>[number];
   type LotRow = NonNullable<typeof lotsQuery.data>[number];
@@ -365,8 +375,8 @@ const ProductDetailPage = () => {
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"
-                onClick={() => {
-                  if (!window.confirm(t("confirmArchive"))) {
+                onClick={async () => {
+                  if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
                     return;
                   }
                   archiveMutation.mutate({ productId });
@@ -477,7 +487,10 @@ const ProductDetailPage = () => {
         <CardContent>
           {showBundle ? (
             bundleComponentsQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : bundleComponents.length ? (
               <ResponsiveDataList
                 items={bundleComponents}
@@ -501,8 +514,8 @@ const ProductDetailPage = () => {
                               label: t("bundleRemoveComponent"),
                               icon: DeleteIcon,
                               variant: "danger" as const,
-                              onSelect: () => {
-                                if (!window.confirm(t("bundleRemoveConfirm"))) {
+                              onSelect: async () => {
+                                if (!(await confirm({ description: t("bundleRemoveConfirm"), confirmVariant: "danger" }))) {
                                   return;
                                 }
                                 removeComponentMutation.mutate({ componentId: component.id });
@@ -545,8 +558,8 @@ const ProductDetailPage = () => {
                       label: t("bundleRemoveComponent"),
                       icon: DeleteIcon,
                       variant: "danger" as const,
-                      onSelect: () => {
-                        if (!window.confirm(t("bundleRemoveConfirm"))) {
+                      onSelect: async () => {
+                        if (!(await confirm({ description: t("bundleRemoveConfirm"), confirmVariant: "danger" }))) {
                           return;
                         }
                         removeComponentMutation.mutate({ componentId: component.id });
@@ -629,7 +642,10 @@ const ProductDetailPage = () => {
             <p className="text-sm text-gray-500">{t("expiryLotsDisabled")}</p>
           ) : showLots ? (
             lotsQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : lots.length ? (
               <ResponsiveDataList
                 items={lots}
@@ -1032,6 +1048,7 @@ const ProductDetailPage = () => {
           )}
         </div>
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

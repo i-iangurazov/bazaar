@@ -1,4 +1,4 @@
-import type { PurchaseOrderStatus, StockMovementType } from "@prisma/client";
+import type { CustomerOrderStatus, PurchaseOrderStatus, StockMovementType } from "@prisma/client";
 
 export type Translator = (key: string) => string;
 export type GenericStatus = "success" | "warning" | "pending" | "danger";
@@ -20,6 +20,26 @@ export const getPurchaseOrderStatusLabel = (
       return tPurchaseOrders("status.received");
     case "CANCELLED":
       return tPurchaseOrders("status.cancelled");
+    default:
+      return status ?? "";
+  }
+};
+
+export const getCustomerOrderStatusLabel = (
+  tSalesOrders: Translator,
+  status?: CustomerOrderStatus | string | null,
+) => {
+  switch (status) {
+    case "DRAFT":
+      return tSalesOrders("status.draft");
+    case "CONFIRMED":
+      return tSalesOrders("status.confirmed");
+    case "READY":
+      return tSalesOrders("status.ready");
+    case "COMPLETED":
+      return tSalesOrders("status.completed");
+    case "CANCELED":
+      return tSalesOrders("status.canceled");
     default:
       return status ?? "";
   }

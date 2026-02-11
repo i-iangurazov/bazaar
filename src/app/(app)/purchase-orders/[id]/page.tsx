@@ -67,6 +67,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
 import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const PurchaseOrderDetailPage = () => {
   const params = useParams();
@@ -77,6 +78,7 @@ const PurchaseOrderDetailPage = () => {
   const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const role = session?.user?.role ?? "STAFF";
   const canManage = role === "ADMIN" || role === "MANAGER";
 
@@ -505,12 +507,11 @@ const PurchaseOrderDetailPage = () => {
                 <Button
                   variant="danger"
                   className="w-full sm:w-auto"
-                  onClick={() => {
+                  onClick={async () => {
                     if (po.status !== "DRAFT" && po.status !== "SUBMITTED") {
                       return;
                     }
-                    const confirmed = window.confirm(t("confirmCancel"));
-                    if (!confirmed) {
+                    if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
                       return;
                     }
                     cancelMutation.mutate({ purchaseOrderId: poId });
@@ -635,9 +636,8 @@ const PurchaseOrderDetailPage = () => {
                                       size="icon"
                                       className="text-danger shadow-none hover:text-danger"
                                       aria-label={t("removeLine")}
-                                      onClick={() => {
-                                        const confirmed = window.confirm(t("confirmRemoveLine"));
-                                        if (!confirmed) {
+                                      onClick={async () => {
+                                        if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
                                           return;
                                         }
                                         removeLineMutation.mutate({ lineId: line.id });
@@ -679,9 +679,8 @@ const PurchaseOrderDetailPage = () => {
                       icon: DeleteIcon,
                       variant: "danger",
                       disabled: removingLineId === line.id,
-                      onSelect: () => {
-                        const confirmed = window.confirm(t("confirmRemoveLine"));
-                        if (!confirmed) {
+                      onSelect: async () => {
+                        if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
                           return;
                         }
                         removeLineMutation.mutate({ lineId: line.id });
@@ -837,11 +836,9 @@ const PurchaseOrderDetailPage = () => {
                                   );
                                 }}
                               >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={t("unitPlaceholder")} />
-                                  </SelectTrigger>
-                                </FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t("unitPlaceholder")} />
+                                </SelectTrigger>
                                 <SelectContent>
                                   {buildUnitOptions(lineProductMap.get(line.lineId) ?? null, "receiving").map(
                                     (option) => (
@@ -925,11 +922,9 @@ const PurchaseOrderDetailPage = () => {
                             );
                           }}
                         >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t("unitPlaceholder")} />
-                            </SelectTrigger>
-                          </FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t("unitPlaceholder")} />
+                          </SelectTrigger>
                           <SelectContent>
                             {buildUnitOptions(product, "receiving").map((option) => (
                               <SelectItem key={option.value} value={option.value}>
@@ -1044,64 +1039,58 @@ const PurchaseOrderDetailPage = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tCommon("product")}</FormLabel>
-                    {editingLine ? (
+                    <div className="relative">
                       <FormControl>
-                        <Input value={editingLine.product.name} disabled />
+                        <Input
+                          value={lineSearch}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setLineSearch(nextValue);
+                            setShowResults(true);
+                            if (selectedProduct && nextValue !== selectedProduct.name) {
+                              setSelectedProduct(null);
+                              field.onChange("");
+                              lineForm.setValue("variantId", null, { shouldValidate: true });
+                              lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
+                            }
+                          }}
+                          onFocus={() => setShowResults(true)}
+                          onBlur={() => {
+                            setTimeout(() => setShowResults(false), 150);
+                          }}
+                          placeholder={t("productSearchPlaceholder")}
+                        />
                       </FormControl>
-                    ) : (
-                      <div className="relative">
-                        <FormControl>
-                          <Input
-                            value={lineSearch}
-                            onChange={(event) => {
-                              const nextValue = event.target.value;
-                              setLineSearch(nextValue);
-                              setShowResults(true);
-                              if (selectedProduct && nextValue !== selectedProduct.name) {
-                                setSelectedProduct(null);
-                                field.onChange("");
-                                lineForm.setValue("variantId", null, { shouldValidate: true });
-                                lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                              }
-                            }}
-                            onFocus={() => setShowResults(true)}
-                            onBlur={() => {
-                              setTimeout(() => setShowResults(false), 150);
-                            }}
-                            placeholder={t("productSearchPlaceholder")}
-                          />
-                        </FormControl>
-                        {showResults && productSearchQuery.data?.length ? (
-                          <div className="absolute z-20 mt-2 w-full rounded-md border border-gray-200 bg-white shadow-lg">
-                            <div className="max-h-64 overflow-y-auto py-1">
-                              {productSearchQuery.data.map((product) => (
-                                <button
-                                  key={product.id}
-                                  type="button"
-                                  className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-gray-50"
-                                  onMouseDown={(event) => event.preventDefault()}
-                                  onClick={() => {
-                                    setSelectedProduct({
-                                      id: product.id,
-                                      name: product.name,
-                                      sku: product.sku,
-                                    });
-                                    setLineSearch(product.name);
-                                    field.onChange(product.id);
-                                    lineForm.setValue("variantId", null, { shouldValidate: true });
-                                    lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                                    setShowResults(false);
-                                  }}
-                                >
-                                  <span className="font-medium text-ink">{product.name}</span>
-                                  <span className="text-xs text-gray-500">{product.sku}</span>
-                                </button>
-                              ))}
-                            </div>
+                      {showResults && productSearchQuery.data?.length ? (
+                        <div className="absolute z-20 mt-2 w-full rounded-md border border-gray-200 bg-white shadow-lg">
+                          <div className="max-h-64 overflow-y-auto py-1">
+                            {productSearchQuery.data.map((product) => (
+                              <button
+                                key={product.id}
+                                type="button"
+                                className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-gray-50"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                  setSelectedProduct({
+                                    id: product.id,
+                                    name: product.name,
+                                    sku: product.sku,
+                                  });
+                                  setLineSearch(product.name);
+                                  field.onChange(product.id);
+                                  lineForm.setValue("variantId", null, { shouldValidate: true });
+                                  lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
+                                  setShowResults(false);
+                                }}
+                              >
+                                <span className="font-medium text-ink">{product.name}</span>
+                                <span className="text-xs text-gray-500">{product.sku}</span>
+                              </button>
+                            ))}
                           </div>
-                        ) : null}
-                      </div>
-                    )}
+                        </div>
+                      ) : null}
+                    </div>
                     {!editingLine ? <FormDescription>{t("productSearchHint")}</FormDescription> : null}
                     <FormMessage />
                   </FormItem>
@@ -1118,7 +1107,7 @@ const PurchaseOrderDetailPage = () => {
                       onValueChange={(value) =>
                         field.onChange(value === "BASE" ? null : value)
                       }
-                      disabled={!lineProductId || Boolean(editingLine)}
+                      disabled={!lineProductId}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -1260,6 +1249,7 @@ const PurchaseOrderDetailPage = () => {
           </form>
         </Form>
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

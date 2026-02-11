@@ -64,6 +64,7 @@ import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const UsersPage = () => {
   const t = useTranslations("users");
@@ -75,6 +76,7 @@ const UsersPage = () => {
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const isForbidden = status === "authenticated" && !isAdmin;
   const usersQuery = trpc.users.list.useQuery(undefined, { enabled: isAdmin });
 
@@ -303,7 +305,7 @@ const UsersPage = () => {
               getKey={(user) => user.id}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
-                  <Table className="min-w-[720px]">
+                  <Table className="min-w-[720px]" data-tour="users-table">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("name")}</TableHead>
@@ -368,12 +370,13 @@ const UsersPage = () => {
                                     </span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onSelect={() => {
+                                    onSelect={async () => {
                                       const nextActive = !user.isActive;
                                       if (
-                                        !window.confirm(
-                                          t(nextActive ? "confirmEnable" : "confirmDisable"),
-                                        )
+                                        !(await confirm({
+                                          description: t(nextActive ? "confirmEnable" : "confirmDisable"),
+                                          confirmVariant: "danger",
+                                        }))
                                       ) {
                                         return;
                                       }
@@ -436,9 +439,14 @@ const UsersPage = () => {
                     key: "toggle",
                     label: user.isActive ? t("disable") : t("enable"),
                     icon: user.isActive ? ArchiveIcon : StatusSuccessIcon,
-                    onSelect: () => {
+                    onSelect: async () => {
                       const nextActive = !user.isActive;
-                      if (!window.confirm(t(nextActive ? "confirmEnable" : "confirmDisable"))) {
+                      if (
+                        !(await confirm({
+                          description: t(nextActive ? "confirmEnable" : "confirmDisable"),
+                          confirmVariant: "danger",
+                        }))
+                      ) {
                         return;
                       }
                       setActiveMutation.mutate({ userId: user.id, isActive: nextActive });
@@ -488,7 +496,10 @@ const UsersPage = () => {
               }}
             />
             {usersQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : !usersQuery.data?.length ? (
               <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                 <div className="flex items-center gap-2">
@@ -557,7 +568,11 @@ const UsersPage = () => {
                   />
                 </FormGrid>
                 <FormActions>
-                  <Button type="submit" disabled={inviteMutation.isLoading}>
+                  <Button
+                    type="submit"
+                    disabled={inviteMutation.isLoading}
+                    data-tour="users-invite"
+                  >
                     {inviteMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                     {inviteMutation.isLoading ? tCommon("loading") : t("inviteSend")}
                   </Button>
@@ -661,7 +676,10 @@ const UsersPage = () => {
               }}
             />
             {invitesQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : !invitesQuery.data?.length ? (
               <p className="text-sm text-gray-500">{t("inviteEmpty")}</p>
             ) : null}
@@ -925,6 +943,7 @@ const UsersPage = () => {
           </form>
         </Form>
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

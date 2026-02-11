@@ -139,6 +139,7 @@ const StockCountsPage = () => {
         subtitle={t("subtitle")}
         action={
           <Button
+            data-tour="stock-count-create"
             className="w-full sm:w-auto"
             onClick={() => setDialogOpen(true)}
             disabled={!storeId || createMutation.isLoading}
@@ -193,14 +194,17 @@ const StockCountsPage = () => {
         </CardHeader>
         <CardContent>
           {countsQuery.isLoading ? (
-            <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : counts.length ? (
             <ResponsiveDataList
               items={counts}
               getKey={(count) => count.id}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
-                  <Table className="min-w-[720px]">
+                  <Table className="min-w-[720px]" data-tour="stock-count-table">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("code")}</TableHead>

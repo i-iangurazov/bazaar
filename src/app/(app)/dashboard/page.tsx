@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
   SelectContent,
@@ -96,7 +97,7 @@ const DashboardPage = () => {
         filters={
           <div className="w-full sm:max-w-xs">
             <Select value={storeId ?? ""} onValueChange={setStoreId}>
-              <SelectTrigger>
+              <SelectTrigger data-tour="dashboard-store-filter">
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
               <SelectContent>
@@ -126,7 +127,10 @@ const DashboardPage = () => {
           </CardHeader>
           <CardContent>
             {summaryQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : summaryQuery.data?.lowStock?.length ? (
               <div className="space-y-4">
                 {summaryQuery.data.lowStock.map((item) => (
@@ -160,7 +164,10 @@ const DashboardPage = () => {
           </CardHeader>
           <CardContent>
             {summaryQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : summaryQuery.data?.pendingPurchaseOrders?.length ? (
               <div className="space-y-3">
                 {summaryQuery.data.pendingPurchaseOrders.map((po) => (
@@ -201,7 +208,10 @@ const DashboardPage = () => {
           </CardHeader>
           <CardContent>
             {summaryQuery.isLoading ? (
-              <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
             ) : summaryQuery.data?.recentMovements?.length ? (
               <div className="space-y-3">
                 {summaryQuery.data.recentMovements.map((movement) => (
@@ -237,7 +247,9 @@ const DashboardPage = () => {
             <p className="text-sm text-gray-500">{t("chartsSubtitle")}</p>
           </div>
           <Button asChild variant="secondary">
-            <Link href="/reports/analytics">{t("chartsAction")}</Link>
+            <Link href="/reports/analytics" data-tour="dashboard-analytics-link">
+              {t("chartsAction")}
+            </Link>
           </Button>
         </CardHeader>
       </Card>
@@ -264,7 +276,10 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               {summaryQuery.isLoading ? (
-                <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
               ) : summaryQuery.data?.recentActivity?.length ? (
                 <div className="space-y-3">
                   {summaryQuery.data.recentActivity.map((item) => (

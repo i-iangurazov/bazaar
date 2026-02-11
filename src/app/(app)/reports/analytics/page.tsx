@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
-import { PageSkeleton } from "@/components/page-skeleton";
+import { PageLoading } from "@/components/page-loading";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,7 +22,7 @@ type Metric = "units" | "revenue" | "profit";
 
 const AnalyticsCharts = dynamic(
   () => import("@/components/analytics-charts").then((mod) => mod.AnalyticsCharts),
-  { ssr: false, loading: () => <PageSkeleton blocks={4} /> },
+  { ssr: false, loading: () => <PageLoading /> },
 );
 
 const AnalyticsPage = () => {

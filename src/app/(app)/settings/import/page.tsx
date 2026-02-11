@@ -81,6 +81,8 @@ type ImportRunSummary = {
   created?: number;
   updated?: number;
   source?: string;
+  targetStoreId?: string;
+  targetStoreName?: string;
   images?: {
     downloaded?: number;
     fallback?: number;
@@ -292,6 +294,7 @@ const ImportPage = () => {
   const [source, setSource] = useState<ImportSource>("csv");
   const [rollbackBatchId, setRollbackBatchId] = useState<string | null>(null);
   const [defaultUnitCode, setDefaultUnitCode] = useState("");
+  const [targetStoreId, setTargetStoreId] = useState("");
   const [skippedRows, setSkippedRows] = useState<number[]>([]);
   const [importStartedAt, setImportStartedAt] = useState<number | null>(null);
   const [importElapsedSeconds, setImportElapsedSeconds] = useState(0);
@@ -299,6 +302,7 @@ const ImportPage = () => {
 
   const batchesQuery = trpc.imports.list.useQuery(undefined, { enabled: isAdmin });
   const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: isAdmin });
+  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: isAdmin });
   const rollbackDetailsQuery = trpc.imports.get.useQuery(
     { batchId: rollbackBatchId ?? "" },
     { enabled: Boolean(rollbackBatchId) },
@@ -928,6 +932,31 @@ const ImportPage = () => {
                 </Select>
                 <p className="text-xs text-gray-500">{t("defaultUnitHint")}</p>
               </div>
+              <div className="max-w-sm space-y-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-ink">{t("targetStoreTitle")}</p>
+                  <Badge variant="muted" className="text-[10px]">
+                    {t("optional")}
+                  </Badge>
+                </div>
+                <Select
+                  value={targetStoreId || "none"}
+                  onValueChange={(value) => setTargetStoreId(value === "none" ? "" : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("targetStorePlaceholder")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("targetStoreNone")}</SelectItem>
+                    {(storesQuery.data ?? []).map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">{t("targetStoreHint")}</p>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-gray-500">{t("mappingEmpty")}</p>
@@ -1149,7 +1178,11 @@ const ImportPage = () => {
                   });
                   return;
                 }
-                importMutation.mutate({ rows: validation.rows, source });
+                importMutation.mutate({
+                  rows: validation.rows,
+                  source,
+                  storeId: targetStoreId || undefined,
+                });
               }}
               disabled={
                 importMutation.isLoading ||
@@ -1190,6 +1223,11 @@ const ImportPage = () => {
               <p className="mt-1 text-xs text-emerald-800">
                 {t("importSuccess", { count: (lastImportSummary.rows ?? 0) })}
               </p>
+              {lastImportSummary.targetStoreName ? (
+                <p className="mt-1 text-xs text-emerald-800">
+                  {t("targetStoreApplied", { store: lastImportSummary.targetStoreName })}
+                </p>
+              ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                 <div className="rounded border border-emerald-200 bg-white p-2">
                   <p className="text-emerald-700">{t("imageDownloaded")}</p>
@@ -1252,6 +1290,7 @@ const ImportPage = () => {
                           created?: number;
                           updated?: number;
                           source?: string;
+                          targetStoreName?: string;
                         };
                         const sourceLabel = summary.source ? t(`source.${summary.source}`) : t("source.csv");
                         const actions = [
@@ -1270,7 +1309,16 @@ const ImportPage = () => {
                             <TableCell className="text-xs text-gray-500">
                               {formatDateTime(batch.createdAt, locale)}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">{sourceLabel}</TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              <div className="space-y-1">
+                                <p>{sourceLabel}</p>
+                                {summary.targetStoreName ? (
+                                  <p className="text-[11px] text-gray-400">
+                                    {t("historyStoreValue", { store: summary.targetStoreName })}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-xs text-gray-500">{summary.rows ?? 0}</TableCell>
                             <TableCell className="text-xs text-gray-500">{summary.created ?? 0}</TableCell>
                             <TableCell className="text-xs text-gray-500">{summary.updated ?? 0}</TableCell>
@@ -1306,6 +1354,7 @@ const ImportPage = () => {
                   created?: number;
                   updated?: number;
                   source?: string;
+                  targetStoreName?: string;
                 };
                 const sourceLabel = summary.source ? t(`source.${summary.source}`) : t("source.csv");
                 const actions = [
@@ -1327,6 +1376,11 @@ const ImportPage = () => {
                           {formatDateTime(batch.createdAt, locale)}
                         </p>
                         <p className="text-xs text-gray-500">{sourceLabel}</p>
+                        {summary.targetStoreName ? (
+                          <p className="text-xs text-gray-400">
+                            {t("historyStoreValue", { store: summary.targetStoreName })}
+                          </p>
+                        ) : null}
                       </div>
                       {batch.rolledBackAt ? (
                         <Badge variant="muted">{t("historyRolledBack")}</Badge>

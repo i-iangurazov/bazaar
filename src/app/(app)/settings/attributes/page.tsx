@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const AttributesPage = () => {
   const t = useTranslations("attributes");
@@ -62,6 +63,7 @@ const AttributesPage = () => {
   const isAdmin = session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const attributesQuery = trpc.attributes.list.useQuery(undefined, { enabled: isAdmin });
   const templatesQuery = trpc.categoryTemplates.list.useQuery(undefined, { enabled: isAdmin });
@@ -345,7 +347,10 @@ const AttributesPage = () => {
       />
 
       {attributesQuery.isLoading ? (
-        <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
+        <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
       ) : attributesQuery.error ? (
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-red-500">
           <span>{translateError(tErrors, attributesQuery.error)}</span>
@@ -418,8 +423,8 @@ const AttributesPage = () => {
                                     variant="ghost"
                                     className="h-8 w-8 text-danger hover:text-danger"
                                     aria-label={t("remove")}
-                                    onClick={() => {
-                                      if (!window.confirm(t("confirmRemove"))) {
+                                    onClick={async () => {
+                                      if (!(await confirm({ description: t("confirmRemove"), confirmVariant: "danger" }))) {
                                         return;
                                       }
                                       removeMutation.mutate({ id: attribute.id });
@@ -470,8 +475,8 @@ const AttributesPage = () => {
                         icon: DeleteIcon,
                         variant: "danger",
                         disabled: removeMutation.isLoading,
-                        onSelect: () => {
-                          if (!window.confirm(t("confirmRemove"))) {
+                        onSelect: async () => {
+                          if (!(await confirm({ description: t("confirmRemove"), confirmVariant: "danger" }))) {
                             return;
                           }
                           removeMutation.mutate({ id: attribute.id });
@@ -569,8 +574,13 @@ const AttributesPage = () => {
                               variant="ghost"
                               className="h-8 w-8 text-danger hover:text-danger"
                               aria-label={tCommon("delete")}
-                              onClick={() => {
-                                if (!window.confirm(t("templateRemoveConfirm"))) {
+                              onClick={async () => {
+                                if (
+                                  !(await confirm({
+                                    description: t("templateRemoveConfirm"),
+                                    confirmVariant: "danger",
+                                  }))
+                                ) {
                                   return;
                                 }
                                 removeTemplateMutation.mutate({ category: group.category });
@@ -983,6 +993,7 @@ const AttributesPage = () => {
           </FormActions>
         </div>
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

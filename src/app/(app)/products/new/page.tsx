@@ -16,6 +16,8 @@ const NewProductPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const barcode = searchParams?.get("barcode")?.trim() ?? "";
+  const requestedType = searchParams?.get("type")?.trim() ?? "";
+  const isBundleDefault = requestedType === "bundle";
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const { toast } = useToast();
@@ -48,6 +50,7 @@ const NewProductPage = () => {
         initialValues={{
           sku: "",
           name: "",
+          isBundle: isBundleDefault,
           category: "",
           baseUnitId: "",
           basePriceKgs: undefined,
@@ -57,6 +60,7 @@ const NewProductPage = () => {
           barcodes: barcode ? [barcode] : [],
           packs: [],
           variants: [],
+          bundleComponents: [],
         }}
         attributeDefinitions={attributesQuery.data ?? []}
         units={unitsQuery.data ?? []}

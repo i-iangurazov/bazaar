@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { HelpTourLauncher } from "@/components/guidance/help-tour-launcher";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +59,7 @@ const HelpPage = () => {
   return (
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <HelpTourLauncher />
 
       <div className="mt-6 space-y-4">
         {articles.map((article) => {

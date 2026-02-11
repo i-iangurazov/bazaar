@@ -77,6 +77,7 @@ import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const ProductsPage = () => {
   const t = useTranslations("products");
@@ -90,11 +91,15 @@ const ProductsPage = () => {
   const isAdmin = role === "ADMIN";
   const canManagePrices = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [productType, setProductType] = useState<"all" | "product" | "bundle">("all");
   const [storeId, setStoreId] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [productsPage, setProductsPage] = useState(1);
+  const [productsPageSize, setProductsPageSize] = useState(25);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [priceTarget, setPriceTarget] = useState<{
     id: string;
@@ -119,9 +124,14 @@ const ProductsPage = () => {
   const productsQuery = trpc.products.list.useQuery({
     search: search || undefined,
     category: category || undefined,
+    type: productType,
     includeArchived: isAdmin ? showArchived : undefined,
     storeId: storeId || undefined,
+    page: productsPage,
+    pageSize: productsPageSize,
   });
+  const products = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
+  const productsTotal = productsQuery.data?.total ?? 0;
   const exportQuery = trpc.products.exportCsv.useQuery(undefined, { enabled: false });
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: () => {
@@ -203,15 +213,23 @@ const ProductsPage = () => {
     }
   }, [bulkCategoryOpen]);
 
+  useEffect(() => {
+    setProductsPage(1);
+  }, [search, category, showArchived, storeId, productType]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [productsPage, productsPageSize]);
+
   const categories = useMemo(() => {
     const set = new Set<string>();
-    productsQuery.data?.forEach((product) => {
+    products.forEach((product) => {
       if (product.category) {
         set.add(product.category);
       }
     });
     return Array.from(set.values());
-  }, [productsQuery.data]);
+  }, [products]);
 
   const showEffectivePrice = Boolean(storeId);
   const showPriceAction = canManagePrices && Boolean(storeId);
@@ -277,7 +295,10 @@ const ProductsPage = () => {
     {
       search: bulkValues.search || undefined,
       category: bulkValues.category || undefined,
+      type: productType,
       includeArchived: isAdmin ? showArchived : undefined,
+      page: 1,
+      pageSize: 1,
     },
     { enabled: bulkOpen },
   );
@@ -319,9 +340,7 @@ const ProductsPage = () => {
   });
 
   const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
-  const allSelected =
-    Boolean(productsQuery.data?.length) &&
-    selectedIds.size === (productsQuery.data?.length ?? 0);
+  const allSelected = Boolean(products.length) && selectedIds.size === products.length;
 
   const queueIdsForQuery = useMemo(
     () => Array.from(new Set(printQueue)).sort(),
@@ -340,7 +359,7 @@ const ProductsPage = () => {
   };
   const productById = useMemo(() => {
     const map = new Map<string, QueueProductLite>();
-    (productsQuery.data ?? []).forEach((product) => {
+    products.forEach((product) => {
       map.set(product.id, {
         id: product.id,
         name: product.name,
@@ -353,7 +372,7 @@ const ProductsPage = () => {
       map.set(product.id, product);
     });
     return map;
-  }, [productsQuery.data, queueProductsQuery.data]);
+  }, [products, queueProductsQuery.data]);
   const queueRowHeight = 72;
   const queueOverscan = 6;
   const canDragQueue = printQueue.length <= 50;
@@ -391,21 +410,21 @@ const ProductsPage = () => {
   const queueVisibleItems = filteredQueue.slice(queueStartIndex, queueEndIndex);
   const queueOffsetTop = queueStartIndex * queueRowHeight;
   const selectedProducts = useMemo(
-    () => (productsQuery.data ?? []).filter((product) => selectedIds.has(product.id)),
-    [productsQuery.data, selectedIds],
+    () => products.filter((product) => selectedIds.has(product.id)),
+    [products, selectedIds],
   );
   const hasActiveSelected = selectedProducts.some((product) => !product.isDeleted);
   const hasArchivedSelected = selectedProducts.some((product) => product.isDeleted);
 
   const toggleSelectAll = () => {
-    if (!productsQuery.data?.length) {
+    if (!products.length) {
       return;
     }
     setSelectedIds(() => {
       if (allSelected) {
         return new Set();
       }
-      return new Set(productsQuery.data.map((product) => product.id));
+      return new Set(products.map((product) => product.id));
     });
   };
 
@@ -447,7 +466,7 @@ const ProductsPage = () => {
       __seedPrintQueue?: (count?: number) => void;
     };
     target.__seedPrintQueue = (count = 500) => {
-      const ids = (productsQuery.data ?? []).slice(0, count).map((product) => product.id);
+      const ids = products.slice(0, count).map((product) => product.id);
       setSelectedIds(new Set(ids));
       setPrintQueue(ids);
       setPrintOpen(true);
@@ -455,7 +474,7 @@ const ProductsPage = () => {
     return () => {
       delete target.__seedPrintQueue;
     };
-  }, [productsQuery.data]);
+  }, [products]);
 
   useEffect(() => {
     if (bulkStorePriceOpen) {
@@ -607,7 +626,7 @@ const ProductsPage = () => {
     if (!selectedList.length || !hasActiveSelected) {
       return;
     }
-    if (!window.confirm(t("confirmBulkArchive"))) {
+    if (!(await confirm({ description: t("confirmBulkArchive"), confirmVariant: "danger" }))) {
       return;
     }
     const targets = selectedProducts.filter((product) => !product.isDeleted);
@@ -633,7 +652,7 @@ const ProductsPage = () => {
     if (!selectedList.length || !hasArchivedSelected) {
       return;
     }
-    if (!window.confirm(t("confirmBulkRestore"))) {
+    if (!(await confirm({ description: t("confirmBulkRestore"), confirmVariant: "danger" }))) {
       return;
     }
     const targets = selectedProducts.filter((product) => product.isDeleted);
@@ -704,12 +723,42 @@ const ProductsPage = () => {
         action={
           <>
             {isAdmin ? (
-              <Link href="/products/new" className="w-full sm:w-auto">
-                <Button className="w-full sm:w-auto">
-                  <AddIcon className="h-4 w-4" aria-hidden />
-                  {t("newProduct")}
-                </Button>
-              </Link>
+              <>
+                <Link href="/products/new" className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto" data-tour="products-create">
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {t("newProduct")}
+                  </Button>
+                </Link>
+                <Link href="/products/new?type=bundle" className="w-full sm:w-auto">
+                  <Button variant="secondary" className="w-full sm:w-auto">
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {t("newBundle")}
+                  </Button>
+                </Link>
+              </>
+            ) : null}
+            {canManagePrices ? (
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setBulkOpen(true)}
+                disabled={!storesQuery.data?.length}
+              >
+                <EditIcon className="h-4 w-4" aria-hidden />
+                {t("bulkPriceUpdate")}
+              </Button>
+            ) : null}
+            {selectedList.length ? (
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setPrintOpen(true)}
+                data-tour="products-print-tags"
+              >
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+                {t("printPriceTags")}
+              </Button>
             ) : null}
             <Button
               variant="secondary"
@@ -728,7 +777,7 @@ const ProductsPage = () => {
                   ? t("exportCsv")
                   : t("exportXlsx")}
             </Button>
-            <div className="w-full sm:w-[170px]">
+            <div className="w-full sm:w-[100px]">
               <Select
                 value={exportFormat}
                 onValueChange={(value) => setExportFormat(value as DownloadFormat)}
@@ -742,32 +791,12 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            {canManagePrices ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setBulkOpen(true)}
-                disabled={!storesQuery.data?.length}
-              >
-                <EditIcon className="h-4 w-4" aria-hidden />
-                {t("bulkPriceUpdate")}
-              </Button>
-            ) : null}
-            {selectedList.length ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setPrintOpen(true)}
-              >
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-                {t("printPriceTags")}
-              </Button>
-            ) : null}
           </>
         }
         filters={
           <>
             <Input
+              data-tour="products-search"
               className="w-full sm:max-w-xs"
               placeholder={t("searchPlaceholder")}
               value={search}
@@ -809,6 +838,23 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="w-full sm:max-w-xs">
+              <Select
+                value={productType}
+                onValueChange={(value) =>
+                  setProductType(value as "all" | "product" | "bundle")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("typeLabel")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("allTypes")}</SelectItem>
+                  <SelectItem value="product">{t("typeProduct")}</SelectItem>
+                  <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {isAdmin ? (
               <div className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2">
                 <Switch
@@ -828,6 +874,23 @@ const ProductsPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {products.length ? (
+            <div className="mb-3 sm:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                {!allSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={toggleSelectAll}
+                  >
+                    {t("selectAll")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {selectedList.length ? (
             <div className="mb-3">
               <TooltipProvider>
@@ -840,6 +903,7 @@ const ProductsPage = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
+                        data-tour="products-print-tags"
                         type="button"
                         variant="ghost"
                         size="icon"
@@ -925,8 +989,12 @@ const ProductsPage = () => {
             </div>
           ) : null}
           <ResponsiveDataList
-            items={productsQuery.data ?? []}
+            items={products}
             getKey={(product) => product.id}
+            page={productsPage}
+            totalItems={productsTotal}
+            onPageChange={setProductsPage}
+            onPageSizeChange={setProductsPageSize}
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
                 <TooltipProvider>
@@ -936,7 +1004,7 @@ const ProductsPage = () => {
                         <TableHead className="w-10">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 accent-ink"
+                            className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             checked={allSelected}
                             onChange={toggleSelectAll}
                             aria-label={t("selectAll")}
@@ -967,7 +1035,7 @@ const ProductsPage = () => {
                             <TableCell>
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 accent-ink"
+                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={selectedIds.has(product.id)}
                                 onChange={() => toggleSelect(product.id)}
                                 aria-label={t("selectProduct", { name: product.name })}
@@ -983,14 +1051,17 @@ const ProductsPage = () => {
                                   className="h-10 w-10 rounded-md border border-gray-200 object-cover"
                                 />
                               ) : (
-                                <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50">
-                                  <EmptyIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                                <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                  <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                                 </div>
                               )}
                             </TableCell>
                             <TableCell className="font-medium">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span>{product.name}</span>
+                                <Badge variant="muted">
+                                  {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                                </Badge>
                                 {product.isDeleted ? (
                                   <Badge variant="muted">{t("archived")}</Badge>
                                 ) : null}
@@ -1080,8 +1151,8 @@ const ProductsPage = () => {
                                       ) : null}
                                       {product.isDeleted ? (
                                         <DropdownMenuItem
-                                          onClick={() => {
-                                            if (!window.confirm(t("confirmRestore"))) {
+                                          onClick={async () => {
+                                            if (!(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))) {
                                               return;
                                             }
                                             restoreMutation.mutate({ productId: product.id });
@@ -1097,8 +1168,8 @@ const ProductsPage = () => {
                                             {tCommon("edit")}
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
-                                            onClick={() => {
-                                              if (!window.confirm(t("confirmArchive"))) {
+                                            onClick={async () => {
+                                              if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
                                                 return;
                                               }
                                               archiveMutation.mutate({ productId: product.id });
@@ -1207,8 +1278,8 @@ const ProductsPage = () => {
                           key: "restore",
                           label: t("restore"),
                           icon: RestoreIcon,
-                          onSelect: () => {
-                            if (!window.confirm(t("confirmRestore"))) {
+                          onSelect: async () => {
+                            if (!(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))) {
                               return;
                             }
                             restoreMutation.mutate({ productId: product.id });
@@ -1227,8 +1298,8 @@ const ProductsPage = () => {
                           label: tCommon("archive"),
                           icon: ArchiveIcon,
                           variant: "danger",
-                          onSelect: () => {
-                            if (!window.confirm(t("confirmArchive"))) {
+                          onSelect: async () => {
+                            if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
                               return;
                             }
                             archiveMutation.mutate({ productId: product.id });
@@ -1251,7 +1322,7 @@ const ProductsPage = () => {
                     <label className="flex items-start gap-3">
                       <input
                         type="checkbox"
-                        className="mt-1 h-4 w-4 accent-ink"
+                        className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         checked={selectedIds.has(product.id)}
                         onChange={() => toggleSelect(product.id)}
                         aria-label={t("selectProduct", { name: product.name })}
@@ -1264,13 +1335,16 @@ const ProductsPage = () => {
                           className="h-10 w-10 rounded-md border border-gray-200 object-cover"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50">
-                          <EmptyIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                          <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                         </div>
                       )}
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-ink">{product.name}</span>
+                          <Badge variant="muted">
+                            {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                          </Badge>
                           {product.isDeleted ? (
                             <Badge variant="muted">{t("archived")}</Badge>
                           ) : null}
@@ -1341,8 +1415,11 @@ const ProductsPage = () => {
             }}
           />
           {productsQuery.isLoading ? (
-            <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
-          ) : !productsQuery.data?.length ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : productsTotal === 0 ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -1454,6 +1531,7 @@ const ProductsPage = () => {
                 filter: {
                   search: values.search || undefined,
                   category: values.category || undefined,
+                  type: productType,
                   includeArchived: isAdmin ? showArchived : undefined,
                 },
                 mode: values.mode,
@@ -1571,7 +1649,7 @@ const ProductsPage = () => {
             <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
               {previewQuery.isLoading
                 ? tCommon("loading")
-                : t("bulkPreview", { count: previewQuery.data?.length ?? 0 })}
+                : t("bulkPreview", { count: previewQuery.data?.total ?? 0 })}
             </div>
 
             <FormActions>
@@ -1990,6 +2068,7 @@ const ProductsPage = () => {
           </form>
         </Form>
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

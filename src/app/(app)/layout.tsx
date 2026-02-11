@@ -15,6 +15,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   let role = String(token.role ?? "STAFF");
   let displayName = token.name ?? null;
   let displayEmail = token.email ?? null;
+  let isOrgOwner = Boolean((token as { isOrgOwner?: boolean } | null)?.isOrgOwner);
   let impersonation:
     | {
         targetName?: string | null;
@@ -26,13 +27,14 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   if (impersonationId && token.role === "ADMIN") {
     const session = await prisma.impersonationSession.findUnique({
       where: { id: impersonationId },
-      include: { targetUser: { select: { name: true, email: true, role: true } } },
+      include: { targetUser: { select: { name: true, email: true, role: true, isOrgOwner: true } } },
     });
 
     if (session && !session.revokedAt && session.expiresAt > new Date() && session.createdById === token.sub) {
       role = session.targetUser.role;
       displayName = session.targetUser.name ?? null;
       displayEmail = session.targetUser.email ?? null;
+      isOrgOwner = session.targetUser.isOrgOwner;
       impersonation = {
         targetName: session.targetUser.name ?? null,
         targetEmail: session.targetUser.email ?? null,
@@ -49,6 +51,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
         role,
         organizationId: (token as { organizationId?: string | null } | null)?.organizationId ?? null,
         isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean } | null)?.isPlatformOwner),
+        isOrgOwner,
       }}
       impersonation={impersonation}
     >

@@ -43,6 +43,7 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -54,6 +55,7 @@ const SuppliersPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const suppliersQuery = trpc.suppliers.list.useQuery();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -176,7 +178,12 @@ const SuppliersPage = () => {
     if (!selectedSuppliers.length) {
       return;
     }
-    if (!window.confirm(t("confirmBulkDelete", { count: selectedSuppliers.length }))) {
+    if (
+      !(await confirm({
+        description: t("confirmBulkDelete", { count: selectedSuppliers.length }),
+        confirmVariant: "danger",
+      }))
+    ) {
       return;
     }
     try {
@@ -333,6 +340,23 @@ const SuppliersPage = () => {
           <CardTitle>{t("directory")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {canManage && (suppliersQuery.data?.length ?? 0) > 0 ? (
+            <div className="mb-3 sm:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                {!allSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={toggleSelectAll}
+                  >
+                    {t("selectAll")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {canManage && selectedSuppliers.length ? (
             <div className="mb-3">
               <TooltipProvider>
@@ -379,7 +403,7 @@ const SuppliersPage = () => {
                           <TableHead className="w-10">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 accent-ink"
+                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                               checked={allSelected}
                               onChange={toggleSelectAll}
                               aria-label={t("selectAll")}
@@ -400,7 +424,7 @@ const SuppliersPage = () => {
                             <TableCell>
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 accent-ink"
+                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={selectedIds.has(supplier.id)}
                                 onChange={() => toggleSelect(supplier.id)}
                                 aria-label={t("selectSupplier", { name: supplier.name })}
@@ -452,9 +476,8 @@ const SuppliersPage = () => {
                                       size="icon"
                                       className="text-danger shadow-none hover:text-danger"
                                       aria-label={tCommon("delete")}
-                                      onClick={() => {
-                                        const confirmed = window.confirm(t("confirmDelete"));
-                                        if (!confirmed) {
+                                      onClick={async () => {
+                                        if (!(await confirm({ description: t("confirmDelete"), confirmVariant: "danger" }))) {
                                           return;
                                         }
                                         deleteMutation.mutate({ supplierId: supplier.id });
@@ -504,9 +527,8 @@ const SuppliersPage = () => {
                       icon: DeleteIcon,
                       variant: "danger",
                       disabled: deletingId === supplier.id,
-                      onSelect: () => {
-                        const confirmed = window.confirm(t("confirmDelete"));
-                        if (!confirmed) {
+                      onSelect: async () => {
+                        if (!(await confirm({ description: t("confirmDelete"), confirmVariant: "danger" }))) {
                           return;
                         }
                         deleteMutation.mutate({ supplierId: supplier.id });
@@ -522,7 +544,7 @@ const SuppliersPage = () => {
                       {canManage ? (
                         <input
                           type="checkbox"
-                          className="mt-1 h-4 w-4 accent-ink"
+                          className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                           checked={selectedIds.has(supplier.id)}
                           onChange={() => toggleSelect(supplier.id)}
                           aria-label={t("selectSupplier", { name: supplier.name })}
@@ -554,7 +576,10 @@ const SuppliersPage = () => {
             }}
           />
           {suppliersQuery.isLoading ? (
-            <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : !suppliersQuery.data?.length ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <div className="flex items-center gap-2">
@@ -578,6 +603,7 @@ const SuppliersPage = () => {
           ) : null}
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 };

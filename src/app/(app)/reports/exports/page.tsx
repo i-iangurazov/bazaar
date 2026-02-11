@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -207,7 +208,12 @@ const ExportsPage = () => {
               </Field>
             </FormGrid>
             <FormActions>
-              <Button type="button" onClick={handleGenerate} disabled={createMutation.isLoading}>
+              <Button
+                type="button"
+                onClick={handleGenerate}
+                disabled={createMutation.isLoading}
+                data-tour="exports-generate"
+              >
                 {createMutation.isLoading ? tCommon("loading") : t("generate")}
               </Button>
             </FormActions>
@@ -221,7 +227,10 @@ const ExportsPage = () => {
         </CardHeader>
         <CardContent>
           {jobsQuery.isLoading ? (
-            <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : jobsQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
               <span>{translateError(tErrors, jobsQuery.error)}</span>
@@ -235,7 +244,7 @@ const ExportsPage = () => {
               getKey={(job) => job.id}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
-                  <Table className="min-w-[720px]">
+                  <Table className="min-w-[720px]" data-tour="exports-jobs">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("columns.createdAt")}</TableHead>

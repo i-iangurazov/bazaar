@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { cookies } from "next/headers";
 
 import "./globals.css";
 import { Providers } from "./providers";
 import { defaultLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
+import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/theme";
 
 const notoSans = localFont({
   src: [
@@ -30,11 +32,13 @@ export const generateMetadata = async (): Promise<Metadata> => {
 const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   const locale = (await getLocale()) ?? defaultLocale;
   const messages = await getMessages();
+  const theme = resolveThemePreference(cookies().get(themeCookieName)?.value);
+  const htmlClassName = themeClassName(theme);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className={htmlClassName} suppressHydrationWarning>
       <body
-        className={`${notoSans.variable} font-sans min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100`}
+        className={`${notoSans.variable} font-sans min-h-screen bg-gradient-to-br from-background via-background to-secondary/40`}
       >
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           {children}

@@ -57,6 +57,7 @@ import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { getStockMovementLabel } from "@/lib/i18n/status";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const statusVariants: Record<string, "default" | "warning" | "success" | "danger"> = {
   DRAFT: "default",
@@ -78,6 +79,7 @@ const StockCountDetailPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const countQuery = trpc.stockCounts.get.useQuery(
     { stockCountId: countId },
@@ -259,12 +261,11 @@ const StockCountDetailPage = () => {
                 variant="secondary"
                 className="w-full sm:w-auto"
                 disabled={!count || isLocked || cancelMutation.isLoading}
-                onClick={() => {
+                onClick={async () => {
                   if (!count) {
                     return;
                   }
-                  const confirmed = window.confirm(t("confirmCancel"));
-                  if (!confirmed) {
+                  if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
                     return;
                   }
                   cancelMutation.mutate({ stockCountId: count.id });
@@ -278,14 +279,16 @@ const StockCountDetailPage = () => {
             <Button
               className="w-full sm:w-auto"
               disabled={!count || isLocked || !canManage || applyMutation.isLoading}
-              onClick={() => {
+              onClick={async () => {
                 if (!count) {
                   return;
                 }
-                const confirmed = window.confirm(
-                  t("confirmApply", { count: summary.varianceLines }),
-                );
-                if (!confirmed) {
+                if (
+                  !(await confirm({
+                    description: t("confirmApply", { count: summary.varianceLines }),
+                    confirmVariant: "danger",
+                  }))
+                ) {
                   return;
                 }
                 applyMutation.mutate({
@@ -439,9 +442,8 @@ const StockCountDetailPage = () => {
                                 className="text-danger shadow-none hover:text-danger"
                                 aria-label={t("removeLine")}
                                 disabled={isLocked || removeLineMutation.isLoading}
-                                onClick={() => {
-                                  const confirmed = window.confirm(t("confirmRemoveLine"));
-                                  if (!confirmed) {
+                                onClick={async () => {
+                                  if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
                                     return;
                                   }
                                   removeLineMutation.mutate({ lineId: line.id });
@@ -491,9 +493,8 @@ const StockCountDetailPage = () => {
                     icon: DeleteIcon,
                     variant: "danger",
                     disabled: isLocked || removeLineMutation.isLoading,
-                    onSelect: () => {
-                      const confirmed = window.confirm(t("confirmRemoveLine"));
-                      if (!confirmed) {
+                    onSelect: async () => {
+                      if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
                         return;
                       }
                       removeLineMutation.mutate({ lineId: line.id });
@@ -783,6 +784,7 @@ const StockCountDetailPage = () => {
           </div>
         )}
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

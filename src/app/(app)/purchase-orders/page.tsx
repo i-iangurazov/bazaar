@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -38,6 +38,7 @@ import {
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -53,10 +54,15 @@ const PurchaseOrdersPage = () => {
   const { data: session } = useSession();
   const canManage = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [bulkCanceling, setBulkCanceling] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const listQuery = trpc.purchaseOrders.list.useQuery();
+  const listQuery = trpc.purchaseOrders.list.useQuery({ page, pageSize });
+  const orders = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
+  const totalOrders = listQuery.data?.total ?? 0;
   const cancelMutation = trpc.purchaseOrders.cancel.useMutation({
     onMutate: (variables) => {
       setCancelingId(variables.purchaseOrderId);
@@ -97,26 +103,29 @@ const PurchaseOrdersPage = () => {
   };
 
   const selectedOrders = useMemo(
-    () => (listQuery.data ?? []).filter((po) => selectedIds.has(po.id)),
-    [listQuery.data, selectedIds],
+    () => orders.filter((po) => selectedIds.has(po.id)),
+    [orders, selectedIds],
   );
-  const allSelected =
-    Boolean(listQuery.data?.length) && selectedIds.size === (listQuery.data?.length ?? 0);
+  const allSelected = Boolean(orders.length) && selectedIds.size === orders.length;
   const cancelableSelected = selectedOrders.filter(
     (po) => po.status === "DRAFT" || po.status === "SUBMITTED",
   );
 
   const toggleSelectAll = () => {
-    if (!listQuery.data?.length) {
+    if (!orders.length) {
       return;
     }
     setSelectedIds(() => {
       if (allSelected) {
         return new Set();
       }
-      return new Set(listQuery.data.map((po) => po.id));
+      return new Set(orders.map((po) => po.id));
     });
   };
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, pageSize]);
 
   const toggleSelect = (purchaseOrderId: string) => {
     setSelectedIds((prev) => {
@@ -135,7 +144,12 @@ const PurchaseOrdersPage = () => {
       toast({ variant: "error", description: t("bulkCancelUnavailable") });
       return;
     }
-    if (!window.confirm(t("confirmBulkCancel", { count: cancelableSelected.length }))) {
+    if (
+      !(await confirm({
+        description: t("confirmBulkCancel", { count: cancelableSelected.length }),
+        confirmVariant: "danger",
+      }))
+    ) {
       return;
     }
     setBulkCanceling(true);
@@ -169,7 +183,7 @@ const PurchaseOrdersPage = () => {
         action={
           canManage ? (
             <Link href="/purchase-orders/new" className="w-full sm:w-auto">
-              <Button className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" data-tour="po-create">
                 <AddIcon className="h-4 w-4" aria-hidden />
                 {t("new")}
               </Button>
@@ -183,6 +197,23 @@ const PurchaseOrdersPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
+          {canManage && orders.length ? (
+            <div className="mb-3 sm:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                {!allSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={toggleSelectAll}
+                  >
+                    {t("selectAll")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {canManage && selectedOrders.length ? (
             <div className="mb-3">
               <TooltipProvider>
@@ -213,19 +244,23 @@ const PurchaseOrdersPage = () => {
             </div>
           ) : null}
           <ResponsiveDataList
-            items={listQuery.data ?? []}
+            items={orders}
             getKey={(po) => po.id}
+            page={page}
+            totalItems={totalOrders}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
                 <TooltipProvider>
-                  <Table className="min-w-[760px]">
+                  <Table className="min-w-[760px]" data-tour="po-table">
                     <TableHeader>
                       <TableRow>
                         {canManage ? (
                           <TableHead className="w-10">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 accent-ink"
+                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                               checked={allSelected}
                               onChange={toggleSelectAll}
                               aria-label={t("selectAll")}
@@ -248,7 +283,7 @@ const PurchaseOrdersPage = () => {
                             <TableCell>
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 accent-ink"
+                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={selectedIds.has(po.id)}
                                 onChange={() => toggleSelect(po.id)}
                                 aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
@@ -315,9 +350,8 @@ const PurchaseOrdersPage = () => {
                                       size="icon"
                                       className="text-danger shadow-none hover:text-danger"
                                       aria-label={t("cancelOrder")}
-                                      onClick={() => {
-                                        const confirmed = window.confirm(t("confirmCancel"));
-                                        if (!confirmed) {
+                                      onClick={async () => {
+                                        if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
                                           return;
                                         }
                                         cancelMutation.mutate({ purchaseOrderId: po.id });
@@ -361,9 +395,8 @@ const PurchaseOrdersPage = () => {
                         icon: CloseIcon,
                         variant: "danger",
                         disabled: cancelingId === po.id,
-                        onSelect: () => {
-                          const confirmed = window.confirm(t("confirmCancel"));
-                          if (!confirmed) {
+                        onSelect: async () => {
+                          if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
                             return;
                           }
                           cancelMutation.mutate({ purchaseOrderId: po.id });
@@ -380,7 +413,7 @@ const PurchaseOrdersPage = () => {
                       {canManage ? (
                         <input
                           type="checkbox"
-                          className="mt-1 h-4 w-4 accent-ink"
+                          className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                           checked={selectedIds.has(po.id)}
                           onChange={() => toggleSelect(po.id)}
                           aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
@@ -427,8 +460,11 @@ const PurchaseOrdersPage = () => {
             }}
           />
           {listQuery.isLoading ? (
-            <p className="mt-4 text-sm text-gray-500">{tCommon("loading")}</p>
-          ) : !listQuery.data?.length ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : totalOrders === 0 ? (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -451,6 +487,7 @@ const PurchaseOrdersPage = () => {
           ) : null}
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 };

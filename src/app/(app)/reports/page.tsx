@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -180,7 +181,10 @@ const ReportsPage = () => {
         </CardHeader>
         <CardContent>
           {stockoutsQuery.isLoading ? (
-            <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : stockoutsQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
               <span>{translateError(tErrors, stockoutsQuery.error)}</span>
@@ -309,7 +313,10 @@ const ReportsPage = () => {
         </CardHeader>
         <CardContent>
           {slowMoversQuery.isLoading ? (
-            <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : slowMoversQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
               <span>{translateError(tErrors, slowMoversQuery.error)}</span>
@@ -436,7 +443,10 @@ const ReportsPage = () => {
         </CardHeader>
         <CardContent>
           {shrinkageQuery.isLoading ? (
-            <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : shrinkageQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
               <span>{translateError(tErrors, shrinkageQuery.error)}</span>

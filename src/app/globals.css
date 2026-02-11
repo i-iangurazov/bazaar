@@ -3,40 +3,136 @@
 @tailwind utilities;
 
 :root {
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%; /* slate-900-ish */
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* keep blue, slightly refined */
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+
+  /* make secondary distinct: subtle tinted surface */
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 47% 11%;
+
+  /* muted = quieter text + surfaces */
+  --muted: 220 14% 97%;
+  --muted-foreground: 215 16% 47%;
+
+  --accent: 220 14% 96%;
+  --accent-foreground: 222 47% 11%;
+
+  /* borders & inputs: clearer separation on white */
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+
+  /* ring: match primary but slightly softer */
+  --ring: 221 83% 53%;
+
+  /* semantics: balanced for white backgrounds */
+  --success: 142 71% 35%;
+  --success-foreground: 0 0% 100%;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 222 47% 11%;
+
+  --danger: 0 74% 50%;
+  --danger-foreground: 0 0% 100%;
+
+  --destructive: 0 74% 50%;
+  --destructive-foreground: 0 0% 100%;
+
+  --radius: 0.75rem;
   color-scheme: light;
 }
 
-body {
-  @apply bg-gray-50 text-ink antialiased;
-  font-feature-settings: "liga" 1, "kern" 1;
+.dark {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 98%;
+
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 98%;
+
+  --popover: 222 47% 9%;
+  --popover-foreground: 210 40% 98%;
+
+  /* blue stays “blue” but tuned for dark */
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 11%;
+
+  --secondary: 223 25% 16%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 223 25% 16%;
+  --muted-foreground: 215 20% 70%;
+
+  --accent: 223 25% 16%;
+  --accent-foreground: 210 40% 98%;
+
+  --border: 223 20% 22%;
+  --input: 223 20% 22%;
+
+  --ring: 217 91% 60%;
+
+  --success: 142 60% 45%;
+  --success-foreground: 222 47% 11%;
+
+  --warning: 38 92% 60%;
+  --warning-foreground: 222 47% 11%;
+
+  --danger: 0 84% 64%;
+  --danger-foreground: 222 47% 11%;
+
+  --destructive: 0 84% 64%;
+  --destructive-foreground: 222 47% 11%;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "liga" 1, "kern" 1;
+  }
+
+  a {
+    @apply text-primary hover:underline;
+  }
+
+  label {
+    @apply text-sm font-medium text-foreground;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm;
+  }
+
+  table {
+    @apply w-full border-collapse;
+  }
+
+  th {
+    @apply text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+
+  td {
+    @apply text-sm text-foreground;
+  }
 }
 
 @supports not selector(:focus-visible) {
   .button-focus-ring:focus {
-    @apply ring-2 ring-ink/20 ring-offset-2 ring-offset-white;
+    @apply ring-2 ring-ring/30 ring-offset-2 ring-offset-background;
   }
-}
-
-a {
-  @apply text-accent hover:underline;
-}
-
-label {
-  @apply text-sm font-medium text-ink;
-}
-
-input, select, textarea {
-  @apply w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-ink shadow-sm;
-}
-
-table {
-  @apply w-full border-collapse;
-}
-
-th {
-  @apply text-left text-xs font-semibold uppercase tracking-wide text-gray-500;
-}
-
-td {
-  @apply text-sm text-ink;
 }

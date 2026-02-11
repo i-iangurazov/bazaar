@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -144,7 +145,10 @@ const PeriodClosePage = () => {
         </CardHeader>
         <CardContent>
           {closesQuery.isLoading ? (
-            <p className="text-sm text-gray-500">{tCommon("loading")}</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
           ) : closesQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
               <span>{translateError(tErrors, closesQuery.error)}</span>
