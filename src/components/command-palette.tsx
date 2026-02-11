@@ -19,6 +19,7 @@ import {
   InventoryIcon,
   ProductsIcon,
   PurchaseOrdersIcon,
+  SalesOrdersIcon,
   SearchIcon,
   StoresIcon,
   SuppliersIcon,
@@ -72,6 +73,14 @@ export const CommandPalette = () => {
 
   const actions = useMemo<PaletteItem[]>(
     () => [
+      {
+        id: "action-create-so",
+        label: t("actionCreateSo"),
+        sublabel: null,
+        href: "/sales/orders/new",
+        icon: SalesOrdersIcon,
+        group: "actions",
+      },
       {
         id: "action-create-po",
         label: t("actionCreatePo"),

@@ -58,7 +58,7 @@ export const Modal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center px-3 sm:px-4">
       <button
         type="button"
-        className="absolute inset-0 z-0 bg-black/30"
+        className="absolute inset-0 z-0 bg-black/40 backdrop-blur-[1px]"
         onClick={() => onOpenChange(false)}
         aria-label={tCommon("close")}
       />
@@ -70,22 +70,22 @@ export const Modal = ({
         aria-describedby={subtitle ? subtitleId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-lg flex-col rounded-lg bg-white shadow-xl",
+          "relative z-10 flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-lg flex-col rounded-xl border border-border bg-card text-card-foreground shadow-2xl",
           className,
         )}
       >
         <div
           className={cn(
-            "sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-100 bg-white p-6",
+            "sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border rounded-xl bg-card p-6",
             headerClassName,
           )}
         >
           <div>
-            <h2 id={titleId} className="text-lg font-semibold text-ink">
+            <h2 id={titleId} className="text-lg font-semibold text-foreground">
               {title}
             </h2>
             {subtitle ? (
-              <p id={subtitleId} className="text-sm text-gray-500">
+              <p id={subtitleId} className="text-sm text-muted-foreground">
                 {subtitle}
               </p>
             ) : null}

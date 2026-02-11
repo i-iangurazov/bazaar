@@ -60,6 +60,7 @@ import { buildVariantMatrix, type VariantGeneratorAttribute } from "@/lib/varian
 export type ProductFormValues = {
   sku: string;
   name: string;
+  isBundle?: boolean;
   category?: string;
   baseUnitId: string;
   basePriceKgs?: number;
@@ -85,6 +86,13 @@ export type ProductFormValues = {
     sku?: string;
     attributes: Record<string, unknown>;
     canDelete?: boolean;
+  }[];
+  bundleComponents?: {
+    componentProductId: string;
+    componentVariantId?: string | null;
+    qty: number;
+    componentName?: string;
+    componentSku?: string;
   }[];
 };
 
@@ -175,6 +183,7 @@ export const ProductForm = ({
       z.object({
         sku: z.string().min(2, t("skuRequired")),
         name: z.string().min(2, t("nameRequired")),
+        isBundle: z.boolean().optional(),
         category: z.string().optional(),
         baseUnitId: z.string().min(1, t("unitRequired")),
         basePriceKgs: z.coerce.number().min(0, t("priceNonNegative")).optional(),
@@ -221,6 +230,17 @@ export const ProductForm = ({
             canDelete: z.boolean().optional(),
           }),
         ),
+        bundleComponents: z
+          .array(
+            z.object({
+              componentProductId: z.string().min(1),
+              componentVariantId: z.string().optional().nullable(),
+              qty: z.coerce.number().int().positive(t("bundleQtyPositive")),
+              componentName: z.string().optional(),
+              componentSku: z.string().optional(),
+            }),
+          )
+          .optional(),
       }),
     [t],
   );
@@ -250,6 +270,7 @@ export const ProductForm = ({
     defaultValues: {
       sku: initialValues.sku,
       name: initialValues.name,
+      isBundle: initialValues.isBundle ?? false,
       category: initialValues.category ?? "",
       baseUnitId: initialValues.baseUnitId,
       basePriceKgs: initialValues.basePriceKgs ?? undefined,
@@ -273,9 +294,17 @@ export const ProductForm = ({
                 name: "",
                 sku: "",
                 attributes: toAttributeEntries({}),
-                canDelete: true,
-              },
-            ],
+              canDelete: true,
+            },
+          ],
+      bundleComponents:
+        initialValues.bundleComponents?.map((component) => ({
+          componentProductId: component.componentProductId,
+          componentVariantId: component.componentVariantId ?? null,
+          qty: component.qty,
+          componentName: component.componentName,
+          componentSku: component.componentSku,
+        })) ?? [],
     },
   });
 
@@ -329,6 +358,15 @@ export const ProductForm = ({
     name: "packs",
   });
 
+  const {
+    fields: bundleComponentFields,
+    append: appendBundleComponent,
+    remove: removeBundleComponent,
+  } = useFieldArray({
+    control: form.control,
+    name: "bundleComponents",
+  });
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
@@ -350,9 +388,17 @@ export const ProductForm = ({
   const [generatorAttributes, setGeneratorAttributes] = useState<VariantGeneratorAttribute[]>([]);
   const [generatorDraftKey, setGeneratorDraftKey] = useState("");
   const [generatorValueDrafts, setGeneratorValueDrafts] = useState<Record<string, string>>({});
+  const [bundleSearch, setBundleSearch] = useState("");
+  const [showBundleResults, setShowBundleResults] = useState(false);
+  const isBundle = Boolean(form.watch("isBundle"));
   const baseUnitId = form.watch("baseUnitId");
   const baseUnit = unitOptions.find((unit) => unit.id === baseUnitId);
   const maxImageBytes = 5 * 1024 * 1024;
+
+  const bundleSearchQuery = trpc.products.searchQuick.useQuery(
+    { q: bundleSearch.trim() },
+    { enabled: !readOnly && isBundle && bundleSearch.trim().length >= 1 },
+  );
 
   const readImageFile = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -563,6 +609,33 @@ export const ProductForm = ({
     setGeneratorOpen(false);
   };
 
+  const addBundleComponentFromSearch = (component: {
+    id: string;
+    name: string;
+    sku: string;
+  }) => {
+    if (readOnly) {
+      return;
+    }
+    const existing = form.getValues("bundleComponents") ?? [];
+    const duplicate = existing.some(
+      (entry) => entry.componentProductId === component.id && !entry.componentVariantId,
+    );
+    if (duplicate) {
+      toast({ variant: "error", description: t("bundleComponentDuplicate") });
+      return;
+    }
+    appendBundleComponent({
+      componentProductId: component.id,
+      componentVariantId: null,
+      qty: 1,
+      componentName: component.name,
+      componentSku: component.sku,
+    });
+    setBundleSearch("");
+    setShowBundleResults(false);
+  };
+
   const handleSubmit = (values: z.infer<typeof schema>) => {
     if (readOnly) {
       return;
@@ -684,6 +757,7 @@ export const ProductForm = ({
     onSubmit({
       sku: values.sku.trim(),
       name: values.name.trim(),
+      isBundle: Boolean(values.isBundle),
       category: values.category?.trim() || undefined,
       baseUnitId: values.baseUnitId,
       basePriceKgs: Number.isFinite(values.basePriceKgs ?? NaN)
@@ -703,6 +777,16 @@ export const ProductForm = ({
           allowInReceiving: pack.allowInReceiving ?? true,
         })) ?? [],
       variants: parsedVariants,
+      bundleComponents:
+        values.bundleComponents
+          ?.map((component) => ({
+            componentProductId: component.componentProductId,
+            componentVariantId: component.componentVariantId ?? null,
+            qty: component.qty,
+            componentName: component.componentName,
+            componentSku: component.componentSku,
+          }))
+          .filter((component) => component.componentProductId) ?? [],
     });
   };
 
@@ -755,6 +839,31 @@ export const ProductForm = ({
                         <FormControl>
                           <Input {...field} disabled={readOnly} />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="isBundle"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("typeLabel")}</FormLabel>
+                        <Select
+                          value={field.value ? "bundle" : "product"}
+                          onValueChange={(value) => field.onChange(value === "bundle")}
+                          disabled={readOnly}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="product">{t("typeProduct")}</SelectItem>
+                            <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -825,6 +934,119 @@ export const ProductForm = ({
                   />
                 </FormGrid>
               </FormSection>
+
+              {isBundle ? (
+                <FormSection
+                  title={t("bundleComponentsTitle")}
+                  description={t("bundleComponentsHint")}
+                >
+                  <div className="space-y-3 rounded-md border border-border p-3">
+                    <div className="relative">
+                      <Input
+                        value={bundleSearch}
+                        onChange={(event) => {
+                          setBundleSearch(event.target.value);
+                          setShowBundleResults(true);
+                        }}
+                        onFocus={() => setShowBundleResults(true)}
+                        onBlur={() => {
+                          window.setTimeout(() => setShowBundleResults(false), 120);
+                        }}
+                        placeholder={t("bundleSearchPlaceholder")}
+                        disabled={readOnly}
+                      />
+                      {showBundleResults && bundleSearch.trim().length > 0 ? (
+                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                          {bundleSearchQuery.isLoading ? (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              {tCommon("loading")}
+                            </div>
+                          ) : bundleSearchQuery.data?.length ? (
+                            bundleSearchQuery.data.map((product) => (
+                              <button
+                                key={product.id}
+                                type="button"
+                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() =>
+                                  addBundleComponentFromSearch({
+                                    id: product.id,
+                                    name: product.name,
+                                    sku: product.sku,
+                                  })
+                                }
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-foreground">{product.name}</p>
+                                  <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
+                                </div>
+                                {product.isBundle ? (
+                                  <Badge variant="muted">{t("bundleProductLabel")}</Badge>
+                                ) : null}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              {tCommon("nothingFound")}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {bundleComponentFields.length ? (
+                      <div className="space-y-2">
+                        {bundleComponentFields.map((component, index) => (
+                          <div
+                            key={component.id}
+                            className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_120px_auto]"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {component.componentName || tCommon("notAvailable")}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {component.componentSku || component.componentProductId}
+                              </p>
+                            </div>
+                            <FormField
+                              control={form.control}
+                              name={`bundleComponents.${index}.qty`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      inputMode="numeric"
+                                      disabled={readOnly}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="icon"
+                              onClick={() => removeBundleComponent(index)}
+                              disabled={readOnly}
+                              aria-label={t("bundleRemoveComponent")}
+                            >
+                              <DeleteIcon className="h-4 w-4" aria-hidden />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("bundleEmpty")}</p>
+                    )}
+                  </div>
+                </FormSection>
+              ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-ink">{t("descriptionTitle")}</h3>

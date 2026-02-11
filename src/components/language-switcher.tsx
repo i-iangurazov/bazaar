@@ -4,8 +4,12 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
+import { LanguageIcon } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { trpc } from "@/lib/trpc";
 import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/locales";
+import { cn } from "@/lib/utils";
 
 export const LanguageSwitcher = () => {
   const t = useTranslations("common");
@@ -39,22 +43,34 @@ export const LanguageSwitcher = () => {
   };
 
   return (
-    <div className="flex items-center gap-2 text-xs text-gray-500">
-      <span className="font-semibold text-gray-400">{t("language")}</span>
+    <div
+      className="inline-flex items-center gap-1 rounded-md border border-input bg-secondary p-1 text-secondary-foreground shadow-sm"
+      role="group"
+      aria-label={t("language")}
+    >
+      <span
+        className="inline-flex h-7 w-7 items-center justify-center text-muted-foreground"
+        aria-hidden
+      >
+        {updateLocale.isLoading ? <Spinner className="h-3.5 w-3.5" /> : <LanguageIcon className="h-4 w-4" />}
+      </span>
       {locales.map((availableLocale) => (
-        <button
+        <Button
           key={availableLocale}
           type="button"
-          className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
-            locale === availableLocale
-              ? "border-ink bg-ink text-white"
-              : "border-gray-200 text-gray-500 hover:bg-gray-100"
-          }`}
+          variant={locale === availableLocale ? "primary" : "ghost"}
+          size="sm"
+          className={cn(
+            "h-7 px-2 text-xs font-semibold",
+            locale === availableLocale ? "shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
           aria-label={t("switchLocale", { locale: localeLabels[availableLocale] })}
+          aria-pressed={locale === availableLocale}
+          disabled={updateLocale.isLoading}
           onClick={() => handleSwitch(availableLocale)}
         >
           {localeLabels[availableLocale]}
-        </button>
+        </Button>
       ))}
     </div>
   );

@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Boxes,
+  ClipboardList,
   ShoppingCart,
   Truck,
   Package,
@@ -47,10 +48,13 @@ import {
   Tag,
   DollarSign,
   Copy,
+  Languages,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
 export const InventoryIcon = Boxes;
+export const OrdersIcon = ClipboardList;
+export const SalesOrdersIcon = User;
 export const PurchaseOrdersIcon = ShoppingCart;
 export const SuppliersIcon = Truck;
 export const ProductsIcon = Package;
@@ -100,3 +104,4 @@ export const SearchIcon = Search;
 export const TagIcon = Tag;
 export const PriceIcon = DollarSign;
 export const CopyIcon = Copy;
+export const LanguageIcon = Languages;

@@ -79,8 +79,12 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                 key={toast.id}
                 role={toast.variant === "error" ? "alert" : "status"}
                 className={cn(
-                  "rounded-lg border bg-white p-4 shadow-lg",
-                  toast.variant === "error" ? "border-red-200" : "border-gray-200",
+                  "rounded-lg border bg-card p-4 shadow-lg",
+                  toast.variant === "error"
+                    ? "border-danger/40"
+                    : toast.variant === "success"
+                      ? "border-success/40"
+                      : "border-border",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -89,8 +93,8 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                       className={cn(
                         "mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full",
                         toast.variant === "error"
-                          ? "bg-red-100 text-red-600"
-                          : "bg-green-100 text-green-700",
+                          ? "bg-danger/15 text-danger"
+                          : "bg-success/15 text-success",
                       )}
                     >
                       <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -98,9 +102,9 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                   ) : null}
                   <div className="flex-1 space-y-1">
                     {toast.title ? (
-                      <p className="text-sm font-semibold text-ink">{toast.title}</p>
+                      <p className="text-sm font-semibold text-foreground">{toast.title}</p>
                     ) : null}
-                    <p className="text-sm text-gray-600">{toast.description}</p>
+                    <p className="text-sm text-muted-foreground">{toast.description}</p>
                   </div>
                   <Tooltip>
                     <TooltipTrigger asChild>

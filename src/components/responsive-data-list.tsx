@@ -25,6 +25,10 @@ type ResponsiveDataListProps<T> = {
   paginationKey?: string;
   defaultPageSize?: number;
   pageSizeOptions?: number[];
+  page?: number;
+  totalItems?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 };
 
 export const ResponsiveDataList = <T,>({
@@ -38,14 +42,26 @@ export const ResponsiveDataList = <T,>({
   paginationKey,
   defaultPageSize = 25,
   pageSizeOptions = [10, 25, 50, 100],
+  page: externalPage,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
 }: ResponsiveDataListProps<T>) => {
   const tCommon = useTranslations("common");
   const list = useMemo(() => items ?? [], [items]);
+  const isServerPagination =
+    typeof onPageChange === "function" &&
+    typeof onPageSizeChange === "function" &&
+    typeof totalItems === "number";
   const storageKey = paginationKey ? `responsive-list:${paginationKey}:page-size` : null;
-  const [page, setPage] = useState(1);
+  const [internalPage, setInternalPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
+  const page = isServerPagination ? Math.max(1, externalPage ?? 1) : internalPage;
 
   useEffect(() => {
+    if (isServerPagination) {
+      return;
+    }
     if (!storageKey) {
       return;
     }
@@ -61,27 +77,43 @@ export const ResponsiveDataList = <T,>({
     } catch {
       // ignore storage errors
     }
-  }, [storageKey, pageSizeOptions]);
+  }, [isServerPagination, storageKey, pageSizeOptions]);
 
   useEffect(() => {
-    setPage(1);
-  }, [pageSize]);
+    if (isServerPagination) {
+      onPageChange?.(1);
+      return;
+    }
+    setInternalPage(1);
+  }, [isServerPagination, onPageChange, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  const totalCount = isServerPagination ? totalItems : list.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   useEffect(() => {
     if (page <= totalPages) {
       return;
     }
-    setPage(totalPages);
-  }, [page, totalPages]);
+    if (isServerPagination) {
+      onPageChange?.(totalPages);
+      return;
+    }
+    setInternalPage(totalPages);
+  }, [isServerPagination, onPageChange, page, totalPages]);
 
   const pagedItems = useMemo(() => {
+    if (isServerPagination) {
+      return list;
+    }
     const start = (page - 1) * pageSize;
     return list.slice(start, start + pageSize);
-  }, [list, page, pageSize]);
-  const startItem = list.length ? (page - 1) * pageSize + 1 : 0;
-  const endItem = list.length ? Math.min(page * pageSize, list.length) : 0;
+  }, [isServerPagination, list, page, pageSize]);
+  const startItem = totalCount ? (page - 1) * pageSize + 1 : 0;
+  const endItem = totalCount
+    ? isServerPagination
+      ? Math.min((page - 1) * pageSize + pagedItems.length, totalCount)
+      : Math.min(page * pageSize, totalCount)
+    : 0;
   const showPagination = totalPages > 1;
 
   return (
@@ -106,7 +138,7 @@ export const ResponsiveDataList = <T,>({
       {showPagination ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
           <p className="text-xs text-gray-500">
-            {tCommon("pagination.items", { from: startItem, to: endItem, total: list.length })}
+            {tCommon("pagination.items", { from: startItem, to: endItem, total: totalCount })}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-gray-500">{tCommon("pagination.rowsPerPage")}</span>
@@ -119,6 +151,10 @@ export const ResponsiveDataList = <T,>({
                     return;
                   }
                   setPageSize(parsed);
+                  if (isServerPagination) {
+                    onPageSizeChange?.(parsed);
+                    return;
+                  }
                   if (storageKey) {
                     try {
                       window.localStorage.setItem(storageKey, String(parsed));
@@ -148,7 +184,13 @@ export const ResponsiveDataList = <T,>({
               variant="secondary"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              onClick={() => {
+                if (isServerPagination) {
+                  onPageChange?.(Math.max(1, page - 1));
+                  return;
+                }
+                setInternalPage((prev) => Math.max(1, prev - 1));
+              }}
               disabled={page <= 1}
               aria-label={tCommon("pagination.previous")}
               title={tCommon("pagination.previous")}
@@ -160,7 +202,13 @@ export const ResponsiveDataList = <T,>({
               variant="secondary"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              onClick={() => {
+                if (isServerPagination) {
+                  onPageChange?.(Math.min(totalPages, page + 1));
+                  return;
+                }
+                setInternalPage((prev) => Math.min(totalPages, prev + 1));
+              }}
               disabled={page >= totalPages}
               aria-label={tCommon("pagination.next")}
               title={tCommon("pagination.next")}
