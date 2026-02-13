@@ -21,7 +21,7 @@ export type CreateUserInput = {
   requestId: string;
   email: string;
   name: string;
-  role: "ADMIN" | "MANAGER" | "STAFF";
+  role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
   password: string;
   preferredLocale: string;
 };
@@ -103,7 +103,7 @@ export type UpdateUserInput = {
   requestId: string;
   email: string;
   name: string;
-  role: "ADMIN" | "MANAGER" | "STAFF";
+  role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
   preferredLocale: string;
 };
 

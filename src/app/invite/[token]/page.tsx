@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
@@ -82,11 +83,11 @@ const InvitePage = () => {
           <CardHeader>
             <CardTitle>{t("acceptedTitle")}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>{t("acceptedHint")}</p>
-            <a href="/login" className="text-sm font-semibold text-ink underline">
+            <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
               {t("goToLogin")}
-            </a>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -104,13 +105,13 @@ const InvitePage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           {inviteQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : inviteQuery.data ? (
             <>
-              <div className="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm text-gray-600">
+              <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
                 <p>{t("inviteFor", { org: inviteQuery.data.organizationName })}</p>
                 <p>{t("inviteEmail", { email: inviteQuery.data.email })}</p>
                 <p>{t("inviteRole", { role: inviteQuery.data.role })}</p>
@@ -118,7 +119,7 @@ const InvitePage = () => {
               <form onSubmit={handleSubmit}>
                 <FormStack>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-ink" htmlFor="invite-name">
+                    <label className="text-sm font-medium text-foreground" htmlFor="invite-name">
                       {t("name")}
                     </label>
                     <Input
@@ -136,7 +137,7 @@ const InvitePage = () => {
                     {fieldErrors.name ? <p className="text-xs font-medium text-danger">{fieldErrors.name}</p> : null}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-ink" htmlFor="invite-password">
+                    <label className="text-sm font-medium text-foreground" htmlFor="invite-password">
                       {t("password")}
                     </label>
                     <Input
@@ -157,7 +158,7 @@ const InvitePage = () => {
                     ) : null}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-ink">{t("preferredLocale")}</label>
+                    <label className="text-sm font-medium text-foreground">{t("preferredLocale")}</label>
                     <Select
                       value={values.preferredLocale}
                       onValueChange={(value) => {
@@ -186,7 +187,7 @@ const InvitePage = () => {
               </form>
             </>
           ) : (
-            <p className="text-sm text-gray-500">{t("invalidInvite")}</p>
+            <p className="text-sm text-muted-foreground">{t("invalidInvite")}</p>
           )}
         </CardContent>
       </Card>

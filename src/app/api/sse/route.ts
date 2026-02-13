@@ -74,7 +74,14 @@ const resolvePoOrganizationId = async (poId: string) => {
 };
 
 const canReceiveEvent = async (organizationId: string, event: { type: string; payload: unknown }) => {
-  if (event.type === "inventory.updated" || event.type === "lowStock.triggered") {
+  if (
+    event.type === "inventory.updated" ||
+    event.type === "lowStock.triggered" ||
+    event.type === "sale.completed" ||
+    event.type === "sale.refunded" ||
+    event.type === "shift.opened" ||
+    event.type === "shift.closed"
+  ) {
     const payload = event.payload as { storeId?: string };
     if (!payload.storeId) {
       return false;

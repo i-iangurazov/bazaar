@@ -15,6 +15,28 @@ export type EventPayload =
   | {
       type: "lowStock.triggered";
       payload: { storeId: string; productId: string; variantId?: string | null; onHand: number; minStock: number };
+    }
+  | {
+      type: "sale.completed";
+      payload: { saleId: string; storeId: string; registerId?: string | null; shiftId?: string | null; number: string };
+    }
+  | {
+      type: "sale.refunded";
+      payload: {
+        saleReturnId: string;
+        storeId: string;
+        registerId?: string | null;
+        shiftId?: string | null;
+        number: string;
+      };
+    }
+  | {
+      type: "shift.opened";
+      payload: { shiftId: string; storeId: string; registerId: string };
+    }
+  | {
+      type: "shift.closed";
+      payload: { shiftId: string; storeId: string; registerId: string };
     };
 
 type Listener = (event: EventPayload) => void;

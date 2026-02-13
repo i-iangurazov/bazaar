@@ -221,7 +221,7 @@ const OnboardingPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -230,7 +230,7 @@ const OnboardingPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <div className="mt-6 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
@@ -251,7 +251,7 @@ const OnboardingPage = () => {
           <CardHeader>
             <CardTitle>{t("completeTitle")}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-500">
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>{t("completeSubtitle")}</p>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="secondary">
@@ -270,11 +270,11 @@ const OnboardingPage = () => {
           <CardTitle>{t("progressTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center justify-between text-sm text-gray-500">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>{t("progressLabel", { done: doneCount, total: totalCount })}</span>
             <span>{progressPercent}%</span>
           </div>
-          <div className="h-2 w-full rounded-full bg-gray-100">
+          <div className="h-2 w-full rounded-full bg-muted/40">
             <div
               className="h-2 rounded-full bg-emerald-500"
               style={{ width: `${progressPercent}%` }}
@@ -289,15 +289,15 @@ const OnboardingPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{t("steps.store.title")}</CardTitle>
-                <p className="text-sm text-gray-500">{t("steps.store.description")}</p>
+                <p className="text-sm text-muted-foreground">{t("steps.store.description")}</p>
               </div>
               {renderStatus(steps.store)}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-xs text-gray-500">{t("currencyHint")}</p>
+            <p className="text-xs text-muted-foreground">{t("currencyHint")}</p>
             {steps.store === "completed" ? (
-              <div className="text-sm text-gray-600">{t("steps.store.completed")}</div>
+              <div className="text-sm text-muted-foreground">{t("steps.store.completed")}</div>
             ) : !hasStores ? (
               <Form {...storeForm}>
                 <form
@@ -427,7 +427,7 @@ const OnboardingPage = () => {
                 </form>
               </Form>
             ) : legalComplete ? (
-              <div className="text-sm text-gray-600">{t("steps.store.completed")}</div>
+              <div className="text-sm text-muted-foreground">{t("steps.store.completed")}</div>
             ) : (
               <Form {...legalForm}>
                 <form
@@ -566,13 +566,13 @@ const OnboardingPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{t("steps.users.title")}</CardTitle>
-                <p className="text-sm text-gray-500">{t("steps.users.description")}</p>
+                <p className="text-sm text-muted-foreground">{t("steps.users.description")}</p>
               </div>
               {renderStatus(steps.users)}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {t("steps.users.progress", { count: stats?.teamCount ?? 0 })}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -597,13 +597,13 @@ const OnboardingPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{t("steps.catalog.title")}</CardTitle>
-                <p className="text-sm text-gray-500">{t("steps.catalog.description")}</p>
+                <p className="text-sm text-muted-foreground">{t("steps.catalog.description")}</p>
               </div>
               {renderStatus(steps.catalog)}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {t("steps.catalog.progress", { count: stats?.productCount ?? 0 })}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -631,7 +631,7 @@ const OnboardingPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{t("steps.inventory.title")}</CardTitle>
-                <p className="text-sm text-gray-500">{t("steps.inventory.description")}</p>
+                <p className="text-sm text-muted-foreground">{t("steps.inventory.description")}</p>
               </div>
               {renderStatus(steps.inventory)}
             </div>
@@ -714,13 +714,13 @@ const OnboardingPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{t("steps.procurement.title")}</CardTitle>
-                <p className="text-sm text-gray-500">{t("steps.procurement.description")}</p>
+                <p className="text-sm text-muted-foreground">{t("steps.procurement.description")}</p>
               </div>
               {renderStatus(steps.procurement)}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {t("steps.procurement.progress", {
                 suppliers: stats?.supplierCount ?? 0,
                 pos: stats?.purchaseOrderCount ?? 0,
@@ -751,13 +751,13 @@ const OnboardingPage = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle>{t("steps.receive.title")}</CardTitle>
-                <p className="text-sm text-gray-500">{t("steps.receive.description")}</p>
+                <p className="text-sm text-muted-foreground">{t("steps.receive.description")}</p>
               </div>
               {renderStatus(steps.receive)}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {t("steps.receive.progress", { count: stats?.receivedOrderCount ?? 0 })}
             </p>
             <div className="flex flex-wrap gap-2">

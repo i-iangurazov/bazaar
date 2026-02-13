@@ -40,7 +40,7 @@ const InviteEntryPage = () => {
           <CardTitle>{t("entryTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-gray-600">{t("entrySubtitle")}</p>
+          <p className="text-sm text-muted-foreground">{t("entrySubtitle")}</p>
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -67,7 +67,7 @@ const InviteEntryPage = () => {
               <Button type="submit" className="w-full">
                 {t("entrySubmit")}
               </Button>
-              <p className="text-xs text-gray-500">{t("entryHint")}</p>
+              <p className="text-xs text-muted-foreground">{t("entryHint")}</p>
             </FormStack>
           </form>
         </CardContent>

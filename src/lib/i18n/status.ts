@@ -54,6 +54,8 @@ export const getStockMovementLabel = (
       return tInventory("movementType.receive");
     case "SALE":
       return tInventory("movementType.sale");
+    case "RETURN":
+      return tInventory("movementType.return");
     case "ADJUSTMENT":
       return tInventory("movementType.adjustment");
     case "TRANSFER_IN":

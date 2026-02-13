@@ -1,5 +1,5 @@
-import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
+import { isProductionRuntime } from "@/server/config/runtime";
 import { getRedisPublisher } from "@/server/redis";
 
 export type RateLimitConfig = {
@@ -41,11 +41,13 @@ class RedisRateLimiter implements RateLimiter {
   private readonly windowMs: number;
   private readonly max: number;
   private readonly prefix: string;
+  private readonly fallbackLimiter: MemoryRateLimiter;
 
   constructor(config: RateLimitConfig) {
     this.windowMs = config.windowMs;
     this.max = config.max;
     this.prefix = config.prefix;
+    this.fallbackLimiter = new MemoryRateLimiter(config);
   }
 
   async consume(key: string) {
@@ -54,9 +56,7 @@ class RedisRateLimiter implements RateLimiter {
       if (isProductionRuntime()) {
         throw new Error("redisUnavailable");
       }
-      return new MemoryRateLimiter({ windowMs: this.windowMs, max: this.max, prefix: this.prefix }).consume(
-        key,
-      );
+      return this.fallbackLimiter.consume(key);
     }
 
     const bucketKey = `${this.prefix}:${key}`;
@@ -73,11 +73,9 @@ class RedisRateLimiter implements RateLimiter {
       }
     } catch (error) {
       if (isProductionRuntime()) {
-        throw new Error("redisUnavailable");
+        throw error;
       }
-      return new MemoryRateLimiter({ windowMs: this.windowMs, max: this.max, prefix: this.prefix }).consume(
-        key,
-      );
+      return this.fallbackLimiter.consume(key);
     }
   }
 }
@@ -85,11 +83,12 @@ class RedisRateLimiter implements RateLimiter {
 export const createRateLimiter = (config: RateLimitConfig): RateLimiter => {
   const redis = getRedisPublisher();
   if (!redis) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("REDIS_URL is required for rate limiting in production.");
-    }
     const logger = getLogger();
-    logger.warn({ prefix: config.prefix }, "Using in-memory rate limiter; Redis not configured.");
+    if (isProductionRuntime()) {
+      logger.error({ prefix: config.prefix }, "Redis rate limiter unavailable in production.");
+      throw new Error("redisUnavailable");
+    }
+    logger.warn({ prefix: config.prefix }, "Using in-memory rate limiter; Redis unavailable.");
     return new MemoryRateLimiter(config);
   }
   return new RedisRateLimiter(config);

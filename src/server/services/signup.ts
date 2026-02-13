@@ -63,15 +63,6 @@ export const createSignup = async (input: {
 
   const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
   if (existingUser) {
-    if (verificationRequired && !existingUser.emailVerifiedAt) {
-      const verifyLink = await sendEmailVerificationToken({
-        userId: existingUser.id,
-        email: existingUser.email,
-        organizationId: existingUser.organizationId,
-        requestId: input.requestId,
-      });
-      return { sent: true, verifyLink };
-    }
     const updatedUser =
       !verificationRequired && !existingUser.emailVerifiedAt
         ? await prisma.user.update({
@@ -80,15 +71,24 @@ export const createSignup = async (input: {
           })
         : existingUser;
 
-    if (!updatedUser.organizationId) {
+    const hasStore = updatedUser.organizationId
+      ? await prisma.store.count({ where: { organizationId: updatedUser.organizationId } })
+      : 0;
+
+    if (!updatedUser.organizationId || hasStore === 0) {
       const nextPath = await createRegistrationNextPath(updatedUser.id, updatedUser.email, updatedUser.organizationId);
       return { sent: true, nextPath };
     }
 
-    const hasStore = await prisma.store.count({ where: { organizationId: updatedUser.organizationId } });
-    if (hasStore === 0) {
-      const nextPath = await createRegistrationNextPath(updatedUser.id, updatedUser.email, updatedUser.organizationId);
-      return { sent: true, nextPath };
+    if (verificationRequired && !updatedUser.emailVerifiedAt) {
+      const verifyLink = await sendEmailVerificationToken({
+        userId: updatedUser.id,
+        email: updatedUser.email,
+        organizationId: updatedUser.organizationId,
+        preferredLocale: updatedUser.preferredLocale ?? input.preferredLocale,
+        requestId: input.requestId,
+      });
+      return { sent: true, verifyLink };
     }
 
     return { sent: true };
@@ -106,16 +106,6 @@ export const createSignup = async (input: {
       emailVerifiedAt: verificationRequired ? null : new Date(),
     },
   });
-
-  if (verificationRequired) {
-    const verifyLink = await sendEmailVerificationToken({
-      userId: user.id,
-      email: user.email,
-      organizationId: user.organizationId,
-      requestId: input.requestId,
-    });
-    return { sent: true, verifyLink };
-  }
 
   const nextPath = await createRegistrationNextPath(user.id, user.email, user.organizationId);
   return { sent: true, nextPath };
@@ -150,9 +140,6 @@ export const registerBusinessFromToken = async (input: {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
-    }
-    if (isEmailVerificationRequired() && !user.emailVerifiedAt) {
-      throw new AppError("emailNotVerified", "FORBIDDEN", 403);
     }
 
     const code = normalizeCode(input.storeCode);
@@ -255,22 +242,29 @@ export const sendEmailVerificationToken = async (input: {
   userId: string;
   email: string;
   organizationId?: string | null;
+  preferredLocale?: string | null;
   requestId: string;
 }) => {
   if (!isEmailVerificationRequired()) {
     return null;
   }
+  const expiresInMinutes = 60 * 24;
   const { raw } = await createAuthToken({
     userId: input.userId,
     email: input.email,
     purpose: "EMAIL_VERIFY",
-    expiresInMinutes: 60 * 24,
+    expiresInMinutes,
     organizationId: input.organizationId,
     actorId: input.userId,
     requestId: input.requestId,
   });
 
   const verifyLink = `${process.env.NEXTAUTH_URL ?? ""}/verify/${raw}`;
-  await sendVerificationEmail({ email: input.email, verifyLink });
+  await sendVerificationEmail({
+    email: input.email,
+    verifyLink,
+    locale: input.preferredLocale === "kg" ? "kg" : "ru",
+    expiresInMinutes,
+  });
   return verifyLink;
 };

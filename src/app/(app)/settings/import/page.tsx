@@ -93,7 +93,7 @@ type ImportRunSummary = {
 const ImportPreviewTable = dynamic(() => import("@/components/import-preview-table"), {
   ssr: false,
   loading: () => (
-    <div className="h-32 animate-pulse rounded-lg border border-dashed border-gray-200 bg-gray-50" aria-hidden />
+    <div className="h-32 animate-pulse rounded-lg border border-dashed border-border bg-muted/30" aria-hidden />
   ),
 });
 
@@ -807,7 +807,7 @@ const ImportPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -845,17 +845,17 @@ const ImportPage = () => {
             }}
           />
           {fileName ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="muted">{fileName}</Badge>
               <span>{t("sourceDetected", { source: t(`source.${source}`) })}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("uploadHint")}
             </div>
           )}
-          {fileError ? <p className="text-sm text-red-500">{fileError}</p> : null}
+          {fileError ? <p className="text-sm text-danger">{fileError}</p> : null}
         </CardContent>
       </Card>
 
@@ -870,7 +870,7 @@ const ImportPage = () => {
                 {mappingFields.map((field) => (
                   <div key={field.key} className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-ink">{field.label}</p>
+                      <p className="text-sm font-medium text-foreground">{field.label}</p>
                       {field.required ? (
                         <Badge variant="warning" className="text-[10px]">
                           {t("required")}
@@ -907,7 +907,7 @@ const ImportPage = () => {
               </FormGrid>
               <div className="max-w-sm space-y-2">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-ink">{t("defaultUnitTitle")}</p>
+                  <p className="text-sm font-medium text-foreground">{t("defaultUnitTitle")}</p>
                   <Badge variant="muted" className="text-[10px]">
                     {t("optional")}
                   </Badge>
@@ -930,11 +930,11 @@ const ImportPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500">{t("defaultUnitHint")}</p>
+                <p className="text-xs text-muted-foreground">{t("defaultUnitHint")}</p>
               </div>
               <div className="max-w-sm space-y-2">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-ink">{t("targetStoreTitle")}</p>
+                  <p className="text-sm font-medium text-foreground">{t("targetStoreTitle")}</p>
                   <Badge variant="muted" className="text-[10px]">
                     {t("optional")}
                   </Badge>
@@ -955,14 +955,14 @@ const ImportPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500">{t("targetStoreHint")}</p>
+                <p className="text-xs text-muted-foreground">{t("targetStoreHint")}</p>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">{t("mappingEmpty")}</p>
+            <p className="text-sm text-muted-foreground">{t("mappingEmpty")}</p>
           )}
           {missingRequired.length ? (
-            <p className="text-sm text-red-500">{t("mappingRequired")}</p>
+            <p className="text-sm text-danger">{t("mappingRequired")}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -975,7 +975,7 @@ const ImportPage = () => {
           {validation.rows.length ? (
             <ImportPreviewTable rows={validation.rows} />
           ) : (
-            <p className="text-sm text-gray-500">{t("previewEmpty")}</p>
+            <p className="text-sm text-muted-foreground">{t("previewEmpty")}</p>
           )}
         </CardContent>
       </Card>
@@ -985,7 +985,7 @@ const ImportPage = () => {
           <CardTitle>{t("validationTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
             <span>
               {t("validationSummary", {
                 valid: validation.rows.length,
@@ -996,14 +996,15 @@ const ImportPage = () => {
               {skippedRows.length ? (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setSkippedRows([])}
                 >
                   {t("clearSkippedRows", { count: skippedRows.length })}
                 </Button>
               ) : null}
               {validation.errors.length ? (
-                <Button type="button" variant="ghost" onClick={handleDownloadErrors}>
+                <Button type="button" variant="secondary" size="sm" onClick={handleDownloadErrors}>
                   <DownloadIcon className="h-4 w-4" aria-hidden />
                   {t("downloadErrors")}
                 </Button>
@@ -1013,16 +1014,16 @@ const ImportPage = () => {
           {validation.errors.length ? (
             <div className="space-y-2">
               {validation.errors.slice(0, 5).map((error) => (
-                <p key={`${error.row}-${error.message}`} className="text-xs text-red-500">
+                <p key={`${error.row}-${error.message}`} className="text-xs text-danger">
                   {error.message}
                 </p>
               ))}
             </div>
           ) : null}
           {shortNameErrors.length ? (
-            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+            <div className="space-y-2 rounded-md border border-primary/30 bg-primary/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium text-blue-900">
+                <p className="text-xs font-medium text-foreground">
                   {t("shortNameResolveTitle", { count: shortNameErrors.length })}
                 </p>
                 <Button
@@ -1038,13 +1039,13 @@ const ImportPage = () => {
                 {shortNameErrors.slice(0, 8).map((error) => (
                   <div
                     key={`resolve-name-${error.row}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-white p-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-card p-2"
                   >
-                    <p className="text-xs text-blue-900">{error.message}</p>
+                    <p className="text-xs text-foreground">{error.message}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleUseSkuAsName(error.row)}
                       >
@@ -1052,7 +1053,7 @@ const ImportPage = () => {
                       </Button>
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleToggleSkipRow(error.row)}
                       >
@@ -1065,9 +1066,9 @@ const ImportPage = () => {
             </div>
           ) : null}
           {missingUnitErrors.length ? (
-            <div className="space-y-2 rounded-md border border-indigo-200 bg-indigo-50 p-3">
+            <div className="space-y-2 rounded-md border border-secondary/70 bg-secondary/30 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium text-indigo-900">
+                <p className="text-xs font-medium text-foreground">
                   {t("missingUnitResolveTitle", { count: missingUnitErrors.length })}
                 </p>
                 <Button
@@ -1080,7 +1081,7 @@ const ImportPage = () => {
                   {t("missingUnitApplyDefault")}
                 </Button>
               </div>
-              <p className="text-xs text-indigo-700">
+              <p className="text-xs text-muted-foreground">
                 {defaultUnitCode
                   ? t("missingUnitHintSelected", { unit: defaultUnitCode })
                   : t("missingUnitHintSelectDefault")}
@@ -1089,13 +1090,13 @@ const ImportPage = () => {
                 {missingUnitErrors.slice(0, 8).map((error) => (
                   <div
                     key={`resolve-unit-${error.row}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-indigo-200 bg-white p-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-secondary/70 bg-card p-2"
                   >
-                    <p className="text-xs text-indigo-900">{error.message}</p>
+                    <p className="text-xs text-foreground">{error.message}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleApplyDefaultUnitToRow(error.row)}
                         disabled={!defaultUnitCode}
@@ -1104,7 +1105,7 @@ const ImportPage = () => {
                       </Button>
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleToggleSkipRow(error.row)}
                       >
@@ -1117,9 +1118,9 @@ const ImportPage = () => {
             </div>
           ) : null}
           {duplicateBarcodeErrors.length ? (
-            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+            <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium text-amber-900">
+                <p className="text-xs font-medium text-foreground">
                   {t("duplicateResolveTitle", { count: duplicateBarcodeErrors.length })}
                 </p>
                 <Button
@@ -1135,13 +1136,13 @@ const ImportPage = () => {
                 {duplicateBarcodeErrors.slice(0, 8).map((error) => (
                   <div
                     key={`resolve-${error.row}-${error.value}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-white p-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-card p-2"
                   >
-                    <p className="text-xs text-amber-900">{error.message}</p>
+                    <p className="text-xs text-foreground">{error.message}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() =>
                           handleClearDuplicateBarcode(error.row, error.value ?? "")
@@ -1151,7 +1152,7 @@ const ImportPage = () => {
                       </Button>
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleToggleSkipRow(error.row)}
                       >
@@ -1200,50 +1201,50 @@ const ImportPage = () => {
             </Button>
           </div>
           {importMutation.isLoading ? (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-              <p className="font-medium text-ink">
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">
                 {t("importInProgress", {
                   count: validation.rows.length,
                   elapsed: importElapsedSeconds,
                 })}
               </p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {t("importInProgressStage", { stage: importProgressStage })}
               </p>
             </div>
           ) : null}
           {importMutation.error ? (
-            <p className="text-sm text-red-500">
+            <p className="text-sm text-danger">
               {translateError(tErrors, importMutation.error)}
             </p>
           ) : null}
           {lastImportSummary ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm text-foreground">
               <p className="font-medium">{t("importResultTitle")}</p>
-              <p className="mt-1 text-xs text-emerald-800">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {t("importSuccess", { count: (lastImportSummary.rows ?? 0) })}
               </p>
               {lastImportSummary.targetStoreName ? (
-                <p className="mt-1 text-xs text-emerald-800">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {t("targetStoreApplied", { store: lastImportSummary.targetStoreName })}
                 </p>
               ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
-                <div className="rounded border border-emerald-200 bg-white p-2">
-                  <p className="text-emerald-700">{t("imageDownloaded")}</p>
-                  <p className="font-semibold text-emerald-900">
+                <div className="rounded border border-success/40 bg-card p-2">
+                  <p className="text-muted-foreground">{t("imageDownloaded")}</p>
+                  <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.downloaded ?? 0}
                   </p>
                 </div>
-                <div className="rounded border border-emerald-200 bg-white p-2">
-                  <p className="text-emerald-700">{t("imageFallback")}</p>
-                  <p className="font-semibold text-emerald-900">
+                <div className="rounded border border-success/40 bg-card p-2">
+                  <p className="text-muted-foreground">{t("imageFallback")}</p>
+                  <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.fallback ?? 0}
                   </p>
                 </div>
-                <div className="rounded border border-emerald-200 bg-white p-2">
-                  <p className="text-emerald-700">{t("imageMissing")}</p>
-                  <p className="font-semibold text-emerald-900">
+                <div className="rounded border border-success/40 bg-card p-2">
+                  <p className="text-muted-foreground">{t("imageMissing")}</p>
+                  <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.missing ?? 0}
                   </p>
                 </div>
@@ -1259,12 +1260,12 @@ const ImportPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {batchesQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !batches.length ? (
-            <p className="text-sm text-gray-500">{t("historyEmpty")}</p>
+            <p className="text-sm text-muted-foreground">{t("historyEmpty")}</p>
           ) : (
             <ResponsiveDataList
               items={batches}
@@ -1306,22 +1307,22 @@ const ImportPage = () => {
 
                         return (
                           <TableRow key={batch.id}>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(batch.createdAt, locale)}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               <div className="space-y-1">
                                 <p>{sourceLabel}</p>
                                 {summary.targetStoreName ? (
-                                  <p className="text-[11px] text-gray-400">
+                                  <p className="text-[11px] text-muted-foreground/80">
                                     {t("historyStoreValue", { store: summary.targetStoreName })}
                                   </p>
                                 ) : null}
                               </div>
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">{summary.rows ?? 0}</TableCell>
-                            <TableCell className="text-xs text-gray-500">{summary.created ?? 0}</TableCell>
-                            <TableCell className="text-xs text-gray-500">{summary.updated ?? 0}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{summary.rows ?? 0}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{summary.created ?? 0}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{summary.updated ?? 0}</TableCell>
                             <TableCell>
                               {batch.rolledBackAt ? (
                                 <Badge variant="muted">{t("historyRolledBack")}</Badge>
@@ -1331,7 +1332,7 @@ const ImportPage = () => {
                             </TableCell>
                             <TableCell className="text-right">
                               {batch.rolledBackAt ? (
-                                <span className="text-xs text-gray-400">{t("historyDone")}</span>
+                                <span className="text-xs text-muted-foreground/80">{t("historyDone")}</span>
                               ) : (
                                 <RowActions
                                   actions={actions}
@@ -1369,15 +1370,15 @@ const ImportPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-ink">
+                        <p className="text-sm font-medium text-foreground">
                           {formatDateTime(batch.createdAt, locale)}
                         </p>
-                        <p className="text-xs text-gray-500">{sourceLabel}</p>
+                        <p className="text-xs text-muted-foreground">{sourceLabel}</p>
                         {summary.targetStoreName ? (
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-muted-foreground/80">
                             {t("historyStoreValue", { store: summary.targetStoreName })}
                           </p>
                         ) : null}
@@ -1388,37 +1389,37 @@ const ImportPage = () => {
                         <Badge variant="success">{t("historyCompleted")}</Badge>
                       )}
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                           {t("historyColumns.rows")}
                         </p>
-                        <p className="text-gray-700">{summary.rows ?? 0}</p>
+                        <p className="text-foreground/90">{summary.rows ?? 0}</p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                           {t("historyColumns.created")}
                         </p>
-                        <p className="text-gray-700">{summary.created ?? 0}</p>
+                        <p className="text-foreground/90">{summary.created ?? 0}</p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                           {t("historyColumns.updated")}
                         </p>
-                        <p className="text-gray-700">{summary.updated ?? 0}</p>
+                        <p className="text-foreground/90">{summary.updated ?? 0}</p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                           {t("historyColumns.status")}
                         </p>
-                        <p className="text-gray-700">
+                        <p className="text-foreground/90">
                           {batch.rolledBackAt ? t("historyRolledBack") : t("historyCompleted")}
                         </p>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-end">
                       {batch.rolledBackAt ? (
-                        <span className="text-xs text-gray-400">{t("historyDone")}</span>
+                        <span className="text-xs text-muted-foreground/80">{t("historyDone")}</span>
                       ) : (
                         <RowActions
                           actions={actions}
@@ -1452,24 +1453,24 @@ const ImportPage = () => {
         }
       >
         {rollbackDetailsQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </div>
         ) : rollbackDetailsQuery.data ? (
           <div className="space-y-4">
-            <p className="text-sm text-gray-500">{t("rollbackHint")}</p>
+            <p className="text-sm text-muted-foreground">{t("rollbackHint")}</p>
             {rollbackDetailsQuery.data.counts.length ? (
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 {rollbackDetailsQuery.data.counts.map((item) => (
                   <div key={item.entityType} className="flex items-center justify-between">
                     <span>{resolveEntityLabel(item.entityType)}</span>
-                    <span className="font-semibold text-ink">{item.count}</span>
+                    <span className="font-semibold text-foreground">{item.count}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">{t("rollbackNothing")}</p>
+              <p className="text-sm text-muted-foreground">{t("rollbackNothing")}</p>
             )}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setRollbackBatchId(null)}>
@@ -1491,7 +1492,7 @@ const ImportPage = () => {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">{t("rollbackMissing")}</p>
+          <p className="text-sm text-muted-foreground">{t("rollbackMissing")}</p>
         )}
       </Modal>
     </div>

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/server/db/prisma";
 import { createAuthToken, consumeAuthToken } from "@/server/services/authTokens";
-import { createSignup, sendEmailVerificationToken } from "@/server/services/signup";
+import { createSignup, registerBusinessFromToken, sendEmailVerificationToken } from "@/server/services/signup";
 import { sendResetEmail, sendInviteEmail } from "@/server/services/email";
 
 const log = (message: string) => {
@@ -31,26 +31,27 @@ const main = async () => {
       preferredLocale: "ru",
       requestId,
     });
-    if (!signup.verifyLink && !signup.nextPath) {
-      throw new Error("verifyFlowMissing");
+    if (!signup.nextPath) {
+      throw new Error("registrationPathMissing");
     }
 
-    if (signup.verifyLink) {
-      const verifyToken = parseTokenFromLink(signup.verifyLink);
-      log("Consuming email verification token");
-      const consumed = await consumeAuthToken({ purpose: "EMAIL_VERIFY", token: verifyToken });
-      if (!consumed.userId) {
-        throw new Error("verifyTokenUserMissing");
-      }
-
-      await prisma.user.update({
-        where: { id: consumed.userId },
-        data: { emailVerifiedAt: new Date() },
-      });
-      log("Email verification flow passed");
-    } else {
-      log("Email verification is skipped in current configuration");
+    const registrationToken = parseTokenFromLink(signup.nextPath);
+    if (!registrationToken) {
+      throw new Error("registrationTokenMissing");
     }
+
+    const registerResult = await registerBusinessFromToken({
+      token: registrationToken,
+      orgName: "Ops Check Org",
+      storeName: "Ops Check Store",
+      storeCode: `OPS${Date.now().toString().slice(-4)}`,
+      legalEntityType: "IP",
+      requestId,
+    });
+    if (!registerResult.organizationId || !registerResult.storeId) {
+      throw new Error("registerBusinessFailed");
+    }
+    log("Business registration flow passed");
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {

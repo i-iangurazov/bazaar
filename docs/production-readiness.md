@@ -115,3 +115,29 @@ GitHub Actions `release-gate` job validates production-like startup constraints:
 - Postgres + Redis services up
 - `pnpm ops:preflight` passes
 - `pnpm build` passes
+
+## 8) Vercel Connectivity Checklist
+
+For Vercel runtime incidents (`ETIMEDOUT`, `Command timed out`, random 500 on all API routes), verify in this order:
+
+1. Database URL
+- `DATABASE_URL` must be reachable from Vercel (public host or VPC/private link via supported setup).
+- Do not use localhost/private LAN hostnames.
+- Ensure SSL is enabled on provider side (typical managed Postgres requirement).
+
+2. Redis URL
+- `REDIS_URL` must use `redis://` or `rediss://` (REST endpoint is invalid for ioredis here).
+- Provider must allow connections from Vercel regions used by the project.
+
+3. Runtime preflight
+- Call `GET /api/preflight` with `x-health-secret`.
+- Expect `status=ready`, checks all `ok`, HTTP `200`.
+- If `503`, read `errors[]` and fix env/connectivity before retry.
+
+4. Health endpoint
+- Call `GET /api/health` with `x-health-secret`.
+- Expect `status=ok`, `db=up`, `redis=up`.
+
+5. Email provider
+- For production, set `EMAIL_PROVIDER=resend`, valid `EMAIL_FROM`, and `RESEND_API_KEY`.
+- Validate flow with `pnpm ops:email-check` on the same env values.

@@ -290,15 +290,15 @@ const PurchaseOrdersPage = () => {
                               />
                             </TableCell>
                           ) : null}
-                          <TableCell className="text-xs text-gray-500" title={po.id}>
+                          <TableCell className="text-xs text-muted-foreground" title={po.id}>
                             {po.id.slice(0, 8).toUpperCase()}
                           </TableCell>
                           <TableCell>
-                            <Link className="font-medium text-ink" href={`/purchase-orders/${po.id}`}>
+                            <Link className="font-medium text-foreground" href={`/purchase-orders/${po.id}`}>
                               {po.supplier?.name ?? tCommon("supplierUnassigned")}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">{po.store.name}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{po.store.name}</TableCell>
                           <TableCell>
                               <Badge
                                 variant={
@@ -318,10 +318,10 @@ const PurchaseOrdersPage = () => {
                               {statusLabel(po.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-muted-foreground">
                             {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                             {formatDate(po.createdAt, locale)}
                           </TableCell>
                           <TableCell>
@@ -407,7 +407,7 @@ const PurchaseOrdersPage = () => {
               ];
 
               return (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-start gap-2">
                       {canManage ? (
@@ -420,11 +420,11 @@ const PurchaseOrdersPage = () => {
                         />
                       ) : null}
                       <div className="min-w-0">
-                        <p className="text-xs text-gray-500">{po.id.slice(0, 8).toUpperCase()}</p>
-                        <p className="truncate text-sm font-medium text-ink">
+                        <p className="text-xs text-muted-foreground">{po.id.slice(0, 8).toUpperCase()}</p>
+                        <p className="truncate text-sm font-medium text-foreground">
                           {po.supplier?.name ?? tCommon("supplierUnassigned")}
                         </p>
-                        <p className="text-xs text-gray-500">{po.store.name}</p>
+                        <p className="text-xs text-muted-foreground">{po.store.name}</p>
                       </div>
                     </div>
                     <RowActions
@@ -448,10 +448,10 @@ const PurchaseOrdersPage = () => {
                       <StatusIcon className="h-3 w-3" aria-hidden />
                       {status}
                     </Badge>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {formatDate(po.createdAt, locale)}
                     </span>
                   </div>
@@ -460,12 +460,12 @@ const PurchaseOrdersPage = () => {
             }}
           />
           {listQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : totalOrders === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noOrders")}
@@ -473,7 +473,7 @@ const PurchaseOrdersPage = () => {
             </div>
           ) : null}
           {listQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-500">
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-danger">
               <span>{translateError(tErrors, listQuery.error)}</span>
               <Button
                 type="button"

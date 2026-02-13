@@ -18,6 +18,8 @@ const NewProductPage = () => {
   const barcode = searchParams?.get("barcode")?.trim() ?? "";
   const requestedType = searchParams?.get("type")?.trim() ?? "";
   const isBundleDefault = requestedType === "bundle";
+  const pageTitle = isBundleDefault ? t("newBundle") : t("newTitle");
+  const pageSubtitle = isBundleDefault ? t("newBundleSubtitle") : t("newSubtitle");
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const { toast } = useToast();
@@ -37,15 +39,15 @@ const NewProductPage = () => {
   if (session && !isAdmin) {
     return (
       <div>
-        <PageHeader title={t("newTitle")} subtitle={t("newSubtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <PageHeader title={pageTitle} subtitle={pageSubtitle} />
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader title={t("newTitle")} subtitle={t("newSubtitle")} />
+      <PageHeader title={pageTitle} subtitle={pageSubtitle} />
       <ProductForm
         initialValues={{
           sku: "",
@@ -54,6 +56,8 @@ const NewProductPage = () => {
           category: "",
           baseUnitId: "",
           basePriceKgs: undefined,
+          purchasePriceKgs: undefined,
+          avgCostKgs: undefined,
           description: "",
           photoUrl: "",
           images: [],
@@ -68,7 +72,7 @@ const NewProductPage = () => {
         isSubmitting={createMutation.isLoading}
       />
       {createMutation.error ? (
-        <p className="mt-3 text-sm text-red-500">
+        <p className="mt-3 text-sm text-danger">
           {translateError(tErrors, createMutation.error)}
         </p>
       ) : null}

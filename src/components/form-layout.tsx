@@ -19,8 +19,8 @@ export const FormSection = ({
   <section className={cn("space-y-2 sm:space-y-3", className)}>
     {title ? (
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        {description ? <p className="text-xs text-gray-500">{description}</p> : null}
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
     ) : null}
     <div className={cn("space-y-3 sm:space-y-4", contentClassName)}>{children}</div>
@@ -51,9 +51,9 @@ export const Field = ({
   labelClassName?: string;
 }) => (
   <div className={cn("flex flex-col gap-1.5", className)}>
-    {label ? <Label className={cn("text-xs text-gray-500", labelClassName)}>{label}</Label> : null}
+    {label ? <Label className={cn("text-xs text-muted-foreground", labelClassName)}>{label}</Label> : null}
     {children}
-    {helper ? <p className="text-xs text-gray-500">{helper}</p> : null}
+    {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
   </div>
 );

@@ -404,7 +404,7 @@ const PurchaseOrderDetailPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={tCommon("loading")} />
-        <div className="mt-6 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
@@ -416,7 +416,7 @@ const PurchaseOrderDetailPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-red-500">
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-danger">
           <span>{translateError(tErrors, poQuery.error)}</span>
           <Button
             type="button"
@@ -435,7 +435,7 @@ const PurchaseOrderDetailPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("notFound")} />
-        <div className="mt-6 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
           <EmptyIcon className="h-4 w-4" aria-hidden />
           {t("notFound")}
         </div>
@@ -586,7 +586,7 @@ const PurchaseOrderDetailPage = () => {
                       {visibleItems.map((line) => (
                         <TableRow key={line.id}>
                           <TableCell className="font-medium">{line.product.name}</TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                             {line.variant?.name ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>
@@ -690,28 +690,28 @@ const PurchaseOrderDetailPage = () => {
                 : [];
 
               return (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink">{line.product.name}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="truncate text-sm font-medium text-foreground">{line.product.name}</p>
+                      <p className="text-xs text-muted-foreground">
                         {line.variant?.name ?? tCommon("notAvailable")}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t("ordered")}: {formatNumber(line.qtyOrdered, locale)}{" "}
                         {resolveUnitLabel(line.product.baseUnit ?? null)}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t("received")}: {formatNumber(line.qtyReceived, locale)}{" "}
                         {resolveUnitLabel(line.product.baseUnit ?? null)}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t("unitCost")}{" "}
                         {line.unitCost === null
                           ? tCommon("notAvailable")
                           : formatCurrencyKGS(line.unitCost ?? 0, locale)}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t("lineTotal")}{" "}
                         {line.unitCost === null
                           ? tCommon("notAvailable")
@@ -731,7 +731,7 @@ const PurchaseOrderDetailPage = () => {
             }}
           />
           {!po.lines.length ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("noLines")}
             </div>
@@ -800,7 +800,7 @@ const PurchaseOrderDetailPage = () => {
                       {visibleItems.map((line) => (
                         <TableRow key={line.lineId}>
                           <TableCell className="font-medium">{line.productName}</TableCell>
-                          <TableCell className="hidden sm:table-cell text-xs text-gray-500">
+                          <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
                             {line.variantName}
                           </TableCell>
                           <TableCell>{formatNumber(line.remaining, locale)}</TableCell>
@@ -861,7 +861,7 @@ const PurchaseOrderDetailPage = () => {
                                     return null;
                                   }
                                   return (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-muted-foreground">
                                       {t("baseQtyPreview", {
                                         qty: formatNumber(baseQty, locale),
                                         unit: resolveUnitLabel(product?.baseUnit ?? null),
@@ -886,13 +886,13 @@ const PurchaseOrderDetailPage = () => {
                     : resolveBasePreview(product, line.unitSelection, line.qtyReceived);
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex flex-col gap-2">
                       <div>
-                        <p className="text-sm font-medium text-ink">{line.productName}</p>
-                        <p className="text-xs text-gray-500">{line.variantName}</p>
+                        <p className="text-sm font-medium text-foreground">{line.productName}</p>
+                        <p className="text-xs text-muted-foreground">{line.variantName}</p>
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {t("remaining")}: {formatNumber(line.remaining, locale)}
                       </div>
                       <Input
@@ -934,7 +934,7 @@ const PurchaseOrderDetailPage = () => {
                           </SelectContent>
                         </Select>
                         {baseQty !== null ? (
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-muted-foreground">
                             {t("baseQtyPreview", {
                               qty: formatNumber(baseQty, locale),
                               unit: resolveUnitLabel(product?.baseUnit ?? null),
@@ -947,25 +947,25 @@ const PurchaseOrderDetailPage = () => {
                 );
               }}
             />
-            <div className="flex flex-col gap-2 text-sm text-gray-500">
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               <div className="flex items-center justify-between">
                 <span>{t("remainingTotal")}</span>
-                <span className="font-medium text-ink">
+                <span className="font-medium text-foreground">
                   {formatNumber(receiveTotals.remaining, locale)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>{t("receivingTotal")}</span>
-                <span className="font-medium text-ink">
+                <span className="font-medium text-foreground">
                   {formatNumber(receiveTotals.receiving, locale)}
                 </span>
               </div>
             </div>
-            <div className="flex items-start gap-3 rounded-md border border-gray-100 bg-gray-50 p-3">
+            <div className="flex items-start gap-3 rounded-md border border-border/70 bg-muted/30 p-3">
               <Switch checked={allowOverReceive} onCheckedChange={setAllowOverReceive} />
               <div>
-                <p className="text-sm font-medium text-ink">{t("allowOverReceive")}</p>
-                <p className="text-xs text-gray-500">{t("allowOverReceiveHint")}</p>
+                <p className="text-sm font-medium text-foreground">{t("allowOverReceive")}</p>
+                <p className="text-xs text-muted-foreground">{t("allowOverReceiveHint")}</p>
               </div>
             </div>
             <FormActions>
@@ -988,7 +988,7 @@ const PurchaseOrderDetailPage = () => {
             </FormActions>
           </form>
         ) : (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <EmptyIcon className="h-4 w-4" aria-hidden />
             {t("nothingToReceive")}
           </div>
@@ -1062,13 +1062,13 @@ const PurchaseOrderDetailPage = () => {
                         />
                       </FormControl>
                       {showResults && productSearchQuery.data?.length ? (
-                        <div className="absolute z-20 mt-2 w-full rounded-md border border-gray-200 bg-white shadow-lg">
+                        <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-card shadow-lg">
                           <div className="max-h-64 overflow-y-auto py-1">
                             {productSearchQuery.data.map((product) => (
                               <button
                                 key={product.id}
                                 type="button"
-                                className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-gray-50"
+                                className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-muted/30"
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => {
                                   setSelectedProduct({
@@ -1083,8 +1083,8 @@ const PurchaseOrderDetailPage = () => {
                                   setShowResults(false);
                                 }}
                               >
-                                <span className="font-medium text-ink">{product.name}</span>
-                                <span className="text-xs text-gray-500">{product.sku}</span>
+                                <span className="font-medium text-foreground">{product.name}</span>
+                                <span className="text-xs text-muted-foreground">{product.sku}</span>
                               </button>
                             ))}
                           </div>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
+import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
 
@@ -38,14 +39,23 @@ type DraftLine = {
   qty: number;
   qtyInput: string;
   isBundle: boolean;
+  unitPriceKgs: number | null;
+  lineTotalKgs: number | null;
 };
+
+const toLineTotal = (qty: number, unitPriceKgs: number | null) =>
+  unitPriceKgs === null ? null : Math.round(qty * unitPriceKgs * 100) / 100;
 
 const NewSalesOrderPage = () => {
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const utils = trpc.useUtils();
   const { toast } = useToast();
+  const isReturnMode = searchParams.get("mode") === "return";
 
   const storesQuery = trpc.stores.list.useQuery();
   const [storeId, setStoreId] = useState<string>("");
@@ -78,7 +88,12 @@ const NewSalesOrderPage = () => {
     },
   });
 
-  const addDraftLine = (product: ProductSearchResult) => {
+  const addDraftLine = async (product: ProductSearchResult) => {
+    if (!storeId) {
+      toast({ variant: "error", description: t("storeRequired") });
+      return;
+    }
+
     const rawQty = pendingQty.trim();
     const qty = Number(rawQty);
     if (!rawQty || !Number.isFinite(qty) || qty <= 0) {
@@ -86,6 +101,23 @@ const NewSalesOrderPage = () => {
       return;
     }
     const normalizedQty = Math.trunc(qty);
+
+    let unitPriceKgs: number | null = null;
+    try {
+      const pricing = await utils.products.pricing.fetch({
+        productId: product.id,
+        storeId,
+      });
+      unitPriceKgs = pricing.effectivePriceKgs;
+    } catch (error) {
+      toast({ variant: "error", description: tErrors("genericMessage") });
+      return;
+    }
+
+    if (unitPriceKgs === null) {
+      toast({ variant: "info", description: t("priceNotSet") });
+    }
+
     setDraftLines((current) => {
       const index = current.findIndex((line) => line.productId === product.id);
       if (index === -1) {
@@ -98,16 +130,21 @@ const NewSalesOrderPage = () => {
             qty: normalizedQty,
             qtyInput: String(normalizedQty),
             isBundle: Boolean(product.isBundle),
+            unitPriceKgs,
+            lineTotalKgs: toLineTotal(normalizedQty, unitPriceKgs),
           },
         ];
       }
 
       const next = [...current];
       const nextQty = Math.max(1, next[index].qty + normalizedQty);
+      const currentPrice = next[index].unitPriceKgs ?? unitPriceKgs;
       next[index] = {
         ...next[index],
         qty: nextQty,
         qtyInput: String(nextQty),
+        unitPriceKgs: currentPrice,
+        lineTotalKgs: toLineTotal(nextQty, currentPrice),
       };
       return next;
     });
@@ -127,6 +164,10 @@ const NewSalesOrderPage = () => {
                   ? Math.trunc(Number(rawValue))
                   : 0,
               qtyInput: rawValue,
+              lineTotalKgs:
+                rawValue.trim().length > 0 && Number.isFinite(Number(rawValue))
+                  ? toLineTotal(Math.trunc(Number(rawValue)), line.unitPriceKgs)
+                  : null,
             }
           : line,
       ),
@@ -148,6 +189,11 @@ const NewSalesOrderPage = () => {
       return;
     }
 
+    if (draftLines.some((line) => line.unitPriceKgs === null)) {
+      toast({ variant: "error", description: t("priceNotSetBlocking") });
+      return;
+    }
+
     await createMutation.mutateAsync({
       storeId,
       customerName: customerName.trim() || null,
@@ -161,9 +207,21 @@ const NewSalesOrderPage = () => {
     });
   };
 
+  const orderTotalKgs = useMemo(
+    () =>
+      draftLines.reduce((total, line) => {
+        return total + (line.lineTotalKgs ?? 0);
+      }, 0),
+    [draftLines],
+  );
+
   return (
     <div>
-      <PageHeader title={t("new")} subtitle={t("newSubtitle")} />
+      <PageHeader
+        title={isReturnMode ? t("newReturn") : t("new")}
+        subtitle={isReturnMode ? t("newReturnSubtitle") : t("newSubtitle")}
+      />
+      {isReturnMode ? <p className="mb-4 text-sm text-muted-foreground">{t("returnModeHint")}</p> : null}
 
       <Card>
         <CardHeader>
@@ -229,7 +287,7 @@ const NewSalesOrderPage = () => {
               <p className="text-xs text-muted-foreground">{t("lineDialogSubtitle")}</p>
             </div>
 
-            <div className="grid gap-2 md:grid-cols-[1fr_120px]">
+            <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
               <div className="relative">
                 <Input
                   value={lineSearch}
@@ -254,7 +312,9 @@ const NewSalesOrderPage = () => {
                           type="button"
                           className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => addDraftLine(product as ProductSearchResult)}
+                          onClick={() => {
+                            void addDraftLine(product as ProductSearchResult);
+                          }}
                         >
                           <div className="min-w-0">
                             <p className="truncate font-medium text-foreground">{product.name}</p>
@@ -282,6 +342,7 @@ const NewSalesOrderPage = () => {
                 min={1}
                 value={pendingQty}
                 onChange={(event) => setPendingQty(event.target.value)}
+                className="sm:max-w-[120px]"
                 aria-label={t("qty")}
               />
             </div>
@@ -293,20 +354,34 @@ const NewSalesOrderPage = () => {
                     key={line.productId}
                     className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-medium">{line.productName}</p>
                         {line.isBundle ? <Badge variant="muted">{t("bundleProductLabel")}</Badge> : null}
                       </div>
                       <p className="truncate text-xs text-muted-foreground">{line.productSku}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          {t("unitPrice")}:{" "}
+                          {line.unitPriceKgs === null
+                            ? t("priceNotSet")
+                            : formatCurrencyKGS(line.unitPriceKgs, locale)}
+                        </span>
+                        <span>
+                          {t("lineTotal")}:{" "}
+                          {line.lineTotalKgs === null
+                            ? t("priceNotSet")
+                            : formatCurrencyKGS(line.lineTotalKgs, locale)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
                       <Input
                         type="number"
                         min={1}
                         value={line.qtyInput}
                         onChange={(event) => updateDraftLineQty(line.productId, event.target.value)}
-                        className="w-20"
+                        className="h-9 w-full sm:w-20"
                         aria-label={t("qty")}
                       />
                       <Button
@@ -326,11 +401,31 @@ const NewSalesOrderPage = () => {
             )}
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" onClick={() => router.push("/sales/orders")}>
+          <div className="rounded-md border border-border p-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-muted-foreground">{t("total")}</span>
+              <span className="font-semibold text-foreground">
+                {formatCurrencyKGS(orderTotalKgs, locale)}
+              </span>
+            </div>
+            {draftLines.some((line) => line.unitPriceKgs === null) ? (
+              <p className="mt-2 text-xs text-danger">{t("priceNotSetBlocking")}</p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => router.push("/sales/orders")}
+            >
               {tCommon("cancel")}
             </Button>
-            <Button onClick={() => void handleCreate()} disabled={createMutation.isLoading}>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => void handleCreate()}
+              disabled={createMutation.isLoading}
+            >
               {createMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("create")}
             </Button>

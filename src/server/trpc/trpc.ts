@@ -43,7 +43,7 @@ const parseCookies = (cookieHeader?: string | null) => {
 };
 
 export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
-  assertStartupConfigured();
+  await assertStartupConfigured();
   const requestId = ensureRequestId(req.headers.get("x-request-id"));
   const cookieHeader = req.headers.get("cookie") ?? "";
   const forwardedFor = req.headers.get("x-forwarded-for");
@@ -137,10 +137,19 @@ const withTiming = t.middleware(async ({ path, type, ctx, next }) => {
 });
 
 export const rateLimit = (config: RateLimitConfig) => {
-  const limiter = createRateLimiter(config);
   return t.middleware(async ({ ctx, next, path }) => {
     const isTest = process.env.NODE_ENV === "test" || process.env.CI === "1" || process.env.CI === "true";
     if (isTest) {
+      return next();
+    }
+    let limiter: ReturnType<typeof createRateLimiter>;
+    try {
+      limiter = createRateLimiter(config);
+    } catch (error) {
+      ctx.logger.warn({ path, error }, "rate limiter unavailable");
+      if (isProductionRuntime()) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "genericMessage" });
+      }
       return next();
     }
     const key = `${ctx.user?.id ?? ctx.ip ?? "anon"}:${path}`;
@@ -197,6 +206,9 @@ export const publicProcedure = baseProcedure;
 export const protectedProcedure = baseProcedure.use(isAuthed).use(ensureActivePlan);
 export const managerProcedure = baseProcedure.use(hasRole([Role.ADMIN, Role.MANAGER])).use(ensureActivePlan);
 export const adminProcedure = baseProcedure.use(hasRole([Role.ADMIN])).use(ensureActivePlan);
+export const cashierProcedure = baseProcedure
+  .use(hasRole([Role.ADMIN, Role.MANAGER, Role.STAFF, Role.CASHIER]))
+  .use(ensureActivePlan);
 
 const isPlatformOwner = t.middleware(({ ctx, next }) => {
   if (!ctx.user || !ctx.user.isPlatformOwner) {

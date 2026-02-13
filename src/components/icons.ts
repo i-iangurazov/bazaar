@@ -9,6 +9,7 @@ import {
   Ruler,
   Users,
   Plus,
+  CirclePlus,
   Upload,
   Download,
   ArrowDownToLine,
@@ -56,6 +57,7 @@ export const InventoryIcon = Boxes;
 export const OrdersIcon = ClipboardList;
 export const SalesOrdersIcon = User;
 export const PurchaseOrdersIcon = ShoppingCart;
+export const PosIcon = CreditCard;
 export const SuppliersIcon = Truck;
 export const ProductsIcon = Package;
 export const StoresIcon = Store;
@@ -63,6 +65,7 @@ export const UnitsIcon = Ruler;
 export const UsersIcon = Users;
 
 export const AddIcon = Plus;
+export const CirclePlusIcon = CirclePlus;
 export const UploadIcon = Upload;
 export const DownloadIcon = Download;
 export const ReceiveIcon = ArrowDownToLine;

@@ -487,7 +487,7 @@ const main = async () => {
       name: "Admin User",
       role: Role.ADMIN,
       password: "Admin123!",
-      isOrgOwner: true,
+      isOrgOwner: false,
     }),
     getOrCreateUser(org, {
       email: "manager@example.com",
@@ -508,6 +508,7 @@ const main = async () => {
     name: PLATFORM_OWNER_NAME,
     role: Role.ADMIN,
     password: PLATFORM_OWNER_PASSWORD,
+    isOrgOwner: true,
   });
 
   const stores = await upsertStores(org.id);

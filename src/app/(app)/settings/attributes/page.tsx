@@ -328,7 +328,7 @@ const AttributesPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -347,12 +347,12 @@ const AttributesPage = () => {
       />
 
       {attributesQuery.isLoading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
       ) : attributesQuery.error ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-red-500">
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-danger">
           <span>{translateError(tErrors, attributesQuery.error)}</span>
           <Button
             type="button"
@@ -392,7 +392,7 @@ const AttributesPage = () => {
                           {attribute.required ? (
                             <Badge variant="muted">{t("requiredYes")}</Badge>
                           ) : (
-                            <span className="text-xs text-gray-500">{t("requiredNo")}</span>
+                            <span className="text-xs text-muted-foreground">{t("requiredNo")}</span>
                           )}
                         </TableCell>
                         <TableCell>
@@ -446,18 +446,18 @@ const AttributesPage = () => {
               </div>
             )}
             renderMobile={(attribute) => (
-              <div className="rounded-md border border-gray-200 bg-white p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-mono text-xs text-gray-500">{attribute.key}</p>
-                    <p className="text-sm font-medium text-ink">{attribute.labelRu}</p>
-                    <p className="text-xs text-gray-500">{attribute.labelKg}</p>
-                    <p className="mt-1 text-xs text-gray-500">{t(`types.${attribute.type}`)}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{attribute.key}</p>
+                    <p className="text-sm font-medium text-foreground">{attribute.labelRu}</p>
+                    <p className="text-xs text-muted-foreground">{attribute.labelKg}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t(`types.${attribute.type}`)}</p>
                     <div className="mt-1">
                       {attribute.required ? (
                         <Badge variant="muted">{t("requiredYes")}</Badge>
                       ) : (
-                        <span className="text-xs text-gray-500">{t("requiredNo")}</span>
+                        <span className="text-xs text-muted-foreground">{t("requiredNo")}</span>
                       )}
                     </div>
                   </div>
@@ -492,10 +492,10 @@ const AttributesPage = () => {
           />
         </div>
       ) : (
-        <div className="mt-6 rounded-lg border border-dashed border-gray-200 p-6 text-center">
-          <EmptyIcon className="mx-auto h-6 w-6 text-gray-400" aria-hidden />
-          <p className="mt-2 text-sm font-semibold text-ink">{t("emptyTitle")}</p>
-          <p className="mt-1 text-xs text-gray-500">{t("emptySubtitle")}</p>
+        <div className="mt-6 rounded-lg border border-dashed border-border p-6 text-center">
+          <EmptyIcon className="mx-auto h-6 w-6 text-muted-foreground/80" aria-hidden />
+          <p className="mt-2 text-sm font-semibold text-foreground">{t("emptyTitle")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("emptySubtitle")}</p>
         </div>
       )}
 
@@ -503,7 +503,7 @@ const AttributesPage = () => {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>{t("templatesTitle")}</CardTitle>
-            <p className="text-xs text-gray-500">{t("templatesSubtitle")}</p>
+            <p className="text-xs text-muted-foreground">{t("templatesSubtitle")}</p>
           </div>
           <Button
             type="button"
@@ -517,12 +517,12 @@ const AttributesPage = () => {
         </CardHeader>
         <CardContent>
           {templatesQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : templatesQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, templatesQuery.error)}</span>
               <Button
                 type="button"
@@ -538,12 +538,12 @@ const AttributesPage = () => {
               {templateGroups.map((group) => (
                 <div
                   key={group.category}
-                  className="rounded-lg border border-gray-100 bg-white p-4"
+                  className="rounded-lg border border-border/70 bg-card p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-ink">{group.category}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-semibold text-foreground">{group.category}</p>
+                      <p className="text-xs text-muted-foreground">
                         {t("templateCount", { count: group.items.length })}
                       </p>
                     </div>
@@ -606,13 +606,13 @@ const AttributesPage = () => {
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("templateEmpty")}
             </div>
           )}
           {!attributesQuery.data?.length ? (
-            <p className="mt-3 text-xs text-gray-500">{t("templateNoDefinitions")}</p>
+            <p className="mt-3 text-xs text-muted-foreground">{t("templateNoDefinitions")}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -702,7 +702,7 @@ const AttributesPage = () => {
                 name="required"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-3 rounded-md border border-gray-100 p-3">
+                    <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-3">
                       <div>
                         <FormLabel>{t("required")}</FormLabel>
                         <FormDescription>{t("requiredHint")}</FormDescription>
@@ -776,7 +776,7 @@ const AttributesPage = () => {
                               </Badge>
                             ))
                           ) : (
-                            <p className="text-xs text-gray-500">{t("optionsEmpty")}</p>
+                            <p className="text-xs text-muted-foreground">{t("optionsEmpty")}</p>
                           )}
                         </div>
                         <FormMessage />
@@ -843,7 +843,7 @@ const AttributesPage = () => {
                               </Badge>
                             ))
                           ) : (
-                            <p className="text-xs text-gray-500">{t("optionsEmpty")}</p>
+                            <p className="text-xs text-muted-foreground">{t("optionsEmpty")}</p>
                           )}
                         </div>
                         <FormMessage />
@@ -967,7 +967,7 @@ const AttributesPage = () => {
                   </Badge>
                 ))
               ) : (
-                <p className="text-xs text-gray-500">{t("templateAttributesEmpty")}</p>
+                <p className="text-xs text-muted-foreground">{t("templateAttributesEmpty")}</p>
               )}
             </div>
             <FormDescription>{t("templateAttributesHint")}</FormDescription>

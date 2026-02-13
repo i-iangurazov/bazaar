@@ -23,6 +23,31 @@ const toTRPCCode = (code: string): TrpcErrorCode => {
   return allowed.includes(code as TrpcErrorCode) ? (code as TrpcErrorCode) : "BAD_REQUEST";
 };
 
+const isInfraConnectionError = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return true;
+  }
+
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const maybeCode = (error as Error & { code?: string }).code ?? "";
+  if (["ETIMEDOUT", "ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ECONNRESET"].includes(maybeCode)) {
+    return true;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("timed out") ||
+    message.includes("can't reach database server") ||
+    message.includes("connection refused") ||
+    message.includes("connection terminated") ||
+    message.includes("p1001") ||
+    message.includes("p1002")
+  );
+};
+
 export const toTRPCError = (error: unknown) => {
   if (error instanceof TRPCError) {
     return error;
@@ -47,6 +72,14 @@ export const toTRPCError = (error: unknown) => {
   if (error instanceof Prisma.PrismaClientValidationError) {
     return new TRPCError({ code: "BAD_REQUEST", message: "validationError" });
   }
+
+  if (isInfraConnectionError(error)) {
+    return new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "serviceUnavailable",
+    });
+  }
+
   return new TRPCError({
     code: "INTERNAL_SERVER_ERROR",
     message: "genericMessage",

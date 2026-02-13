@@ -6,7 +6,11 @@ import { getImportBatch, listImportBatches, rollbackImportBatch } from "@/server
 
 export const importsRouter = router({
   list: adminProcedure.query(async ({ ctx }) => {
-    return listImportBatches({ organizationId: ctx.user.organizationId });
+    try {
+      return await listImportBatches({ organizationId: ctx.user.organizationId });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
   }),
 
   get: adminProcedure

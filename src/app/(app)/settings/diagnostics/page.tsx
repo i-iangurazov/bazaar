@@ -74,10 +74,13 @@ const DiagnosticsPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const { toast } = useToast();
-  const isOrgOwner = Boolean(session?.user?.isOrgOwner);
-  const isForbidden = status === "authenticated" && !isOrgOwner;
+  const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
+    enabled: status === "authenticated",
+  });
+  const isOrgOwner = Boolean(profileQuery.data?.isOrgOwner);
+  const isForbidden = status === "authenticated" && profileQuery.isSuccess && !isOrgOwner;
 
   const [checkResults, setCheckResults] = useState<Partial<Record<DiagnosticsCheckType, DiagnosticsCheckResult>>>({});
   const [reportMeta, setReportMeta] = useState<{
@@ -88,7 +91,7 @@ const DiagnosticsPage = () => {
   const [confirmEmailInProduction, setConfirmEmailInProduction] = useState(false);
 
   const lastReportQuery = trpc.diagnostics.getLastReport.useQuery(undefined, {
-    enabled: status === "authenticated" && isOrgOwner,
+    enabled: status === "authenticated" && profileQuery.isSuccess && isOrgOwner,
   });
 
   const applyReport = (report: DiagnosticsReportSummary) => {
@@ -185,7 +188,7 @@ const DiagnosticsPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -212,7 +215,7 @@ const DiagnosticsPage = () => {
       <Card>
         <CardHeader className="space-y-2">
           <CardTitle>{t("overviewTitle")}</CardTitle>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <Badge variant={overallStatus === "ok" ? "success" : overallStatus === "warning" ? "warning" : "danger"}>
               {t(`statuses.${overallStatus}`)}
             </Badge>
@@ -224,10 +227,10 @@ const DiagnosticsPage = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-ink">{t("emailConfirmTitle")}</p>
-              <p className="text-xs text-gray-500">{t("emailConfirmDescription")}</p>
+              <p className="text-sm font-medium text-foreground">{t("emailConfirmTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("emailConfirmDescription")}</p>
             </div>
             <Switch
               checked={confirmEmailInProduction}
@@ -237,7 +240,7 @@ const DiagnosticsPage = () => {
           </div>
 
           {lastReportQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -260,17 +263,17 @@ const DiagnosticsPage = () => {
                         {statusValue ? t(`statuses.${statusValue}`) : t("statuses.notRun")}
                       </Badge>
                     </div>
-                    <p className="text-sm text-gray-500">{t(`checks.${checkType}.description`)}</p>
+                    <p className="text-sm text-muted-foreground">{t(`checks.${checkType}.description`)}</p>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-muted-foreground">
                       {result ? (
                         <div className="space-y-1">
                           <p>{t(`codes.${result.code}`)}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             {t("lastRun", { value: formatDateTime(result.ranAt, locale) })}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             {t("durationMs", { value: result.durationMs })}
                           </p>
                         </div>
@@ -310,7 +313,7 @@ const DiagnosticsPage = () => {
       </Card>
 
       {lastReportQuery.error ? (
-        <p className="text-sm text-red-500">{translateError(tErrors, lastReportQuery.error)}</p>
+        <p className="text-sm text-danger">{translateError(tErrors, lastReportQuery.error)}</p>
       ) : null}
     </div>
   );

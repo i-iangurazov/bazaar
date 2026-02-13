@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { PageBreadcrumbs } from "@/components/page-breadcrumbs";
 import { cn } from "@/lib/utils";
 
 export const PageHeaderActions = ({
@@ -32,7 +33,8 @@ export const PageHeader = ({
 }) => (
   <div className="mb-8 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <div>
+      <div className="min-w-0">
+        <PageBreadcrumbs />
         <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
         {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>

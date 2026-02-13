@@ -330,7 +330,7 @@ const NewPurchaseOrderPage = () => {
     return (
       <div>
         <PageHeader title={t("new")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -456,7 +456,7 @@ const NewPurchaseOrderPage = () => {
                               <TableCell className="font-medium">
                                 {product?.name ?? tCommon("notAvailable")}
                               </TableCell>
-                              <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                              <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                                 {variantLabel}
                               </TableCell>
                               <TableCell>
@@ -465,7 +465,7 @@ const NewPurchaseOrderPage = () => {
                                     {formatNumber(line.qtyOrdered, locale)} {unitLabel}
                                   </span>
                                   {line.unitSelection !== "BASE" && baseQty !== null ? (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-muted-foreground">
                                       {t("baseQtyPreview", {
                                         qty: formatNumber(baseQty, locale),
                                         unit: baseUnitLabel,
@@ -557,31 +557,31 @@ const NewPurchaseOrderPage = () => {
                     : (line.unitCost ?? 0) * resolveLineBaseQty(line);
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {product?.name ?? tCommon("notAvailable")}
                         </p>
-                        <p className="text-xs text-gray-500">{variantLabel}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">{variantLabel}</p>
+                        <p className="text-xs text-muted-foreground">
                           {t("orderQty")}: {formatNumber(line.qtyOrdered, locale)} {unitLabel}
                         </p>
                         {line.unitSelection !== "BASE" && baseQty !== null ? (
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-muted-foreground">
                             {t("baseQtyPreview", {
                               qty: formatNumber(baseQty, locale),
                               unit: baseUnitLabel,
                             })}
                           </p>
                         ) : null}
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t("unitCost")}{" "}
                           {line.unitCost === undefined
                             ? tCommon("notAvailable")
                             : formatCurrencyKGS(line.unitCost ?? 0, locale)}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t("lineTotal")}{" "}
                           {lineTotal === null ? tCommon("notAvailable") : formatCurrencyKGS(lineTotal, locale)}
                         </p>
@@ -616,13 +616,13 @@ const NewPurchaseOrderPage = () => {
               }}
             />
             {!fields.length ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noLines")}
               </div>
             ) : null}
             {form.formState.errors.lines?.message ? (
-              <p className="mt-3 text-sm text-red-500">
+              <p className="mt-3 text-sm text-danger">
                 {String(form.formState.errors.lines.message)}
               </p>
             ) : null}
@@ -766,13 +766,13 @@ const NewPurchaseOrderPage = () => {
                         />
                       </FormControl>
                       {showResults && productSearchQuery.data?.length ? (
-                        <div className="absolute z-20 mt-2 w-full rounded-md border border-gray-200 bg-white shadow-lg">
+                        <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-card shadow-lg">
                           <div className="max-h-64 overflow-y-auto py-1">
                             {productSearchQuery.data.map((product) => (
                               <button
                                 key={product.id}
                                 type="button"
-                                className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-gray-50"
+                                className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-accent/50"
                                 onMouseDown={(event) => event.preventDefault()}
                                 onPointerDown={(event) => event.preventDefault()}
                                 onClick={() => {
@@ -788,8 +788,8 @@ const NewPurchaseOrderPage = () => {
                                   setShowResults(false);
                                 }}
                               >
-                                <span className="font-medium text-ink">{product.name}</span>
-                                <span className="text-xs text-gray-500">{product.sku}</span>
+                                <span className="font-medium text-foreground">{product.name}</span>
+                                <span className="text-xs text-muted-foreground">{product.sku}</span>
                               </button>
                             ))}
                           </div>

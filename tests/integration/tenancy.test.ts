@@ -43,30 +43,17 @@ describeDb("tenant isolation and signup", () => {
     });
 
     expect(signup.sent).toBe(true);
-    expect(Boolean(signup.verifyLink) || Boolean(signup.nextPath)).toBe(true);
+    expect(signup.nextPath).toBeTruthy();
+    expect(signup.verifyLink).toBeUndefined();
 
     const userBeforeVerify = await prisma.user.findUnique({
       where: { email: "owner@test.local" },
     });
     expect(userBeforeVerify).not.toBeNull();
     expect(userBeforeVerify?.organizationId).toBeNull();
-    if (signup.verifyLink) {
-      expect(userBeforeVerify?.emailVerifiedAt).toBeNull();
-    } else {
-      expect(userBeforeVerify?.emailVerifiedAt).not.toBeNull();
-    }
+    expect(userBeforeVerify?.emailVerifiedAt).toBeNull();
 
-    let registrationToken: string | null = null;
-    if (signup.verifyLink) {
-      const verifyToken = getTokenFromPath(signup.verifyLink);
-      expect(verifyToken).toBeTruthy();
-      const verify = await caller.publicAuth.verifyEmail({ token: verifyToken ?? "" });
-      expect(verify.verified).toBe(true);
-      expect(verify.registrationToken).toBeTruthy();
-      registrationToken = verify.registrationToken;
-    } else {
-      registrationToken = getTokenFromPath(signup.nextPath);
-    }
+    const registrationToken = getTokenFromPath(signup.nextPath);
     expect(registrationToken).toBeTruthy();
 
     const register = await caller.publicAuth.registerBusiness({
@@ -91,7 +78,7 @@ describeDb("tenant isolation and signup", () => {
     const user = await prisma.user.findUnique({ where: { id: register.userId } });
     expect(user?.email).toBe("owner@test.local");
     expect(user?.role).toBe("ADMIN");
-    expect(user?.emailVerifiedAt).not.toBeNull();
+    expect(user?.emailVerifiedAt).toBeNull();
 
     const anotherCaller = createTestCaller();
     const duplicate = await anotherCaller.publicAuth.signup({

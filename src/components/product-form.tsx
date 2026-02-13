@@ -64,6 +64,8 @@ export type ProductFormValues = {
   category?: string;
   baseUnitId: string;
   basePriceKgs?: number;
+  purchasePriceKgs?: number;
+  avgCostKgs?: number;
   description?: string;
   photoUrl?: string;
   images?: {
@@ -179,14 +181,21 @@ export const ProductForm = ({
   const resolveUnitLabel = (unit: UnitOption) =>
     locale === "kg" ? unit.labelKg : unit.labelRu;
   const schema = useMemo(
-    () =>
-      z.object({
+    () => {
+      const optionalPrice = z.preprocess(
+        (value) => (value === "" || value === null || value === undefined ? undefined : value),
+        z.coerce.number().min(0, t("priceNonNegative")).optional(),
+      );
+
+      return z.object({
         sku: z.string().min(2, t("skuRequired")),
         name: z.string().min(2, t("nameRequired")),
         isBundle: z.boolean().optional(),
         category: z.string().optional(),
         baseUnitId: z.string().min(1, t("unitRequired")),
-        basePriceKgs: z.coerce.number().min(0, t("priceNonNegative")).optional(),
+        basePriceKgs: optionalPrice,
+        purchasePriceKgs: optionalPrice,
+        avgCostKgs: optionalPrice,
         description: z.string().optional(),
         photoUrl: z
           .string()
@@ -241,7 +250,8 @@ export const ProductForm = ({
             }),
           )
           .optional(),
-      }),
+      });
+    },
     [t],
   );
   type VariantFormRow = z.infer<typeof schema>["variants"][number];
@@ -274,6 +284,8 @@ export const ProductForm = ({
       category: initialValues.category ?? "",
       baseUnitId: initialValues.baseUnitId,
       basePriceKgs: initialValues.basePriceKgs ?? undefined,
+      purchasePriceKgs: initialValues.purchasePriceKgs ?? undefined,
+      avgCostKgs: initialValues.avgCostKgs ?? undefined,
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
       images: initialValues.images ?? [],
@@ -763,6 +775,12 @@ export const ProductForm = ({
       basePriceKgs: Number.isFinite(values.basePriceKgs ?? NaN)
         ? values.basePriceKgs
         : undefined,
+      purchasePriceKgs: Number.isFinite(values.purchasePriceKgs ?? NaN)
+        ? values.purchasePriceKgs
+        : undefined,
+      avgCostKgs: Number.isFinite(values.avgCostKgs ?? NaN)
+        ? values.avgCostKgs
+        : undefined,
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,
@@ -812,10 +830,10 @@ export const ProductForm = ({
         <TooltipProvider>
           <Card>
             <CardHeader>
-              <CardTitle>{t("detailsTitle")}</CardTitle>
+              <CardTitle>{isBundle ? t("detailsBundleTitle") : t("detailsTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <FormSection title={t("basicInfoTitle")}>
+              <FormSection title={isBundle ? t("basicInfoBundleTitle") : t("basicInfoTitle")}>
                 <FormGrid className="items-start">
                   <FormField
                     control={form.control}
@@ -928,6 +946,48 @@ export const ProductForm = ({
                             disabled={readOnly}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="purchasePriceKgs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("purchasePrice")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder={t("pricePlaceholder")}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormDescription>{t("purchasePriceHint")}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="avgCostKgs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("avgCost")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder={t("pricePlaceholder")}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormDescription>{t("avgCostHint")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1049,7 +1109,7 @@ export const ProductForm = ({
               ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-ink">{t("descriptionTitle")}</h3>
+                <h3 className="text-sm font-semibold text-foreground">{t("descriptionTitle")}</h3>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1088,11 +1148,11 @@ export const ProductForm = ({
                         <ImagePlusIcon className="h-4 w-4" aria-hidden />
                         {t("imagesAdd")}
                       </Button>
-                      <span className="text-xs text-gray-500">{t("imagesReorderHint")}</span>
+                      <span className="text-xs text-muted-foreground">{t("imagesReorderHint")}</span>
                     </div>
                     <div
-                      className={`rounded-md border border-dashed px-4 py-4 text-sm text-gray-500 transition ${
-                        isDragActive ? "border-ink bg-gray-50" : "border-gray-200"
+                      className={`rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
+                        isDragActive ? "border-ink bg-muted/30" : "border-border"
                       }`}
                       onDragOver={handleImageDragOver}
                       onDragLeave={handleImageDragLeave}
@@ -1108,7 +1168,7 @@ export const ProductForm = ({
                           return (
                             <div
                               key={image.id}
-                              className={`flex items-start gap-3 rounded-md border border-gray-200 bg-white p-3 ${
+                              className={`flex items-start gap-3 rounded-md border border-border bg-card p-3 ${
                                 draggedImageIndex === index ? "opacity-60" : ""
                               }`}
                               draggable={!readOnly}
@@ -1134,7 +1194,7 @@ export const ProductForm = ({
                                 setDraggedImageIndex(null);
                               }}
                             >
-                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-gray-50">
+                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-muted/30">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={image.url}
@@ -1147,11 +1207,11 @@ export const ProductForm = ({
                                   {index === 0 ? (
                                     <Badge variant="success">{t("imagePrimary")}</Badge>
                                   ) : null}
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-muted-foreground">
                                     {t("imagePosition", { index: index + 1, total: imageFields.length })}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <GripIcon className="h-4 w-4" aria-hidden />
                                   {t("imageDragHint")}
                                 </div>
@@ -1211,7 +1271,7 @@ export const ProductForm = ({
                         })}
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400">{t("imagesEmpty")}</p>
+                      <p className="text-xs text-muted-foreground/80">{t("imagesEmpty")}</p>
                     )}
                   </FormSection>
                   <FormSection>
@@ -1248,7 +1308,7 @@ export const ProductForm = ({
               ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-ink">{t("advancedTitle")}</h3>
+                <h3 className="text-sm font-semibold text-foreground">{t("advancedTitle")}</h3>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1345,7 +1405,7 @@ export const ProductForm = ({
                                 </Badge>
                               ))
                             ) : (
-                              <p className="text-xs text-gray-500">{t("barcodeEmpty")}</p>
+                              <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
                             )}
                           </div>
                           <FormDescription>{t("barcodeHint")}</FormDescription>
@@ -1383,7 +1443,7 @@ export const ProductForm = ({
                         {packFields.map((field, index) => (
                           <div
                             key={field.id}
-                            className="space-y-3 rounded-lg border border-gray-100 bg-white p-4"
+                            className="space-y-3 rounded-lg border border-border/70 bg-card p-4"
                           >
                             <FormGrid className="items-start">
                               <FormField
@@ -1500,9 +1560,9 @@ export const ProductForm = ({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500">{t("packsEmpty")}</p>
+                      <p className="text-xs text-muted-foreground">{t("packsEmpty")}</p>
                     )}
-                    <p className="text-xs text-gray-500">{t("packsHint")}</p>
+                    <p className="text-xs text-muted-foreground">{t("packsHint")}</p>
                   </FormSection>
 
                   <Separator />
@@ -1566,7 +1626,7 @@ export const ProductForm = ({
                       return (
                         <div
                           key={field.id}
-                          className="space-y-4 rounded-lg border border-gray-100 bg-white p-4"
+                          className="space-y-4 rounded-lg border border-border/70 bg-card p-4"
                         >
                           <FormGrid className="items-start">
                             <FormField
@@ -1599,7 +1659,7 @@ export const ProductForm = ({
 
                           <div className="space-y-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <h4 className="text-sm font-semibold text-ink">
+                              <h4 className="text-sm font-semibold text-foreground">
                                 {t("variantAttributes")}
                               </h4>
                               {!readOnly && availableDefinitions.length ? (
@@ -1682,7 +1742,7 @@ export const ProductForm = ({
                                       control={form.control}
                                       name={fieldName}
                                       render={({ field: attrField }) => (
-                                        <FormItem className="rounded-md border border-gray-100 p-3">
+                                        <FormItem className="rounded-md border border-border/70 p-3">
                                           <div className="flex items-center justify-between gap-2">
                                             <FormLabel>
                                               {label}
@@ -1811,10 +1871,10 @@ export const ProductForm = ({
                                 })}
                               </div>
                             ) : (
-                              <p className="text-xs text-gray-500">{t("variantAttributesEmpty")}</p>
+                              <p className="text-xs text-muted-foreground">{t("variantAttributesEmpty")}</p>
                             )}
                             {definitions.length === 0 ? (
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-muted-foreground">
                                 {t("variantAttributesNoDefinitions")}
                               </p>
                             ) : null}
@@ -1874,7 +1934,7 @@ export const ProductForm = ({
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-ink">{t("generatorAttributes")}</p>
+                <p className="text-sm font-semibold text-foreground">{t("generatorAttributes")}</p>
                 {generatorAvailableDefinitions.length ? (
                   <FormRow className="w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-end">
                     <Select
@@ -1925,12 +1985,12 @@ export const ProductForm = ({
                     return (
                       <div
                         key={attribute.key}
-                        className="rounded-lg border border-gray-100 bg-white p-3"
+                        className="rounded-lg border border-border/70 bg-card p-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <p className="text-sm font-semibold text-ink">{label}</p>
-                            <p className="text-xs text-gray-500">{t("generatorAttributeHint")}</p>
+                            <p className="text-sm font-semibold text-foreground">{label}</p>
+                            <p className="text-xs text-muted-foreground">{t("generatorAttributeHint")}</p>
                           </div>
                           <Button
                             type="button"
@@ -1979,7 +2039,7 @@ export const ProductForm = ({
                               })}
                             </div>
                           ) : (
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               {t("generatorNoOptions")}
                             </p>
                           )}
@@ -2065,11 +2125,11 @@ export const ProductForm = ({
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-gray-500">{t("generatorEmpty")}</p>
+                <p className="text-xs text-muted-foreground">{t("generatorEmpty")}</p>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{t("generatorPreview", { count: generatorPreviewCount })}</span>
               {templateKeys.length ? (
                 <span>{t("generatorTemplateHint")}</span>

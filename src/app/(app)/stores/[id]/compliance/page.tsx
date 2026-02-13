@@ -161,7 +161,7 @@ const CompliancePage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -177,7 +177,7 @@ const CompliancePage = () => {
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle>{t("cardTitle")}</CardTitle>
-            <p className="text-sm text-gray-500">{t("cardSubtitle")}</p>
+            <p className="text-sm text-muted-foreground">{t("cardSubtitle")}</p>
           </div>
           <Button
             type="button"
@@ -205,7 +205,7 @@ const CompliancePage = () => {
                     <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
                       <div>
                         <FormLabel>{t("kkmToggle")}</FormLabel>
-                        <p className="text-xs text-gray-500">{t("kkmHint")}</p>
+                        <p className="text-xs text-muted-foreground">{t("kkmHint")}</p>
                       </div>
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
@@ -221,7 +221,7 @@ const CompliancePage = () => {
                     <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
                       <div>
                         <FormLabel>{t("esfToggle")}</FormLabel>
-                        <p className="text-xs text-gray-500">{t("esfHint")}</p>
+                        <p className="text-xs text-muted-foreground">{t("esfHint")}</p>
                       </div>
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
@@ -237,7 +237,7 @@ const CompliancePage = () => {
                     <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
                       <div>
                         <FormLabel>{t("ettnToggle")}</FormLabel>
-                        <p className="text-xs text-gray-500">{t("ettnHint")}</p>
+                        <p className="text-xs text-muted-foreground">{t("ettnHint")}</p>
                       </div>
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
@@ -253,7 +253,7 @@ const CompliancePage = () => {
                     <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
                       <div>
                         <FormLabel>{t("markingToggle")}</FormLabel>
-                        <p className="text-xs text-gray-500">{t("markingHint")}</p>
+                        <p className="text-xs text-muted-foreground">{t("markingHint")}</p>
                       </div>
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
@@ -264,7 +264,7 @@ const CompliancePage = () => {
 
                 {advancedOpen ? (
                   <div className="rounded-lg border p-4">
-                    <p className="mb-4 text-sm text-gray-500">{t("advancedIntro")}</p>
+                    <p className="mb-4 text-sm text-muted-foreground">{t("advancedIntro")}</p>
                     <FormStack>
                       <FormField
                         control={form.control}
@@ -334,10 +334,10 @@ const CompliancePage = () => {
                       />
 
                       {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.EXPORT_ONLY ? (
-                        <p className="text-xs text-gray-500">{t("exportOnlyHint")}</p>
+                        <p className="text-xs text-muted-foreground">{t("exportOnlyHint")}</p>
                       ) : null}
                       {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.ADAPTER ? (
-                        <p className="text-xs text-gray-500">{t("adapterHint")}</p>
+                        <p className="text-xs text-muted-foreground">{t("adapterHint")}</p>
                       ) : null}
 
                       <FormField
@@ -377,7 +377,7 @@ const CompliancePage = () => {
                 ) : null}
 
                 {!canEdit ? (
-                  <p className="text-xs text-gray-500">{t("readOnlyHint")}</p>
+                  <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p>
                 ) : null}
               </FormStack>
 

@@ -20,7 +20,7 @@ export const createInvite = async (input: {
   createdById: string;
   requestId: string;
   email: string;
-  role: "ADMIN" | "MANAGER" | "STAFF";
+  role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
 }) => {
   await assertWithinLimits({ organizationId: input.organizationId, kind: "users" });
   return prisma.$transaction(async (tx) => {

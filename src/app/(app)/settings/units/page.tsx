@@ -148,7 +148,7 @@ const UnitsPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -175,12 +175,12 @@ const UnitsPage = () => {
         </CardHeader>
         <CardContent>
           {unitsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !unitsQuery.data?.length ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("empty")}
             </div>
@@ -249,12 +249,12 @@ const UnitsPage = () => {
                 </div>
               )}
               renderMobile={(unit) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink">{unit.code}</p>
-                      <p className="text-xs text-gray-500">{unit.labelRu}</p>
-                      <p className="text-xs text-gray-500">{unit.labelKg}</p>
+                      <p className="text-sm font-medium text-foreground">{unit.code}</p>
+                      <p className="text-xs text-muted-foreground">{unit.labelRu}</p>
+                      <p className="text-xs text-muted-foreground">{unit.labelKg}</p>
                     </div>
                     <RowActions
                       actions={[
@@ -282,7 +282,7 @@ const UnitsPage = () => {
             />
           )}
           {unitsQuery.error ? (
-            <p className="mt-3 text-sm text-red-500">
+            <p className="mt-3 text-sm text-danger">
               {translateError(tErrors, unitsQuery.error)}
             </p>
           ) : null}

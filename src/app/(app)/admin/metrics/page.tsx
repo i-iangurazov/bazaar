@@ -34,7 +34,7 @@ const AdminMetricsPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -44,7 +44,7 @@ const AdminMetricsPage = () => {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {metricsQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
@@ -54,7 +54,7 @@ const AdminMetricsPage = () => {
             <CardHeader>
               <CardTitle>{t("onboardingTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-gray-600">
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Badge variant={metricsQuery.data.onboardingCompleted ? "success" : "warning"}>
                   {metricsQuery.data.onboardingCompleted ? t("completed") : t("incomplete")}
@@ -79,7 +79,7 @@ const AdminMetricsPage = () => {
             <CardHeader>
               <CardTitle>{t("firstValueTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-gray-600">
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
               {metricsQuery.data.firstValueAt ? (
                 <>
                   <p>
@@ -106,7 +106,7 @@ const AdminMetricsPage = () => {
             <CardHeader>
               <CardTitle>{t("adoptionTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-gray-600">
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>
                 {t("weeklyActiveUsers", {
                   count: metricsQuery.data.weeklyActiveUsers,
@@ -126,7 +126,7 @@ const AdminMetricsPage = () => {
           </Card>
         </div>
       ) : (
-        <p className="text-sm text-gray-500">{t("empty")}</p>
+        <p className="text-sm text-muted-foreground">{t("empty")}</p>
       )}
     </div>
   );

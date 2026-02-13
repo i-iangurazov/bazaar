@@ -7,6 +7,12 @@ export const shouldRunDbTests =
   process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1";
 
 export const resetDatabase = async () => {
+  await prisma.saleReturnLine.deleteMany();
+  await prisma.salePayment.deleteMany();
+  await prisma.saleReturn.deleteMany();
+  await prisma.cashDrawerMovement.deleteMany();
+  await prisma.registerShift.deleteMany();
+  await prisma.posRegister.deleteMany();
   await prisma.customerOrderLine.deleteMany();
   await prisma.customerOrder.deleteMany();
   await prisma.organizationCounter.deleteMany();
@@ -125,6 +131,16 @@ export const seedBase = async (options?: {
       emailVerifiedAt: new Date(),
     },
   });
+  const cashierUser = await prisma.user.create({
+    data: {
+      organizationId: org.id,
+      email: "cashier@test.local",
+      name: "Cashier User",
+      passwordHash: "hash",
+      role: Role.CASHIER,
+      emailVerifiedAt: new Date(),
+    },
+  });
 
-  return { org, store, supplier, product, adminUser, managerUser, staffUser, baseUnit };
+  return { org, store, supplier, product, adminUser, managerUser, staffUser, cashierUser, baseUnit };
 };

@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -9,6 +10,28 @@ export const dashboardRouter = router({
   summary: protectedProcedure
     .input(z.object({ storeId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const asRecord = (value: Prisma.JsonValue | null): Record<string, unknown> | null => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          return null;
+        }
+        return value as Record<string, unknown>;
+      };
+
+      const getStoreIdFromLog = (
+        log: { entity: string; entityId: string; before: Prisma.JsonValue | null; after: Prisma.JsonValue | null },
+        purchaseOrderStoreMap: Map<string, string>,
+      ): string | null => {
+        if (log.entity === "PurchaseOrder") {
+          return purchaseOrderStoreMap.get(log.entityId) ?? null;
+        }
+        const source = asRecord(log.after) ?? asRecord(log.before);
+        if (!source) {
+          return null;
+        }
+        const storeId = source.storeId;
+        return typeof storeId === "string" ? storeId : null;
+      };
+
       const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
       if (!store || store.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
@@ -40,7 +63,14 @@ export const dashboardRouter = router({
         new Set(lowStockCandidates.map((item) => item.productId)),
       );
 
-      const [lowStockSnapshots, policies, forecasts, recentMovements, pendingPurchaseOrders, recentActivityLogs] =
+      const [
+        lowStockSnapshots,
+        policies,
+        forecasts,
+        recentMovements,
+        pendingPurchaseOrders,
+        recentActivityLogsRaw,
+      ] =
         await Promise.all([
           lowStockSnapshotIds.length
             ? ctx.prisma.inventorySnapshot.findMany({
@@ -73,6 +103,7 @@ export const dashboardRouter = router({
           ctx.prisma.purchaseOrder.findMany({
             where: {
               organizationId: ctx.user.organizationId,
+              storeId: input.storeId,
               status: { in: ["SUBMITTED", "APPROVED"] },
             },
             include: { supplier: true },
@@ -90,9 +121,32 @@ export const dashboardRouter = router({
               },
             },
             orderBy: { createdAt: "desc" },
-            take: 8,
+            take: 40,
           }),
         ]);
+
+      const activityPurchaseOrderIds = Array.from(
+        new Set(
+          recentActivityLogsRaw
+            .filter((log) => log.entity === "PurchaseOrder")
+            .map((log) => log.entityId),
+        ),
+      );
+      const activityPurchaseOrders = activityPurchaseOrderIds.length
+        ? await ctx.prisma.purchaseOrder.findMany({
+            where: { id: { in: activityPurchaseOrderIds } },
+            select: { id: true, storeId: true },
+          })
+        : [];
+      const activityPurchaseOrderStoreMap = new Map(
+        activityPurchaseOrders.map((order) => [order.id, order.storeId]),
+      );
+
+      const recentActivityLogs = recentActivityLogsRaw
+        .filter(
+          (log) => getStoreIdFromLog(log, activityPurchaseOrderStoreMap) === input.storeId,
+        )
+        .slice(0, 8);
 
       const snapshotMap = new Map(
         lowStockSnapshots.map((snapshot) => [snapshot.id, snapshot]),

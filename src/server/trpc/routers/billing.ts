@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { OrganizationPlan } from "@prisma/client";
 
-import { adminProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
-import { getBillingSummary } from "@/server/services/billing";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "@/server/trpc/trpc";
+import { getBillingSummary, requestPlanUpgrade } from "@/server/services/billing";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 
@@ -10,6 +11,26 @@ export const billingRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     return getBillingSummary({ organizationId: ctx.user.organizationId });
   }),
+
+  requestUpgrade: publicProcedure
+    .input(
+      z.object({
+        requestedPlan: z.nativeEnum(OrganizationPlan),
+        message: z.string().max(500).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.user || ctx.user.role !== "ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+      }
+      return requestPlanUpgrade({
+        organizationId: ctx.user.organizationId,
+        requestedById: ctx.user.id,
+        requestedPlan: input.requestedPlan,
+        message: input.message ?? null,
+        requestId: ctx.requestId,
+      });
+    }),
 
   setPlanDev: adminProcedure
     .input(

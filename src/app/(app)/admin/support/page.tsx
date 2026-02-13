@@ -99,7 +99,7 @@ const AdminSupportPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -139,7 +139,7 @@ const AdminSupportPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {usersQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -170,7 +170,7 @@ const AdminSupportPage = () => {
               </Button>
             </div>
           )}
-          <p className="text-xs text-gray-500">{t("impersonationHint")}</p>
+          <p className="text-xs text-muted-foreground">{t("impersonationHint")}</p>
         </CardContent>
       </Card>
 
@@ -179,7 +179,7 @@ const AdminSupportPage = () => {
           <CardTitle>{t("bundleTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-gray-600">{t("bundleHint")}</p>
+          <p className="text-sm text-muted-foreground">{t("bundleHint")}</p>
           <Button type="button" variant="secondary" onClick={() => exportMutation.mutate()}>
             {exportMutation.isLoading ? tCommon("loading") : t("bundleAction")}
           </Button>
@@ -192,17 +192,17 @@ const AdminSupportPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {storeFlagsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : (
             (storeFlagsQuery.data ?? []).map((store) => (
-              <div key={store.id} className="rounded-lg border border-gray-100 p-4">
+              <div key={store.id} className="rounded-lg border border-border/70 p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-ink">{store.name}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-semibold text-foreground">{store.name}</p>
+                    <p className="text-xs text-muted-foreground">
                       {t("storeCode", { code: store.code })}
                     </p>
                   </div>
@@ -214,8 +214,8 @@ const AdminSupportPage = () => {
                     store.featureFlags.map((flag) => (
                       <div key={flag.id} className="flex items-center justify-between gap-2 text-sm">
                         <div>
-                          <p className="font-medium text-ink">{t("flagKey", { key: flag.key })}</p>
-                          <p className="text-xs text-gray-400">
+                          <p className="font-medium text-foreground">{t("flagKey", { key: flag.key })}</p>
+                          <p className="text-xs text-muted-foreground/80">
                             {t("flagUpdatedAt", { date: formatDateTime(flag.updatedAt, locale) })}
                           </p>
                         </div>
@@ -227,7 +227,7 @@ const AdminSupportPage = () => {
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-gray-400">{t("flagsEmpty")}</p>
+                    <p className="text-xs text-muted-foreground/80">{t("flagsEmpty")}</p>
                   )}
                 </div>
 

@@ -145,7 +145,7 @@ export const publicAuthRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await registerBusinessFromToken({
+        const registration = await registerBusinessFromToken({
           token: input.token,
           orgName: input.orgName,
           storeName: input.storeName,
@@ -157,6 +157,21 @@ export const publicAuthRouter = router({
           phone: input.phone,
           requestId: ctx.requestId,
         });
+        if (!isEmailVerificationRequired()) {
+          return { ...registration, requiresEmailVerification: false };
+        }
+        const user = await prisma.user.findUnique({ where: { id: registration.userId } });
+        if (user && !user.emailVerifiedAt) {
+          await sendEmailVerificationToken({
+            userId: user.id,
+            email: user.email,
+            organizationId: user.organizationId,
+            preferredLocale: user.preferredLocale,
+            requestId: ctx.requestId,
+          });
+          return { ...registration, requiresEmailVerification: true };
+        }
+        return { ...registration, requiresEmailVerification: false };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -183,7 +198,11 @@ export const publicAuthRouter = router({
         });
 
         const resetLink = `${process.env.NEXTAUTH_URL ?? ""}/reset/${raw}`;
-        await sendResetEmail({ email: user.email, resetLink });
+        try {
+          await sendResetEmail({ email: user.email, resetLink });
+        } catch (emailError) {
+          ctx.logger.warn({ emailError, email: user.email }, "password reset email delivery failed");
+        }
         return { sent: true };
       } catch (error) {
         throw toTRPCError(error);
@@ -269,6 +288,7 @@ export const publicAuthRouter = router({
           userId: user.id,
           email: user.email,
           organizationId: user.organizationId,
+          preferredLocale: input.preferredLocale,
           requestId: ctx.requestId,
         });
         return { user, verifyLink };
@@ -297,6 +317,7 @@ export const publicAuthRouter = router({
           userId: user.id,
           email: user.email,
           organizationId: user.organizationId,
+          preferredLocale: user.preferredLocale,
           requestId: ctx.requestId,
         });
         return { sent: true };

@@ -136,12 +136,12 @@ export const ResponsiveDataList = <T,>({
         )}
       </div>
       {showPagination ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
-          <p className="text-xs text-gray-500">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+          <p className="text-xs text-muted-foreground">
             {tCommon("pagination.items", { from: startItem, to: endItem, total: totalCount })}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-gray-500">{tCommon("pagination.rowsPerPage")}</span>
+            <span className="text-xs text-muted-foreground">{tCommon("pagination.rowsPerPage")}</span>
             <div className="w-[88px]">
               <Select
                 value={String(pageSize)}
@@ -176,7 +176,7 @@ export const ResponsiveDataList = <T,>({
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {tCommon("pagination.page", { page, totalPages })}
             </p>
             <Button

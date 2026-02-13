@@ -26,7 +26,7 @@ export const usersRouter = router({
       z.object({
         email: z.string().email(),
         name: z.string().min(2),
-        role: z.enum(["ADMIN", "MANAGER", "STAFF"]),
+        role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         password: z.string().min(8),
         preferredLocale: z.enum(["ru", "kg"]).optional(),
       }),
@@ -54,7 +54,7 @@ export const usersRouter = router({
         userId: z.string(),
         email: z.string().email(),
         name: z.string().min(2),
-        role: z.enum(["ADMIN", "MANAGER", "STAFF"]),
+        role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         preferredLocale: z.enum(["ru", "kg"]),
       }),
     )

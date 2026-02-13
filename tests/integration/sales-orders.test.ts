@@ -44,6 +44,42 @@ describeDb("sales orders", () => {
     expect(dbOrder?.lines[0]?.qty).toBe(2);
   });
 
+  it("snapshots unit price and line total using store override price", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 120 },
+    });
+    await prisma.storePrice.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        priceKgs: 95,
+      },
+    });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const order = await caller.salesOrders.createDraft({ storeId: store.id });
+    const line = await caller.salesOrders.addLine({
+      customerOrderId: order.id,
+      productId: product.id,
+      qty: 3,
+    });
+
+    expect(line.unitPriceKgs).toBe(95);
+    expect(line.lineTotalKgs).toBe(285);
+  });
+
   it("completes customer order and creates SALE ledger movements", async () => {
     const { org, store, product, adminUser } = await seedBase();
 

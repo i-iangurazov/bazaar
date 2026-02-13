@@ -11,6 +11,7 @@ import { getLogger } from "@/server/logging";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 import { isEmailVerificationRequired } from "@/server/config/auth";
 import { ThemePreference } from "@prisma/client";
+import { createAuthToken } from "@/server/services/authTokens";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -101,7 +102,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials, req) => {
-        assertStartupConfigured();
+        await assertStartupConfigured();
         const logger = getLogger();
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) {
@@ -125,13 +126,28 @@ export const authOptions: NextAuthOptions = {
         if (isEmailVerificationRequired() && !user.emailVerifiedAt) {
           throw new Error("emailNotVerified");
         }
-        if (!user.organizationId) {
-          throw new Error("registrationNotCompleted");
-        }
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
         if (!isValid) {
           return null;
+        }
+
+        const storeCount = user.organizationId
+          ? await prisma.store.count({
+              where: { organizationId: user.organizationId },
+            })
+          : 0;
+
+        if (!user.organizationId || storeCount === 0) {
+          const registration = await createAuthToken({
+            userId: user.id,
+            email: user.email,
+            purpose: "REGISTRATION",
+            expiresInMinutes: 60,
+            organizationId: user.organizationId,
+            actorId: user.id,
+          });
+          throw new Error(`registrationNotCompleted:${registration.raw}`);
         }
 
         const cookieLocale = resolvePreferredLocale(getCookie(req, "NEXT_LOCALE"));

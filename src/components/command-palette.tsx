@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useCallback,
   useRef,
   useState,
   type ComponentType,
@@ -15,17 +16,27 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
-  DownloadIcon,
+  AdjustIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BillingIcon,
   InventoryIcon,
-  ProductsIcon,
   PurchaseOrdersIcon,
+  ProductsIcon,
+  ReceiveIcon,
   SalesOrdersIcon,
   SearchIcon,
   StoresIcon,
   SuppliersIcon,
+  TagIcon,
+  TransferIcon,
+  UserIcon,
+  UsersIcon,
 } from "@/components/icons";
+import { filterCommandPaletteActions, type CommandPaletteCategory } from "@/lib/command-palette";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { cn } from "@/lib/utils";
 
 type PaletteItem = {
   id: string;
@@ -34,17 +45,44 @@ type PaletteItem = {
   href: string;
   icon: ComponentType<{ className?: string }>;
   group: "actions" | "results";
+  category?: CommandPaletteCategory;
+  keywords?: string[];
 };
 
-export const CommandPalette = () => {
+const actionCategories: CommandPaletteCategory[] = ["documents", "products", "other", "payments"];
+
+const normalizeQuery = (value: string) => value.trim();
+const itemKey = (item: PaletteItem) => `${item.group}:${item.id}`;
+
+export const CommandPalette = ({
+  open,
+  onOpenChange,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) => {
   const t = useTranslations("commandPalette");
   const tErrors = useTranslations("errors");
   const router = useRouter();
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [keyboardNavigation, setKeyboardNavigation] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const isControlled = typeof open === "boolean";
+  const isOpen = isControlled ? Boolean(open) : internalOpen;
+
+  const setOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (!isControlled) {
+        setInternalOpen(nextOpen);
+      }
+      onOpenChange?.(nextOpen);
+    },
+    [isControlled, onOpenChange],
+  );
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -55,59 +93,197 @@ export const CommandPalette = () => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
-    if (open) {
+    if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 0);
     } else {
       setQuery("");
       setActiveIndex(0);
+      setHoveredIndex(null);
+      setKeyboardNavigation(false);
     }
-  }, [open]);
+  }, [isOpen]);
+
+  const normalizedQuery = normalizeQuery(query);
 
   const searchQuery = trpc.search.global.useQuery(
-    { q: query.trim() },
-    { enabled: query.trim().length >= 2 && open },
+    { q: normalizedQuery },
+    { enabled: normalizedQuery.length >= 2 && isOpen },
   );
 
   const actions = useMemo<PaletteItem[]>(
     () => [
       {
-        id: "action-create-so",
-        label: t("actionCreateSo"),
+        id: "create-sale-order",
+        label: t("actions.sale"),
+        keywords: [t("keywords.sale"), t("keywords.document"), t("keywords.order")],
         sublabel: null,
-        href: "/sales/orders/new",
+        href: "/pos/sell",
         icon: SalesOrdersIcon,
         group: "actions",
+        category: "documents",
       },
       {
-        id: "action-create-po",
-        label: t("actionCreatePo"),
+        id: "sale-return",
+        label: t("actions.saleReturn"),
+        keywords: [t("keywords.sale"), t("keywords.return"), t("keywords.document")],
         sublabel: null,
-        href: "/purchase-orders/new",
-        icon: PurchaseOrdersIcon,
+        href: "/pos/history",
+        icon: ArrowDownIcon,
         group: "actions",
+        category: "documents",
       },
       {
-        id: "action-stock-count",
-        label: t("actionStartCount"),
+        id: "inventory-receive",
+        label: t("actions.stockReceive"),
+        keywords: [t("keywords.inventory"), t("keywords.receive"), t("keywords.document")],
         sublabel: null,
-        href: "/inventory/counts",
+        href: "/inventory?action=receive",
+        icon: ReceiveIcon,
+        group: "actions",
+        category: "documents",
+      },
+      {
+        id: "inventory-adjust",
+        label: t("actions.stockWriteoff"),
+        keywords: [t("keywords.inventory"), t("keywords.adjust"), t("keywords.document")],
+        sublabel: null,
+        href: "/inventory?action=adjust",
+        icon: AdjustIcon,
+        group: "actions",
+        category: "documents",
+      },
+      {
+        id: "inventory-count",
+        label: t("actions.stockCount"),
+        keywords: [t("keywords.inventory"), t("keywords.count"), t("keywords.document")],
+        sublabel: null,
+        href: "/inventory/counts/new",
         icon: InventoryIcon,
         group: "actions",
+        category: "documents",
       },
       {
-        id: "action-print-tags",
-        label: t("actionPrintTags"),
+        id: "inventory-transfer",
+        label: t("actions.stockTransfer"),
+        keywords: [t("keywords.inventory"), t("keywords.transfer"), t("keywords.document")],
         sublabel: null,
-        href: "/products",
-        icon: DownloadIcon,
+        href: "/inventory?action=transfer",
+        icon: TransferIcon,
         group: "actions",
+        category: "documents",
+      },
+      {
+        id: "create-product",
+        label: t("actions.product"),
+        keywords: [t("keywords.product"), t("keywords.catalog"), t("keywords.create")],
+        sublabel: null,
+        href: "/products/new?type=product",
+        icon: ProductsIcon,
+        group: "actions",
+        category: "products",
+      },
+      {
+        id: "create-bundle",
+        label: t("actions.bundle"),
+        keywords: [t("keywords.bundle"), t("keywords.catalog"), t("keywords.create")],
+        sublabel: null,
+        href: "/products/new?type=bundle",
+        icon: TagIcon,
+        group: "actions",
+        category: "products",
+      },
+      {
+        id: "new-customer",
+        label: t("actions.customer"),
+        keywords: [t("keywords.customer"), t("keywords.other"), t("keywords.create")],
+        sublabel: null,
+        href: "/customers/new",
+        icon: UserIcon,
+        group: "actions",
+        category: "other",
+      },
+      {
+        id: "new-supplier",
+        label: t("actions.supplier"),
+        keywords: [t("keywords.supplier"), t("keywords.other"), t("keywords.create")],
+        sublabel: null,
+        href: "/suppliers/new",
+        icon: SuppliersIcon,
+        group: "actions",
+        category: "other",
+      },
+      {
+        id: "new-employee",
+        label: t("actions.employee"),
+        keywords: [t("keywords.employee"), t("keywords.other"), t("keywords.create")],
+        sublabel: null,
+        href: "/settings/users?create=1",
+        icon: UsersIcon,
+        group: "actions",
+        category: "other",
+      },
+      {
+        id: "new-store",
+        label: t("actions.store"),
+        keywords: [t("keywords.store"), t("keywords.other"), t("keywords.create")],
+        sublabel: null,
+        href: "/stores/new",
+        icon: StoresIcon,
+        group: "actions",
+        category: "other",
+      },
+      {
+        id: "cash",
+        label: t("actions.cash"),
+        keywords: [t("keywords.cash"), t("keywords.other")],
+        sublabel: null,
+        href: "/pos",
+        icon: BillingIcon,
+        group: "actions",
+        category: "other",
+      },
+      {
+        id: "finance-income",
+        label: t("actions.income"),
+        keywords: [t("keywords.finance"), t("keywords.income"), t("keywords.payment")],
+        sublabel: null,
+        href: "/finance/income",
+        icon: ArrowDownIcon,
+        group: "actions",
+        category: "payments",
+      },
+      {
+        id: "finance-expense",
+        label: t("actions.expense"),
+        keywords: [t("keywords.finance"), t("keywords.expense"), t("keywords.payment")],
+        sublabel: null,
+        href: "/finance/expense",
+        icon: ArrowUpIcon,
+        group: "actions",
+        category: "payments",
       },
     ],
     [t],
   );
+
+  const filteredActions = useMemo(() => {
+    const searchable = actions.map((action) => ({
+      id: action.id,
+      category: action.category ?? "other",
+      label: action.label,
+      keywords: action.keywords ?? [],
+      href: action.href,
+    }));
+    const matches = filterCommandPaletteActions(searchable, normalizedQuery);
+    const actionMap = new Map(actions.map((action) => [action.id, action]));
+    return matches.flatMap((match) => {
+      const item = actionMap.get(match.id);
+      return item ? [item] : [];
+    });
+  }, [actions, normalizedQuery]);
 
   const results = useMemo<PaletteItem[]>(() => {
     const items = searchQuery.data?.results ?? [];
@@ -153,11 +329,26 @@ export const CommandPalette = () => {
     });
   }, [searchQuery.data]);
 
-  const allItems = useMemo(() => [...actions, ...results], [actions, results]);
+  const allItems = useMemo(() => [...filteredActions, ...results], [filteredActions, results]);
+  const activeItem = allItems[activeIndex];
+  const indexByItemId = useMemo(
+    () => new Map(allItems.map((item, index) => [itemKey(item), index])),
+    [allItems],
+  );
+  const groupedActions = useMemo(
+    () =>
+      actionCategories.map((category) => ({
+        category,
+        items: filteredActions.filter((action) => action.category === category),
+      })),
+    [filteredActions],
+  );
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, results.length]);
+    setHoveredIndex(null);
+    setKeyboardNavigation(false);
+  }, [normalizedQuery, filteredActions.length, results.length]);
 
   const findByBarcode = trpc.products.findByBarcode.useMutation({
     onSuccess: (product) => {
@@ -184,11 +375,15 @@ export const CommandPalette = () => {
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      setKeyboardNavigation(true);
+      setHoveredIndex(null);
       setActiveIndex((prev) => (allItems.length ? (prev + 1) % allItems.length : 0));
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      setKeyboardNavigation(true);
+      setHoveredIndex(null);
       setActiveIndex((prev) =>
         allItems.length ? (prev - 1 + allItems.length) % allItems.length : 0,
       );
@@ -196,11 +391,12 @@ export const CommandPalette = () => {
     }
     if (event.key === "Enter") {
       event.preventDefault();
+      const selectedIndex = hoveredIndex ?? activeIndex;
       if (allItems.length) {
-        handleSelect(allItems[activeIndex]);
+        handleSelect(allItems[selectedIndex]);
         return;
       }
-      const trimmed = query.trim();
+      const trimmed = normalizedQuery;
       if (trimmed.length >= 2) {
         findByBarcode.mutate({ value: trimmed });
       }
@@ -213,85 +409,164 @@ export const CommandPalette = () => {
   };
 
   return (
-    <Modal open={open} onOpenChange={setOpen} title={t("title")} subtitle={t("subtitle")}>
-      <div className="space-y-4">
+    <Modal
+      open={isOpen}
+      onOpenChange={setOpen}
+      title={t("title")}
+      subtitle={t("subtitle")}
+      className="max-w-4xl"
+      headerClassName="px-4 py-4 sm:px-6 sm:py-5"
+      bodyClassName="space-y-4 px-4 pb-5 pt-4 sm:px-6 sm:pb-6"
+    >
+      <div className="space-y-5">
         <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
+          <SearchIcon
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
           <Input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setKeyboardNavigation(false);
+            }}
             onKeyDown={handleInputKeyDown}
             placeholder={t("placeholder")}
-            className="pl-9"
+            className="h-11 rounded-lg border-border/80 bg-background pl-9 text-sm"
             aria-label={t("searchLabel")}
           />
         </div>
 
-        <div className="space-y-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            {t("actionsTitle")}
+        {normalizedQuery.length >= 2 ? (
+          <section className="rounded-xl border border-border/80 bg-card/80 p-3 sm:p-4">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("resultsTitle")}
+            </div>
+            {searchQuery.isFetching ? (
+              <p className="text-sm text-muted-foreground">{t("loading")}</p>
+            ) : results.length ? (
+              <div className="grid grid-cols-1 gap-2">
+                {results.map((item) => {
+                  const key = itemKey(item);
+                  const index = indexByItemId.get(key) ?? 0;
+                  const Icon = item.icon;
+                  const isActive =
+                    hoveredIndex === index ||
+                    (keyboardNavigation && activeItem ? itemKey(activeItem) === key : false);
+                  return (
+                    <button
+                      key={`${item.group}-${item.id}`}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition",
+                        isActive
+                          ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
+                          : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
+                      )}
+                      onMouseEnter={() => {
+                        setKeyboardNavigation(false);
+                        setActiveIndex(index);
+                        setHoveredIndex(index);
+                      }}
+                      onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        setKeyboardNavigation(false);
+                      }}
+                      onClick={() => handleSelect(item)}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                          isActive
+                            ? "border-primary/40 bg-primary/15 text-primary"
+                            : "border-border bg-secondary/70 text-muted-foreground",
+                        )}
+                      >
+                        <Icon className="h-4 w-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{item.label}</p>
+                        {item.sublabel ? (
+                          <p className="truncate text-xs text-muted-foreground">{item.sublabel}</p>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("noResults")}</p>
+            )}
+          </section>
+        ) : (
+          <div className="rounded-xl border border-border/70 bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
+            {t("typeMoreToSearch")}
           </div>
-          <div className="space-y-1">
-            {actions.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = allItems[activeIndex]?.id === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
-                    isActive ? "bg-gray-100 text-ink" : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => handleSelect(item)}
-                >
-                  <Icon className="h-4 w-4" aria-hidden />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
 
         <div className="space-y-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            {t("resultsTitle")}
-          </div>
-          {searchQuery.isFetching ? (
-            <p className="text-sm text-gray-500">{t("loading")}</p>
-          ) : results.length ? (
-            <div className="space-y-1">
-              {results.map((item, index) => {
-                const globalIndex = actions.length + index;
-                const Icon = item.icon;
-                const isActive = allItems[activeIndex]?.id === item.id;
-                return (
-                  <button
-                    key={`${item.group}-${item.id}`}
-                    type="button"
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
-                      isActive ? "bg-gray-100 text-ink" : "text-gray-600 hover:bg-gray-50"
-                    }`}
-                    onMouseEnter={() => setActiveIndex(globalIndex)}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleSelect(item)}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden />
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-ink">{item.label}</p>
-                      {item.sublabel ? (
-                        <p className="truncate text-xs text-gray-500">{item.sublabel}</p>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">{t("noResults")}</p>
-          )}
+          {groupedActions.map((group) => {
+            if (!group.items.length) {
+              return null;
+            }
+            return (
+              <section
+                key={group.category}
+                className="rounded-xl border border-border/70 bg-secondary/20 p-3 sm:p-4"
+              >
+                <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t(`sections.${group.category}`)}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const key = itemKey(item);
+                    const index = indexByItemId.get(key) ?? 0;
+                    const isActive =
+                      hoveredIndex === index ||
+                      (keyboardNavigation && activeItem ? itemKey(activeItem) === key : false);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition",
+                          isActive
+                            ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
+                            : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
+                        )}
+                        onMouseEnter={() => {
+                          setKeyboardNavigation(false);
+                          setActiveIndex(index);
+                          setHoveredIndex(index);
+                        }}
+                        onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setKeyboardNavigation(false);
+                        }}
+                        onClick={() => handleSelect(item)}
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                            isActive
+                              ? "border-primary/40 bg-primary/15 text-primary"
+                              : "border-border bg-secondary/70 text-muted-foreground",
+                          )}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </span>
+                        <span className="font-medium text-foreground">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </div>
       </div>
     </Modal>

@@ -368,9 +368,15 @@ const SalesOrdersPage = () => {
               </Card>
             )}
             empty={
-              <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                <EmptyIcon className="mx-auto mb-2 h-5 w-5" aria-hidden />
-                {t("noOrders")}
+              <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                <EmptyIcon className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
+                <p className="text-sm text-muted-foreground">{t("noOrders")}</p>
+                <Link href="/sales/orders/new" className="mt-3 inline-flex">
+                  <Button size="sm">
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {t("create")}
+                  </Button>
+                </Link>
               </div>
             }
             paginationKey="sales-orders"

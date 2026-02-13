@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -69,10 +70,10 @@ const ResetTokenPage = () => {
         <CardContent className="space-y-3">
           {done ? (
             <>
-              <p className="text-sm text-gray-600">{t("resetSuccess")}</p>
-              <a href="/login" className="text-sm font-semibold text-ink underline">
+              <p className="text-sm text-muted-foreground">{t("resetSuccess")}</p>
+              <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
                 {t("backToLogin")}
-              </a>
+              </Link>
             </>
           ) : (
             <Form {...form}>

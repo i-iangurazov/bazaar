@@ -227,12 +227,12 @@ const ExportsPage = () => {
         </CardHeader>
         <CardContent>
           {jobsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : jobsQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, jobsQuery.error)}</span>
               <Button type="button" variant="secondary" size="sm" onClick={() => jobsQuery.refetch()}>
                 {tErrors("tryAgain")}
@@ -295,13 +295,13 @@ const ExportsPage = () => {
 
                         return (
                           <TableRow key={job.id}>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(job.createdAt, locale)}
                             </TableCell>
                             <TableCell className="font-medium">
                               {typeLabels[job.type] ?? job.type}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
                             </TableCell>
                             <TableCell>
@@ -361,13 +361,13 @@ const ExportsPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {typeLabels[job.type] ?? job.type}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {formatDateTime(job.createdAt, locale)}
                         </p>
                       </div>
@@ -375,7 +375,7 @@ const ExportsPage = () => {
                         {t(`status.${job.status}`)}
                       </Badge>
                     </div>
-                    <div className="mt-2 text-xs text-gray-500">
+                    <div className="mt-2 text-xs text-muted-foreground">
                       {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
                     </div>
                     <div className="mt-3 flex items-center justify-end">
@@ -389,7 +389,7 @@ const ExportsPage = () => {
               }}
             />
           ) : (
-            <p className="text-sm text-gray-500">{t("empty")}</p>
+            <p className="text-sm text-muted-foreground">{t("empty")}</p>
           )}
         </CardContent>
       </Card>

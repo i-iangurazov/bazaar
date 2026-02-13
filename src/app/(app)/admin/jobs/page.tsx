@@ -61,7 +61,7 @@ const AdminJobsPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -76,12 +76,12 @@ const AdminJobsPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {jobsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !(jobsQuery.data ?? []).length ? (
-            <p className="text-sm text-gray-500">{t("empty")}</p>
+            <p className="text-sm text-muted-foreground">{t("empty")}</p>
           ) : (
             <ResponsiveDataList
               items={jobsQuery.data ?? []}
@@ -103,9 +103,9 @@ const AdminJobsPage = () => {
                       {visibleItems.map((job: JobRow) => (
                         <TableRow key={job.id}>
                           <TableCell className="font-medium">{job.jobName}</TableCell>
-                          <TableCell className="text-xs text-gray-500">{job.attempts}</TableCell>
-                          <TableCell className="text-xs text-gray-500">{job.lastError}</TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-muted-foreground">{job.attempts}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{job.lastError}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
                             {formatDateTime(job.lastErrorAt, locale)}
                           </TableCell>
                           <TableCell>
@@ -117,7 +117,7 @@ const AdminJobsPage = () => {
                           </TableCell>
                           <TableCell className="text-right">
                             {job.resolvedAt ? (
-                              <span className="text-xs text-gray-400">{t("resolved")}</span>
+                              <span className="text-xs text-muted-foreground/80">{t("resolved")}</span>
                             ) : (
                               <div className="flex justify-end gap-2">
                                 <Button
@@ -148,15 +148,15 @@ const AdminJobsPage = () => {
                 </div>
               )}
               renderMobile={(job) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink">{job.jobName}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="truncate text-sm font-medium text-foreground">{job.jobName}</p>
+                      <p className="text-xs text-muted-foreground">
                         {t("columns.attempts")}: {job.attempts}
                       </p>
-                      <p className="text-xs text-gray-500">{job.lastError}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">{job.lastError}</p>
+                      <p className="text-xs text-muted-foreground">
                         {formatDateTime(job.lastErrorAt, locale)}
                       </p>
                     </div>
@@ -168,7 +168,7 @@ const AdminJobsPage = () => {
                   </div>
                   <div className="mt-2 flex justify-end">
                     {job.resolvedAt ? (
-                      <span className="text-xs text-gray-400">{t("resolved")}</span>
+                      <span className="text-xs text-muted-foreground/80">{t("resolved")}</span>
                     ) : (
                       <RowActions
                         actions={[

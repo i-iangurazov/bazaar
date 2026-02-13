@@ -2,9 +2,9 @@
 
 import { useEffect, useId, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CloseIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,7 @@ export const Modal = ({
   className,
   headerClassName,
   bodyClassName,
+  usePortal = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,6 +27,7 @@ export const Modal = ({
   className?: string;
   headerClassName?: string;
   bodyClassName?: string;
+  usePortal?: boolean;
 }) => {
   const tCommon = useTranslations("common");
   const titleId = useId();
@@ -54,8 +56,8 @@ export const Modal = ({
     return null;
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-3 sm:px-4">
+  const content = (
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden px-3 py-4 sm:px-4 sm:py-6">
       <button
         type="button"
         className="absolute inset-0 z-0 bg-black/40 backdrop-blur-[1px]"
@@ -70,13 +72,13 @@ export const Modal = ({
         aria-describedby={subtitle ? subtitleId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex max-h-[85dvh] w-[calc(100vw-24px)] max-w-lg flex-col rounded-xl border border-border bg-card text-card-foreground shadow-2xl",
+          "relative z-10 flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl",
           className,
         )}
       >
         <div
           className={cn(
-            "sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border rounded-xl bg-card p-6",
+            "sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-xl border-b border-border bg-card p-6",
             headerClassName,
           )}
         >
@@ -90,23 +92,25 @@ export const Modal = ({
               </p>
             ) : null}
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                aria-label={tCommon("close")}
-              >
-                <CloseIcon className="h-4 w-4" aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{tCommon("close")}</TooltipContent>
-          </Tooltip>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+            aria-label={tCommon("close")}
+            title={tCommon("close")}
+          >
+            <CloseIcon className="h-4 w-4" aria-hidden />
+          </Button>
         </div>
-        <div className={cn("flex-1 overflow-y-auto p-6", bodyClassName)}>{children}</div>
+        <div className={cn("flex-1 overflow-y-auto bg-card p-6", bodyClassName)}>{children}</div>
       </div>
     </div>
   );
+
+  if (usePortal && typeof document !== "undefined") {
+    return createPortal(content, document.body);
+  }
+
+  return content;
 };

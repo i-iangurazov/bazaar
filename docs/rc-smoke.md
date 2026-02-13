@@ -53,3 +53,75 @@ Release only if:
 - manual sections 1-8 have no P0/P1 failures,
 - no cross-org leak and no ledger integrity regression.
 
+---
+
+# Final 375px Smoke Pass
+
+Date: 2026-02-13
+Viewport target: 375px width (mobile-first critical path)
+Result: `GO` (release-ready)
+
+## Automated Gates (final run)
+- `pnpm lint` -> PASS
+- `pnpm typecheck` -> PASS
+- `pnpm i18n:check` -> PASS
+- `pnpm build` -> PASS
+
+## 375px Scenario Checklist (concrete paths)
+
+### 1) App shell + header + drawer
+- Path: any app page (`/dashboard`, `/products`, `/pos/sell`)
+- Checks:
+  - mobile header actions remain single-row and tappable
+  - drawer opens/closes cleanly, no overlay artifacts
+  - super-plus action remains in drawer and keeps full-width CTA
+- Status: PASS
+
+### 2) Dashboard mobile composition
+- Path: `/dashboard`
+- Checks:
+  - KPI cards stack from 1 column on 375px
+  - section headers do not collide with badges/buttons
+  - low-stock / pending PO rows do not overflow horizontally
+- Status: PASS
+
+### 3) Sales order create flow
+- Path: `/sales/orders/new`
+- Checks:
+  - add-line search + qty input stack properly on 375px
+  - line qty editor and remove action fit in row without overflow
+  - primary/secondary action buttons become full-width and readable
+- Status: PASS
+
+### 4) POS sell flow (draft behavior + mobile usability)
+- Path: `/pos/sell`
+- Checks:
+  - draft is not auto-opened unexpectedly on page entry
+  - explicit draft decision is shown: continue or discard
+  - item rows, qty input, totals, payment rows render without clipping
+  - payment actions are usable on narrow width
+- Status: PASS
+
+### 5) Import settings responsiveness + token consistency
+- Path: `/settings/import`
+- Checks:
+  - mapping and validation panels remain readable on 375px
+  - action groups wrap cleanly (no broken overlaps)
+  - semantic colors are token-based (no hardcoded blue/indigo/amber/emerald blocks)
+- Status: PASS
+
+### 6) Guidance / modal behavior
+- Path: any screen with tips modal
+- Checks:
+  - modal appears centered on mobile viewport
+  - header/body spacing and close action are consistent with design system
+  - no half-hidden panel at top
+- Status: PASS
+
+## Release-Ready Verdict
+- P0 blockers: none
+- P1 blockers: none
+- Decision: `GO`
+
+## Residual Risk (non-blocking)
+- Do one final physical-device tap test (iOS Safari + Android Chrome) for keyboard overlap on input-heavy screens (`/pos/sell`, `/sales/orders/new`, `/settings/import`).

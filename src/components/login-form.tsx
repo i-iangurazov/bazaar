@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -75,6 +76,13 @@ export const LoginForm = () => {
         setError("loginRateLimited");
       } else if (result.error === "emailNotVerified") {
         setError("emailNotVerified");
+      } else if (result.error.startsWith("registrationNotCompleted:")) {
+        const registrationToken = result.error.slice("registrationNotCompleted:".length);
+        if (registrationToken) {
+          router.replace(`/register-business/${registrationToken}`);
+          return;
+        }
+        setError("registrationNotCompleted");
       } else if (result.error === "registrationNotCompleted") {
         setError("registrationNotCompleted");
       } else {
@@ -135,11 +143,11 @@ export const LoginForm = () => {
               </FormItem>
             )}
           />
-          {error ? <p className="text-sm text-red-500">{t(error)}</p> : null}
+          {error ? <p className="text-sm text-danger">{t(error)}</p> : null}
           <div className="text-right">
-            <a href="/reset" className="text-xs font-semibold text-ink underline">
+            <Link href="/reset" className="text-xs font-semibold text-primary hover:text-primary/80">
               {t("forgotPassword")}
-            </a>
+            </Link>
           </div>
           <Button className="w-full" type="submit" disabled={isLoading}>
             {isLoading ? t("signingIn") : t("signIn")}

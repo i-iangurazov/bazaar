@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,6 +78,9 @@ const StoresPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
+  const router = useRouter();
+  const pathname = usePathname() ?? "/stores";
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const storesQuery = trpc.stores.list.useQuery();
 
@@ -210,7 +214,7 @@ const StoresPage = () => {
     },
   });
 
-  const openCreateDialog = () => {
+  const openCreateDialog = useCallback(() => {
     setEditingStore(null);
     storeForm.reset({
       name: "",
@@ -224,7 +228,22 @@ const StoresPage = () => {
       phone: "",
     });
     setStoreDialogOpen(true);
-  };
+  }, [storeForm]);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") {
+      return;
+    }
+
+    if (canManage) {
+      openCreateDialog();
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("create");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [canManage, openCreateDialog, pathname, router, searchParams]);
 
   const openEditDialog = (store: Store) => {
     setEditingStore(store);
@@ -296,17 +315,17 @@ const StoresPage = () => {
                         return (
                           <TableRow key={store.id}>
                             <TableCell className="font-medium">{store.name}</TableCell>
-                            <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                               {store.code}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                            <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                               {store.legalEntityType ? (
                                 <Badge variant="muted">{legalTypeLabels[store.legalEntityType]}</Badge>
                               ) : (
                                 tCommon("notAvailable")
                               )}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500 hidden lg:table-cell">
+                            <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
                               {store.inn ?? tCommon("notAvailable")}
                             </TableCell>
                             <TableCell>
@@ -485,11 +504,11 @@ const StoresPage = () => {
               ];
 
               return (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink">{store.name}</p>
-                      <p className="text-xs text-gray-500">{store.code}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{store.name}</p>
+                      <p className="text-xs text-muted-foreground">{store.code}</p>
                     </div>
                     <RowActions
                       actions={actions}
@@ -519,7 +538,7 @@ const StoresPage = () => {
                       {complianceBadge.label}
                     </Badge>
                   </div>
-                  <div className="mt-2 text-xs text-gray-500">
+                  <div className="mt-2 text-xs text-muted-foreground">
                     {store.legalEntityType ? legalTypeLabels[store.legalEntityType] : tCommon("notAvailable")}
                     {store.inn ? ` · ${store.inn}` : ""}
                   </div>
@@ -528,12 +547,12 @@ const StoresPage = () => {
             }}
           />
           {storesQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !storesQuery.data?.length ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noStores")}
@@ -541,7 +560,7 @@ const StoresPage = () => {
             </div>
           ) : null}
           {storesQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, storesQuery.error)}</span>
               <Button
                 type="button"
@@ -702,7 +721,7 @@ const StoresPage = () => {
                 name="allowNegativeStock"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3">
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
                       <div className="space-y-1">
                         <FormLabel>{t("allowNegativeStock")}</FormLabel>
                         <FormDescription>{t("allowNegativeHint")}</FormDescription>
@@ -723,7 +742,7 @@ const StoresPage = () => {
                 name="trackExpiryLots"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3">
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
                       <div className="space-y-1">
                         <FormLabel>{t("trackExpiryLots")}</FormLabel>
                         <FormDescription>{t("trackExpiryHint")}</FormDescription>
@@ -884,23 +903,23 @@ const StoresPage = () => {
       >
         <div className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-xs text-gray-500">{t("code")}</p>
+            <p className="text-xs text-muted-foreground">{t("code")}</p>
             <p className="font-medium">{viewingStore?.code ?? tCommon("notAvailable")}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t("allowNegativeStock")}</p>
+            <p className="text-xs text-muted-foreground">{t("allowNegativeStock")}</p>
             <Badge variant={viewingStore?.allowNegativeStock ? "success" : "warning"}>
               {viewingStore?.allowNegativeStock ? tCommon("yes") : tCommon("no")}
             </Badge>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t("trackExpiryLots")}</p>
+            <p className="text-xs text-muted-foreground">{t("trackExpiryLots")}</p>
             <Badge variant={viewingStore?.trackExpiryLots ? "success" : "warning"}>
               {viewingStore?.trackExpiryLots ? tCommon("yes") : tCommon("no")}
             </Badge>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t("legalType")}</p>
+            <p className="text-xs text-muted-foreground">{t("legalType")}</p>
             <p className="font-medium">
               {viewingStore?.legalEntityType
                 ? legalTypeLabels[viewingStore.legalEntityType]
@@ -908,19 +927,19 @@ const StoresPage = () => {
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t("legalName")}</p>
+            <p className="text-xs text-muted-foreground">{t("legalName")}</p>
             <p className="font-medium">{viewingStore?.legalName ?? tCommon("notAvailable")}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t("inn")}</p>
+            <p className="text-xs text-muted-foreground">{t("inn")}</p>
             <p className="font-medium">{viewingStore?.inn ?? tCommon("notAvailable")}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t("phone")}</p>
+            <p className="text-xs text-muted-foreground">{t("phone")}</p>
             <p className="font-medium">{viewingStore?.phone ?? tCommon("notAvailable")}</p>
           </div>
           <div className="sm:col-span-2">
-            <p className="text-xs text-gray-500">{t("address")}</p>
+            <p className="text-xs text-muted-foreground">{t("address")}</p>
             <p className="font-medium">{viewingStore?.address ?? tCommon("notAvailable")}</p>
           </div>
         </div>

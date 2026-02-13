@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 export const Spinner = ({ className }: { className?: string }) => (
   <svg
-    className={cn("h-4 w-4 animate-spin text-gray-400", className)}
+    className={cn("h-4 w-4 animate-spin text-muted-foreground/80", className)}
     viewBox="0 0 24 24"
     aria-hidden
   >

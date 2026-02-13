@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -65,7 +66,7 @@ const ResetRequestPage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           {sent ? (
-            <p className="text-sm text-gray-600">{t("requestSent")}</p>
+            <p className="text-sm text-muted-foreground">{t("requestSent")}</p>
           ) : (
             <Form {...form}>
               <form
@@ -93,9 +94,9 @@ const ResetRequestPage = () => {
               </form>
             </Form>
           )}
-          <a href="/login" className="text-sm font-semibold text-ink underline">
+          <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
             {t("backToLogin")}
-          </a>
+          </Link>
         </CardContent>
       </Card>
     </div>

@@ -89,7 +89,7 @@ const PeriodClosePage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -145,12 +145,12 @@ const PeriodClosePage = () => {
         </CardHeader>
         <CardContent>
           {closesQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : closesQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, closesQuery.error)}</span>
               <Button type="button" variant="secondary" size="sm" onClick={() => closesQuery.refetch()}>
                 {tErrors("tryAgain")}
@@ -191,10 +191,10 @@ const PeriodClosePage = () => {
 
                         return (
                           <TableRow key={close.id}>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {formatDate(close.periodStart, locale)} — {formatDate(close.periodEnd, locale)}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(close.closedAt, locale)}
                             </TableCell>
                             <TableCell>
@@ -215,13 +215,13 @@ const PeriodClosePage = () => {
                 </div>
               )}
               renderMobile={(close) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink">
+                      <p className="text-sm font-medium text-foreground">
                         {formatDate(close.periodStart, locale)} — {formatDate(close.periodEnd, locale)}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {formatDateTime(close.closedAt, locale)}
                       </p>
                     </div>
@@ -252,7 +252,7 @@ const PeriodClosePage = () => {
               )}
             />
           ) : (
-            <p className="text-sm text-gray-500">{t("empty")}</p>
+            <p className="text-sm text-muted-foreground">{t("empty")}</p>
           )}
         </CardContent>
       </Card>

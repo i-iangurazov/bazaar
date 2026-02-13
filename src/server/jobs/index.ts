@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
+import { isProductionRuntime } from "@/server/config/runtime";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
 import { getRedisPublisher } from "@/server/redis";
@@ -15,9 +16,9 @@ import {
 const lockStore = new Map<string, number>();
 
 const acquireLock = async (name: string, ttlMs: number) => {
-  const redis = getRedisPublisher();
   const logger = getLogger();
   const now = Date.now();
+  const redis = getRedisPublisher();
 
   if (redis) {
     const lockKey = `job-lock:${name}`;
@@ -25,8 +26,15 @@ const acquireLock = async (name: string, ttlMs: number) => {
       const result = await redis.set(lockKey, String(now), "PX", ttlMs, "NX");
       return result === "OK";
     } catch (error) {
+      if (isProductionRuntime()) {
+        throw error;
+      }
       logger.warn({ job: name, error }, "redis lock unavailable; falling back to in-memory lock");
     }
+  }
+
+  if (isProductionRuntime()) {
+    throw new Error("redisLockUnavailable");
   }
 
   const existing = lockStore.get(name);
@@ -44,8 +52,14 @@ const releaseLock = async (name: string) => {
     try {
       await redis.del(`job-lock:${name}`);
     } catch (error) {
+      if (isProductionRuntime()) {
+        throw error;
+      }
       logger.warn({ job: name, error }, "redis unlock unavailable; releasing in-memory lock only");
     }
+  }
+  if (isProductionRuntime() && !redis) {
+    throw new Error("redisLockUnavailable");
   }
   lockStore.delete(name);
 };

@@ -59,26 +59,35 @@ const main = async () => {
   }
 
   try {
-    assertStartupConfigured();
+    await assertStartupConfigured();
     ok("Startup configuration checks passed");
   } catch (error) {
     fail(`Startup configuration checks failed: ${(error as Error).message}`);
   }
 
+  let redisClient: ReturnType<typeof getRedisPublisher> = null;
   try {
-    const redis = getRedisPublisher();
-    if (!redis) {
+    redisClient = getRedisPublisher();
+    if (!redisClient) {
       if (nodeEnv === "production") {
         fail("Redis client unavailable in production");
       } else {
         ok("Redis is optional in non-production and is currently not configured");
       }
     } else {
-      await redis.ping();
+      await redisClient.ping();
       ok("Redis ping check passed");
     }
   } catch (error) {
     fail(`Redis check failed: ${(error as Error).message}`);
+  } finally {
+    if (redisClient) {
+      try {
+        await redisClient.quit();
+      } catch {
+        redisClient.disconnect();
+      }
+    }
   }
 
   await prisma.$disconnect();

@@ -9,6 +9,7 @@ import {
   archiveProduct,
   bulkUpdateProductCategory,
   createProduct,
+  duplicateProduct,
   restoreProduct,
   updateProduct,
 } from "@/server/services/products";
@@ -28,6 +29,9 @@ const sanitizeListImageUrl = (value: string | null | undefined) => {
   }
   return value;
 };
+
+const decimalToNumber = (value: Prisma.Decimal | null | undefined) =>
+  value === null || value === undefined ? null : Number(value);
 
 export const productsRouter = router({
   lookupScan: protectedProcedure
@@ -279,8 +283,8 @@ export const productsRouter = router({
               return sanitized ? [{ ...image, url: sanitized }] : [];
             }),
             photoUrl: sanitizeListImageUrl(product.photoUrl),
-            basePriceKgs: product.basePriceKgs ? Number(product.basePriceKgs) : null,
-            effectivePriceKgs: product.basePriceKgs ? Number(product.basePriceKgs) : null,
+            basePriceKgs: decimalToNumber(product.basePriceKgs),
+            effectivePriceKgs: decimalToNumber(product.basePriceKgs),
             purchasePriceKgs:
               purchasePriceByProductId.get(product.id) ??
               avgCostByProductId.get(product.id) ??
@@ -301,9 +305,9 @@ export const productsRouter = router({
         const priceMap = new Map(storePrices.map((price) => [price.productId, price]));
 
         return products.map((product) => {
-          const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : null;
+          const basePrice = decimalToNumber(product.basePriceKgs);
           const override = priceMap.get(product.id);
-          const effectivePrice = override ? Number(override.priceKgs) : basePrice;
+          const effectivePrice = override ? decimalToNumber(override.priceKgs) : basePrice;
           return {
             ...product,
             images: product.images.flatMap((image) => {
@@ -375,6 +379,31 @@ export const productsRouter = router({
       }
       const variantIds = product.variants.map((variant) => variant.id);
       const blockedVariantIds = new Set<string>();
+      const [baseCost, latestPurchaseLine] = await Promise.all([
+        ctx.prisma.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: ctx.user.organizationId,
+              productId: input.productId,
+              variantKey: "BASE",
+            },
+          },
+          select: { avgCostKgs: true },
+        }),
+        ctx.prisma.purchaseOrderLine.findFirst({
+          where: {
+            productId: input.productId,
+            variantId: null,
+            unitCost: { not: null },
+            purchaseOrder: {
+              organizationId: ctx.user.organizationId,
+              status: { in: ["PARTIALLY_RECEIVED", "RECEIVED"] },
+            },
+          },
+          select: { unitCost: true },
+          orderBy: { purchaseOrder: { receivedAt: "desc" } },
+        }),
+      ]);
       if (variantIds.length) {
         const [movementVariants, snapshotVariants, lineVariants] = await Promise.all([
           ctx.prisma.stockMovement.findMany({
@@ -402,6 +431,7 @@ export const productsRouter = router({
           }
         });
       }
+      const avgCostKgs = decimalToNumber(baseCost?.avgCostKgs);
       return {
         ...product,
         barcodes: product.barcodes.map((barcode) => barcode.value),
@@ -409,7 +439,12 @@ export const productsRouter = router({
           ...variant,
           canDelete: !blockedVariantIds.has(variant.id),
         })),
-        basePriceKgs: product.basePriceKgs ? Number(product.basePriceKgs) : null,
+        basePriceKgs: decimalToNumber(product.basePriceKgs),
+        purchasePriceKgs:
+          latestPurchaseLine?.unitCost !== null && latestPurchaseLine?.unitCost !== undefined
+            ? Number(latestPurchaseLine.unitCost)
+            : avgCostKgs,
+        avgCostKgs,
       };
     }),
 
@@ -451,14 +486,80 @@ export const productsRouter = router({
         select: { avgCostKgs: true },
       });
 
-      const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : null;
-      const effectivePrice = storePrice ? Number(storePrice.priceKgs) : basePrice;
+      const basePrice = decimalToNumber(product.basePriceKgs);
+      const effectivePrice = storePrice ? decimalToNumber(storePrice.priceKgs) : basePrice;
 
       return {
         basePriceKgs: basePrice,
         effectivePriceKgs: effectivePrice,
         priceOverridden: Boolean(storePrice),
-        avgCostKgs: cost?.avgCostKgs ? Number(cost.avgCostKgs) : null,
+        avgCostKgs: decimalToNumber(cost?.avgCostKgs),
+      };
+    }),
+
+  storePricing: protectedProcedure
+    .input(z.object({ productId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const product = await ctx.prisma.product.findUnique({
+        where: { id: input.productId },
+        select: {
+          id: true,
+          organizationId: true,
+          basePriceKgs: true,
+        },
+      });
+      if (!product || product.organizationId !== ctx.user.organizationId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
+      }
+
+      const [stores, overrides, cost] = await Promise.all([
+        ctx.prisma.store.findMany({
+          where: { organizationId: ctx.user.organizationId },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        }),
+        ctx.prisma.storePrice.findMany({
+          where: {
+            organizationId: ctx.user.organizationId,
+            productId: input.productId,
+            variantKey: "BASE",
+          },
+          select: {
+            storeId: true,
+            priceKgs: true,
+          },
+        }),
+        ctx.prisma.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: ctx.user.organizationId,
+              productId: input.productId,
+              variantKey: "BASE",
+            },
+          },
+          select: { avgCostKgs: true },
+        }),
+      ]);
+
+      const basePrice = decimalToNumber(product.basePriceKgs);
+      const overrideByStore = new Map(
+        overrides.map((override) => [override.storeId, Number(override.priceKgs)]),
+      );
+
+      return {
+        basePriceKgs: basePrice,
+        avgCostKgs: decimalToNumber(cost?.avgCostKgs),
+        stores: stores.map((store) => {
+          const override = overrideByStore.get(store.id);
+          const effective = override ?? basePrice;
+          return {
+            storeId: store.id,
+            storeName: store.name,
+            effectivePriceKgs: effective,
+            overridePriceKgs: override ?? null,
+            priceOverridden: override !== undefined,
+          };
+        }),
       };
     }),
 
@@ -470,6 +571,8 @@ export const productsRouter = router({
         category: z.string().optional(),
         baseUnitId: z.string().min(1),
         basePriceKgs: z.number().min(0).optional(),
+        purchasePriceKgs: z.number().min(0).optional(),
+        avgCostKgs: z.number().min(0).optional(),
         description: z.string().optional(),
         photoUrl: z.string().min(1).optional(),
         images: z
@@ -528,6 +631,8 @@ export const productsRouter = router({
           category: input.category,
           baseUnitId: input.baseUnitId,
           basePriceKgs: input.basePriceKgs,
+          purchasePriceKgs: input.purchasePriceKgs,
+          avgCostKgs: input.avgCostKgs,
           description: input.description,
           photoUrl: input.photoUrl,
           images: input.images,
@@ -552,6 +657,8 @@ export const productsRouter = router({
         category: z.string().optional(),
         baseUnitId: z.string().min(1),
         basePriceKgs: z.number().min(0).optional(),
+        purchasePriceKgs: z.number().min(0).optional(),
+        avgCostKgs: z.number().min(0).optional(),
         description: z.string().optional(),
         photoUrl: z.string().min(1).optional(),
         images: z
@@ -611,6 +718,8 @@ export const productsRouter = router({
           category: input.category,
           baseUnitId: input.baseUnitId,
           basePriceKgs: input.basePriceKgs,
+          purchasePriceKgs: input.purchasePriceKgs,
+          avgCostKgs: input.avgCostKgs,
           description: input.description,
           photoUrl: input.photoUrl,
           images: input.images,
@@ -620,6 +729,27 @@ export const productsRouter = router({
           bundleComponents: input.bundleComponents,
           packs: input.packs,
           variants: input.variants,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  duplicate: adminProcedure
+    .input(
+      z.object({
+        productId: z.string(),
+        sku: z.string().min(2).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await duplicateProduct({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productId: input.productId,
+          sku: input.sku,
         });
       } catch (error) {
         throw toTRPCError(error);

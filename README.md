@@ -266,6 +266,23 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - RBAC: ADMIN/MANAGER can complete/cancel; staff can work with non-final steps.
 - Sales metrics page at `/sales/orders/metrics` provides revenue/cost/profit trends and top products/bundles.
 
+## POS (Cash Register)
+- POS routes:
+  - `/pos` (entry)
+  - `/pos/registers` (register setup)
+  - `/pos/sell` (cashier sale flow)
+  - `/pos/history` (sales history + returns)
+  - `/pos/shifts` (shift controls, cash in/out, X/Z-style reports)
+- Register + shift model:
+  - Only one `OPEN` shift per register.
+  - Shift close stores expected cash, counted cash, and discrepancy.
+- POS sales are stored in `CustomerOrder` with POS context (`isPosSale`, `registerId`, `shiftId`).
+- Split payments are persisted in immutable `SalePayment` entries.
+- Returns are created from sales history and persisted via `SaleReturn` + `SaleReturnLine`.
+- Completing POS sale/return writes immutable inventory ledger movements and is idempotent.
+- Cash drawer movements (`PAY_IN` / `PAY_OUT`) are immutable and idempotent.
+- KKM-ready hooks are supported via store compliance mode (`EXPORT_ONLY`/`ADAPTER`); no legal compliance claim.
+
 ## Replenishment -> PO Drafts
 - Create draft POs from inventory planning, grouped by supplier.
 - Missing supplier assignments are flagged before creation; quantities remain editable.

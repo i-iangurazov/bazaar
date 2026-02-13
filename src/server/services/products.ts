@@ -22,6 +22,8 @@ export type CreateProductInput = {
   category?: string | null;
   baseUnitId: string;
   basePriceKgs?: number | null;
+  purchasePriceKgs?: number | null;
+  avgCostKgs?: number | null;
   description?: string | null;
   photoUrl?: string | null;
   images?: {
@@ -46,6 +48,47 @@ export type CreateProductInput = {
     componentVariantId?: string | null;
     qty: number;
   }[];
+};
+
+const upsertBaseProductCost = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    productId: string;
+    avgCostKgs: number;
+  },
+) => {
+  const existing = await tx.productCost.findUnique({
+    where: {
+      organizationId_productId_variantKey: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantKey: "BASE",
+      },
+    },
+    select: { id: true, costBasisQty: true },
+  });
+
+  if (existing) {
+    await tx.productCost.update({
+      where: { id: existing.id },
+      data: {
+        avgCostKgs: input.avgCostKgs,
+        costBasisQty: Math.max(existing.costBasisQty, 1),
+      },
+    });
+    return;
+  }
+
+  await tx.productCost.create({
+    data: {
+      organizationId: input.organizationId,
+      productId: input.productId,
+      variantKey: "BASE",
+      avgCostKgs: input.avgCostKgs,
+      costBasisQty: 1,
+    },
+  });
 };
 
 const normalizeBarcodes = (barcodes?: string[]) => {
@@ -609,6 +652,12 @@ export const createProduct = async (input: CreateProductInput) => {
     images: input.images,
   });
   const normalizedBundleComponents = normalizeBundleComponents(input.bundleComponents);
+  const resolvedBaseCost =
+    input.avgCostKgs !== undefined && input.avgCostKgs !== null
+      ? input.avgCostKgs
+      : input.purchasePriceKgs !== undefined && input.purchasePriceKgs !== null
+        ? input.purchasePriceKgs
+        : undefined;
 
   return prisma.$transaction(async (tx) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
@@ -687,6 +736,13 @@ export const createProduct = async (input: CreateProductInput) => {
       });
     }
     await ensureBaseSnapshots(tx, input.organizationId, product.id);
+    if (resolvedBaseCost !== undefined) {
+      await upsertBaseProductCost(tx, {
+        organizationId: input.organizationId,
+        productId: product.id,
+        avgCostKgs: resolvedBaseCost,
+      });
+    }
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
@@ -720,6 +776,8 @@ export type UpdateProductInput = {
   category?: string | null;
   baseUnitId: string;
   basePriceKgs?: number | null;
+  purchasePriceKgs?: number | null;
+  avgCostKgs?: number | null;
   description?: string | null;
   photoUrl?: string | null;
   images?: CreateProductInput["images"];
@@ -739,6 +797,12 @@ export const updateProduct = async (input: UpdateProductInput) => {
   });
   const normalizedBundleComponents =
     input.bundleComponents !== undefined ? normalizeBundleComponents(input.bundleComponents) : undefined;
+  const resolvedBaseCost =
+    input.avgCostKgs !== undefined && input.avgCostKgs !== null
+      ? input.avgCostKgs
+      : input.purchasePriceKgs !== undefined && input.purchasePriceKgs !== null
+        ? input.purchasePriceKgs
+        : undefined;
 
   return prisma.$transaction(async (tx) => {
     const before = await tx.product.findUnique({ where: { id: input.productId } });
@@ -909,6 +973,14 @@ export const updateProduct = async (input: UpdateProductInput) => {
       });
     }
 
+    if (resolvedBaseCost !== undefined) {
+      await upsertBaseProductCost(tx, {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        avgCostKgs: resolvedBaseCost,
+      });
+    }
+
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -921,6 +993,186 @@ export const updateProduct = async (input: UpdateProductInput) => {
     });
 
     return product;
+  });
+};
+
+const resolveDuplicateSku = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    sourceSku: string;
+    requestedSku?: string | null;
+  },
+) => {
+  const requested = input.requestedSku?.trim();
+  if (requested) {
+    const exists = await tx.product.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        sku: requested,
+      },
+      select: { id: true },
+    });
+    if (exists) {
+      throw new AppError("uniqueConstraintViolation", "CONFLICT", 409);
+    }
+    return requested;
+  }
+
+  const base = `${input.sourceSku}-COPY`;
+  let suffix = 1;
+  for (;;) {
+    const candidate = suffix === 1 ? base : `${base}-${suffix}`;
+    const exists = await tx.product.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        sku: candidate,
+      },
+      select: { id: true },
+    });
+    if (!exists) {
+      return candidate;
+    }
+    suffix += 1;
+    if (suffix > 5000) {
+      throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
+    }
+  }
+};
+
+export const duplicateProduct = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productId: string;
+  sku?: string | null;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
+
+    const source = await tx.product.findUnique({
+      where: { id: input.productId },
+      include: {
+        packs: true,
+        images: true,
+        variants: {
+          where: { isActive: true },
+          select: {
+            name: true,
+            sku: true,
+            attributes: true,
+          },
+        },
+        bundleComponents: {
+          select: {
+            componentProductId: true,
+            componentVariantId: true,
+            qty: true,
+          },
+        },
+      },
+    });
+
+    if (!source || source.organizationId !== input.organizationId) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+
+    const nextSku = await resolveDuplicateSku(tx, {
+      organizationId: input.organizationId,
+      sourceSku: source.sku,
+      requestedSku: input.sku,
+    });
+
+    const duplicate = await tx.product.create({
+      data: {
+        organizationId: input.organizationId,
+        supplierId: source.supplierId,
+        sku: nextSku,
+        name: source.name,
+        category: source.category,
+        unit: source.unit,
+        baseUnitId: source.baseUnitId,
+        basePriceKgs: source.basePriceKgs,
+        description: source.description,
+        photoUrl: source.photoUrl,
+        isBundle: source.isBundle,
+      },
+    });
+
+    if (source.images.length) {
+      await tx.productImage.createMany({
+        data: source.images.map((image) => ({
+          organizationId: input.organizationId,
+          productId: duplicate.id,
+          url: image.url,
+          position: image.position,
+        })),
+      });
+    }
+
+    if (source.packs.length) {
+      await tx.productPack.createMany({
+        data: source.packs.map((pack) => ({
+          organizationId: input.organizationId,
+          productId: duplicate.id,
+          packName: pack.packName,
+          packBarcode: null,
+          multiplierToBase: pack.multiplierToBase,
+          allowInPurchasing: pack.allowInPurchasing,
+          allowInReceiving: pack.allowInReceiving,
+        })),
+      });
+    }
+
+    const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
+    if (source.variants.length) {
+      await createVariants(
+        tx,
+        duplicate.id,
+        source.variants.map((variant) => ({
+          name: variant.name,
+          sku: variant.sku,
+          attributes:
+            variant.attributes && typeof variant.attributes === "object"
+              ? (variant.attributes as Record<string, unknown>)
+              : {},
+        })),
+        input.organizationId,
+        attributeDefinitions,
+      );
+    }
+
+    if (source.isBundle && source.bundleComponents.length) {
+      await syncBundleComponents(tx, {
+        organizationId: input.organizationId,
+        productId: duplicate.id,
+        components: source.bundleComponents.map((component) => ({
+          componentProductId: component.componentProductId,
+          componentVariantId: component.componentVariantId,
+          qty: component.qty,
+        })),
+        mode: "create-only",
+      });
+    }
+
+    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id);
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "PRODUCT_CREATE",
+      entity: "Product",
+      entityId: duplicate.id,
+      before: toJson({ sourceProductId: source.id }),
+      after: toJson(duplicate),
+      requestId: input.requestId,
+    });
+
+    return {
+      productId: duplicate.id,
+      sku: duplicate.sku,
+      copiedBarcodes: false,
+    };
   });
 };
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,6 +55,9 @@ const SuppliersPage = () => {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
+  const router = useRouter();
+  const pathname = usePathname() ?? "/suppliers";
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const suppliersQuery = trpc.suppliers.list.useQuery();
@@ -122,6 +126,28 @@ const SuppliersPage = () => {
     },
   });
   const bulkDeleteMutation = trpc.suppliers.bulkDelete.useMutation();
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") {
+      return;
+    }
+
+    if (canManage) {
+      setEditingId(null);
+      form.reset({
+        name: "",
+        email: "",
+        phone: "",
+        notes: "",
+      });
+      setFormOpen(true);
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("create");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [canManage, form, pathname, router, searchParams]);
 
   const handleSubmit = (values: z.infer<typeof schema>) => {
     if (editingId) {
@@ -326,7 +352,7 @@ const SuppliersPage = () => {
                 </Button>
               </FormActions>
               {createMutation.error || updateMutation.error ? (
-                <p className="text-sm text-red-500">
+                <p className="text-sm text-danger">
                   {translateError(tErrors, createMutation.error ?? updateMutation.error)}
                 </p>
               ) : null}
@@ -432,13 +458,13 @@ const SuppliersPage = () => {
                             </TableCell>
                           ) : null}
                           <TableCell className="font-medium">{supplier.name}</TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                             {supplier.email ?? tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                             {supplier.phone ?? tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                             {supplier.notes ?? tCommon("notAvailable")}
                           </TableCell>
                           {canManage ? (
@@ -538,7 +564,7 @@ const SuppliersPage = () => {
                 : [];
 
               return (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-start gap-2">
                       {canManage ? (
@@ -551,11 +577,11 @@ const SuppliersPage = () => {
                         />
                       ) : null}
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">{supplier.name}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="truncate text-sm font-medium text-foreground">{supplier.name}</p>
+                        <p className="text-xs text-muted-foreground">
                           {supplier.email ?? tCommon("notAvailable")}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {supplier.phone ?? tCommon("notAvailable")}
                         </p>
                       </div>
@@ -569,19 +595,19 @@ const SuppliersPage = () => {
                     ) : null}
                   </div>
                   {supplier.notes ? (
-                    <p className="mt-2 text-xs text-gray-500">{supplier.notes}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">{supplier.notes}</p>
                   ) : null}
                 </div>
               );
             }}
           />
           {suppliersQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !suppliersQuery.data?.length ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noSuppliers")}
@@ -589,7 +615,7 @@ const SuppliersPage = () => {
             </div>
           ) : null}
           {suppliersQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, suppliersQuery.error)}</span>
               <Button
                 type="button"

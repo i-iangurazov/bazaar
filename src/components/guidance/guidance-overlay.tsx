@@ -341,10 +341,10 @@ const TourOverlay = ({
         className="fixed z-[47] max-w-[calc(100vw-24px)]"
         style={cardPosition}
       >
-        <Card className="border-gray-200 shadow-2xl">
+        <Card className="border-border shadow-2xl">
           <CardHeader className="space-y-2 pb-2">
             <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {t("tourProgress", { current: stepIndex + 1, total: stepCount })}
               </p>
               <GuidanceCloseButton label={tCommon("close")} onClick={onSkip} />
@@ -352,12 +352,11 @@ const TourOverlay = ({
             <CardTitle className="text-base">{t(step.titleKey)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">{t(step.bodyKey)}</p>
+            <p className="text-sm text-muted-foreground">{t(step.bodyKey)}</p>
             <GuidanceTourNavButtons
               canGoBack={stepIndex > 0}
               onBack={onBack}
               onNext={onNext}
-              onSkip={onSkip}
               nextLabel={isLast ? t("finish") : t("next")}
             />
           </CardContent>
@@ -389,18 +388,18 @@ const TipsOverlay = ({
     <Card
       role="dialog"
       aria-label={t(tip.titleKey)}
-      className="fixed z-[45] max-w-[calc(100vw-24px)] border-gray-200 shadow-xl"
+      className="fixed z-[45] max-w-[calc(100vw-24px)] border-border shadow-xl"
       style={cardPosition}
     >
       <CardHeader className="space-y-2 pb-2">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t("tipsBadge")}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("tipsBadge")}</p>
           <GuidanceCloseButton label={tCommon("close")} onClick={onDismiss} />
         </div>
         <CardTitle className="text-base">{t(tip.titleKey)}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-gray-600">{t(tip.bodyKey)}</p>
+        <p className="text-sm text-muted-foreground">{t(tip.bodyKey)}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="ghost" size="default" className="h-10 px-4 text-sm" onClick={onDismiss}>
             {t("dismiss")}

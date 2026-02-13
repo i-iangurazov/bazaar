@@ -31,7 +31,7 @@ const variantClasses: Record<Variant, string> = {
   danger: "bg-danger text-danger-foreground hover:bg-danger/90",
   destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
   outline: "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
-  link: "h-auto rounded-none px-0 text-primary underline-offset-4 hover:underline shadow-none",
+  link: "h-auto rounded-none px-0 text-primary hover:text-primary/80 shadow-none",
 };
 
 const sizeClasses: Record<Size, string> = {

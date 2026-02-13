@@ -105,7 +105,16 @@
   }
 
   a {
-    @apply text-primary hover:underline;
+    @apply text-primary no-underline;
+    text-decoration: none !important;
+  }
+
+  a:hover,
+  a:focus,
+  a:focus-visible,
+  a:active,
+  a:visited {
+    text-decoration: none !important;
   }
 
   label {

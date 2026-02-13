@@ -61,6 +61,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   ArchiveIcon,
+  CopyIcon,
   DeleteIcon,
   DownloadIcon,
   EditIcon,
@@ -101,12 +102,6 @@ const ProductsPage = () => {
   const [productsPage, setProductsPage] = useState(1);
   const [productsPageSize, setProductsPageSize] = useState(25);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
-  const [priceTarget, setPriceTarget] = useState<{
-    id: string;
-    name: string;
-    basePriceKgs: number | null;
-    effectivePriceKgs: number | null;
-  } | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
@@ -155,11 +150,14 @@ const ProductsPage = () => {
   const bulkArchiveMutation = trpc.products.archive.useMutation();
   const bulkRestoreMutation = trpc.products.restore.useMutation();
 
-  const storePriceMutation = trpc.storePrices.upsert.useMutation({
-    onSuccess: () => {
+  const duplicateMutation = trpc.products.duplicate.useMutation({
+    onSuccess: (result) => {
       productsQuery.refetch();
-      toast({ variant: "success", description: t("priceSaved") });
-      setPriceTarget(null);
+      toast({
+        variant: "success",
+        description: result.copiedBarcodes ? t("duplicateSuccess") : t("duplicateSuccessNoBarcodes"),
+      });
+      router.push(`/products/${result.productId}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -232,28 +230,6 @@ const ProductsPage = () => {
   }, [products]);
 
   const showEffectivePrice = Boolean(storeId);
-  const showPriceAction = canManagePrices && Boolean(storeId);
-
-  const priceSchema = useMemo(
-    () =>
-      z.object({
-        priceKgs: z.coerce.number().min(0, t("priceNonNegative")),
-      }),
-    [t],
-  );
-
-  const priceForm = useForm<z.infer<typeof priceSchema>>({
-    resolver: zodResolver(priceSchema),
-    defaultValues: { priceKgs: 0 },
-  });
-
-  useEffect(() => {
-    if (priceTarget) {
-      priceForm.reset({
-        priceKgs: priceTarget.effectivePriceKgs ?? priceTarget.basePriceKgs ?? 0,
-      });
-    }
-  }, [priceTarget, priceForm]);
 
   const bulkSchema = useMemo(
     () =>
@@ -856,13 +832,13 @@ const ProductsPage = () => {
               </Select>
             </div>
             {isAdmin ? (
-              <div className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2">
+              <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
                 <Switch
                   checked={showArchived}
                   onCheckedChange={setShowArchived}
                   aria-label={t("showArchived")}
                 />
-                <span className="text-sm text-gray-600">{t("showArchived")}</span>
+                <span className="text-sm text-muted-foreground">{t("showArchived")}</span>
               </div>
             ) : null}
           </>
@@ -1016,7 +992,7 @@ const ProductsPage = () => {
                         <TableHead className="hidden md:table-cell">{t("category")}</TableHead>
                         <TableHead className="hidden lg:table-cell">{t("unit")}</TableHead>
                         <TableHead>{t("salePrice")}</TableHead>
-                        <TableHead>{t("purchasePrice")}</TableHead>
+                        <TableHead>{t("lastPurchasePrice")}</TableHead>
                         <TableHead>{t("avgCost")}</TableHead>
                         <TableHead>{t("barcodes")}</TableHead>
                         <TableHead>{t("stores")}</TableHead>
@@ -1041,14 +1017,14 @@ const ProductsPage = () => {
                                 aria-label={t("selectProduct", { name: product.name })}
                               />
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">{product.sku}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{product.sku}</TableCell>
                             <TableCell>
                               {previewImageUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={previewImageUrl}
                                   alt={product.name}
-                                  className="h-10 w-10 rounded-md border border-gray-200 object-cover"
+                                  className="h-10 w-10 rounded-md border border-border object-cover"
                                 />
                               ) : (
                                 <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
@@ -1067,11 +1043,11 @@ const ProductsPage = () => {
                                 ) : null}
                               </div>
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                            <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                               {product.category ?? tCommon("notAvailable")}
                             </TableCell>
                             <TableCell className="hidden lg:table-cell">{product.unit}</TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span>
                                   {showEffectivePrice
@@ -1089,25 +1065,25 @@ const ProductsPage = () => {
                                 ) : null}
                               </div>
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {product.purchasePriceKgs !== null &&
                               product.purchasePriceKgs !== undefined
                                 ? formatCurrencyKGS(product.purchasePriceKgs, locale)
                                 : tCommon("notAvailable")}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {product.avgCostKgs !== null && product.avgCostKgs !== undefined
                                 ? formatCurrencyKGS(product.avgCostKgs, locale)
                                 : tCommon("notAvailable")}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {barcodeSummary.label}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {storeInfo.names.length ? (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="cursor-help text-ink">
+                                    <span className="cursor-help text-foreground">
                                       {storeInfo.summary}
                                     </span>
                                   </TooltipTrigger>
@@ -1135,20 +1111,6 @@ const ProductsPage = () => {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                      {showPriceAction ? (
-                                        <DropdownMenuItem
-                                          onClick={() =>
-                                            setPriceTarget({
-                                              id: product.id,
-                                              name: product.name,
-                                              basePriceKgs: product.basePriceKgs ?? null,
-                                              effectivePriceKgs: product.effectivePriceKgs ?? null,
-                                            })
-                                          }
-                                        >
-                                          {t("setStorePrice")}
-                                        </DropdownMenuItem>
-                                      ) : null}
                                       {product.isDeleted ? (
                                         <DropdownMenuItem
                                           onClick={async () => {
@@ -1168,6 +1130,15 @@ const ProductsPage = () => {
                                             {tCommon("edit")}
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
+                                            onClick={() =>
+                                              duplicateMutation.mutate({
+                                                productId: product.id,
+                                              })
+                                            }
+                                          >
+                                            {t("duplicate")}
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
                                             onClick={async () => {
                                               if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
                                                 return;
@@ -1181,46 +1152,6 @@ const ProductsPage = () => {
                                       )}
                                     </DropdownMenuContent>
                                   </DropdownMenu>
-                                ) : showPriceAction ? (
-                                  <>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="shadow-none"
-                                          onClick={() => router.push(`/products/${product.id}`)}
-                                          aria-label={tCommon("view")}
-                                        >
-                                          <ViewIcon className="h-4 w-4" aria-hidden />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{tCommon("view")}</TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="shadow-none"
-                                          onClick={() =>
-                                            setPriceTarget({
-                                              id: product.id,
-                                              name: product.name,
-                                              basePriceKgs: product.basePriceKgs ?? null,
-                                              effectivePriceKgs: product.effectivePriceKgs ?? null,
-                                            })
-                                          }
-                                          aria-label={t("setStorePrice")}
-                                        >
-                                          <EditIcon className="h-4 w-4" aria-hidden />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{t("setStorePrice")}</TooltipContent>
-                                    </Tooltip>
-                                  </>
                                 ) : (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -1255,22 +1186,6 @@ const ProductsPage = () => {
                 product.inventorySnapshots.map((snapshot) => snapshot.storeId),
               );
               const actions = [
-                ...(showPriceAction
-                  ? [
-                      {
-                        key: "set-price",
-                        label: t("setStorePrice"),
-                        icon: PriceIcon,
-                        onSelect: () =>
-                          setPriceTarget({
-                            id: product.id,
-                            name: product.name,
-                            basePriceKgs: product.basePriceKgs ?? null,
-                            effectivePriceKgs: product.effectivePriceKgs ?? null,
-                          }),
-                      },
-                    ]
-                  : []),
                 ...(isAdmin
                   ? product.isDeleted
                     ? [
@@ -1292,6 +1207,15 @@ const ProductsPage = () => {
                           label: tCommon("edit"),
                           icon: EditIcon,
                           href: `/products/${product.id}`,
+                        },
+                        {
+                          key: "duplicate",
+                          label: t("duplicate"),
+                          icon: CopyIcon,
+                          onSelect: () =>
+                            duplicateMutation.mutate({
+                              productId: product.id,
+                            }),
                         },
                         {
                           key: "archive",
@@ -1317,7 +1241,7 @@ const ProductsPage = () => {
               ];
 
               return (
-                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <div className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <label className="flex items-start gap-3">
                       <input
@@ -1332,7 +1256,7 @@ const ProductsPage = () => {
                         <img
                           src={previewImageUrl}
                           alt={product.name}
-                          className="h-10 w-10 rounded-md border border-gray-200 object-cover"
+                          className="h-10 w-10 rounded-md border border-border object-cover"
                         />
                       ) : (
                         <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
@@ -1341,7 +1265,7 @@ const ProductsPage = () => {
                       )}
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-ink">{product.name}</span>
+                          <span className="text-sm font-semibold text-foreground">{product.name}</span>
                           <Badge variant="muted">
                             {product.isBundle ? t("typeBundle") : t("typeProduct")}
                           </Badge>
@@ -1349,7 +1273,7 @@ const ProductsPage = () => {
                             <Badge variant="muted">{t("archived")}</Badge>
                           ) : null}
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t("sku")}: {product.sku}
                         </p>
                       </div>
@@ -1360,20 +1284,20 @@ const ProductsPage = () => {
                       className="shrink-0"
                     />
                   </div>
-                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("category")}</span>
-                      <span className="text-ink">
+                      <span className="text-foreground">
                         {product.category ?? tCommon("notAvailable")}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("unit")}</span>
-                      <span className="text-ink">{product.unit}</span>
+                      <span className="text-foreground">{product.unit}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("salePrice")}</span>
-                      <span className="text-ink">
+                      <span className="text-foreground">
                         {showEffectivePrice
                           ? product.effectivePriceKgs !== null &&
                             product.effectivePriceKgs !== undefined
@@ -1385,8 +1309,8 @@ const ProductsPage = () => {
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span>{t("purchasePrice")}</span>
-                      <span className="text-ink">
+                      <span>{t("lastPurchasePrice")}</span>
+                      <span className="text-foreground">
                         {product.purchasePriceKgs !== null &&
                         product.purchasePriceKgs !== undefined
                           ? formatCurrencyKGS(product.purchasePriceKgs, locale)
@@ -1395,7 +1319,7 @@ const ProductsPage = () => {
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("avgCost")}</span>
-                      <span className="text-ink">
+                      <span className="text-foreground">
                         {product.avgCostKgs !== null && product.avgCostKgs !== undefined
                           ? formatCurrencyKGS(product.avgCostKgs, locale)
                           : tCommon("notAvailable")}
@@ -1403,11 +1327,11 @@ const ProductsPage = () => {
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("barcodes")}</span>
-                      <span className="text-ink">{barcodeSummary.label}</span>
+                      <span className="text-foreground">{barcodeSummary.label}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("stores")}</span>
-                      <span className="text-ink">{storeInfo.summary}</span>
+                      <span className="text-foreground">{storeInfo.summary}</span>
                     </div>
                   </div>
                 </div>
@@ -1415,12 +1339,12 @@ const ProductsPage = () => {
             }}
           />
           {productsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : productsTotal === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noProducts")}
@@ -1428,7 +1352,7 @@ const ProductsPage = () => {
             </div>
           ) : null}
           {productsQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, productsQuery.error)}</span>
               <Button
                 type="button"
@@ -1442,75 +1366,6 @@ const ProductsPage = () => {
           ) : null}
         </CardContent>
       </Card>
-
-      <Modal
-        open={Boolean(priceTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPriceTarget(null);
-          }
-        }}
-        title={t("setStorePrice")}
-        subtitle={priceTarget?.name ?? ""}
-      >
-        <Form {...priceForm}>
-          <form
-            className="space-y-4"
-            onSubmit={priceForm.handleSubmit((values) => {
-              if (!priceTarget || !storeId) {
-                return;
-              }
-              storePriceMutation.mutate({
-                storeId,
-                productId: priceTarget.id,
-                priceKgs: values.priceKgs,
-              });
-            })}
-          >
-            <FormField
-              control={priceForm.control}
-              name="priceKgs"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("effectivePrice")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      placeholder={t("pricePlaceholder")}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormActions>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setPriceTarget(null)}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button
-                type="submit"
-                className="w-full sm:w-auto"
-                disabled={storePriceMutation.isLoading}
-              >
-                {storePriceMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <EditIcon className="h-4 w-4" aria-hidden />
-                )}
-                {storePriceMutation.isLoading ? tCommon("loading") : t("savePrice")}
-              </Button>
-            </FormActions>
-          </form>
-        </Form>
-      </Modal>
 
       <Modal
         open={bulkOpen}
@@ -1646,7 +1501,7 @@ const ProductsPage = () => {
               )}
             />
 
-            <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               {previewQuery.isLoading
                 ? tCommon("loading")
                 : t("bulkPreview", { count: previewQuery.data?.total ?? 0 })}
@@ -1692,14 +1547,14 @@ const ProductsPage = () => {
           }}
         >
           <div className="space-y-2">
-            <label className="text-sm font-medium text-ink">{t("category")}</label>
+            <label className="text-sm font-medium text-foreground">{t("category")}</label>
             <Input
               value={bulkCategoryValue}
               onChange={(event) => setBulkCategoryValue(event.target.value)}
               placeholder={t("bulkCategoryPlaceholder")}
               list="bulk-category-options"
             />
-            <p className="text-xs text-gray-500">{t("bulkCategoryHint")}</p>
+            <p className="text-xs text-muted-foreground">{t("bulkCategoryHint")}</p>
             <datalist id="bulk-category-options">
               {categories.map((item) => (
                 <option key={item} value={item} />
@@ -1832,7 +1687,7 @@ const ProductsPage = () => {
             className="flex h-full min-h-0 flex-col"
             onSubmit={printForm.handleSubmit((values) => handlePrintTags(values))}
           >
-            <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 pt-6 pb-4">
+            <div className="sticky top-0 z-10 border-b border-border/70 bg-card px-6 pt-6 pb-4">
               <div className="grid gap-4 sm:grid-cols-3">
                 <FormField
                   control={printForm.control}
@@ -1906,7 +1761,7 @@ const ProductsPage = () => {
                     aria-label={t("printQueueSearchLabel")}
                   />
                 </div>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {queueSearch.trim()
                     ? t("printQueueFiltered", {
                         filtered: filteredQueue.length,
@@ -1926,8 +1781,8 @@ const ProductsPage = () => {
                 </Button>
               </div>
               <div className="mt-4 flex items-center justify-between text-sm">
-                <span className="font-medium text-ink">{t("printQueueTitle")}</span>
-                <span className="text-xs text-gray-500">
+                <span className="font-medium text-foreground">{t("printQueueTitle")}</span>
+                <span className="text-xs text-muted-foreground">
                   {canDragQueue ? t("printQueueHint") : t("printQueueNoDragHint")}
                 </span>
               </div>
@@ -1954,7 +1809,7 @@ const ProductsPage = () => {
                           return (
                             <div
                               key={productId}
-                              className={`flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 ${
+                              className={`flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 ${
                                 isDragging ? "opacity-60" : ""
                               }`}
                               style={{ height: queueRowHeight }}
@@ -1991,13 +1846,13 @@ const ProductsPage = () => {
                             >
                               <div className="flex min-w-0 items-center gap-2">
                                 {canDragQueue ? (
-                                  <GripIcon className="h-4 w-4 text-gray-400" aria-hidden />
+                                  <GripIcon className="h-4 w-4 text-muted-foreground/80" aria-hidden />
                                 ) : null}
                                 <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium text-ink">
+                                  <p className="truncate text-sm font-medium text-foreground">
                                     {product?.name ?? tCommon("notAvailable")}
                                   </p>
-                                  <p className="text-xs text-gray-500">
+                                  <p className="text-xs text-muted-foreground">
                                     {product?.sku ?? productId.slice(0, 8).toUpperCase()}
                                   </p>
                                 </div>
@@ -2043,13 +1898,13 @@ const ProductsPage = () => {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-500">{t("printQueueNoResults")}</p>
+                  <p className="text-xs text-muted-foreground">{t("printQueueNoResults")}</p>
                 )
               ) : (
-                <p className="text-xs text-gray-500">{t("printQueueEmpty")}</p>
+                <p className="text-xs text-muted-foreground">{t("printQueueEmpty")}</p>
               )}
             </div>
-            <div className="sticky bottom-0 z-10 border-t border-gray-100 bg-white px-6 py-4">
+            <div className="sticky bottom-0 z-10 border-t border-border/70 bg-card px-6 py-4">
               <FormActions>
                 <Button
                   type="button"

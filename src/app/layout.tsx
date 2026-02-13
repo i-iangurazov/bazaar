@@ -26,6 +26,15 @@ export const generateMetadata = async (): Promise<Metadata> => {
   return {
     title: t("title"),
     description: t("description"),
+    icons: {
+      icon: [
+        { url: "/brand/icon.png", type: "image/png" },
+        { url: "/brand/icon.png", sizes: "32x32", type: "image/png" },
+        { url: "/brand/icon.png", sizes: "192x192", type: "image/png" },
+      ],
+      apple: [{ url: "/brand/icon.png", type: "image/png" }],
+      shortcut: ["/brand/icon.png"],
+    },
   };
 };
 

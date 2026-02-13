@@ -11,6 +11,7 @@ enum Role {
   ADMIN
   MANAGER
   STAFF
+  CASHIER
 }
 
 enum ThemePreference {
@@ -28,6 +29,7 @@ enum LegalEntityType {
 enum StockMovementType {
   RECEIVE
   SALE
+  RETURN
   ADJUSTMENT
   TRANSFER_IN
   TRANSFER_OUT
@@ -48,6 +50,35 @@ enum CustomerOrderStatus {
   READY
   COMPLETED
   CANCELED
+}
+
+enum RegisterShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum PosPaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum CashDrawerMovementType {
+  PAY_IN
+  PAY_OUT
+}
+
+enum PosReturnStatus {
+  DRAFT
+  COMPLETED
+  CANCELED
+}
+
+enum PosKkmStatus {
+  NOT_SENT
+  SENT
+  FAILED
 }
 
 enum StockCountStatus {
@@ -74,6 +105,12 @@ enum OrganizationSubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELED
+}
+
+enum PlanUpgradeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum AuthTokenType {
@@ -149,7 +186,13 @@ model Organization {
   exportJobs ExportJob[]
   periodCloses PeriodClose[]
   diagnosticsReports DiagnosticsReport[]
+  planUpgradeRequests PlanUpgradeRequest[]
   counters OrganizationCounter?
+  posRegisters PosRegister[]
+  registerShifts RegisterShift[]
+  salePayments SalePayment[]
+  cashDrawerMovements CashDrawerMovement[]
+  saleReturns SaleReturn[]
 }
 
 model User {
@@ -194,12 +237,22 @@ model User {
   exportJobsRequested ExportJob[] @relation("exportRequestedBy")
   periodClosesCreated PeriodClose[] @relation("periodClosedBy")
   diagnosticsReportsCreated DiagnosticsReport[] @relation("diagnosticsCreatedBy")
+  planUpgradeRequestsCreated PlanUpgradeRequest[] @relation("planUpgradeRequestedBy")
+  planUpgradeRequestsReviewed PlanUpgradeRequest[] @relation("planUpgradeReviewedBy")
+  registerShiftsOpened RegisterShift[] @relation("posShiftsOpened")
+  registerShiftsClosed RegisterShift[] @relation("posShiftsClosed")
+  salePaymentsCreated SalePayment[] @relation("salePaymentsCreated")
+  cashDrawerMovementsCreated CashDrawerMovement[] @relation("cashDrawerMovementsCreated")
+  saleReturnsCreated SaleReturn[] @relation("saleReturnsCreated")
+  saleReturnsCompleted SaleReturn[] @relation("saleReturnsCompleted")
   guideState UserGuideState?
 }
 
 model OrganizationCounter {
   organizationId    String  @id
   salesOrderNumber  Int     @default(0)
+  posSaleNumber     Int     @default(0)
+  posReturnNumber   Int     @default(0)
   updatedAt         DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -248,6 +301,11 @@ model Store {
   complianceProfile StoreComplianceProfile?
   exportJobs ExportJob[]
   periodCloses PeriodClose[]
+  posRegisters PosRegister[]
+  registerShifts RegisterShift[]
+  salePayments SalePayment[]
+  cashDrawerMovements CashDrawerMovement[]
+  saleReturns SaleReturn[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -354,6 +412,28 @@ model DiagnosticsReport {
   @@index([createdById, createdAt])
 }
 
+model PlanUpgradeRequest {
+  id             String   @id @default(cuid())
+  organizationId String
+  requestedById  String
+  currentPlan    OrganizationPlan
+  requestedPlan  OrganizationPlan
+  status         PlanUpgradeRequestStatus @default(PENDING)
+  message        String? @db.Text
+  reviewNote     String? @db.Text
+  createdAt      DateTime @default(now())
+  reviewedAt     DateTime?
+  reviewedById   String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  requestedBy  User @relation("planUpgradeRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy   User? @relation("planUpgradeReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([organizationId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([requestedById, createdAt])
+}
+
 model Supplier {
   id             String   @id @default(cuid())
   organizationId String
@@ -425,6 +505,7 @@ model Product {
   images           ProductImage[]
   complianceFlags  ProductComplianceFlags?
   customerOrderLines CustomerOrderLine[]
+  saleReturnLines  SaleReturnLine[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
@@ -505,6 +586,7 @@ model ProductVariant {
   attributeValues VariantAttributeValue[]
   bundleComponents ProductBundleComponent[] @relation("bundleComponentVariants")
   customerOrderLines CustomerOrderLine[]
+  saleReturnLines  SaleReturnLine[]
 
   @@index([productId])
   @@index([sku])
@@ -607,13 +689,19 @@ model CustomerOrder {
   id               String              @id @default(cuid())
   organizationId   String
   storeId          String
+  registerId       String?
+  shiftId          String?
   number           String
   status           CustomerOrderStatus @default(DRAFT)
+  isPosSale        Boolean             @default(false)
   customerName     String?
   customerPhone    String?
   subtotalKgs      Decimal             @default(0) @db.Decimal(12, 2)
   totalKgs         Decimal             @default(0) @db.Decimal(12, 2)
   notes            String?
+  kkmStatus        PosKkmStatus        @default(NOT_SENT)
+  kkmReceiptId     String?
+  kkmRawJson       Json?
   confirmedAt      DateTime?
   readyAt          DateTime?
   completedAt      DateTime?
@@ -626,7 +714,11 @@ model CustomerOrder {
 
   organization Organization         @relation(fields: [organizationId], references: [id])
   store        Store                @relation(fields: [storeId], references: [id])
+  register     PosRegister?         @relation(fields: [registerId], references: [id])
+  shift        RegisterShift?       @relation(fields: [shiftId], references: [id])
   lines        CustomerOrderLine[]
+  payments     SalePayment[]
+  saleReturns  SaleReturn[]         @relation("saleReturnsOriginal")
   createdBy    User?                @relation("customerOrdersCreated", fields: [createdById], references: [id])
   updatedBy    User?                @relation("customerOrdersUpdated", fields: [updatedById], references: [id])
 
@@ -634,6 +726,8 @@ model CustomerOrder {
   @@index([storeId, status, createdAt])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, createdAt])
+  @@index([organizationId, isPosSale, createdAt])
+  @@index([shiftId, status, createdAt])
 }
 
 model CustomerOrderLine {
@@ -651,10 +745,166 @@ model CustomerOrderLine {
   customerOrder CustomerOrder  @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
   product       Product        @relation(fields: [productId], references: [id])
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  saleReturnLines SaleReturnLine[]
 
   @@unique([customerOrderId, productId, variantKey])
   @@index([customerOrderId])
   @@index([productId])
+  @@index([productId, variantId])
+}
+
+model PosRegister {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  name           String
+  code           String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  shifts       RegisterShift[]
+  sales        CustomerOrder[]
+  saleReturns  SaleReturn[]
+
+  @@unique([storeId, code])
+  @@index([organizationId, storeId, isActive])
+}
+
+model RegisterShift {
+  id                    String              @id @default(cuid())
+  organizationId        String
+  storeId               String
+  registerId            String
+  status                RegisterShiftStatus @default(OPEN)
+  openedAt              DateTime            @default(now())
+  openedById            String
+  closedAt              DateTime?
+  closedById            String?
+  openingCashKgs        Decimal             @default(0) @db.Decimal(12, 2)
+  closingCashCountedKgs Decimal?            @db.Decimal(12, 2)
+  expectedCashKgs       Decimal?            @db.Decimal(12, 2)
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  store         Store @relation(fields: [storeId], references: [id])
+  register      PosRegister @relation(fields: [registerId], references: [id])
+  openedBy      User @relation("posShiftsOpened", fields: [openedById], references: [id])
+  closedBy      User? @relation("posShiftsClosed", fields: [closedById], references: [id])
+  sales         CustomerOrder[]
+  payments      SalePayment[]
+  cashMovements CashDrawerMovement[]
+  returns       SaleReturn[]
+
+  @@index([organizationId, storeId, status, openedAt])
+  @@index([registerId, status, openedAt])
+}
+
+model SalePayment {
+  id              String           @id @default(cuid())
+  organizationId  String
+  storeId         String
+  shiftId         String
+  customerOrderId String
+  saleReturnId    String?
+  method          PosPaymentMethod
+  amountKgs       Decimal          @db.Decimal(12, 2)
+  providerRef     String?
+  isRefund        Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  createdById     String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  shift        RegisterShift @relation(fields: [shiftId], references: [id])
+  customerOrder CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  saleReturn   SaleReturn? @relation(fields: [saleReturnId], references: [id])
+  createdBy    User? @relation("salePaymentsCreated", fields: [createdById], references: [id])
+
+  @@index([organizationId, storeId, createdAt])
+  @@index([shiftId, createdAt])
+  @@index([customerOrderId, createdAt])
+}
+
+model CashDrawerMovement {
+  id             String                 @id @default(cuid())
+  organizationId String
+  storeId        String
+  shiftId        String
+  type           CashDrawerMovementType
+  amountKgs      Decimal                @db.Decimal(12, 2)
+  reason         String
+  createdAt      DateTime               @default(now())
+  createdById    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  shift        RegisterShift @relation(fields: [shiftId], references: [id])
+  createdBy    User? @relation("cashDrawerMovementsCreated", fields: [createdById], references: [id])
+
+  @@index([organizationId, storeId, createdAt])
+  @@index([shiftId, createdAt])
+}
+
+model SaleReturn {
+  id               String          @id @default(cuid())
+  organizationId   String
+  storeId          String
+  registerId       String
+  shiftId          String
+  originalSaleId   String
+  number           String
+  status           PosReturnStatus @default(DRAFT)
+  subtotalKgs      Decimal         @default(0) @db.Decimal(12, 2)
+  totalKgs         Decimal         @default(0) @db.Decimal(12, 2)
+  notes            String?
+  completedAt      DateTime?
+  canceledAt       DateTime?
+  completedEventId String?         @unique
+  createdById      String
+  completedById    String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  register     PosRegister @relation(fields: [registerId], references: [id])
+  shift        RegisterShift @relation(fields: [shiftId], references: [id])
+  originalSale CustomerOrder @relation("saleReturnsOriginal", fields: [originalSaleId], references: [id])
+  lines        SaleReturnLine[]
+  payments     SalePayment[]
+  createdBy    User @relation("saleReturnsCreated", fields: [createdById], references: [id])
+  completedBy  User? @relation("saleReturnsCompleted", fields: [completedById], references: [id])
+
+  @@unique([organizationId, number])
+  @@index([organizationId, storeId, status, createdAt])
+  @@index([originalSaleId, createdAt])
+}
+
+model SaleReturnLine {
+  id                  String    @id @default(cuid())
+  saleReturnId        String
+  customerOrderLineId String
+  productId           String
+  variantId           String?
+  variantKey          String    @default("BASE")
+  qty                 Int
+  unitPriceKgs        Decimal   @db.Decimal(12, 2)
+  lineTotalKgs        Decimal   @db.Decimal(12, 2)
+  unitCostKgs         Decimal?  @db.Decimal(12, 2)
+  lineCostTotalKgs    Decimal?  @db.Decimal(12, 2)
+
+  saleReturn      SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+  customerOrderLine CustomerOrderLine @relation(fields: [customerOrderLineId], references: [id])
+  product         Product @relation(fields: [productId], references: [id])
+  variant         ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([saleReturnId, customerOrderLineId])
+  @@index([saleReturnId])
   @@index([productId, variantId])
 }
 

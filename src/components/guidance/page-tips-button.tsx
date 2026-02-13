@@ -49,13 +49,16 @@ export const PageTipsButton = () => {
         onOpenChange={setOpen}
         title={t("tipsPanelTitle")}
         subtitle={t("tipsPanelSubtitle")}
-        bodyClassName="space-y-4"
+        usePortal
+        className="max-w-lg rounded-2xl"
+        headerClassName="px-4 py-4 sm:px-6 sm:py-5"
+        bodyClassName="space-y-4 px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4"
       >
-        <div className="rounded-md border border-gray-200 p-3">
+        <div className="rounded-md border border-border bg-card p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-ink">{t("disableToursLabel")}</p>
-              <p className="text-xs text-gray-500">{t("disableToursHint")}</p>
+              <p className="text-sm font-medium text-foreground">{t("disableToursLabel")}</p>
+              <p className="text-xs text-muted-foreground">{t("disableToursHint")}</p>
             </div>
             <Switch
               checked={toursDisabled}
@@ -107,10 +110,10 @@ export const PageTipsButton = () => {
 
         <div className="space-y-3">
           {pageTips.map((tip) => (
-            <div key={tip.id} className="rounded-md border border-gray-200 p-3">
+            <div key={tip.id} className="rounded-md border border-border bg-card p-3">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-ink">{t(tip.titleKey)}</p>
-                <p className="text-xs text-gray-500">{t(tip.bodyKey)}</p>
+                <p className="text-sm font-medium text-foreground">{t(tip.titleKey)}</p>
+                <p className="text-xs text-muted-foreground">{t(tip.bodyKey)}</p>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button

@@ -53,21 +53,21 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
             <TableBody>
               {visibleItems.map((row) => (
                 <TableRow key={`${row.sku}-${row.name}`}>
-                  <TableCell className="text-xs text-gray-500">{row.sku}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{row.sku}</TableCell>
                   <TableCell className="font-medium">{row.name}</TableCell>
-                  <TableCell className="text-xs text-gray-500 hidden lg:table-cell">
+                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
                     {row.basePriceKgs ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-gray-500 hidden lg:table-cell">
+                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
                     {row.purchasePriceKgs ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-gray-500 hidden lg:table-cell">
+                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
                     {row.avgCostKgs ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                  <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                     {row.category ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                  <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                     {row.unit}
                   </TableCell>
                 </TableRow>
@@ -77,41 +77,41 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
         </div>
       )}
       renderMobile={(row) => (
-        <div className="rounded-md border border-gray-200 bg-white p-3">
+        <div className="rounded-md border border-border bg-card p-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-ink">{row.name}</p>
-            <p className="text-xs text-gray-500">{row.sku}</p>
+            <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
+            <p className="text-xs text-muted-foreground">{row.sku}</p>
           </div>
           <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-400">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldCategory")}
               </p>
-              <p className="text-gray-700">{row.category ?? tCommon("notAvailable")}</p>
+              <p className="text-foreground/90">{row.category ?? tCommon("notAvailable")}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-400">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldUnit")}
               </p>
-              <p className="text-gray-700">{row.unit}</p>
+              <p className="text-foreground/90">{row.unit}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-400">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldBasePrice")}
               </p>
-              <p className="text-gray-700">{row.basePriceKgs ?? tCommon("notAvailable")}</p>
+              <p className="text-foreground/90">{row.basePriceKgs ?? tCommon("notAvailable")}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-400">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldPurchasePrice")}
               </p>
-              <p className="text-gray-700">{row.purchasePriceKgs ?? tCommon("notAvailable")}</p>
+              <p className="text-foreground/90">{row.purchasePriceKgs ?? tCommon("notAvailable")}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-gray-400">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldAvgCost")}
               </p>
-              <p className="text-gray-700">{row.avgCostKgs ?? tCommon("notAvailable")}</p>
+              <p className="text-foreground/90">{row.avgCostKgs ?? tCommon("notAvailable")}</p>
             </div>
           </div>
         </div>

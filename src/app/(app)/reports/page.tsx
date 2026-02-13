@@ -69,7 +69,7 @@ const ReportsPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -181,12 +181,12 @@ const ReportsPage = () => {
         </CardHeader>
         <CardContent>
           {stockoutsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : stockoutsQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, stockoutsQuery.error)}</span>
               <Button
                 type="button"
@@ -217,13 +217,13 @@ const ReportsPage = () => {
                     <TableBody>
                       {visibleItems.map((row) => (
                         <TableRow key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}>
-                          <TableCell className="text-xs text-gray-500">{row.storeName}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{row.storeName}</TableCell>
                           <TableCell className="font-medium">{row.productName}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{formatNumber(row.count, locale)}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                             {row.lastAt ? formatDate(row.lastAt, locale) : tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{formatNumber(row.onHand, locale)}</TableCell>
@@ -234,46 +234,46 @@ const ReportsPage = () => {
                 </div>
               )}
               renderMobile={(row) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{row.productName}</p>
-                    <p className="text-xs text-gray-500">{row.storeName}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{row.productName}</p>
+                    <p className="text-xs text-muted-foreground">{row.storeName}</p>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.variant")}
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-foreground/90">
                         {row.variantName ?? tCommon("notAvailable")}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.count")}
                       </p>
-                      <p className="text-gray-700">{formatNumber(row.count, locale)}</p>
+                      <p className="text-foreground/90">{formatNumber(row.count, locale)}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.lastAt")}
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-foreground/90">
                         {row.lastAt ? formatDate(row.lastAt, locale) : tCommon("notAvailable")}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.onHand")}
                       </p>
-                      <p className="text-gray-700">{formatNumber(row.onHand, locale)}</p>
+                      <p className="text-foreground/90">{formatNumber(row.onHand, locale)}</p>
                     </div>
                   </div>
                 </div>
               )}
             />
           ) : (
-            <p className="text-sm text-gray-500">{t("stockoutsEmpty")}</p>
+            <p className="text-sm text-muted-foreground">{t("stockoutsEmpty")}</p>
           )}
         </CardContent>
       </Card>
@@ -313,12 +313,12 @@ const ReportsPage = () => {
         </CardHeader>
         <CardContent>
           {slowMoversQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : slowMoversQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, slowMoversQuery.error)}</span>
               <Button
                 type="button"
@@ -348,12 +348,12 @@ const ReportsPage = () => {
                     <TableBody>
                       {visibleItems.map((row) => (
                         <TableRow key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}>
-                          <TableCell className="text-xs text-gray-500">{row.storeName}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{row.storeName}</TableCell>
                           <TableCell className="font-medium">{row.productName}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-muted-foreground">
                             {row.lastMovementAt
                               ? formatDate(row.lastMovementAt, locale)
                               : tCommon("notAvailable")}
@@ -366,42 +366,42 @@ const ReportsPage = () => {
                 </div>
               )}
               renderMobile={(row) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{row.productName}</p>
-                    <p className="text-xs text-gray-500">{row.storeName}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{row.productName}</p>
+                    <p className="text-xs text-muted-foreground">{row.storeName}</p>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.variant")}
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-foreground/90">
                         {row.variantName ?? tCommon("notAvailable")}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.lastMovement")}
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-foreground/90">
                         {row.lastMovementAt
                           ? formatDate(row.lastMovementAt, locale)
                           : tCommon("notAvailable")}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.onHand")}
                       </p>
-                      <p className="text-gray-700">{formatNumber(row.onHand, locale)}</p>
+                      <p className="text-foreground/90">{formatNumber(row.onHand, locale)}</p>
                     </div>
                   </div>
                 </div>
               )}
             />
           ) : (
-            <p className="text-sm text-gray-500">{t("slowMoversEmpty")}</p>
+            <p className="text-sm text-muted-foreground">{t("slowMoversEmpty")}</p>
           )}
         </CardContent>
       </Card>
@@ -443,12 +443,12 @@ const ReportsPage = () => {
         </CardHeader>
         <CardContent>
           {shrinkageQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : shrinkageQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, shrinkageQuery.error)}</span>
               <Button
                 type="button"
@@ -483,12 +483,12 @@ const ReportsPage = () => {
                         <TableRow
                           key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}-${row.userId ?? "anon"}`}
                         >
-                          <TableCell className="text-xs text-gray-500">{row.storeName}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{row.storeName}</TableCell>
                           <TableCell className="font-medium">{row.productName}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-gray-500">
+                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-muted-foreground">
                             {row.userName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{formatNumber(row.totalQty, locale)}</TableCell>
@@ -500,44 +500,44 @@ const ReportsPage = () => {
                 </div>
               )}
               renderMobile={(row) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{row.productName}</p>
-                    <p className="text-xs text-gray-500">{row.storeName}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{row.productName}</p>
+                    <p className="text-xs text-muted-foreground">{row.storeName}</p>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.variant")}
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-foreground/90">
                         {row.variantName ?? tCommon("notAvailable")}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.user")}
                       </p>
-                      <p className="text-gray-700">{row.userName ?? tCommon("notAvailable")}</p>
+                      <p className="text-foreground/90">{row.userName ?? tCommon("notAvailable")}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.qty")}
                       </p>
-                      <p className="text-gray-700">{formatNumber(row.totalQty, locale)}</p>
+                      <p className="text-foreground/90">{formatNumber(row.totalQty, locale)}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.movements")}
                       </p>
-                      <p className="text-gray-700">{formatNumber(row.movementCount, locale)}</p>
+                      <p className="text-foreground/90">{formatNumber(row.movementCount, locale)}</p>
                     </div>
                   </div>
                 </div>
               )}
             />
           ) : (
-            <p className="text-sm text-gray-500">{t("shrinkageEmpty")}</p>
+            <p className="text-sm text-muted-foreground">{t("shrinkageEmpty")}</p>
           )}
         </CardContent>
       </Card>

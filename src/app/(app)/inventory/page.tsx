@@ -712,6 +712,8 @@ const InventoryPage = () => {
         return t("movementType.receive");
       case "SALE":
         return t("movementType.sale");
+      case "RETURN":
+        return t("movementType.return");
       case "ADJUSTMENT":
         return t("movementType.adjustment");
       case "TRANSFER_IN":
@@ -732,6 +734,8 @@ const InventoryPage = () => {
         return "warning";
       case "SALE":
         return "danger";
+      case "RETURN":
+        return "success";
       default:
         return "default";
     }
@@ -852,13 +856,13 @@ const InventoryPage = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <div className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2">
+            <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
               <Switch
                 checked={showPlanning}
                 onCheckedChange={setShowPlanning}
                 aria-label={t("showPlanning")}
               />
-              <span className="text-sm text-gray-600">{t("showPlanning")}</span>
+              <span className="text-sm text-muted-foreground">{t("showPlanning")}</span>
             </div>
           </>
         }
@@ -891,7 +895,7 @@ const InventoryPage = () => {
           </CardHeader>
           <CardContent>
             {expiringQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -903,14 +907,14 @@ const InventoryPage = () => {
                       {lot.product.name}
                       {lot.variant?.name ? ` • ${lot.variant.name}` : ""}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {lot.expiryDate ? formatDateTime(lot.expiryDate, locale) : tCommon("notAvailable")}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noExpiringLots")}
               </div>
@@ -1024,7 +1028,7 @@ const InventoryPage = () => {
                                   })}
                                 />
                               </TableCell>
-                              <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                              <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                                 {item.product.sku}
                               </TableCell>
                               <TableCell className="font-medium">
@@ -1049,7 +1053,7 @@ const InventoryPage = () => {
                                     {t("lowStockBadge")}
                                   </Badge>
                                 ) : (
-                                  <span className="text-xs text-gray-400">
+                                  <span className="text-xs text-muted-foreground/80">
                                     {tCommon("notAvailable")}
                                   </span>
                                 )}
@@ -1078,7 +1082,7 @@ const InventoryPage = () => {
                                       </Button>
                                     </div>
                                   ) : (
-                                    <span className="text-xs text-gray-400">
+                                    <span className="text-xs text-muted-foreground/80">
                                       {t("planningUnavailable")}
                                     </span>
                                   )}
@@ -1153,10 +1157,10 @@ const InventoryPage = () => {
                             {showPlanning && isExpanded && reorder ? (
                               <TableRow>
                                 <TableCell colSpan={tableColumnCount}>
-                                  <div className="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm">
+                                  <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm">
                                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                       <div>
-                                        <p className="text-xs text-gray-500">
+                                        <p className="text-xs text-muted-foreground">
                                           {t("demandDuringLeadTime")}
                                         </p>
                                         <p className="font-semibold">
@@ -1164,25 +1168,25 @@ const InventoryPage = () => {
                                         </p>
                                       </div>
                                       <div>
-                                        <p className="text-xs text-gray-500">{t("safetyStock")}</p>
+                                        <p className="text-xs text-muted-foreground">{t("safetyStock")}</p>
                                         <p className="font-semibold">
                                           {formatNumber(reorder.safetyStock, locale)}
                                         </p>
                                       </div>
                                       <div>
-                                        <p className="text-xs text-gray-500">{t("reorderPoint")}</p>
+                                        <p className="text-xs text-muted-foreground">{t("reorderPoint")}</p>
                                         <p className="font-semibold">
                                           {formatNumber(reorder.reorderPoint, locale)}
                                         </p>
                                       </div>
                                       <div>
-                                        <p className="text-xs text-gray-500">{t("targetLevel")}</p>
+                                        <p className="text-xs text-muted-foreground">{t("targetLevel")}</p>
                                         <p className="font-semibold">
                                           {formatNumber(reorder.targetLevel, locale)}
                                         </p>
                                       </div>
                                       <div>
-                                        <p className="text-xs text-gray-500">
+                                        <p className="text-xs text-muted-foreground">
                                           {t("suggestedOrder")}
                                         </p>
                                         <p className="font-semibold">
@@ -1251,7 +1255,7 @@ const InventoryPage = () => {
                   ];
 
               return (
-                <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                <div className="rounded-md border border-border bg-card p-3 shadow-sm">
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -1262,35 +1266,35 @@ const InventoryPage = () => {
                     />
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-ink">{label}</p>
+                        <p className="truncate text-sm font-semibold text-foreground">{label}</p>
                         {trackExpiryLots && expiringSet.has(expiryKey) ? (
                           <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
                         ) : null}
                       </div>
-                      <p className="text-xs text-gray-500">{item.product.sku}</p>
-                      <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                      <p className="text-xs text-muted-foreground">{item.product.sku}</p>
+                      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                         <div>
                           <p>{t("onHand")}</p>
-                          <p className="text-sm font-semibold text-ink">
+                          <p className="text-sm font-semibold text-foreground">
                             {formatNumber(item.snapshot.onHand, locale)}
                           </p>
                         </div>
                         <div>
                           <p>{t("minStock")}</p>
-                          <p className="text-sm font-semibold text-ink">
+                          <p className="text-sm font-semibold text-foreground">
                             {formatNumber(item.minStock, locale)}
                           </p>
                         </div>
                         <div>
                           <p>{t("onOrder")}</p>
-                          <p className="text-sm font-semibold text-ink">
+                          <p className="text-sm font-semibold text-foreground">
                             {formatNumber(item.snapshot.onOrder, locale)}
                           </p>
                         </div>
                         {showPlanning ? (
                           <div>
                             <p>{t("suggestedOrder")}</p>
-                            <p className="text-sm font-semibold text-ink">
+                            <p className="text-sm font-semibold text-foreground">
                               {reorder
                                 ? formatNumber(reorder.suggestedOrderQty, locale)
                                 : t("planningUnavailable")}
@@ -1305,7 +1309,7 @@ const InventoryPage = () => {
                             {t("lowStockBadge")}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-muted-foreground/80">
                             {tCommon("notAvailable")}
                           </span>
                         )}
@@ -1322,17 +1326,17 @@ const InventoryPage = () => {
             }}
           />
           {inventoryQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !storeId ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("selectStoreHint")}
             </div>
           ) : inventoryTotal === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noInventory")}
@@ -1348,7 +1352,7 @@ const InventoryPage = () => {
             </div>
           ) : null}
           {inventoryQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-500">
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-danger">
               <span>{translateError(tErrors, inventoryQuery.error)}</span>
               <Button
                 type="button"
@@ -1412,7 +1416,7 @@ const InventoryPage = () => {
             <div className="space-y-3">
               {Array.from(groupedDraftItems.entries()).map(([supplierId, items]) => (
                 <div key={supplierId} className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500">
+                  <p className="text-xs font-semibold text-muted-foreground">
                     {supplierId === "unassigned"
                       ? t("supplierUnassigned")
                       : supplierMap.get(supplierId) ?? t("supplierUnassigned")}
@@ -1420,12 +1424,12 @@ const InventoryPage = () => {
                   {items.map((item) => (
                     <div
                       key={item.key}
-                      className="space-y-2 rounded-md border border-gray-100 bg-white p-3"
+                      className="space-y-2 rounded-md border border-border/70 bg-card p-3"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm font-semibold text-ink">{item.productName}</p>
-                          <p className="text-xs text-gray-500">{item.variantName}</p>
+                          <p className="text-sm font-semibold text-foreground">{item.productName}</p>
+                          <p className="text-xs text-muted-foreground">{item.variantName}</p>
                         </div>
                         <Switch
                           checked={item.selected}
@@ -1439,14 +1443,14 @@ const InventoryPage = () => {
                         />
                       </div>
                       <div className="grid gap-2 sm:grid-cols-3">
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-muted-foreground">
                           {t("suggestedOrder")}
-                          <div className="text-sm font-semibold text-ink">
+                          <div className="text-sm font-semibold text-foreground">
                             {formatNumber(item.suggestedQty, locale)}
                           </div>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">{t("draftQty")}</label>
+                          <label className="text-xs text-muted-foreground">{t("draftQty")}</label>
                           <Input
                             type="number"
                             inputMode="numeric"
@@ -1468,7 +1472,7 @@ const InventoryPage = () => {
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">{t("supplier")}</label>
+                          <label className="text-xs text-muted-foreground">{t("supplier")}</label>
                           <Select
                             value={item.supplierId ?? ""}
                             onValueChange={(value) => {
@@ -1515,7 +1519,7 @@ const InventoryPage = () => {
             </FormActions>
           </form>
         ) : (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <EmptyIcon className="h-4 w-4" aria-hidden />
             {t("noReorderSuggestions")}
           </div>
@@ -2373,12 +2377,12 @@ const InventoryPage = () => {
         className="max-w-3xl"
       >
         {movementsQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </div>
         ) : movementsQuery.error ? (
-          <div className="flex flex-wrap items-center gap-3 text-sm text-red-500">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-danger">
             <span>{translateError(tErrors, movementsQuery.error)}</span>
             <Button
               type="button"
@@ -2408,7 +2412,7 @@ const InventoryPage = () => {
                   <TableBody>
                     {visibleItems.map((movement) => (
                       <TableRow key={movement.id}>
-                        <TableCell className="text-xs text-gray-500">
+                        <TableCell className="text-xs text-muted-foreground">
                           {formatDateTime(movement.createdAt, locale)}
                         </TableCell>
                         <TableCell>
@@ -2420,12 +2424,12 @@ const InventoryPage = () => {
                           {movement.qtyDelta > 0 ? "+" : ""}
                           {formatNumber(movement.qtyDelta, locale)}
                         </TableCell>
-                        <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                           {movement.createdBy?.name ??
                             movement.createdBy?.email ??
                             tCommon("notAvailable")}
                         </TableCell>
-                        <TableCell className="text-xs text-gray-500 hidden md:table-cell">
+                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                           {formatMovementNote(t, movement.note) || tCommon("notAvailable")}
                         </TableCell>
                       </TableRow>
@@ -2435,10 +2439,10 @@ const InventoryPage = () => {
               </div>
             )}
             renderMobile={(movement) => (
-              <div className="rounded-md border border-gray-200 bg-white p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {formatDateTime(movement.createdAt, locale)}
                     </p>
                     <div className="mt-1">
@@ -2447,27 +2451,27 @@ const InventoryPage = () => {
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-sm font-semibold text-ink">
+                  <p className="text-sm font-semibold text-foreground">
                     {movement.qtyDelta > 0 ? "+" : ""}
                     {formatNumber(movement.qtyDelta, locale)}
                   </p>
                 </div>
-                <div className="mt-2 grid gap-2 text-xs text-gray-500">
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground">
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                       {t("movementUser")}
                     </p>
-                    <p className="text-gray-700">
+                    <p className="text-foreground/90">
                       {movement.createdBy?.name ??
                         movement.createdBy?.email ??
                         tCommon("notAvailable")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                       {t("movementNote")}
                     </p>
-                    <p className="text-gray-700">
+                    <p className="text-foreground/90">
                       {formatMovementNote(t, movement.note) || tCommon("notAvailable")}
                     </p>
                   </div>
@@ -2476,7 +2480,7 @@ const InventoryPage = () => {
             )}
           />
         ) : (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <EmptyIcon className="h-4 w-4" aria-hidden />
             {t("noMovements")}
           </div>

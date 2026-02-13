@@ -16,7 +16,7 @@ export const invitesRouter = router({
   }),
 
   create: adminProcedure
-    .input(z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MANAGER", "STAFF"]) }))
+    .input(z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]) }))
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await createInvite({

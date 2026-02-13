@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { z } from "zod";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -24,6 +25,7 @@ const RegisterBusinessPage = () => {
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
   const [values, setValues] = useState<{
     orgName: string;
     storeName: string;
@@ -59,9 +61,13 @@ const RegisterBusinessPage = () => {
   });
 
   const mutation = trpc.publicAuth.registerBusiness.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setNeedsEmailVerification(Boolean(result.requiresEmailVerification));
       setSubmitted(true);
-      toast({ variant: "success", description: t("success") });
+      toast({
+        variant: "success",
+        description: result.requiresEmailVerification ? t("verifyHintAfterRegistration") : t("success"),
+      });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -109,17 +115,17 @@ const RegisterBusinessPage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           {submitted ? (
-            <div className="space-y-2 text-sm text-gray-600">
-              <p>{t("submitted")}</p>
-              <a href="/login" className="text-sm font-semibold text-ink underline">
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>{needsEmailVerification ? t("submittedVerify") : t("submitted")}</p>
+              <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
                 {t("goToLogin")}
-              </a>
+              </Link>
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
               <FormStack>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-org-name">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-org-name">
                     {t("orgName")}
                   </label>
                   <Input
@@ -137,7 +143,7 @@ const RegisterBusinessPage = () => {
                   {fieldErrors.orgName ? <p className="text-xs font-medium text-danger">{fieldErrors.orgName}</p> : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-store-name">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-store-name">
                     {t("storeName")}
                   </label>
                   <Input
@@ -157,7 +163,7 @@ const RegisterBusinessPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-store-code">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-store-code">
                     {t("storeCode")}
                   </label>
                   <Input
@@ -177,7 +183,7 @@ const RegisterBusinessPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink">{t("legalEntityType")}</label>
+                  <label className="text-sm font-medium text-foreground">{t("legalEntityType")}</label>
                   <Select
                     value={values.legalEntityType}
                     onValueChange={(value) => {
@@ -202,7 +208,7 @@ const RegisterBusinessPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-legal-name">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-legal-name">
                     {t("legalName")}
                   </label>
                   <Input
@@ -222,7 +228,7 @@ const RegisterBusinessPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-inn">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-inn">
                     {t("inn")}
                   </label>
                   <Input
@@ -240,7 +246,7 @@ const RegisterBusinessPage = () => {
                   {fieldErrors.inn ? <p className="text-xs font-medium text-danger">{fieldErrors.inn}</p> : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-phone">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-phone">
                     {t("phone")}
                   </label>
                   <Input
@@ -258,7 +264,7 @@ const RegisterBusinessPage = () => {
                   {fieldErrors.phone ? <p className="text-xs font-medium text-danger">{fieldErrors.phone}</p> : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="register-address">
+                  <label className="text-sm font-medium text-foreground" htmlFor="register-address">
                     {t("address")}
                   </label>
                   <Input

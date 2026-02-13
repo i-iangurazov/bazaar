@@ -236,7 +236,7 @@ const ProfilePage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
@@ -248,7 +248,7 @@ const ProfilePage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{translateError(tErrors, profileQuery.error)}</p>
+        <p className="mt-4 text-sm text-danger">{translateError(tErrors, profileQuery.error)}</p>
       </div>
     );
   }
@@ -568,7 +568,7 @@ const ProfilePage = () => {
       ) : null}
 
       {businessQuery.error ? (
-        <p className="text-sm text-red-500">{translateError(tErrors, businessQuery.error)}</p>
+        <p className="text-sm text-danger">{translateError(tErrors, businessQuery.error)}</p>
       ) : null}
     </div>
   );

@@ -9,6 +9,7 @@ type RedisState = {
   warnedMissing: boolean;
   warnedError: boolean;
   fatalRedisError: Error | null;
+  readinessCheck: Promise<void> | null;
 };
 
 const globalForRedis = globalThis as typeof globalThis & {
@@ -21,6 +22,7 @@ const state: RedisState = globalForRedis.__bazaarRedisState ?? {
   warnedMissing: false,
   warnedError: false,
   fatalRedisError: null,
+  readinessCheck: null,
 };
 
 if (!globalForRedis.__bazaarRedisState) {
@@ -42,6 +44,9 @@ const getRedisUrl = () => {
   const url = process.env.REDIS_URL ?? "";
   if (!url && isProductionRuntime()) {
     throw new Error("REDIS_URL is required in production.");
+  }
+  if (url && /^https?:\/\//i.test(url)) {
+    throw new Error("REDIS_URL must use redis:// or rediss:// (Upstash REST URL is not supported here).");
   }
   return url;
 };
@@ -70,8 +75,8 @@ const createClient = (role: "publisher" | "subscriber") => {
       commandTimeout: 2_000,
       // Subscriber connections should not run INFO-based ready checks after SUBSCRIBE.
       enableReadyCheck: role !== "subscriber",
-      // Subscriber should queue SUBSCRIBE until ready; publisher remains fail-fast.
-      enableOfflineQueue: role === "subscriber",
+      // Queue commands until socket is writable; bounded by connect/command timeout and retry strategy.
+      enableOfflineQueue: true,
       retryStrategy: (attempt) => (attempt > 1 ? null : 100),
     });
 
@@ -97,8 +102,9 @@ const createClient = (role: "publisher" | "subscriber") => {
 };
 
 export const getRedisPublisher = () => {
-  if (isProductionRuntime() && state.fatalRedisError) {
-    throw state.fatalRedisError;
+  if (state.fatalRedisError) {
+    state.publisher = null;
+    return null;
   }
   if (!state.publisher) {
     state.publisher = createClient("publisher");
@@ -107,8 +113,9 @@ export const getRedisPublisher = () => {
 };
 
 export const getRedisSubscriber = () => {
-  if (isProductionRuntime() && state.fatalRedisError) {
-    throw state.fatalRedisError;
+  if (state.fatalRedisError) {
+    state.subscriber = null;
+    return null;
   }
   if (!state.subscriber) {
     state.subscriber = createClient("subscriber");
@@ -117,3 +124,37 @@ export const getRedisSubscriber = () => {
 };
 
 export const redisConfigured = () => Boolean(getRedisUrl());
+
+export const assertRedisReady = async () => {
+  const url = getRedisUrl();
+  if (!url || !isProductionRuntime()) {
+    return;
+  }
+
+  if (state.readinessCheck) {
+    return state.readinessCheck;
+  }
+
+  state.readinessCheck = (async () => {
+    const client = getRedisPublisher();
+    if (!client) {
+      throw new Error("REDIS_URL is configured but Redis publisher is unavailable.");
+    }
+    try {
+      if (client.status === "wait") {
+        await client.connect();
+      }
+      await client.ping();
+    } catch (error) {
+      state.fatalRedisError = error instanceof Error ? error : new Error(String(error));
+      throw new Error("REDIS_URL is configured but Redis is unreachable in production.");
+    }
+  })();
+
+  try {
+    await state.readinessCheck;
+  } catch (error) {
+    state.readinessCheck = null;
+    throw error;
+  }
+};

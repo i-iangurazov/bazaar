@@ -3,6 +3,7 @@ import type { Role } from "@prisma/client";
 const roleRank: Record<Role, number> = {
   ADMIN: 3,
   MANAGER: 2,
+  CASHIER: 1,
   STAFF: 1,
 };
 

@@ -183,7 +183,7 @@ const StockCountsPage = () => {
       />
 
       {countsQuery.error ? (
-        <p className="mb-4 text-sm text-red-500">
+        <p className="mb-4 text-sm text-danger">
           {translateError(tErrors, countsQuery.error)}
         </p>
       ) : null}
@@ -194,7 +194,7 @@ const StockCountsPage = () => {
         </CardHeader>
         <CardContent>
           {countsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -249,23 +249,23 @@ const StockCountsPage = () => {
                 </div>
               )}
               renderMobile={(count) => (
-                <div className="rounded-md border border-gray-200 bg-white p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-ink">{count.code}</p>
+                      <p className="text-sm font-medium text-foreground">{count.code}</p>
                       <Badge variant={statusVariants[count.status] ?? "default"}>
                         {statusLabel(count.status)}
                       </Badge>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {t("lines")}: {count._count.lines}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t("startedAt")}:{" "}
                         {count.startedAt
                           ? formatDateTime(count.startedAt, locale)
                           : tCommon("notAvailable")}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t("appliedAt")}:{" "}
                         {count.appliedAt
                           ? formatDateTime(count.appliedAt, locale)
@@ -289,7 +289,7 @@ const StockCountsPage = () => {
               )}
             />
           ) : (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("empty")}
             </div>

@@ -28,7 +28,7 @@ export const GET = async (request: Request) => {
   const errors: string[] = [];
 
   try {
-    assertStartupConfigured();
+    await assertStartupConfigured();
   } catch (error) {
     startup = "failed";
     errors.push((error as Error).message);

@@ -94,7 +94,7 @@ const UsersPage = () => {
       z.object({
         name: z.string().min(2, t("nameRequired")),
         email: z.string().email(t("emailInvalid")),
-        role: z.enum(["ADMIN", "MANAGER", "STAFF"]),
+        role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         preferredLocale: z.enum(["ru", "kg"]),
         isActive: z.boolean(),
         password: isEditing
@@ -142,7 +142,7 @@ const UsersPage = () => {
     () =>
       z.object({
         email: z.string().email(t("emailInvalid")),
-        role: z.enum(["ADMIN", "MANAGER", "STAFF"]),
+        role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
       }),
     [t],
   );
@@ -268,6 +268,8 @@ const UsersPage = () => {
         return tCommon("roles.manager");
       case "STAFF":
         return tCommon("roles.staff");
+      case "CASHIER":
+        return tCommon("roles.cashier");
       default:
         return role;
     }
@@ -277,7 +279,7 @@ const UsersPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -327,11 +329,11 @@ const UsersPage = () => {
                         return (
                           <TableRow key={user.id}>
                             <TableCell className="font-medium">{user.name}</TableCell>
-                            <TableCell className="text-xs text-gray-500 hidden sm:table-cell">
+                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                               {user.email}
                             </TableCell>
                             <TableCell>{roleLabel(user.role)}</TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {tCommon(`locales.${user.preferredLocale}`)}
                             </TableCell>
                             <TableCell>
@@ -457,11 +459,11 @@ const UsersPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                  <div className="rounded-md border border-border bg-card p-3 shadow-sm">
                     <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
+                          <p className="truncate text-sm font-semibold text-foreground">{user.name}</p>
                           <Badge variant={user.isActive ? "success" : "danger"}>
                             {user.isActive ? (
                               <StatusSuccessIcon className="h-3 w-3" aria-hidden />
@@ -471,15 +473,15 @@ const UsersPage = () => {
                             {user.isActive ? t("active") : t("inactive")}
                           </Badge>
                         </div>
-                        <p className="text-xs text-gray-500">{user.email}</p>
-                        <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span>
                             {t("role")}:{" "}
-                            <span className="text-ink">{roleLabel(user.role)}</span>
+                            <span className="text-foreground">{roleLabel(user.role)}</span>
                           </span>
                           <span>
                             {t("locale")}:{" "}
-                            <span className="text-ink">
+                            <span className="text-foreground">
                               {tCommon(`locales.${user.preferredLocale}`)}
                             </span>
                           </span>
@@ -496,12 +498,12 @@ const UsersPage = () => {
               }}
             />
             {usersQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
             ) : !usersQuery.data?.length ? (
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <EmptyIcon className="h-4 w-4" aria-hidden />
                   {t("noUsers")}
@@ -509,7 +511,7 @@ const UsersPage = () => {
               </div>
             ) : null}
             {usersQuery.error ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
                 <span>{translateError(tErrors, usersQuery.error)}</span>
                 <Button
                   type="button"
@@ -560,6 +562,7 @@ const UsersPage = () => {
                           <SelectContent>
                             <SelectItem value="ADMIN">{tCommon("roles.admin")}</SelectItem>
                             <SelectItem value="MANAGER">{tCommon("roles.manager")}</SelectItem>
+                            <SelectItem value="CASHIER">{tCommon("roles.cashier")}</SelectItem>
                             <SelectItem value="STAFF">{tCommon("roles.staff")}</SelectItem>
                           </SelectContent>
                         </Select>
@@ -581,10 +584,10 @@ const UsersPage = () => {
             </Form>
 
             {inviteLink ? (
-              <div className="flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-                <span className="font-medium text-ink">{t("inviteLinkReady")}</span>
+              <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{t("inviteLinkReady")}</span>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <code className="break-all rounded bg-white px-2 py-1">{inviteLink}</code>
+                  <code className="break-all rounded bg-card px-2 py-1">{inviteLink}</code>
                   <Button type="button" variant="secondary" onClick={handleCopyInvite}>
                     {t("inviteCopy")}
                   </Button>
@@ -620,10 +623,10 @@ const UsersPage = () => {
                             <TableCell className="font-medium">{invite.email}</TableCell>
                             <TableCell>{roleLabel(invite.role)}</TableCell>
                             <TableCell>{status}</TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(invite.expiresAt, locale)}
                             </TableCell>
-                            <TableCell className="text-xs text-gray-500">
+                            <TableCell className="text-xs text-muted-foreground">
                               {invite.createdBy?.name ??
                                 invite.createdBy?.email ??
                                 tCommon("notAvailable")}
@@ -644,26 +647,26 @@ const UsersPage = () => {
                     : t("invitePending");
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+                  <div className="rounded-md border border-border bg-card p-3 shadow-sm">
                     <div className="space-y-2">
-                      <p className="truncate text-sm font-semibold text-ink">{invite.email}</p>
-                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                      <p className="truncate text-sm font-semibold text-foreground">{invite.email}</p>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                         <span>
                           {t("inviteRole")}:{" "}
-                          <span className="text-ink">{roleLabel(invite.role)}</span>
+                          <span className="text-foreground">{roleLabel(invite.role)}</span>
                         </span>
                         <span>
-                          {t("inviteStatus")}: <span className="text-ink">{status}</span>
+                          {t("inviteStatus")}: <span className="text-foreground">{status}</span>
                         </span>
                         <span>
                           {t("inviteExpires")}:{" "}
-                          <span className="text-ink">
+                          <span className="text-foreground">
                             {formatDateTime(invite.expiresAt, locale)}
                           </span>
                         </span>
                         <span>
                           {t("inviteCreatedBy")}:{" "}
-                          <span className="text-ink">
+                          <span className="text-foreground">
                             {invite.createdBy?.name ??
                               invite.createdBy?.email ??
                               tCommon("notAvailable")}
@@ -676,15 +679,15 @@ const UsersPage = () => {
               }}
             />
             {invitesQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
             ) : !invitesQuery.data?.length ? (
-              <p className="text-sm text-gray-500">{t("inviteEmpty")}</p>
+              <p className="text-sm text-muted-foreground">{t("inviteEmpty")}</p>
             ) : null}
             {invitesQuery.error ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-red-500">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
                 <span>{translateError(tErrors, invitesQuery.error)}</span>
                 <Button
                   type="button"
@@ -794,6 +797,7 @@ const UsersPage = () => {
                       <SelectContent>
                         <SelectItem value="ADMIN">{tCommon("roles.admin")}</SelectItem>
                         <SelectItem value="MANAGER">{tCommon("roles.manager")}</SelectItem>
+                        <SelectItem value="CASHIER">{tCommon("roles.cashier")}</SelectItem>
                         <SelectItem value="STAFF">{tCommon("roles.staff")}</SelectItem>
                       </SelectContent>
                     </Select>
@@ -830,7 +834,7 @@ const UsersPage = () => {
               name="isActive"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3">
+                  <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
                     <div className="space-y-1">
                       <FormLabel>{t("status")}</FormLabel>
                       <FormDescription>{t("statusHint")}</FormDescription>

@@ -30,7 +30,7 @@ const WhatsNewPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-red-500">{tErrors("forbidden")}</p>
+        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -44,10 +44,10 @@ const WhatsNewPage = () => {
             <CardHeader>
               <CardTitle>{section.title}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-gray-600">
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
               {section.items.map((item, index) => (
                 <div key={`${section.id}-${index}`} className="flex gap-2">
-                  <span className="text-ink" aria-hidden>
+                  <span className="text-foreground" aria-hidden>
                     •
                   </span>
                   <span>{item}</span>

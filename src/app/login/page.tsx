@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import Link from "next/link";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
@@ -17,28 +18,27 @@ const LoginPage = async () => {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>{t("loginTitle")}</CardTitle>
-          <p className="text-sm text-gray-500">{t("loginSubtitle")}</p>
+          <p className="text-sm text-muted-foreground">{t("loginSubtitle")}</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <LoginForm />
-          <div className="flex flex-col gap-2 text-sm text-gray-600">
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
             {isOpenMode ? (
-              <a href="/signup" className="font-semibold text-ink underline">
+              <Link href="/signup" className="font-semibold text-primary hover:text-primary/80">
                 {t("createAccount")}
-              </a>
+              </Link>
             ) : (
               <>
-                <a href="/signup" className="font-semibold text-ink underline">
+                <Link href="/signup" className="font-semibold text-primary hover:text-primary/80">
                   {t("requestAccess")}
-                </a>
-                <a href="/invite" className="font-semibold text-ink underline">
+                </Link>
+                <Link href="/invite" className="font-semibold text-primary hover:text-primary/80">
                   {t("acceptInvite")}
-                </a>
-                <span className="text-xs text-gray-500">{t("inviteHint")}</span>
+                </Link>
+                <span className="text-xs text-muted-foreground">{t("inviteHint")}</span>
               </>
             )}
           </div>
-          <p className="mt-4 text-xs text-gray-400">{t("demoAccounts")}</p>
         </CardContent>
       </Card>
     </div>

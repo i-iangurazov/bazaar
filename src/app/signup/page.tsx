@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -150,11 +151,11 @@ const SignupPage = () => {
           <CardHeader>
             <CardTitle>{t("submittedTitle")}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>{mode === "open" ? t("submittedVerify") : t("submittedRequest")}</p>
-            <a href="/login" className="text-sm font-semibold text-ink underline">
+            <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
               {t("backToLogin")}
-            </a>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -175,7 +176,7 @@ const SignupPage = () => {
             <form onSubmit={handleRequestSubmit}>
               <FormStack>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="signup-email">
+                  <label className="text-sm font-medium text-foreground" htmlFor="signup-email">
                     {t("email")}
                   </label>
                   <Input
@@ -196,7 +197,7 @@ const SignupPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="signup-org-name">
+                  <label className="text-sm font-medium text-foreground" htmlFor="signup-org-name">
                     {t("orgName")}
                   </label>
                   <Input
@@ -218,11 +219,11 @@ const SignupPage = () => {
                   <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
                     {requestMutation.isLoading ? tCommon("loading") : t("requestAccess")}
                   </Button>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{t("inviteOnlyNote")}</span>
-                    <a href="/invite" className="font-semibold text-ink underline">
+                    <Link href="/invite" className="font-semibold text-primary hover:text-primary/80">
                       {t("haveInvite")}
-                    </a>
+                    </Link>
                   </div>
               </FormStack>
             </form>
@@ -230,7 +231,7 @@ const SignupPage = () => {
             <form onSubmit={handleSignupSubmit}>
               <FormStack>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="signup-name">
+                  <label className="text-sm font-medium text-foreground" htmlFor="signup-name">
                     {t("name")}
                   </label>
                   <Input
@@ -250,7 +251,7 @@ const SignupPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="signup-open-email">
+                  <label className="text-sm font-medium text-foreground" htmlFor="signup-open-email">
                     {t("email")}
                   </label>
                   <Input
@@ -271,7 +272,7 @@ const SignupPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink" htmlFor="signup-password">
+                  <label className="text-sm font-medium text-foreground" htmlFor="signup-password">
                     {t("password")}
                   </label>
                   <Input
@@ -292,7 +293,7 @@ const SignupPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-ink">{t("preferredLocale")}</label>
+                  <label className="text-sm font-medium text-foreground">{t("preferredLocale")}</label>
                   <Select
                     value={signupValues.preferredLocale}
                     onValueChange={(value) => {

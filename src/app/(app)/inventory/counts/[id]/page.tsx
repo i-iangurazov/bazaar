@@ -309,7 +309,7 @@ const StockCountDetailPage = () => {
       />
 
       {countQuery.error ? (
-        <p className="mb-4 text-sm text-red-500">
+        <p className="mb-4 text-sm text-danger">
           {translateError(tErrors, countQuery.error)}
         </p>
       ) : null}
@@ -343,11 +343,11 @@ const StockCountDetailPage = () => {
                 placeholder={t("scanPlaceholder")}
                 disabled={!count || isLocked || addLineMutation.isLoading}
               />
-              <p className="mt-2 text-xs text-gray-500">{t("scanHint")}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{t("scanHint")}</p>
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={scanMode} onCheckedChange={setScanMode} />
-              <span className="text-sm text-gray-500">{t("scanMode")}</span>
+              <span className="text-sm text-muted-foreground">{t("scanMode")}</span>
             </div>
           </div>
         </CardContent>
@@ -381,7 +381,7 @@ const StockCountDetailPage = () => {
                         <TableRow key={line.id}>
                           <TableCell className="font-medium">
                             {line.product.name}
-                            <div className="text-xs text-gray-500">{line.product.sku}</div>
+                            <div className="text-xs text-muted-foreground">{line.product.sku}</div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell">
                             {line.variant?.name ?? tCommon("notAvailable")}
@@ -462,7 +462,7 @@ const StockCountDetailPage = () => {
               renderMobile={(line) => {
                 const deltaClass =
                   line.deltaQty === 0
-                    ? "text-gray-500"
+                    ? "text-muted-foreground"
                     : line.deltaQty > 0
                       ? "text-emerald-600"
                       : "text-red-600";
@@ -503,24 +503,24 @@ const StockCountDetailPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-gray-200 bg-white p-3">
+                  <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">{line.product.name}</p>
-                        <p className="text-xs text-gray-500">{line.product.sku}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="truncate text-sm font-medium text-foreground">{line.product.name}</p>
+                        <p className="text-xs text-muted-foreground">{line.product.sku}</p>
+                        <p className="text-xs text-muted-foreground">
                           {line.variant?.name ?? tCommon("notAvailable")}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t("expected")}: {formatNumber(line.expectedOnHand, locale)}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t("counted")}: {formatNumber(line.countedQty, locale)}
                         </p>
                         <p className={`text-xs ${deltaClass}`}>
                           {t("delta")}: {formatNumber(line.deltaQty, locale)}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t("lastScanned")}:{" "}
                           {line.lastScannedAt
                             ? formatDateTime(line.lastScannedAt, locale)
@@ -538,7 +538,7 @@ const StockCountDetailPage = () => {
               }}
             />
             {!lines.length ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noLines")}
               </div>
@@ -567,7 +567,7 @@ const StockCountDetailPage = () => {
               <span>{t("shortages")}</span>
               <span className="font-semibold text-red-600">{summary.shortages}</span>
             </div>
-            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500">
+            <div className="rounded-lg border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {t("summaryHint")}
             </div>
           </CardContent>
@@ -596,7 +596,7 @@ const StockCountDetailPage = () => {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-gray-500">{t("noOverages")}</p>
+                <p className="text-sm text-muted-foreground">{t("noOverages")}</p>
               )}
             </CardContent>
           </Card>
@@ -640,7 +640,7 @@ const StockCountDetailPage = () => {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-gray-500">{t("noShortages")}</p>
+                <p className="text-sm text-muted-foreground">{t("noShortages")}</p>
               )}
             </CardContent>
           </Card>
@@ -713,7 +713,7 @@ const StockCountDetailPage = () => {
         subtitle={movementTarget?.label ?? ""}
       >
         {movementQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </div>
@@ -750,25 +750,25 @@ const StockCountDetailPage = () => {
               </div>
             )}
             renderMobile={(movement) => (
-              <div className="rounded-md border border-gray-200 bg-white p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">
+                    <p className="text-sm font-medium text-foreground">
                       {movementLabel(movement.type)}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {formatDateTime(movement.createdAt, locale)}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold text-ink">
+                  <p className="text-sm font-semibold text-foreground">
                     {formatNumber(movement.qtyDelta, locale)}
                   </p>
                 </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  <span className="text-[11px] uppercase tracking-wide text-gray-400">
+                <div className="mt-2 text-xs text-muted-foreground">
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                     {tInventory("movementUser")}
                   </span>
-                  <div className="text-gray-700">
+                  <div className="text-foreground/90">
                     {movement.createdBy?.name ??
                       movement.createdBy?.email ??
                       tCommon("notAvailable")}
@@ -778,7 +778,7 @@ const StockCountDetailPage = () => {
             )}
           />
         ) : (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <EmptyIcon className="h-4 w-4" aria-hidden />
             {tInventory("noMovements")}
           </div>

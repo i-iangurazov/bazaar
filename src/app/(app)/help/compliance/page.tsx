@@ -57,7 +57,7 @@ const ComplianceHelpPage = () => {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <CardTitle>{article.title}</CardTitle>
-                    <p className="text-sm text-gray-500">{article.summary}</p>
+                    <p className="text-sm text-muted-foreground">{article.summary}</p>
                   </div>
                   <Button
                     type="button"
@@ -74,7 +74,7 @@ const ComplianceHelpPage = () => {
                 </div>
               </CardHeader>
               {isOpen ? (
-                <CardContent className="space-y-3 text-sm text-gray-600">
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
                   {article.body.map((paragraph, index) => (
                     <p key={`${article.id}-${index}`}>{paragraph}</p>
                   ))}

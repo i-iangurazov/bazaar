@@ -76,37 +76,30 @@ export const GuidanceTourNavButtons = ({
   canGoBack,
   onBack,
   onNext,
-  onSkip,
   nextLabel,
 }: {
   canGoBack: boolean;
   onBack: () => void;
   onNext: () => void;
-  onSkip: () => void;
   nextLabel: string;
 }) => {
   const t = useTranslations("guidance");
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <Button type="button" variant="ghost" size="default" className={headerButtonClassName} onClick={onSkip}>
-        {t("skip")}
+    <div className="flex items-center justify-end gap-2">
+      <Button
+        type="button"
+        variant="secondary"
+        size="default"
+        className={headerButtonClassName}
+        onClick={onBack}
+        disabled={!canGoBack}
+      >
+        {t("back")}
       </Button>
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="default"
-          className={headerButtonClassName}
-          onClick={onBack}
-          disabled={!canGoBack}
-        >
-          {t("back")}
-        </Button>
-        <Button type="button" size="default" className={headerButtonClassName} onClick={onNext}>
-          {nextLabel}
-        </Button>
-      </div>
+      <Button type="button" size="default" className={headerButtonClassName} onClick={onNext}>
+        {nextLabel}
+      </Button>
     </div>
   );
 };

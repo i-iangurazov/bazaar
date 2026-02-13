@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { OrganizationSubscriptionStatus } from "@prisma/client";
+import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prisma/client";
 
 import { platformOwnerProcedure, router } from "@/server/trpc/trpc";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { getPlanMonthlyPrice, toPlanTier } from "@/server/services/planLimits";
+import {
+  listPendingPlanUpgradeRequests,
+  reviewPlanUpgradeRequest,
+} from "@/server/services/billing";
 
 export const platformOwnerRouter = router({
   summary: platformOwnerProcedure.query(async ({ ctx }) => {
@@ -36,6 +40,9 @@ export const platformOwnerRouter = router({
     const paidCount = organizations.filter(
       (organization) => organization.subscriptionStatus === OrganizationSubscriptionStatus.ACTIVE,
     ).length;
+    const pendingUpgradeRequests = await ctx.prisma.planUpgradeRequest.count({
+      where: { status: PlanUpgradeRequestStatus.PENDING },
+    });
 
     return {
       organizationsTotal: organizations.length,
@@ -46,10 +53,31 @@ export const platformOwnerRouter = router({
       organizationsCanceled: organizations.filter(
         (organization) => organization.subscriptionStatus === OrganizationSubscriptionStatus.CANCELED,
       ).length,
+      pendingUpgradeRequests,
       activeByTier,
       estimatedMrrKgs,
     };
   }),
+
+  listUpgradeRequests: platformOwnerProcedure.query(async () => listPendingPlanUpgradeRequests()),
+
+  reviewUpgradeRequest: platformOwnerProcedure
+    .input(
+      z.object({
+        requestId: z.string().min(1),
+        status: z.enum(["APPROVED", "REJECTED"]),
+        reviewNote: z.string().max(500).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      reviewPlanUpgradeRequest({
+        requestId: input.requestId,
+        status: input.status,
+        reviewNote: input.reviewNote ?? null,
+        reviewedById: ctx.user.id,
+        requestAuditId: ctx.requestId,
+      }),
+    ),
 
   listOrganizations: platformOwnerProcedure.query(async ({ ctx }) => {
     return ctx.prisma.organization.findMany({

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { trpc } from "@/lib/trpc";
@@ -16,21 +17,32 @@ const VerifyPage = () => {
   const t = useTranslations("verify");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const [done, setDone] = useState(false);
+  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [nextPath, setNextPath] = useState("/login");
+  const requestedTokenRef = useRef<string | null>(null);
 
   const verifyMutation = trpc.publicAuth.verifyEmail.useMutation({
     onSuccess: (result) => {
       setNextPath(result.nextPath ?? "/login");
-      setDone(true);
+      setStatus("success");
     },
-    onError: () => setDone(true),
+    onError: (error) => {
+      if (error.data?.code === "CONFLICT") {
+        // Token may already be consumed, but the account can still proceed to login.
+        setNextPath("/login");
+        setStatus("success");
+        return;
+      }
+      setStatus("error");
+    },
   });
 
   useEffect(() => {
-    if (token) {
-      verifyMutation.mutate({ token });
+    if (!token || requestedTokenRef.current === token) {
+      return;
     }
+    requestedTokenRef.current = token;
+    verifyMutation.mutate({ token });
   }, [token, verifyMutation]);
 
   return (
@@ -42,24 +54,27 @@ const VerifyPage = () => {
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-gray-600">
-          {verifyMutation.isLoading ? (
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          {status === "loading" ? (
             <div className="flex items-center gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-          ) : done && verifyMutation.isError ? (
+          ) : status === "error" ? (
             <p>{tErrors("tokenInvalid")}</p>
           ) : (
             <p>{t("success")}</p>
           )}
-          <button
-            type="button"
-            className="text-left text-sm font-semibold text-ink underline"
-            onClick={() => router.push(nextPath)}
-          >
-            {nextPath.startsWith("/register-business") ? t("goToRegisterBusiness") : t("goToLogin")}
-          </button>
+          {status !== "loading" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => router.push(nextPath)}
+            >
+              {nextPath.startsWith("/register-business") ? t("goToRegisterBusiness") : t("goToLogin")}
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
     </div>

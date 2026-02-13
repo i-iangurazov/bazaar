@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -15,9 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
+  CirclePlusIcon,
   DashboardIcon,
   InventoryIcon,
   OrdersIcon,
+  PosIcon,
   ActivityIcon,
   SalesOrdersIcon,
   PurchaseOrdersIcon,
@@ -108,12 +111,14 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
   const tHeader = useTranslations("appHeader");
+  const tCommand = useTranslations("commandPalette");
   const tErrors = useTranslations("errors");
   const tSupport = useTranslations("adminSupport");
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const normalizedPath = stripLocaleFromPath(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const [scanValue, setScanValue] = useState("");
@@ -124,6 +129,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   >([]);
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
   const { toast } = useToast();
+  const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
+    enabled: Boolean(user.organizationId),
+  });
+  const isOrgOwner = Boolean(profileQuery.data?.isOrgOwner);
   const storageKey = useMemo(
     () =>
       `nav-groups:${user.organizationId ?? "org"}:${user.role}:${user.email ?? user.name ?? "user"}`,
@@ -141,6 +150,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         labelKey: "groups.core",
         items: [
           { key: "dashboard", href: "/dashboard", icon: DashboardIcon },
+          { key: "pos", href: "/pos", icon: PosIcon },
           { key: "products", href: "/products", icon: ProductsIcon },
           { key: "inventory", href: "/inventory", icon: InventoryIcon },
           {
@@ -194,7 +204,6 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         id: "help",
         labelKey: "groups.help",
         items: [
-          { key: "profile", href: "/settings/profile", icon: UserIcon },
           { key: "adminSupport", href: "/admin/support", icon: SupportIcon, adminOnly: true },
           { key: "help", href: "/help", icon: HelpIcon },
           {
@@ -215,7 +224,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       ? tCommon("roles.admin")
       : user.role === "MANAGER"
         ? tCommon("roles.manager")
-        : tCommon("roles.staff");
+        : user.role === "CASHIER"
+          ? tCommon("roles.cashier")
+          : tCommon("roles.staff");
 
   const displayName = user.name ?? user.email ?? tCommon("userFallback");
 
@@ -406,7 +417,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     if (item.platformOwnerOnly && !user.isPlatformOwner) {
       return false;
     }
-    if (item.orgOwnerOnly && !user.isOrgOwner) {
+    if (item.orgOwnerOnly && !isOrgOwner) {
       return false;
     }
     if (item.children?.length) {
@@ -450,7 +461,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         if (group.platformOwnerOnly && !user.isPlatformOwner) {
           return false;
         }
-        if (group.orgOwnerOnly && !user.isOrgOwner) {
+        if (group.orgOwnerOnly && !isOrgOwner) {
           return false;
         }
         return group.items.some((item) => isItemVisible(item));
@@ -575,7 +586,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     <GuidanceProvider role={guidanceRole}>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
       {impersonation ? (
-        <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+        <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
             <span>
               {tSupport("impersonationActive", {
@@ -597,19 +608,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         <div className="flex items-center gap-3">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             size="icon"
             onClick={() => setMobileOpen(true)}
             aria-label={tCommon("openMenu")}
           >
             <MenuIcon className="h-4 w-4" aria-hidden />
           </Button>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {tNav("platform")}
-            </p>
-            <p className="text-lg font-semibold text-foreground">{tNav("brand")}</p>
-          </div>
         </div>
         <div className="flex items-center gap-2">
           <PageTipsButton />
@@ -620,11 +625,24 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       <div className="flex min-h-screen">
         <aside className="hidden w-64 flex-col border-r border-border bg-card px-6 py-8 lg:flex">
           <div className="space-y-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {tNav("platform")}
-              </p>
-              <h1 className="text-xl font-semibold text-foreground">{tNav("brand")}</h1>
+            <div className="space-y-3">
+              <Image
+                src="/brand/logo.png"
+                alt={tNav("brand")}
+                width={724}
+                height={181}
+                className="h-auto w-[184px] max-w-full"
+                priority
+              />
+              <Button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                size="default"
+                className="h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                aria-label={tCommand("openButton")}
+              >
+                <CirclePlusIcon className="h-5 w-5" aria-hidden />
+              </Button>
             </div>
             <nav className="space-y-4">{renderNavGroups()}</nav>
           </div>
@@ -726,15 +744,17 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           )}
         >
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {tNav("platform")}
-              </p>
-              <p className="text-lg font-semibold text-foreground">{tNav("brand")}</p>
-            </div>
+            <Image
+              src="/brand/logo.png"
+              alt={tNav("brand")}
+              width={724}
+              height={181}
+              className="h-auto w-[132px] max-w-full"
+              priority
+            />
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="icon"
               onClick={() => setMobileOpen(false)}
               aria-label={tCommon("closeMenu")}
@@ -742,6 +762,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               <CloseIcon className="h-4 w-4" aria-hidden />
             </Button>
           </div>
+          <Button
+            type="button"
+            onClick={() => {
+              setCommandPaletteOpen(true);
+              setMobileOpen(false);
+            }}
+            size="default"
+            className="mt-3 h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+            aria-label={tCommand("openButton")}
+          >
+            <CirclePlusIcon className="h-5 w-5" aria-hidden />
+          </Button>
 
           <nav className="mt-6 space-y-4">{renderNavGroups(() => setMobileOpen(false))}</nav>
 
@@ -753,7 +785,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           </div>
         </div>
       </div>
-        <CommandPalette />
+        <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
         <GuidanceOverlay />
       </div>
     </GuidanceProvider>
