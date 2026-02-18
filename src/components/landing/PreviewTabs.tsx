@@ -14,6 +14,7 @@ type PreviewTab = {
 
 type PreviewTabsProps = {
   tabs: PreviewTab[];
+  tabListAriaLabel: string;
 };
 
 const usePrefersReducedMotion = () => {
@@ -30,7 +31,7 @@ const usePrefersReducedMotion = () => {
   return reducedMotion;
 };
 
-export const PreviewTabs = ({ tabs }: PreviewTabsProps) => {
+export const PreviewTabs = ({ tabs, tabListAriaLabel }: PreviewTabsProps) => {
   const prefersReducedMotion = usePrefersReducedMotion();
   const [activeId, setActiveId] = useState(tabs[0]?.id ?? "");
 
@@ -42,7 +43,7 @@ export const PreviewTabs = ({ tabs }: PreviewTabsProps) => {
     <div className="space-y-4">
       <div
         role="tablist"
-        aria-label="Preview tabs"
+        aria-label={tabListAriaLabel}
         className="inline-flex w-full flex-wrap gap-2 rounded-xl border border-border bg-secondary/50 p-1"
       >
         {tabs.map((tab) => {
@@ -100,4 +101,3 @@ export const PreviewTabs = ({ tabs }: PreviewTabsProps) => {
     </div>
   );
 };
-

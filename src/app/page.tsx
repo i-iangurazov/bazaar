@@ -28,9 +28,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerAuthToken } from "@/server/auth/token";
 
 export const generateMetadata = async (): Promise<Metadata> => {
-  const t = await getTranslations("landing.meta");
-  const title = t("title");
-  const description = t("description");
+  const tMeta = await getTranslations("landing.meta");
+  const title = tMeta("title");
+  const description = tMeta("description");
 
   return {
     title,
@@ -198,6 +198,7 @@ const RootPage = async () => {
     <main className="relative min-h-screen overflow-x-clip bg-gradient-to-b from-background via-background to-secondary/30">
       <StickyNav
         links={navLinks}
+        navAriaLabel={t("nav.features")}
         leftSlot={
           <Link href="/" className="inline-flex items-center gap-2 font-semibold text-foreground">
             <Image
@@ -259,7 +260,7 @@ const RootPage = async () => {
               <CardTitle className="text-base">{t("preview.title")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <PreviewTabs tabs={previewTabs} />
+              <PreviewTabs tabs={previewTabs} tabListAriaLabel={t("preview.title")} />
             </CardContent>
           </Card>
         </Reveal>
@@ -453,4 +454,3 @@ const RootPage = async () => {
 };
 
 export default RootPage;
-

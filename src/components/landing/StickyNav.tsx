@@ -14,11 +14,12 @@ type StickyNavProps = {
   links: StickyNavLink[];
   leftSlot: ReactNode;
   rightSlot: ReactNode;
+  navAriaLabel: string;
 };
 
 const resolveSectionId = (href: string) => href.replace(/^#/, "");
 
-export const StickyNav = ({ links, leftSlot, rightSlot }: StickyNavProps) => {
+export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNavProps) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeHref, setActiveHref] = useState(links[0]?.href ?? "");
 
@@ -66,7 +67,7 @@ export const StickyNav = ({ links, leftSlot, rightSlot }: StickyNavProps) => {
         <div className="shrink-0">{leftSlot}</div>
 
         <nav
-          aria-label="Primary"
+          aria-label={navAriaLabel}
           className="hidden flex-1 items-center justify-center gap-1 overflow-x-auto px-2 md:flex"
         >
           {links.map((link) => {
@@ -95,4 +96,3 @@ export const StickyNav = ({ links, leftSlot, rightSlot }: StickyNavProps) => {
     </header>
   );
 };
-

@@ -9,11 +9,7 @@ type AuthBrandProps = {
 
 export const AuthBrand = ({ className }: AuthBrandProps) => {
   return (
-    <Link
-      href="/"
-      aria-label="BAZAAR home"
-      className={cn("inline-flex items-center justify-center", className)}
-    >
+    <Link href="/" className={cn("inline-flex items-center justify-center", className)}>
       <Image
         src="/brand/logo.png"
         alt="BAZAAR"
@@ -25,4 +21,3 @@ export const AuthBrand = ({ className }: AuthBrandProps) => {
     </Link>
   );
 };
-
