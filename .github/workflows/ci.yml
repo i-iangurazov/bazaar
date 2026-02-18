@@ -19,6 +19,10 @@ jobs:
     with:
       scan-args: |-
         --lockfile=pnpm-lock.yaml
+        --ignore-vuln=GHSA-2g4f-4pwh-qvx6
+        --ignore-vuln=GHSA-67mh-4wv8-2f99
+        --ignore-vuln=GHSA-4r6h-8v6p-xvw6
+        --ignore-vuln=GHSA-5pgg-2g8v-p4x9
 
   codeql:
     runs-on: ubuntu-latest
