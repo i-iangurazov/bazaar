@@ -7,9 +7,16 @@ export const shouldRunDbTests =
   process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1";
 
 export const resetDatabase = async () => {
+  await prisma.refundRequest.deleteMany();
+  await prisma.fiscalReceipt.deleteMany();
+  await prisma.kkmConnectorPairingCode.deleteMany();
+  await prisma.kkmConnectorDevice.deleteMany();
   await prisma.saleReturnLine.deleteMany();
   await prisma.salePayment.deleteMany();
   await prisma.saleReturn.deleteMany();
+  await prisma.markingCodeCapture.deleteMany();
+  await prisma.ettnReference.deleteMany();
+  await prisma.esfReference.deleteMany();
   await prisma.cashDrawerMovement.deleteMany();
   await prisma.registerShift.deleteMany();
   await prisma.posRegister.deleteMany();

@@ -1,9 +1,14 @@
+import { randomUUID } from "node:crypto";
 import type { AttributeType, Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
+import {
+  resolveUniqueGeneratedBarcode,
+  type BarcodeGenerationMode,
+} from "@/server/services/barcodes";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import {
@@ -122,6 +127,33 @@ const ensureBarcodesAvailable = async (
   });
   if (existing.length) {
     throw new AppError("barcodeExists", "CONFLICT", 409);
+  }
+};
+
+const generateUniqueBarcodeValue = async (input: {
+  tx: Prisma.TransactionClient;
+  organizationId: string;
+  mode: BarcodeGenerationMode;
+}) => {
+  try {
+    return await resolveUniqueGeneratedBarcode({
+      organizationId: input.organizationId,
+      mode: input.mode,
+      isTaken: async (value) => {
+        const existing = await input.tx.productBarcode.findUnique({
+          where: {
+            organizationId_value: {
+              organizationId: input.organizationId,
+              value,
+            },
+          },
+          select: { id: true },
+        });
+        return Boolean(existing);
+      },
+    });
+  } catch {
+    throw new AppError("barcodeGenerationFailed", "INTERNAL_SERVER_ERROR", 500);
   }
 };
 
@@ -603,6 +635,7 @@ const syncProductImages = async (
 
 const resolveIncomingProductImages = async (input: {
   organizationId: string;
+  productId?: string | null;
   photoUrl?: string | null;
   images?: CreateProductInput["images"];
 }) => {
@@ -614,6 +647,7 @@ const resolveIncomingProductImages = async (input: {
     const resolved = await resolveProductImageUrl({
       value: image.url,
       organizationId: input.organizationId,
+      productId: input.productId,
       cache,
     });
     if (!resolved.url) {
@@ -627,6 +661,7 @@ const resolveIncomingProductImages = async (input: {
       ? await resolveProductImageUrl({
           value: input.photoUrl,
           organizationId: input.organizationId,
+          productId: input.productId,
           cache,
         })
       : undefined;
@@ -646,8 +681,10 @@ const resolveIncomingProductImages = async (input: {
 };
 
 export const createProduct = async (input: CreateProductInput) => {
+  const productId = randomUUID();
   const resolvedMedia = await resolveIncomingProductImages({
     organizationId: input.organizationId,
+    productId,
     photoUrl: input.photoUrl,
     images: input.images,
   });
@@ -679,6 +716,7 @@ export const createProduct = async (input: CreateProductInput) => {
 
     const product = await tx.product.create({
       data: {
+        id: productId,
         organizationId: input.organizationId,
         sku: input.sku,
         name: input.name,
@@ -792,6 +830,7 @@ export type UpdateProductInput = {
 export const updateProduct = async (input: UpdateProductInput) => {
   const resolvedMedia = await resolveIncomingProductImages({
     organizationId: input.organizationId,
+    productId: input.productId,
     photoUrl: input.photoUrl,
     images: input.images,
   });
@@ -1176,6 +1215,196 @@ export const duplicateProduct = async (input: {
   });
 };
 
+export const generateProductBarcode = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productId: string;
+  mode: BarcodeGenerationMode;
+  force?: boolean;
+}) =>
+  prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUnique({
+      where: { id: input.productId },
+      select: {
+        id: true,
+        organizationId: true,
+        isDeleted: true,
+        barcodes: {
+          orderBy: { createdAt: "asc" },
+          select: { value: true },
+        },
+      },
+    });
+    if (!product || product.organizationId !== input.organizationId || product.isDeleted) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+
+    const beforeValues = product.barcodes.map((barcode) => barcode.value);
+    if (beforeValues.length > 0 && !input.force) {
+      throw new AppError("productBarcodeExists", "CONFLICT", 409);
+    }
+    if (beforeValues.length > 0 && input.force) {
+      await tx.productBarcode.deleteMany({
+        where: {
+          organizationId: input.organizationId,
+          productId: input.productId,
+        },
+      });
+    }
+
+    const value = await generateUniqueBarcodeValue({
+      tx,
+      organizationId: input.organizationId,
+      mode: input.mode,
+    });
+    await tx.productBarcode.create({
+      data: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        value,
+      },
+    });
+
+    const barcodes = [value];
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "PRODUCT_UPDATE",
+      entity: "Product",
+      entityId: product.id,
+      before: toJson({ barcodes: beforeValues }),
+      after: toJson({ barcodes, generated: true, mode: input.mode }),
+      requestId: input.requestId,
+    });
+
+    return {
+      productId: product.id,
+      value,
+      mode: input.mode,
+      barcodes,
+    };
+  });
+
+type ProductBulkGenerationFilter = {
+  productIds?: string[];
+  search?: string;
+  category?: string | null;
+  type?: "all" | "product" | "bundle";
+  includeArchived?: boolean;
+  storeId?: string | null;
+  limit?: number;
+};
+
+export const bulkGenerateProductBarcodes = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  mode: BarcodeGenerationMode;
+  filter?: ProductBulkGenerationFilter;
+}) =>
+  prisma.$transaction(async (tx) => {
+    const productIds =
+      input.filter?.productIds?.map((value) => value.trim()).filter(Boolean) ?? [];
+    const uniqueProductIds = Array.from(new Set(productIds));
+    const search = input.filter?.search?.trim();
+    const category = input.filter?.category?.trim();
+    const limit = Math.min(Math.max(input.filter?.limit ?? 500, 1), 5_000);
+
+    if (input.filter?.storeId) {
+      const store = await tx.store.findUnique({
+        where: { id: input.filter.storeId },
+        select: { id: true, organizationId: true },
+      });
+      if (!store || store.organizationId !== input.organizationId) {
+        throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+      }
+    }
+
+    const where: Prisma.ProductWhereInput = {
+      organizationId: input.organizationId,
+      ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
+      ...(uniqueProductIds.length ? { id: { in: uniqueProductIds } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { sku: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+      ...(category ? { category } : {}),
+      ...(input.filter?.type === "product"
+        ? { isBundle: false }
+        : input.filter?.type === "bundle"
+          ? { isBundle: true }
+          : {}),
+      ...(input.filter?.storeId
+        ? {
+            inventorySnapshots: {
+              some: { storeId: input.filter.storeId },
+            },
+          }
+        : {}),
+    };
+
+    const products = await tx.product.findMany({
+      where,
+      select: {
+        id: true,
+        barcodes: {
+          orderBy: { createdAt: "asc" },
+          select: { value: true },
+        },
+      },
+      orderBy: { name: "asc" },
+      take: limit,
+    });
+
+    let generatedCount = 0;
+    let skippedCount = 0;
+    const updatedProductIds: string[] = [];
+
+    for (const product of products) {
+      if (product.barcodes.length > 0) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const value = await generateUniqueBarcodeValue({
+        tx,
+        organizationId: input.organizationId,
+        mode: input.mode,
+      });
+      await tx.productBarcode.create({
+        data: {
+          organizationId: input.organizationId,
+          productId: product.id,
+          value,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_UPDATE",
+        entity: "Product",
+        entityId: product.id,
+        before: toJson({ barcodes: [] }),
+        after: toJson({ barcodes: [value], generated: true, mode: input.mode }),
+        requestId: input.requestId,
+      });
+      generatedCount += 1;
+      updatedProductIds.push(product.id);
+    }
+
+    return {
+      scannedCount: products.length,
+      generatedCount,
+      skippedCount,
+      updatedProductIds,
+    };
+  });
+
 export const bulkUpdateProductCategory = async (input: {
   organizationId: string;
   actorId: string;
@@ -1223,16 +1452,29 @@ export const bulkUpdateProductCategory = async (input: {
 
 export type ImportProductRow = {
   sku: string;
-  name: string;
+  name?: string;
   category?: string | null;
-  unit: string;
+  unit?: string;
   description?: string | null;
   photoUrl?: string | null;
   barcodes?: string[];
   basePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
+  minStock?: number;
 };
+
+export type ImportUpdateField =
+  | "name"
+  | "unit"
+  | "category"
+  | "description"
+  | "photoUrl"
+  | "barcodes"
+  | "basePriceKgs"
+  | "purchasePriceKgs"
+  | "avgCostKgs"
+  | "minStock";
 
 export type ImportPhotoResolutionSummary = {
   downloaded: number;
@@ -1358,6 +1600,8 @@ export type ImportProductsInput = {
   rows: ImportProductRow[];
   storeId?: string;
   batchId?: string;
+  mode?: "full" | "update_selected";
+  updateMask?: ImportUpdateField[];
 };
 
 const resolveImportTransactionTimeout = () => {
@@ -1372,7 +1616,11 @@ export const importProductsTx = async (
   tx: Prisma.TransactionClient,
   input: ImportProductsInput,
 ) => {
-  const results: { sku: string; action: "created" | "updated" }[] = [];
+  const results: { sku: string; action: "created" | "updated" | "skipped" }[] = [];
+  const isUpdateSelectedMode = input.mode === "update_selected";
+  const updateMask = new Set<ImportUpdateField>(input.updateMask ?? []);
+  const shouldApplyField = (field: ImportUpdateField) =>
+    !isUpdateSelectedMode || updateMask.has(field);
   const stores = await tx.store.findMany({
     where: { organizationId: input.organizationId },
     select: { id: true, allowNegativeStock: true },
@@ -1397,6 +1645,16 @@ export const importProductsTx = async (
     }
     if (!Number.isFinite(value) || value < 0) {
       throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+    }
+    return value;
+  };
+
+  const resolveOptionalInteger = (value?: number) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
     return value;
   };
@@ -1464,79 +1722,177 @@ export const importProductsTx = async (
     });
   };
 
-  for (const row of input.rows) {
-    const barcodes = normalizeBarcodes(row.barcodes);
-    const photoUrl = normalizeImportPhotoUrl(row.photoUrl);
-    const basePriceKgs = resolveOptionalPrice(row.basePriceKgs);
-    const avgCostKgs = resolveOptionalPrice(row.avgCostKgs);
-    const purchasePriceKgs = resolveOptionalPrice(row.purchasePriceKgs);
-    const resolvedBaseCost = avgCostKgs ?? purchasePriceKgs;
-    const baseUnit = await ensureUnitByCode(tx, input.organizationId, row.unit.trim());
-    const existing = await tx.product.findUnique({
-      where: { organizationId_sku: { organizationId: input.organizationId, sku: row.sku } },
+  const upsertMinStock = async (productId: string, minStock?: number) => {
+    if (minStock === undefined) {
+      return;
+    }
+    if (!input.storeId) {
+      throw new AppError("storeRequired", "BAD_REQUEST", 400);
+    }
+    const existing = await tx.reorderPolicy.findUnique({
+      where: { storeId_productId: { storeId: input.storeId, productId } },
+      select: { id: true },
     });
 
-    await ensureBarcodesAvailable(
-      tx,
-      input.organizationId,
-      barcodes,
-      existing?.id,
-    );
+    const policy = await tx.reorderPolicy.upsert({
+      where: { storeId_productId: { storeId: input.storeId, productId } },
+      update: { minStock },
+      create: {
+        storeId: input.storeId,
+        productId,
+        minStock,
+        leadTimeDays: 7,
+        reviewPeriodDays: 7,
+        safetyStockDays: 3,
+        minOrderQty: 0,
+      },
+    });
+
+    if (!existing) {
+      await recordImportedEntity("ReorderPolicy", policy.id);
+    }
+  };
+
+  for (const row of input.rows) {
+    const sku = row.sku.trim();
+    if (!sku) {
+      throw new AppError("skuRequired", "BAD_REQUEST", 400);
+    }
+
+    const barcodes = shouldApplyField("barcodes") ? normalizeBarcodes(row.barcodes) : [];
+    const photoUrl = shouldApplyField("photoUrl")
+      ? normalizeImportPhotoUrl(row.photoUrl)
+      : null;
+    const basePriceKgs = shouldApplyField("basePriceKgs")
+      ? resolveOptionalPrice(row.basePriceKgs)
+      : undefined;
+    const avgCostKgs = shouldApplyField("avgCostKgs")
+      ? resolveOptionalPrice(row.avgCostKgs)
+      : undefined;
+    const purchasePriceKgs = shouldApplyField("purchasePriceKgs")
+      ? resolveOptionalPrice(row.purchasePriceKgs)
+      : undefined;
+    const minStock = shouldApplyField("minStock")
+      ? resolveOptionalInteger(row.minStock)
+      : undefined;
+    const resolvedBaseCost = avgCostKgs ?? purchasePriceKgs;
+    const unitCode = row.unit?.trim() ?? "";
+    const baseUnit =
+      shouldApplyField("unit") && unitCode
+        ? await ensureUnitByCode(tx, input.organizationId, unitCode)
+        : null;
+    const existing = await tx.product.findUnique({
+      where: { organizationId_sku: { organizationId: input.organizationId, sku } },
+    });
+
+    if (shouldApplyField("barcodes")) {
+      await ensureBarcodesAvailable(
+        tx,
+        input.organizationId,
+        barcodes,
+        existing?.id,
+      );
+    }
 
     if (existing) {
-      await tx.product.update({
-        where: { id: existing.id },
-        data: {
-          name: row.name,
-          category: row.category ?? null,
-          unit: baseUnit.code,
-          baseUnitId: baseUnit.id,
-          ...(basePriceKgs !== undefined ? { basePriceKgs } : {}),
-          description: row.description ?? null,
-          photoUrl: photoUrl ?? existing.photoUrl,
-          isDeleted: false,
-        },
-      });
+      const updateData: Prisma.ProductUpdateInput = {};
+      if (isUpdateSelectedMode) {
+        if (shouldApplyField("name") && row.name?.trim()) {
+          updateData.name = row.name.trim();
+        }
+        if (shouldApplyField("category")) {
+          updateData.category = row.category ?? null;
+        }
+        if (shouldApplyField("description")) {
+          updateData.description = row.description ?? null;
+        }
+        if (shouldApplyField("unit")) {
+          if (!unitCode || !baseUnit) {
+            throw new AppError("unitRequired", "BAD_REQUEST", 400);
+          }
+          updateData.unit = baseUnit.code;
+          updateData.baseUnit = { connect: { id: baseUnit.id } };
+        }
+        if (shouldApplyField("basePriceKgs") && basePriceKgs !== undefined) {
+          updateData.basePriceKgs = basePriceKgs;
+        }
+        if (shouldApplyField("photoUrl")) {
+          updateData.photoUrl = photoUrl ?? existing.photoUrl;
+        }
+      } else {
+        const name = row.name?.trim();
+        if (!name) {
+          throw new AppError("nameRequired", "BAD_REQUEST", 400);
+        }
+        if (!unitCode || !baseUnit) {
+          throw new AppError("unitRequired", "BAD_REQUEST", 400);
+        }
+        updateData.name = name;
+        updateData.category = row.category ?? null;
+        updateData.unit = baseUnit.code;
+        updateData.baseUnit = { connect: { id: baseUnit.id } };
+        updateData.description = row.description ?? null;
+        updateData.photoUrl = photoUrl ?? existing.photoUrl;
+        updateData.isDeleted = false;
+        if (basePriceKgs !== undefined) {
+          updateData.basePriceKgs = basePriceKgs;
+        }
+      }
 
-      if (photoUrl) {
+      if (Object.keys(updateData).length > 0) {
+        await tx.product.update({
+          where: { id: existing.id },
+          data: updateData,
+        });
+      }
+
+      if (shouldApplyField("photoUrl") && photoUrl) {
         await syncProductImages(tx, input.organizationId, existing.id, [
           { url: photoUrl, position: 0 },
         ]);
       }
 
-      const existingBarcodes = await tx.productBarcode.findMany({
-        where: { productId: existing.id },
-        select: { id: true, value: true },
-      });
-      const existingValues = new Map(
-        existingBarcodes.map((barcode) => [barcode.value, barcode.id]),
-      );
-      const nextValues = new Set(barcodes);
-      const toRemove = existingBarcodes.filter((barcode) => !nextValues.has(barcode.value));
-      const toAdd = barcodes.filter((value) => !existingValues.has(value));
+      if (shouldApplyField("barcodes")) {
+        const existingBarcodes = await tx.productBarcode.findMany({
+          where: { productId: existing.id },
+          select: { id: true, value: true },
+        });
+        const existingValues = new Map(
+          existingBarcodes.map((barcode) => [barcode.value, barcode.id]),
+        );
+        const nextValues = new Set(barcodes);
+        const toRemove = existingBarcodes.filter((barcode) => !nextValues.has(barcode.value));
+        const toAdd = barcodes.filter((value) => !existingValues.has(value));
 
-      if (toRemove.length) {
-        await tx.productBarcode.deleteMany({
-          where: { id: { in: toRemove.map((barcode) => barcode.id) } },
-        });
-      }
-      for (const value of toAdd) {
-        const barcode = await tx.productBarcode.create({
-          data: {
-            organizationId: input.organizationId,
-            productId: existing.id,
-            value,
-          },
-        });
-        await recordImportedEntity("ProductBarcode", barcode.id);
+        if (toRemove.length) {
+          await tx.productBarcode.deleteMany({
+            where: { id: { in: toRemove.map((barcode) => barcode.id) } },
+          });
+        }
+        for (const value of toAdd) {
+          const barcode = await tx.productBarcode.create({
+            data: {
+              organizationId: input.organizationId,
+              productId: existing.id,
+              value,
+            },
+          });
+          await recordImportedEntity("ProductBarcode", barcode.id);
+        }
       }
 
       await ensureBaseSnapshots(tx, input.organizationId, existing.id, stores);
-      if (basePriceKgs !== undefined) {
+      if (shouldApplyField("basePriceKgs") && basePriceKgs !== undefined) {
         await upsertStoreBasePrice(existing.id, basePriceKgs);
       }
-      if (resolvedBaseCost !== undefined) {
+      if (
+        (shouldApplyField("avgCostKgs") || shouldApplyField("purchasePriceKgs")) &&
+        resolvedBaseCost !== undefined
+      ) {
         await setBaseCost(existing.id, resolvedBaseCost);
+      }
+      if (shouldApplyField("minStock")) {
+        await upsertMinStock(existing.id, minStock);
       }
 
       await writeAuditLog(tx, {
@@ -1550,19 +1906,32 @@ export const importProductsTx = async (
         requestId: input.requestId,
       });
 
-      results.push({ sku: row.sku, action: "updated" });
+      results.push({ sku, action: "updated" });
     } else {
+      if (isUpdateSelectedMode) {
+        results.push({ sku, action: "skipped" });
+        continue;
+      }
+      const name = row.name?.trim();
+      if (!name) {
+        throw new AppError("nameRequired", "BAD_REQUEST", 400);
+      }
+      if (!unitCode) {
+        throw new AppError("unitRequired", "BAD_REQUEST", 400);
+      }
+      const resolvedBaseUnit = baseUnit ?? (await ensureUnitByCode(tx, input.organizationId, unitCode));
+
       const product = await tx.product.create({
         data: {
           organizationId: input.organizationId,
-          sku: row.sku,
-          name: row.name,
+          sku,
+          name,
           category: row.category ?? null,
-          unit: baseUnit.code,
-          baseUnitId: baseUnit.id,
+          unit: resolvedBaseUnit.code,
+          baseUnitId: resolvedBaseUnit.id,
           basePriceKgs: basePriceKgs ?? null,
           description: row.description ?? null,
-          photoUrl,
+          photoUrl: photoUrl ?? null,
         },
       });
 
@@ -1597,6 +1966,9 @@ export const importProductsTx = async (
       if (resolvedBaseCost !== undefined) {
         await setBaseCost(product.id, resolvedBaseCost);
       }
+      if (shouldApplyField("minStock")) {
+        await upsertMinStock(product.id, minStock);
+      }
 
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
@@ -1609,7 +1981,7 @@ export const importProductsTx = async (
         requestId: input.requestId,
       });
 
-      results.push({ sku: row.sku, action: "created" });
+      results.push({ sku, action: "created" });
     }
   }
 

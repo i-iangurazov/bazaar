@@ -14,12 +14,13 @@ import {
 
 type ImportPreviewRow = {
   sku: string;
-  name: string;
-  unit: string;
+  name?: string;
+  unit?: string;
   category?: string | null;
   basePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
+  minStock?: number;
 };
 
 type ImportPreviewTableProps = {
@@ -35,7 +36,7 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
   return (
     <ResponsiveDataList
       items={previewRows}
-      getKey={(row) => `${row.sku}-${row.name}`}
+      getKey={(row) => `${row.sku}-${row.name ?? ""}`}
       renderDesktop={(visibleItems) => (
         <div className="overflow-x-auto">
           <Table className="min-w-[520px]">
@@ -46,15 +47,16 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                 <TableHead className="hidden lg:table-cell">{t("fieldBasePrice")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldPurchasePrice")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldAvgCost")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("fieldMinStock")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("fieldCategory")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("fieldUnit")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleItems.map((row) => (
-                <TableRow key={`${row.sku}-${row.name}`}>
+                <TableRow key={`${row.sku}-${row.name ?? ""}`}>
                   <TableCell className="text-xs text-muted-foreground">{row.sku}</TableCell>
-                  <TableCell className="font-medium">{row.name}</TableCell>
+                  <TableCell className="font-medium">{row.name ?? tCommon("notAvailable")}</TableCell>
                   <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
                     {row.basePriceKgs ?? tCommon("notAvailable")}
                   </TableCell>
@@ -64,11 +66,14 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                   <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
                     {row.avgCostKgs ?? tCommon("notAvailable")}
                   </TableCell>
+                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
+                    {row.minStock ?? tCommon("notAvailable")}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
                     {row.category ?? tCommon("notAvailable")}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                    {row.unit}
+                    {row.unit ?? tCommon("notAvailable")}
                   </TableCell>
                 </TableRow>
               ))}
@@ -79,7 +84,7 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
       renderMobile={(row) => (
         <div className="rounded-md border border-border bg-card p-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
+            <p className="truncate text-sm font-medium text-foreground">{row.name ?? tCommon("notAvailable")}</p>
             <p className="text-xs text-muted-foreground">{row.sku}</p>
           </div>
           <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
@@ -93,7 +98,7 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldUnit")}
               </p>
-              <p className="text-foreground/90">{row.unit}</p>
+              <p className="text-foreground/90">{row.unit ?? tCommon("notAvailable")}</p>
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
@@ -112,6 +117,12 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                 {t("fieldAvgCost")}
               </p>
               <p className="text-foreground/90">{row.avgCostKgs ?? tCommon("notAvailable")}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                {t("fieldMinStock")}
+              </p>
+              <p className="text-foreground/90">{row.minStock ?? tCommon("notAvailable")}</p>
             </div>
           </div>
         </div>

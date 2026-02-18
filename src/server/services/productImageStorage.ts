@@ -30,6 +30,9 @@ const extractHyperlinkTarget = (value: string) => {
 const normalizeOrgPath = (organizationId: string) =>
   organizationId.replace(/[^a-zA-Z0-9_-]/g, "").trim() || "default";
 
+const normalizeProductPath = (productId?: string | null) =>
+  productId?.replace(/[^a-zA-Z0-9_-]/g, "").trim() || "unassigned";
+
 const resolveMaxImageBytes = () => {
   const parsed = Number(process.env.PRODUCT_IMAGE_MAX_BYTES);
   if (Number.isFinite(parsed) && parsed > 0) {
@@ -177,8 +180,23 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
   if (normalizedType === "image/webp") {
     return "webp";
   }
+  if (normalizedType === "image/avif") {
+    return "avif";
+  }
+  if (normalizedType === "image/heic") {
+    return "heic";
+  }
+  if (normalizedType === "image/heif") {
+    return "heif";
+  }
   if (normalizedType === "image/gif") {
     return "gif";
+  }
+  if (normalizedType === "image/bmp") {
+    return "bmp";
+  }
+  if (normalizedType === "image/tiff") {
+    return "tiff";
   }
   if (normalizedType === "image/svg+xml") {
     return "svg";
@@ -186,7 +204,22 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
   if (sourceUrl) {
     try {
       const ext = extname(new URL(sourceUrl).pathname).toLowerCase().replace(".", "");
-      if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext)) {
+      if (
+        [
+          "png",
+          "jpg",
+          "jpeg",
+          "webp",
+          "avif",
+          "heic",
+          "heif",
+          "gif",
+          "bmp",
+          "tif",
+          "tiff",
+          "svg",
+        ].includes(ext)
+      ) {
         return ext === "jpeg" ? "jpg" : ext;
       }
     } catch {
@@ -196,8 +229,10 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
   return "jpg";
 };
 
-const toManagedLocalUrl = (organizationId: string, fileName: string) =>
-  `/uploads/imported-products/${normalizeOrgPath(organizationId)}/${fileName}`;
+const toManagedLocalUrl = (organizationId: string, fileName: string, productId?: string | null) =>
+  `/uploads/imported-products/${normalizeOrgPath(organizationId)}/products/${normalizeProductPath(
+    productId,
+  )}/${fileName}`;
 
 const toManagedR2Url = (config: R2Config, objectKey: string) => {
   const base = config.publicBaseUrl.endsWith("/")
@@ -206,11 +241,12 @@ const toManagedR2Url = (config: R2Config, objectKey: string) => {
   return new URL(objectKey, base).toString();
 };
 
-const getObjectKey = (organizationId: string, fileName: string) =>
-  `retails/${normalizeOrgPath(organizationId)}/products/${fileName}`;
+const getObjectKey = (organizationId: string, fileName: string, productId?: string | null) =>
+  `retails/${normalizeOrgPath(organizationId)}/products/${normalizeProductPath(productId)}/${fileName}`;
 
 const uploadBufferToStorage = async (input: {
   organizationId: string;
+  productId?: string | null;
   buffer: Buffer;
   contentType: string;
   sourceUrl?: string;
@@ -221,7 +257,7 @@ const uploadBufferToStorage = async (input: {
   const storage = resolveStorageProvider();
 
   if (storage.provider === "r2" && storage.config) {
-    const objectKey = getObjectKey(input.organizationId, fileName);
+    const objectKey = getObjectKey(input.organizationId, fileName, input.productId);
     const client = getR2Client(storage.config);
     await client.send(
       new PutObjectCommand({
@@ -238,11 +274,16 @@ const uploadBufferToStorage = async (input: {
     };
   }
 
-  const orgDir = join(localImageRootDir, normalizeOrgPath(input.organizationId));
+  const orgDir = join(
+    localImageRootDir,
+    normalizeOrgPath(input.organizationId),
+    "products",
+    normalizeProductPath(input.productId),
+  );
   await mkdir(orgDir, { recursive: true });
   await writeFile(join(orgDir, fileName), input.buffer);
   return {
-    url: toManagedLocalUrl(input.organizationId, fileName),
+    url: toManagedLocalUrl(input.organizationId, fileName, input.productId),
     managed: true,
   };
 };
@@ -422,6 +463,9 @@ export const isManagedProductImageUrl = (url: string) => {
   return prefixes.some((prefix) => value.startsWith(prefix));
 };
 
+const isUnassignedManagedProductImageUrl = (url: string) =>
+  url.includes("/products/unassigned/");
+
 export const normalizeProductImageUrl = (value?: string | null) => {
   const normalized = value?.trim();
   if (!normalized) {
@@ -461,6 +505,7 @@ export type ResolveProductImageUrlResult = {
 export const resolveProductImageUrl = async (input: {
   value?: string | null;
   organizationId: string;
+  productId?: string | null;
   cache?: Map<string, ResolveProductImageUrlResult>;
 }) => {
   const normalized = normalizeProductImageUrl(input.value);
@@ -473,7 +518,10 @@ export const resolveProductImageUrl = async (input: {
     return cached;
   }
 
-  if (isManagedProductImageUrl(normalized)) {
+  const shouldRehomeUnassignedManagedImage =
+    Boolean(input.productId) && isUnassignedManagedProductImageUrl(normalized);
+
+  if (isManagedProductImageUrl(normalized) && !shouldRehomeUnassignedManagedImage) {
     const result = { url: normalized, managed: true } as ResolveProductImageUrlResult;
     input.cache?.set(normalized, result);
     return result;
@@ -489,6 +537,7 @@ export const resolveProductImageUrl = async (input: {
     try {
       const uploaded = await uploadBufferToStorage({
         organizationId: input.organizationId,
+        productId: input.productId,
         buffer: parsed.buffer,
         contentType: parsed.contentType,
       });
@@ -512,6 +561,7 @@ export const resolveProductImageUrl = async (input: {
   try {
     const uploaded = await uploadBufferToStorage({
       organizationId: input.organizationId,
+      productId: input.productId,
       buffer: downloaded.buffer,
       contentType: downloaded.contentType,
       sourceUrl: normalized,
@@ -524,6 +574,32 @@ export const resolveProductImageUrl = async (input: {
     input.cache?.set(normalized, result);
     return result;
   }
+};
+
+export const uploadProductImageBuffer = async (input: {
+  organizationId: string;
+  productId?: string | null;
+  buffer: Buffer;
+  contentType: string;
+  sourceFileName?: string;
+}) => {
+  if (!input.organizationId) {
+    throw new Error("forbidden");
+  }
+  if (!input.contentType.toLowerCase().startsWith("image/")) {
+    throw new Error("imageInvalidType");
+  }
+  if (!input.buffer.length || input.buffer.length > maxImageBytes) {
+    throw new Error("imageTooLarge");
+  }
+
+  return uploadBufferToStorage({
+    organizationId: input.organizationId,
+    productId: input.productId,
+    buffer: input.buffer,
+    contentType: input.contentType,
+    sourceUrl: input.sourceFileName ? `https://upload.local/${input.sourceFileName}` : undefined,
+  });
 };
 
 export const assertProductImageStorageConfigured = () => {

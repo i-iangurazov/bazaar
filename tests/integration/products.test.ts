@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createProduct, importProducts, updateProduct } from "@/server/services/products";
+import { computeEan13CheckDigit } from "@/server/services/barcodes";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
@@ -150,6 +151,133 @@ describeDb("products", () => {
     expect(result.exactMatch).toBe(true);
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ id: product.id, matchType: "barcode" });
+  });
+
+  it("generates a unique EAN-13 barcode for a product", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-generate-barcode",
+      sku: "SKU-GEN-1",
+      name: "Generate Barcode Product",
+      baseUnitId: baseUnit.id,
+    });
+
+    const generated = await caller.products.generateBarcode({
+      productId: product.id,
+      mode: "EAN13",
+    });
+
+    expect(/^\d{13}$/.test(generated.value)).toBe(true);
+    expect(generated.value[12]).toBe(computeEan13CheckDigit(generated.value.slice(0, 12)));
+
+    const stored = await prisma.productBarcode.findMany({
+      where: { organizationId: org.id, productId: product.id },
+      select: { value: true },
+    });
+    expect(stored.map((row) => row.value)).toContain(generated.value);
+  });
+
+  it("replaces existing barcode when force generation is enabled", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-force-barcode",
+      sku: "SKU-FORCE-1",
+      name: "Force Barcode Product",
+      baseUnitId: baseUnit.id,
+      barcodes: ["FORCE-OLD-001"],
+    });
+
+    const generated = await caller.products.generateBarcode({
+      productId: product.id,
+      mode: "EAN13",
+      force: true,
+    });
+
+    expect(generated.barcodes).toEqual([generated.value]);
+    const stored = await prisma.productBarcode.findMany({
+      where: { organizationId: org.id, productId: product.id },
+      select: { value: true },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.value).toBe(generated.value);
+  });
+
+  it("bulk generates barcodes only for products missing barcode", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const productWithoutBarcodeA = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-barcode-a",
+      sku: "SKU-BULK-A",
+      name: "Bulk Product A",
+      baseUnitId: baseUnit.id,
+    });
+    const productWithBarcode = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-barcode-b",
+      sku: "SKU-BULK-B",
+      name: "Bulk Product B",
+      baseUnitId: baseUnit.id,
+      barcodes: ["BULK-EXISTING-1"],
+    });
+    const productWithoutBarcodeC = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-barcode-c",
+      sku: "SKU-BULK-C",
+      name: "Bulk Product C",
+      baseUnitId: baseUnit.id,
+    });
+
+    const result = await caller.products.bulkGenerateBarcodes({
+      mode: "CODE128",
+      filter: {
+        productIds: [
+          productWithoutBarcodeA.id,
+          productWithBarcode.id,
+          productWithoutBarcodeC.id,
+        ],
+      },
+    });
+
+    expect(result.generatedCount).toBe(2);
+    expect(result.skippedCount).toBe(1);
+
+    const generatedRows = await prisma.productBarcode.findMany({
+      where: {
+        organizationId: org.id,
+        productId: { in: [productWithoutBarcodeA.id, productWithoutBarcodeC.id] },
+      },
+      select: { value: true },
+    });
+    expect(generatedRows.every((row) => row.value.startsWith("BZ"))).toBe(true);
   });
 
   it("initializes base snapshots for create and import across stores", async () => {

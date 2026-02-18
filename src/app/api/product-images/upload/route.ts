@@ -1,0 +1,60 @@
+import { getServerAuthToken } from "@/server/auth/token";
+import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const toMessage = (value: unknown) => (value instanceof Error ? value.message : "genericMessage");
+
+export const POST = async (request: Request) => {
+  const token = await getServerAuthToken();
+  if (!token) {
+    return Response.json({ message: "unauthorized" }, { status: 401 });
+  }
+  if (!token.organizationId || token.role !== "ADMIN") {
+    return Response.json({ message: "forbidden" }, { status: 403 });
+  }
+
+  const formData = await request.formData().catch(() => null);
+  if (!formData) {
+    return Response.json({ message: "invalidInput" }, { status: 400 });
+  }
+
+  const file = formData.get("file");
+  const productIdRaw = formData.get("productId");
+  const productId =
+    typeof productIdRaw === "string" && productIdRaw.trim().length > 0
+      ? productIdRaw.trim()
+      : undefined;
+
+  if (!(file instanceof File)) {
+    return Response.json({ message: "invalidInput" }, { status: 400 });
+  }
+  if (!file.type.toLowerCase().startsWith("image/")) {
+    return Response.json({ message: "imageInvalidType" }, { status: 400 });
+  }
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const uploaded = await uploadProductImageBuffer({
+      organizationId: String(token.organizationId),
+      productId,
+      buffer,
+      contentType: file.type,
+      sourceFileName: file.name,
+    });
+    return Response.json({ url: uploaded.url }, { status: 200 });
+  } catch (error) {
+    const message = toMessage(error);
+    if (message === "imageTooLarge") {
+      return Response.json({ message }, { status: 413 });
+    }
+    if (message === "imageInvalidType" || message === "invalidInput") {
+      return Response.json({ message }, { status: 400 });
+    }
+    if (message === "forbidden") {
+      return Response.json({ message }, { status: 403 });
+    }
+    return Response.json({ message: "genericMessage" }, { status: 500 });
+  }
+};

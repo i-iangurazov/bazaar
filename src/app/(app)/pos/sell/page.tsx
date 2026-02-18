@@ -59,6 +59,7 @@ const PosSellPage = () => {
   const [saleId, setSaleId] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
   const [qtyInput, setQtyInput] = useState("1");
+  const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
   const [payments, setPayments] = useState<PaymentDraft[]>([defaultPayment()]);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
@@ -139,6 +140,19 @@ const PosSellPage = () => {
     },
   });
 
+  const upsertMarkingCodesMutation = trpc.pos.sales.upsertMarkingCodes.useMutation({
+    onSuccess: (result) => {
+      setMarkingInput((current) => ({
+        ...current,
+        [result.lineId]: result.codes.join(", "),
+      }));
+      toast({ variant: "success", description: t("sell.markingSaved") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("sell.saleDiscarded") });
@@ -173,6 +187,8 @@ const PosSellPage = () => {
   const activeDraft = activeDraftQuery.data;
   const saleIdForPaymentInit = saleQuery.data?.id;
   const saleTotalForPaymentInit = saleQuery.data?.totalKgs;
+  const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
+  const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
 
   useEffect(() => {
     if (!saleIdForPaymentInit || saleTotalForPaymentInit === undefined) {
@@ -194,7 +210,20 @@ const PosSellPage = () => {
     }
     setSaleId(null);
     setPayments([defaultPayment()]);
+    setMarkingInput({});
   }, [saleId, saleQuery.data, saleQuery.isLoading]);
+
+  useEffect(() => {
+    if (!sale?.lines?.length) {
+      setMarkingInput({});
+      return;
+    }
+    setMarkingInput(
+      Object.fromEntries(
+        sale.lines.map((line) => [line.id, (line.markingCodes ?? []).join(", ")]),
+      ),
+    );
+  }, [sale?.id, sale?.lines]);
 
   const hasOpenShift = Boolean(shiftQuery.data?.id);
   const isLineBusy =
@@ -202,6 +231,7 @@ const PosSellPage = () => {
     addLineMutation.isLoading ||
     updateLineMutation.isLoading ||
     removeLineMutation.isLoading ||
+    upsertMarkingCodesMutation.isLoading ||
     cancelDraftMutation.isLoading;
   const totalPayment = roundMoney(
     payments.reduce((sum, payment) => {
@@ -266,6 +296,27 @@ const PosSellPage = () => {
       if (saleId) {
         await trpcUtils.pos.sales.get.invalidate({ saleId });
       }
+    } catch {
+      // handled by mutation onError
+    }
+  };
+
+  const handleSaveMarkingCodes = async (lineId: string) => {
+    if (!saleId) {
+      return;
+    }
+    const value = markingInput[lineId] ?? "";
+    const codes = value
+      .split(/[\n,;]+/g)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    try {
+      await upsertMarkingCodesMutation.mutateAsync({
+        saleId,
+        lineId,
+        codes,
+      });
+      await trpcUtils.pos.sales.get.invalidate({ saleId });
     } catch {
       // handled by mutation onError
     }
@@ -510,6 +561,42 @@ const PosSellPage = () => {
                           <p className="text-xs text-muted-foreground">
                             {t("sell.unitPrice")}: {formatCurrencyKGS(line.unitPriceKgs, locale)}
                           </p>
+                          {saleMarkingEnabled && line.product.complianceFlags?.requiresMarking ? (
+                            <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/20 p-2">
+                              <p className="text-xs text-muted-foreground">
+                                {t("sell.markingLabel")}
+                                {saleMarkingMode === "REQUIRED_ON_SALE"
+                                  ? ` · ${t("sell.markingRequired")}`
+                                  : ""}
+                              </p>
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <Input
+                                  value={markingInput[line.id] ?? ""}
+                                  onChange={(event) =>
+                                    setMarkingInput((current) => ({
+                                      ...current,
+                                      [line.id]: event.target.value,
+                                    }))
+                                  }
+                                  placeholder={t("sell.markingPlaceholder")}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="w-full sm:w-auto"
+                                  onClick={() => handleSaveMarkingCodes(line.id)}
+                                  disabled={isLineBusy || completeMutation.isLoading}
+                                >
+                                  {t("sell.markingSave")}
+                                </Button>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">
+                                {t("sell.markingCapturedCount", {
+                                  count: line.markingCodes.length,
+                                })}
+                              </p>
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex w-full items-center gap-2 sm:w-auto">
                           <Input

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -55,11 +55,13 @@ const PurchaseOrdersPage = () => {
   const canManage = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const trpcUtils = trpc.useUtils();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [bulkCanceling, setBulkCanceling] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectingAllResults, setSelectingAllResults] = useState(false);
   const listQuery = trpc.purchaseOrders.list.useQuery({ page, pageSize });
   const orders = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const totalOrders = listQuery.data?.total ?? 0;
@@ -102,14 +104,9 @@ const PurchaseOrdersPage = () => {
     }
   };
 
-  const selectedOrders = useMemo(
-    () => orders.filter((po) => selectedIds.has(po.id)),
-    [orders, selectedIds],
-  );
-  const allSelected = Boolean(orders.length) && selectedIds.size === orders.length;
-  const cancelableSelected = selectedOrders.filter(
-    (po) => po.status === "DRAFT" || po.status === "SUBMITTED",
-  );
+  const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
+  const allSelected = Boolean(orders.length) && orders.every((po) => selectedIds.has(po.id));
+  const allResultsSelected = totalOrders > 0 && selectedIds.size === totalOrders;
 
   const toggleSelectAll = () => {
     if (!orders.length) {
@@ -123,9 +120,20 @@ const PurchaseOrdersPage = () => {
     });
   };
 
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [page, pageSize]);
+  const handleSelectAllResults = async () => {
+    setSelectingAllResults(true);
+    try {
+      const ids = await trpcUtils.purchaseOrders.listIds.fetch();
+      setSelectedIds(new Set(ids));
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setSelectingAllResults(false);
+    }
+  };
 
   const toggleSelect = (purchaseOrderId: string) => {
     setSelectedIds((prev) => {
@@ -140,13 +148,22 @@ const PurchaseOrdersPage = () => {
   };
 
   const handleBulkCancel = async () => {
-    if (!cancelableSelected.length) {
+    if (!selectedList.length) {
+      return;
+    }
+    const [draftIds, submittedIds] = await Promise.all([
+      trpcUtils.purchaseOrders.listIds.fetch({ status: "DRAFT" }),
+      trpcUtils.purchaseOrders.listIds.fetch({ status: "SUBMITTED" }),
+    ]);
+    const cancelableIdSet = new Set([...draftIds, ...submittedIds]);
+    const cancelableSelectedIds = selectedList.filter((id) => cancelableIdSet.has(id));
+    if (!cancelableSelectedIds.length) {
       toast({ variant: "error", description: t("bulkCancelUnavailable") });
       return;
     }
     if (
       !(await confirm({
-        description: t("confirmBulkCancel", { count: cancelableSelected.length }),
+        description: t("confirmBulkCancel", { count: cancelableSelectedIds.length }),
         confirmVariant: "danger",
       }))
     ) {
@@ -155,15 +172,15 @@ const PurchaseOrdersPage = () => {
     setBulkCanceling(true);
     try {
       await Promise.all(
-        cancelableSelected.map((po) =>
-          bulkCancelMutation.mutateAsync({ purchaseOrderId: po.id }),
+        cancelableSelectedIds.map((purchaseOrderId) =>
+          bulkCancelMutation.mutateAsync({ purchaseOrderId }),
         ),
       );
       await listQuery.refetch();
       setSelectedIds(new Set());
       toast({
         variant: "success",
-        description: t("bulkCancelSuccess", { count: cancelableSelected.length }),
+        description: t("bulkCancelSuccess", { count: cancelableSelectedIds.length }),
       });
     } catch (error) {
       toast({
@@ -211,18 +228,48 @@ const PurchaseOrdersPage = () => {
                     {t("selectAll")}
                   </Button>
                 ) : null}
+                {totalOrders > orders.length && !allResultsSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void handleSelectAllResults()}
+                    disabled={selectingAllResults}
+                  >
+                    {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
+                    {selectingAllResults
+                      ? tCommon("loading")
+                      : tCommon("selectAllResults", { count: totalOrders })}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : null}
-          {canManage && selectedOrders.length ? (
+          {canManage && selectedList.length ? (
             <div className="mb-3">
               <TooltipProvider>
                 <SelectionToolbar
-                  count={selectedOrders.length}
-                  label={tCommon("selectedCount", { count: selectedOrders.length })}
+                  count={selectedList.length}
+                  label={tCommon("selectedCount", { count: selectedList.length })}
                   clearLabel={tCommon("clearSelection")}
                   onClear={() => setSelectedIds(new Set())}
                 >
+                  {totalOrders > orders.length && !allResultsSelected ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleSelectAllResults()}
+                      disabled={selectingAllResults}
+                    >
+                      {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
+                      {selectingAllResults
+                        ? tCommon("loading")
+                        : tCommon("selectAllResults", { count: totalOrders })}
+                    </Button>
+                  ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -232,7 +279,7 @@ const PurchaseOrdersPage = () => {
                         className="text-danger shadow-none hover:text-danger"
                         aria-label={t("bulkCancel")}
                         onClick={handleBulkCancel}
-                        disabled={bulkCanceling || !cancelableSelected.length}
+                        disabled={bulkCanceling || !selectedList.length}
                       >
                         {bulkCanceling ? <Spinner className="h-4 w-4" /> : <CloseIcon className="h-4 w-4" aria-hidden />}
                       </Button>

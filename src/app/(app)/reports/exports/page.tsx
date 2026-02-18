@@ -46,7 +46,18 @@ type ExportTypeValue =
   | "PURCHASES"
   | "INVENTORY_ON_HAND"
   | "PERIOD_CLOSE_REPORT"
-  | "RECEIPTS_FOR_KKM";
+  | "RECEIPTS_FOR_KKM"
+  | "RECEIPTS_REGISTRY"
+  | "SHIFT_X_REPORT"
+  | "SHIFT_Z_REPORT"
+  | "SALES_BY_DAY"
+  | "SALES_BY_ITEM"
+  | "RETURNS_BY_DAY"
+  | "RETURNS_BY_ITEM"
+  | "CASH_DRAWER_MOVEMENTS"
+  | "MARKING_SALES_REGISTRY"
+  | "ETTN_REFERENCES"
+  | "ESF_REFERENCES";
 
 const EXPORT_TYPES: readonly ExportTypeValue[] = [
   "INVENTORY_MOVEMENTS_LEDGER",
@@ -59,6 +70,17 @@ const EXPORT_TYPES: readonly ExportTypeValue[] = [
   "INVENTORY_ON_HAND",
   "PERIOD_CLOSE_REPORT",
   "RECEIPTS_FOR_KKM",
+  "RECEIPTS_REGISTRY",
+  "SHIFT_X_REPORT",
+  "SHIFT_Z_REPORT",
+  "SALES_BY_DAY",
+  "SALES_BY_ITEM",
+  "RETURNS_BY_DAY",
+  "RETURNS_BY_ITEM",
+  "CASH_DRAWER_MOVEMENTS",
+  "MARKING_SALES_REGISTRY",
+  "ETTN_REFERENCES",
+  "ESF_REFERENCES",
 ];
 
 const ExportsPage = () => {
@@ -117,6 +139,17 @@ const ExportsPage = () => {
       INVENTORY_ON_HAND: t("types.inventoryOnHand"),
       PERIOD_CLOSE_REPORT: t("types.periodClose"),
       RECEIPTS_FOR_KKM: t("types.kkmReceipts"),
+      RECEIPTS_REGISTRY: t("types.receiptsRegistry"),
+      SHIFT_X_REPORT: t("types.shiftXReport"),
+      SHIFT_Z_REPORT: t("types.shiftZReport"),
+      SALES_BY_DAY: t("types.salesByDay"),
+      SALES_BY_ITEM: t("types.salesByItem"),
+      RETURNS_BY_DAY: t("types.returnsByDay"),
+      RETURNS_BY_ITEM: t("types.returnsByItem"),
+      CASH_DRAWER_MOVEMENTS: t("types.cashDrawerMovements"),
+      MARKING_SALES_REGISTRY: t("types.markingSalesRegistry"),
+      ETTN_REFERENCES: t("types.ettnReferences"),
+      ESF_REFERENCES: t("types.esfReferences"),
     }),
     [t],
   );

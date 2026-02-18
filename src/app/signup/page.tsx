@@ -37,6 +37,7 @@ const SignupPage = () => {
   const router = useRouter();
 
   const [submitted, setSubmitted] = useState(false);
+  const [redirectingToBusiness, setRedirectingToBusiness] = useState(false);
   const [requestValues, setRequestValues] = useState<RequestValues>({ email: "", orgName: "" });
   const [signupValues, setSignupValues] = useState<SignupValues>({
     email: "",
@@ -48,7 +49,7 @@ const SignupPage = () => {
   const [signupFieldErrors, setSignupFieldErrors] = useState<Partial<Record<keyof SignupValues, string>>>({});
 
   const modeQuery = trpc.publicAuth.signupMode.useQuery();
-  const mode = modeQuery.data?.mode ?? "invite_only";
+  const mode = modeQuery.data?.mode;
 
   const requestSchema = useMemo(
     () =>
@@ -94,16 +95,18 @@ const SignupPage = () => {
   const signupMutation = trpc.publicAuth.signup.useMutation({
     onSuccess: async (result, variables) => {
       if (result.nextPath) {
-        setSubmitted(true);
-        await fetch("/api/locale", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ locale: variables.preferredLocale }),
-        });
-        router.push(result.nextPath);
+        setRedirectingToBusiness(true);
+        try {
+          await fetch("/api/locale", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ locale: variables.preferredLocale }),
+          });
+        } finally {
+          router.replace(result.nextPath);
+        }
         return;
       }
-      setSubmitted(true);
       await fetch("/api/locale", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -111,10 +114,14 @@ const SignupPage = () => {
       });
       toast({ variant: "success", description: t("signupSuccess") });
       if (result.verifyLink) {
+        setSubmitted(true);
         toast({ variant: "info", description: t("verifyHint") });
+        return;
       }
+      router.replace("/login");
     },
     onError: (error) => {
+      setRedirectingToBusiness(false);
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
@@ -140,6 +147,25 @@ const SignupPage = () => {
     setSignupFieldErrors({});
     signupMutation.mutate(parsed.data);
   };
+
+  if (modeQuery.isLoading || redirectingToBusiness) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("title")}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (

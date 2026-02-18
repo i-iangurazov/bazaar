@@ -20,6 +20,7 @@ type RowAction = {
   icon: ComponentType<{ className?: string }>;
   onSelect?: () => void;
   href?: string;
+  openInNewTab?: boolean;
   disabled?: boolean;
   variant?: string;
 };
@@ -52,6 +53,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
           variant={resolveVariant(action.variant)}
           onClick={action.onSelect}
           href={action.href}
+          openInNewTab={Boolean(action.href && (action.openInNewTab ?? action.key === "edit"))}
           disabled={action.disabled}
         />
       ))}
@@ -70,16 +72,37 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
                   <span>{action.label}</span>
                 </div>
               );
+              const openInNewTab = Boolean(
+                action.href && (action.openInNewTab ?? action.key === "edit"),
+              );
 
               if (action.href && !action.disabled) {
                 return (
                   <DropdownMenuItem key={action.key} asChild>
                     {action.href.startsWith("/api/") ? (
-                      <a href={action.href}>{item}</a>
+                      <a
+                        href={action.href}
+                        target={openInNewTab ? "_blank" : undefined}
+                        rel={openInNewTab ? "noopener noreferrer" : undefined}
+                      >
+                        {item}
+                      </a>
                     ) : action.href.startsWith("/") ? (
-                      <Link href={action.href}>{item}</Link>
+                      <Link
+                        href={action.href}
+                        target={openInNewTab ? "_blank" : undefined}
+                        rel={openInNewTab ? "noopener noreferrer" : undefined}
+                      >
+                        {item}
+                      </Link>
                     ) : (
-                      <a href={action.href}>{item}</a>
+                      <a
+                        href={action.href}
+                        target={openInNewTab ? "_blank" : undefined}
+                        rel={openInNewTab ? "noopener noreferrer" : undefined}
+                      >
+                        {item}
+                      </a>
                     )}
                   </DropdownMenuItem>
                 );

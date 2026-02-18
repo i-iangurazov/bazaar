@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KkmMode } from "@prisma/client";
+import { KkmMode, MarkingMode } from "@prisma/client";
 
 import { adminProcedure, managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
@@ -14,6 +14,7 @@ const complianceSchema = z.object({
   enableEsf: z.boolean(),
   enableEttn: z.boolean(),
   enableMarking: z.boolean(),
+  markingMode: z.nativeEnum(MarkingMode),
   kkmProviderKey: z.string().nullable().optional(),
   kkmSettings: z.record(z.unknown()).nullable().optional(),
 });
@@ -40,6 +41,7 @@ export const complianceRouter = router({
         enableEsf: input.enableEsf,
         enableEttn: input.enableEttn,
         enableMarking: input.enableMarking,
+        markingMode: input.markingMode,
         kkmProviderKey: input.kkmProviderKey ?? null,
         kkmSettings: (input.kkmSettings as Record<string, unknown> | null | undefined) ?? null,
       });

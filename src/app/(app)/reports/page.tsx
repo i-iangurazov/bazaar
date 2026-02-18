@@ -88,6 +88,9 @@ const ReportsPage = () => {
               <Link href="/reports/exports">{t("exportsLink")}</Link>
             </Button>
             <Button asChild variant="secondary">
+              <Link href="/reports/receipts">{t("receiptsLink")}</Link>
+            </Button>
+            <Button asChild variant="secondary">
               <Link href="/reports/close">{t("closeLink")}</Link>
             </Button>
           </>

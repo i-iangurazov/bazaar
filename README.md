@@ -61,6 +61,9 @@ cp .env.example .env
 - `R2_PUBLIC_BASE_URL` (required when `IMAGE_STORAGE_PROVIDER=r2`; public/custom domain or `*.r2.dev`)
 - `R2_ENDPOINT` (optional override; defaults to `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`)
 - `PRODUCT_IMAGE_MAX_BYTES` (optional max image payload; default `5242880`)
+- `PRODUCT_IMAGE_FETCH_TIMEOUT_MS` (optional remote image fetch timeout for import/backfill resolution; default `4000`)
+- `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES` (optional client-side upload target max bytes; set `4000000` on Vercel to avoid `413` on multipart overhead)
+- `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES` (optional client-side pre-compression input cap; default `10485760`)
 
 ### 5) Create DB schema + seed
 ```bash
@@ -203,7 +206,8 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 ## Product Image Storage (Local / Cloudflare R2)
 - Storage mode is controlled by `IMAGE_STORAGE_PROVIDER` (`local` or `r2`).
 - In `r2` mode, imported/uploaded product images are written to Cloudflare R2 and resolved via `R2_PUBLIC_BASE_URL`.
-- Object key pattern: `retails/<organizationId>/products/<sha1>.<ext>`.
+- Object key pattern: `retails/<organizationId>/products/<productId|unassigned>/<sha1>.<ext>`.
+- Images uploaded before product creation are auto-rehomed from `unassigned` to the concrete product folder on save when possible.
 - In development, if `r2` variables are incomplete, storage falls back to local with warning.
 - In production, missing required `r2` variables fail fast.
 

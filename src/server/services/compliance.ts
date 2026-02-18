@@ -1,4 +1,4 @@
-import { Prisma, type KkmMode } from "@prisma/client";
+import { Prisma, type KkmMode, type MarkingMode } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -17,6 +17,7 @@ type ComplianceUpdateInput = {
   enableEsf: boolean;
   enableEttn: boolean;
   enableMarking: boolean;
+  markingMode: MarkingMode;
   kkmProviderKey?: string | null;
   kkmSettings?: Record<string, unknown> | null;
 };
@@ -63,6 +64,7 @@ export const upsertStoreComplianceProfile = async (input: ComplianceUpdateInput)
       enableEsf: input.enableEsf,
       enableEttn: input.enableEttn,
       enableMarking: input.enableMarking,
+      markingMode: input.markingMode,
       kkmProviderKey: input.kkmProviderKey ?? null,
       kkmSettings: normalizeJson(input.kkmSettings) ?? Prisma.DbNull,
       updatedById: input.updatedById,
@@ -75,6 +77,7 @@ export const upsertStoreComplianceProfile = async (input: ComplianceUpdateInput)
       enableEsf: input.enableEsf,
       enableEttn: input.enableEttn,
       enableMarking: input.enableMarking,
+      markingMode: input.markingMode,
       kkmProviderKey: input.kkmProviderKey ?? null,
       kkmSettings: normalizeJson(input.kkmSettings),
       updatedById: input.updatedById,

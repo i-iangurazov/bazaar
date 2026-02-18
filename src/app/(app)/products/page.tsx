@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -93,6 +93,7 @@ const ProductsPage = () => {
   const canManagePrices = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const trpcUtils = trpc.useUtils();
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -107,13 +108,11 @@ const ProductsPage = () => {
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
   const [queueSearch, setQueueSearch] = useState("");
-  const [queueScrollTop, setQueueScrollTop] = useState(0);
-  const [queueViewportHeight, setQueueViewportHeight] = useState(0);
-  const queueListRef = useRef<HTMLDivElement | null>(null);
 
   const storesQuery = trpc.stores.list.useQuery();
   const productsQuery = trpc.products.list.useQuery({
@@ -198,6 +197,25 @@ const ProductsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const bulkGenerateBarcodesMutation = trpc.products.bulkGenerateBarcodes.useMutation({
+    onSuccess: (result) => {
+      productsQuery.refetch();
+      setSelectedIds(new Set());
+      toast({
+        variant: "success",
+        description: t("bulkGenerateBarcodesSuccess", {
+          generated: result.generatedCount,
+          skipped: result.skippedCount,
+        }),
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error),
+      });
+    },
+  });
 
   useEffect(() => {
     if (!storeId && storesQuery.data?.length === 1) {
@@ -217,7 +235,7 @@ const ProductsPage = () => {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [productsPage, productsPageSize]);
+  }, [search, category, showArchived, storeId, productType]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -316,7 +334,8 @@ const ProductsPage = () => {
   });
 
   const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
-  const allSelected = Boolean(products.length) && selectedIds.size === products.length;
+  const allSelected = Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
+  const allResultsSelected = productsTotal > 0 && selectedIds.size === productsTotal;
 
   const queueIdsForQuery = useMemo(
     () => Array.from(new Set(printQueue)).sort(),
@@ -349,42 +368,31 @@ const ProductsPage = () => {
     });
     return map;
   }, [products, queueProductsQuery.data]);
-  const queueRowHeight = 72;
-  const queueOverscan = 6;
   const canDragQueue = printQueue.length <= 50;
-  const queueIndexById = useMemo(
-    () => new Map(printQueue.map((id, index) => [id, index])),
-    [printQueue],
-  );
-  const filteredQueue = useMemo(() => {
-    if (!queueSearch.trim()) {
-      return printQueue;
-    }
+  const filteredQueueEntries = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
-    return printQueue.filter((productId) => {
-      const product = productById.get(productId);
-      const name = product?.name ?? "";
-      const sku = product?.sku ?? "";
-      const barcodes =
-        product?.barcodes?.map((barcode) => barcode.value).join(" ") ?? "";
-      return [name, sku, barcodes].some((value) =>
-        value.toLowerCase().includes(query),
-      );
-    });
+    return printQueue.reduce<Array<{ productId: string; queueIndex: number }>>(
+      (acc, productId, queueIndex) => {
+        if (!query) {
+          acc.push({ productId, queueIndex });
+          return acc;
+        }
+        const product = productById.get(productId);
+        const name = product?.name ?? "";
+        const sku = product?.sku ?? "";
+        const barcodes =
+          product?.barcodes?.map((barcode) => barcode.value).join(" ") ?? "";
+        const matched = [name, sku, barcodes].some((value) =>
+          value.toLowerCase().includes(query),
+        );
+        if (matched) {
+          acc.push({ productId, queueIndex });
+        }
+        return acc;
+      },
+      [],
+    );
   }, [printQueue, productById, queueSearch]);
-  const queueTotalHeight = filteredQueue.length * queueRowHeight;
-  const effectiveViewportHeight =
-    queueViewportHeight || queueRowHeight * Math.max(filteredQueue.length, 1);
-  const queueStartIndex = Math.max(
-    0,
-    Math.floor(queueScrollTop / queueRowHeight) - queueOverscan,
-  );
-  const queueEndIndex = Math.min(
-    filteredQueue.length,
-    Math.ceil((queueScrollTop + effectiveViewportHeight) / queueRowHeight) + queueOverscan,
-  );
-  const queueVisibleItems = filteredQueue.slice(queueStartIndex, queueEndIndex);
-  const queueOffsetTop = queueStartIndex * queueRowHeight;
   const selectedProducts = useMemo(
     () => products.filter((product) => selectedIds.has(product.id)),
     [products, selectedIds],
@@ -402,6 +410,27 @@ const ProductsPage = () => {
       }
       return new Set(products.map((product) => product.id));
     });
+  };
+
+  const handleSelectAllResults = async () => {
+    setSelectingAllResults(true);
+    try {
+      const ids = await trpcUtils.products.listIds.fetch({
+        search: search || undefined,
+        category: category || undefined,
+        type: productType,
+        includeArchived: isAdmin ? showArchived : undefined,
+        storeId: storeId || undefined,
+      });
+      setSelectedIds(new Set(ids));
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setSelectingAllResults(false);
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -426,11 +455,9 @@ const ProductsPage = () => {
       setPrintQueue(selectedList);
       setDraggedQueueIndex(null);
       setQueueSearch("");
-      setQueueScrollTop(0);
     } else {
       setPrintQueue([]);
       setQueueSearch("");
-      setQueueScrollTop(0);
     }
   }, [printOpen, printForm, storeId, selectedList]);
 
@@ -460,36 +487,6 @@ const ProductsPage = () => {
       });
     }
   }, [bulkStorePriceOpen, bulkStorePriceForm, storeId]);
-
-  useLayoutEffect(() => {
-    if (!printOpen) {
-      return;
-    }
-    const container = queueListRef.current;
-    if (!container) {
-      return;
-    }
-    const updateHeight = () => {
-      const height = container.getBoundingClientRect().height;
-      if (height > 0) {
-        setQueueViewportHeight(height);
-      }
-    };
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [printOpen, filteredQueue.length]);
-
-  useEffect(() => {
-    if (!queueSearch.trim()) {
-      return;
-    }
-    if (queueListRef.current) {
-      queueListRef.current.scrollTop = 0;
-    }
-    setQueueScrollTop(0);
-  }, [queueSearch]);
 
   const storeNameById = useMemo(
     () => new Map((storesQuery.data ?? []).map((store) => [store.id, store.name])),
@@ -691,6 +688,28 @@ const ProductsPage = () => {
     }
   };
 
+  const handleBulkGenerateBarcodes = async () => {
+    if (!selectedList.length || !isAdmin) {
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("confirmBulkGenerateBarcodes", {
+          count: selectedList.length,
+        }),
+      }))
+    ) {
+      return;
+    }
+    bulkGenerateBarcodesMutation.mutate({
+      mode: "EAN13",
+      filter: {
+        productIds: selectedList,
+        limit: selectedList.length,
+      },
+    });
+  };
+
   return (
     <div>
       <PageHeader
@@ -864,6 +883,21 @@ const ProductsPage = () => {
                     {t("selectAll")}
                   </Button>
                 ) : null}
+                {productsTotal > products.length && !allResultsSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void handleSelectAllResults()}
+                    disabled={selectingAllResults}
+                  >
+                    {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
+                    {selectingAllResults
+                      ? tCommon("loading")
+                      : tCommon("selectAllResults", { count: productsTotal })}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -876,6 +910,21 @@ const ProductsPage = () => {
                   clearLabel={tCommon("clearSelection")}
                   onClear={() => setSelectedIds(new Set())}
                 >
+                  {productsTotal > products.length && !allResultsSelected ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleSelectAllResults()}
+                      disabled={selectingAllResults}
+                    >
+                      {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
+                      {selectingAllResults
+                        ? tCommon("loading")
+                        : tCommon("selectAllResults", { count: productsTotal })}
+                    </Button>
+                  ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -959,6 +1008,25 @@ const ProductsPage = () => {
                       </TooltipTrigger>
                       <TooltipContent>{t("bulkSetStorePrice")}</TooltipContent>
                     </Tooltip>
+                  ) : null}
+                  {isAdmin ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleBulkGenerateBarcodes()}
+                      disabled={bulkGenerateBarcodesMutation.isLoading}
+                    >
+                      {bulkGenerateBarcodesMutation.isLoading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <AddIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {bulkGenerateBarcodesMutation.isLoading
+                        ? tCommon("loading")
+                        : t("bulkGenerateBarcodes")}
+                    </Button>
                   ) : null}
                 </SelectionToolbar>
               </TooltipProvider>
@@ -1125,9 +1193,15 @@ const ProductsPage = () => {
                                       ) : (
                                         <>
                                           <DropdownMenuItem
-                                            onClick={() => router.push(`/products/${product.id}`)}
+                                            asChild
                                           >
-                                            {tCommon("edit")}
+                                            <Link
+                                              href={`/products/${product.id}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                            >
+                                              {tCommon("edit")}
+                                            </Link>
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
                                             onClick={() =>
@@ -1679,7 +1753,7 @@ const ProductsPage = () => {
         }}
         title={t("printPriceTags")}
         subtitle={t("printSubtitle", { count: printQueue.length })}
-        className="sm:max-w-2xl h-[85dvh]"
+        className="h-[92dvh] sm:h-[85dvh] sm:max-w-2xl"
         bodyClassName="p-0 min-h-0 overflow-hidden"
       >
         <Form {...printForm}>
@@ -1687,8 +1761,8 @@ const ProductsPage = () => {
             className="flex h-full min-h-0 flex-col"
             onSubmit={printForm.handleSubmit((values) => handlePrintTags(values))}
           >
-            <div className="sticky top-0 z-10 border-b border-border/70 bg-card px-6 pt-6 pb-4">
-              <div className="grid gap-4 sm:grid-cols-3">
+            <div className="sticky top-0 z-10 border-b border-border/70 bg-card px-4 py-3 sm:px-6 sm:pt-6 sm:pb-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
                 <FormField
                   control={printForm.control}
                   name="template"
@@ -1752,7 +1826,7 @@ const ProductsPage = () => {
                   )}
                 />
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3 sm:mt-4">
                 <div className="w-full sm:max-w-xs">
                   <Input
                     value={queueSearch}
@@ -1764,7 +1838,7 @@ const ProductsPage = () => {
                 <span className="text-xs text-muted-foreground">
                   {queueSearch.trim()
                     ? t("printQueueFiltered", {
-                        filtered: filteredQueue.length,
+                        filtered: filteredQueueEntries.length,
                         total: printQueue.length,
                       })
                     : t("printQueueSelected", { count: printQueue.length })}
@@ -1780,121 +1854,110 @@ const ProductsPage = () => {
                   {t("printQueueClear")}
                 </Button>
               </div>
-              <div className="mt-4 flex items-center justify-between text-sm">
+              <div className="mt-3 flex items-center justify-between text-sm sm:mt-4">
                 <span className="font-medium text-foreground">{t("printQueueTitle")}</span>
                 <span className="text-xs text-muted-foreground">
                   {canDragQueue ? t("printQueueHint") : t("printQueueNoDragHint")}
                 </span>
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+            <div className="flex min-h-0 flex-1 flex-col px-4 py-3 sm:px-6 sm:py-4">
               {printQueue.length ? (
-                filteredQueue.length ? (
-                  <div
-                    ref={queueListRef}
-                    className="h-[min(48dvh,32rem)] min-h-[12rem] overflow-y-auto"
-                    onScroll={(event) => setQueueScrollTop(event.currentTarget.scrollTop)}
-                  >
-                    <div className="relative" style={{ height: queueTotalHeight }}>
-                      <div
-                        className="absolute left-0 right-0"
-                        style={{ transform: `translateY(${queueOffsetTop}px)` }}
-                      >
-                        {queueVisibleItems.map((productId) => {
-                          const product = productById.get(productId);
-                          const queueIndex = queueIndexById.get(productId) ?? 0;
-                          const canMoveUp = queueIndex > 0;
-                          const canMoveDown = queueIndex < printQueue.length - 1;
-                          const isDragging = draggedQueueIndex === queueIndex;
-                          return (
-                            <div
-                              key={productId}
-                              className={`flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 ${
-                                isDragging ? "opacity-60" : ""
-                              }`}
-                              style={{ height: queueRowHeight }}
-                              draggable={canDragQueue}
-                              onDragStart={() => {
-                                if (!canDragQueue) {
-                                  return;
-                                }
-                                setDraggedQueueIndex(queueIndex);
-                              }}
-                              onDragEnd={() => {
-                                if (!canDragQueue) {
-                                  return;
-                                }
-                                setDraggedQueueIndex(null);
-                              }}
-                              onDragOver={(event) => {
-                                if (!canDragQueue || draggedQueueIndex === null) {
-                                  return;
-                                }
-                                event.preventDefault();
-                              }}
-                              onDrop={(event) => {
-                                if (!canDragQueue) {
-                                  return;
-                                }
-                                event.preventDefault();
-                                if (draggedQueueIndex === null || draggedQueueIndex === queueIndex) {
-                                  return;
-                                }
-                                movePrintQueueItem(draggedQueueIndex, queueIndex);
-                                setDraggedQueueIndex(null);
-                              }}
-                            >
-                              <div className="flex min-w-0 items-center gap-2">
-                                {canDragQueue ? (
-                                  <GripIcon className="h-4 w-4 text-muted-foreground/80" aria-hidden />
-                                ) : null}
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium text-foreground">
-                                    {product?.name ?? tCommon("notAvailable")}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {product?.sku ?? productId.slice(0, 8).toUpperCase()}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      aria-label={t("printQueueMoveUp")}
-                                      onClick={() => canMoveUp && movePrintQueueItem(queueIndex, queueIndex - 1)}
-                                      disabled={!canMoveUp}
-                                    >
-                                      <ArrowUpIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t("printQueueMoveUp")}</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      aria-label={t("printQueueMoveDown")}
-                                      onClick={() => canMoveDown && movePrintQueueItem(queueIndex, queueIndex + 1)}
-                                      disabled={!canMoveDown}
-                                    >
-                                      <ArrowDownIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t("printQueueMoveDown")}</TooltipContent>
-                                </Tooltip>
+                filteredQueueEntries.length ? (
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+                    <div className="space-y-2">
+                      {filteredQueueEntries.map(({ productId, queueIndex }) => {
+                        const product = productById.get(productId);
+                        const canMoveUp = queueIndex > 0;
+                        const canMoveDown = queueIndex < printQueue.length - 1;
+                        const isDragging = draggedQueueIndex === queueIndex;
+                        return (
+                          <div
+                            key={`${productId}-${queueIndex}`}
+                            className={`flex h-[72px] items-center justify-between gap-3 rounded-md border border-border bg-card px-3 ${
+                              isDragging ? "opacity-60" : ""
+                            }`}
+                            draggable={canDragQueue}
+                            onDragStart={() => {
+                              if (!canDragQueue) {
+                                return;
+                              }
+                              setDraggedQueueIndex(queueIndex);
+                            }}
+                            onDragEnd={() => {
+                              if (!canDragQueue) {
+                                return;
+                              }
+                              setDraggedQueueIndex(null);
+                            }}
+                            onDragOver={(event) => {
+                              if (!canDragQueue || draggedQueueIndex === null) {
+                                return;
+                              }
+                              event.preventDefault();
+                            }}
+                            onDrop={(event) => {
+                              if (!canDragQueue) {
+                                return;
+                              }
+                              event.preventDefault();
+                              if (draggedQueueIndex === null || draggedQueueIndex === queueIndex) {
+                                return;
+                              }
+                              movePrintQueueItem(draggedQueueIndex, queueIndex);
+                              setDraggedQueueIndex(null);
+                            }}
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              {canDragQueue ? (
+                                <GripIcon className="h-4 w-4 text-muted-foreground/80" aria-hidden />
+                              ) : null}
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {product?.name ?? tCommon("notAvailable")}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {product?.sku ?? productId.slice(0, 8).toUpperCase()}
+                                </p>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                            <div className="flex items-center gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="shadow-none"
+                                    aria-label={t("printQueueMoveUp")}
+                                    onClick={() => canMoveUp && movePrintQueueItem(queueIndex, queueIndex - 1)}
+                                    disabled={!canMoveUp}
+                                  >
+                                    <ArrowUpIcon className="h-4 w-4" aria-hidden />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t("printQueueMoveUp")}</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="shadow-none"
+                                    aria-label={t("printQueueMoveDown")}
+                                    onClick={() => canMoveDown && movePrintQueueItem(queueIndex, queueIndex + 1)}
+                                    disabled={!canMoveDown}
+                                  >
+                                    <ArrowDownIcon className="h-4 w-4" aria-hidden />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t("printQueueMoveDown")}</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -1904,7 +1967,7 @@ const ProductsPage = () => {
                 <p className="text-xs text-muted-foreground">{t("printQueueEmpty")}</p>
               )}
             </div>
-            <div className="sticky bottom-0 z-10 border-t border-border/70 bg-card px-6 py-4">
+            <div className="sticky bottom-0 z-10 border-t border-border/70 bg-card px-4 py-3 sm:px-6 sm:py-4">
               <FormActions>
                 <Button
                   type="button"

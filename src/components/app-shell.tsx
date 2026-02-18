@@ -178,6 +178,8 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         labelKey: "groups.insights",
         items: [
           { key: "reports", href: "/reports", icon: ActivityIcon, managerOnly: true },
+          { key: "posReceipts", href: "/pos/receipts", icon: OrdersIcon, managerOnly: true },
+          { key: "posKkm", href: "/pos/kkm", icon: PosIcon, managerOnly: true },
           { key: "adminMetrics", href: "/admin/metrics", icon: MetricsIcon, adminOnly: true },
         ],
       },
@@ -623,8 +625,8 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       </header>
 
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 flex-col border-r border-border bg-card px-6 py-8 lg:flex">
-          <div className="space-y-6">
+        <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+          <div className="flex h-full min-h-0 flex-col">
             <div className="space-y-3">
               <Image
                 src="/brand/logo.png"
@@ -644,17 +646,21 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 <CirclePlusIcon className="h-5 w-5" aria-hidden />
               </Button>
             </div>
-            <nav className="space-y-4">{renderNavGroups()}</nav>
-          </div>
-          <div className="mt-10 border-t border-border pt-6 text-sm">
-            {renderProfileShortcut()}
-            <div className="mt-4">
-              <SignOutButton />
+
+            <nav className="scrollbar-soft mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+              {renderNavGroups()}
+            </nav>
+
+            <div className="mt-6 border-t border-border pt-6 text-sm">
+              {renderProfileShortcut()}
+              <div className="mt-4">
+                <SignOutButton />
+              </div>
             </div>
           </div>
         </aside>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
           <div className="mx-auto max-w-6xl">
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="relative w-full sm:max-w-md">
@@ -739,7 +745,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           role="dialog"
           aria-modal="true"
           className={cn(
-            "absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-border bg-card p-6 shadow-xl transition-transform duration-200 ease-out",
+            "scrollbar-soft absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-border bg-card p-6 shadow-xl transition-transform duration-200 ease-out",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >

@@ -40,8 +40,8 @@ import { formatDateTime } from "@/lib/i18nFormat";
 
 type ImportRow = {
   sku: string;
-  name: string;
-  unit: string;
+  name?: string;
+  unit?: string;
   category?: string;
   description?: string;
   photoUrl?: string;
@@ -49,6 +49,7 @@ type ImportRow = {
   basePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
+  minStock?: number;
 };
 
 type RawRow = Record<string, unknown>;
@@ -63,24 +64,46 @@ type MappingKey =
   | "barcodes"
   | "basePriceKgs"
   | "purchasePriceKgs"
-  | "avgCostKgs";
+  | "avgCostKgs"
+  | "minStock";
 
 type MappingState = Record<MappingKey, string>;
 
 type ValidationError = {
   row: number;
   message: string;
-  code: "missingField" | "duplicateSku" | "duplicateBarcode" | "minLength" | "invalidNumber";
+  code:
+    | "missingField"
+    | "duplicateSku"
+    | "duplicateBarcode"
+    | "minLength"
+    | "invalidNumber"
+    | "missingStoreForMinStock";
   value?: string;
 };
 
 type ImportSource = "cloudshop" | "onec" | "csv";
+type ImportMode = "full" | "update_selected";
+type ImportUpdateField =
+  | "name"
+  | "unit"
+  | "category"
+  | "description"
+  | "photoUrl"
+  | "barcodes"
+  | "basePriceKgs"
+  | "purchasePriceKgs"
+  | "avgCostKgs"
+  | "minStock";
 
 type ImportRunSummary = {
   rows?: number;
   created?: number;
   updated?: number;
+  skipped?: number;
   source?: string;
+  mode?: ImportMode;
+  updateMask?: ImportUpdateField[] | null;
   targetStoreId?: string;
   targetStoreName?: string;
   images?: {
@@ -124,6 +147,19 @@ const parseOptionalNumericValue = (value: string) => {
   const compact = normalized.replace(/\s+/g, "").replace(",", ".");
   const parsed = Number(compact);
   if (!Number.isFinite(parsed) || parsed < 0) {
+    return { value: undefined as number | undefined, invalid: true };
+  }
+  return { value: parsed, invalid: false };
+};
+
+const parseOptionalIntegerValue = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return { value: undefined as number | undefined, invalid: false };
+  }
+  const compact = normalized.replace(/\s+/g, "").replace(",", ".");
+  const parsed = Number(compact);
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
     return { value: undefined as number | undefined, invalid: true };
   }
   return { value: parsed, invalid: false };
@@ -234,6 +270,11 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
     ["cost", "avgcost", "себестоимость", "средняясебестоимость", "costprice"],
     { allowContains: true },
   ),
+  minStock: detectColumn(
+    headers,
+    ["minstock", "minimumstock", "минимальныйостаток", "миностаток", "минкалдык"],
+    { allowContains: true },
+  ),
   photoUrl: detectColumn(
     headers,
     [
@@ -287,9 +328,17 @@ const ImportPage = () => {
     basePriceKgs: "",
     purchasePriceKgs: "",
     avgCostKgs: "",
+    minStock: "",
     photoUrl: "",
     barcodes: "",
   });
+  const [importMode, setImportMode] = useState<ImportMode>("full");
+  const [selectedUpdateFields, setSelectedUpdateFields] = useState<ImportUpdateField[]>([
+    "basePriceKgs",
+    "purchasePriceKgs",
+    "avgCostKgs",
+    "minStock",
+  ]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [source, setSource] = useState<ImportSource>("csv");
   const [rollbackBatchId, setRollbackBatchId] = useState<string | null>(null);
@@ -332,6 +381,7 @@ const ImportPage = () => {
         basePriceKgs: "",
         purchasePriceKgs: "",
         avgCostKgs: "",
+        minStock: "",
         photoUrl: "",
         barcodes: "",
       });
@@ -370,6 +420,8 @@ const ImportPage = () => {
         return t("rollbackEntities.attribute");
       case "PurchaseOrder":
         return t("rollbackEntities.purchaseOrder");
+      case "ReorderPolicy":
+        return t("rollbackEntities.reorderPolicy");
       default:
         return entityType;
     }
@@ -385,16 +437,39 @@ const ImportPage = () => {
       { key: "basePriceKgs" as const, label: t("fieldBasePrice"), required: false },
       { key: "purchasePriceKgs" as const, label: t("fieldPurchasePrice"), required: false },
       { key: "avgCostKgs" as const, label: t("fieldAvgCost"), required: false },
+      { key: "minStock" as const, label: t("fieldMinStock"), required: false },
       { key: "photoUrl" as const, label: t("fieldPhotoUrl"), required: false },
       { key: "barcodes" as const, label: t("fieldBarcodes"), required: false },
     ],
     [t],
   );
 
+  const selectedUpdateFieldSet = useMemo(
+    () => new Set<ImportUpdateField>(selectedUpdateFields),
+    [selectedUpdateFields],
+  );
+  const isUpdateSelectedMode = importMode === "update_selected";
+  const requiredFields = useMemo(() => {
+    const required = new Set<MappingKey>(["sku"]);
+    if (isUpdateSelectedMode) {
+      selectedUpdateFieldSet.forEach((field) => {
+        required.add(field as MappingKey);
+      });
+      return required;
+    }
+    required.add("name");
+    required.add("unit");
+    return required;
+  }, [isUpdateSelectedMode, selectedUpdateFieldSet]);
+  const updateSelectableFields = useMemo(
+    () => mappingFields.filter((field) => field.key !== "sku"),
+    [mappingFields],
+  );
+
   const missingRequired = useMemo(
     () =>
       mappingFields.filter((field) => {
-        if (!field.required) {
+        if (!requiredFields.has(field.key)) {
           return false;
         }
         if (field.key === "unit") {
@@ -402,7 +477,7 @@ const ImportPage = () => {
         }
         return !mapping[field.key];
       }),
-    [defaultUnitCode, mapping, mappingFields],
+    [defaultUnitCode, mapping, mappingFields, requiredFields],
   );
 
   const validation = useMemo(() => {
@@ -422,9 +497,11 @@ const ImportPage = () => {
         return;
       }
       const sku = normalizeValue(row[mapping.sku]);
-      const name = normalizeValue(row[mapping.name]);
+      const name = mapping.name ? normalizeValue(row[mapping.name]) : "";
       const unitFromRow = mapping.unit ? normalizeValue(row[mapping.unit]) : "";
       const unit = unitFromRow || defaultUnitCode;
+      const shouldApply = (field: ImportUpdateField) =>
+        importMode === "full" || selectedUpdateFieldSet.has(field);
 
       if (!sku) {
         errors.push({
@@ -435,7 +512,7 @@ const ImportPage = () => {
         });
         return;
       }
-      if (!name) {
+      if (shouldApply("name") && !name) {
         errors.push({
           row: rowNumber,
           message: t("rowMissing", { row: rowNumber, field: t("fieldName") }),
@@ -444,7 +521,7 @@ const ImportPage = () => {
         });
         return;
       }
-      if (!unit) {
+      if (shouldApply("unit") && !unit) {
         errors.push({
           row: rowNumber,
           message: t("rowMissing", { row: rowNumber, field: t("fieldUnit") }),
@@ -466,7 +543,7 @@ const ImportPage = () => {
         });
         return;
       }
-      if (name.length < 2) {
+      if (shouldApply("name") && name.length < 2) {
         errors.push({
           row: rowNumber,
           message: t("rowMinLength", {
@@ -490,22 +567,26 @@ const ImportPage = () => {
         return;
       }
 
-      const barcodesValue = mapping.barcodes
+      const barcodesValue = shouldApply("barcodes") && mapping.barcodes
         ? normalizeValue(row[mapping.barcodes])
         : "";
       const barcodes = barcodesValue ? parseBarcodes(barcodesValue) : [];
-      const basePriceCandidate = mapping.basePriceKgs
+      const basePriceCandidate = shouldApply("basePriceKgs") && mapping.basePriceKgs
         ? normalizeValue(row[mapping.basePriceKgs])
         : "";
-      const purchasePriceCandidate = mapping.purchasePriceKgs
+      const purchasePriceCandidate = shouldApply("purchasePriceKgs") && mapping.purchasePriceKgs
         ? normalizeValue(row[mapping.purchasePriceKgs])
         : "";
-      const avgCostCandidate = mapping.avgCostKgs
+      const avgCostCandidate = shouldApply("avgCostKgs") && mapping.avgCostKgs
         ? normalizeValue(row[mapping.avgCostKgs])
+        : "";
+      const minStockCandidate = shouldApply("minStock") && mapping.minStock
+        ? normalizeValue(row[mapping.minStock])
         : "";
       const basePriceResult = parseOptionalNumericValue(basePriceCandidate);
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
+      const minStockResult = parseOptionalIntegerValue(minStockCandidate);
 
       if (basePriceResult.invalid) {
         errors.push({
@@ -534,41 +615,76 @@ const ImportPage = () => {
         });
         return;
       }
-
-      const duplicateBarcode = barcodes.find((barcode) => seenBarcodes.has(barcode));
-      if (duplicateBarcode) {
+      if (minStockResult.invalid) {
         errors.push({
           row: rowNumber,
-          message: t("duplicateBarcode", { row: rowNumber, value: duplicateBarcode }),
-          code: "duplicateBarcode",
-          value: duplicateBarcode,
+          message: t("rowInvalidInteger", { row: rowNumber, field: t("fieldMinStock") }),
+          code: "invalidNumber",
+          value: "minStock",
+        });
+        return;
+      }
+      if (minStockResult.value !== undefined && !targetStoreId) {
+        errors.push({
+          row: rowNumber,
+          message: t("rowStoreRequiredForMinStock", { row: rowNumber }),
+          code: "missingStoreForMinStock",
+          value: "minStock",
         });
         return;
       }
 
+      if (shouldApply("barcodes")) {
+        const duplicateBarcode = barcodes.find((barcode) => seenBarcodes.has(barcode));
+        if (duplicateBarcode) {
+          errors.push({
+            row: rowNumber,
+            message: t("duplicateBarcode", { row: rowNumber, value: duplicateBarcode }),
+            code: "duplicateBarcode",
+            value: duplicateBarcode,
+          });
+          return;
+        }
+      }
+
       seenSkus.add(sku);
-      barcodes.forEach((barcode) => seenBarcodes.add(barcode));
+      if (shouldApply("barcodes")) {
+        barcodes.forEach((barcode) => seenBarcodes.add(barcode));
+      }
 
       rows.push({
         sku,
-        name,
-        unit,
-        category: mapping.category ? normalizeValue(row[mapping.category]) || undefined : undefined,
-        description: mapping.description
+        name: shouldApply("name") ? name || undefined : undefined,
+        unit: shouldApply("unit") ? unit || undefined : undefined,
+        category: shouldApply("category") && mapping.category
+          ? normalizeValue(row[mapping.category]) || undefined
+          : undefined,
+        description: shouldApply("description") && mapping.description
           ? normalizeValue(row[mapping.description]) || undefined
           : undefined,
         basePriceKgs: basePriceResult.value,
         purchasePriceKgs: purchasePriceResult.value,
         avgCostKgs: avgCostResult.value,
-        photoUrl: mapping.photoUrl
+        minStock: minStockResult.value,
+        photoUrl: shouldApply("photoUrl") && mapping.photoUrl
           ? normalizeValue(row[mapping.photoUrl]) || undefined
           : undefined,
-        barcodes: barcodes.length ? barcodes : undefined,
+        barcodes: shouldApply("barcodes") && barcodes.length ? barcodes : undefined,
       });
     });
 
     return { rows, errors };
-  }, [defaultUnitCode, missingRequired.length, mapping, rawRows, skippedRows, t]);
+  }, [
+    defaultUnitCode,
+    importMode,
+    missingRequired.length,
+    mapping,
+    rawRows,
+    selectedUpdateFieldSet,
+    skippedRows,
+    t,
+    targetStoreId,
+  ]);
 
   const handleFile = async (file: File) => {
     setFileError(null);
@@ -584,6 +700,7 @@ const ImportPage = () => {
       basePriceKgs: "",
       purchasePriceKgs: "",
       avgCostKgs: "",
+      minStock: "",
       photoUrl: "",
       barcodes: "",
     });
@@ -772,6 +889,30 @@ const ImportPage = () => {
     );
   };
 
+  const handleToggleUpdateField = (field: ImportUpdateField) => {
+    setSelectedUpdateFields((prev) =>
+      prev.includes(field)
+        ? prev.filter((value) => value !== field)
+        : [...prev, field],
+    );
+  };
+
+  const applyUpdatePreset = (preset: "prices" | "minStock" | "all" | "none") => {
+    if (preset === "prices") {
+      setSelectedUpdateFields(["basePriceKgs", "purchasePriceKgs", "avgCostKgs"]);
+      return;
+    }
+    if (preset === "minStock") {
+      setSelectedUpdateFields(["minStock"]);
+      return;
+    }
+    if (preset === "all") {
+      setSelectedUpdateFields(updateSelectableFields.map((field) => field.key as ImportUpdateField));
+      return;
+    }
+    setSelectedUpdateFields([]);
+  };
+
   const duplicateBarcodeErrors = validation.errors.filter(
     (error) => error.code === "duplicateBarcode" && Boolean(error.value),
   );
@@ -866,12 +1007,75 @@ const ImportPage = () => {
         <CardContent className="space-y-4">
           {headers.length ? (
             <div className="space-y-4">
+              <div className="space-y-3 rounded-md border border-border bg-card p-3">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">{t("importModeTitle")}</p>
+                  <Select
+                    value={importMode}
+                    onValueChange={(value) => setImportMode(value as ImportMode)}
+                  >
+                    <SelectTrigger className="max-w-sm">
+                      <SelectValue placeholder={t("importModePlaceholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">{t("mode.full")}</SelectItem>
+                      <SelectItem value="update_selected">{t("mode.update_selected")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{t("importModeHint")}</p>
+                </div>
+
+                {isUpdateSelectedMode ? (
+                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-medium text-foreground">{t("updateFieldsTitle")}</p>
+                      {selectedUpdateFields.length ? (
+                        <Badge variant="muted" className="text-[10px]">
+                          {selectedUpdateFields.length}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t("updateFieldsHint")}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("prices")}>
+                        {t("updatePresetPrices")}
+                      </Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("minStock")}>
+                        {t("updatePresetMinStock")}
+                      </Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("all")}>
+                        {t("updatePresetAll")}
+                      </Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("none")}>
+                        {t("updatePresetNone")}
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {updateSelectableFields.map((field) => {
+                        const selected = selectedUpdateFields.includes(field.key as ImportUpdateField);
+                        return (
+                          <Button
+                            key={`mask-${field.key}`}
+                            type="button"
+                            size="sm"
+                            variant={selected ? "default" : "secondary"}
+                            onClick={() => handleToggleUpdateField(field.key as ImportUpdateField)}
+                          >
+                            {field.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               <FormGrid className="items-start">
                 {mappingFields.map((field) => (
                   <div key={field.key} className="space-y-2">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{field.label}</p>
-                      {field.required ? (
+                      {requiredFields.has(field.key) ? (
                         <Badge variant="warning" className="text-[10px]">
                           {t("required")}
                         </Badge>
@@ -963,6 +1167,9 @@ const ImportPage = () => {
           )}
           {missingRequired.length ? (
             <p className="text-sm text-danger">{t("mappingRequired")}</p>
+          ) : null}
+          {isUpdateSelectedMode && selectedUpdateFields.length === 0 ? (
+            <p className="text-sm text-danger">{t("updateMaskRequired")}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -1183,11 +1390,14 @@ const ImportPage = () => {
                   rows: validation.rows,
                   source,
                   storeId: targetStoreId || undefined,
+                  mode: importMode,
+                  updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
                 });
               }}
               disabled={
                 importMutation.isLoading ||
                 missingRequired.length > 0 ||
+                (isUpdateSelectedMode && selectedUpdateFields.length === 0) ||
                 validation.errors.length > 0 ||
                 validation.rows.length === 0
               }
@@ -1224,12 +1434,33 @@ const ImportPage = () => {
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("importSuccess", { count: (lastImportSummary.rows ?? 0) })}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t(`mode.${lastImportSummary.mode ?? "full"}`)}
+              </p>
               {lastImportSummary.targetStoreName ? (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t("targetStoreApplied", { store: lastImportSummary.targetStoreName })}
                 </p>
               ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                <div className="rounded border border-success/40 bg-card p-2">
+                  <p className="text-muted-foreground">{t("historyColumns.created")}</p>
+                  <p className="font-semibold text-foreground">
+                    {lastImportSummary.created ?? 0}
+                  </p>
+                </div>
+                <div className="rounded border border-success/40 bg-card p-2">
+                  <p className="text-muted-foreground">{t("historyColumns.updated")}</p>
+                  <p className="font-semibold text-foreground">
+                    {lastImportSummary.updated ?? 0}
+                  </p>
+                </div>
+                <div className="rounded border border-success/40 bg-card p-2">
+                  <p className="text-muted-foreground">{t("historyColumns.skipped")}</p>
+                  <p className="font-semibold text-foreground">
+                    {lastImportSummary.skipped ?? 0}
+                  </p>
+                </div>
                 <div className="rounded border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageDownloaded")}</p>
                   <p className="font-semibold text-foreground">
@@ -1280,6 +1511,7 @@ const ImportPage = () => {
                         <TableHead>{t("historyColumns.rows")}</TableHead>
                         <TableHead>{t("historyColumns.created")}</TableHead>
                         <TableHead>{t("historyColumns.updated")}</TableHead>
+                        <TableHead>{t("historyColumns.skipped")}</TableHead>
                         <TableHead>{t("historyColumns.status")}</TableHead>
                         <TableHead className="text-right">{tCommon("actions")}</TableHead>
                       </TableRow>
@@ -1290,7 +1522,9 @@ const ImportPage = () => {
                           rows?: number;
                           created?: number;
                           updated?: number;
+                          skipped?: number;
                           source?: string;
+                          mode?: ImportMode;
                           targetStoreName?: string;
                         };
                         const sourceLabel = summary.source ? t(`source.${summary.source}`) : t("source.csv");
@@ -1313,6 +1547,9 @@ const ImportPage = () => {
                             <TableCell className="text-xs text-muted-foreground">
                               <div className="space-y-1">
                                 <p>{sourceLabel}</p>
+                                <p className="text-[11px] text-muted-foreground/80">
+                                  {t(`mode.${summary.mode ?? "full"}`)}
+                                </p>
                                 {summary.targetStoreName ? (
                                   <p className="text-[11px] text-muted-foreground/80">
                                     {t("historyStoreValue", { store: summary.targetStoreName })}
@@ -1323,6 +1560,7 @@ const ImportPage = () => {
                             <TableCell className="text-xs text-muted-foreground">{summary.rows ?? 0}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{summary.created ?? 0}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{summary.updated ?? 0}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{summary.skipped ?? 0}</TableCell>
                             <TableCell>
                               {batch.rolledBackAt ? (
                                 <Badge variant="muted">{t("historyRolledBack")}</Badge>
@@ -1354,7 +1592,9 @@ const ImportPage = () => {
                   rows?: number;
                   created?: number;
                   updated?: number;
+                  skipped?: number;
                   source?: string;
+                  mode?: ImportMode;
                   targetStoreName?: string;
                 };
                 const sourceLabel = summary.source ? t(`source.${summary.source}`) : t("source.csv");
@@ -1377,6 +1617,9 @@ const ImportPage = () => {
                           {formatDateTime(batch.createdAt, locale)}
                         </p>
                         <p className="text-xs text-muted-foreground">{sourceLabel}</p>
+                        <p className="text-xs text-muted-foreground/80">
+                          {t(`mode.${summary.mode ?? "full"}`)}
+                        </p>
                         {summary.targetStoreName ? (
                           <p className="text-xs text-muted-foreground/80">
                             {t("historyStoreValue", { store: summary.targetStoreName })}
@@ -1407,6 +1650,12 @@ const ImportPage = () => {
                           {t("historyColumns.updated")}
                         </p>
                         <p className="text-foreground/90">{summary.updated ?? 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                          {t("historyColumns.skipped")}
+                        </p>
+                        <p className="text-foreground/90">{summary.skipped ?? 0}</p>
                       </div>
                       <div>
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">

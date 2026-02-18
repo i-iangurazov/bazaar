@@ -48,6 +48,8 @@ const PosShiftsPage = () => {
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
+  const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -70,9 +72,22 @@ const PosShiftsPage = () => {
     setRegisterId(registersQuery.data[0].id);
   }, [registerId, registersQuery.data]);
 
+  useEffect(() => {
+    if (!registerId || !registersQuery.data?.length) {
+      return;
+    }
+    if (registerExists) {
+      return;
+    }
+    setRegisterId("");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(selectedRegisterKey);
+    }
+  }, [registerExists, registerId, registersQuery.data]);
+
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: Boolean(registerId), refetchOnWindowFocus: true },
+    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
 
   const reportQuery = trpc.pos.shifts.xReport.useQuery(
@@ -82,7 +97,7 @@ const PosShiftsPage = () => {
 
   const historyQuery = trpc.pos.shifts.list.useQuery(
     { registerId: registerId || undefined, page: 1, pageSize: 20 },
-    { enabled: Boolean(registerId), refetchOnWindowFocus: true },
+    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
 
   const closeShiftMutation = trpc.pos.shifts.close.useMutation({
@@ -188,14 +203,20 @@ const PosShiftsPage = () => {
           <CardTitle>{t("shifts.current")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {currentShiftQuery.isLoading ? (
+          {!canLoadRegisterScopedData ? (
+            <p className="text-sm text-muted-foreground">
+              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+            </p>
+          ) : null}
+
+          {canLoadRegisterScopedData && currentShiftQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
 
-          {!currentShiftQuery.isLoading && !currentShift ? (
+          {canLoadRegisterScopedData && !currentShiftQuery.isLoading && !currentShift ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {t("entry.shiftClosed")}
               <Button variant="secondary" asChild>
@@ -305,6 +326,12 @@ const PosShiftsPage = () => {
           <CardTitle>{t("shifts.historyTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {!canLoadRegisterScopedData ? (
+            <p className="text-sm text-muted-foreground">
+              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+            </p>
+          ) : null}
+
           {(historyItems ?? []).map((shift) => (
             <div
               key={shift.id}
@@ -329,7 +356,7 @@ const PosShiftsPage = () => {
             </div>
           ))}
 
-          {historyQuery.isLoading ? (
+          {canLoadRegisterScopedData && historyQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}

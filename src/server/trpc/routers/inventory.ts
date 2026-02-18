@@ -98,6 +98,60 @@ export const inventoryRouter = router({
       return { items, total, page, pageSize };
     }),
 
+  listIds: protectedProcedure
+    .input(
+      z.object({
+        storeId: z.string(),
+        search: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
+      if (!store || store.organizationId !== ctx.user.organizationId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      }
+
+      const where = {
+        storeId: input.storeId,
+        product: {
+          isDeleted: false,
+          ...(input.search
+            ? {
+                OR: [
+                  { name: { contains: input.search, mode: "insensitive" as const } },
+                  { sku: { contains: input.search, mode: "insensitive" as const } },
+                ],
+              }
+            : {}),
+        },
+      };
+
+      const rows = await ctx.prisma.inventorySnapshot.findMany({
+        where,
+        select: { id: true },
+        orderBy: { product: { name: "asc" } },
+      });
+      return rows.map((row) => row.id);
+    }),
+
+  productIdsBySnapshotIds: protectedProcedure
+    .input(z.object({ snapshotIds: z.array(z.string()).min(1).max(10_000) }))
+    .query(async ({ ctx, input }) => {
+      const snapshotIds = Array.from(new Set(input.snapshotIds.filter(Boolean)));
+      if (!snapshotIds.length) {
+        return [];
+      }
+      const rows = await ctx.prisma.inventorySnapshot.findMany({
+        where: {
+          id: { in: snapshotIds },
+          store: { organizationId: ctx.user.organizationId },
+          product: { isDeleted: false },
+        },
+        select: { productId: true },
+      });
+      return Array.from(new Set(rows.map((row) => row.productId)));
+    }),
+
   movements: protectedProcedure
     .input(
       z.object({

@@ -92,6 +92,36 @@ export const purchaseOrdersRouter = router({
       };
     }),
 
+  listIds: protectedProcedure
+    .input(
+      z
+        .object({
+          status: z
+            .enum([
+              "DRAFT",
+              "SUBMITTED",
+              "APPROVED",
+              "PARTIALLY_RECEIVED",
+              "RECEIVED",
+              "CANCELLED",
+            ])
+            .optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const where = {
+        organizationId: ctx.user.organizationId,
+        ...(input?.status ? { status: input.status } : {}),
+      };
+      const rows = await ctx.prisma.purchaseOrder.findMany({
+        where,
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map((row) => row.id);
+    }),
+
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {

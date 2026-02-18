@@ -1,18 +1,31 @@
 import {
   CashDrawerMovementType,
   CustomerOrderStatus,
+  KkmMode,
+  MarkingCodeStatus,
+  MarkingMode,
+  PosPaymentMethod,
   PosReturnStatus,
   Prisma,
   RegisterShiftStatus,
+  RefundRequestStatus,
   StockMovementType,
 } from "@prisma/client";
-import type { PosPaymentMethod } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import type { FiscalReceiptDraft } from "@/server/kkm/adapter";
 import { getKkmAdapter } from "@/server/kkm/registry";
 import { getLogger } from "@/server/logging";
+import {
+  incrementCounter,
+  kkmReceiptsFailedTotal,
+  kkmReceiptsQueuedTotal,
+  kkmReceiptsSentTotal,
+  posShiftClosedTotal,
+  posShiftOpenedTotal,
+} from "@/server/metrics/metrics";
+import { queueFiscalReceipt } from "@/server/services/kkmConnector";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
@@ -284,6 +297,18 @@ const normalizePayments = (
   return normalized;
 };
 
+const normalizeMarkingCodes = (codes: string[]) => {
+  const unique = new Set<string>();
+  for (const raw of codes) {
+    const value = raw.trim();
+    if (!value) {
+      continue;
+    }
+    unique.add(value);
+  }
+  return Array.from(unique);
+};
+
 const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
   organizationId: string;
   shiftId: string;
@@ -292,7 +317,19 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
     where: { id: input.shiftId, organizationId: input.organizationId },
     include: {
       register: { select: { id: true, code: true, name: true } },
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          complianceProfile: {
+            select: {
+              enableMarking: true,
+              markingMode: true,
+            },
+          },
+        },
+      },
       openedBy: { select: { id: true, name: true } },
       closedBy: { select: { id: true, name: true } },
     },
@@ -424,7 +461,19 @@ export const listPosRegisters = async (input: {
       ...(input.storeId ? { storeId: input.storeId } : {}),
     },
     include: {
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          complianceProfile: {
+            select: {
+              enableMarking: true,
+              markingMode: true,
+            },
+          },
+        },
+      },
       shifts: {
         where: { status: RegisterShiftStatus.OPEN },
         orderBy: { openedAt: "desc" },
@@ -641,6 +690,7 @@ export const openRegisterShift = async (input: {
     type: "shift.opened",
     payload: { shiftId: result.id, storeId: result.storeId, registerId: result.registerId },
   });
+  incrementCounter(posShiftOpenedTotal);
 
   return result;
 };
@@ -657,7 +707,19 @@ export const getCurrentRegisterShift = async (input: {
     },
     include: {
       register: { select: { id: true, name: true, code: true } },
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          complianceProfile: {
+            select: {
+              enableMarking: true,
+              markingMode: true,
+            },
+          },
+        },
+      },
       openedBy: { select: { id: true, name: true } },
     },
     orderBy: { openedAt: "desc" },
@@ -823,6 +885,7 @@ export const closeRegisterShift = async (input: {
     type: "shift.closed",
     payload: { shiftId: result.id, storeId: result.storeId, registerId: result.registerId },
   });
+  incrementCounter(posShiftClosedTotal);
 
   return result;
 };
@@ -837,40 +900,61 @@ export const createPosSaleDraft = async (input: {
   requestId: string;
   lines?: Array<{ productId: string; variantId?: string | null; qty: number }>;
 }) => {
-  return prisma.$transaction(async (tx) => {
-    const shift = await requireOpenShift(tx, {
-      organizationId: input.organizationId,
-      registerId: input.registerId,
-    });
-
-    const existingDraft = await tx.customerOrder.findFirst({
-      where: {
+  const createDraftInTransaction = async () =>
+    prisma.$transaction(async (tx) => {
+      const shift = await requireOpenShift(tx, {
         organizationId: input.organizationId,
-        storeId: shift.storeId,
-        registerId: shift.registerId,
-        shiftId: shift.id,
-        createdById: input.actorId,
-        isPosSale: true,
-        status: CustomerOrderStatus.DRAFT,
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        number: true,
-        status: true,
-        storeId: true,
-        registerId: true,
-        shiftId: true,
-      },
-    });
-    if (existingDraft) {
-      return existingDraft;
-    }
+        registerId: input.registerId,
+      });
 
-    const number = await nextPosSaleNumber(tx, input.organizationId);
+      const existingDraft = await tx.customerOrder.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          registerId: shift.registerId,
+          createdById: input.actorId,
+          isPosSale: true,
+          status: CustomerOrderStatus.DRAFT,
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          storeId: true,
+          registerId: true,
+          shiftId: true,
+          shift: {
+            select: {
+              status: true,
+            },
+          },
+        },
+      });
 
-    const createOrder = () =>
-      tx.customerOrder.create({
+      if (existingDraft) {
+        // If an old draft is tied to a closed shift, archive it and create a fresh draft.
+        if (existingDraft.shift?.status !== RegisterShiftStatus.OPEN) {
+          await tx.customerOrder.update({
+            where: { id: existingDraft.id },
+            data: {
+              status: CustomerOrderStatus.CANCELED,
+              updatedById: input.actorId,
+            },
+          });
+        } else {
+          return {
+            id: existingDraft.id,
+            number: existingDraft.number,
+            status: existingDraft.status,
+            storeId: existingDraft.storeId,
+            registerId: existingDraft.registerId,
+            shiftId: existingDraft.shiftId,
+          };
+        }
+      }
+
+      const number = await nextPosSaleNumber(tx, input.organizationId);
+      const order = await tx.customerOrder.create({
         data: {
           organizationId: input.organizationId,
           storeId: shift.storeId,
@@ -887,92 +971,94 @@ export const createPosSaleDraft = async (input: {
         },
       });
 
-    let order: Awaited<ReturnType<typeof createOrder>>;
-    try {
-      order = await createOrder();
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        const concurrentDraft = await tx.customerOrder.findFirst({
-          where: {
+      if (input.lines?.length) {
+        for (const lineInput of input.lines) {
+          const resolved = await resolveUnitPrice({
+            tx,
             organizationId: input.organizationId,
             storeId: shift.storeId,
-            registerId: shift.registerId,
-            shiftId: shift.id,
-            createdById: input.actorId,
-            isPosSale: true,
-            status: CustomerOrderStatus.DRAFT,
-          },
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            number: true,
-            status: true,
-            storeId: true,
-            registerId: true,
-            shiftId: true,
-          },
-        });
-        if (concurrentDraft) {
-          return concurrentDraft;
-        }
-      }
-      throw error;
-    }
-
-    if (input.lines?.length) {
-      for (const lineInput of input.lines) {
-        const resolved = await resolveUnitPrice({
-          tx,
-          organizationId: input.organizationId,
-          storeId: shift.storeId,
-          productId: lineInput.productId,
-          variantId: lineInput.variantId ?? null,
-        });
-        const unitCost = await resolveUnitCost({
-          tx,
-          organizationId: input.organizationId,
-          productId: lineInput.productId,
-          variantId: lineInput.variantId ?? null,
-          isBundle: resolved.isBundle,
-        });
-
-        await tx.customerOrderLine.create({
-          data: {
-            customerOrderId: order.id,
             productId: lineInput.productId,
             variantId: lineInput.variantId ?? null,
-            variantKey: resolved.variantKey,
-            qty: lineInput.qty,
-            unitPriceKgs: resolved.unitPrice,
-            lineTotalKgs: roundMoney(resolved.unitPrice * lineInput.qty),
-            unitCostKgs: unitCost,
-            lineCostTotalKgs: unitCost === null ? null : roundMoney(unitCost * lineInput.qty),
-          },
-        });
-      }
-      await recomputeSaleTotals(tx, order.id, input.actorId);
-    }
+          });
+          const unitCost = await resolveUnitCost({
+            tx,
+            organizationId: input.organizationId,
+            productId: lineInput.productId,
+            variantId: lineInput.variantId ?? null,
+            isBundle: resolved.isBundle,
+          });
 
-    await writeAuditLog(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      action: "POS_SALE_CREATE",
-      entity: "CustomerOrder",
-      entityId: order.id,
-      before: null,
-      after: toJson(order),
-      requestId: input.requestId,
+          await tx.customerOrderLine.create({
+            data: {
+              customerOrderId: order.id,
+              productId: lineInput.productId,
+              variantId: lineInput.variantId ?? null,
+              variantKey: resolved.variantKey,
+              qty: lineInput.qty,
+              unitPriceKgs: resolved.unitPrice,
+              lineTotalKgs: roundMoney(resolved.unitPrice * lineInput.qty),
+              unitCostKgs: unitCost,
+              lineCostTotalKgs: unitCost === null ? null : roundMoney(unitCost * lineInput.qty),
+            },
+          });
+        }
+        await recomputeSaleTotals(tx, order.id, input.actorId);
+      }
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "POS_SALE_CREATE",
+        entity: "CustomerOrder",
+        entityId: order.id,
+        before: null,
+        after: toJson(order),
+        requestId: input.requestId,
+      });
+
+      return {
+        id: order.id,
+        number: order.number,
+        status: order.status,
+        storeId: order.storeId,
+        registerId: order.registerId,
+        shiftId: order.shiftId,
+      };
     });
 
-    return {
-      id: order.id,
-      number: order.number,
-      status: order.status,
-      storeId: order.storeId,
-      registerId: order.registerId,
-      shiftId: order.shiftId,
-    };
-  });
+  try {
+    return await createDraftInTransaction();
+  } catch (error) {
+    // If another request created the draft first, return that draft from a fresh query context.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const concurrentDraft = await prisma.customerOrder.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          registerId: input.registerId,
+          createdById: input.actorId,
+          isPosSale: true,
+          status: CustomerOrderStatus.DRAFT,
+          shift: {
+            status: RegisterShiftStatus.OPEN,
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          storeId: true,
+          registerId: true,
+          shiftId: true,
+        },
+      });
+      if (concurrentDraft) {
+        return concurrentDraft;
+      }
+    }
+
+    throw error;
+  }
 };
 
 export const getActivePosSaleDraft = async (input: {
@@ -1149,7 +1235,19 @@ export const getPosSale = async (input: {
       isPosSale: true,
     },
     include: {
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          complianceProfile: {
+            select: {
+              enableMarking: true,
+              markingMode: true,
+            },
+          },
+        },
+      },
       register: { select: { id: true, name: true, code: true } },
       shift: {
         select: {
@@ -1164,13 +1262,24 @@ export const getPosSale = async (input: {
           product: {
             select: {
               id: true,
-              sku: true,
-              name: true,
-              isBundle: true,
-              baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
+                sku: true,
+                name: true,
+                isBundle: true,
+                complianceFlags: {
+                  select: {
+                    requiresMarking: true,
+                    markingType: true,
+                  },
+                },
+                baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
+              },
             },
-          },
           variant: { select: { id: true, name: true } },
+          markingCodeCaptures: {
+            where: { status: MarkingCodeStatus.CAPTURED },
+            select: { id: true, code: true, status: true, capturedAt: true },
+            orderBy: { capturedAt: "asc" },
+          },
         },
         orderBy: { id: "asc" },
       },
@@ -1200,6 +1309,7 @@ export const getPosSale = async (input: {
       lineTotalKgs: toMoney(line.lineTotalKgs),
       unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
       lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
+      markingCodes: line.markingCodeCaptures.map((capture) => capture.code),
     })),
     payments: sale.payments.map((payment) => ({
       ...payment,
@@ -1411,6 +1521,234 @@ export const removePosSaleLine = async (input: {
   });
 };
 
+export const upsertSaleLineMarkingCodes = async (input: {
+  organizationId: string;
+  saleId: string;
+  lineId: string;
+  codes: string[];
+  actorId: string;
+  requestId: string;
+}) => {
+  const normalizedCodes = normalizeMarkingCodes(input.codes);
+  if (normalizedCodes.length > 200) {
+    throw new AppError("posMarkingCodesLimitExceeded", "BAD_REQUEST", 400);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: {
+        id: true,
+        storeId: true,
+        status: true,
+      },
+    });
+
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (sale.status !== CustomerOrderStatus.DRAFT) {
+      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+    }
+
+    const line = await tx.customerOrderLine.findUnique({
+      where: { id: input.lineId },
+      include: { product: { select: { id: true, name: true, sku: true } } },
+    });
+    if (!line || line.customerOrderId !== sale.id) {
+      throw new AppError("posSaleLineNotFound", "NOT_FOUND", 404);
+    }
+
+    const existingActive = await tx.markingCodeCapture.findMany({
+      where: {
+        saleLineId: line.id,
+        status: MarkingCodeStatus.CAPTURED,
+      },
+      select: { id: true, code: true },
+    });
+
+    if (existingActive.length) {
+      const toVoidIds = existingActive
+        .filter((capture) => !normalizedCodes.includes(capture.code))
+        .map((capture) => capture.id);
+      if (toVoidIds.length) {
+        await tx.markingCodeCapture.updateMany({
+          where: { id: { in: toVoidIds } },
+          data: { status: MarkingCodeStatus.VOIDED },
+        });
+      }
+    }
+
+    for (const code of normalizedCodes) {
+      await tx.markingCodeCapture.upsert({
+        where: {
+          saleLineId_code: {
+            saleLineId: line.id,
+            code,
+          },
+        },
+        create: {
+          organizationId: input.organizationId,
+          storeId: sale.storeId,
+          saleId: sale.id,
+          saleLineId: line.id,
+          code,
+          status: MarkingCodeStatus.CAPTURED,
+          capturedById: input.actorId,
+        },
+        update: {
+          status: MarkingCodeStatus.CAPTURED,
+          capturedAt: new Date(),
+          capturedById: input.actorId,
+        },
+      });
+    }
+
+    const current = await tx.markingCodeCapture.findMany({
+      where: {
+        saleLineId: line.id,
+        status: MarkingCodeStatus.CAPTURED,
+      },
+      select: { code: true },
+      orderBy: { capturedAt: "asc" },
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_MARKING_CODES_UPSERT",
+      entity: "CustomerOrderLine",
+      entityId: line.id,
+      before: toJson({ codes: existingActive.map((capture) => capture.code) }),
+      after: toJson({ codes: current.map((capture) => capture.code) }),
+      requestId: input.requestId,
+    });
+
+    return {
+      saleId: sale.id,
+      lineId: line.id,
+      productId: line.productId,
+      productName: line.product.name,
+      productSku: line.product.sku,
+      codes: current.map((capture) => capture.code),
+    };
+  });
+};
+
+export const listPosReceipts = async (input: {
+  organizationId: string;
+  storeId?: string;
+  shiftId?: string;
+  registerId?: string;
+  cashierId?: string;
+  statuses?: CustomerOrderStatus[];
+  dateFrom?: Date;
+  dateTo?: Date;
+  page: number;
+  pageSize: number;
+}) => {
+  const where: Prisma.CustomerOrderWhereInput = {
+    organizationId: input.organizationId,
+    isPosSale: true,
+    ...(input.storeId ? { storeId: input.storeId } : {}),
+    ...(input.shiftId ? { shiftId: input.shiftId } : {}),
+    ...(input.registerId ? { registerId: input.registerId } : {}),
+    ...(input.cashierId ? { createdById: input.cashierId } : {}),
+    ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
+    ...((input.dateFrom || input.dateTo)
+      ? {
+          createdAt: {
+            ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+            ...(input.dateTo ? { lte: input.dateTo } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const [total, items] = await Promise.all([
+    prisma.customerOrder.count({ where }),
+    prisma.customerOrder.findMany({
+      where,
+      include: {
+        store: { select: { id: true, name: true, code: true } },
+        register: { select: { id: true, name: true, code: true } },
+        shift: {
+          select: {
+            id: true,
+            openedAt: true,
+            closedAt: true,
+            status: true,
+          },
+        },
+        createdBy: { select: { id: true, name: true, email: true } },
+        payments: {
+          where: { isRefund: false },
+          select: { method: true, amountKgs: true },
+        },
+        fiscalReceipts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            providerReceiptId: true,
+            fiscalNumber: true,
+            qr: true,
+            lastError: true,
+            mode: true,
+            sentAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    }),
+  ]);
+
+  return {
+    items: items.map((item) => {
+      const paymentBreakdown: Record<PosPaymentMethod, number> = {
+        CASH: 0,
+        CARD: 0,
+        TRANSFER: 0,
+        OTHER: 0,
+      };
+      for (const payment of item.payments) {
+        paymentBreakdown[payment.method] = roundMoney(
+          paymentBreakdown[payment.method] + toMoney(payment.amountKgs),
+        );
+      }
+      const receipt = item.fiscalReceipts[0] ?? null;
+      return {
+        id: item.id,
+        number: item.number,
+        status: item.status,
+        createdAt: item.createdAt,
+        completedAt: item.completedAt,
+        totalKgs: toMoney(item.totalKgs),
+        subtotalKgs: toMoney(item.subtotalKgs),
+        customerName: item.customerName,
+        customerPhone: item.customerPhone,
+        store: item.store,
+        register: item.register,
+        shift: item.shift,
+        cashier: item.createdBy,
+        paymentBreakdown,
+        kkmStatus: item.kkmStatus,
+        fiscalReceipt: receipt,
+      };
+    }),
+    total,
+    page: input.page,
+    pageSize: input.pageSize,
+  };
+};
+
 export const completePosSale = async (input: {
   organizationId: string;
   saleId: string;
@@ -1515,6 +1853,54 @@ export const completePosSale = async (input: {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }
 
+        const compliance = await tx.storeComplianceProfile.findUnique({
+          where: { storeId: sale.storeId },
+          select: {
+            enableKkm: true,
+            kkmMode: true,
+            kkmProviderKey: true,
+            enableMarking: true,
+            markingMode: true,
+          },
+        });
+
+        if (
+          compliance?.enableMarking &&
+          compliance.markingMode === MarkingMode.REQUIRED_ON_SALE
+        ) {
+          const productIds = Array.from(new Set(sale.lines.map((line) => line.productId)));
+          const requiredFlags = productIds.length
+            ? await tx.productComplianceFlags.findMany({
+                where: {
+                  organizationId: input.organizationId,
+                  productId: { in: productIds },
+                  requiresMarking: true,
+                },
+                select: { productId: true },
+              })
+            : [];
+          const requiredProducts = new Set(requiredFlags.map((flag) => flag.productId));
+
+          const requiredLines = sale.lines.filter((line) => requiredProducts.has(line.productId));
+          if (requiredLines.length) {
+            const captures = await tx.markingCodeCapture.groupBy({
+              by: ["saleLineId"],
+              where: {
+                saleId: sale.id,
+                saleLineId: { in: requiredLines.map((line) => line.id) },
+                status: MarkingCodeStatus.CAPTURED,
+              },
+              _count: { _all: true },
+            });
+            const counts = new Map(captures.map((row) => [row.saleLineId, row._count._all]));
+
+            const missingLine = requiredLines.find((line) => (counts.get(line.id) ?? 0) < 1);
+            if (missingLine) {
+              throw new AppError("posMarkingCodeRequired", "BAD_REQUEST", 400);
+            }
+          }
+        }
+
         for (const line of sale.lines) {
           await applyStockMovement(tx, {
             storeId: sale.storeId,
@@ -1554,15 +1940,6 @@ export const completePosSale = async (input: {
           },
         });
 
-        const compliance = await tx.storeComplianceProfile.findUnique({
-          where: { storeId: sale.storeId },
-          select: {
-            enableKkm: true,
-            kkmMode: true,
-            kkmProviderKey: true,
-          },
-        });
-
         await writeAuditLog(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
@@ -1574,30 +1951,47 @@ export const completePosSale = async (input: {
           requestId: input.requestId,
         });
 
-        const kkmCandidate: FiscalReceiptDraft | null =
-          compliance?.enableKkm && compliance.kkmMode === "ADAPTER"
-            ? {
-                storeId: sale.storeId,
-                receiptId: sale.number,
-                cashierName: input.actorId,
-                customerName: sale.customerName ?? undefined,
-                lines: sale.lines.map((line) => ({
-                  sku: line.product.sku,
-                  name: line.product.name,
-                  qty: line.qty,
-                  priceKgs: toMoney(line.unitPriceKgs),
-                })),
-                payments: normalizedPayments.map((payment) => ({
-                  type: payment.method,
-                  amountKgs: payment.amountKgs,
-                })),
-                metadata: {
-                  saleId: sale.id,
-                  shiftId: shift.id,
-                  registerId: sale.registerId,
-                },
-              }
+        const kkmMode =
+          compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF
+            ? compliance.kkmMode
             : null;
+        const kkmCandidate: FiscalReceiptDraft | null = kkmMode
+          ? {
+              storeId: sale.storeId,
+              receiptId: sale.number,
+              cashierName: input.actorId,
+              customerName: sale.customerName ?? undefined,
+              lines: sale.lines.map((line) => ({
+                sku: line.product.sku,
+                name: line.product.name,
+                qty: line.qty,
+                priceKgs: toMoney(line.unitPriceKgs),
+              })),
+              payments: normalizedPayments.map((payment) => ({
+                type: payment.method,
+                amountKgs: payment.amountKgs,
+              })),
+              metadata: {
+                saleId: sale.id,
+                shiftId: shift.id,
+                registerId: sale.registerId,
+                mode: kkmMode,
+              },
+            }
+          : null;
+
+        const fiscalReceipt = kkmCandidate
+          ? await queueFiscalReceipt({
+              tx,
+              organizationId: input.organizationId,
+              storeId: sale.storeId,
+              customerOrderId: sale.id,
+              idempotencyKey: `pos-sale:${sale.id}:${input.idempotencyKey}`,
+              mode: kkmMode ?? KkmMode.EXPORT_ONLY,
+              providerKey: compliance?.kkmProviderKey ?? null,
+              payload: kkmCandidate,
+            })
+          : null;
 
         return {
           id: updated.id,
@@ -1607,8 +2001,10 @@ export const completePosSale = async (input: {
           registerId: updated.registerId,
           shiftId: updated.shiftId,
           productIds: sale.lines.map((line) => line.productId),
-          kkmCandidate,
+          kkmCandidate: kkmMode === KkmMode.ADAPTER ? kkmCandidate : null,
+          kkmMode,
           kkmProviderKey: compliance?.kkmProviderKey ?? null,
+          fiscalReceiptId: fiscalReceipt?.id ?? null,
         };
       },
     );
@@ -1616,28 +2012,66 @@ export const completePosSale = async (input: {
     return { ...completion, replayed };
   });
 
-  if (!result.replayed && result.kkmCandidate) {
+  if (!result.replayed && result.fiscalReceiptId) {
+    incrementCounter(kkmReceiptsQueuedTotal, {
+      mode: result.kkmMode ?? KkmMode.EXPORT_ONLY,
+    });
+  }
+
+  if (!result.replayed && result.kkmCandidate && result.kkmMode === KkmMode.ADAPTER) {
     try {
       const adapter = getKkmAdapter(result.kkmProviderKey);
       const fiscalized = await adapter.fiscalizeReceipt(result.kkmCandidate);
-      await prisma.customerOrder.update({
-        where: { id: result.id },
-        data: {
-          kkmStatus: "SENT",
-          kkmReceiptId: fiscalized.providerReceiptId,
-          kkmRawJson: fiscalized.rawJson ?? Prisma.DbNull,
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.customerOrder.update({
+          where: { id: result.id },
+          data: {
+            kkmStatus: "SENT",
+            kkmReceiptId: fiscalized.providerReceiptId,
+            kkmRawJson: fiscalized.rawJson ?? Prisma.DbNull,
+          },
+        });
+        if (result.fiscalReceiptId) {
+          await tx.fiscalReceipt.update({
+            where: { id: result.fiscalReceiptId },
+            data: {
+              status: "SENT",
+              providerReceiptId: fiscalized.providerReceiptId,
+              fiscalNumber: fiscalized.fiscalNumber ?? null,
+              sentAt: new Date(),
+              attemptCount: { increment: 1 },
+              lastError: null,
+              nextAttemptAt: null,
+            },
+          });
+        }
       });
+      incrementCounter(kkmReceiptsSentTotal, { mode: KkmMode.ADAPTER });
     } catch (error) {
-      await prisma.customerOrder.update({
-        where: { id: result.id },
-        data: {
-          kkmStatus: "FAILED",
-          kkmRawJson: toJson({
-            message: error instanceof Error ? error.message : String(error),
-          }) as Prisma.InputJsonValue,
-        },
+      const message = error instanceof Error ? error.message : String(error);
+      await prisma.$transaction(async (tx) => {
+        await tx.customerOrder.update({
+          where: { id: result.id },
+          data: {
+            kkmStatus: "FAILED",
+            kkmRawJson: toJson({
+              message,
+            }) as Prisma.InputJsonValue,
+          },
+        });
+        if (result.fiscalReceiptId) {
+          await tx.fiscalReceipt.update({
+            where: { id: result.fiscalReceiptId },
+            data: {
+              status: "FAILED",
+              lastError: message,
+              nextAttemptAt: new Date(Date.now() + 60_000),
+              attemptCount: { increment: 1 },
+            },
+          });
+        }
       });
+      incrementCounter(kkmReceiptsFailedTotal, { mode: KkmMode.ADAPTER });
     }
   }
 
@@ -2153,6 +2587,107 @@ export const completeSaleReturn = async (input: {
           throw new AppError("posShiftNotOpen", "CONFLICT", 409);
         }
 
+        const originalSale = await tx.customerOrder.findFirst({
+          where: {
+            id: saleReturn.originalSaleId,
+            organizationId: input.organizationId,
+            isPosSale: true,
+            status: CustomerOrderStatus.COMPLETED,
+          },
+          select: {
+            id: true,
+            shiftId: true,
+            payments: {
+              where: { isRefund: false },
+              select: { method: true },
+            },
+          },
+        });
+        if (!originalSale) {
+          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+
+        const refundHasCard = normalizedPayments.some(
+          (payment) => payment.method === PosPaymentMethod.CARD,
+        );
+        const refundHasQrLike = normalizedPayments.some(
+          (payment) => payment.method === PosPaymentMethod.TRANSFER,
+        );
+        const originalHasQrLike = originalSale.payments.some(
+          (payment) => payment.method === PosPaymentMethod.TRANSFER,
+        );
+
+        if (
+          refundHasCard &&
+          (!originalSale.shiftId || originalSale.shiftId !== saleReturn.shiftId)
+        ) {
+          throw new AppError("posCardRefundShiftMismatch", "CONFLICT", 409);
+        }
+
+        if (refundHasQrLike || originalHasQrLike) {
+          const request = await tx.refundRequest.upsert({
+            where: { saleReturnId: saleReturn.id },
+            create: {
+              organizationId: input.organizationId,
+              storeId: saleReturn.storeId,
+              saleReturnId: saleReturn.id,
+              originalSaleId: saleReturn.originalSaleId,
+              paymentMethod: refundHasQrLike
+                ? PosPaymentMethod.TRANSFER
+                : PosPaymentMethod.OTHER,
+              reasonCode: "MKASSA_QR_MANUAL",
+              notes: saleReturn.notes,
+              createdById: input.actorId,
+              status: RefundRequestStatus.OPEN,
+            },
+            update: {
+              paymentMethod: refundHasQrLike
+                ? PosPaymentMethod.TRANSFER
+                : PosPaymentMethod.OTHER,
+              reasonCode: "MKASSA_QR_MANUAL",
+              notes: saleReturn.notes,
+              status: RefundRequestStatus.OPEN,
+            },
+          });
+
+          const updatedReturn = await tx.saleReturn.update({
+            where: { id: saleReturn.id },
+            data: {
+              status: PosReturnStatus.CANCELED,
+              canceledAt: new Date(),
+              notes: saleReturn.notes
+                ? `${saleReturn.notes}\n[MANUAL_REFUND_REQUIRED]`
+                : "[MANUAL_REFUND_REQUIRED]",
+            },
+          });
+
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "POS_RETURN_MANUAL_REQUIRED",
+            entity: "SaleReturn",
+            entityId: saleReturn.id,
+            before: toJson({ status: saleReturn.status }),
+            after: toJson({
+              status: updatedReturn.status,
+              refundRequestId: request.id,
+            }),
+            requestId: input.requestId,
+          });
+
+          return {
+            id: updatedReturn.id,
+            number: updatedReturn.number,
+            status: updatedReturn.status,
+            storeId: updatedReturn.storeId,
+            registerId: updatedReturn.registerId,
+            shiftId: updatedReturn.shiftId,
+            productIds: [] as string[],
+            manualRequired: true,
+            refundRequestId: request.id,
+          };
+        }
+
         if (!saleReturn.lines.length) {
           throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
         }
@@ -2222,6 +2757,8 @@ export const completeSaleReturn = async (input: {
           registerId: updated.registerId,
           shiftId: updated.shiftId,
           productIds: saleReturn.lines.map((line) => line.productId),
+          manualRequired: false,
+          refundRequestId: null,
         };
       },
     );
@@ -2229,29 +2766,33 @@ export const completeSaleReturn = async (input: {
     return completion;
   });
 
-  const productIds = Array.from(new Set(result.productIds));
-  for (const productId of productIds) {
+  if (!result.manualRequired) {
+    const productIds = Array.from(new Set(result.productIds));
+    for (const productId of productIds) {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: result.storeId, productId, variantId: null },
+      });
+    }
+
     eventBus.publish({
-      type: "inventory.updated",
-      payload: { storeId: result.storeId, productId, variantId: null },
+      type: "sale.refunded",
+      payload: {
+        saleReturnId: result.id,
+        storeId: result.storeId,
+        registerId: result.registerId,
+        shiftId: result.shiftId,
+        number: result.number,
+      },
     });
   }
-
-  eventBus.publish({
-    type: "sale.refunded",
-    payload: {
-      saleReturnId: result.id,
-      storeId: result.storeId,
-      registerId: result.registerId,
-      shiftId: result.shiftId,
-      number: result.number,
-    },
-  });
 
   return {
     id: result.id,
     number: result.number,
     status: result.status,
+    manualRequired: result.manualRequired,
+    refundRequestId: result.refundRequestId,
   };
 };
 

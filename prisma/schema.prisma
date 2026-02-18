@@ -122,7 +122,38 @@ enum AuthTokenType {
 enum KkmMode {
   OFF
   EXPORT_ONLY
+  CONNECTOR
   ADAPTER
+}
+
+enum MarkingMode {
+  OFF
+  OPTIONAL
+  REQUIRED_ON_SALE
+}
+
+enum FiscalReceiptStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum RefundRequestStatus {
+  OPEN
+  RESOLVED
+  CANCELED
+}
+
+enum MarkingCodeStatus {
+  CAPTURED
+  VOIDED
+}
+
+enum TaxReferenceDocumentType {
+  PURCHASE
+  TRANSFER
+  SALE
 }
 
 enum ExportJobStatus {
@@ -143,6 +174,17 @@ enum ExportType {
   INVENTORY_ON_HAND
   PERIOD_CLOSE_REPORT
   RECEIPTS_FOR_KKM
+  RECEIPTS_REGISTRY
+  SHIFT_X_REPORT
+  SHIFT_Z_REPORT
+  SALES_BY_DAY
+  SALES_BY_ITEM
+  RETURNS_BY_DAY
+  RETURNS_BY_ITEM
+  CASH_DRAWER_MOVEMENTS
+  MARKING_SALES_REGISTRY
+  ETTN_REFERENCES
+  ESF_REFERENCES
 }
 
 model Organization {
@@ -193,6 +235,13 @@ model Organization {
   salePayments SalePayment[]
   cashDrawerMovements CashDrawerMovement[]
   saleReturns SaleReturn[]
+  fiscalReceipts FiscalReceipt[]
+  kkmConnectorDevices KkmConnectorDevice[]
+  kkmConnectorPairingCodes KkmConnectorPairingCode[]
+  refundRequests RefundRequest[]
+  markingCodeCaptures MarkingCodeCapture[]
+  ettnReferences EttnReference[]
+  esfReferences EsfReference[]
 }
 
 model User {
@@ -245,6 +294,12 @@ model User {
   cashDrawerMovementsCreated CashDrawerMovement[] @relation("cashDrawerMovementsCreated")
   saleReturnsCreated SaleReturn[] @relation("saleReturnsCreated")
   saleReturnsCompleted SaleReturn[] @relation("saleReturnsCompleted")
+  kkmPairingCodesCreated KkmConnectorPairingCode[] @relation("kkmPairingCodeCreatedBy")
+  refundRequestsCreated RefundRequest[] @relation("refundRequestsCreatedBy")
+  refundRequestsReviewed RefundRequest[] @relation("refundRequestsReviewedBy")
+  markingCodeCaptures MarkingCodeCapture[] @relation("markingCapturedBy")
+  ettnReferencesCreated EttnReference[] @relation("ettnReferenceCreatedBy")
+  esfReferencesCreated EsfReference[] @relation("esfReferenceCreatedBy")
   guideState UserGuideState?
 }
 
@@ -306,6 +361,13 @@ model Store {
   salePayments SalePayment[]
   cashDrawerMovements CashDrawerMovement[]
   saleReturns SaleReturn[]
+  fiscalReceipts FiscalReceipt[]
+  kkmConnectorDevices KkmConnectorDevice[]
+  kkmConnectorPairingCodes KkmConnectorPairingCode[]
+  refundRequests RefundRequest[]
+  markingCodeCaptures MarkingCodeCapture[]
+  ettnReferences EttnReference[]
+  esfReferences EsfReference[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -322,6 +384,7 @@ model StoreComplianceProfile {
   enableEsf      Boolean  @default(false)
   enableEttn     Boolean  @default(false)
   enableMarking  Boolean  @default(false)
+  markingMode    MarkingMode @default(OFF)
   kkmProviderKey String?
   kkmSettings    Json?
   updatedById    String?
@@ -719,6 +782,9 @@ model CustomerOrder {
   lines        CustomerOrderLine[]
   payments     SalePayment[]
   saleReturns  SaleReturn[]         @relation("saleReturnsOriginal")
+  fiscalReceipts FiscalReceipt[]
+  refundRequests RefundRequest[]
+  markingCodeCaptures MarkingCodeCapture[]
   createdBy    User?                @relation("customerOrdersCreated", fields: [createdById], references: [id])
   updatedBy    User?                @relation("customerOrdersUpdated", fields: [updatedById], references: [id])
 
@@ -746,6 +812,7 @@ model CustomerOrderLine {
   product       Product        @relation(fields: [productId], references: [id])
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
   saleReturnLines SaleReturnLine[]
+  markingCodeCaptures MarkingCodeCapture[]
 
   @@unique([customerOrderId, productId, variantKey])
   @@index([customerOrderId])
@@ -877,6 +944,7 @@ model SaleReturn {
   originalSale CustomerOrder @relation("saleReturnsOriginal", fields: [originalSaleId], references: [id])
   lines        SaleReturnLine[]
   payments     SalePayment[]
+  refundRequests RefundRequest[]
   createdBy    User @relation("saleReturnsCreated", fields: [createdById], references: [id])
   completedBy  User? @relation("saleReturnsCompleted", fields: [completedById], references: [id])
 
@@ -906,6 +974,169 @@ model SaleReturnLine {
   @@unique([saleReturnId, customerOrderLineId])
   @@index([saleReturnId])
   @@index([productId, variantId])
+}
+
+model FiscalReceipt {
+  id               String              @id @default(cuid())
+  organizationId   String
+  storeId          String
+  customerOrderId  String
+  status           FiscalReceiptStatus @default(QUEUED)
+  mode             KkmMode             @default(EXPORT_ONLY)
+  providerKey      String?
+  idempotencyKey   String              @unique
+  payloadJson      Json
+  attemptCount     Int                 @default(0)
+  lastError        String?
+  nextAttemptAt    DateTime?
+  providerReceiptId String?
+  fiscalNumber     String?
+  qr               String?
+  connectorDeviceId String?
+  sentAt           DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  customerOrder CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  connectorDevice KkmConnectorDevice? @relation(fields: [connectorDeviceId], references: [id])
+
+  @@index([organizationId, storeId, status, createdAt])
+  @@index([storeId, status, createdAt])
+  @@index([connectorDeviceId, status, createdAt])
+}
+
+model KkmConnectorDevice {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  name           String
+  tokenHash      String   @unique
+  isActive       Boolean  @default(true)
+  pairedAt       DateTime @default(now())
+  lastSeenAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  fiscalReceipts FiscalReceipt[]
+
+  @@index([organizationId, storeId, isActive])
+}
+
+model KkmConnectorPairingCode {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  code           String   @unique
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  createdBy    User @relation("kkmPairingCodeCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, storeId, expiresAt])
+}
+
+model RefundRequest {
+  id               String              @id @default(cuid())
+  organizationId   String
+  storeId          String
+  saleReturnId     String              @unique
+  originalSaleId   String
+  status           RefundRequestStatus @default(OPEN)
+  paymentMethod    PosPaymentMethod
+  reasonCode       String
+  notes            String?
+  createdById      String
+  reviewedById     String?
+  reviewedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  saleReturn   SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+  originalSale CustomerOrder @relation(fields: [originalSaleId], references: [id], onDelete: Cascade)
+  createdBy    User @relation("refundRequestsCreatedBy", fields: [createdById], references: [id])
+  reviewedBy   User? @relation("refundRequestsReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([organizationId, storeId, status, createdAt])
+  @@index([saleReturnId])
+  @@index([originalSaleId])
+}
+
+model MarkingCodeCapture {
+  id              String            @id @default(cuid())
+  organizationId  String
+  storeId         String
+  saleId          String
+  saleLineId      String
+  code            String
+  status          MarkingCodeStatus @default(CAPTURED)
+  capturedAt      DateTime          @default(now())
+  capturedById    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  sale         CustomerOrder @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleLine     CustomerOrderLine @relation(fields: [saleLineId], references: [id], onDelete: Cascade)
+  capturedBy   User? @relation("markingCapturedBy", fields: [capturedById], references: [id])
+
+  @@unique([saleLineId, code])
+  @@index([organizationId, storeId, capturedAt])
+  @@index([saleId, saleLineId, status])
+}
+
+model EttnReference {
+  id             String                   @id @default(cuid())
+  organizationId String
+  storeId        String
+  documentType   TaxReferenceDocumentType
+  documentId     String
+  ettnNumber     String
+  ettnDate       DateTime?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  createdBy    User? @relation("ettnReferenceCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([organizationId, storeId, documentType, documentId])
+  @@index([organizationId, storeId, documentType, createdAt])
+  @@index([documentType, documentId])
+}
+
+model EsfReference {
+  id               String                   @id @default(cuid())
+  organizationId   String
+  storeId          String
+  documentType     TaxReferenceDocumentType
+  documentId       String
+  esfNumber        String
+  esfDate          DateTime?
+  counterpartyName String?
+  createdById      String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store @relation(fields: [storeId], references: [id])
+  createdBy    User? @relation("esfReferenceCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([organizationId, storeId, documentType, documentId])
+  @@index([organizationId, storeId, documentType, createdAt])
+  @@index([documentType, documentId])
 }
 
 model ReorderPolicy {

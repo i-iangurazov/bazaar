@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
@@ -86,7 +87,11 @@ const InventoryPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
+  const router = useRouter();
+  const pathname = usePathname() ?? "/inventory";
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
   const storesQuery = trpc.stores.list.useQuery();
   const suppliersQuery = trpc.suppliers.list.useQuery();
   type StoreRow = NonNullable<typeof storesQuery.data>[number] & { trackExpiryLots?: boolean };
@@ -121,6 +126,7 @@ const InventoryPage = () => {
     }[]
   >([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
 
@@ -403,16 +409,12 @@ const InventoryPage = () => {
     return Array.from(map.values());
   }, [inventoryItems]);
 
-  const selectedItems = useMemo(
-    () => inventoryItems.filter((item) => selectedIds.has(item.snapshot.id)),
-    [inventoryItems, selectedIds],
-  );
-  const selectedProductIds = useMemo(() => {
-    const ids = new Set<string>();
-    selectedItems.forEach((item) => ids.add(item.product.id));
-    return Array.from(ids);
-  }, [selectedItems]);
-  const allSelected = Boolean(inventoryItems.length) && selectedIds.size === inventoryItems.length;
+  const selectedSnapshotIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
+  const selectedCount = selectedSnapshotIds.length;
+  const allSelected =
+    Boolean(inventoryItems.length) &&
+    inventoryItems.every((item) => selectedIds.has(item.snapshot.id));
+  const allResultsSelected = inventoryTotal > 0 && selectedIds.size === inventoryTotal;
 
   const toggleSelectAll = () => {
     if (!inventoryItems.length) {
@@ -424,6 +426,27 @@ const InventoryPage = () => {
       }
       return new Set(inventoryItems.map((item) => item.snapshot.id));
     });
+  };
+
+  const handleSelectAllResults = async () => {
+    if (!storeId) {
+      return;
+    }
+    setSelectingAllResults(true);
+    try {
+      const ids = await trpcUtils.inventory.listIds.fetch({
+        storeId,
+        search: search || undefined,
+      });
+      setSelectedIds(new Set(ids));
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setSelectingAllResults(false);
+    }
   };
 
   const toggleSelect = (snapshotId: string) => {
@@ -462,7 +485,7 @@ const InventoryPage = () => {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [storeId, inventoryPage, inventoryPageSize]);
+  }, [storeId, search]);
 
   useEffect(() => {
     if (!printOpen) {
@@ -555,17 +578,23 @@ const InventoryPage = () => {
   }, [minStockProductId, inventoryItems, minStockForm]);
 
   const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
-    if (!selectedProductIds.length) {
+    if (!selectedSnapshotIds.length) {
       return;
     }
     try {
+      const snapshotProductIds = await trpcUtils.inventory.productIdsBySnapshotIds.fetch({
+        snapshotIds: selectedSnapshotIds,
+      });
+      if (!snapshotProductIds.length) {
+        return;
+      }
       const response = await fetch("/api/price-tags/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           template: values.template,
           storeId: values.storeId || undefined,
-          items: selectedProductIds.map((productId) => ({
+          items: snapshotProductIds.map((productId) => ({
             productId,
             quantity: values.quantity,
           })),
@@ -589,33 +618,61 @@ const InventoryPage = () => {
     }
   };
 
-  const openActionDialog = (
-    type: "receive" | "adjust" | "transfer" | "minStock",
-    item?: InventoryRow,
-  ) => {
-    setActiveDialog(type);
-    if (!item) {
+  const openActionDialog = useCallback(
+    (type: "receive" | "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
+      setActiveDialog(type);
+      if (!item) {
+        return;
+      }
+      const productId = item.product.id;
+      const variantId = item.snapshot.variantId ?? null;
+      if (type === "receive") {
+        receiveForm.setValue("productId", productId, { shouldValidate: true });
+        receiveForm.setValue("variantId", variantId, { shouldValidate: true });
+      }
+      if (type === "adjust") {
+        adjustForm.setValue("productId", productId, { shouldValidate: true });
+        adjustForm.setValue("variantId", variantId, { shouldValidate: true });
+      }
+      if (type === "transfer") {
+        transferForm.setValue("productId", productId, { shouldValidate: true });
+        transferForm.setValue("variantId", variantId, { shouldValidate: true });
+      }
+      if (type === "minStock") {
+        minStockForm.setValue("productId", productId, { shouldValidate: true });
+        minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
+      }
+    },
+    [adjustForm, minStockForm, receiveForm, transferForm],
+  );
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (!action) {
       return;
     }
-    const productId = item.product.id;
-    const variantId = item.snapshot.variantId ?? null;
-    if (type === "receive") {
-      receiveForm.setValue("productId", productId, { shouldValidate: true });
-      receiveForm.setValue("variantId", variantId, { shouldValidate: true });
+
+    if (!canManage) {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("action");
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      return;
     }
-    if (type === "adjust") {
-      adjustForm.setValue("productId", productId, { shouldValidate: true });
-      adjustForm.setValue("variantId", variantId, { shouldValidate: true });
+
+    if (!storeId && !(storesQuery.data?.length ?? 0)) {
+      return;
     }
-    if (type === "transfer") {
-      transferForm.setValue("productId", productId, { shouldValidate: true });
-      transferForm.setValue("variantId", variantId, { shouldValidate: true });
+
+    if (action === "receive" || action === "adjust" || action === "transfer") {
+      openActionDialog(action);
     }
-    if (type === "minStock") {
-      minStockForm.setValue("productId", productId, { shouldValidate: true });
-      minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
-    }
-  };
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("action");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [canManage, openActionDialog, pathname, router, searchParams, storeId, storesQuery.data]);
 
   const openMovements = (item: InventoryRow) => {
     const label = item.variant?.name
@@ -942,18 +999,48 @@ const InventoryPage = () => {
                     {t("selectAll")}
                   </Button>
                 ) : null}
+                {inventoryTotal > inventoryItems.length && !allResultsSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void handleSelectAllResults()}
+                    disabled={selectingAllResults}
+                  >
+                    {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
+                    {selectingAllResults
+                      ? tCommon("loading")
+                      : tCommon("selectAllResults", { count: inventoryTotal })}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : null}
-          {selectedItems.length ? (
+          {selectedCount ? (
             <div className="mb-3">
               <TooltipProvider>
                 <SelectionToolbar
-                  count={selectedItems.length}
-                  label={tCommon("selectedCount", { count: selectedItems.length })}
+                  count={selectedCount}
+                  label={tCommon("selectedCount", { count: selectedCount })}
                   clearLabel={tCommon("clearSelection")}
                   onClear={() => setSelectedIds(new Set())}
                 >
+                  {inventoryTotal > inventoryItems.length && !allResultsSelected ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleSelectAllResults()}
+                      disabled={selectingAllResults}
+                    >
+                      {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
+                      {selectingAllResults
+                        ? tCommon("loading")
+                        : tCommon("selectAllResults", { count: inventoryTotal })}
+                    </Button>
+                  ) : null}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -1534,7 +1621,7 @@ const InventoryPage = () => {
           }
         }}
         title={t("printPriceTags")}
-        subtitle={t("printSubtitle", { count: selectedItems.length })}
+        subtitle={t("printSubtitle", { count: selectedCount })}
       >
         <Form {...printForm}>
           <form className="space-y-4" onSubmit={printForm.handleSubmit(handlePrintTags)}>

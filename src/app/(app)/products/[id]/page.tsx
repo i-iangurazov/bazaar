@@ -788,6 +788,7 @@ const ProductDetailPage = () => {
         units={unitsQuery.data ?? []}
         isSubmitting={updateMutation.isLoading}
         readOnly={!isAdmin}
+        productId={productId}
       />
       <Card className="mt-6">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

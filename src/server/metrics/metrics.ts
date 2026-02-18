@@ -105,3 +105,33 @@ export const jobsInflight = defineGauge({
   name: "jobs_inflight",
   help: "Jobs currently running",
 });
+
+export const kkmReceiptsQueuedTotal = defineCounter({
+  name: "kkm_receipts_queued_total",
+  help: "Total fiscal receipts queued",
+});
+
+export const kkmReceiptsSentTotal = defineCounter({
+  name: "kkm_receipts_sent_total",
+  help: "Total fiscal receipts sent successfully",
+});
+
+export const kkmReceiptsFailedTotal = defineCounter({
+  name: "kkm_receipts_failed_total",
+  help: "Total fiscal receipts failed",
+});
+
+export const connectorOnlineGauge = defineGauge({
+  name: "connector_online_gauge",
+  help: "Connector online state by store label (1 online, 0 unknown/offline)",
+});
+
+export const posShiftOpenedTotal = defineCounter({
+  name: "pos_shift_opened_total",
+  help: "Total opened POS shifts",
+});
+
+export const posShiftClosedTotal = defineCounter({
+  name: "pos_shift_closed_total",
+  help: "Total closed POS shifts",
+});

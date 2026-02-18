@@ -9,12 +9,14 @@ type IconButtonProps = Omit<ComponentProps<typeof Button>, "children" | "size"> 
   icon: ComponentType<{ className?: string }>;
   label: string;
   href?: string;
+  openInNewTab?: boolean;
 };
 
 export const IconButton = ({
   icon: Icon,
   label,
   href,
+  openInNewTab,
   className,
   ...props
 }: IconButtonProps) => {
@@ -34,11 +36,21 @@ export const IconButton = ({
         >
           {canLink ? (
             isInternalLink ? (
-              <Link href={href!} aria-label={label}>
+              <Link
+                href={href!}
+                aria-label={label}
+                target={openInNewTab ? "_blank" : undefined}
+                rel={openInNewTab ? "noopener noreferrer" : undefined}
+              >
                 {content}
               </Link>
             ) : (
-              <a href={href} aria-label={label}>
+              <a
+                href={href}
+                aria-label={label}
+                target={openInNewTab ? "_blank" : undefined}
+                rel={openInNewTab ? "noopener noreferrer" : undefined}
+              >
                 {content}
               </a>
             )

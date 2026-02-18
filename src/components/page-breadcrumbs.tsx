@@ -93,6 +93,8 @@ const segmentLabel = (
       return tBreadcrumbs("analytics");
     case "exports":
       return tBreadcrumbs("exports");
+    case "receipts":
+      return tNav("posReceipts");
     case "close":
       return tBreadcrumbs("close");
     case "billing":

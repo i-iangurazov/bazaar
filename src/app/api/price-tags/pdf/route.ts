@@ -8,6 +8,7 @@ import { getMessageFromFallback } from "@/lib/i18nFallback";
 import { cookies } from "next/headers";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { buildPriceTagsPdf, type PriceTagLabel } from "@/server/services/priceTagsPdf";
+import { selectPrimaryBarcodeValue } from "@/server/services/barcodes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -138,7 +139,7 @@ export const POST = async (request: Request) => {
     const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : null;
     const override = priceMap.get(product.id);
     const effectivePrice = override ? Number(override.priceKgs) : basePrice;
-    const barcode = product.barcodes?.[0]?.value ?? "";
+    const barcode = selectPrimaryBarcodeValue(product.barcodes.map((entry) => entry.value));
     const label = {
       name: product.name,
       sku: product.sku,
@@ -158,6 +159,7 @@ export const POST = async (request: Request) => {
     locale: toIntlLocale(locale),
     storeName,
     noPriceLabel: tPriceTags("noPrice"),
+    noBarcodeLabel: tPriceTags("noBarcode"),
     skuLabel: tPriceTags("sku"),
   });
   const response = new Response(pdf, {

@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import Cropper, { type Area } from "react-easy-crop";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,11 +51,15 @@ import {
   ArrowUpIcon,
   CloseIcon,
   DeleteIcon,
+  EditIcon,
   GripIcon,
   ImagePlusIcon,
+  RestoreIcon,
   StatusSuccessIcon,
+  ViewIcon,
 } from "@/components/icons";
 import { trpc } from "@/lib/trpc";
+import { translateError } from "@/lib/translateError";
 import { buildVariantMatrix, type VariantGeneratorAttribute } from "@/lib/variantGenerator";
 
 export type ProductFormValues = {
@@ -116,12 +121,32 @@ type AttributeDefinition = {
   required?: boolean | null;
 };
 
+const defaultProductImageMaxBytes = 5 * 1024 * 1024;
+const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
+const heicMimeTypes = new Set(["image/heic", "image/heif"]);
+
+const resolveClientImageMaxBytes = () => {
+  const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return defaultProductImageMaxBytes;
+};
+
+const resolveClientImageMaxInputBytes = (maxImageBytes: number) => {
+  const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.max(Math.trunc(parsed), maxImageBytes);
+  }
+  return Math.max(defaultProductImageMaxInputBytes, maxImageBytes);
+};
+
 const isPhotoUrlValid = (value?: string | null) => {
   const normalized = value?.trim();
   if (!normalized) {
     return true;
   }
-  if (normalized.startsWith("/uploads/") || normalized.startsWith("data:image/")) {
+  if (normalized.startsWith("/uploads/")) {
     return true;
   }
   try {
@@ -132,6 +157,41 @@ const isPhotoUrlValid = (value?: string | null) => {
   }
 };
 
+const isHeicLikeFile = (file: File) => {
+  const normalizedType = file.type.toLowerCase();
+  if (heicMimeTypes.has(normalizedType)) {
+    return true;
+  }
+  return /\.(heic|heif)$/i.test(file.name);
+};
+
+const replaceFileExtension = (fileName: string, extension: string) => {
+  if (!fileName.includes(".")) {
+    return `${fileName}.${extension}`;
+  }
+  return fileName.replace(/\.[^.]+$/, `.${extension}`);
+};
+
+const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+
+const getRotatedBoundingBox = (width: number, height: number, rotation: number) => {
+  const radians = toRadians(rotation);
+  return {
+    width: Math.abs(Math.cos(radians) * width) + Math.abs(Math.sin(radians) * height),
+    height: Math.abs(Math.sin(radians) * width) + Math.abs(Math.cos(radians) * height),
+  };
+};
+
+const resolveImageExtensionByMime = (mimeType: string) => {
+  if (mimeType === "image/png") {
+    return "png";
+  }
+  if (mimeType === "image/webp") {
+    return "webp";
+  }
+  return "jpg";
+};
+
 
 export const ProductForm = ({
   initialValues,
@@ -140,6 +200,7 @@ export const ProductForm = ({
   attributeDefinitions,
   units,
   readOnly = false,
+  productId,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -147,6 +208,7 @@ export const ProductForm = ({
   attributeDefinitions?: AttributeDefinition[];
   units?: UnitOption[];
   readOnly?: boolean;
+  productId?: string;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -360,6 +422,7 @@ export const ProductForm = ({
     control: form.control,
     name: "images",
   });
+  const watchedImages = useWatch({ control: form.control, name: "images" }) ?? [];
 
   const {
     fields: packFields,
@@ -383,6 +446,7 @@ export const ProductForm = ({
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeGenerateMode, setBarcodeGenerateMode] = useState<"EAN13" | "CODE128">("EAN13");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(
     () =>
@@ -402,63 +466,622 @@ export const ProductForm = ({
   const [generatorValueDrafts, setGeneratorValueDrafts] = useState<Record<string, string>>({});
   const [bundleSearch, setBundleSearch] = useState("");
   const [showBundleResults, setShowBundleResults] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
+  const [imageEditorIndex, setImageEditorIndex] = useState<number | null>(null);
+  const [imageEditorSourceUrl, setImageEditorSourceUrl] = useState<string | null>(null);
+  const [imageEditorObjectUrl, setImageEditorObjectUrl] = useState<string | null>(null);
+  const [imageEditorSourceFile, setImageEditorSourceFile] = useState<File | null>(null);
+  const [imageEditorAspect, setImageEditorAspect] = useState(1);
+  const [imageEditorCrop, setImageEditorCrop] = useState({ x: 0, y: 0 });
+  const [imageEditorZoom, setImageEditorZoom] = useState(1);
+  const [imageEditorRotation, setImageEditorRotation] = useState(0);
+  const [imageEditorCroppedAreaPixels, setImageEditorCroppedAreaPixels] = useState<Area | null>(
+    null,
+  );
+  const [isPreparingImageEditor, setIsPreparingImageEditor] = useState(false);
+  const [isSavingImageEdit, setIsSavingImageEdit] = useState(false);
+  const [imagePreviewVersion, setImagePreviewVersion] = useState<Record<string, number>>({});
   const isBundle = Boolean(form.watch("isBundle"));
   const baseUnitId = form.watch("baseUnitId");
   const baseUnit = unitOptions.find((unit) => unit.id === baseUnitId);
-  const maxImageBytes = 5 * 1024 * 1024;
+  const maxImageBytes = resolveClientImageMaxBytes();
+  const maxInputImageBytes = resolveClientImageMaxInputBytes(maxImageBytes);
 
   const bundleSearchQuery = trpc.products.searchQuick.useQuery(
     { q: bundleSearch.trim() },
     { enabled: !readOnly && isBundle && bundleSearch.trim().length >= 1 },
   );
+  const generateBarcodeMutation = trpc.products.generateBarcode.useMutation({
+    onSuccess: (result) => {
+      form.setValue("barcodes", result.barcodes ?? [result.value], {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+      form.clearErrors("barcodes");
+      toast({
+        variant: "success",
+        description: t("barcodeGenerated", { value: result.value }),
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error),
+      });
+    },
+  });
 
-  const readImageFile = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ""));
-      reader.onerror = () => reject(new Error("imageReadFailed"));
-      reader.readAsDataURL(file);
+  const encodeCanvasToFile = async (input: {
+    canvas: HTMLCanvasElement;
+    fileName: string;
+    lastModified: number;
+    type: "image/jpeg" | "image/png" | "image/webp";
+    quality?: number;
+  }) => {
+    const blob = await new Promise<Blob | null>((resolve) => {
+      if (input.type === "image/jpeg" || input.type === "image/webp") {
+        input.canvas.toBlob(resolve, input.type, input.quality ?? 1);
+        return;
+      }
+      input.canvas.toBlob(resolve, input.type);
+    });
+    if (!blob) {
+      return null;
+    }
+    return new File([blob], input.fileName, {
+      type: input.type,
+      lastModified: input.lastModified,
+    });
+  };
+
+  const optimizeImageToLimit = async (file: File) => {
+    const sourceType = file.type.toLowerCase();
+    const normalizedType =
+      sourceType === "image/jpg"
+        ? "image/jpeg"
+        : sourceType === "image/pjpeg"
+          ? "image/jpeg"
+          : sourceType;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(normalizedType)) {
+      return null;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const nextImage = new Image();
+        nextImage.onload = () => resolve(nextImage);
+        nextImage.onerror = () => reject(new Error("imageCompressionFailed"));
+        nextImage.src = objectUrl;
+      });
+
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      if (!width || !height) {
+        return null;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return null;
+      }
+      context.drawImage(image, 0, 0, width, height);
+
+      const candidates: File[] = [];
+      const pushCandidate = (candidate: File | null) => {
+        if (!candidate) {
+          return;
+        }
+        candidates.push(candidate);
+      };
+
+      // First pass: try to keep visual quality максимально близкой к исходнику.
+      pushCandidate(
+        await encodeCanvasToFile({
+          canvas,
+          fileName: file.name,
+          lastModified: file.lastModified || Date.now(),
+          type: normalizedType as "image/jpeg" | "image/png" | "image/webp",
+          quality: 1,
+        }),
+      );
+      pushCandidate(
+        await encodeCanvasToFile({
+          canvas,
+          fileName: file.name,
+          lastModified: file.lastModified || Date.now(),
+          type: "image/webp",
+          quality: 1,
+        }),
+      );
+      if (normalizedType !== "image/png") {
+        pushCandidate(
+          await encodeCanvasToFile({
+            canvas,
+            fileName: file.name,
+            lastModified: file.lastModified || Date.now(),
+            type: "image/jpeg",
+            quality: 1,
+          }),
+        );
+      }
+
+      if (!candidates.length) {
+        return null;
+      }
+
+      let best = candidates.reduce((smallest, candidate) =>
+        candidate.size < smallest.size ? candidate : smallest,
+      );
+      if (best.size <= maxImageBytes) {
+        return best;
+      }
+
+      // Second pass: high-quality optimization without resize.
+      const fallbackType: "image/jpeg" | "image/webp" =
+        normalizedType === "image/png" ? "image/webp" : "image/jpeg";
+      const qualitySteps = [0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82] as const;
+      for (const quality of qualitySteps) {
+        const optimized = await encodeCanvasToFile({
+          canvas,
+          fileName: file.name,
+          lastModified: file.lastModified || Date.now(),
+          type: fallbackType,
+          quality,
+        });
+        if (!optimized) {
+          continue;
+        }
+        if (optimized.size < best.size) {
+          best = optimized;
+        }
+        if (optimized.size <= maxImageBytes) {
+          return optimized;
+        }
+      }
+
+      return best;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const convertHeicToJpeg = async (file: File) => {
+    try {
+      const heic2anyModule = await import("heic2any");
+      const convert = heic2anyModule.default as (
+        options: { blob: Blob; toType: string; quality?: number },
+      ) => Promise<Blob | Blob[]>;
+      const converted = await convert({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.95,
+      });
+      const outputBlob = Array.isArray(converted) ? converted[0] : converted;
+      if (!(outputBlob instanceof Blob)) {
+        return null;
+      }
+      return new File([outputBlob], replaceFileExtension(file.name, "jpg"), {
+        type: "image/jpeg",
+        lastModified: file.lastModified || Date.now(),
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  const uploadImageFile = async (file: File) => {
+    const formData = new FormData();
+    formData.set("file", file);
+    if (productId) {
+      formData.set("productId", productId);
+    }
+
+    const response = await fetch("/api/product-images/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { message?: string; url?: string }
+      | null;
+    if (!response.ok) {
+      const code = body?.message;
+      if (code === "forbidden") {
+        toast({ variant: "error", description: tErrors("forbidden") });
+      } else if (code === "imageInvalidType") {
+        toast({ variant: "error", description: t("imageInvalidType") });
+      } else if (code === "imageTooLarge") {
+        toast({
+          variant: "error",
+          description: t("imageTooLargeAfterCompression", {
+            size: Math.round(maxImageBytes / (1024 * 1024)),
+          }),
+        });
+      } else {
+        toast({ variant: "error", description: t("imageReadFailed") });
+      }
+      return null;
+    }
+
+    const uploadedUrl = body?.url?.trim();
+    if (!uploadedUrl) {
+      toast({ variant: "error", description: t("imageReadFailed") });
+      return null;
+    }
+    return uploadedUrl;
+  };
+
+  const closeImageEditor = () => {
+    setIsImageEditorOpen(false);
+    setImageEditorIndex(null);
+    setImageEditorSourceUrl(null);
+    setImageEditorSourceFile(null);
+    setImageEditorAspect(1);
+    setImageEditorCrop({ x: 0, y: 0 });
+    setImageEditorZoom(1);
+    setImageEditorRotation(0);
+    setImageEditorCroppedAreaPixels(null);
+    setIsPreparingImageEditor(false);
+    setIsSavingImageEdit(false);
+    setImageEditorObjectUrl((previous) => {
+      if (previous) {
+        URL.revokeObjectURL(previous);
+      }
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (imageEditorObjectUrl) {
+        URL.revokeObjectURL(imageEditorObjectUrl);
+      }
+    };
+  }, [imageEditorObjectUrl]);
+
+  const getImageDimensions = async (source: string) =>
+    new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        resolve({
+          width: image.naturalWidth || image.width,
+          height: image.naturalHeight || image.height,
+        });
+      };
+      image.onerror = () => reject(new Error("imageReadFailed"));
+      image.src = source;
     });
 
+  const resolveImageFileNameFromUrl = (sourceUrl: string, mimeType: string) => {
+    const fallbackExtension = resolveImageExtensionByMime(mimeType);
+    const fallbackName = `product-image.${fallbackExtension}`;
+    try {
+      const parsed = new URL(sourceUrl, window.location.origin);
+      const rawName = parsed.pathname.split("/").pop();
+      if (!rawName) {
+        return fallbackName;
+      }
+      const normalized = rawName.trim();
+      if (!normalized) {
+        return fallbackName;
+      }
+      if (normalized.includes(".")) {
+        return normalized;
+      }
+      return `${normalized}.${fallbackExtension}`;
+    } catch {
+      return fallbackName;
+    }
+  };
+
+  const withPreviewVersion = (url: string, imageFieldId: string) => {
+    const version = imagePreviewVersion[imageFieldId];
+    if (!version) {
+      return url;
+    }
+
+    try {
+      const parsed = new URL(url, window.location.origin);
+      parsed.searchParams.set("v", String(version));
+      if (url.startsWith("/")) {
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return parsed.toString();
+    } catch {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}v=${version}`;
+    }
+  };
+
+  const createEditedImageFile = async (input: {
+    sourceFile: File;
+    cropAreaPixels: Area;
+    rotation: number;
+  }) => {
+    const sourceObjectUrl = URL.createObjectURL(input.sourceFile);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const nextImage = new Image();
+        nextImage.onload = () => resolve(nextImage);
+        nextImage.onerror = () => reject(new Error("imageReadFailed"));
+        nextImage.src = sourceObjectUrl;
+      });
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      if (!sourceWidth || !sourceHeight) {
+        return null;
+      }
+
+      const rotatedBounds = getRotatedBoundingBox(
+        sourceWidth,
+        sourceHeight,
+        input.rotation,
+      );
+      const rotatedCanvas = document.createElement("canvas");
+      rotatedCanvas.width = Math.max(1, Math.round(rotatedBounds.width));
+      rotatedCanvas.height = Math.max(1, Math.round(rotatedBounds.height));
+      const rotatedContext = rotatedCanvas.getContext("2d");
+      if (!rotatedContext) {
+        return null;
+      }
+
+      rotatedContext.translate(rotatedCanvas.width / 2, rotatedCanvas.height / 2);
+      rotatedContext.rotate(toRadians(input.rotation));
+      rotatedContext.drawImage(image, -sourceWidth / 2, -sourceHeight / 2);
+
+      const cropWidth = Math.max(1, Math.round(input.cropAreaPixels.width));
+      const cropHeight = Math.max(1, Math.round(input.cropAreaPixels.height));
+      const maxCropX = Math.max(0, rotatedCanvas.width - cropWidth);
+      const maxCropY = Math.max(0, rotatedCanvas.height - cropHeight);
+      const cropX = Math.max(
+        0,
+        Math.min(Math.round(input.cropAreaPixels.x), maxCropX),
+      );
+      const cropY = Math.max(
+        0,
+        Math.min(Math.round(input.cropAreaPixels.y), maxCropY),
+      );
+
+      const croppedCanvas = document.createElement("canvas");
+      croppedCanvas.width = cropWidth;
+      croppedCanvas.height = cropHeight;
+      const croppedContext = croppedCanvas.getContext("2d");
+      if (!croppedContext) {
+        return null;
+      }
+
+      croppedContext.drawImage(
+        rotatedCanvas,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        cropWidth,
+        cropHeight,
+      );
+
+      const preferredType: "image/jpeg" | "image/png" | "image/webp" =
+        input.sourceFile.type === "image/png"
+          ? "image/png"
+          : input.sourceFile.type === "image/webp"
+            ? "image/webp"
+            : "image/jpeg";
+      const nextFileName = replaceFileExtension(
+        input.sourceFile.name,
+        resolveImageExtensionByMime(preferredType),
+      );
+      return encodeCanvasToFile({
+        canvas: croppedCanvas,
+        fileName: nextFileName,
+        lastModified: Date.now(),
+        type: preferredType,
+        quality: preferredType === "image/png" ? undefined : 0.96,
+      });
+    } finally {
+      URL.revokeObjectURL(sourceObjectUrl);
+    }
+  };
+
+  const openImageEditor = async (index: number, imageUrl: string) => {
+    setImageEditorIndex(index);
+    setImageEditorSourceUrl(imageUrl);
+    setImageEditorSourceFile(null);
+    setImageEditorAspect(1);
+    setImageEditorCrop({ x: 0, y: 0 });
+    setImageEditorZoom(1);
+    setImageEditorRotation(0);
+    setImageEditorCroppedAreaPixels(null);
+    setIsImageEditorOpen(true);
+    setIsPreparingImageEditor(true);
+
+    try {
+      const response = await fetch(imageUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("imageReadFailed");
+      }
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) {
+        throw new Error("imageInvalidType");
+      }
+
+      const fileName = resolveImageFileNameFromUrl(imageUrl, blob.type || "image/jpeg");
+      const sourceFile = new File([blob], fileName, {
+        type: blob.type || "image/jpeg",
+        lastModified: Date.now(),
+      });
+      const objectUrl = URL.createObjectURL(sourceFile);
+      const dimensions = await getImageDimensions(objectUrl);
+      const nextAspect =
+        dimensions.width > 0 && dimensions.height > 0
+          ? dimensions.width / dimensions.height
+          : 1;
+      setImageEditorAspect(nextAspect || 1);
+      setImageEditorSourceFile(sourceFile);
+      setImageEditorObjectUrl((previous) => {
+        if (previous) {
+          URL.revokeObjectURL(previous);
+        }
+        return objectUrl;
+      });
+    } catch {
+      toast({ variant: "error", description: t("imageReadFailed") });
+      closeImageEditor();
+    } finally {
+      setIsPreparingImageEditor(false);
+    }
+  };
+
+  const saveEditedImage = async () => {
+    if (
+      readOnly ||
+      isSavingImageEdit ||
+      imageEditorIndex === null ||
+      !imageEditorSourceFile ||
+      !imageEditorCroppedAreaPixels
+    ) {
+      return;
+    }
+    setIsSavingImageEdit(true);
+    try {
+      const editedFile = await createEditedImageFile({
+        sourceFile: imageEditorSourceFile,
+        cropAreaPixels: imageEditorCroppedAreaPixels,
+        rotation: imageEditorRotation,
+      });
+      if (!editedFile) {
+        toast({ variant: "error", description: t("imageReadFailed") });
+        return;
+      }
+
+      let uploadFile = editedFile;
+      if (uploadFile.size > maxImageBytes) {
+        const optimized = await optimizeImageToLimit(uploadFile);
+        if (!optimized) {
+          toast({ variant: "error", description: t("imageCompressionFailed") });
+          return;
+        }
+        if (optimized.size > maxImageBytes) {
+          toast({
+            variant: "error",
+            description: t("imageTooLargeAfterCompression", {
+              size: Math.round(maxImageBytes / (1024 * 1024)),
+            }),
+          });
+          return;
+        }
+        uploadFile = optimized;
+      }
+
+      const uploadedUrl = await uploadImageFile(uploadFile);
+      if (!uploadedUrl) {
+        return;
+      }
+      const editedImageFieldId = imageFields[imageEditorIndex]?.id;
+      form.setValue(`images.${imageEditorIndex}.url`, uploadedUrl, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      if (editedImageFieldId) {
+        setImagePreviewVersion((previous) => ({
+          ...previous,
+          [editedImageFieldId]: Date.now(),
+        }));
+      }
+      if (imageEditorIndex === 0) {
+        form.setValue("photoUrl", uploadedUrl, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      toast({ variant: "success", description: t("imageEditSaved") });
+      closeImageEditor();
+    } finally {
+      setIsSavingImageEdit(false);
+    }
+  };
+
+  const imageEditorZoomPercent = Math.round(imageEditorZoom * 100);
+  const imageEditorRotationDegrees = ((Math.round(imageEditorRotation) % 360) + 360) % 360;
+
   const handleImageFiles = async (files: FileList | File[]) => {
-    if (readOnly) {
+    if (readOnly || isUploadingImages) {
       return;
     }
     const list = Array.from(files);
     if (!list.length) {
       return;
     }
-    const nextImages: { url: string; position?: number }[] = [];
-    for (const file of list) {
-      if (!file.type.startsWith("image/")) {
-        toast({ variant: "error", description: t("imageInvalidType") });
-        continue;
-      }
-      if (file.size > maxImageBytes) {
-        toast({
-          variant: "error",
-          description: t("imageTooLarge", { size: Math.round(maxImageBytes / (1024 * 1024)) }),
-        });
-        continue;
-      }
-      try {
-        const url = await readImageFile(file);
-        if (url) {
-          nextImages.push({ url });
+    setIsUploadingImages(true);
+    try {
+      const nextImages: { url: string; position?: number }[] = [];
+      for (const originalFile of list) {
+        let file = originalFile;
+        if (isHeicLikeFile(file)) {
+          const converted = await convertHeicToJpeg(file);
+          if (!converted) {
+            toast({ variant: "error", description: t("imageCompressionFailed") });
+            continue;
+          }
+          file = converted;
         }
-      } catch {
-        toast({ variant: "error", description: t("imageReadFailed") });
+
+        if (!file.type.startsWith("image/")) {
+          toast({ variant: "error", description: t("imageInvalidType") });
+          continue;
+        }
+        if (file.size > maxInputImageBytes) {
+          toast({
+            variant: "error",
+            description: t("imageTooLargeInput", {
+              size: Math.round(maxInputImageBytes / (1024 * 1024)),
+            }),
+          });
+          continue;
+        }
+
+        let uploadFile = file;
+        if (file.size > maxImageBytes) {
+          const optimized = await optimizeImageToLimit(file);
+          if (!optimized) {
+            toast({ variant: "error", description: t("imageCompressionFailed") });
+            continue;
+          }
+          if (optimized.size > maxImageBytes) {
+            toast({
+              variant: "error",
+              description: t("imageTooLargeAfterCompression", {
+                size: Math.round(maxImageBytes / (1024 * 1024)),
+              }),
+            });
+            continue;
+          }
+          uploadFile = optimized;
+        }
+
+        const uploadedUrl = await uploadImageFile(uploadFile);
+        if (uploadedUrl) {
+          nextImages.push({ url: uploadedUrl });
+        }
       }
-    }
-    if (nextImages.length) {
-      appendImage(nextImages);
+
+      if (nextImages.length) {
+        appendImage(nextImages);
+      }
+    } finally {
+      setIsUploadingImages(false);
     }
   };
 
   const handleImageDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragActive(false);
-    if (readOnly) {
+    if (readOnly || isUploadingImages) {
       return;
     }
     if (event.dataTransfer?.files?.length) {
@@ -467,7 +1090,7 @@ export const ProductForm = ({
   };
 
   const handleImageDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (readOnly) {
+    if (readOnly || isUploadingImages) {
       return;
     }
     event.preventDefault();
@@ -765,6 +1388,11 @@ export const ProductForm = ({
           ? [{ id: undefined, url: fallbackPhotoUrl, position: 0 }]
           : [];
     const resolvedPhotoUrl = resolvedImages.length > 0 ? resolvedImages[0].url : undefined;
+    const hasInlineImage = resolvedImages.some((image) => image.url.startsWith("data:image/"));
+    if (hasInlineImage || resolvedPhotoUrl?.startsWith("data:image/")) {
+      toast({ variant: "error", description: t("imageReadFailed") });
+      return;
+    }
 
     onSubmit({
       sku: values.sku.trim(),
@@ -1130,6 +1758,7 @@ export const ProductForm = ({
                         accept="image/*"
                         multiple
                         className="hidden"
+                        disabled={readOnly || isUploadingImages}
                         onChange={(event) => {
                           const files = event.target.files;
                           if (files && files.length) {
@@ -1143,10 +1772,14 @@ export const ProductForm = ({
                         variant="secondary"
                         className="w-full sm:w-auto"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={readOnly}
+                        disabled={readOnly || isUploadingImages}
                       >
-                        <ImagePlusIcon className="h-4 w-4" aria-hidden />
-                        {t("imagesAdd")}
+                        {isUploadingImages ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : (
+                          <ImagePlusIcon className="h-4 w-4" aria-hidden />
+                        )}
+                        {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
                       </Button>
                       <span className="text-xs text-muted-foreground">{t("imagesReorderHint")}</span>
                     </div>
@@ -1163,6 +1796,7 @@ export const ProductForm = ({
                     {imageFields.length ? (
                       <div className="grid gap-3 sm:grid-cols-2">
                         {imageFields.map((image, index) => {
+                          const imageUrl = watchedImages[index]?.url?.trim() || image.url;
                           const canMoveUp = index > 0;
                           const canMoveDown = index < imageFields.length - 1;
                           return (
@@ -1194,10 +1828,10 @@ export const ProductForm = ({
                                 setDraggedImageIndex(null);
                               }}
                             >
-                              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-muted/30">
+                              <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-md bg-muted/30">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                  src={image.url}
+                                  src={withPreviewVersion(imageUrl, image.id)}
                                   alt={t("imageAlt", { index: index + 1 })}
                                   className="h-full w-full object-cover"
                                 />
@@ -1214,6 +1848,23 @@ export const ProductForm = ({
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <GripIcon className="h-4 w-4" aria-hidden />
                                   {t("imageDragHint")}
+                                </div>
+                                <div>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-8 px-3 text-xs"
+                                    onClick={() => void openImageEditor(index, imageUrl)}
+                                    disabled={isUploadingImages || isSavingImageEdit}
+                                  >
+                                    {readOnly ? (
+                                      <ViewIcon className="h-3.5 w-3.5" aria-hidden />
+                                    ) : (
+                                      <EditIcon className="h-3.5 w-3.5" aria-hidden />
+                                    )}
+                                    {readOnly ? t("imagePreview") : t("imagePreviewEdit")}
+                                  </Button>
                                 </div>
                               </div>
                               <div className="flex flex-col items-center gap-2">
@@ -1367,6 +2018,74 @@ export const ProductForm = ({
                               {t("addBarcode")}
                             </Button>
                           </FormRow>
+                          <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                            <div className="w-full sm:w-[220px]">
+                              <Select
+                                value={barcodeGenerateMode}
+                                onValueChange={(value) =>
+                                  setBarcodeGenerateMode(value as "EAN13" | "CODE128")
+                                }
+                                disabled={
+                                  readOnly ||
+                                  !productId ||
+                                  generateBarcodeMutation.isLoading
+                                }
+                              >
+                                <SelectTrigger aria-label={t("generateBarcodeMode")}>
+                                  <SelectValue placeholder={t("generateBarcodeMode")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="EAN13">
+                                    {t("barcodeModeEan13")}
+                                  </SelectItem>
+                                  <SelectItem value="CODE128">
+                                    {t("barcodeModeCode128")}
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="w-full sm:w-auto"
+                              onClick={() => {
+                                if (!productId || readOnly) {
+                                  return;
+                                }
+                                const currentBarcodes = form
+                                  .getValues("barcodes")
+                                  ?.map((value) => value.trim())
+                                  .filter(Boolean) ?? [];
+                                generateBarcodeMutation.mutate({
+                                  productId,
+                                  mode: barcodeGenerateMode,
+                                  force: currentBarcodes.length === 0,
+                                });
+                              }}
+                              disabled={
+                                readOnly ||
+                                !productId ||
+                                generateBarcodeMutation.isLoading
+                              }
+                            >
+                              {generateBarcodeMutation.isLoading ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : (
+                                <AddIcon className="h-4 w-4" aria-hidden />
+                              )}
+                              {generateBarcodeMutation.isLoading
+                                ? tCommon("loading")
+                                : t("generateBarcode")}
+                            </Button>
+                          </FormRow>
+                          <p className="text-xs text-muted-foreground">
+                            {t("barcodeInternalHint")}
+                          </p>
+                          {!productId ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("barcodeGenerateRequiresSave")}
+                            </p>
+                          ) : null}
                           <div className="flex min-h-[36px] flex-wrap gap-2">
                             {field.value?.length ? (
                               field.value.map((barcode, index) => (
@@ -1391,8 +2110,10 @@ export const ProductForm = ({
                                           const next = (field.value ?? []).filter(
                                             (_, i) => i !== index,
                                           );
+                                          form.clearErrors("barcodes");
                                           form.setValue("barcodes", next, {
-                                            shouldValidate: true,
+                                            shouldValidate: false,
+                                            shouldDirty: true,
                                           });
                                         }}
                                         disabled={readOnly}
@@ -2169,6 +2890,136 @@ export const ProductForm = ({
           </div>
         </Modal>
       ) : null}
+
+      <Modal
+        open={isImageEditorOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeImageEditor();
+          }
+        }}
+        title={t("imageEditorTitle")}
+        subtitle={readOnly ? t("imageEditorPreviewSubtitle") : t("imageEditorSubtitle")}
+        className="max-w-4xl"
+        bodyClassName="space-y-4 p-4 sm:p-6"
+        usePortal
+      >
+        <div className="space-y-4">
+          <div className="relative h-[48vh] min-h-[280px] overflow-hidden rounded-lg border border-border bg-black/70">
+            {isPreparingImageEditor ? (
+              <div className="flex h-full items-center justify-center text-sm text-white/90">
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
+            ) : imageEditorObjectUrl ? (
+              <Cropper
+                image={imageEditorObjectUrl}
+                crop={imageEditorCrop}
+                zoom={imageEditorZoom}
+                rotation={imageEditorRotation}
+                aspect={imageEditorAspect}
+                minZoom={1}
+                maxZoom={3}
+                zoomSpeed={0.15}
+                showGrid
+                objectFit="contain"
+                onCropChange={setImageEditorCrop}
+                onZoomChange={setImageEditorZoom}
+                onRotationChange={setImageEditorRotation}
+                onCropComplete={(_, croppedAreaPixels) =>
+                  setImageEditorCroppedAreaPixels(croppedAreaPixels)
+                }
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-white/90">
+                {t("imagesEmpty")}
+              </div>
+            )}
+          </div>
+
+          {imageEditorSourceUrl ? (
+            <p className="truncate text-xs text-muted-foreground">
+              {t("imageEditorSource", { source: imageEditorSourceUrl })}
+            </p>
+          ) : null}
+
+          {!readOnly ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{t("imageEditorZoom")}</span>
+                  <Badge variant="muted">{imageEditorZoomPercent}%</Badge>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.05}
+                  value={imageEditorZoom}
+                  onChange={(event) => setImageEditorZoom(Number(event.target.value))}
+                  aria-label={t("imageEditorZoom")}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                />
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{t("imageEditorRotation")}</span>
+                  <Badge variant="muted">{imageEditorRotationDegrees}°</Badge>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={360}
+                    step={1}
+                    value={imageEditorRotation}
+                    onChange={(event) => setImageEditorRotation(Number(event.target.value))}
+                    aria-label={t("imageEditorRotation")}
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 shrink-0 px-3"
+                    onClick={() => setImageEditorRotation((prev) => (prev + 90) % 360)}
+                    disabled={isSavingImageEdit}
+                  >
+                    <RestoreIcon className="h-3.5 w-3.5" aria-hidden />
+                    {t("imageEditorRotate90")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={closeImageEditor}
+              disabled={isSavingImageEdit}
+            >
+              {tCommon("cancel")}
+            </Button>
+            {!readOnly ? (
+              <Button
+                type="button"
+                onClick={() => void saveEditedImage()}
+                disabled={isSavingImageEdit || isPreparingImageEditor || !imageEditorObjectUrl}
+              >
+                {isSavingImageEdit ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                )}
+                {isSavingImageEdit ? tCommon("loading") : t("imageEditorSave")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </Modal>
     </Form>
   );
 };

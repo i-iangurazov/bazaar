@@ -64,6 +64,7 @@
     "openHelpArticle": "Открыть справку: {article}",
     "selectedCount": "Выбрано: {count}",
     "clearSelection": "Снять выделение",
+    "selectAllResults": "Выбрать все записи ({count})",
     "allStores": "Все магазины",
     "moreActions": "Больше действий",
     "nothingFound": "Ничего не найдено",
@@ -100,7 +101,7 @@
     "demoAccounts": "Демо аккаунты: admin@example.com (Admin123!), manager@example.com (Manager123!), staff@example.com (Staff123!)."
   },
   "meta": {
-    "title": "BAZAAR Inventory",
+    "title": "BAZAAR",
     "description": "Надежное управление запасами для ежедневной работы."
   },
   "signup": {
@@ -370,7 +371,9 @@
     "help": "Справка",
     "billing": "Тарифы",
     "profile": "Профиль",
-    "diagnostics": "Диагностика"
+    "diagnostics": "Диагностика",
+    "posKkm": "Очередь ККМ",
+    "posReceipts": "Реестр чеков"
   },
   "breadcrumbs": {
     "ariaLabel": "Хлебные крошки",
@@ -578,6 +581,7 @@
       "registerTitle": "Касса и смена",
       "register": "Касса",
       "selectRegister": "Выберите кассу",
+      "selectRegisterFirst": "Сначала выберите кассу.",
       "noRegisters": "Кассы не настроены. Создайте кассу в разделе управления.",
       "shiftOpen": "Смена открыта",
       "shiftClosed": "Смена закрыта",
@@ -588,6 +592,7 @@
       "quickActionsTitle": "Быстрые действия",
       "sell": "Продажа",
       "history": "История",
+      "receipts": "Чеки",
       "shifts": "Смены",
       "registers": "Кассы"
     },
@@ -641,7 +646,13 @@
       "paymentMismatch": "Сумма платежей должна совпадать с итогом чека.",
       "saleCreated": "Черновик продажи создан.",
       "lineAdded": "Позиция добавлена.",
-      "completeSuccess": "Продажа {number} завершена."
+      "completeSuccess": "Продажа {number} завершена.",
+      "markingLabel": "Маркировка",
+      "markingRequired": "обязательно",
+      "markingPlaceholder": "Код(ы) маркировки через запятую",
+      "markingSave": "Сохранить коды",
+      "markingSaved": "Коды маркировки сохранены.",
+      "markingCapturedCount": "Сохранено кодов: {count}"
     },
     "shifts": {
       "title": "Смены",
@@ -694,13 +705,64 @@
       "kkmRetryFailed": "Не удалось повторно отправить чек в ККМ.",
       "kkmRetryFailedWithReason": "Не удалось отправить чек в ККМ: {reason}",
       "returnTotal": "Сумма возврата",
-      "completeReturn": "Завершить возврат"
+      "completeReturn": "Завершить возврат",
+      "manualRefundRequired": "Возврат требует ручной обработки. Создан запрос: {requestId}."
     },
     "payments": {
       "cash": "Наличные",
       "card": "Карта",
       "transfer": "Перевод",
       "other": "Другое"
+    },
+    "kkm": {
+      "title": "Очередь ККМ",
+      "subtitle": "Контроль отправки фискальных чеков и сопряжения локального коннектора.",
+      "connectorTitle": "Сопряжение коннектора",
+      "store": "Магазин",
+      "generatePairCode": "Сгенерировать код",
+      "pairCodeCreated": "Код сопряжения создан: {code}.",
+      "queueTitle": "Очередь чеков",
+      "status": "Статус",
+      "statusAll": "Все статусы",
+      "statusQueued": "В очереди",
+      "statusProcessing": "В обработке",
+      "statusSent": "Отправлен",
+      "statusFailed": "Ошибка",
+      "storeFilterHint": "Выбранный магазин отобразится здесь.",
+      "retry": "Повторить",
+      "retryQueued": "Чек поставлен в очередь повторной отправки.",
+      "empty": "Чеков в очереди нет."
+    },
+    "receipts": {
+      "title": "Реестр чеков",
+      "subtitle": "Сверка чеков по сменам, кассирам, оплатам и фискальному статусу.",
+      "filtersTitle": "Фильтры",
+      "storeLabel": "Магазин",
+      "allStores": "Все магазины",
+      "statusLabel": "Статус",
+      "fromDate": "Дата от",
+      "toDate": "Дата до",
+      "export": "Экспорт",
+      "empty": "Чеки не найдены.",
+      "unknownCashier": "Кассир не указан",
+      "status": {
+        "all": "Все",
+        "draft": "Черновик",
+        "confirmed": "Подтвержден",
+        "ready": "Готов",
+        "completed": "Завершен",
+        "canceled": "Отменен"
+      },
+      "columns": {
+        "number": "Номер",
+        "date": "Дата",
+        "store": "Магазин",
+        "cashier": "Кассир",
+        "total": "Итог",
+        "payments": "Оплаты",
+        "status": "Статус",
+        "fiscal": "Фискализация"
+      }
     }
   },
   "dashboard": {
@@ -887,14 +949,35 @@
     "imageUrlRequired": "Добавьте изображение.",
     "imageInvalidType": "Поддерживаются только изображения.",
     "imageTooLarge": "Файл слишком большой (макс. {size} МБ).",
+    "imageTooLargeInput": "Файл слишком большой для обработки (макс. {size} МБ).",
+    "imageTooLargeAfterCompression": "После автоматической оптимизации файл все еще больше {size} МБ.",
+    "imageCompressionFailed": "Не удалось подготовить изображение к загрузке.",
     "imageReadFailed": "Не удалось загрузить изображение.",
+    "imagePreview": "Открыть",
+    "imagePreviewEdit": "Открыть и редактировать",
+    "imageEditorTitle": "Редактор изображения",
+    "imageEditorSubtitle": "Обрежьте и поверните фото перед сохранением.",
+    "imageEditorPreviewSubtitle": "Просмотр изображения.",
+    "imageEditorSource": "Источник: {source}",
+    "imageEditorZoom": "Масштаб",
+    "imageEditorRotation": "Поворот",
+    "imageEditorRotate90": "Повернуть на 90°",
+    "imageEditorSave": "Сохранить фото",
+    "imageEditSaved": "Изображение обновлено.",
     "barcodes": "Штрихкоды",
     "barcodesCount": "{count, plural, one {# штрихкод} few {# штрихкода} many {# штрихкодов} other {# штрихкода}}",
     "barcodeHint": "Разделяйте штрихкоды запятыми или |",
     "barcodePlaceholder": "Введите штрихкод",
     "barcodeDuplicate": "Этот штрихкод уже добавлен.",
-    "barcodeEmpty": "Штрихкод не может быть пустым.",
+    "barcodeEmpty": "Штрихкоды не добавлены.",
     "addBarcode": "Добавить штрихкод",
+    "generateBarcode": "Сгенерировать штрихкод",
+    "generateBarcodeMode": "Формат штрихкода",
+    "barcodeModeEan13": "EAN-13 (внутренний)",
+    "barcodeModeCode128": "CODE-128 (внутренний)",
+    "barcodeGenerated": "Штрихкод сгенерирован: {value}",
+    "barcodeInternalHint": "Внутренний штрихкод для печати и сканирования в системе (не GS1).",
+    "barcodeGenerateRequiresSave": "Сначала сохраните товар, затем можно сгенерировать штрихкод.",
     "removeBarcode": "Удалить",
     "packsTitle": "Упаковки",
     "addPack": "Добавить упаковку",
@@ -964,6 +1047,9 @@
     "bulkCategoryHint": "Оставьте поле пустым, чтобы очистить категорию.",
     "bulkCategorySuccess": "Категория обновлена для {count} товаров.",
     "bulkSetStorePrice": "Цена для магазина",
+    "bulkGenerateBarcodes": "Сгенерировать штрихкоды",
+    "confirmBulkGenerateBarcodes": "Сгенерировать штрихкоды для выбранных товаров ({count})? Существующие штрихкоды не изменяются.",
+    "bulkGenerateBarcodesSuccess": "Сгенерировано: {generated}. Пропущено: {skipped}.",
     "bulkStorePriceTitle": "Цена для выбранных товаров",
     "bulkStorePriceSubtitle": "Установите цену для магазина сразу для нескольких товаров.",
     "bulkStorePriceSuccess": "Цены обновлены для {count} товаров.",
@@ -1496,7 +1582,8 @@
     "inviteAccepted": "Принято",
     "inviteExpired": "Истекло",
     "inviteEmpty": "Приглашений пока нет.",
-    "inviteCreated": "Приглашение создано."
+    "inviteCreated": "Приглашение создано.",
+    "inviteEmailNotSentUseLink": "Письмо не отправлено. Отправьте ссылку приглашения вручную."
   },
   "audit": {
     "systemActor": "Система",
@@ -1594,6 +1681,8 @@
     "poOrgMismatch": "Заказ не относится к организации.",
     "duplicateBarcode": "Штрихкод повторяется в списке.",
     "barcodeExists": "Штрихкод уже используется другим товаром.",
+    "productBarcodeExists": "У товара уже есть штрихкод. Используйте существующий или включите принудительную генерацию.",
+    "barcodeGenerationFailed": "Не удалось сгенерировать уникальный штрихкод. Повторите попытку.",
     "invalidInn": "ИНН должен содержать 10–14 цифр.",
     "duplicateLineItem": "Позиция товара повторяется в заказе.",
     "transferSameStore": "Нельзя перемещать товар в тот же магазин.",
@@ -1692,6 +1781,15 @@
     "posReturnNotEditable": "Возврат нельзя изменить в текущем статусе.",
     "posReturnSourceMismatch": "Позиция не относится к исходной продаже.",
     "posReturnLineNotFound": "Позиция возврата не найдена.",
+    "posCardRefundShiftMismatch": "Возврат по карте доступен только в текущей смене исходной продажи.",
+    "posMarkingCodeRequired": "Для товаров с обязательной маркировкой сохраните хотя бы один код перед завершением продажи.",
+    "posMarkingCodesLimitExceeded": "Слишком много кодов маркировки в одной позиции.",
+    "ettnDisabled": "ЭТТН отключена для этого магазина.",
+    "esfDisabled": "ЭСФ отключена для этого магазина.",
+    "kkmPairingCodeInvalid": "Код сопряжения недействителен или истек.",
+    "kkmReceiptNotFound": "Фискальный чек не найден.",
+    "kkmRetryUnsupportedMode": "Повторная отправка недоступна для этого режима ККМ.",
+    "kkmReceiptPayloadInvalid": "Полезная нагрузка фискального чека повреждена.",
     "copyFailed": "Не удалось скопировать."
   },
   "adminJobs": {
@@ -1759,6 +1857,30 @@
     "weeklyActiveUsers": "WAU: {count}",
     "adjustments30d": "Корректировки (30 дней): {count}",
     "stockoutsCurrent": "Товары без остатка: {count}",
+    "salesTitle": "Продажи",
+    "sales7dOrders": "Заказы (7 дней): {count}",
+    "sales7dRevenue": "Выручка (7 дней): {amount}",
+    "sales30dOrders": "Заказы (30 дней): {count}",
+    "sales30dRevenue": "Выручка (30 дней): {amount}",
+    "returnsProfitTitle": "Возвраты и прибыль",
+    "returns30dOrders": "Возвраты (30 дней): {count}",
+    "returns30dAmount": "Сумма возвратов: {amount}",
+    "refundRate": "Доля возвратов: {rate}",
+    "grossProfit30d": "Валовая прибыль (30 дней): {amount}",
+    "grossMargin30d": "Валовая маржа: {rate}",
+    "poPipelineTitle": "Пайплайн поставок",
+    "poSubmitted": "Отправлены: {count}",
+    "poApproved": "Согласованы: {count}",
+    "poPartiallyReceived": "Частично получены: {count}",
+    "kkmHealthTitle": "Здоровье ККМ",
+    "kkmNotSentOrders": "Чеки не отправлены: {count}",
+    "kkmFailedOrders": "Чеки с ошибкой: {count}",
+    "kkmFiscalQueued": "В очереди фискализации: {count}",
+    "kkmFiscalProcessing": "Обрабатываются: {count}",
+    "kkmFiscalFailed": "Ошибки фискализации: {count}",
+    "topStockoutsTitle": "Топ дефицитных позиций",
+    "stockoutOnHand": "Остаток: {count}",
+    "topStockoutsEmpty": "Дефицитных позиций нет.",
     "eventLabels": {
       "onboarding_started": "Онбординг начат",
       "onboarding_completed": "Онбординг завершен",
@@ -1831,7 +1953,8 @@
   },
   "priceTags": {
     "sku": "SKU",
-    "noPrice": "Цена не задана"
+    "noPrice": "Цена не задана",
+    "noBarcode": "Нет штрихкода"
   },
   "units": {
     "title": "Единицы измерения",
@@ -1930,8 +2053,8 @@
       "csv": "CSV"
     },
     "templateDownload": "Скачать шаблон 1С",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,barcodes",
-    "templateExample": "SKU-001,Товар,шт,Категория,Описание,150,120,120,1234567890",
+    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,barcodes",
+    "templateExample": "SKU-001,Товар,шт,Категория,Описание,150,120,120,15,1234567890",
     "mappingTitle": "Сопоставление колонок",
     "mappingPlaceholder": "Выберите колонку",
     "mappingEmpty": "Нет колонок для сопоставления.",
@@ -1946,16 +2069,31 @@
     "fieldBasePrice": "Цена продажи",
     "fieldPurchasePrice": "Цена закупки",
     "fieldAvgCost": "Себестоимость",
+    "fieldMinStock": "Минимальный остаток",
     "fieldPhotoUrl": "Фото (URL)",
     "fieldBarcodes": "Штрихкоды",
+    "importModeTitle": "Режим импорта",
+    "importModePlaceholder": "Выберите режим",
+    "importModeHint": "Полный импорт создает/обновляет карточки. Выборочный импорт обновляет только отмеченные поля у существующих SKU.",
+    "mode": {
+      "full": "Полный импорт",
+      "update_selected": "Выборочное обновление"
+    },
+    "updateFieldsTitle": "Поля для обновления",
+    "updateFieldsHint": "Выберите, какие поля обновлять из файла.",
+    "updateMaskRequired": "Для выборочного режима отметьте хотя бы одно поле.",
+    "updatePresetPrices": "Только цены",
+    "updatePresetMinStock": "Только мин. остаток",
+    "updatePresetAll": "Все поля",
+    "updatePresetNone": "Очистить",
     "defaultUnitTitle": "Ед. измерения по умолчанию",
     "defaultUnitPlaceholder": "Выберите единицу",
     "defaultUnitHint": "Если в файле пустая единица измерения, будет использовано это значение.",
-    "targetStoreTitle": "Магазин для цен",
+    "targetStoreTitle": "Магазин для цен и мин. остатков",
     "targetStorePlaceholder": "Выберите магазин",
-    "targetStoreNone": "Не применять цену к магазину",
-    "targetStoreHint": "Если выбран магазин, колонка «Цена продажи» создаст или обновит цену именно для него.",
-    "targetStoreApplied": "Цены применены для магазина: {store}.",
+    "targetStoreNone": "Не применять к магазину",
+    "targetStoreHint": "Если выбран магазин, «Цена продажи» обновит цену магазина, а «Минимальный остаток» применит порог low-stock для этого магазина.",
+    "targetStoreApplied": "Данные применены для магазина: {store}.",
     "previewTitle": "Предпросмотр",
     "previewEmpty": "Нет данных для предпросмотра.",
     "validationTitle": "Проверка",
@@ -1994,6 +2132,8 @@
     "rowMissing": "Строка {row}: отсутствует {field}.",
     "rowMinLength": "Строка {row}: поле {field} должно содержать минимум {min} символа(ов).",
     "rowInvalidNumber": "Строка {row}: поле {field} должно быть числом не меньше 0.",
+    "rowInvalidInteger": "Строка {row}: поле {field} должно быть целым числом не меньше 0.",
+    "rowStoreRequiredForMinStock": "Строка {row}: для импорта минимального остатка выберите магазин.",
     "duplicateSku": "Строка {row}: дубликат SKU {value}.",
     "duplicateBarcode": "Строка {row}: дубликат штрихкода {value}.",
     "historyTitle": "История импортов",
@@ -2016,6 +2156,7 @@
       "rows": "Строк",
       "created": "Создано",
       "updated": "Обновлено",
+      "skipped": "Пропущено",
       "status": "Статус"
     },
     "historyStoreValue": "Магазин: {store}",
@@ -2023,7 +2164,8 @@
       "product": "Товары",
       "barcode": "Штрихкоды",
       "attribute": "Атрибуты",
-      "purchaseOrder": "Заказы поставки"
+      "purchaseOrder": "Заказы поставки",
+      "reorderPolicy": "Политики минимального остатка"
     },
     "errorCsvRowHeader": "Строка",
     "errorCsvMessageHeader": "Ошибка"
@@ -2057,7 +2199,12 @@
     },
     "analyticsLink": "Аналитика",
     "exportsLink": "Экспорты",
-    "closeLink": "Закрытие периода"
+    "receiptsLink": "Реестр чеков",
+    "closeLink": "Закрытие периода",
+    "receipts": {
+      "title": "Реестр чеков",
+      "subtitle": "Отчетный реестр чеков для сверки с бухгалтерией."
+    }
   },
   "analytics": {
     "title": "Аналитика",
@@ -2286,10 +2433,10 @@
     }
   },
   "compliance": {
-    "title": "KG compliance-ready",
+    "title": "Налоги и требования",
     "subtitle": "Настройте режимы ККМ, ЭСФ, ЭТТН и маркировки для выбранного магазина.",
     "subtitleStore": "Настройте режимы ККМ, ЭСФ, ЭТТН и маркировки для магазина «{store}».",
-    "cardTitle": "KG compliance-ready",
+    "cardTitle": "Налоги и требования",
     "cardSubtitle": "Включите только нужные модули, остальное — в расширенных настройках.",
     "helpLink": "Справка по требованиям КР",
     "saved": "Настройки сохранены",
@@ -2303,6 +2450,10 @@
     "ettnHint": "Экспорт данных для электронных товарно-транспортных накладных.",
     "markingToggle": "Маркировка",
     "markingHint": "Отмечайте товары, требующие маркировки.",
+    "markingMode": "Режим маркировки",
+    "markingModeHint": "При обязательном режиме завершение продажи блокируется, пока коды не сохранены.",
+    "markingModeOptional": "Необязательно при продаже",
+    "markingModeRequired": "Обязательно при продаже",
     "advancedShow": "Расширенные",
     "advancedHide": "Скрыть",
     "advancedIntro": "Дополнительные параметры видны только при необходимости.",
@@ -2311,8 +2462,10 @@
     "kkmMode": "Режим ККМ",
     "kkmModeOff": "Выключено",
     "kkmModeExport": "Только экспорт",
+    "kkmModeConnector": "Через локальный коннектор",
     "kkmModeAdapter": "Через адаптер",
     "exportOnlyHint": "Экспортируйте чеки для бухгалтера или поставщика ККМ.",
+    "connectorHint": "Локальный коннектор получает чеки из очереди и отправляет результаты обратно.",
     "adapterHint": "Адаптер будет вызывать фискализацию при подключении.",
     "providerKey": "Ключ провайдера ККМ",
     "settingsJson": "Настройки адаптера (JSON)"
@@ -2346,7 +2499,18 @@
       "purchases": "Закупки",
       "inventoryOnHand": "Остатки на складе",
       "periodClose": "Закрытие периода",
-      "kkmReceipts": "Чеки для ККМ"
+      "kkmReceipts": "Чеки для ККМ",
+      "receiptsRegistry": "Реестр чеков",
+      "shiftXReport": "Смена X (сводка)",
+      "shiftZReport": "Смена Z (закрытие)",
+      "salesByDay": "Продажи по дням",
+      "salesByItem": "Продажи по товарам",
+      "returnsByDay": "Возвраты по дням",
+      "returnsByItem": "Возвраты по товарам",
+      "cashDrawerMovements": "Движения кассы (cash in/out)",
+      "markingSalesRegistry": "Реестр маркировки продаж",
+      "ettnReferences": "Ссылки ЭТТН",
+      "esfReferences": "Ссылки ЭСФ"
     },
     "formats": {
       "csv": "CSV",
@@ -2387,7 +2551,7 @@
     }
   },
   "helpCompliance": {
-    "title": "KG compliance-ready",
+    "title": "Налоги и требования",
     "subtitle": "Короткие инструкции по режимам и экспортам.",
     "toggleArticle": "Открыть статью: {title}",
     "articles": {

@@ -18,6 +18,7 @@ describe("price tags pdf", () => {
       locale: "ru-RU",
       storeName: "Магазин Центр",
       noPriceLabel: "Нет цены",
+      noBarcodeLabel: "Нет штрихкода",
       skuLabel: "Артикул",
     });
 
@@ -38,6 +39,28 @@ describe("price tags pdf", () => {
       locale: "ru-RU",
       storeName: null,
       noPriceLabel: "Нет цены",
+      noBarcodeLabel: "Нет штрихкода",
+      skuLabel: "Артикул",
+    });
+
+    expect(pdf.length).toBeGreaterThan(500);
+  });
+
+  it("renders fallback text when barcode is missing", async () => {
+    const pdf = await buildPriceTagsPdf({
+      labels: [
+        {
+          name: "Без штрихкода",
+          sku: "SKU-003",
+          barcode: "",
+          price: null,
+        },
+      ],
+      template: "3x8",
+      locale: "ru-RU",
+      storeName: null,
+      noPriceLabel: "Нет цены",
+      noBarcodeLabel: "Нет штрихкода",
       skuLabel: "Артикул",
     });
 

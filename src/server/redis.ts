@@ -8,7 +8,6 @@ type RedisState = {
   subscriber: Redis | null;
   warnedMissing: boolean;
   warnedError: boolean;
-  fatalRedisError: Error | null;
   readinessCheck: Promise<void> | null;
 };
 
@@ -21,7 +20,6 @@ const state: RedisState = globalForRedis.__bazaarRedisState ?? {
   subscriber: null,
   warnedMissing: false,
   warnedError: false,
-  fatalRedisError: null,
   readinessCheck: null,
 };
 
@@ -70,21 +68,37 @@ const createClient = (role: "publisher" | "subscriber") => {
     const client = new Redis(url, {
       // Subscriber is connected explicitly before SUBSCRIBE to avoid INFO checks in subscriber mode.
       lazyConnect: role === "subscriber",
-      maxRetriesPerRequest: role === "subscriber" ? null : 1,
-      connectTimeout: 1_000,
-      commandTimeout: 2_000,
+      maxRetriesPerRequest: role === "subscriber" ? null : 2,
+      connectTimeout: 3_000,
+      commandTimeout: 5_000,
       // Subscriber connections should not run INFO-based ready checks after SUBSCRIBE.
       enableReadyCheck: role !== "subscriber",
       // Queue commands until socket is writable; bounded by connect/command timeout and retry strategy.
       enableOfflineQueue: true,
-      retryStrategy: (attempt) => (attempt > 1 ? null : 100),
+      retryStrategy: (attempt) => {
+        if (attempt > 8) {
+          return null;
+        }
+        return Math.min(1_500, 100 * attempt);
+      },
     });
 
     client.on("error", (error) => {
-      state.fatalRedisError = error instanceof Error ? error : new Error(String(error));
       if (!state.warnedError) {
         state.warnedError = true;
         logger.warn({ error: toLogError(error), role }, "Redis connection error.");
+      }
+    });
+    client.on("ready", () => {
+      state.warnedError = false;
+      state.readinessCheck = null;
+    });
+    client.on("end", () => {
+      state.readinessCheck = null;
+      if (role === "publisher") {
+        state.publisher = null;
+      } else {
+        state.subscriber = null;
       }
     });
 
@@ -102,9 +116,8 @@ const createClient = (role: "publisher" | "subscriber") => {
 };
 
 export const getRedisPublisher = () => {
-  if (state.fatalRedisError) {
+  if (state.publisher?.status === "end") {
     state.publisher = null;
-    return null;
   }
   if (!state.publisher) {
     state.publisher = createClient("publisher");
@@ -113,9 +126,8 @@ export const getRedisPublisher = () => {
 };
 
 export const getRedisSubscriber = () => {
-  if (state.fatalRedisError) {
+  if (state.subscriber?.status === "end") {
     state.subscriber = null;
-    return null;
   }
   if (!state.subscriber) {
     state.subscriber = createClient("subscriber");
@@ -136,17 +148,24 @@ export const assertRedisReady = async () => {
   }
 
   state.readinessCheck = (async () => {
-    const client = getRedisPublisher();
+    let client = getRedisPublisher();
     if (!client) {
       throw new Error("REDIS_URL is configured but Redis publisher is unavailable.");
     }
     try {
+      if (client.status === "end") {
+        state.publisher = null;
+        client = getRedisPublisher();
+      }
+      if (!client) {
+        throw new Error("REDIS_URL is configured but Redis publisher is unavailable.");
+      }
       if (client.status === "wait") {
         await client.connect();
       }
       await client.ping();
-    } catch (error) {
-      state.fatalRedisError = error instanceof Error ? error : new Error(String(error));
+    } catch {
+      state.publisher = null;
       throw new Error("REDIS_URL is configured but Redis is unreachable in production.");
     }
   })();

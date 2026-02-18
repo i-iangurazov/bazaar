@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -72,6 +73,9 @@ const UsersPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
+  const router = useRouter();
+  const pathname = usePathname() ?? "/settings/users";
+  const searchParams = useSearchParams();
   const currentUserId = session?.user?.id;
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
@@ -178,6 +182,9 @@ const UsersPage = () => {
         setInviteLink(`${window.location.origin}/invite/${result.token}`);
       }
       toast({ variant: "success", description: t("inviteCreated") });
+      if (!result.emailSent) {
+        toast({ variant: "info", description: t("inviteEmailNotSentUseLink") });
+      }
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -234,7 +241,7 @@ const UsersPage = () => {
   const isSaving =
     createMutation.isLoading || updateMutation.isLoading || setActiveMutation.isLoading;
 
-  const openCreateDialog = () => {
+  const openCreateDialog = useCallback(() => {
     setEditingUser(null);
     form.reset({
       name: "",
@@ -245,7 +252,22 @@ const UsersPage = () => {
       password: "",
     });
     setDialogOpen(true);
-  };
+  }, [form]);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") {
+      return;
+    }
+
+    if (isAdmin) {
+      openCreateDialog();
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("create");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [isAdmin, openCreateDialog, pathname, router, searchParams]);
 
   const openEditDialog = (user: UserRow) => {
     setEditingUser(user);

@@ -37,6 +37,7 @@ type FormValues = {
   enableEsf: boolean;
   enableEttn: boolean;
   enableMarking: boolean;
+  markingMode: MarkingModeValue;
   kkmProviderKey: string;
   kkmSettingsText: string;
 };
@@ -44,10 +45,19 @@ type FormValues = {
 const KKM_MODE = {
   OFF: "OFF",
   EXPORT_ONLY: "EXPORT_ONLY",
+  CONNECTOR: "CONNECTOR",
   ADAPTER: "ADAPTER",
 } as const;
 
 type KkmModeValue = (typeof KKM_MODE)[keyof typeof KKM_MODE];
+
+const MARKING_MODE = {
+  OFF: "OFF",
+  OPTIONAL: "OPTIONAL",
+  REQUIRED_ON_SALE: "REQUIRED_ON_SALE",
+} as const;
+
+type MarkingModeValue = (typeof MARKING_MODE)[keyof typeof MARKING_MODE];
 
 const emptyForm: FormValues = {
   defaultLocale: "",
@@ -57,6 +67,7 @@ const emptyForm: FormValues = {
   enableEsf: false,
   enableEttn: false,
   enableMarking: false,
+  markingMode: MARKING_MODE.OFF,
   kkmProviderKey: "",
   kkmSettingsText: "",
 };
@@ -87,10 +98,20 @@ const CompliancePage = () => {
         defaultLocale: z.string().optional(),
         taxRegime: z.string().optional(),
         enableKkm: z.boolean(),
-        kkmMode: z.enum([KKM_MODE.OFF, KKM_MODE.EXPORT_ONLY, KKM_MODE.ADAPTER]),
+        kkmMode: z.enum([
+          KKM_MODE.OFF,
+          KKM_MODE.EXPORT_ONLY,
+          KKM_MODE.CONNECTOR,
+          KKM_MODE.ADAPTER,
+        ]),
         enableEsf: z.boolean(),
         enableEttn: z.boolean(),
         enableMarking: z.boolean(),
+        markingMode: z.enum([
+          MARKING_MODE.OFF,
+          MARKING_MODE.OPTIONAL,
+          MARKING_MODE.REQUIRED_ON_SALE,
+        ]),
         kkmProviderKey: z.string().optional(),
         kkmSettingsText: z.string().optional(),
       }),
@@ -116,10 +137,24 @@ const CompliancePage = () => {
       enableEsf: profile.enableEsf,
       enableEttn: profile.enableEttn,
       enableMarking: profile.enableMarking,
+      markingMode: profile.markingMode ?? MARKING_MODE.OFF,
       kkmProviderKey: profile.kkmProviderKey ?? "",
       kkmSettingsText: profile.kkmSettings ? JSON.stringify(profile.kkmSettings, null, 2) : "",
     });
   }, [profileQuery.data, form]);
+
+  const markingEnabled = form.watch("enableMarking");
+  const markingMode = form.watch("markingMode");
+
+  useEffect(() => {
+    if (!markingEnabled && markingMode !== MARKING_MODE.OFF) {
+      form.setValue("markingMode", MARKING_MODE.OFF, { shouldDirty: true });
+      return;
+    }
+    if (markingEnabled && markingMode === MARKING_MODE.OFF) {
+      form.setValue("markingMode", MARKING_MODE.OPTIONAL, { shouldDirty: true });
+    }
+  }, [form, markingEnabled, markingMode]);
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -152,6 +187,7 @@ const CompliancePage = () => {
       enableEsf: values.enableEsf,
       enableEttn: values.enableEttn,
       enableMarking: values.enableMarking,
+      markingMode: values.enableMarking ? values.markingMode : MARKING_MODE.OFF,
       kkmProviderKey: values.kkmProviderKey || null,
       kkmSettings: parsedSettings,
     });
@@ -262,6 +298,39 @@ const CompliancePage = () => {
                   )}
                 />
 
+                {markingEnabled ? (
+                  <FormField
+                    control={form.control}
+                    name="markingMode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("markingMode")}</FormLabel>
+                        <FormControl>
+                          <Select
+                            value={field.value}
+                            onValueChange={(value) => field.onChange(value as MarkingModeValue)}
+                            disabled={!canEdit}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={t("markingMode")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={MARKING_MODE.OPTIONAL}>
+                                {t("markingModeOptional")}
+                              </SelectItem>
+                              <SelectItem value={MARKING_MODE.REQUIRED_ON_SALE}>
+                                {t("markingModeRequired")}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">{t("markingModeHint")}</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+
                 {advancedOpen ? (
                   <div className="rounded-lg border p-4">
                     <p className="mb-4 text-sm text-muted-foreground">{t("advancedIntro")}</p>
@@ -324,6 +393,7 @@ const CompliancePage = () => {
                                 <SelectContent>
                                   <SelectItem value={KKM_MODE.OFF}>{t("kkmModeOff")}</SelectItem>
                                   <SelectItem value={KKM_MODE.EXPORT_ONLY}>{t("kkmModeExport")}</SelectItem>
+                                  <SelectItem value={KKM_MODE.CONNECTOR}>{t("kkmModeConnector")}</SelectItem>
                                   <SelectItem value={KKM_MODE.ADAPTER}>{t("kkmModeAdapter")}</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -335,6 +405,9 @@ const CompliancePage = () => {
 
                       {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.EXPORT_ONLY ? (
                         <p className="text-xs text-muted-foreground">{t("exportOnlyHint")}</p>
+                      ) : null}
+                      {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.CONNECTOR ? (
+                        <p className="text-xs text-muted-foreground">{t("connectorHint")}</p>
                       ) : null}
                       {form.watch("enableKkm") && form.watch("kkmMode") === KKM_MODE.ADAPTER ? (
                         <p className="text-xs text-muted-foreground">{t("adapterHint")}</p>

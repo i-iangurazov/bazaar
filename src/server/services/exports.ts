@@ -1,7 +1,17 @@
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ExportJobStatus, ExportType, Prisma, StockMovementType } from "@prisma/client";
+import {
+  CashDrawerMovementType,
+  CustomerOrderStatus,
+  ExportJobStatus,
+  ExportType,
+  MarkingCodeStatus,
+  PosReturnStatus,
+  Prisma,
+  RegisterShiftStatus,
+  StockMovementType,
+} from "@prisma/client";
 import * as XLSX from "xlsx";
 
 import { prisma } from "@/server/db/prisma";
@@ -39,6 +49,7 @@ const EXPORT_SCHEMA_VERSION = "v1";
 const DEFAULT_EXPORT_FORMAT: ExportFormat = "csv";
 
 const formatDay = (date: Date) => date.toISOString().slice(0, 10);
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const ensureExportDir = async () => {
   const directory = join(tmpdir(), "exports");
@@ -403,6 +414,537 @@ const buildReceiptsRows = async (
     }
     return row;
   });
+};
+
+const buildReceiptsRegistryRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const receipts = await prisma.customerOrder.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      isPosSale: true,
+      createdAt: { gte: periodStart, lte: periodEnd },
+    },
+    include: {
+      register: { select: { code: true, name: true } },
+      createdBy: { select: { email: true } },
+      payments: {
+        where: { isRefund: false },
+        select: { method: true, amountKgs: true },
+      },
+      fiscalReceipts: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          status: true,
+          mode: true,
+          fiscalNumber: true,
+          providerReceiptId: true,
+          lastError: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return receipts.map((receipt) => {
+    const payments = {
+      cash: 0,
+      card: 0,
+      transfer: 0,
+      other: 0,
+    };
+
+    for (const payment of receipt.payments) {
+      const amount = Number(payment.amountKgs);
+      if (payment.method === "CASH") {
+        payments.cash = roundMoney(payments.cash + amount);
+      } else if (payment.method === "CARD") {
+        payments.card = roundMoney(payments.card + amount);
+      } else if (payment.method === "TRANSFER") {
+        payments.transfer = roundMoney(payments.transfer + amount);
+      } else {
+        payments.other = roundMoney(payments.other + amount);
+      }
+    }
+
+    const fiscal = receipt.fiscalReceipts[0];
+    return {
+      orgId: organizationId,
+      storeCode: store.code,
+      storeName: store.name,
+      receiptNumber: receipt.number,
+      createdAt: receipt.createdAt.toISOString(),
+      completedAt: receipt.completedAt ? receipt.completedAt.toISOString() : "",
+      status: receipt.status,
+      registerCode: receipt.register?.code ?? "",
+      registerName: receipt.register?.name ?? "",
+      cashierEmail: receipt.createdBy?.email ?? "",
+      totalKgs: Number(receipt.totalKgs),
+      cashKgs: payments.cash,
+      cardKgs: payments.card,
+      transferKgs: payments.transfer,
+      otherKgs: payments.other,
+      kkmStatus: receipt.kkmStatus,
+      fiscalStatus: fiscal?.status ?? "",
+      fiscalMode: fiscal?.mode ?? "",
+      fiscalNumber: fiscal?.fiscalNumber ?? "",
+      providerReceiptId: fiscal?.providerReceiptId ?? "",
+      fiscalError: fiscal?.lastError ?? "",
+    };
+  });
+};
+
+const buildShiftReportRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+  mode: "x" | "z",
+) => {
+  const shifts = await prisma.registerShift.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      openedAt: { gte: periodStart, lte: periodEnd },
+      ...(mode === "z" ? { status: RegisterShiftStatus.CLOSED } : {}),
+    },
+    include: {
+      register: { select: { code: true, name: true } },
+      openedBy: { select: { email: true } },
+      closedBy: { select: { email: true } },
+    },
+    orderBy: { openedAt: "desc" },
+  });
+
+  if (!shifts.length) {
+    return [];
+  }
+
+  const shiftIds = shifts.map((shift) => shift.id);
+
+  const [salesAgg, returnsAgg, paymentsAgg, cashAgg] = await Promise.all([
+    prisma.customerOrder.groupBy({
+      by: ["shiftId"],
+      where: {
+        organizationId,
+        isPosSale: true,
+        status: CustomerOrderStatus.COMPLETED,
+        shiftId: { in: shiftIds },
+      },
+      _sum: { totalKgs: true },
+      _count: { _all: true },
+    }),
+    prisma.saleReturn.groupBy({
+      by: ["shiftId"],
+      where: {
+        organizationId,
+        status: PosReturnStatus.COMPLETED,
+        shiftId: { in: shiftIds },
+      },
+      _sum: { totalKgs: true },
+      _count: { _all: true },
+    }),
+    prisma.salePayment.groupBy({
+      by: ["shiftId", "method", "isRefund"],
+      where: {
+        organizationId,
+        shiftId: { in: shiftIds },
+      },
+      _sum: { amountKgs: true },
+    }),
+    prisma.cashDrawerMovement.groupBy({
+      by: ["shiftId", "type"],
+      where: {
+        organizationId,
+        shiftId: { in: shiftIds },
+      },
+      _sum: { amountKgs: true },
+    }),
+  ]);
+
+  const salesMap = new Map(salesAgg.map((row) => [row.shiftId, row]));
+  const returnsMap = new Map(returnsAgg.map((row) => [row.shiftId, row]));
+  const paymentsMap = new Map<string, Array<(typeof paymentsAgg)[number]>>();
+  for (const row of paymentsAgg) {
+    const list = paymentsMap.get(row.shiftId) ?? [];
+    list.push(row);
+    paymentsMap.set(row.shiftId, list);
+  }
+  const cashMap = new Map<string, Array<(typeof cashAgg)[number]>>();
+  for (const row of cashAgg) {
+    const list = cashMap.get(row.shiftId) ?? [];
+    list.push(row);
+    cashMap.set(row.shiftId, list);
+  }
+
+  return shifts.map((shift) => {
+    const sales = salesMap.get(shift.id);
+    const returns = returnsMap.get(shift.id);
+    const paymentRows = paymentsMap.get(shift.id) ?? [];
+    const cashRows = cashMap.get(shift.id) ?? [];
+
+    const cashSales = paymentRows
+      .filter((row) => row.method === "CASH" && !row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const cashRefunds = paymentRows
+      .filter((row) => row.method === "CASH" && row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const payIn = cashRows
+      .filter((row) => row.type === CashDrawerMovementType.PAY_IN)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const payOut = cashRows
+      .filter((row) => row.type === CashDrawerMovementType.PAY_OUT)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+
+    const expectedCash = roundMoney(
+      Number(shift.openingCashKgs) + payIn - payOut + cashSales - cashRefunds,
+    );
+    const countedCash = shift.closingCashCountedKgs ? Number(shift.closingCashCountedKgs) : null;
+    const discrepancy = countedCash === null ? null : roundMoney(countedCash - expectedCash);
+
+    return {
+      orgId: organizationId,
+      storeCode: store.code,
+      reportType: mode === "x" ? "SHIFT_X" : "SHIFT_Z",
+      shiftId: shift.id,
+      status: shift.status,
+      registerCode: shift.register.code,
+      registerName: shift.register.name,
+      openedAt: shift.openedAt.toISOString(),
+      openedBy: shift.openedBy.email ?? "",
+      closedAt: shift.closedAt ? shift.closedAt.toISOString() : "",
+      closedBy: shift.closedBy?.email ?? "",
+      salesCount: sales?._count._all ?? 0,
+      salesTotalKgs: Number(sales?._sum.totalKgs ?? 0),
+      returnsCount: returns?._count._all ?? 0,
+      returnsTotalKgs: Number(returns?._sum.totalKgs ?? 0),
+      openingCashKgs: Number(shift.openingCashKgs),
+      cashPayInKgs: roundMoney(payIn),
+      cashPayOutKgs: roundMoney(payOut),
+      expectedCashKgs: expectedCash,
+      countedCashKgs: countedCash ?? "",
+      discrepancyKgs: discrepancy ?? "",
+    };
+  });
+};
+
+const buildSalesByDayRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const sales = await prisma.customerOrder.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      isPosSale: true,
+      status: CustomerOrderStatus.COMPLETED,
+      completedAt: { gte: periodStart, lte: periodEnd },
+    },
+    select: { completedAt: true, totalKgs: true },
+  });
+
+  const grouped = new Map<string, { ordersCount: number; revenueKgs: number }>();
+  for (const sale of sales) {
+    if (!sale.completedAt) {
+      continue;
+    }
+    const day = formatDay(sale.completedAt);
+    const entry = grouped.get(day) ?? { ordersCount: 0, revenueKgs: 0 };
+    entry.ordersCount += 1;
+    entry.revenueKgs = roundMoney(entry.revenueKgs + Number(sale.totalKgs));
+    grouped.set(day, entry);
+  }
+
+  return Array.from(grouped.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, entry]) => ({
+      orgId: organizationId,
+      storeCode: store.code,
+      day,
+      ordersCount: entry.ordersCount,
+      revenueKgs: entry.revenueKgs,
+    }));
+};
+
+const buildSalesByItemRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const lines = await prisma.customerOrderLine.findMany({
+    where: {
+      customerOrder: {
+        organizationId,
+        storeId: store.id,
+        isPosSale: true,
+        status: CustomerOrderStatus.COMPLETED,
+        completedAt: { gte: periodStart, lte: periodEnd },
+      },
+    },
+    select: {
+      product: { select: { sku: true, name: true } },
+      variant: { select: { sku: true, name: true } },
+      qty: true,
+      lineTotalKgs: true,
+    },
+  });
+
+  const grouped = new Map<string, { sku: string; productName: string; variantSku: string; variantName: string; qty: number; revenueKgs: number }>();
+  for (const line of lines) {
+    const key = `${line.product.sku}:${line.variant?.sku ?? "BASE"}`;
+    const entry =
+      grouped.get(key) ??
+      {
+        sku: line.product.sku,
+        productName: line.product.name,
+        variantSku: line.variant?.sku ?? "",
+        variantName: line.variant?.name ?? "",
+        qty: 0,
+        revenueKgs: 0,
+      };
+    entry.qty += line.qty;
+    entry.revenueKgs = roundMoney(entry.revenueKgs + Number(line.lineTotalKgs));
+    grouped.set(key, entry);
+  }
+
+  return Array.from(grouped.values()).map((entry) => ({
+    orgId: organizationId,
+    storeCode: store.code,
+    ...entry,
+  }));
+};
+
+const buildReturnsByDayRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const returns = await prisma.saleReturn.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      status: PosReturnStatus.COMPLETED,
+      completedAt: { gte: periodStart, lte: periodEnd },
+    },
+    select: { completedAt: true, totalKgs: true },
+  });
+
+  const grouped = new Map<string, { returnsCount: number; returnsTotalKgs: number }>();
+  for (const item of returns) {
+    if (!item.completedAt) {
+      continue;
+    }
+    const day = formatDay(item.completedAt);
+    const entry = grouped.get(day) ?? { returnsCount: 0, returnsTotalKgs: 0 };
+    entry.returnsCount += 1;
+    entry.returnsTotalKgs = roundMoney(entry.returnsTotalKgs + Number(item.totalKgs));
+    grouped.set(day, entry);
+  }
+
+  return Array.from(grouped.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, entry]) => ({
+      orgId: organizationId,
+      storeCode: store.code,
+      day,
+      returnsCount: entry.returnsCount,
+      returnsTotalKgs: entry.returnsTotalKgs,
+    }));
+};
+
+const buildReturnsByItemRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const lines = await prisma.saleReturnLine.findMany({
+    where: {
+      saleReturn: {
+        organizationId,
+        storeId: store.id,
+        status: PosReturnStatus.COMPLETED,
+        completedAt: { gte: periodStart, lte: periodEnd },
+      },
+    },
+    select: {
+      product: { select: { sku: true, name: true } },
+      variant: { select: { sku: true, name: true } },
+      qty: true,
+      lineTotalKgs: true,
+    },
+  });
+
+  const grouped = new Map<string, { sku: string; productName: string; variantSku: string; variantName: string; qty: number; returnsTotalKgs: number }>();
+  for (const line of lines) {
+    const key = `${line.product.sku}:${line.variant?.sku ?? "BASE"}`;
+    const entry =
+      grouped.get(key) ??
+      {
+        sku: line.product.sku,
+        productName: line.product.name,
+        variantSku: line.variant?.sku ?? "",
+        variantName: line.variant?.name ?? "",
+        qty: 0,
+        returnsTotalKgs: 0,
+      };
+    entry.qty += line.qty;
+    entry.returnsTotalKgs = roundMoney(entry.returnsTotalKgs + Number(line.lineTotalKgs));
+    grouped.set(key, entry);
+  }
+
+  return Array.from(grouped.values()).map((entry) => ({
+    orgId: organizationId,
+    storeCode: store.code,
+    ...entry,
+  }));
+};
+
+const buildCashDrawerMovementRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const rows = await prisma.cashDrawerMovement.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      createdAt: { gte: periodStart, lte: periodEnd },
+    },
+    include: {
+      shift: { select: { id: true, register: { select: { code: true, name: true } } } },
+      createdBy: { select: { email: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return rows.map((row) => ({
+    orgId: organizationId,
+    storeCode: store.code,
+    createdAt: row.createdAt.toISOString(),
+    shiftId: row.shiftId,
+    registerCode: row.shift.register.code,
+    registerName: row.shift.register.name,
+    type: row.type,
+    amountKgs: Number(row.amountKgs),
+    reason: row.reason,
+    createdBy: row.createdBy?.email ?? "",
+  }));
+};
+
+const buildMarkingSalesRegistryRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const rows = await prisma.markingCodeCapture.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      status: MarkingCodeStatus.CAPTURED,
+      capturedAt: { gte: periodStart, lte: periodEnd },
+      sale: {
+        isPosSale: true,
+      },
+    },
+    include: {
+      sale: { select: { number: true, createdAt: true } },
+      saleLine: {
+        select: {
+          qty: true,
+          product: { select: { sku: true, name: true } },
+        },
+      },
+      capturedBy: { select: { email: true } },
+    },
+    orderBy: { capturedAt: "desc" },
+  });
+
+  return rows.map((row) => ({
+    orgId: organizationId,
+    storeCode: store.code,
+    capturedAt: row.capturedAt.toISOString(),
+    receiptNumber: row.sale.number,
+    receiptCreatedAt: row.sale.createdAt.toISOString(),
+    sku: row.saleLine.product.sku,
+    productName: row.saleLine.product.name,
+    qty: row.saleLine.qty,
+    markingCode: row.code,
+    capturedBy: row.capturedBy?.email ?? "",
+  }));
+};
+
+const buildEttnReferenceRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const rows = await prisma.ettnReference.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      createdAt: { gte: periodStart, lte: periodEnd },
+    },
+    include: {
+      createdBy: { select: { email: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return rows.map((row) => ({
+    orgId: organizationId,
+    storeCode: store.code,
+    createdAt: row.createdAt.toISOString(),
+    documentType: row.documentType,
+    documentId: row.documentId,
+    ettnNumber: row.ettnNumber,
+    ettnDate: row.ettnDate ? row.ettnDate.toISOString() : "",
+    notes: row.notes ?? "",
+    createdBy: row.createdBy?.email ?? "",
+  }));
+};
+
+const buildEsfReferenceRows = async (
+  organizationId: string,
+  store: StoreSummary,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const rows = await prisma.esfReference.findMany({
+    where: {
+      organizationId,
+      storeId: store.id,
+      createdAt: { gte: periodStart, lte: periodEnd },
+    },
+    include: {
+      createdBy: { select: { email: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return rows.map((row) => ({
+    orgId: organizationId,
+    storeCode: store.code,
+    createdAt: row.createdAt.toISOString(),
+    documentType: row.documentType,
+    documentId: row.documentId,
+    esfNumber: row.esfNumber,
+    esfDate: row.esfDate ? row.esfDate.toISOString() : "",
+    counterpartyName: row.counterpartyName ?? "",
+    createdBy: row.createdBy?.email ?? "",
+  }));
 };
 
 const buildInventoryMovementsLedgerRows = async (
@@ -914,6 +1456,310 @@ const buildExportData = async (
         keys.push("ettnRequired");
       }
       return { header, keys, rows };
+    }
+    case ExportType.RECEIPTS_REGISTRY: {
+      const rows = await buildReceiptsRegistryRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      const header = [
+        "orgId",
+        "storeCode",
+        "storeName",
+        "receiptNumber",
+        "createdAt",
+        "completedAt",
+        "status",
+        "registerCode",
+        "registerName",
+        "cashierEmail",
+        "totalKgs",
+        "cashKgs",
+        "cardKgs",
+        "transferKgs",
+        "otherKgs",
+        "kkmStatus",
+        "fiscalStatus",
+        "fiscalMode",
+        "fiscalNumber",
+        "providerReceiptId",
+        "fiscalError",
+      ];
+      return { header, keys: [...header], rows };
+    }
+    case ExportType.SHIFT_X_REPORT: {
+      const rows = await buildShiftReportRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+        "x",
+      );
+      const header = [
+        "orgId",
+        "storeCode",
+        "reportType",
+        "shiftId",
+        "status",
+        "registerCode",
+        "registerName",
+        "openedAt",
+        "openedBy",
+        "closedAt",
+        "closedBy",
+        "salesCount",
+        "salesTotalKgs",
+        "returnsCount",
+        "returnsTotalKgs",
+        "openingCashKgs",
+        "cashPayInKgs",
+        "cashPayOutKgs",
+        "expectedCashKgs",
+        "countedCashKgs",
+        "discrepancyKgs",
+      ];
+      return { header, keys: [...header], rows };
+    }
+    case ExportType.SHIFT_Z_REPORT: {
+      const rows = await buildShiftReportRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+        "z",
+      );
+      const header = [
+        "orgId",
+        "storeCode",
+        "reportType",
+        "shiftId",
+        "status",
+        "registerCode",
+        "registerName",
+        "openedAt",
+        "openedBy",
+        "closedAt",
+        "closedBy",
+        "salesCount",
+        "salesTotalKgs",
+        "returnsCount",
+        "returnsTotalKgs",
+        "openingCashKgs",
+        "cashPayInKgs",
+        "cashPayOutKgs",
+        "expectedCashKgs",
+        "countedCashKgs",
+        "discrepancyKgs",
+      ];
+      return { header, keys: [...header], rows };
+    }
+    case ExportType.SALES_BY_DAY: {
+      const rows = await buildSalesByDayRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: ["orgId", "storeCode", "day", "ordersCount", "revenueKgs"],
+        keys: ["orgId", "storeCode", "day", "ordersCount", "revenueKgs"],
+        rows,
+      };
+    }
+    case ExportType.SALES_BY_ITEM: {
+      const rows = await buildSalesByItemRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: ["orgId", "storeCode", "sku", "productName", "variantSku", "variantName", "qty", "revenueKgs"],
+        keys: ["orgId", "storeCode", "sku", "productName", "variantSku", "variantName", "qty", "revenueKgs"],
+        rows,
+      };
+    }
+    case ExportType.RETURNS_BY_DAY: {
+      const rows = await buildReturnsByDayRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: ["orgId", "storeCode", "day", "returnsCount", "returnsTotalKgs"],
+        keys: ["orgId", "storeCode", "day", "returnsCount", "returnsTotalKgs"],
+        rows,
+      };
+    }
+    case ExportType.RETURNS_BY_ITEM: {
+      const rows = await buildReturnsByItemRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "productName",
+          "variantSku",
+          "variantName",
+          "qty",
+          "returnsTotalKgs",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "productName",
+          "variantSku",
+          "variantName",
+          "qty",
+          "returnsTotalKgs",
+        ],
+        rows,
+      };
+    }
+    case ExportType.CASH_DRAWER_MOVEMENTS: {
+      const rows = await buildCashDrawerMovementRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "createdAt",
+          "shiftId",
+          "registerCode",
+          "registerName",
+          "type",
+          "amountKgs",
+          "reason",
+          "createdBy",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "createdAt",
+          "shiftId",
+          "registerCode",
+          "registerName",
+          "type",
+          "amountKgs",
+          "reason",
+          "createdBy",
+        ],
+        rows,
+      };
+    }
+    case ExportType.MARKING_SALES_REGISTRY: {
+      const rows = await buildMarkingSalesRegistryRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "capturedAt",
+          "receiptNumber",
+          "receiptCreatedAt",
+          "sku",
+          "productName",
+          "qty",
+          "markingCode",
+          "capturedBy",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "capturedAt",
+          "receiptNumber",
+          "receiptCreatedAt",
+          "sku",
+          "productName",
+          "qty",
+          "markingCode",
+          "capturedBy",
+        ],
+        rows,
+      };
+    }
+    case ExportType.ETTN_REFERENCES: {
+      const rows = await buildEttnReferenceRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "createdAt",
+          "documentType",
+          "documentId",
+          "ettnNumber",
+          "ettnDate",
+          "notes",
+          "createdBy",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "createdAt",
+          "documentType",
+          "documentId",
+          "ettnNumber",
+          "ettnDate",
+          "notes",
+          "createdBy",
+        ],
+        rows,
+      };
+    }
+    case ExportType.ESF_REFERENCES: {
+      const rows = await buildEsfReferenceRows(
+        input.organizationId,
+        store,
+        input.periodStart,
+        input.periodEnd,
+      );
+      return {
+        header: [
+          "orgId",
+          "storeCode",
+          "createdAt",
+          "documentType",
+          "documentId",
+          "esfNumber",
+          "esfDate",
+          "counterpartyName",
+          "createdBy",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "createdAt",
+          "documentType",
+          "documentId",
+          "esfNumber",
+          "esfDate",
+          "counterpartyName",
+          "createdBy",
+        ],
+        rows,
+      };
     }
     default:
       throw new AppError("exportTypeInvalid", "BAD_REQUEST", 400);

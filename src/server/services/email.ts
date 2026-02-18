@@ -12,6 +12,20 @@ type EmailLocale = "ru" | "kg";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+const getEmailLogoUrl = () => {
+  const explicit = (process.env.EMAIL_LOGO_URL ?? "").trim();
+  if (explicit) {
+    return explicit;
+  }
+  const baseUrl = trimTrailingSlash((process.env.NEXTAUTH_URL ?? "").trim());
+  if (!baseUrl) {
+    return null;
+  }
+  return `${baseUrl}/brand/logo.png`;
+};
+
 const getEmailProvider = () => {
   const configured = (process.env.EMAIL_PROVIDER ?? "").trim().toLowerCase();
   if (configured) {
@@ -108,6 +122,7 @@ export const sendVerificationEmail = async (input: {
   locale?: EmailLocale | null;
   expiresInMinutes?: number;
 }) => {
+  const logoUrl = getEmailLogoUrl();
   const locale: EmailLocale = input.locale === "kg" ? "kg" : "ru";
   const expiresInHours = Math.max(1, Math.round((input.expiresInMinutes ?? 60) / 60));
   const copy =
@@ -138,7 +153,11 @@ export const sendVerificationEmail = async (input: {
     html: `
       <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
         <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
-          <h1 style="margin:0 0 8px;font-size:20px;line-height:1.3;color:#111827;">BAZAAR</h1>
+          ${
+            logoUrl
+              ? `<img src="${logoUrl}" alt="BAZAAR" width="180" height="48" style="display:block;height:auto;width:180px;max-width:100%;margin:0 0 12px;" />`
+              : '<h1 style="margin:0 0 8px;font-size:20px;line-height:1.3;color:#111827;">BAZAAR</h1>'
+          }
           <p style="margin:0 0 8px;color:#111827;">${copy.greeting}</p>
           <p style="margin:0 0 16px;color:#374151;">${copy.intro}</p>
           <p style="margin:0 0 16px;color:#374151;">${copy.expires}</p>

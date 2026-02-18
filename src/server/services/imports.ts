@@ -33,6 +33,13 @@ const importTransactionOptions = {
 
 export const runProductImport = async (input: RunProductImportInput) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  const importMode = input.mode ?? "full";
+  const hasMinStockImport =
+    input.rows.some((row) => row.minStock !== undefined) &&
+    (importMode === "full" || input.updateMask?.includes("minStock"));
+  if (hasMinStockImport && !input.storeId) {
+    throw new AppError("storeRequired", "BAD_REQUEST", 400);
+  }
   const targetStore = input.storeId
     ? await prisma.store.findFirst({
         where: {
@@ -67,7 +74,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
     : 0;
   const netNewProducts = Math.max(0, uniqueSkus.length - existingCount);
 
-  if (netNewProducts > 0) {
+  if (importMode === "full" && netNewProducts > 0) {
     await assertCapacity({
       organizationId: input.organizationId,
       kind: "products",
@@ -83,6 +90,8 @@ export const runProductImport = async (input: RunProductImportInput) => {
           createdById: input.actorId,
           summary: {
             source: input.source ?? "csv",
+            mode: importMode,
+            updateMask: input.updateMask ?? null,
             targetStoreId: targetStore?.id ?? null,
             targetStoreName: targetStore?.name ?? null,
             rows: rows.length,
@@ -97,15 +106,19 @@ export const runProductImport = async (input: RunProductImportInput) => {
       });
 
       const created = results.filter((row) => row.action === "created").length;
-      const updated = results.length - created;
+      const updated = results.filter((row) => row.action === "updated").length;
+      const skipped = results.filter((row) => row.action === "skipped").length;
 
       const summary = {
         source: input.source ?? "csv",
+        mode: importMode,
+        updateMask: input.updateMask ?? null,
         targetStoreId: targetStore?.id ?? null,
         targetStoreName: targetStore?.name ?? null,
         rows: rows.length,
         created,
         updated,
+        skipped,
         images: {
           downloaded: photoResolution.summary.downloaded,
           fallback: photoResolution.summary.fallback,
@@ -353,6 +366,7 @@ export const rollbackImportBatch = async (input: {
     const productIds = byType.get("Product") ?? [];
     const barcodeIds = byType.get("ProductBarcode") ?? [];
     const attributeIds = byType.get("AttributeDefinition") ?? [];
+    const reorderPolicyIds = byType.get("ReorderPolicy") ?? [];
 
     const archivedProducts = productIds.length
       ? await tx.product.updateMany({
@@ -392,11 +406,18 @@ export const rollbackImportBatch = async (input: {
         })
       : { count: 0 };
 
+    const removedReorderPolicies = reorderPolicyIds.length
+      ? await tx.reorderPolicy.deleteMany({
+          where: { id: { in: reorderPolicyIds } },
+        })
+      : { count: 0 };
+
     const summary = {
       archivedProducts: archivedProducts.count,
       removedBarcodes: removedBarcodes.count,
       removedTemplates: removedTemplates.count,
       deactivatedAttributes: deactivatedAttributes.count,
+      removedReorderPolicies: removedReorderPolicies.count,
       cancelledPurchaseOrders,
       adjustments,
     };

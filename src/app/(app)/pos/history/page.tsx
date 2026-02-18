@@ -49,6 +49,8 @@ const PosHistoryPage = () => {
   const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>(PosPaymentMethod.CASH);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
+  const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -71,9 +73,22 @@ const PosHistoryPage = () => {
     setRegisterId(registersQuery.data[0].id);
   }, [registerId, registersQuery.data]);
 
+  useEffect(() => {
+    if (!registerId || !registersQuery.data?.length) {
+      return;
+    }
+    if (registerExists) {
+      return;
+    }
+    setRegisterId("");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(selectedRegisterKey);
+    }
+  }, [registerExists, registerId, registersQuery.data]);
+
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: Boolean(registerId), refetchOnWindowFocus: true },
+    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
 
   const salesQuery = trpc.pos.sales.list.useQuery(
@@ -84,7 +99,7 @@ const PosHistoryPage = () => {
       page: 1,
       pageSize: 30,
     },
-    { enabled: Boolean(registerId), refetchOnWindowFocus: true },
+    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
 
   const saleDetailQuery = trpc.pos.sales.get.useQuery(
@@ -99,7 +114,7 @@ const PosHistoryPage = () => {
       page: 1,
       pageSize: 20,
     },
-    { enabled: Boolean(registerId), refetchOnWindowFocus: true },
+    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
 
   const createReturnMutation = trpc.pos.returns.createDraft.useMutation();
@@ -231,7 +246,7 @@ const PosHistoryPage = () => {
         });
       }
 
-      await completeReturnMutation.mutateAsync({
+      const completion = await completeReturnMutation.mutateAsync({
         saleReturnId: draft.id,
         idempotencyKey: createIdempotencyKey(),
         payments: [
@@ -242,7 +257,16 @@ const PosHistoryPage = () => {
         ],
       });
 
-      toast({ variant: "success", description: t("history.returnSuccess") });
+      if (completion.manualRequired) {
+        toast({
+          variant: "info",
+          description: t("history.manualRefundRequired", {
+            requestId: completion.refundRequestId ?? "-",
+          }),
+        });
+      } else {
+        toast({ variant: "success", description: t("history.returnSuccess") });
+      }
       setReturnSaleId(null);
       await Promise.all([salesQuery.refetch(), returnsQuery.refetch()]);
     } catch (error) {
@@ -284,7 +308,13 @@ const PosHistoryPage = () => {
           <CardTitle>{t("history.salesTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {salesQuery.isLoading ? (
+          {!canLoadRegisterScopedData ? (
+            <p className="text-sm text-muted-foreground">
+              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+            </p>
+          ) : null}
+
+          {canLoadRegisterScopedData && salesQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
@@ -347,7 +377,7 @@ const PosHistoryPage = () => {
             </div>
           ))}
 
-          {!salesQuery.isLoading && !(salesQuery.data?.items ?? []).length ? (
+          {canLoadRegisterScopedData && !salesQuery.isLoading && !(salesQuery.data?.items ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
           ) : null}
         </CardContent>
@@ -358,6 +388,12 @@ const PosHistoryPage = () => {
           <CardTitle>{t("history.returnsTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {!canLoadRegisterScopedData ? (
+            <p className="text-sm text-muted-foreground">
+              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+            </p>
+          ) : null}
+
           {(returnsQuery.data?.items ?? []).map((item) => (
             <div key={item.id} className="rounded-md border border-border bg-card p-3 text-sm">
               <div className="flex items-start justify-between gap-2">
@@ -390,7 +426,7 @@ const PosHistoryPage = () => {
               </div>
             </div>
           ))}
-          {returnsQuery.isLoading ? (
+          {canLoadRegisterScopedData && returnsQuery.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}

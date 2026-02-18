@@ -345,6 +345,7 @@ const runPdfCheck = async (): Promise<Omit<DiagnosticsCheckResult, "type" | "ran
     locale: "ru",
     storeName: null,
     noPriceLabel: "N/A",
+    noBarcodeLabel: "N/A",
     skuLabel: "SKU",
   });
   if (!pdf.byteLength) {

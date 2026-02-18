@@ -27,10 +27,23 @@ export const invitesRouter = router({
           role: input.role,
         });
         const baseUrl = process.env.NEXTAUTH_URL ?? "";
+        let emailSent = false;
         if (baseUrl) {
-          await sendInviteEmail({ email: result.invite.email, inviteLink: `${baseUrl}/invite/${result.token}` });
+          try {
+            await sendInviteEmail({ email: result.invite.email, inviteLink: `${baseUrl}/invite/${result.token}` });
+            emailSent = true;
+          } catch (emailError) {
+            ctx.logger.warn(
+              {
+                emailError,
+                email: result.invite.email,
+                requestId: ctx.requestId,
+              },
+              "invite email delivery failed"
+            );
+          }
         }
-        return result;
+        return { ...result, emailSent };
       } catch (error) {
         throw toTRPCError(error);
       }

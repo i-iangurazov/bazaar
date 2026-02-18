@@ -8,14 +8,18 @@ import { lookupScanProducts } from "@/server/services/scanLookup";
 import {
   archiveProduct,
   bulkUpdateProductCategory,
+  bulkGenerateProductBarcodes,
   createProduct,
   duplicateProduct,
+  generateProductBarcode,
   restoreProduct,
+  type ImportUpdateField,
   updateProduct,
 } from "@/server/services/products";
 import { runProductImport } from "@/server/services/imports";
 
 const maxListImageUrlLength = 2_048;
+const maxDetailImageUrlLength = 8_192;
 
 const sanitizeListImageUrl = (value: string | null | undefined) => {
   if (!value) {
@@ -30,8 +34,36 @@ const sanitizeListImageUrl = (value: string | null | undefined) => {
   return value;
 };
 
+const sanitizeDetailImageUrl = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+  if (value.startsWith("data:image/")) {
+    return null;
+  }
+  if (value.length > maxDetailImageUrlLength) {
+    return null;
+  }
+  return value;
+};
+
 const decimalToNumber = (value: Prisma.Decimal | null | undefined) =>
   value === null || value === undefined ? null : Number(value);
+
+const importUpdateFieldEnum = z.enum([
+  "name",
+  "unit",
+  "category",
+  "description",
+  "photoUrl",
+  "barcodes",
+  "basePriceKgs",
+  "purchasePriceKgs",
+  "avgCostKgs",
+  "minStock",
+]);
+
+const barcodeGenerationModeEnum = z.enum(["EAN13", "CODE128"]);
 
 export const productsRouter = router({
   lookupScan: protectedProcedure
@@ -335,6 +367,53 @@ export const productsRouter = router({
       };
     }),
 
+  listIds: protectedProcedure
+    .input(
+      z
+        .object({
+          search: z.string().optional(),
+          category: z.string().optional(),
+          type: z.enum(["all", "product", "bundle"]).optional(),
+          includeArchived: z.boolean().optional(),
+          storeId: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      if (input?.storeId) {
+        const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
+        if (!store || store.organizationId !== ctx.user.organizationId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+        }
+      }
+
+      const where = {
+        ...(input?.includeArchived ? {} : { isDeleted: false }),
+        ...(input?.search
+          ? {
+              OR: [
+                { name: { contains: input.search, mode: "insensitive" as const } },
+                { sku: { contains: input.search, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+        ...(input?.category ? { category: input.category } : {}),
+        ...(input?.type === "product"
+          ? { isBundle: false }
+          : input?.type === "bundle"
+            ? { isBundle: true }
+            : {}),
+        organizationId: ctx.user.organizationId,
+      };
+
+      const rows = await ctx.prisma.product.findMany({
+        where,
+        select: { id: true },
+        orderBy: { name: "asc" },
+      });
+      return rows.map((row) => row.id);
+    }),
+
   byIds: protectedProcedure
     .input(z.object({ ids: z.array(z.string()).max(10000) }))
     .query(async ({ ctx, input }) => {
@@ -432,8 +511,18 @@ export const productsRouter = router({
         });
       }
       const avgCostKgs = decimalToNumber(baseCost?.avgCostKgs);
+      const images = product.images.flatMap((image) => {
+        const sanitized = sanitizeDetailImageUrl(image.url);
+        return sanitized ? [{ ...image, url: sanitized }] : [];
+      });
+      const photoUrl =
+        sanitizeDetailImageUrl(product.photoUrl) ??
+        images[0]?.url ??
+        null;
       return {
         ...product,
+        images,
+        photoUrl,
         barcodes: product.barcodes.map((barcode) => barcode.value),
         variants: product.variants.map((variant) => ({
           ...variant,
@@ -756,6 +845,61 @@ export const productsRouter = router({
       }
     }),
 
+  generateBarcode: adminProcedure
+    .input(
+      z.object({
+        productId: z.string().min(1),
+        mode: barcodeGenerationModeEnum,
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await generateProductBarcode({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productId: input.productId,
+          mode: input.mode,
+          force: input.force,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkGenerateBarcodes: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 3, prefix: "products-barcodes-bulk" }))
+    .input(
+      z.object({
+        mode: barcodeGenerationModeEnum,
+        filter: z
+          .object({
+            productIds: z.array(z.string().min(1)).max(5000).optional(),
+            search: z.string().optional(),
+            category: z.string().optional(),
+            type: z.enum(["all", "product", "bundle"]).optional(),
+            includeArchived: z.boolean().optional(),
+            storeId: z.string().optional(),
+            limit: z.number().int().min(1).max(5000).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await bulkGenerateProductBarcodes({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          mode: input.mode,
+          filter: input.filter,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   bulkUpdateCategory: adminProcedure
     .input(
       z.object({
@@ -785,26 +929,46 @@ export const productsRouter = router({
           .array(
             z.object({
               sku: z.string().min(2),
-              name: z.string().min(2),
+              name: z.string().min(2).optional(),
               category: z.string().optional(),
-              unit: z.string().min(1),
+              unit: z.string().min(1).optional(),
               description: z.string().optional(),
               photoUrl: z.string().optional(),
               barcodes: z.array(z.string()).optional(),
               basePriceKgs: z.number().min(0).optional(),
               purchasePriceKgs: z.number().min(0).optional(),
               avgCostKgs: z.number().min(0).optional(),
+              minStock: z.number().int().min(0).optional(),
             }),
           )
           .min(1),
         source: z.enum(["cloudshop", "onec", "csv"]).optional(),
         storeId: z.string().optional(),
+        mode: z.enum(["full", "update_selected"]).optional(),
+        updateMask: z.array(importUpdateFieldEnum).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         if (input.rows.length > 1000) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "importTooLarge" });
+        }
+        const mode = input.mode ?? "full";
+        if (mode === "update_selected" && (!input.updateMask || input.updateMask.length === 0)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "invalidInput" });
+        }
+        if (mode === "full") {
+          const invalidFullRows = input.rows.some((row) => !row.name || !row.unit);
+          if (invalidFullRows) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "invalidInput" });
+          }
+        }
+        if (
+          input.rows.some((row) => row.minStock !== undefined) &&
+          (mode === "full" || input.updateMask?.includes("minStock")) &&
+          !input.storeId
+        ) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "storeRequired" });
         }
         const result = await runProductImport({
           organizationId: ctx.user.organizationId,
@@ -813,6 +977,8 @@ export const productsRouter = router({
           rows: input.rows,
           source: input.source,
           storeId: input.storeId,
+          mode,
+          updateMask: input.updateMask as ImportUpdateField[] | undefined,
         });
         return {
           batchId: result.batch.id,

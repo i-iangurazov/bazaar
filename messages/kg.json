@@ -64,6 +64,7 @@
     "openHelpArticle": "Жардам макаласын ачуу: {article}",
     "selectedCount": "Тандалды: {count}",
     "clearSelection": "Тандоону тазалоо",
+    "selectAllResults": "Бардык жазууларды тандоо ({count})",
     "allStores": "Бардык дүкөндөр",
     "moreActions": "Дагы аракеттер",
     "nothingFound": "Эч нерсе табылган жок",
@@ -100,7 +101,7 @@
     "demoAccounts": "Демо аккаунттар: admin@example.com (Admin123!), manager@example.com (Manager123!), staff@example.com (Staff123!)."
   },
   "meta": {
-    "title": "BAZAAR Inventory",
+    "title": "BAZAAR",
     "description": "Күнүмдүк иш үчүн ишенимдүү запас башкаруу."
   },
   "signup": {
@@ -370,7 +371,9 @@
     "help": "Жардам",
     "billing": "Тарифтер",
     "profile": "Профиль",
-    "diagnostics": "Диагностика"
+    "diagnostics": "Диагностика",
+    "posKkm": "ККМ кезеги",
+    "posReceipts": "Чектер реестри"
   },
   "breadcrumbs": {
     "ariaLabel": "Барак навигациясы",
@@ -578,6 +581,7 @@
       "registerTitle": "Касса жана смена",
       "register": "Касса",
       "selectRegister": "Кассаны тандаңыз",
+      "selectRegisterFirst": "Адегенде кассаны тандаңыз.",
       "noRegisters": "Кассалар али түзүлгөн эмес. Башкаруу бөлүмүндө касса түзүңүз.",
       "shiftOpen": "Смена ачык",
       "shiftClosed": "Смена жабык",
@@ -588,6 +592,7 @@
       "quickActionsTitle": "Тез аракеттер",
       "sell": "Сатуу",
       "history": "Тарых",
+      "receipts": "Чектер",
       "shifts": "Сменалар",
       "registers": "Кассалар"
     },
@@ -641,7 +646,13 @@
       "paymentMismatch": "Төлөмдөр суммасы чек жыйынтыгына барабар болушу керек.",
       "saleCreated": "Сатуу черновиги түзүлдү.",
       "lineAdded": "Позиция кошулду.",
-      "completeSuccess": "{number} сатуу аяктады."
+      "completeSuccess": "{number} сатуу аяктады.",
+      "markingLabel": "Маркировка",
+      "markingRequired": "милдеттүү",
+      "markingPlaceholder": "Маркировка коддорун үтүр менен киргизиңиз",
+      "markingSave": "Коддорду сактоо",
+      "markingSaved": "Маркировка коддору сакталды.",
+      "markingCapturedCount": "Сакталган коддор: {count}"
     },
     "shifts": {
       "title": "Сменалар",
@@ -694,13 +705,64 @@
       "kkmRetryFailed": "Чекти ККМге кайра жөнөтүү мүмкүн болгон жок.",
       "kkmRetryFailedWithReason": "Чекти ККМге жөнөтүү мүмкүн болгон жок: {reason}",
       "returnTotal": "Кайтаруу суммасы",
-      "completeReturn": "Кайтарууну аяктоо"
+      "completeReturn": "Кайтарууну аяктоо",
+      "manualRefundRequired": "Кайтаруу кол менен иштетилет. Сурам түзүлдү: {requestId}."
     },
     "payments": {
       "cash": "Накталай",
       "card": "Карта",
       "transfer": "Которуу",
       "other": "Башка"
+    },
+    "kkm": {
+      "title": "ККМ кезеги",
+      "subtitle": "Фискалдык чектердин жөнөтүлүшүн жана локалдык коннектордун байланышын көзөмөлдөө.",
+      "connectorTitle": "Коннекторду байланыштыруу",
+      "store": "Дүкөн",
+      "generatePairCode": "Код түзүү",
+      "pairCodeCreated": "Байланыштыруу коду түзүлдү: {code}.",
+      "queueTitle": "Чектер кезеги",
+      "status": "Абалы",
+      "statusAll": "Бардык абалдар",
+      "statusQueued": "Кезекте",
+      "statusProcessing": "Иштелүүдө",
+      "statusSent": "Жөнөтүлдү",
+      "statusFailed": "Ката",
+      "storeFilterHint": "Тандалган дүкөн бул жерде көрсөтүлөт.",
+      "retry": "Кайра аракет",
+      "retryQueued": "Чек кайра жөнөтүү үчүн кезекке коюлду.",
+      "empty": "Кезекте чек жок."
+    },
+    "receipts": {
+      "title": "Чектер реестри",
+      "subtitle": "Смена, кассир, төлөм жана фискалдык абал боюнча чектерди салыштыруу.",
+      "filtersTitle": "Фильтрлер",
+      "storeLabel": "Дүкөн",
+      "allStores": "Бардык дүкөндөр",
+      "statusLabel": "Абалы",
+      "fromDate": "Башталыш датасы",
+      "toDate": "Аяктоо датасы",
+      "export": "Экспорт",
+      "empty": "Чектер табылган жок.",
+      "unknownCashier": "Кассир көрсөтүлгөн эмес",
+      "status": {
+        "all": "Баары",
+        "draft": "Черновик",
+        "confirmed": "Тастыкталган",
+        "ready": "Даяр",
+        "completed": "Аяктады",
+        "canceled": "Жокко чыгарылды"
+      },
+      "columns": {
+        "number": "Номер",
+        "date": "Дата",
+        "store": "Дүкөн",
+        "cashier": "Кассир",
+        "total": "Жыйынтык",
+        "payments": "Төлөмдөр",
+        "status": "Абалы",
+        "fiscal": "Фискалдаштыруу"
+      }
     }
   },
   "dashboard": {
@@ -887,14 +949,35 @@
     "imageUrlRequired": "Сүрөттү кошуңуз.",
     "imageInvalidType": "Сүрөт файлдары гана колдоого алынат.",
     "imageTooLarge": "Файл өтө чоң (макс. {size} МБ).",
+    "imageTooLargeInput": "Файл иштетүү үчүн өтө чоң (макс. {size} МБ).",
+    "imageTooLargeAfterCompression": "Автоматтык оптимизациядан кийин да файл {size} МБ дан чоң бойдон калды.",
+    "imageCompressionFailed": "Сүрөттү жүктөөгө даярдоо мүмкүн болбоду.",
     "imageReadFailed": "Сүрөттү жүктөө мүмкүн эмес.",
+    "imagePreview": "Ачуу",
+    "imagePreviewEdit": "Ачып түзөтүү",
+    "imageEditorTitle": "Сүрөт редактору",
+    "imageEditorSubtitle": "Сактоодон мурун сүрөттү кесип жана буруңуз.",
+    "imageEditorPreviewSubtitle": "Сүрөттү көрүү.",
+    "imageEditorSource": "Булак: {source}",
+    "imageEditorZoom": "Масштаб",
+    "imageEditorRotation": "Бурулуш",
+    "imageEditorRotate90": "90° буруу",
+    "imageEditorSave": "Сүрөттү сактоо",
+    "imageEditSaved": "Сүрөт жаңыртылды.",
     "barcodes": "Штрихкоддор",
     "barcodesCount": "{count} штрихкод",
     "barcodeHint": "Штрихкоддорду үтүр же | менен бөлүңүз",
     "barcodePlaceholder": "Штрихкод киргизиңиз",
     "barcodeDuplicate": "Бул штрихкод мурда кошулган.",
-    "barcodeEmpty": "Штрихкод бош болбошу керек.",
+    "barcodeEmpty": "Штрихкоддор кошула элек.",
     "addBarcode": "Штрихкод кошуу",
+    "generateBarcode": "Штрихкод түзүү",
+    "generateBarcodeMode": "Штрихкод форматы",
+    "barcodeModeEan13": "EAN-13 (ички)",
+    "barcodeModeCode128": "CODE-128 (ички)",
+    "barcodeGenerated": "Штрихкод түзүлдү: {value}",
+    "barcodeInternalHint": "Система ичинде басып чыгаруу жана сканерлөө үчүн ички штрихкод (GS1 эмес).",
+    "barcodeGenerateRequiresSave": "Адегенде товарды сактап, андан кийин штрихкод түзүңүз.",
     "removeBarcode": "Өчүрүү",
     "packsTitle": "Таңгактар",
     "addPack": "Таңгак кошуу",
@@ -964,6 +1047,9 @@
     "bulkCategoryHint": "Категорияны тазалоо үчүн талааны бош калтырыңыз.",
     "bulkCategorySuccess": "Категория {count} буюм үчүн жаңыртылды.",
     "bulkSetStorePrice": "Дүкөн баасы",
+    "bulkGenerateBarcodes": "Штрихкод түзүү",
+    "confirmBulkGenerateBarcodes": "Тандалган товарлар үчүн штрихкод түзөлүбү ({count})? Бар штрихкоддор өзгөртүлбөйт.",
+    "bulkGenerateBarcodesSuccess": "Түзүлдү: {generated}. Өткөрүлдү: {skipped}.",
     "bulkStorePriceTitle": "Тандалган буюмдар үчүн баа",
     "bulkStorePriceSubtitle": "Бир нече буюм үчүн дүкөн баасын бир заматта коюңуз.",
     "bulkStorePriceSuccess": "{count} буюм үчүн баалар жаңыртылды.",
@@ -1496,7 +1582,8 @@
     "inviteAccepted": "Кабыл алынды",
     "inviteExpired": "Мөөнөтү бүттү",
     "inviteEmpty": "Азырынча чакыруу жок.",
-    "inviteCreated": "Чакыруу түзүлдү."
+    "inviteCreated": "Чакыруу түзүлдү.",
+    "inviteEmailNotSentUseLink": "Кат жөнөтүлгөн жок. Чакыруу шилтемесин кол менен жөнөтүңүз."
   },
   "audit": {
     "systemActor": "Тутум",
@@ -1594,6 +1681,8 @@
     "poOrgMismatch": "Заказ уюмга тиешелүү эмес.",
     "duplicateBarcode": "Штрихкод тизмеде кайталанды.",
     "barcodeExists": "Бул штрихкод башка буюмда колдонулат.",
+    "productBarcodeExists": "Бул товарда штрихкод бар. Барын колдонуңуз же мажбурлап түзүүнү иштетиңиз.",
+    "barcodeGenerationFailed": "Уникалдуу штрихкод түзүү мүмкүн болгон жок. Кайра аракет кылыңыз.",
     "invalidInn": "ИНН 10–14 цифра болушу керек.",
     "duplicateLineItem": "Заказдагы позиция кайталанып турат.",
     "transferSameStore": "Бир эле дүкөнгө өткөрүүгө болбойт.",
@@ -1692,6 +1781,15 @@
     "posReturnNotEditable": "Бул макамда кайтарууну өзгөртүү мүмкүн эмес.",
     "posReturnSourceMismatch": "Позиция баштапкы сатууга тиешелүү эмес.",
     "posReturnLineNotFound": "Кайтаруунун сабы табылган жок.",
+    "posCardRefundShiftMismatch": "Карта аркылуу кайтаруу баштапкы сатуу болгон учурдагы сменада гана мүмкүн.",
+    "posMarkingCodeRequired": "Милдеттүү маркировкасы бар товар үчүн сатууну аяктоодон мурун жок дегенде бир код сактаңыз.",
+    "posMarkingCodesLimitExceeded": "Бир позиция үчүн маркировка коддору өтө көп.",
+    "ettnDisabled": "Бул дүкөн үчүн ЭТТН модулу өчүрүлгөн.",
+    "esfDisabled": "Бул дүкөн үчүн ЭСФ модулу өчүрүлгөн.",
+    "kkmPairingCodeInvalid": "Байланыштыруу коду жараксыз же мөөнөтү өткөн.",
+    "kkmReceiptNotFound": "Фискалдык чек табылган жок.",
+    "kkmRetryUnsupportedMode": "Бул ККМ режиминде кайра жөнөтүү жеткиликсиз.",
+    "kkmReceiptPayloadInvalid": "Фискалдык чектин жүгү бузулган.",
     "copyFailed": "Көчүрүү мүмкүн эмес."
   },
   "adminJobs": {
@@ -1759,6 +1857,30 @@
     "weeklyActiveUsers": "WAU: {count}",
     "adjustments30d": "Корректировкалар (30 күн): {count}",
     "stockoutsCurrent": "Калдыксыз товарлар: {count}",
+    "salesTitle": "Сатуулар",
+    "sales7dOrders": "Заказдар (7 күн): {count}",
+    "sales7dRevenue": "Түшүм (7 күн): {amount}",
+    "sales30dOrders": "Заказдар (30 күн): {count}",
+    "sales30dRevenue": "Түшүм (30 күн): {amount}",
+    "returnsProfitTitle": "Кайтаруулар жана пайда",
+    "returns30dOrders": "Кайтаруулар (30 күн): {count}",
+    "returns30dAmount": "Кайтаруу суммасы: {amount}",
+    "refundRate": "Кайтаруу үлүшү: {rate}",
+    "grossProfit30d": "Валдык пайда (30 күн): {amount}",
+    "grossMargin30d": "Валдык маржа: {rate}",
+    "poPipelineTitle": "Жеткирүү пайплайны",
+    "poSubmitted": "Жөнөтүлгөн: {count}",
+    "poApproved": "Бекитилген: {count}",
+    "poPartiallyReceived": "Жарым-жартылай кабыл алынган: {count}",
+    "kkmHealthTitle": "ККМ абалы",
+    "kkmNotSentOrders": "Жөнөтүлбөгөн чектер: {count}",
+    "kkmFailedOrders": "Ката кеткен чектер: {count}",
+    "kkmFiscalQueued": "Фискалдаштыруу кезегинде: {count}",
+    "kkmFiscalProcessing": "Иштелүүдө: {count}",
+    "kkmFiscalFailed": "Фискалдаштыруу каталары: {count}",
+    "topStockoutsTitle": "Дефицит позициялар топу",
+    "stockoutOnHand": "Калдык: {count}",
+    "topStockoutsEmpty": "Дефицит позициялар табылган жок.",
     "eventLabels": {
       "onboarding_started": "Онбординг башталды",
       "onboarding_completed": "Онбординг аяктады",
@@ -1831,7 +1953,8 @@
   },
   "priceTags": {
     "sku": "SKU",
-    "noPrice": "Баасы жок"
+    "noPrice": "Баасы жок",
+    "noBarcode": "Штрихкод жок"
   },
   "units": {
     "title": "Өлчөм бирдиктери",
@@ -1930,8 +2053,8 @@
       "csv": "CSV"
     },
     "templateDownload": "1C шаблонун жүктөө",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,barcodes",
-    "templateExample": "SKU-001,Буюм,шт,Категория,Сыпаттама,150,120,120,1234567890",
+    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,barcodes",
+    "templateExample": "SKU-001,Буюм,шт,Категория,Сыпаттама,150,120,120,15,1234567890",
     "mappingTitle": "Тилкелерди дал келтирүү",
     "mappingPlaceholder": "Тилкени тандаңыз",
     "mappingEmpty": "Дал келтирүү үчүн тилкелер жок.",
@@ -1946,16 +2069,31 @@
     "fieldBasePrice": "Сатуу баасы",
     "fieldPurchasePrice": "Сатып алуу баасы",
     "fieldAvgCost": "Өздүк наркы",
+    "fieldMinStock": "Минималдуу калдык",
     "fieldPhotoUrl": "Фото (URL)",
     "fieldBarcodes": "Штрихкоддор",
+    "importModeTitle": "Импорт режими",
+    "importModePlaceholder": "Режимди тандаңыз",
+    "importModeHint": "Толук импорт карточкаларды түзөт/жаңыртат. Тандалма импорт бар болгон SKU үчүн белгиленген талааларды гана жаңыртат.",
+    "mode": {
+      "full": "Толук импорт",
+      "update_selected": "Тандалма жаңыртуу"
+    },
+    "updateFieldsTitle": "Жаңыртыла турган талаалар",
+    "updateFieldsHint": "Файлдан кайсы талааларды жаңыртууну тандаңыз.",
+    "updateMaskRequired": "Тандалма режим үчүн жок дегенде бир талааны белгилеңиз.",
+    "updatePresetPrices": "Баалар гана",
+    "updatePresetMinStock": "Мин. калдык гана",
+    "updatePresetAll": "Баардык талаалар",
+    "updatePresetNone": "Тазалоо",
     "defaultUnitTitle": "Демейки өлчөм бирдиги",
     "defaultUnitPlaceholder": "Өлчөм бирдигин тандаңыз",
     "defaultUnitHint": "Файлда өлчөм бирдиги бош болсо, ушул маани колдонулат.",
-    "targetStoreTitle": "Дүкөн баасы үчүн",
+    "targetStoreTitle": "Баалар жана мин. калдыктар үчүн дүкөн",
     "targetStorePlaceholder": "Дүкөндү тандаңыз",
-    "targetStoreNone": "Дүкөнгө баа колдонбоо",
-    "targetStoreHint": "Эгер дүкөн тандалса, «Сатуу баасы» тилкеси ошол дүкөн үчүн бааны түзөт же жаңыртат.",
-    "targetStoreApplied": "Баалар ушул дүкөнгө колдонулду: {store}.",
+    "targetStoreNone": "Дүкөнгө колдонбоо",
+    "targetStoreHint": "Эгер дүкөн тандалса, «Сатуу баасы» дүкөн баасын жаңыртат, ал эми «Минималдуу калдык» ошол дүкөн үчүн low-stock чегин жаңыртат.",
+    "targetStoreApplied": "Маалымат ушул дүкөнгө колдонулду: {store}.",
     "previewTitle": "Алдын ала көрүү",
     "previewEmpty": "Алдын ала көрүү үчүн маалымат жок.",
     "validationTitle": "Текшерүү",
@@ -1994,6 +2132,8 @@
     "rowMissing": "Сап {row}: {field} жок.",
     "rowMinLength": "Сап {row}: {field} талаасы кеминде {min} символ болушу керек.",
     "rowInvalidNumber": "Сап {row}: {field} талаасы 0 же андан чоң сан болушу керек.",
+    "rowInvalidInteger": "Сап {row}: {field} талаасы 0 же андан чоң бүтүн сан болушу керек.",
+    "rowStoreRequiredForMinStock": "Сап {row}: минималдуу калдыкты импорттоо үчүн дүкөндү тандаңыз.",
     "duplicateSku": "Сап {row}: SKU дубликаты {value}.",
     "duplicateBarcode": "Сап {row}: штрихкод дубликаты {value}.",
     "historyTitle": "Импорт тарыхы",
@@ -2016,6 +2156,7 @@
       "rows": "Саптар",
       "created": "Түзүлгөн",
       "updated": "Жаңыртылган",
+      "skipped": "Өткөрүлдү",
       "status": "Абалы"
     },
     "historyStoreValue": "Дүкөн: {store}",
@@ -2023,7 +2164,8 @@
       "product": "Товарлар",
       "barcode": "Штрихкоддор",
       "attribute": "Атрибуттар",
-      "purchaseOrder": "Жеткирүү буйруктары"
+      "purchaseOrder": "Жеткирүү буйруктары",
+      "reorderPolicy": "Минималдуу калдык саясаттары"
     },
     "errorCsvRowHeader": "Сап",
     "errorCsvMessageHeader": "Ката"
@@ -2057,7 +2199,12 @@
     },
     "analyticsLink": "Аналитика",
     "exportsLink": "Экспорттор",
-    "closeLink": "Мезгилди жабуу"
+    "receiptsLink": "Чектер реестри",
+    "closeLink": "Мезгилди жабуу",
+    "receipts": {
+      "title": "Чектер реестри",
+      "subtitle": "Бухгалтерия менен салыштыруу үчүн отчеттук чек реестри."
+    }
   },
   "analytics": {
     "title": "Аналитика",
@@ -2286,10 +2433,10 @@
     }
   },
   "compliance": {
-    "title": "KG compliance-ready",
+    "title": "Салык жана талаптар",
     "subtitle": "Тандалган дүкөн үчүн ККМ, ЭСФ, ЭТТН жана маркировка режимдерин настройка кылыңыз.",
     "subtitleStore": "«{store}» дүкөнү үчүн ККМ, ЭСФ, ЭТТН жана маркировка режимдерин настройка кылыңыз.",
-    "cardTitle": "KG compliance-ready",
+    "cardTitle": "Салык жана талаптар",
     "cardSubtitle": "Керектүү модулдарды гана күйгүзүңүз, калганы кеңейтилген бөлүмдө.",
     "helpLink": "КР талаптары боюнча жардам",
     "saved": "Орнотуулар сакталды",
@@ -2303,6 +2450,10 @@
     "ettnHint": "Электрондук товар-транспорт накладнаялар үчүн экспорт.",
     "markingToggle": "Маркировка",
     "markingHint": "Маркировкаланган товарларды белгилеңиз.",
+    "markingMode": "Маркировка режими",
+    "markingModeHint": "Милдеттүү режимде коддор сакталмайынча сатууну аяктоо бөгөттөлөт.",
+    "markingModeOptional": "Сатууда милдеттүү эмес",
+    "markingModeRequired": "Сатууда милдеттүү",
     "advancedShow": "Кеңейтилген",
     "advancedHide": "Жашыруу",
     "advancedIntro": "Кошумча параметрлер керек болгондо гана көрүнөт.",
@@ -2311,8 +2462,10 @@
     "kkmMode": "ККМ режими",
     "kkmModeOff": "Өчүк",
     "kkmModeExport": "Жөн гана экспорт",
+    "kkmModeConnector": "Локалдык коннектор аркылуу",
     "kkmModeAdapter": "Адаптер аркылуу",
     "exportOnlyHint": "Чектерди бухгалтерге же ККМ провайдерине экспорт кылыңыз.",
+    "connectorHint": "Локалдык коннектор чектерди кезектен алып, жыйынтыкты кайра жөнөтөт.",
     "adapterHint": "Адаптер туташканда фискалдаштыруу жүргүзөт.",
     "providerKey": "ККМ провайдер ачкычы",
     "settingsJson": "Адаптер жөндөөлөрү (JSON)"
@@ -2346,7 +2499,18 @@
       "purchases": "Сатып алуулар",
       "inventoryOnHand": "Кампа калдыгы",
       "periodClose": "Мезгилди жабуу",
-      "kkmReceipts": "ККМ үчүн чектер"
+      "kkmReceipts": "ККМ үчүн чектер",
+      "receiptsRegistry": "Чектер реестри",
+      "shiftXReport": "X смена (жыйынтык)",
+      "shiftZReport": "Z смена (жабуу)",
+      "salesByDay": "Күн боюнча сатуу",
+      "salesByItem": "Товар боюнча сатуу",
+      "returnsByDay": "Күн боюнча кайтаруу",
+      "returnsByItem": "Товар боюнча кайтаруу",
+      "cashDrawerMovements": "Касса кыймылдары (cash in/out)",
+      "markingSalesRegistry": "Маркировка сатуу реестри",
+      "ettnReferences": "ЭТТН шилтемелери",
+      "esfReferences": "ЭСФ шилтемелери"
     },
     "formats": {
       "csv": "CSV",
@@ -2387,7 +2551,7 @@
     }
   },
   "helpCompliance": {
-    "title": "KG compliance-ready",
+    "title": "Салык жана талаптар",
     "subtitle": "Режимдер жана экспорттор боюнча кыскача маалымат.",
     "toggleArticle": "Макаланы ачуу: {title}",
     "articles": {

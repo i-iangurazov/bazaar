@@ -16,6 +16,7 @@ Required for production:
 - `EMAIL_FROM`
 - `RESEND_API_KEY`
 - `ALLOW_LOG_EMAIL_IN_PRODUCTION` (`0` in normal production; temporary `1` only before external email provider is live)
+- If `IMAGE_STORAGE_PROVIDER=r2`: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL` (and optional `R2_ENDPOINT`)
 
 Run preflight:
 
@@ -128,6 +129,10 @@ For Vercel runtime incidents (`ETIMEDOUT`, `Command timed out`, random 500 on al
 2. Redis URL
 - `REDIS_URL` must use `redis://` or `rediss://` (REST endpoint is invalid for ioredis here).
 - Provider must allow connections from Vercel regions used by the project.
+
+2.1 Product image payload size (Vercel)
+- Keep client upload target below serverless body limits; set `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES=4000000` for Vercel deployments.
+- Align `PRODUCT_IMAGE_MAX_BYTES` with your operational limit (same or slightly higher than client target).
 
 3. Runtime preflight
 - Call `GET /api/preflight` with `x-health-secret`.

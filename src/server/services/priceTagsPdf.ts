@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildPriceTagLayout } from "@/server/services/priceTagsLayout";
+import { resolveBarcodeRenderSpec } from "@/server/services/barcodes";
 
 export type PriceTagLabel = {
   name: string;
@@ -17,10 +18,9 @@ type PriceTagsPdfInput = {
   locale: string;
   storeName: string | null;
   noPriceLabel: string;
+  noBarcodeLabel: string;
   skuLabel: string;
 };
-
-type BarcodeSpec = { bcid: "ean13" | "code128"; text: string };
 type BwipModule = { toBuffer: (options: Record<string, unknown>) => Promise<Buffer> };
 
 const formatCurrency = (amount: number, locale: string) =>
@@ -114,33 +114,7 @@ const clampTextLines = (
   return lines;
 };
 
-const computeEan13CheckDigit = (digits: string) => {
-  let sum = 0;
-  for (let i = 0; i < digits.length; i += 1) {
-    const value = Number(digits[i]);
-    sum += i % 2 === 0 ? value : value * 3;
-  }
-  return String((10 - (sum % 10)) % 10);
-};
-
-const resolveBarcodeSpec = (value: string): BarcodeSpec | null => {
-  const cleaned = value.replace(/\s+/g, "");
-  if (!cleaned) {
-    return null;
-  }
-  if (/^\d{12}$/.test(cleaned)) {
-    return { bcid: "ean13", text: `${cleaned}${computeEan13CheckDigit(cleaned)}` };
-  }
-  if (/^\d{13}$/.test(cleaned)) {
-    const expected = computeEan13CheckDigit(cleaned.slice(0, 12));
-    if (cleaned[12] === expected) {
-      return { bcid: "ean13", text: cleaned };
-    }
-  }
-  return { bcid: "code128", text: cleaned };
-};
-
-const createBarcodePng = async (spec: BarcodeSpec) => {
+const createBarcodePng = async (spec: { bcid: "ean13" | "code128"; text: string }) => {
   const bwipModule = (await import("bwip-js")) as unknown as BwipModule & { default?: BwipModule };
   const bwip = bwipModule.default ?? bwipModule;
   return bwip.toBuffer({
@@ -158,6 +132,7 @@ export const buildPriceTagsPdf = async ({
   locale,
   storeName,
   noPriceLabel,
+  noBarcodeLabel,
   skuLabel,
 }: PriceTagsPdfInput) => {
   const layout = buildPriceTagLayout(template, { storeName });
@@ -195,6 +170,15 @@ export const buildPriceTagsPdf = async ({
 
     const contentX = x + layout.padding;
     const contentWidth = layout.contentWidth;
+    const drawNoBarcode = () => {
+      const fallback = truncateLine(doc, noBarcodeLabel, contentWidth, layout.config.metaFont);
+      doc.fontSize(layout.config.metaFont).fillColor("#666666");
+      doc.text(fallback, contentX, y + layout.barcodeValue.y, {
+        width: contentWidth,
+        align: "center",
+        lineBreak: false,
+      });
+    };
 
     const nameLines = clampTextLines(
       doc,
@@ -232,9 +216,9 @@ export const buildPriceTagsPdf = async ({
       });
     }
 
-    if (label.barcode) {
-      const spec = resolveBarcodeSpec(label.barcode);
-      if (spec) {
+    const spec = resolveBarcodeRenderSpec(label.barcode);
+    if (spec) {
+      try {
         const cacheKey = `${spec.bcid}:${spec.text}`;
         let barcodeEntry = barcodeCache.get(cacheKey);
         if (!barcodeEntry) {
@@ -258,7 +242,11 @@ export const buildPriceTagsPdf = async ({
           align: "center",
           lineBreak: false,
         });
+      } catch {
+        drawNoBarcode();
       }
+    } else {
+      drawNoBarcode();
     }
   }
 

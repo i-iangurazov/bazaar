@@ -199,6 +199,9 @@ const PosEntryPage = () => {
             <Link href={`/pos/history?registerId=${registerId}`}>{t("entry.history")}</Link>
           </Button>
           <Button variant="secondary" asChild>
+            <Link href="/pos/receipts">{t("entry.receipts")}</Link>
+          </Button>
+          <Button variant="secondary" asChild>
             <Link href={`/pos/shifts?registerId=${registerId}`}>{t("entry.shifts")}</Link>
           </Button>
           {canManageRegisters ? (

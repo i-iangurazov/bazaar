@@ -20,9 +20,29 @@ export const listBundleComponents = async (input: {
 
   return prisma.productBundleComponent.findMany({
     where: { bundleProductId: input.bundleProductId },
-    include: {
-      componentProduct: true,
-      componentVariant: true,
+    select: {
+      id: true,
+      organizationId: true,
+      bundleProductId: true,
+      componentProductId: true,
+      componentVariantId: true,
+      qty: true,
+      createdAt: true,
+      updatedAt: true,
+      componentProduct: {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+        },
+      },
+      componentVariant: {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
