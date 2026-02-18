@@ -8,7 +8,7 @@
     "db:down": "docker compose down",
     "db:reset": "pnpm db:up && pnpm prisma:reset",
     "dev": "next dev",
-    "prebuild": "pnpm prisma:generate",
+    "prebuild": "pnpm prisma:generate && pnpm env:check:build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -24,6 +24,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
+    "env:check:build": "node --import tsx scripts/ops-preflight.ts --env-only",
     "ops:preflight": "node --import tsx scripts/ops-preflight.ts",
     "ops:email-check": "node --import tsx scripts/ops-email-flow-check.ts",
     "ops:images-backfill": "node --import tsx scripts/ops-product-images-backfill.ts"

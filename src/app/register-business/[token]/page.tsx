@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { z } from "zod";
 
+import { AuthBrand } from "@/components/auth-brand";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FormStack } from "@/components/form-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,6 +107,9 @@ const RegisterBusinessPage = () => {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-center">
+        <AuthBrand />
+      </div>
       <div className="flex justify-end">
         <LanguageSwitcher />
       </div>

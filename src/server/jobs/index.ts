@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { Prisma } from "@prisma/client";
 
 import { isProductionRuntime } from "@/server/config/runtime";
@@ -5,27 +7,76 @@ import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
 import { getRedisPublisher } from "@/server/redis";
 import {
+  jobDurationMs,
+  jobsCompletedTotal,
   incrementCounter,
   incrementGauge,
   decrementGauge,
   jobsFailedTotal,
   jobsInflight,
+  jobsSkippedTotal,
   jobsRetriedTotal,
+  observeHistogram,
+  redisOperationDurationMs,
+  redisOperationsTotal,
 } from "@/server/metrics/metrics";
 
-const lockStore = new Map<string, number>();
+type InMemoryLock = {
+  ownerToken: string;
+  expiresAt: number;
+};
 
-const acquireLock = async (name: string, ttlMs: number) => {
+type LockHandle = {
+  name: string;
+  ownerToken: string;
+  ttlMs: number;
+};
+
+const lockStore = new Map<string, InMemoryLock>();
+
+const buildLockKey = (name: string) => `job-lock:${name}`;
+
+const compareAndDeleteScript = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+end
+return 0
+`;
+
+const compareAndPexpireScript = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("pexpire", KEYS[1], ARGV[2])
+end
+return 0
+`;
+
+const recordRedisOperationMetric = (
+  operation: "lock_set" | "lock_renew" | "lock_release",
+  status: "ok" | "error",
+  startedAt: number,
+) => {
+  incrementCounter(redisOperationsTotal, { operation, status });
+  observeHistogram(redisOperationDurationMs, { operation }, Date.now() - startedAt);
+};
+
+const acquireLock = async (name: string, ttlMs: number): Promise<LockHandle | null> => {
   const logger = getLogger();
   const now = Date.now();
   const redis = getRedisPublisher();
+  const ownerToken = randomUUID();
 
   if (redis) {
-    const lockKey = `job-lock:${name}`;
+    const lockKey = buildLockKey(name);
+    const startedAt = Date.now();
     try {
-      const result = await redis.set(lockKey, String(now), "PX", ttlMs, "NX");
-      return result === "OK";
+      const result = await redis.set(lockKey, ownerToken, "PX", ttlMs, "NX");
+      recordRedisOperationMetric("lock_set", "ok", startedAt);
+      if (result === "OK") {
+        return { name, ownerToken, ttlMs };
+      }
+      return null;
     } catch (error) {
+      recordRedisOperationMetric("lock_set", "error", startedAt);
       if (isProductionRuntime()) {
         throw error;
       }
@@ -38,30 +89,73 @@ const acquireLock = async (name: string, ttlMs: number) => {
   }
 
   const existing = lockStore.get(name);
-  if (existing && existing > now) {
-    return false;
+  if (existing && existing.expiresAt > now) {
+    return null;
   }
-  lockStore.set(name, now + ttlMs);
-  return true;
+  lockStore.set(name, { ownerToken, expiresAt: now + ttlMs });
+  return { name, ownerToken, ttlMs };
 };
 
-const releaseLock = async (name: string) => {
+const renewLock = async (lock: LockHandle) => {
   const redis = getRedisPublisher();
   const logger = getLogger();
   if (redis) {
+    const startedAt = Date.now();
     try {
-      await redis.del(`job-lock:${name}`);
+      const result = await redis.eval(
+        compareAndPexpireScript,
+        1,
+        buildLockKey(lock.name),
+        lock.ownerToken,
+        String(lock.ttlMs),
+      );
+      recordRedisOperationMetric("lock_renew", "ok", startedAt);
+      return result === 1;
     } catch (error) {
+      recordRedisOperationMetric("lock_renew", "error", startedAt);
       if (isProductionRuntime()) {
         throw error;
       }
-      logger.warn({ job: name, error }, "redis unlock unavailable; releasing in-memory lock only");
+      logger.warn({ job: lock.name, error }, "redis lock renew unavailable; renewing in-memory lock only");
     }
   }
   if (isProductionRuntime() && !redis) {
     throw new Error("redisLockUnavailable");
   }
-  lockStore.delete(name);
+  const current = lockStore.get(lock.name);
+  if (!current || current.ownerToken !== lock.ownerToken || current.expiresAt <= Date.now()) {
+    return false;
+  }
+  lockStore.set(lock.name, {
+    ownerToken: lock.ownerToken,
+    expiresAt: Date.now() + lock.ttlMs,
+  });
+  return true;
+};
+
+const releaseLock = async (lock: LockHandle) => {
+  const redis = getRedisPublisher();
+  const logger = getLogger();
+  if (redis) {
+    const startedAt = Date.now();
+    try {
+      await redis.eval(compareAndDeleteScript, 1, buildLockKey(lock.name), lock.ownerToken);
+      recordRedisOperationMetric("lock_release", "ok", startedAt);
+    } catch (error) {
+      recordRedisOperationMetric("lock_release", "error", startedAt);
+      if (isProductionRuntime()) {
+        throw error;
+      }
+      logger.warn({ job: lock.name, error }, "redis unlock unavailable; releasing in-memory lock only");
+    }
+  }
+  if (isProductionRuntime() && !redis) {
+    throw new Error("redisLockUnavailable");
+  }
+  const current = lockStore.get(lock.name);
+  if (current?.ownerToken === lock.ownerToken) {
+    lockStore.delete(lock.name);
+  }
 };
 
 export type JobResult = {
@@ -130,8 +224,8 @@ const executeJob = async (
     } catch (error) {
       logger.warn({ job: name, attempts, error }, "job attempt failed");
       if (attempts >= maxAttempts) {
-      return { result: null, attempts, error };
-    }
+        return { result: null, attempts, error };
+      }
       const delay = baseDelayMs * Math.pow(2, attempts - 1);
       await sleep(delay);
     }
@@ -144,22 +238,34 @@ export const runJob = async (name: string, payload?: JobPayload): Promise<JobRes
   const logger = getLogger();
   const job = jobs[name];
   if (!job) {
+    incrementCounter(jobsSkippedTotal, { job: name, reason: "unknown" });
     return { job: name, status: "skipped", details: { reason: "unknown" } };
   }
 
-  const locked = await acquireLock(name, 5 * 60 * 1000);
-  if (!locked) {
+  const lock = await acquireLock(name, 5 * 60 * 1000);
+  if (!lock) {
+    incrementCounter(jobsSkippedTotal, { job: name, reason: "locked" });
     return { job: name, status: "skipped", details: { reason: "locked" } };
   }
+  const startedAt = Date.now();
+  const renewEveryMs = Math.max(5_000, Math.floor(lock.ttlMs / 3));
+  let lockRenewTimer: NodeJS.Timeout | null = setInterval(() => {
+    void renewLock(lock).catch((error) => {
+      logger.warn({ job: name, error }, "job lock renew failed");
+    });
+  }, renewEveryMs);
+  lockRenewTimer.unref?.();
 
   try {
     incrementGauge(jobsInflight, undefined, 1);
     const { result, attempts, error } = await executeJob(name, payload);
     if (result) {
+      incrementCounter(jobsCompletedTotal, { job: name, status: result.status });
       return result;
     }
 
     incrementCounter(jobsFailedTotal, { job: name });
+    incrementCounter(jobsSkippedTotal, { job: name, reason: "failed" });
     const errorMessage = error instanceof Error ? error.message : "jobFailed";
     const organizationId =
       payload && typeof payload === "object" && "organizationId" in payload
@@ -179,8 +285,13 @@ export const runJob = async (name: string, payload?: JobPayload): Promise<JobRes
     logger.error({ job: name, attempts, error }, "job failed; dead letter created");
     return { job: name, status: "skipped", details: { reason: "failed" } };
   } finally {
+    if (lockRenewTimer) {
+      clearInterval(lockRenewTimer);
+      lockRenewTimer = null;
+    }
     decrementGauge(jobsInflight, undefined, 1);
-    await releaseLock(name);
+    observeHistogram(jobDurationMs, { job: name }, Date.now() - startedAt);
+    await releaseLock(lock);
   }
 };
 

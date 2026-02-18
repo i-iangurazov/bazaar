@@ -74,15 +74,12 @@ export const LoginForm = () => {
     if (result?.error) {
       if (result.error === "loginRateLimited") {
         setError("loginRateLimited");
+      } else if (result.error === "loginLocked") {
+        setError("loginLocked");
+      } else if (result.error === "loginBackoff") {
+        setError("loginBackoff");
       } else if (result.error === "emailNotVerified") {
         setError("emailNotVerified");
-      } else if (result.error.startsWith("registrationNotCompleted:")) {
-        const registrationToken = result.error.slice("registrationNotCompleted:".length);
-        if (registrationToken) {
-          router.replace(`/register-business/${registrationToken}`);
-          return;
-        }
-        setError("registrationNotCompleted");
       } else if (result.error === "registrationNotCompleted") {
         setError("registrationNotCompleted");
       } else {

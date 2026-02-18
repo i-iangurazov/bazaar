@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -113,6 +111,46 @@ type ImportRunSummary = {
   };
 };
 
+/* eslint-disable-next-line @typescript-eslint/consistent-type-imports */
+type XlsxModule = typeof import("xlsx");
+/* eslint-disable-next-line @typescript-eslint/consistent-type-imports */
+type PapaModule = typeof import("papaparse");
+/* eslint-disable-next-line @typescript-eslint/consistent-type-imports */
+type XlsxWorkSheet = import("xlsx").WorkSheet;
+/* eslint-disable-next-line @typescript-eslint/consistent-type-imports */
+type XlsxCellObject = import("xlsx").CellObject;
+
+let xlsxModulePromise: Promise<XlsxModule> | null = null;
+const loadXlsx = () => {
+  if (!xlsxModulePromise) {
+    xlsxModulePromise = import("xlsx");
+  }
+  return xlsxModulePromise;
+};
+
+const resolvePapaModule = (module: PapaModule): PapaModule => {
+  if ("default" in module) {
+    const maybeDefault = module.default;
+    if (
+      typeof maybeDefault === "object" &&
+      maybeDefault !== null &&
+      "parse" in maybeDefault &&
+      typeof maybeDefault.parse === "function"
+    ) {
+      return maybeDefault as PapaModule;
+    }
+  }
+  return module;
+};
+
+let papaModulePromise: Promise<PapaModule> | null = null;
+const loadPapa = () => {
+  if (!papaModulePromise) {
+    papaModulePromise = import("papaparse").then((module) => resolvePapaModule(module));
+  }
+  return papaModulePromise;
+};
+
 const ImportPreviewTable = dynamic(() => import("@/components/import-preview-table"), {
   ssr: false,
   loading: () => (
@@ -190,16 +228,16 @@ const detectColumn = (
   return containsMatch ?? "";
 };
 
-const parseSpreadsheetRows = (sheet: XLSX.WorkSheet) => {
+const parseSpreadsheetRows = (sheet: XlsxWorkSheet, xlsx: XlsxModule) => {
   const rangeRef = sheet["!ref"];
   if (!rangeRef) {
     return { rows: [] as RawRow[], headers: [] as string[] };
   }
 
-  const range = XLSX.utils.decode_range(rangeRef);
+  const range = xlsx.utils.decode_range(rangeRef);
   const headers: string[] = [];
   for (let col = range.s.c; col <= range.e.c; col += 1) {
-    const headerAddress = XLSX.utils.encode_cell({ r: range.s.r, c: col });
+    const headerAddress = xlsx.utils.encode_cell({ r: range.s.r, c: col });
     const headerCell = sheet[headerAddress];
     const header = normalizeValue(headerCell?.v);
     headers.push(header || `Column${col + 1}`);
@@ -211,9 +249,9 @@ const parseSpreadsheetRows = (sheet: XLSX.WorkSheet) => {
     let hasValue = false;
     for (let col = range.s.c; col <= range.e.c; col += 1) {
       const header = headers[col - range.s.c];
-      const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: col });
+      const cellAddress = xlsx.utils.encode_cell({ r: rowIndex, c: col });
       const cell = sheet[cellAddress] as
-        | (XLSX.CellObject & { l?: { Target?: string } })
+        | (XlsxCellObject & { l?: { Target?: string } })
         | undefined;
       const hyperlink = cell?.l?.Target?.trim();
       const formula = typeof cell?.f === "string" ? cell.f.trim() : "";
@@ -709,10 +747,11 @@ const ImportPage = () => {
 
     try {
       if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        const xlsx = await loadXlsx();
         const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: "array" });
+        const workbook = xlsx.read(buffer, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const parsed = parseSpreadsheetRows(sheet);
+        const parsed = parseSpreadsheetRows(sheet, xlsx);
         setRawRows(parsed.rows);
         setHeaders(parsed.headers);
         setMapping(buildDefaultMapping(parsed.headers));
@@ -720,10 +759,11 @@ const ImportPage = () => {
         return;
       }
 
-      Papa.parse<RawRow>(file, {
+      const papa = await loadPapa();
+      papa.parse<RawRow>(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results) => {
+        complete: (results: { data: RawRow[] }) => {
           const nextHeaders = Object.keys(results.data[0] ?? {});
           setRawRows(results.data);
           setHeaders(nextHeaders);

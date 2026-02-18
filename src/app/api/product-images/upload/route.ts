@@ -5,6 +5,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const toMessage = (value: unknown) => (value instanceof Error ? value.message : "genericMessage");
+const resolveMaxImageBytes = () => {
+  const parsed = Number(process.env.PRODUCT_IMAGE_MAX_BYTES);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return 5 * 1024 * 1024;
+};
+const MAX_IMAGE_BYTES = resolveMaxImageBytes();
+const MAX_MULTIPART_OVERHEAD_BYTES = 256 * 1024;
+const MAX_UPLOAD_REQUEST_BYTES = MAX_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD_BYTES;
 
 export const POST = async (request: Request) => {
   const token = await getServerAuthToken();
@@ -13,6 +23,14 @@ export const POST = async (request: Request) => {
   }
   if (!token.organizationId || token.role !== "ADMIN") {
     return Response.json({ message: "forbidden" }, { status: 403 });
+  }
+
+  const contentLengthRaw = request.headers.get("content-length");
+  if (contentLengthRaw) {
+    const contentLength = Number(contentLengthRaw);
+    if (Number.isFinite(contentLength) && contentLength > MAX_UPLOAD_REQUEST_BYTES) {
+      return Response.json({ message: "imageTooLarge" }, { status: 413 });
+    }
   }
 
   const formData = await request.formData().catch(() => null);
@@ -29,6 +47,9 @@ export const POST = async (request: Request) => {
 
   if (!(file instanceof File)) {
     return Response.json({ message: "invalidInput" }, { status: 400 });
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return Response.json({ message: "imageTooLarge" }, { status: 413 });
   }
   if (!file.type.toLowerCase().startsWith("image/")) {
     return Response.json({ message: "imageInvalidType" }, { status: 400 });

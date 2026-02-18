@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db/prisma";
 import { assertStartupConfigured } from "@/server/config/startupChecks";
 import { getRedisPublisher } from "@/server/redis";
+import { assertBuildEnvConfigured, getRuntimeEnv } from "@/server/config/runtime";
 
 const fail = (message: string) => {
   console.error(`[preflight] FAIL: ${message}`);
@@ -21,19 +22,30 @@ const ensure = (condition: boolean, message: string) => {
 };
 
 const main = async () => {
-  const nodeEnv = process.env.NODE_ENV ?? "";
-  const dbUrl = process.env.DATABASE_URL ?? "";
-  const authUrl = process.env.NEXTAUTH_URL ?? "";
-  const authSecret = process.env.NEXTAUTH_SECRET ?? "";
-  const jobsSecret = process.env.JOBS_SECRET ?? "";
-  const redisUrl = process.env.REDIS_URL ?? "";
-  const emailProvider = (process.env.EMAIL_PROVIDER ?? "").trim().toLowerCase();
-  const emailFrom = process.env.EMAIL_FROM ?? "";
-  const resendApiKey = process.env.RESEND_API_KEY ?? "";
-  const allowLogEmailInProduction = ["1", "true", "yes"].includes(
-    (process.env.ALLOW_LOG_EMAIL_IN_PRODUCTION ?? "").trim().toLowerCase(),
-  );
-  const signupMode = process.env.SIGNUP_MODE ?? "invite_only";
+  const envOnly = process.argv.includes("--env-only");
+
+  try {
+    assertBuildEnvConfigured();
+    ok("Build/runtime environment schema checks passed");
+  } catch (error) {
+    fail(`Environment schema checks failed: ${(error as Error).message}`);
+    if (envOnly) {
+      return;
+    }
+  }
+
+  const env = getRuntimeEnv();
+  const nodeEnv = env.nodeEnv;
+  const dbUrl = env.databaseUrl;
+  const authUrl = env.nextAuthUrl;
+  const authSecret = env.nextAuthSecret;
+  const jobsSecret = env.jobsSecret;
+  const redisUrl = env.redisUrl;
+  const emailProvider = env.emailProvider;
+  const emailFrom = env.emailFrom;
+  const resendApiKey = env.resendApiKey;
+  const allowLogEmailInProduction = env.allowLogEmailInProduction;
+  const signupMode = env.signupMode;
 
   ensure(Boolean(nodeEnv), "NODE_ENV is set");
   ensure(Boolean(dbUrl), "DATABASE_URL is set");
@@ -49,6 +61,10 @@ const main = async () => {
       ensure(Boolean(emailFrom), "EMAIL_FROM is set for resend");
       ensure(Boolean(resendApiKey), "RESEND_API_KEY is set for resend");
     }
+  }
+
+  if (envOnly) {
+    return;
   }
 
   try {

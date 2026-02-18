@@ -3,9 +3,11 @@ import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import {
   decrementGauge,
+  httpRequestDurationMs,
   incrementCounter,
   incrementGauge,
   httpRequestsTotal,
+  observeHistogram,
   sseConnectionsActive,
 } from "@/server/metrics/metrics";
 
@@ -103,8 +105,14 @@ const canReceiveEvent = async (organizationId: string, event: { type: string; pa
 };
 
 export const GET = async (request: Request) => {
+  const startedAt = Date.now();
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
+    observeHistogram(
+      httpRequestDurationMs,
+      { method: request.method.toUpperCase(), path: "/api/sse" },
+      Date.now() - startedAt,
+    );
     return new Response("unauthorized", { status: 401 });
   }
 
@@ -146,11 +154,17 @@ export const GET = async (request: Request) => {
     },
   });
 
-  return new Response(stream, {
+  const response = new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
     },
   });
+  observeHistogram(
+    httpRequestDurationMs,
+    { method: request.method.toUpperCase(), path: "/api/sse" },
+    Date.now() - startedAt,
+  );
+  return response;
 };

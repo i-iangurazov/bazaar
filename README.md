@@ -117,6 +117,15 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Role-based access: ADMIN, MANAGER, STAFF with protected routes.
 - Admin-only user management at `/settings/users`: create/update users, set roles/locales, activate/deactivate, reset passwords.
 
+## Auth Session Policy
+- NextAuth credentials auth uses JWT session strategy only.
+- Session token lifetime is `8h` (`maxAge=28800`) with `15m` refresh window (`updateAge=900`).
+- Production cookies are explicitly hardened:
+  - `__Secure-next-auth.session-token`: `HttpOnly`, `SameSite=Lax`, `Secure`, `Path=/`, `Max-Age=28800`.
+  - `__Host-next-auth.csrf-token`: `HttpOnly`, `SameSite=Lax`, `Secure`, `Path=/`.
+  - `__Secure-next-auth.callback-url`: `SameSite=Lax`, `Secure`, `Path=/`.
+- Redirect callback policy only allows relative URLs or same-origin absolute URLs.
+
 ## Signup, Verification & Invites
 - `/signup` supports `invite_only` (request access) or `open` (self-signup) based on `SIGNUP_MODE`.
 - By default, email verification is required before login; verification/reset/invite links are delivered via configured email provider.

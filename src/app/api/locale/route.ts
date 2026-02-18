@@ -24,6 +24,7 @@ export const POST = async (request: Request) => {
     maxAge: COOKIE_MAX_AGE,
     sameSite: "lax",
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
   });
   return response;
 };

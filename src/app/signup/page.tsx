@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { z } from "zod";
 
+import { AuthBrand } from "@/components/auth-brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -151,6 +152,9 @@ const SignupPage = () => {
   if (modeQuery.isLoading || redirectingToBusiness) {
     return (
       <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+        <div className="flex justify-center">
+          <AuthBrand />
+        </div>
         <div className="flex justify-end">
           <LanguageSwitcher />
         </div>
@@ -170,6 +174,9 @@ const SignupPage = () => {
   if (submitted) {
     return (
       <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+        <div className="flex justify-center">
+          <AuthBrand />
+        </div>
         <div className="flex justify-end">
           <LanguageSwitcher />
         </div>
@@ -190,6 +197,9 @@ const SignupPage = () => {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-center">
+        <AuthBrand />
+      </div>
       <div className="flex justify-end">
         <LanguageSwitcher />
       </div>

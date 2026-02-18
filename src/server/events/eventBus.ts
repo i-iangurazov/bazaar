@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type Redis from "ioredis";
 
 import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
@@ -79,11 +80,11 @@ class RedisEventBus {
   private listeners = new Set<Listener>();
   private readonly sourceId = randomUUID();
   private readonly logger = getLogger();
-  private readonly publisher = getRedisPublisher();
-  private readonly subscriber = getRedisSubscriber();
   private subscribed = false;
   private redisHealthy = true;
-  private handlersAttached = false;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private subscriberWithHandlers: Redis | null = null;
+  private readonly reconnectDelayMs = 1_500;
   private readonly onMessage = (_channel: string, message: string) => {
     try {
       const envelope = JSON.parse(message) as EventEnvelope;
@@ -102,18 +103,26 @@ class RedisEventBus {
     this.handleRedisFailure(error, "subscriber", "subscriber");
   };
 
+  private readonly onEnd = () => {
+    this.handleRedisFailure(new Error("subscriberDisconnected"), "subscriber", "subscriber");
+  };
+
   publish(event: EventPayload) {
     incrementCounter(eventsPublishedTotal, { type: event.type });
     for (const listener of this.listeners) {
       listener(event);
     }
 
-    if (!this.publisher || !this.redisHealthy) {
+    const publisher = getRedisPublisher();
+    if (!publisher || !this.redisHealthy) {
+      if (!this.redisHealthy) {
+        this.scheduleRecovery();
+      }
       return;
     }
 
     const envelope: EventEnvelope = { sourceId: this.sourceId, event };
-    this.publisher
+    publisher
       .publish(CHANNEL, JSON.stringify(envelope))
       .catch((error) => {
         incrementCounter(eventsPublishFailuresTotal, { type: event.type });
@@ -124,26 +133,23 @@ class RedisEventBus {
   subscribe(listener: Listener) {
     this.listeners.add(listener);
     this.ensureSubscription();
+    if (!this.redisHealthy) {
+      this.scheduleRecovery();
+    }
     return () => this.listeners.delete(listener);
   }
 
   private ensureSubscription() {
-    if (this.subscribed || !this.subscriber || !this.redisHealthy) {
+    if (this.subscribed || !this.redisHealthy) {
       return;
     }
-    if (!this.handlersAttached) {
-      this.handlersAttached = true;
-      this.subscriber.on("message", this.onMessage);
-      this.subscriber.on("error", this.onError);
-    }
-
-    this.subscribed = true;
-    const subscriber = this.subscriber;
+    const subscriber = getRedisSubscriber();
     if (!subscriber) {
-      this.subscribed = false;
+      this.handleRedisFailure(new Error("subscriberUnavailable"), "subscribe", "subscribe");
       return;
     }
-
+    this.attachSubscriberHandlers(subscriber);
+    this.subscribed = true;
     void (async () => {
       if (subscriber.status === "wait") {
         await subscriber.connect();
@@ -156,6 +162,64 @@ class RedisEventBus {
     });
   }
 
+  private attachSubscriberHandlers(subscriber: Redis) {
+    if (this.subscriberWithHandlers === subscriber) {
+      return;
+    }
+
+    if (this.subscriberWithHandlers) {
+      this.subscriberWithHandlers.off("message", this.onMessage);
+      this.subscriberWithHandlers.off("error", this.onError);
+      this.subscriberWithHandlers.off("end", this.onEnd);
+    }
+
+    this.subscriberWithHandlers = subscriber;
+    subscriber.on("message", this.onMessage);
+    subscriber.on("error", this.onError);
+    subscriber.on("end", this.onEnd);
+  }
+
+  private scheduleRecovery() {
+    if (this.reconnectTimer) {
+      return;
+    }
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.tryRecover();
+    }, this.reconnectDelayMs);
+    this.reconnectTimer.unref?.();
+  }
+
+  private async tryRecover() {
+    const publisher = getRedisPublisher();
+    const subscriber = getRedisSubscriber();
+    if (!publisher || !subscriber) {
+      this.scheduleRecovery();
+      return;
+    }
+
+    try {
+      if (publisher.status === "wait") {
+        await publisher.connect();
+      }
+      await publisher.ping();
+      this.attachSubscriberHandlers(subscriber);
+      if (subscriber.status === "wait") {
+        await subscriber.connect();
+      }
+      if (this.listeners.size) {
+        await subscriber.subscribe(CHANNEL);
+        this.subscribed = true;
+      } else {
+        this.subscribed = false;
+      }
+      this.redisHealthy = true;
+      this.logger.info("redis event bus recovered");
+    } catch {
+      this.scheduleRecovery();
+    }
+  }
+
   private handleRedisFailure(error: unknown, source: "publish" | "subscribe" | "subscriber", eventType: string) {
     if (!this.redisHealthy) {
       return;
@@ -166,6 +230,7 @@ class RedisEventBus {
       ? "redis event bus degraded; cross-instance realtime is unavailable"
       : "redis event bus degraded; falling back to in-memory realtime";
     this.logger.warn({ error: toLogError(error), source, eventType }, message);
+    this.scheduleRecovery();
   }
 }
 

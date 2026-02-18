@@ -1,7 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
-import { getToken } from "next-auth/jwt";
-import type { NextApiRequest } from "next";
 import superjson from "superjson";
 
 import { prisma } from "@/server/db/prisma";
@@ -13,6 +11,7 @@ import { createRateLimiter, type RateLimitConfig } from "@/server/middleware/rat
 import { Role } from "@prisma/client";
 import { assertTrialActive } from "@/server/services/planLimits";
 import { toTRPCError } from "@/server/trpc/errors";
+import { getAuthTokenFromCookieHeader } from "@/server/auth/token";
 
 export type AuthUser = {
   id: string;
@@ -28,19 +27,17 @@ export type ImpersonationContext = {
   impersonationSessionId: string;
 };
 
-const parseCookies = (cookieHeader?: string | null) => {
-  if (!cookieHeader) {
-    return new Map<string, string>();
-  }
-  return new Map(
-    cookieHeader.split(";").map((pair) => {
-      const [rawKey, ...rest] = pair.trim().split("=");
-      const key = decodeURIComponent(rawKey);
-      const value = decodeURIComponent(rest.join("="));
-      return [key, value];
-    }),
+const parseCookies = (cookieHeader?: string | null) =>
+  new Map(
+    (cookieHeader ?? "")
+      .split(";")
+      .map((pair) => pair.trim())
+      .filter(Boolean)
+      .map((pair) => {
+        const [rawKey, ...rest] = pair.split("=");
+        return [decodeURIComponent(rawKey), decodeURIComponent(rest.join("="))];
+      }),
   );
-};
 
 export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
   await assertStartupConfigured();
@@ -50,10 +47,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
   const realIp = req.headers.get("x-real-ip");
   const ip = forwardedFor?.split(",")[0]?.trim() ?? realIp ?? null;
   const cookies = parseCookies(cookieHeader);
-  const token = await getToken({
-    req: { headers: { cookie: cookieHeader }, cookies } as unknown as NextApiRequest,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
+  const token = await getAuthTokenFromCookieHeader(cookieHeader);
   const user = token
       ? {
           id: token.sub ?? "",

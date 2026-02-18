@@ -9,12 +9,44 @@ import { cookies } from "next/headers";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { buildPriceTagsPdf, type PriceTagLabel } from "@/server/services/priceTagsPdf";
 import { selectPrimaryBarcodeValue } from "@/server/services/barcodes";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type MessageTree = Record<string, unknown>;
 type PriceTagItem = { productId: string; quantity: number };
+const PRICE_TAG_TEMPLATES = ["3x8", "2x5"] as const;
+const MAX_PRICE_TAG_REQUEST_ITEMS = 200;
+const MAX_PRICE_TAG_QUANTITY_PER_ITEM = 100;
+const MAX_PRICE_TAG_LABELS_TOTAL = 500;
+
+const priceTagRequestSchema = z
+  .object({
+    template: z.enum(PRICE_TAG_TEMPLATES),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().min(1).max(191),
+          quantity: z.coerce.number().int().positive().max(MAX_PRICE_TAG_QUANTITY_PER_ITEM),
+        }),
+      )
+      .min(1)
+      .max(MAX_PRICE_TAG_REQUEST_ITEMS),
+    storeId: z
+      .union([z.string().min(1).max(191), z.null(), z.undefined()])
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    const totalLabels = value.items.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalLabels > MAX_PRICE_TAG_LABELS_TOTAL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "labelsLimitExceeded",
+        path: ["items"],
+      });
+    }
+  });
 
 const loadMessages = async (locale: string) => {
   const filepath = join(process.cwd(), "messages", `${locale}.json`);
@@ -66,34 +98,14 @@ export const POST = async (request: Request) => {
   }
 
   const body = await request.json().catch(() => null);
-  if (!body || typeof body !== "object") {
+  const parsed = priceTagRequestSchema.safeParse(body);
+  if (!parsed.success) {
     return new Response(tErrors("invalidInput"), { status: 400 });
   }
 
-  const template = body.template as "3x8" | "2x5" | undefined;
-  const items = Array.isArray(body.items) ? (body.items as PriceTagItem[]) : [];
-  const storeId = typeof body.storeId === "string" && body.storeId ? body.storeId : null;
-
-  if (!template || !["3x8", "2x5"].includes(template)) {
-    return new Response(tErrors("invalidInput"), { status: 400 });
-  }
-  if (!items.length) {
-    return new Response(tErrors("invalidInput"), { status: 400 });
-  }
-
-  const parsedItems: PriceTagItem[] = items
-    .map((item: PriceTagItem) => ({
-      productId: typeof item.productId === "string" ? item.productId : "",
-      quantity: Number(item.quantity ?? 0),
-    }))
-    .filter(
-      (item: PriceTagItem) =>
-        item.productId && Number.isFinite(item.quantity) && item.quantity > 0,
-    );
-
-  if (!parsedItems.length) {
-    return new Response(tErrors("invalidInput"), { status: 400 });
-  }
+  const template = parsed.data.template;
+  const parsedItems = parsed.data.items as PriceTagItem[];
+  const storeId = typeof parsed.data.storeId === "string" ? parsed.data.storeId : null;
 
   let storeName: string | null = null;
   if (storeId) {
@@ -104,7 +116,7 @@ export const POST = async (request: Request) => {
     storeName = store.name;
   }
 
-  const productIds = parsedItems.map((item: PriceTagItem) => item.productId);
+  const productIds = Array.from(new Set(parsedItems.map((item: PriceTagItem) => item.productId)));
   const products = await prisma.product.findMany({
     where: {
       id: { in: productIds },

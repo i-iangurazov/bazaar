@@ -4,6 +4,7 @@ export type AppErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "TOO_MANY_REQUESTS"
   | "INTERNAL_SERVER_ERROR";
 
 export class AppError extends Error {

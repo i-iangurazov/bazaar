@@ -1,4 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { Readable } from "node:stream";
 
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
@@ -26,9 +28,13 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
     return new Response(null, { status: 404 });
   }
 
-  let file: Buffer;
+  let fileSize: number;
   try {
-    file = await readFile(job.storagePath);
+    const stats = await stat(job.storagePath);
+    if (!stats.isFile()) {
+      return new Response(null, { status: 404 });
+    }
+    fileSize = stats.size;
   } catch {
     return new Response(null, { status: 404 });
   }
@@ -38,11 +44,16 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
       : "csv";
   const fileName = job.fileName ?? `export-${job.id}.${defaultExtension}`;
 
-  return new Response(new Uint8Array(file), {
+  const stream = createReadStream(job.storagePath);
+  const body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+
+  return new Response(body, {
     status: 200,
     headers: {
       "Content-Type": job.mimeType ?? "text/csv;charset=utf-8",
       "Content-Disposition": `attachment; filename=\"${fileName}\"`,
+      "Content-Length": String(fileSize),
+      "X-Content-Type-Options": "nosniff",
     },
   });
 };

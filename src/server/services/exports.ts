@@ -17,7 +17,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
-import { toCsv } from "@/server/services/csv";
+import { sanitizeSpreadsheetValue, toCsv } from "@/server/services/csv";
 import { toJson } from "@/server/services/json";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
 
@@ -47,6 +47,9 @@ export type ExportFormat = "csv" | "xlsx";
 
 const EXPORT_SCHEMA_VERSION = "v1";
 const DEFAULT_EXPORT_FORMAT: ExportFormat = "csv";
+const DEFAULT_EXPORT_LIST_LIMIT = 50;
+const MAX_EXPORT_LIST_LIMIT = 200;
+const MAX_ACTIVE_EXPORT_JOBS_PER_ORG = 20;
 
 const formatDay = (date: Date) => date.toISOString().slice(0, 10);
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
@@ -78,7 +81,7 @@ const buildExportFile = (
 ) => {
   if (format === "xlsx") {
     const workbook = XLSX.utils.book_new();
-    const values = [header, ...rows.map((row) => keys.map((key) => row[key] ?? ""))];
+    const values = [header, ...rows.map((row) => keys.map((key) => sanitizeSpreadsheetValue(row[key])))];
     const worksheet = XLSX.utils.aoa_to_sheet(values);
     XLSX.utils.book_append_sheet(workbook, worksheet, "export");
     const content = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
@@ -1766,10 +1769,38 @@ const buildExportData = async (
   }
 };
 
-export const listExportJobs = async (organizationId: string, storeId?: string) => {
+type ListExportJobsInput = {
+  storeId?: string;
+  limit?: number;
+};
+
+const normalizeListLimit = (limit?: number) => {
+  if (!Number.isFinite(limit)) {
+    return DEFAULT_EXPORT_LIST_LIMIT;
+  }
+  return Math.max(1, Math.min(MAX_EXPORT_LIST_LIMIT, Math.trunc(limit as number)));
+};
+
+const assertExportQueueCapacity = async (organizationId: string) => {
+  const activeJobsCount = await prisma.exportJob.count({
+    where: {
+      organizationId,
+      status: {
+        in: [ExportJobStatus.QUEUED, ExportJobStatus.RUNNING],
+      },
+    },
+  });
+  if (activeJobsCount >= MAX_ACTIVE_EXPORT_JOBS_PER_ORG) {
+    throw new AppError("exportQueueBusy", "TOO_MANY_REQUESTS", 429);
+  }
+};
+
+export const listExportJobs = async (organizationId: string, input?: ListExportJobsInput) => {
+  const take = normalizeListLimit(input?.limit);
   return prisma.exportJob.findMany({
-    where: { organizationId, ...(storeId ? { storeId } : {}) },
+    where: { organizationId, ...(input?.storeId ? { storeId: input.storeId } : {}) },
     orderBy: { createdAt: "desc" },
+    take,
   });
 };
 
@@ -1794,6 +1825,7 @@ export const retryExportJob = async (input: {
   if (job.status !== ExportJobStatus.FAILED) {
     throw new AppError("exportRetryUnavailable", "CONFLICT", 409);
   }
+  await assertExportQueueCapacity(input.organizationId);
 
   const updated = await prisma.exportJob.update({
     where: { id: job.id },
@@ -1829,6 +1861,7 @@ export const retryExportJob = async (input: {
 };
 
 export const requestExport = async (input: ExportRequestInput) => {
+  await assertExportQueueCapacity(input.organizationId);
   const format = input.format ?? DEFAULT_EXPORT_FORMAT;
   const store = await prisma.store.findFirst({
     where: { id: input.storeId, organizationId: input.organizationId },

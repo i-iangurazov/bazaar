@@ -6,9 +6,22 @@ const escapeCsvValue = (value: unknown) => {
   if (value === null || value === undefined) {
     return "";
   }
-  const str = String(value);
+  const str = sanitizeSpreadsheetValue(value);
   if (/[",\n]/.test(str)) {
     return `"${str.replace(/"/g, "\"\"")}"`;
+  }
+  return str;
+};
+
+const spreadsheetFormulaPattern = /^[=+\-@]/;
+
+export const sanitizeSpreadsheetValue = (value: unknown) => {
+  const str = String(value ?? "");
+  if (!str) {
+    return str;
+  }
+  if (spreadsheetFormulaPattern.test(str)) {
+    return `'${str}`;
   }
   return str;
 };
@@ -29,7 +42,9 @@ const buildCsv = (rows: string[][]) => {
 
 const buildXlsx = (rows: string[][]) => {
   const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  const worksheet = XLSX.utils.aoa_to_sheet(
+    rows.map((row) => row.map((value) => sanitizeSpreadsheetValue(value))),
+  );
   XLSX.utils.book_append_sheet(workbook, worksheet, "export");
   return XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
 };

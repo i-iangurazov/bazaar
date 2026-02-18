@@ -102,7 +102,7 @@ const ExportsPage = () => {
   const [periodEnd, setPeriodEnd] = useState(formatDateInput(now));
 
   const jobsQuery = trpc.exports.list.useQuery(
-    { storeId: storeId || undefined },
+    { storeId: storeId || undefined, limit: 100 },
     { enabled: status === "authenticated" },
   );
 

@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
+import { AuthBrand } from "@/components/auth-brand";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,9 @@ const LoginPage = async () => {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 py-8 sm:py-12">
+      <div className="w-full max-w-md flex justify-center">
+        <AuthBrand />
+      </div>
       <div className="w-full max-w-md flex justify-end">
         <LanguageSwitcher />
       </div>

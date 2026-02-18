@@ -9,6 +9,7 @@ type TrpcErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "TOO_MANY_REQUESTS"
   | "INTERNAL_SERVER_ERROR";
 
 const toTRPCCode = (code: string): TrpcErrorCode => {
@@ -18,6 +19,7 @@ const toTRPCCode = (code: string): TrpcErrorCode => {
     "FORBIDDEN",
     "NOT_FOUND",
     "CONFLICT",
+    "TOO_MANY_REQUESTS",
     "INTERNAL_SERVER_ERROR",
   ];
   return allowed.includes(code as TrpcErrorCode) ? (code as TrpcErrorCode) : "BAD_REQUEST";

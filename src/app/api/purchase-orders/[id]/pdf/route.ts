@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
@@ -158,9 +159,7 @@ export const GET = async (
     doc.registerFont("Body", resolvedFont);
     doc.font("Body");
   }
-  const chunks: Buffer[] = [];
-
-  doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+  const body = Readable.toWeb(doc as unknown as Readable) as ReadableStream<Uint8Array>;
 
   doc.fontSize(18).text(labels.title, { align: "left" });
   doc.moveDown(0.5);
@@ -234,16 +233,11 @@ export const GET = async (
   });
 
   doc.end();
-
-  const buffer = await new Promise<Buffer>((resolve) => {
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-  });
-
-  const responseBody = new Uint8Array(buffer);
-  return new Response(responseBody, {
+  return new Response(body, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename=\"po-${po.id}.pdf\"`,
+      "X-Content-Type-Options": "nosniff",
     },
   });
 };

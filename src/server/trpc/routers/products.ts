@@ -17,6 +17,7 @@ import {
   updateProduct,
 } from "@/server/services/products";
 import { runProductImport } from "@/server/services/imports";
+import { sanitizeSpreadsheetValue } from "@/server/services/csv";
 
 const maxListImageUrlLength = 2_048;
 const maxDetailImageUrlLength = 8_192;
@@ -1017,7 +1018,9 @@ export const productsRouter = router({
         product.photoUrl ?? "",
         barcodes,
       ];
-      return values.map((value) => `"${String(value).replace(/\"/g, '\"\"')}"`).join(",");
+      return values
+        .map((value) => `"${sanitizeSpreadsheetValue(value).replace(/\"/g, '\"\"')}"`)
+        .join(",");
     });
 
     return [header.join(","), ...lines].join("\n");
