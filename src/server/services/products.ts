@@ -12,6 +12,10 @@ import {
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import {
+  ensureProductCategory,
+  normalizeProductCategoryName,
+} from "@/server/services/productCategories";
+import {
   isManagedProductImageUrl,
   normalizeProductImageUrl,
   resolveProductImageUrl,
@@ -710,6 +714,13 @@ export const createProduct = async (input: CreateProductInput) => {
       .filter(Boolean) as string[];
     await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
     const normalizedImages = resolvedMedia.images;
+    const normalizedCategory = normalizeProductCategoryName(input.category);
+    if (normalizedCategory) {
+      await ensureProductCategory(tx, {
+        organizationId: input.organizationId,
+        name: normalizedCategory,
+      });
+    }
     if (input.isBundle && normalizedBundleComponents.length < 1) {
       throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
     }
@@ -720,7 +731,7 @@ export const createProduct = async (input: CreateProductInput) => {
         organizationId: input.organizationId,
         sku: input.sku,
         name: input.name,
-        category: input.category ?? null,
+        category: normalizedCategory,
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
         basePriceKgs: input.basePriceKgs ?? null,
@@ -865,6 +876,13 @@ export const updateProduct = async (input: UpdateProductInput) => {
     }
 
     const normalizedImages = input.images ? resolvedMedia.images : undefined;
+    const normalizedCategory = normalizeProductCategoryName(input.category);
+    if (normalizedCategory) {
+      await ensureProductCategory(tx, {
+        organizationId: input.organizationId,
+        name: normalizedCategory,
+      });
+    }
     const nextIsBundle = input.isBundle ?? before.isBundle;
     if (
       nextIsBundle &&
@@ -879,7 +897,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
       data: {
         sku: input.sku,
         name: input.name,
-        category: input.category ?? null,
+        category: normalizedCategory,
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
         basePriceKgs: input.basePriceKgs ?? null,
@@ -1426,7 +1444,13 @@ export const bulkUpdateProductCategory = async (input: {
       return { updated: 0 };
     }
 
-    const nextCategory = input.category ?? null;
+    const nextCategory = normalizeProductCategoryName(input.category);
+    if (nextCategory) {
+      await ensureProductCategory(tx, {
+        organizationId: input.organizationId,
+        name: nextCategory,
+      });
+    }
     await tx.product.updateMany({
       where: { organizationId: input.organizationId, id: { in: input.productIds } },
       data: { category: nextCategory },

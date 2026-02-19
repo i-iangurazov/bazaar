@@ -104,6 +104,8 @@ const ProductsPage = () => {
   const [productsPageSize, setProductsPageSize] = useState(25);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [categoryInputValue, setCategoryInputValue] = useState("");
   const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
@@ -115,6 +117,7 @@ const ProductsPage = () => {
   const [queueSearch, setQueueSearch] = useState("");
 
   const storesQuery = trpc.stores.list.useQuery();
+  const categoriesQuery = trpc.productCategories.list.useQuery();
   const productsQuery = trpc.products.list.useQuery({
     search: search || undefined,
     category: category || undefined,
@@ -171,6 +174,30 @@ const ProductsPage = () => {
         description: t("bulkPriceSuccess", { count: result.updated }),
       });
       setBulkOpen(false);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const createCategoryMutation = trpc.productCategories.create.useMutation({
+    onSuccess: () => {
+      categoriesQuery.refetch();
+      toast({ variant: "success", description: t("categoryCreateSuccess") });
+      setCategoryInputValue("");
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const removeCategoryMutation = trpc.productCategories.remove.useMutation({
+    onSuccess: (_result, input) => {
+      categoriesQuery.refetch();
+      if (category === input.name) {
+        setCategory("");
+      }
+      toast({ variant: "success", description: t("categoryRemoveSuccess") });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -239,13 +266,18 @@ const ProductsPage = () => {
 
   const categories = useMemo(() => {
     const set = new Set<string>();
+    (categoriesQuery.data ?? []).forEach((value) => {
+      if (value) {
+        set.add(value);
+      }
+    });
     products.forEach((product) => {
       if (product.category) {
         set.add(product.category);
       }
     });
-    return Array.from(set.values());
-  }, [products]);
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
+  }, [categoriesQuery.data, products]);
 
   const showEffectivePrice = Boolean(storeId);
 
@@ -658,6 +690,14 @@ const ProductsPage = () => {
     });
   };
 
+  const handleCategoryCreate = () => {
+    const trimmed = categoryInputValue.trim();
+    if (!trimmed) {
+      return;
+    }
+    createCategoryMutation.mutate({ name: trimmed });
+  };
+
   const handleBulkStorePriceApply = async (values: z.infer<typeof bulkStorePriceSchema>) => {
     if (!selectedList.length) {
       return;
@@ -815,7 +855,7 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-full sm:max-w-xs">
+            <div className="flex w-full items-center gap-2 sm:max-w-xs">
               <Select
                 value={category || "all"}
                 onValueChange={(value) => setCategory(value === "all" ? "" : value)}
@@ -832,6 +872,18 @@ const ProductsPage = () => {
                   ))}
                 </SelectContent>
               </Select>
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label={t("manageCategories")}
+                  onClick={() => setCategoryManagerOpen(true)}
+                >
+                  <TagIcon className="h-4 w-4" aria-hidden />
+                </Button>
+              ) : null}
             </div>
             <div className="w-full sm:max-w-xs">
               <Select
@@ -1601,6 +1653,89 @@ const ProductsPage = () => {
             </FormActions>
           </form>
         </Form>
+      </Modal>
+
+      <Modal
+        open={categoryManagerOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCategoryManagerOpen(false);
+          }
+        }}
+        title={t("categoriesManageTitle")}
+        subtitle={t("categoriesManageSubtitle")}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleCategoryCreate();
+          }}
+        >
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">{t("category")}</label>
+            <Input
+              value={categoryInputValue}
+              onChange={(event) => setCategoryInputValue(event.target.value)}
+              placeholder={t("categoriesManagePlaceholder")}
+              list="manage-category-options"
+            />
+            <datalist id="manage-category-options">
+              {categories.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
+          </div>
+
+          <FormActions>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setCategoryManagerOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={createCategoryMutation.isLoading}
+            >
+              {createCategoryMutation.isLoading ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <AddIcon className="h-4 w-4" aria-hidden />
+              )}
+              {createCategoryMutation.isLoading ? tCommon("loading") : tCommon("save")}
+            </Button>
+          </FormActions>
+        </form>
+
+        <div className="space-y-2 mt-4">
+          {categories.length ? (
+            categories.map((item) => (
+              <div
+                key={item}
+                className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-2"
+              >
+                <span className="text-sm text-foreground">{item}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-danger"
+                  aria-label={tCommon("delete")}
+                  onClick={() => removeCategoryMutation.mutate({ name: item })}
+                  disabled={removeCategoryMutation.isLoading}
+                >
+                  <DeleteIcon className="h-4 w-4" aria-hidden />
+                </Button>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("categoriesManageEmpty")}</p>
+          )}
+        </div>
       </Modal>
 
       <Modal

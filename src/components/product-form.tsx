@@ -124,6 +124,25 @@ type AttributeDefinition = {
 const defaultProductImageMaxBytes = 5 * 1024 * 1024;
 const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
 const heicMimeTypes = new Set(["image/heic", "image/heif"]);
+const supportedImageExtensions = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "avif",
+  "gif",
+  "bmp",
+  "tif",
+  "tiff",
+  "svg",
+  "heic",
+  "heif",
+]);
+
+const hasSupportedImageExtension = (fileName: string) => {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  return Boolean(ext && supportedImageExtensions.has(ext));
+};
 
 const resolveClientImageMaxBytes = () => {
   const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES);
@@ -163,6 +182,13 @@ const isHeicLikeFile = (file: File) => {
     return true;
   }
   return /\.(heic|heif)$/i.test(file.name);
+};
+
+const isImageLikeFile = (file: File) => {
+  if (file.type.toLowerCase().startsWith("image/")) {
+    return true;
+  }
+  return hasSupportedImageExtension(file.name);
 };
 
 const replaceFileExtension = (fileName: string, extension: string) => {
@@ -389,10 +415,28 @@ export const ProductForm = ({
   }, [form, unitOptions]);
 
   const categoryValue = form.watch("category");
+  const emptyCategoryOptionValue = "__category_none__";
+  const categoryOptionsQuery = trpc.productCategories.list.useQuery(undefined, {
+    enabled: !readOnly,
+  });
   const templateQuery = trpc.categoryTemplates.list.useQuery(
     { category: categoryValue?.trim() || "" },
     { enabled: !readOnly && Boolean(categoryValue?.trim()) },
   );
+  const categoryOptions = useMemo(() => {
+    const categories = new Set<string>();
+    (categoryOptionsQuery.data ?? []).forEach((value) => {
+      const normalized = value.trim();
+      if (normalized) {
+        categories.add(normalized);
+      }
+    });
+    const selected = categoryValue?.trim();
+    if (selected) {
+      categories.add(selected);
+    }
+    return Array.from(categories).sort((a, b) => a.localeCompare(b));
+  }, [categoryOptionsQuery.data, categoryValue]);
   const templateKeys = useMemo(() => {
     return (templateQuery.data ?? [])
       .slice()
@@ -1021,6 +1065,16 @@ export const ProductForm = ({
     try {
       const nextImages: { url: string; position?: number }[] = [];
       for (const originalFile of list) {
+        if (originalFile.size > maxInputImageBytes) {
+          toast({
+            variant: "error",
+            description: t("imageTooLargeInput", {
+              size: Math.round(maxInputImageBytes / (1024 * 1024)),
+            }),
+          });
+          continue;
+        }
+
         let file = originalFile;
         if (isHeicLikeFile(file)) {
           const converted = await convertHeicToJpeg(file);
@@ -1031,17 +1085,8 @@ export const ProductForm = ({
           file = converted;
         }
 
-        if (!file.type.startsWith("image/")) {
+        if (!isImageLikeFile(file)) {
           toast({ variant: "error", description: t("imageInvalidType") });
-          continue;
-        }
-        if (file.size > maxInputImageBytes) {
-          toast({
-            variant: "error",
-            description: t("imageTooLargeInput", {
-              size: Math.round(maxInputImageBytes / (1024 * 1024)),
-            }),
-          });
           continue;
         }
 
@@ -1521,8 +1566,29 @@ export const ProductForm = ({
                       <FormItem>
                         <FormLabel>{t("category")}</FormLabel>
                         <FormControl>
-                          <Input {...field} disabled={readOnly} />
+                          <Select
+                            value={field.value?.trim() || emptyCategoryOptionValue}
+                            onValueChange={(value) =>
+                              field.onChange(value === emptyCategoryOptionValue ? "" : value)
+                            }
+                            disabled={readOnly}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={t("categoryPlaceholder")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={emptyCategoryOptionValue}>
+                                {tCommon("notAvailable")}
+                              </SelectItem>
+                              {categoryOptions.map((value) => (
+                                <SelectItem key={value} value={value}>
+                                  {value}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </FormControl>
+                        <FormDescription>{t("categoryHint")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1755,7 +1821,7 @@ export const ProductForm = ({
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.heic,.heif,image/heic,image/heif"
                         multiple
                         className="hidden"
                         disabled={readOnly || isUploadingImages}

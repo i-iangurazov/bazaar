@@ -202,6 +202,7 @@ model Organization {
   suppliers       Supplier[]
   products        Product[]
   units           Unit[]
+  productCategories ProductCategory[]
   productBarcodes ProductBarcode[]
   productImages   ProductImage[]
   productPacks    ProductPack[]
@@ -527,6 +528,19 @@ model Unit {
   products      Product[]
 
   @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model ProductCategory {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, name])
   @@index([organizationId])
 }
 

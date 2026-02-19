@@ -18,7 +18,12 @@ export const listCategoryTemplates = async (input: {
   });
 
 export const listTemplateCategories = async (organizationId: string) => {
-  const [productCategories, templateCategories] = await Promise.all([
+  const [savedCategories, productCategories, templateCategories] = await Promise.all([
+    prisma.productCategory.findMany({
+      where: { organizationId },
+      select: { name: true },
+      distinct: ["name"],
+    }),
     prisma.product.findMany({
       where: { organizationId, category: { not: null } },
       select: { category: true },
@@ -32,6 +37,11 @@ export const listTemplateCategories = async (organizationId: string) => {
   ]);
 
   const categories = new Set<string>();
+  savedCategories.forEach((item) => {
+    if (item.name) {
+      categories.add(item.name);
+    }
+  });
   productCategories.forEach((item) => {
     if (item.category) {
       categories.add(item.category);

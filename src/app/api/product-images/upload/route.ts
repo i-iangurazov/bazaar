@@ -15,6 +15,32 @@ const resolveMaxImageBytes = () => {
 const MAX_IMAGE_BYTES = resolveMaxImageBytes();
 const MAX_MULTIPART_OVERHEAD_BYTES = 256 * 1024;
 const MAX_UPLOAD_REQUEST_BYTES = MAX_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD_BYTES;
+const imageMimeByExtension: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  avif: "image/avif",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  svg: "image/svg+xml",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+const resolveUploadContentType = (file: File) => {
+  const normalizedType = file.type.toLowerCase().split(";")[0]?.trim();
+  if (normalizedType.startsWith("image/")) {
+    return normalizedType;
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (!ext) {
+    return null;
+  }
+  return imageMimeByExtension[ext] ?? null;
+};
 
 export const POST = async (request: Request) => {
   const token = await getServerAuthToken();
@@ -51,7 +77,8 @@ export const POST = async (request: Request) => {
   if (file.size > MAX_IMAGE_BYTES) {
     return Response.json({ message: "imageTooLarge" }, { status: 413 });
   }
-  if (!file.type.toLowerCase().startsWith("image/")) {
+  const contentType = resolveUploadContentType(file);
+  if (!contentType) {
     return Response.json({ message: "imageInvalidType" }, { status: 400 });
   }
 
@@ -61,7 +88,7 @@ export const POST = async (request: Request) => {
       organizationId: String(token.organizationId),
       productId,
       buffer,
-      contentType: file.type,
+      contentType,
       sourceFileName: file.name,
     });
     return Response.json({ url: uploaded.url }, { status: 200 });

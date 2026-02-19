@@ -37,6 +37,7 @@ import { userSettingsRouter } from "@/server/trpc/routers/userSettings";
 import { orgSettingsRouter } from "@/server/trpc/routers/orgSettings";
 import { posRouter } from "@/server/trpc/routers/pos";
 import { taxReferencesRouter } from "@/server/trpc/routers/taxReferences";
+import { productCategoriesRouter } from "@/server/trpc/routers/productCategories";
 
 export const appRouter = router({
   inventory: inventoryRouter,
@@ -54,6 +55,7 @@ export const appRouter = router({
   bundles: bundlesRouter,
   attributes: attributesRouter,
   categoryTemplates: categoryTemplatesRouter,
+  productCategories: productCategoriesRouter,
   units: unitsRouter,
   reports: reportsRouter,
   compliance: complianceRouter,
