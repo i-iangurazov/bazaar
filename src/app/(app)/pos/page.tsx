@@ -127,8 +127,13 @@ const PosEntryPage = () => {
           </div>
 
           {!entryQuery.isLoading && !(entryQuery.data?.registers?.length ?? 0) ? (
-            <div className="rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-              {t("entry.noRegisters")}
+            <div className="rounded-md border border-border bg-muted/40 p-4">
+              <p className="text-sm text-muted-foreground">{t("entry.noRegisters")}</p>
+              {canManageRegisters ? (
+                <Button className="mt-3" size="sm" asChild>
+                  <Link href="/pos/registers">{t("registers.create")}</Link>
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
