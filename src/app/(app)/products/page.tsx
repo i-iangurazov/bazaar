@@ -1337,7 +1337,7 @@ const ProductsPage = () => {
                         <TableHead>{t("name")}</TableHead>
                         <TableHead className="hidden md:table-cell">{t("category")}</TableHead>
                         <TableHead className="hidden lg:table-cell">{t("unit")}</TableHead>
-                        <TableHead>{tInventory("onHand")}</TableHead>
+                        <TableHead className="text-nowrap">{tInventory("onHand")}</TableHead>
                         <TableHead>{t("salePrice")}</TableHead>
                         <TableHead>{t("avgCost")}</TableHead>
                         <TableHead>{t("barcodes")}</TableHead>
