@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
@@ -138,6 +139,7 @@ export const InlineEditableCell = <
   const [draftValue, setDraftValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [standaloneEditing, setStandaloneEditing] = useState(false);
+  const selectEditorRef = useRef<HTMLDivElement | null>(null);
 
   const cellId = `${rowId}:${definition.columnKey}`;
   const activeCellId = tableState?.activeCellId ?? (standaloneEditing ? cellId : null);
@@ -286,6 +288,41 @@ export const InlineEditableCell = <
     [closeEditor, commitFromRawValue, draftValue],
   );
 
+  useEffect(() => {
+    if (!isEditing || definition.inputType !== "select" || isSaving) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (selectEditorRef.current?.contains(target)) {
+        return;
+      }
+      if (target instanceof Element && target.closest("[data-inline-edit-select-content]")) {
+        return;
+      }
+      closeEditor();
+    };
+
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      closeEditor();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [closeEditor, definition.inputType, isEditing, isSaving]);
+
   const displayText = definition.formatter(localValue, row, context, displayContext);
   const editorType =
     definition.inputType === "money" ? "number" : definition.inputType === "date" ? "date" : "text";
@@ -302,7 +339,7 @@ export const InlineEditableCell = <
         options.find((option) => option.value === "none");
       const selectValue = draftValue || emptyOption?.value;
       return (
-        <div className={cn("flex items-center gap-2", className)}>
+        <div ref={selectEditorRef} className={cn("flex items-center gap-2", className)}>
           <Select
             value={selectValue}
             onValueChange={(next) => {
@@ -314,10 +351,16 @@ export const InlineEditableCell = <
             <SelectTrigger
               aria-label={tInline("editorAria", { field: columnLabel })}
               className="h-8 min-w-[120px]"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeEditor();
+                }
+              }}
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent data-inline-edit-select-content>
               {options.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}

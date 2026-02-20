@@ -443,7 +443,7 @@
     "usageStores": "Дүкөндөр: {count} / {limit}",
     "usageUsers": "Колдонуучулар: {count} / {limit}",
     "usageProducts": "Буюмдар: {count} / {limit}",
-    "planPricePrimary": "≈ {amount} сом/ай",
+    "planPricePrimary": "{amount} сом/ай",
     "planPriceSecondary": "{usd} USD / ай",
     "planPriceRounding": "Тегеректөө: {step} сомго чейин (курс: {rate})",
     "featuresEnabled": "Кошулган функциялар: {value}",
@@ -505,7 +505,7 @@
     "ctaTitle": "Көбүрөөк лимит керекпи?",
     "ctaHint": "Планды көтөрүү үчүн WhatsApp аркылуу байланышыңыз же жогорку планга сураныч жазыңыз.",
     "ctaWhatsapp": "WhatsApp менен байланышуу",
-    "ctaWhatsappLink": "https://wa.me/996700000000",
+    "ctaWhatsappLink": "https://wa.me/996709911300",
     "empty": "Тариф маалыматы жеткиликтүү эмес."
   },
   "platformOwner": {
@@ -1641,7 +1641,7 @@
     "total": "Жалпы",
     "created": "Түзүлгөн",
     "searchPlaceholder": "Номер, аты же телефон боюнча издөө",
-    "noOrders": "Кардар заказдары жок.",
+    "noOrders": "Азырынча кардар заказдары жок.",
     "notFound": "Кардар заказы табылган жок.",
     "confirmOrder": "Ырастоо",
     "confirmSuccess": "Заказ ырасталды.",

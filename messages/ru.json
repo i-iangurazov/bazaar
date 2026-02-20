@@ -443,7 +443,7 @@
     "usageStores": "Магазины: {count} из {limit}",
     "usageUsers": "Пользователи: {count} из {limit}",
     "usageProducts": "Товары: {count} из {limit}",
-    "planPricePrimary": "≈ {amount} сом/мес",
+    "planPricePrimary": "{amount} сом/мес",
     "planPriceSecondary": "{usd} USD / мес",
     "planPriceRounding": "Округление: до {step} сом (курс: {rate})",
     "featuresEnabled": "Включенные функции: {value}",
@@ -505,7 +505,7 @@
     "ctaTitle": "Нужен больший лимит?",
     "ctaHint": "Для апгрейда свяжитесь с нами в WhatsApp или отправьте запрос на план выше.",
     "ctaWhatsapp": "Связаться в WhatsApp",
-    "ctaWhatsappLink": "https://wa.me/996700000000",
+    "ctaWhatsappLink": "https://wa.me/996709911300",
     "empty": "Данные тарифа недоступны."
   },
   "platformOwner": {
@@ -1641,7 +1641,7 @@
     "total": "Итого",
     "created": "Создан",
     "searchPlaceholder": "Поиск по номеру, имени или телефону",
-    "noOrders": "Заказы клиентов отсутствуют.",
+    "noOrders": "Пока нет заказов клиентов.",
     "notFound": "Заказ клиента не найден.",
     "confirmOrder": "Подтвердить",
     "confirmSuccess": "Заказ подтвержден.",
