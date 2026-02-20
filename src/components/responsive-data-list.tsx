@@ -91,6 +91,9 @@ export const ResponsiveDataList = <T,>({
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   useEffect(() => {
+    if (isServerPagination && totalCount === 0 && page > 1) {
+      return;
+    }
     if (page <= totalPages) {
       return;
     }
@@ -99,7 +102,7 @@ export const ResponsiveDataList = <T,>({
       return;
     }
     setInternalPage(totalPages);
-  }, [isServerPagination, onPageChange, page, totalPages]);
+  }, [isServerPagination, onPageChange, page, totalCount, totalPages]);
 
   const pagedItems = useMemo(() => {
     if (isServerPagination) {

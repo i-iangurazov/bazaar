@@ -59,13 +59,16 @@ const SalesOrdersPage = () => {
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const storesQuery = trpc.stores.list.useQuery();
-  const listQuery = trpc.salesOrders.list.useQuery({
-    page,
-    pageSize,
-    search: search.trim() || undefined,
-    storeId: storeId === "all" ? undefined : storeId,
-    status: statusFilter === "all" ? undefined : statusFilter,
-  });
+  const listQuery = trpc.salesOrders.list.useQuery(
+    {
+      page,
+      pageSize,
+      search: search.trim() || undefined,
+      storeId: storeId === "all" ? undefined : storeId,
+      status: statusFilter === "all" ? undefined : statusFilter,
+    },
+    { keepPreviousData: true },
+  );
 
   const completeMutation = trpc.salesOrders.complete.useMutation({
     onSuccess: async () => {

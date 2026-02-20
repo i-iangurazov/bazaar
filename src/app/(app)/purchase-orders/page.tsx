@@ -62,7 +62,10 @@ const PurchaseOrdersPage = () => {
   const [bulkCanceling, setBulkCanceling] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
-  const listQuery = trpc.purchaseOrders.list.useQuery({ page, pageSize });
+  const listQuery = trpc.purchaseOrders.list.useQuery(
+    { page, pageSize },
+    { keepPreviousData: true },
+  );
   const orders = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const totalOrders = listQuery.data?.total ?? 0;
   const cancelMutation = trpc.purchaseOrders.cancel.useMutation({

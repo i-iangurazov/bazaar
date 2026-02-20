@@ -255,7 +255,7 @@ const InventoryPage = () => {
       page: inventoryPage,
       pageSize: inventoryPageSize,
     },
-    { enabled: Boolean(storeId) },
+    { enabled: Boolean(storeId), keepPreviousData: true },
   );
   const inventoryItems = useMemo(
     () => inventoryQuery.data?.items ?? [],

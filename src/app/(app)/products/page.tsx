@@ -122,15 +122,18 @@ const ProductsPage = () => {
 
   const storesQuery = trpc.stores.list.useQuery();
   const categoriesQuery = trpc.productCategories.list.useQuery();
-  const productsQuery = trpc.products.list.useQuery({
-    search: search || undefined,
-    category: category || undefined,
-    type: productType,
-    includeArchived: isAdmin ? showArchived : undefined,
-    storeId: storeId || undefined,
-    page: productsPage,
-    pageSize: productsPageSize,
-  });
+  const productsQuery = trpc.products.list.useQuery(
+    {
+      search: search || undefined,
+      category: category || undefined,
+      type: productType,
+      includeArchived: isAdmin ? showArchived : undefined,
+      storeId: storeId || undefined,
+      page: productsPage,
+      pageSize: productsPageSize,
+    },
+    { keepPreviousData: true },
+  );
   const products = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
   const productsTotal = productsQuery.data?.total ?? 0;
   const exportQuery = trpc.products.exportCsv.useQuery(undefined, { enabled: false });
