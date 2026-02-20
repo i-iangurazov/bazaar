@@ -56,7 +56,7 @@ Inline-enabled fields are documented in `docs/inline-edit-audit.md`.
 
 Currently enabled:
 
-- Products list: `name`, `category`, `salePrice`.
+- Products list: `name`, `category`, `salePrice`, `onHandQty` (when store is selected).
 - Inventory list: `minStock`.
 - Suppliers list: `name`, `email`, `phone`, `notes`.
 - Stores list: `name`, `code`, `legalEntityType`, `inn`, `allowNegativeStock`, `trackExpiryLots`.

@@ -10,6 +10,7 @@ Date: 2026-02-20
 | Products list | `category` | `products.bulkUpdateCategory` | `ADMIN` | Single-row inline uses bulk endpoint with one `productId`. |
 | Products list | `salePrice` (no store selected) | `products.inlineUpdate` | `ADMIN` | Writes base product price. |
 | Products list | `salePrice` (store selected) | `storePrices.upsert` | `MANAGER`, `ADMIN` | Writes store override price. |
+| Products list | `onHandQty` (when store selected) | `inventory.adjust` | `MANAGER`, `ADMIN` | Inline absolute value is converted to delta (`qtyDelta`) using existing inventory adjustment flow. |
 | Inventory list | `minStock` | `inventory.setMinStock` | `MANAGER`, `ADMIN` | Store-scoped and org-scoped server-side. |
 | Suppliers list | `name` | `suppliers.update` | `MANAGER`, `ADMIN` | Full supplier update with current row values. |
 | Suppliers list | `email` | `suppliers.update` | `MANAGER`, `ADMIN` | Full supplier update with current row values. |

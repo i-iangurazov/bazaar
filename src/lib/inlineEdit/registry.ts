@@ -15,6 +15,7 @@ export type InlineEditTableKey =
 export type InlineMutationRoute =
   | "products.inlineUpdate"
   | "products.bulkUpdateCategory"
+  | "inventory.adjust"
   | "storePrices.upsert"
   | "inventory.setMinStock"
   | "suppliers.update"
@@ -37,6 +38,13 @@ export type InlineMutationInputByRoute = {
   "products.bulkUpdateCategory": {
     productIds: string[];
     category: string | null;
+  };
+  "inventory.adjust": {
+    storeId: string;
+    productId: string;
+    qtyDelta: number;
+    reason: string;
+    idempotencyKey: string;
   };
   "storePrices.upsert": {
     storeId: string;
@@ -135,11 +143,13 @@ export type InlineProductsRow = {
   unit: string;
   baseUnitId: string;
   basePriceKgs: number | null;
+  onHandQty: number;
 };
 
 export type InlineProductsContext = {
   storeId?: string | null;
   categories: string[];
+  stockAdjustReason: string;
 };
 
 export type InlineInventoryRow = {
@@ -292,11 +302,15 @@ const formatMoney = (value: number | null | undefined, locale: string, notAvaila
 const formatInt = (value: number | null | undefined, locale: string, notAvailableLabel: string) =>
   value === null || value === undefined ? notAvailableLabel : formatNumber(value, locale);
 
+const createInlineIdempotencyKey = () =>
+  `inline-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
 export type InlineEditRegistry = {
   products: {
     name: InlineEditColumnDefinition<InlineProductsRow, string, InlineProductsContext>;
     category: InlineEditColumnDefinition<InlineProductsRow, string | null, InlineProductsContext>;
     salePrice: InlineEditColumnDefinition<InlineProductsRow, number | null, InlineProductsContext>;
+    onHand: InlineEditColumnDefinition<InlineProductsRow, number, InlineProductsContext>;
   };
   inventory: {
     minStock: InlineEditColumnDefinition<InlineInventoryRow, number, Record<string, never>>;
@@ -393,6 +407,30 @@ export const inlineEditRegistry: InlineEditRegistry = {
       },
       permissionCheck: (role, _row, context) =>
         context.storeId ? isManagerOrAdmin(role) : isAdmin(role),
+    },
+    onHand: {
+      tableKey: "products",
+      columnKey: "onHand",
+      inputType: "number",
+      formatter: (value, _row, _context, display) =>
+        formatInt(value, display.locale, display.notAvailableLabel),
+      parser: (raw, _row, context) => {
+        if (!context.storeId) {
+          return { ok: false, errorKey: "storeRequired" };
+        }
+        return parseNonNegativeInt(raw);
+      },
+      mutation: (row, value, context) => ({
+        route: "inventory.adjust",
+        input: {
+          storeId: context.storeId as string,
+          productId: row.id,
+          qtyDelta: value - row.onHandQty,
+          reason: context.stockAdjustReason,
+          idempotencyKey: createInlineIdempotencyKey(),
+        },
+      }),
+      permissionCheck: (role, _row, context) => Boolean(context.storeId) && isManagerOrAdmin(role),
     },
   },
   inventory: {

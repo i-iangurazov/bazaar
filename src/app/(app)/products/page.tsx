@@ -170,6 +170,7 @@ const ProductsPage = () => {
   const inlineProductMutation = trpc.products.inlineUpdate.useMutation();
   const inlineCategoryMutation = trpc.products.bulkUpdateCategory.useMutation();
   const inlineStorePriceMutation = trpc.storePrices.upsert.useMutation();
+  const inlineInventoryAdjustMutation = trpc.inventory.adjust.useMutation();
 
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: (result) => {
@@ -303,8 +304,9 @@ const ProductsPage = () => {
     () => ({
       storeId: storeId || null,
       categories,
+      stockAdjustReason: tInventory("stockAdjustment"),
     }),
-    [categories, storeId],
+    [categories, storeId, tInventory],
   );
 
   const applyProductListPatch = useCallback(
@@ -391,16 +393,36 @@ const ProductsPage = () => {
         return;
       }
 
+      if (operation.route === "inventory.adjust") {
+        applyProductListPatch(operation.input.productId, (item) => ({
+          ...item,
+          onHandQty: item.onHandQty + operation.input.qtyDelta,
+        }));
+        try {
+          await inlineInventoryAdjustMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await Promise.all([
+          trpcUtils.products.list.invalidate(productsListInput),
+          trpcUtils.inventory.list.invalidate(),
+        ]);
+        return;
+      }
+
       throw new Error(`Unsupported inline operation: ${operation.route}`);
     },
     [
       applyProductListPatch,
       inlineCategoryMutation,
+      inlineInventoryAdjustMutation,
       inlineProductMutation,
       inlineStorePriceMutation,
       productsListInput,
       showEffectivePrice,
       trpcUtils.products.list,
+      trpcUtils.inventory.list,
     ],
   );
 
@@ -1400,7 +1422,20 @@ const ProductsPage = () => {
                               <span>{product.unit}</span>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {formatNumber(product.onHandQty, locale)}
+                              <InlineEditableCell
+                                rowId={product.id}
+                                row={product}
+                                value={product.onHandQty}
+                                definition={inlineEditRegistry.products.onHand}
+                                context={inlineProductsContext}
+                                role={role}
+                                locale={locale}
+                                columnLabel={tInventory("onHand")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineProductMutation}
+                              />
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               <div className="flex flex-wrap items-center gap-2">
