@@ -3,9 +3,19 @@ import { z } from "zod";
 import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { bulkUpdateStorePrices, upsertStorePrice } from "@/server/services/storePrices";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
+
+const storePricesProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "storePrices" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
 
 export const storePricesRouter = router({
-  upsert: managerProcedure
+  upsert: storePricesProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -30,7 +40,7 @@ export const storePricesRouter = router({
       }
     }),
 
-  bulkUpdate: managerProcedure
+  bulkUpdate: storePricesProcedure
     .input(
       z.object({
         storeId: z.string(),

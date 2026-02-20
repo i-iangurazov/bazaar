@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import {
   Table,
   TableBody,
@@ -79,6 +80,12 @@ import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/
 import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
+import {
+  inlineEditRegistry,
+  type InlineMutationOperation,
+  type InlineProductsContext,
+} from "@/lib/inlineEdit/registry";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
@@ -119,11 +126,12 @@ const ProductsPage = () => {
   const [printQueue, setPrintQueue] = useState<string[]>([]);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
   const [queueSearch, setQueueSearch] = useState("");
+  const inlineEditingEnabled = isInlineEditingEnabled();
 
   const storesQuery = trpc.stores.list.useQuery();
   const categoriesQuery = trpc.productCategories.list.useQuery();
-  const productsQuery = trpc.products.list.useQuery(
-    {
+  const productsListInput = useMemo(
+    () => ({
       search: search || undefined,
       category: category || undefined,
       type: productType,
@@ -131,9 +139,10 @@ const ProductsPage = () => {
       storeId: storeId || undefined,
       page: productsPage,
       pageSize: productsPageSize,
-    },
-    { keepPreviousData: true },
+    }),
+    [category, isAdmin, productType, productsPage, productsPageSize, search, showArchived, storeId],
   );
+  const productsQuery = trpc.products.list.useQuery(productsListInput, { keepPreviousData: true });
   const products = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
   const productsTotal = productsQuery.data?.total ?? 0;
   const exportQuery = trpc.products.exportCsv.useQuery(undefined, { enabled: false });
@@ -158,6 +167,9 @@ const ProductsPage = () => {
 
   const bulkArchiveMutation = trpc.products.archive.useMutation();
   const bulkRestoreMutation = trpc.products.restore.useMutation();
+  const inlineProductMutation = trpc.products.inlineUpdate.useMutation();
+  const inlineCategoryMutation = trpc.products.bulkUpdateCategory.useMutation();
+  const inlineStorePriceMutation = trpc.storePrices.upsert.useMutation();
 
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: (result) => {
@@ -287,6 +299,110 @@ const ProductsPage = () => {
   }, [categoriesQuery.data, products]);
 
   const showEffectivePrice = Boolean(storeId);
+  const inlineProductsContext = useMemo<InlineProductsContext>(
+    () => ({
+      storeId: storeId || null,
+      categories,
+    }),
+    [categories, storeId],
+  );
+
+  const applyProductListPatch = useCallback(
+    (
+      productId: string,
+      patch: (item: NonNullable<typeof productsQuery.data>["items"][number]) => NonNullable<
+        typeof productsQuery.data
+      >["items"][number],
+    ) => {
+      trpcUtils.products.list.setData(productsListInput, (current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          items: current.items.map((item) => (item.id === productId ? patch(item) : item)),
+        };
+      });
+    },
+    [productsListInput, productsQuery, trpcUtils.products.list],
+  );
+
+  const executeInlineProductMutation = useCallback(
+    async (operation: InlineMutationOperation) => {
+      const previous = trpcUtils.products.list.getData(productsListInput);
+      const rollback = () => {
+        trpcUtils.products.list.setData(productsListInput, previous);
+      };
+
+      if (operation.route === "products.inlineUpdate") {
+        const patch = operation.input.patch;
+        applyProductListPatch(operation.input.productId, (item) => {
+          const nextBasePrice =
+            patch.basePriceKgs !== undefined ? patch.basePriceKgs : item.basePriceKgs;
+          return {
+            ...item,
+            name: patch.name ?? item.name,
+            baseUnitId: patch.baseUnitId ?? item.baseUnitId,
+            unit: item.unit,
+            basePriceKgs: nextBasePrice,
+            effectivePriceKgs: showEffectivePrice
+              ? item.effectivePriceKgs
+              : nextBasePrice,
+          };
+        });
+        try {
+          await inlineProductMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.products.list.invalidate(productsListInput);
+        return;
+      }
+
+      if (operation.route === "products.bulkUpdateCategory") {
+        applyProductListPatch(operation.input.productIds[0], (item) => ({
+          ...item,
+          category: operation.input.category,
+        }));
+        try {
+          await inlineCategoryMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.products.list.invalidate(productsListInput);
+        return;
+      }
+
+      if (operation.route === "storePrices.upsert") {
+        applyProductListPatch(operation.input.productId, (item) => ({
+          ...item,
+          effectivePriceKgs: operation.input.priceKgs,
+          priceOverridden: true,
+        }));
+        try {
+          await inlineStorePriceMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.products.list.invalidate(productsListInput);
+        return;
+      }
+
+      throw new Error(`Unsupported inline operation: ${operation.route}`);
+    },
+    [
+      applyProductListPatch,
+      inlineCategoryMutation,
+      inlineProductMutation,
+      inlineStorePriceMutation,
+      productsListInput,
+      showEffectivePrice,
+      trpcUtils.products.list,
+    ],
+  );
 
   const bulkSchema = useMemo(
     () =>
@@ -1181,7 +1297,8 @@ const ProductsPage = () => {
               viewMode === "table" ? (
                 <div className="overflow-x-auto">
                   <TooltipProvider>
-                    <Table className="min-w-[720px]">
+                    <InlineEditTableProvider>
+                      <Table className="min-w-[720px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">
@@ -1241,7 +1358,20 @@ const ProductsPage = () => {
                             </TableCell>
                             <TableCell className="font-medium">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span>{product.name}</span>
+                                <InlineEditableCell
+                                  rowId={product.id}
+                                  row={product}
+                                  value={product.name}
+                                  definition={inlineEditRegistry.products.name}
+                                  context={inlineProductsContext}
+                                  role={role}
+                                  locale={locale}
+                                  columnLabel={t("name")}
+                                  tTable={t}
+                                  tCommon={tCommon}
+                                  enabled={inlineEditingEnabled}
+                                  executeMutation={executeInlineProductMutation}
+                                />
                                 <Badge variant="muted">
                                   {product.isBundle ? t("typeBundle") : t("typeProduct")}
                                 </Badge>
@@ -1251,25 +1381,43 @@ const ProductsPage = () => {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
-                              {product.category ?? tCommon("notAvailable")}
+                              <InlineEditableCell
+                                rowId={product.id}
+                                row={product}
+                                value={product.category}
+                                definition={inlineEditRegistry.products.category}
+                                context={inlineProductsContext}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("category")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineProductMutation}
+                              />
                             </TableCell>
-                            <TableCell className="hidden lg:table-cell">{product.unit}</TableCell>
+                            <TableCell className="hidden lg:table-cell">
+                              <span>{product.unit}</span>
+                            </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {formatNumber(product.onHandQty, locale)}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span>
-                                  {showEffectivePrice
-                                    ? product.effectivePriceKgs !== null &&
-                                      product.effectivePriceKgs !== undefined
-                                      ? formatCurrencyKGS(product.effectivePriceKgs, locale)
-                                      : tCommon("notAvailable")
-                                    : product.basePriceKgs !== null &&
-                                        product.basePriceKgs !== undefined
-                                      ? formatCurrencyKGS(product.basePriceKgs, locale)
-                                      : tCommon("notAvailable")}
-                                </span>
+                                <InlineEditableCell
+                                  rowId={product.id}
+                                  row={product}
+                                  value={showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs}
+                                  definition={inlineEditRegistry.products.salePrice}
+                                  context={inlineProductsContext}
+                                  role={role}
+                                  locale={locale}
+                                  columnLabel={t("salePrice")}
+                                  tTable={t}
+                                  tCommon={tCommon}
+                                  enabled={inlineEditingEnabled}
+                                  executeMutation={executeInlineProductMutation}
+                                />
                                 {showEffectivePrice && product.priceOverridden ? (
                                   <Badge variant="muted">{t("priceOverridden")}</Badge>
                                 ) : null}
@@ -1386,6 +1534,7 @@ const ProductsPage = () => {
                       })}
                     </TableBody>
                   </Table>
+                    </InlineEditTableProvider>
                   </TooltipProvider>
                 </div>
               ) : (

@@ -72,6 +72,9 @@ import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
 import { useToast } from "@/components/ui/toast";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
+import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
+import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const InventoryPage = () => {
   const t = useTranslations("inventory");
@@ -124,6 +127,7 @@ const InventoryPage = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const inlineEditingEnabled = isInlineEditingEnabled();
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
 
   const receiveSchema = useMemo(
@@ -248,15 +252,19 @@ const InventoryPage = () => {
     },
   });
 
-  const inventoryQuery = trpc.inventory.list.useQuery(
-    {
+  const inventoryListInput = useMemo(
+    () => ({
       storeId: storeId ?? "",
       search: search || undefined,
       page: inventoryPage,
       pageSize: inventoryPageSize,
-    },
-    { enabled: Boolean(storeId), keepPreviousData: true },
+    }),
+    [inventoryPage, inventoryPageSize, search, storeId],
   );
+  const inventoryQuery = trpc.inventory.list.useQuery(inventoryListInput, {
+    enabled: Boolean(storeId),
+    keepPreviousData: true,
+  });
   const inventoryItems = useMemo(
     () => inventoryQuery.data?.items ?? [],
     [inventoryQuery.data?.items],
@@ -779,6 +787,52 @@ const InventoryPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const inlineMinStockMutation = trpc.inventory.setMinStock.useMutation();
+
+  const applyInventoryListPatch = useCallback(
+    (
+      productId: string,
+      patch: (item: NonNullable<typeof inventoryQuery.data>["items"][number]) => NonNullable<
+        typeof inventoryQuery.data
+      >["items"][number],
+    ) => {
+      trpcUtils.inventory.list.setData(inventoryListInput, (current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          items: current.items.map((item) =>
+            item.snapshot.productId === productId ? patch(item) : item,
+          ),
+        };
+      });
+    },
+    [inventoryListInput, inventoryQuery, trpcUtils.inventory.list],
+  );
+
+  const executeInlineInventoryMutation = useCallback(
+    async (operation: InlineMutationOperation) => {
+      if (operation.route !== "inventory.setMinStock") {
+        throw new Error(`Unsupported inline operation: ${operation.route}`);
+      }
+
+      const previous = trpcUtils.inventory.list.getData(inventoryListInput);
+      applyInventoryListPatch(operation.input.productId, (item) => ({
+        ...item,
+        minStock: operation.input.minStock,
+        lowStock: operation.input.minStock > 0 && item.snapshot.onHand <= operation.input.minStock,
+      }));
+      try {
+        await inlineMinStockMutation.mutateAsync(operation.input);
+      } catch (error) {
+        trpcUtils.inventory.list.setData(inventoryListInput, previous);
+        throw error;
+      }
+      await trpcUtils.inventory.list.invalidate(inventoryListInput);
+    },
+    [applyInventoryListPatch, inlineMinStockMutation, inventoryListInput, trpcUtils.inventory.list],
+  );
 
   const createPoDraftMutation = trpc.purchaseOrders.createFromReorder.useMutation({
     onSuccess: (result) => {
@@ -1141,7 +1195,8 @@ const InventoryPage = () => {
               viewMode === "table" ? (
                 <div className="overflow-x-auto">
                   <TooltipProvider>
-                    <Table className="min-w-[640px]">
+                    <InlineEditTableProvider>
+                      <Table className="min-w-[640px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-10">
@@ -1217,7 +1272,20 @@ const InventoryPage = () => {
                                 </TableCell>
                                 <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
                                 <TableCell className="hidden sm:table-cell">
-                                  {formatNumber(item.minStock, locale)}
+                                  <InlineEditableCell
+                                    rowId={item.snapshot.id}
+                                    row={item}
+                                    value={item.minStock}
+                                    definition={inlineEditRegistry.inventory.minStock}
+                                    context={{}}
+                                    role={role}
+                                    locale={locale}
+                                    columnLabel={t("minStock")}
+                                    tTable={t}
+                                    tCommon={tCommon}
+                                    enabled={inlineEditingEnabled}
+                                    executeMutation={executeInlineInventoryMutation}
+                                  />
                                 </TableCell>
                                 <TableCell>
                                   {item.lowStock ? (
@@ -1324,6 +1392,7 @@ const InventoryPage = () => {
                         })}
                       </TableBody>
                     </Table>
+                    </InlineEditTableProvider>
                   </TooltipProvider>
                 </div>
               ) : (

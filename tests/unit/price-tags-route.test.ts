@@ -5,6 +5,7 @@ const { mockGetServerAuthToken, mockRecordFirstEvent, mockUploadProductImageBuff
   mockRecordFirstEvent: vi.fn(),
   mockUploadProductImageBuffer: vi.fn(),
   prisma: {
+    organization: { findUnique: vi.fn() },
     store: { findUnique: vi.fn() },
     product: { findMany: vi.fn() },
     storePrice: { findMany: vi.fn() },
@@ -39,6 +40,13 @@ describe("price tags pdf route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", sub: "user-1" });
+    prisma.organization.findUnique.mockResolvedValue({
+      id: "org-1",
+      plan: "BUSINESS",
+      trialEndsAt: null,
+      subscriptionStatus: "ACTIVE",
+      currentPeriodEndsAt: null,
+    });
     prisma.store.findUnique.mockResolvedValue({ id: "store-1", organizationId: "org-1", name: "Тест" });
     prisma.product.findMany.mockResolvedValue([
       {

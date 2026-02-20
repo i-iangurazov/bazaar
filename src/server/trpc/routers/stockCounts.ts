@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   addOrUpdateLineByScan,
   applyStockCount,
@@ -12,8 +13,26 @@ import {
   setLineCountedQty,
 } from "@/server/services/stockCounts";
 
+const stockCountsProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "stockCounts" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const stockCountsManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "stockCounts" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
 export const stockCountsRouter = router({
-  list: protectedProcedure
+  list: stockCountsProtectedProcedure
     .input(
       z.object({
         storeId: z.string(),
@@ -40,7 +59,7 @@ export const stockCountsRouter = router({
       });
     }),
 
-  get: protectedProcedure
+  get: stockCountsProtectedProcedure
     .input(z.object({ stockCountId: z.string() }))
     .query(async ({ ctx, input }) => {
       const count = await ctx.prisma.stockCount.findFirst({
@@ -76,7 +95,7 @@ export const stockCountsRouter = router({
       };
     }),
 
-  create: protectedProcedure
+  create: stockCountsProtectedProcedure
     .input(z.object({ storeId: z.string(), notes: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -92,7 +111,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  addOrUpdateLineByScan: protectedProcedure
+  addOrUpdateLineByScan: stockCountsProtectedProcedure
     .use(rateLimit({ windowMs: 10_000, max: 60, prefix: "stockcount-scan" }))
     .input(
       z.object({
@@ -122,7 +141,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  setLineCountedQty: protectedProcedure
+  setLineCountedQty: stockCountsProtectedProcedure
     .input(z.object({ lineId: z.string(), countedQty: z.number().int().min(0) }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -138,7 +157,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  removeLine: protectedProcedure
+  removeLine: stockCountsProtectedProcedure
     .input(z.object({ lineId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -153,7 +172,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  apply: managerProcedure
+  apply: stockCountsManagerProcedure
     .input(z.object({ stockCountId: z.string(), idempotencyKey: z.string().min(8) }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -169,7 +188,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  cancel: managerProcedure
+  cancel: stockCountsManagerProcedure
     .input(z.object({ stockCountId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {

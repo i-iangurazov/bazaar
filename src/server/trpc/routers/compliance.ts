@@ -4,6 +4,7 @@ import { KkmMode, MarkingMode } from "@prisma/client";
 import { adminProcedure, managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { getStoreComplianceProfile, upsertStoreComplianceProfile } from "@/server/services/compliance";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 
 const complianceSchema = z.object({
   storeId: z.string(),
@@ -22,6 +23,7 @@ const complianceSchema = z.object({
 export const complianceRouter = router({
   getStore: managerProcedure.input(z.object({ storeId: z.string() })).query(async ({ ctx, input }) => {
     try {
+      await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "compliance" });
       return await getStoreComplianceProfile(ctx.user.organizationId, input.storeId);
     } catch (error) {
       throw toTRPCError(error);
@@ -29,6 +31,7 @@ export const complianceRouter = router({
   }),
   updateStore: adminProcedure.input(complianceSchema).mutation(async ({ ctx, input }) => {
     try {
+      await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "compliance" });
       return await upsertStoreComplianceProfile({
         organizationId: ctx.user.organizationId,
         storeId: input.storeId,

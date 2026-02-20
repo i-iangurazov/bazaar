@@ -1,77 +1,44 @@
 import type { OrganizationPlan } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import {
+  getFeatureLockedErrorKey,
+  getPlanFeatures as getCatalogFeatures,
+  getPlanLimits as getCatalogLimits,
+  getPlanMonthlyPriceKgs,
+  hasFeature,
+  type PlanCode,
+  type PlanFeature,
+  toPlanCode,
+} from "@/server/billing/planCatalog";
 import { AppError } from "@/server/services/errors";
 
-const STARTER_LIMITS = {
-  maxStores: 1,
-  maxUsers: 3,
-  maxProducts: 1000,
+export type PlanTier = PlanCode;
+export type PlanLimits = {
+  maxStores: number;
+  maxUsers: number;
+  maxProducts: number;
 };
 
-const BUSINESS_LIMITS = {
-  maxStores: 5,
-  maxUsers: 15,
-  maxProducts: 50000,
-};
+export type { PlanFeature } from "@/server/billing/planCatalog";
 
-const ENTERPRISE_LIMITS = {
-  maxStores: 20,
-  maxUsers: 60,
-  maxProducts: 200000,
-};
-
-export type PlanTier = "STARTER" | "BUSINESS" | "ENTERPRISE";
-export type PlanLimits = typeof STARTER_LIMITS;
-
-export type PlanFeature =
-  | "imports"
-  | "exports"
-  | "analytics"
-  | "compliance"
-  | "supportToolkit";
-
-const PLAN_TIER_FEATURES: Record<PlanTier, readonly PlanFeature[]> = {
-  STARTER: [],
-  BUSINESS: ["imports", "exports", "analytics", "compliance"],
-  ENTERPRISE: ["imports", "exports", "analytics", "compliance", "supportToolkit"],
-};
-
-const PLAN_MONTHLY_PRICES: Record<PlanTier, number> = {
-  STARTER: Number(process.env.PLAN_PRICE_STARTER_KGS ?? "2500"),
-  BUSINESS: Number(process.env.PLAN_PRICE_BUSINESS_KGS ?? "8900"),
-  ENTERPRISE: Number(process.env.PLAN_PRICE_ENTERPRISE_KGS ?? "19900"),
-};
-
-export const toPlanTier = (plan: OrganizationPlan): PlanTier => {
-  const value = String(plan);
-  if (value === "ENTERPRISE") {
-    return "ENTERPRISE";
-  }
-  if (value === "BUSINESS" || value === "PRO") {
-    return "BUSINESS";
-  }
-  return "STARTER";
-};
+export const toPlanTier = (plan: OrganizationPlan): PlanTier => toPlanCode(plan);
 
 export const getLimitsForPlan = (plan: OrganizationPlan): PlanLimits => {
-  const tier = toPlanTier(plan);
-  if (tier === "ENTERPRISE") {
-    return ENTERPRISE_LIMITS;
-  }
-  if (tier === "BUSINESS") {
-    return BUSINESS_LIMITS;
-  }
-  return STARTER_LIMITS;
+  const limits = getCatalogLimits(plan);
+  return {
+    maxStores: limits.maxStores,
+    maxUsers: limits.maxActiveUsers,
+    maxProducts: limits.maxProducts,
+  };
 };
 
-export const getPlanFeatures = (plan: OrganizationPlan): readonly PlanFeature[] =>
-  PLAN_TIER_FEATURES[toPlanTier(plan)];
+export const getPlanFeatures = (plan: OrganizationPlan): readonly PlanFeature[] => getCatalogFeatures(plan);
 
 export const hasPlanFeature = (plan: OrganizationPlan, feature: PlanFeature) =>
-  getPlanFeatures(plan).includes(feature);
+  hasFeature(plan, feature);
 
-export const getPlanMonthlyPrice = (plan: OrganizationPlan) => PLAN_MONTHLY_PRICES[toPlanTier(plan)];
+export const getPlanMonthlyPrice = (plan: OrganizationPlan) => getPlanMonthlyPriceKgs(plan);
 
 export const getOrganizationPlan = async (organizationId: string) => {
   const org = await prisma.organization.findUnique({
@@ -143,7 +110,7 @@ export const assertFeatureEnabled = async (input: {
 }) => {
   const org = await assertTrialActive(input.organizationId);
   if (!hasPlanFeature(org.plan, input.feature)) {
-    throw new AppError("planFeatureUnavailable", "FORBIDDEN", 403);
+    throw new AppError(getFeatureLockedErrorKey(input.feature), "FORBIDDEN", 403);
   }
   return org;
 };

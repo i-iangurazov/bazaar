@@ -15,6 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -66,6 +67,8 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
+import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
+import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const UsersPage = () => {
   const t = useTranslations("users");
@@ -81,8 +84,10 @@ const UsersPage = () => {
   const isAdmin = role === "ADMIN";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const trpcUtils = trpc.useUtils();
   const isForbidden = status === "authenticated" && !isAdmin;
   const usersQuery = trpc.users.list.useQuery(undefined, { enabled: isAdmin });
+  const inlineEditingEnabled = isInlineEditingEnabled();
 
   type UserRow = NonNullable<typeof usersQuery.data>[number];
 
@@ -225,6 +230,68 @@ const UsersPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const inlineUpdateMutation = trpc.users.update.useMutation();
+  const inlineSetActiveMutation = trpc.users.setActive.useMutation();
+
+  const applyUsersListPatch = useCallback(
+    (
+      userId: string,
+      patch: (user: NonNullable<typeof usersQuery.data>[number]) => NonNullable<typeof usersQuery.data>[number],
+    ) => {
+      trpcUtils.users.list.setData(undefined, (current) => {
+        if (!current) {
+          return current;
+        }
+        return current.map((user) => (user.id === userId ? patch(user) : user));
+      });
+    },
+    [trpcUtils.users.list, usersQuery],
+  );
+
+  const executeInlineUserMutation = useCallback(
+    async (operation: InlineMutationOperation) => {
+      const previous = trpcUtils.users.list.getData();
+      const rollback = () => {
+        trpcUtils.users.list.setData(undefined, previous);
+      };
+
+      if (operation.route === "users.update") {
+        applyUsersListPatch(operation.input.userId, (user) => ({
+          ...user,
+          email: operation.input.email,
+          name: operation.input.name,
+          role: operation.input.role,
+          preferredLocale: operation.input.preferredLocale,
+        }));
+        try {
+          await inlineUpdateMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.users.list.invalidate();
+        return;
+      }
+
+      if (operation.route === "users.setActive") {
+        applyUsersListPatch(operation.input.userId, (user) => ({
+          ...user,
+          isActive: operation.input.isActive,
+        }));
+        try {
+          await inlineSetActiveMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.users.list.invalidate();
+        return;
+      }
+
+      throw new Error(`Unsupported inline operation: ${operation.route}`);
+    },
+    [applyUsersListPatch, inlineSetActiveMutation, inlineUpdateMutation, trpcUtils.users.list],
+  );
 
   const resetPasswordMutation = trpc.users.resetPassword.useMutation({
     onSuccess: () => {
@@ -329,6 +396,7 @@ const UsersPage = () => {
               getKey={(user) => user.id}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
+                  <InlineEditTableProvider>
                   <Table className="min-w-[720px]" data-tour="users-table">
                     <TableHeader>
                       <TableRow>
@@ -350,23 +418,85 @@ const UsersPage = () => {
                           setActiveMutation.isLoading && setActiveMutation.variables?.userId === user.id;
                         return (
                           <TableRow key={user.id}>
-                            <TableCell className="font-medium">{user.name}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                              {user.email}
+                            <TableCell className="font-medium">
+                              <InlineEditableCell
+                                rowId={user.id}
+                                row={user}
+                                value={user.name}
+                                definition={inlineEditRegistry.users.name}
+                                context={{ currentUserId }}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("name")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUserMutation}
+                              />
                             </TableCell>
-                            <TableCell>{roleLabel(user.role)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {tCommon(`locales.${user.preferredLocale}`)}
+                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                              <InlineEditableCell
+                                rowId={user.id}
+                                row={user}
+                                value={user.email}
+                                definition={inlineEditRegistry.users.email}
+                                context={{ currentUserId }}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("email")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUserMutation}
+                              />
                             </TableCell>
                             <TableCell>
-                              <Badge variant={user.isActive ? "success" : "danger"}>
-                                {user.isActive ? (
-                                  <StatusSuccessIcon className="h-3 w-3" aria-hidden />
-                                ) : (
-                                  <StatusDangerIcon className="h-3 w-3" aria-hidden />
-                                )}
-                                {user.isActive ? t("active") : t("inactive")}
-                              </Badge>
+                              <InlineEditableCell
+                                rowId={user.id}
+                                row={user}
+                                value={user.role}
+                                definition={inlineEditRegistry.users.role}
+                                context={{ currentUserId }}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("role")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUserMutation}
+                              />
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              <InlineEditableCell
+                                rowId={user.id}
+                                row={user}
+                                value={user.preferredLocale}
+                                definition={inlineEditRegistry.users.preferredLocale}
+                                context={{ currentUserId }}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("locale")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUserMutation}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <InlineEditableCell
+                                rowId={user.id}
+                                row={user}
+                                value={user.isActive}
+                                definition={inlineEditRegistry.users.isActive}
+                                context={{ currentUserId }}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("status")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUserMutation}
+                              />
                             </TableCell>
                             <TableCell>
                               <DropdownMenu>
@@ -435,6 +565,7 @@ const UsersPage = () => {
                       })}
                     </TableBody>
                   </Table>
+                  </InlineEditTableProvider>
                 </div>
               )}
               renderMobile={(user) => {

@@ -9,6 +9,8 @@ import { cookies } from "next/headers";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { buildPriceTagsPdf, type PriceTagLabel } from "@/server/services/priceTagsPdf";
 import { selectPrimaryBarcodeValue } from "@/server/services/barcodes";
+import { AppError } from "@/server/services/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -95,6 +97,18 @@ export const POST = async (request: Request) => {
   const token = await getServerAuthToken();
   if (!token) {
     return new Response(tErrors("unauthorized"), { status: 401 });
+  }
+  try {
+    await assertFeatureEnabled({
+      organizationId: token.organizationId as string,
+      feature: "priceTags",
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      const status = error.code === "FORBIDDEN" ? 403 : 400;
+      return new Response(tErrors(error.message), { status });
+    }
+    return new Response(tErrors("genericMessage"), { status: 500 });
   }
 
   const body = await request.json().catch(() => null);

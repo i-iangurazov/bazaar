@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,6 +35,7 @@ import { useToast } from "@/components/ui/toast";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import {
   Tooltip,
   TooltipContent,
@@ -43,15 +44,20 @@ import {
 } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
+import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const UnitsPage = () => {
   const t = useTranslations("units");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const locale = useLocale();
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
+  const inlineEditingEnabled = isInlineEditingEnabled();
 
   const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: isAdmin });
   type UnitRow = NonNullable<typeof unitsQuery.data>[number];
@@ -103,6 +109,38 @@ const UnitsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const inlineUpdateMutation = trpc.units.update.useMutation();
+  const executeInlineUnitMutation = useCallback(
+    async (operation: InlineMutationOperation) => {
+      if (operation.route !== "units.update") {
+        throw new Error(`Unsupported inline operation: ${operation.route}`);
+      }
+
+      const previous = trpcUtils.units.list.getData();
+      trpcUtils.units.list.setData(undefined, (current) => {
+        if (!current) {
+          return current;
+        }
+        return current.map((unit) =>
+          unit.id === operation.input.unitId
+            ? {
+                ...unit,
+                labelRu: operation.input.labelRu,
+                labelKg: operation.input.labelKg,
+              }
+            : unit,
+        );
+      });
+      try {
+        await inlineUpdateMutation.mutateAsync(operation.input);
+      } catch (error) {
+        trpcUtils.units.list.setData(undefined, previous);
+        throw error;
+      }
+      await trpcUtils.units.list.invalidate();
+    },
+    [inlineUpdateMutation, trpcUtils.units.list],
+  );
 
   const removeMutation = trpc.units.remove.useMutation({
     onSuccess: () => {
@@ -191,7 +229,8 @@ const UnitsPage = () => {
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
                   <TooltipProvider>
-                    <Table className="min-w-[520px]">
+                    <InlineEditTableProvider>
+                      <Table className="min-w-[520px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t("code")}</TableHead>
@@ -204,8 +243,38 @@ const UnitsPage = () => {
                         {visibleItems.map((unit) => (
                           <TableRow key={unit.id}>
                             <TableCell className="font-medium">{unit.code}</TableCell>
-                            <TableCell>{unit.labelRu}</TableCell>
-                            <TableCell>{unit.labelKg}</TableCell>
+                            <TableCell>
+                              <InlineEditableCell
+                                rowId={unit.id}
+                                row={unit}
+                                value={unit.labelRu}
+                                definition={inlineEditRegistry.units.labelRu}
+                                context={{}}
+                                role={session?.user?.role}
+                                locale={locale}
+                                columnLabel={t("labelRu")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUnitMutation}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <InlineEditableCell
+                                rowId={unit.id}
+                                row={unit}
+                                value={unit.labelKg}
+                                definition={inlineEditRegistry.units.labelKg}
+                                context={{}}
+                                role={session?.user?.role}
+                                locale={locale}
+                                columnLabel={t("labelKg")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineUnitMutation}
+                              />
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <Tooltip>
@@ -245,6 +314,7 @@ const UnitsPage = () => {
                         ))}
                       </TableBody>
                     </Table>
+                    </InlineEditTableProvider>
                   </TooltipProvider>
                 </div>
               )}

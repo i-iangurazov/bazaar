@@ -411,12 +411,21 @@
   },
   "billing": {
     "title": "Тарифтер",
-    "subtitle": "Сынак мөөнөтү жана лимиттер.",
+    "subtitle": "Тарифтер, лимиттер жана модулдар.",
     "planTitle": "План",
     "plans": {
-      "starter": "Starter",
-      "business": "Business",
-      "enterprise": "Enterprise",
+      "starter": {
+        "name": "Жаңы баштаган",
+        "short": "Старт"
+      },
+      "business": {
+        "name": "Ишкер",
+        "short": "Өсүү"
+      },
+      "enterprise": {
+        "name": "Монополист",
+        "short": "Тармак"
+      },
       "trial": "Сынак",
       "pro": "Профессионал"
     },
@@ -434,7 +443,9 @@
     "usageStores": "Дүкөндөр: {count} / {limit}",
     "usageUsers": "Колдонуучулар: {count} / {limit}",
     "usageProducts": "Буюмдар: {count} / {limit}",
-    "planPrice": "План баасы: {amount} KGS / ай",
+    "planPricePrimary": "≈ {amount} сом/ай",
+    "planPriceSecondary": "{usd} USD / ай",
+    "planPriceRounding": "Тегеректөө: {step} сомго чейин (курс: {rate})",
     "featuresEnabled": "Кошулган функциялар: {value}",
     "featuresNone": "Учурдагы планда кошумча функциялар жок.",
     "features": {
@@ -442,20 +453,22 @@
       "exports": "Экспорт",
       "analytics": "Аналитика",
       "compliance": "Комплаенс",
-      "supportToolkit": "Кеңейтилген колдоо"
-    },
-    "featuresBase": {
-      "catalog": "Товарлар каталогу",
-      "inventory": "Запастарды эсепке алуу жана кыймылдар",
-      "purchaseOrders": "Жеткирүүчүгө заказдар",
-      "salesOrders": "Кардар заказдары",
-      "priceTags": "Баа белгилерин басып чыгаруу"
+      "supportToolkit": "Колдоо инструменттери",
+      "pos": "Касса (POS)",
+      "stockCounts": "Инвентаризация",
+      "priceTags": "Баа кагаздарын басуу",
+      "storePrices": "Дүкөн боюнча баалар",
+      "bundles": "Топтомдор",
+      "expiryLots": "Мөөнөт боюнча партиялар",
+      "customerOrders": "Кардар заказдары",
+      "periodClose": "Мезгилди жабуу",
+      "kkm": "ККМ интеграциясы"
     },
     "plansCatalogTitle": "Пландар жана мүмкүнчүлүктөр",
     "planDescriptions": {
-      "starter": "Бир дүкөн үчүн негизги операциялар менен старт планы.",
-      "business": "Өсүп жаткан ритейл үчүн аналитика жана экспорт менен кеңейтилген план.",
-      "enterprise": "Көп филиалдуу тармактарга ылайык кеңейтилген колдоо планы."
+      "starter": "Бир дүкөн үчүн негизги операциялар.",
+      "business": "Өсүү үчүн импорт, экспорт, аналитика жана кеңейтилген модулдар.",
+      "enterprise": "Чоң тармак үчүн комплаенс, колдоо жана ККМ."
     },
     "includesTitle": "Камтылганы",
     "currentPlanBadge": "Азыркы план",
@@ -471,9 +484,28 @@
     "requestMessagePlaceholder": "Мисалы: жаңы дүкөн ачабыз жана команда кеңейүүдө.",
     "requestSubmit": "Сураныч жөнөтүү",
     "requestSentSuccess": "Тарифти алмаштыруу боюнча сураныч жөнөтүлдү.",
+    "comparisonTitle": "Тарифтерди салыштыруу",
+    "comparison": {
+      "columnFeature": "Параметр",
+      "included": "Бар",
+      "locked": "Жабык",
+      "rows": {
+        "stores": "Дүкөн лимити",
+        "products": "Буюм лимити",
+        "users": "Колдонуучу лимити"
+      }
+    },
+    "limitExceededTitle": "Лимит ашты, тариф жаңыртуу керек",
+    "limitExceededDescription": "Колдонуу көлөмү тариф лимитинен ашты. Бар маалымат сакталат, бирок жаңы түзүү чектелет.",
+    "limitExceededItems": {
+      "stores": "Дүкөн лимити ашкан",
+      "products": "Буюм лимити ашкан",
+      "users": "Колдонуучу лимити ашкан"
+    },
     "ctaTitle": "Көбүрөөк лимит керекпи?",
-    "ctaHint": "Business же Enterprise планга өтүү үчүн байланышыңыз.",
-    "ctaContact": "sales@BAZAAR.example",
+    "ctaHint": "Планды көтөрүү үчүн WhatsApp аркылуу байланышыңыз же жогорку планга сураныч жазыңыз.",
+    "ctaWhatsapp": "WhatsApp менен байланышуу",
+    "ctaWhatsappLink": "https://wa.me/996700000000",
     "empty": "Тариф маалыматы жеткиликтүү эмес."
   },
   "platformOwner": {
@@ -505,9 +537,18 @@
     "editBillingTitle": "Жазылуу параметрлери",
     "billingSaved": "Жазылуу параметрлери жаңыртылды",
     "plans": {
-      "starter": "Starter",
-      "business": "Business",
-      "enterprise": "Enterprise",
+      "starter": {
+        "name": "Жаңы баштаган",
+        "short": "Старт"
+      },
+      "business": {
+        "name": "Ишкер",
+        "short": "Өсүү"
+      },
+      "enterprise": {
+        "name": "Монополист",
+        "short": "Тармак"
+      },
       "trial": "Сынак",
       "pro": "Профессионал"
     },
@@ -1950,6 +1991,20 @@
     "trialExpired": "Сынак мөөнөтү аяктады.",
     "subscriptionInactive": "Жазылуу активдүү эмес. Администраторго кайрылыңыз.",
     "planFeatureUnavailable": "Функция учурдагы тарифте жеткиликсиз.",
+    "featureLockedImports": "Импорт модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedExports": "Экспорт модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedAnalytics": "Аналитика модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedCompliance": "Комплаенс модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedSupportToolkit": "Колдоо инструменттери жогорку тарифтерде гана бар.",
+    "featureLockedPos": "Касса модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedStockCounts": "Инвентаризация модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedPriceTags": "Баа кагаздарын басуу модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedStorePrices": "Дүкөн боюнча баалар сиздин тарифте жеткиликсиз.",
+    "featureLockedBundles": "Топтом модулу сиздин тарифте жеткиликсиз.",
+    "featureLockedExpiryLots": "Мөөнөт партиялары сиздин тарифте жеткиликсиз.",
+    "featureLockedCustomerOrders": "Кардар заказдары сиздин тарифте жеткиликсиз.",
+    "featureLockedPeriodClose": "Мезгилди жабуу сиздин тарифте жеткиликсиз.",
+    "featureLockedKkm": "ККМ интеграциясы сиздин тарифте жеткиликсиз.",
     "planUpgradeMustBeHigher": "Жогорку тарифке гана өтүү суранычын жөнөтүүгө болот.",
     "planUpgradeRequestPending": "Тарифти көтөрүү боюнча сураныч мурунтан жөнөтүлгөн.",
     "planUpgradeRequestNotFound": "Тарифти көтөрүү суранычы табылган жок.",
@@ -2794,6 +2849,12 @@
         ]
       }
     }
+  },
+  "inlineEditing": {
+    "editorAria": "Талааны түзөтүү: {field}",
+    "savingAria": "Өзгөртүү сакталууда",
+    "noPermissionTooltip": "Түзөтүүгө уруксат жетишсиз",
+    "editButtonAria": "Талааны түзөтүү: {field}"
   },
   "guidance": {
     "tipsButton": "Кеңештер",

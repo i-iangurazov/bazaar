@@ -7,14 +7,15 @@ import {
 import { z } from "zod";
 
 import {
-  adminProcedure,
-  cashierProcedure,
-  managerProcedure,
-  protectedProcedure,
+  adminProcedure as baseAdminProcedure,
+  cashierProcedure as baseCashierProcedure,
+  managerProcedure as baseManagerProcedure,
+  protectedProcedure as baseProtectedProcedure,
   rateLimit,
   router,
 } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   addPosSaleLine,
   addSaleReturnLine,
@@ -56,6 +57,60 @@ const paymentSchema = z.object({
   method: z.nativeEnum(PosPaymentMethod),
   amountKgs: z.number().positive(),
   providerRef: z.string().max(120).optional().nullable(),
+});
+
+const protectedProcedure = baseProtectedProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "pos" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const managerProcedure = baseManagerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "pos" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const adminProcedure = baseAdminProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "pos" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const cashierProcedure = baseCashierProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "pos" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const kkmManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "kkm" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const kkmAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "kkm" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
 });
 
 export const posRouter = router({
@@ -694,7 +749,7 @@ export const posRouter = router({
   }),
 
   kkm: router({
-    receipts: managerProcedure
+    receipts: kkmManagerProcedure
       .input(
         z
           .object({
@@ -719,7 +774,7 @@ export const posRouter = router({
         }
       }),
 
-    createPairingCode: adminProcedure
+    createPairingCode: kkmAdminProcedure
       .use(rateLimit({ windowMs: 10_000, max: 10, prefix: "pos-kkm-pair-code" }))
       .input(z.object({ storeId: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
@@ -735,7 +790,7 @@ export const posRouter = router({
         }
       }),
 
-    retryReceipt: managerProcedure
+    retryReceipt: kkmManagerProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-kkm-retry-receipt" }))
       .input(z.object({ receiptId: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {

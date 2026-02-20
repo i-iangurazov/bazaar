@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   addCustomerOrderLine,
   cancelCustomerOrder,
@@ -18,8 +19,26 @@ import {
   updateCustomerOrderLine,
 } from "@/server/services/salesOrders";
 
+const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const salesOrdersManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
 export const salesOrdersRouter = router({
-  metrics: managerProcedure
+  metrics: salesOrdersManagerProcedure
     .input(
       z.object({
         storeId: z.string().optional(),
@@ -42,7 +61,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  list: protectedProcedure
+  list: salesOrdersProtectedProcedure
     .input(
       z
         .object({
@@ -73,7 +92,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  getById: protectedProcedure
+  getById: salesOrdersProtectedProcedure
     .input(z.object({ customerOrderId: z.string() }))
     .query(async ({ ctx, input }) => {
       try {
@@ -86,7 +105,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  createDraft: protectedProcedure
+  createDraft: salesOrdersProtectedProcedure
     .input(
       z.object({
         storeId: z.string().min(1),
@@ -121,7 +140,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  setCustomer: protectedProcedure
+  setCustomer: salesOrdersProtectedProcedure
     .input(
       z.object({
         customerOrderId: z.string(),
@@ -146,7 +165,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  addLine: protectedProcedure
+  addLine: salesOrdersProtectedProcedure
     .input(
       z.object({
         customerOrderId: z.string(),
@@ -171,7 +190,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  updateLine: protectedProcedure
+  updateLine: salesOrdersProtectedProcedure
     .input(
       z.object({
         lineId: z.string(),
@@ -192,7 +211,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  removeLine: protectedProcedure
+  removeLine: salesOrdersProtectedProcedure
     .input(z.object({ lineId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -207,7 +226,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  confirm: protectedProcedure
+  confirm: salesOrdersProtectedProcedure
     .input(z.object({ customerOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -222,7 +241,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  markReady: protectedProcedure
+  markReady: salesOrdersProtectedProcedure
     .input(z.object({ customerOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -237,7 +256,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  complete: managerProcedure
+  complete: salesOrdersManagerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "sales-orders-complete" }))
     .input(
       z.object({
@@ -259,7 +278,7 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  cancel: managerProcedure
+  cancel: salesOrdersManagerProcedure
     .input(z.object({ customerOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {

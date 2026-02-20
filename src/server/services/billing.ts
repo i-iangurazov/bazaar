@@ -15,6 +15,10 @@ import {
   getPlanMonthlyPrice,
   toPlanTier,
 } from "@/server/services/planLimits";
+import {
+  getPlanFeatureMap,
+  getPlanMonthlyPriceKgsOverride,
+} from "@/server/billing/planCatalog";
 
 const PLAN_RANK: Record<PlanTier, number> = {
   STARTER: 1,
@@ -36,7 +40,9 @@ export const getPlanCatalog = () => {
       planTier: tier,
       limits: getLimitsForPlan(plan),
       features: getPlanFeatures(plan),
+      featureFlags: getPlanFeatureMap(plan),
       monthlyPriceKgs: getPlanMonthlyPrice(plan),
+      monthlyPriceKgsOverride: getPlanMonthlyPriceKgsOverride(plan),
     };
   });
 };
@@ -83,6 +89,12 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
   const now = new Date();
   const trialExpired =
     Boolean(org.trialEndsAt && org.trialEndsAt < now && (!org.currentPeriodEndsAt || org.currentPeriodEndsAt < now));
+  const limitExceeded = {
+    stores: stores > limits.maxStores,
+    users: users > limits.maxUsers,
+    products: products > limits.maxProducts,
+  };
+  const hasLimitExceeded = Object.values(limitExceeded).some(Boolean);
 
   return {
     organizationId: org.id,
@@ -95,7 +107,11 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     usage: { stores, users, products },
     limits,
     features: getPlanFeatures(org.plan),
+    featureFlags: getPlanFeatureMap(org.plan),
     monthlyPriceKgs: getPlanMonthlyPrice(org.plan),
+    monthlyPriceKgsOverride: getPlanMonthlyPriceKgsOverride(org.plan),
+    limitState: hasLimitExceeded ? "LIMIT_EXCEEDED" : "OK",
+    limitExceeded,
     planCatalog: getPlanCatalog(),
     upgradeRequests,
     pendingUpgradeRequest:

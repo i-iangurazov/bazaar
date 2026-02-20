@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
@@ -11,8 +11,8 @@ describeDb("plan limits", () => {
     await resetDatabase();
   });
 
-  it("blocks creating stores, users and products when trial limits are reached", async () => {
-    const { org, adminUser, baseUnit, supplier } = await seedBase();
+  it("starter cannot create second store", async () => {
+    const { org, adminUser } = await seedBase({ plan: "STARTER" });
 
     const caller = createTestCaller({
       id: adminUser.id,
@@ -21,54 +21,28 @@ describeDb("plan limits", () => {
       organizationId: org.id,
     });
 
-    await prisma.store.createMany({
-      data: [
-        {
-          organizationId: org.id,
-          name: "Branch 1",
-          code: "BR1",
-          allowNegativeStock: false,
-        },
-        {
-          organizationId: org.id,
-          name: "Branch 2",
-          code: "BR2",
-          allowNegativeStock: false,
-        },
-      ],
-    });
-
     await expect(
       caller.stores.create({
         name: "Overflow store",
-        code: "BR3",
+        code: "OVR-1",
         allowNegativeStock: false,
         trackExpiryLots: false,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT", message: "planLimitStores" });
+  });
 
-    await prisma.user.createMany({
-      data: Array.from({ length: 7 }).map((_, index) => ({
-        organizationId: org.id,
-        email: `limit-user-${index}@test.local`,
-        name: `Limit User ${index}`,
-        passwordHash: "hash",
-        role: "STAFF",
-        emailVerifiedAt: new Date(),
-      })),
+  it("starter cannot exceed 100 products", async () => {
+    const { org, adminUser, baseUnit, supplier } = await seedBase({ plan: "STARTER" });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
     });
 
-    await expect(
-      caller.users.create({
-        email: "overflow-user@test.local",
-        name: "Overflow User",
-        role: "STAFF",
-        password: "Password123!",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT", message: "planLimitUsers" });
-
     await prisma.product.createMany({
-      data: Array.from({ length: 999 }).map((_, index) => ({
+      data: Array.from({ length: 99 }).map((_, index) => ({
         organizationId: org.id,
         supplierId: supplier.id,
         sku: `SKU-LIMIT-${index}`,
@@ -85,5 +59,32 @@ describeDb("plan limits", () => {
         baseUnitId: baseUnit.id,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT", message: "planLimitProducts" });
+  });
+
+  it("starter cannot exceed 5 active users", async () => {
+    const { org, adminUser } = await seedBase({ plan: "STARTER" });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await caller.users.create({
+      email: "limit-user-1@test.local",
+      name: "Limit User 1",
+      role: "STAFF",
+      password: "Password123!",
+    });
+
+    await expect(
+      caller.users.create({
+        email: "limit-user-2@test.local",
+        name: "Limit User 2",
+        role: "STAFF",
+        password: "Password123!",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "planLimitUsers" });
   });
 });

@@ -66,6 +66,21 @@ const importUpdateFieldEnum = z.enum([
 
 const barcodeGenerationModeEnum = z.enum(["EAN13", "CODE128"]);
 
+const inlineUpdatePatchSchema = z
+  .object({
+    name: z.string().min(2).optional(),
+    baseUnitId: z.string().min(1).optional(),
+    basePriceKgs: z.number().min(0).nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (Object.keys(value).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "invalidInput",
+      });
+    }
+  });
+
 export const productsRouter = router({
   lookupScan: protectedProcedure
     .input(z.object({ q: z.string() }))
@@ -241,6 +256,7 @@ export const productsRouter = router({
             name: true,
             category: true,
             unit: true,
+            baseUnitId: true,
             isBundle: true,
             isDeleted: true,
             photoUrl: true,
@@ -848,6 +864,58 @@ export const productsRouter = router({
           bundleComponents: input.bundleComponents,
           packs: input.packs,
           variants: input.variants,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  inlineUpdate: adminProcedure
+    .input(
+      z.object({
+        productId: z.string().min(1),
+        patch: inlineUpdatePatchSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const existing = await ctx.prisma.product.findUnique({
+          where: { id: input.productId },
+          select: {
+            id: true,
+            organizationId: true,
+            sku: true,
+            name: true,
+            category: true,
+            baseUnitId: true,
+            basePriceKgs: true,
+            description: true,
+            photoUrl: true,
+            supplierId: true,
+            barcodes: { select: { value: true } },
+          },
+        });
+        if (!existing || existing.organizationId !== ctx.user.organizationId) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
+        }
+
+        return await updateProduct({
+          productId: existing.id,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          sku: existing.sku,
+          name: input.patch.name ?? existing.name,
+          category: existing.category,
+          baseUnitId: input.patch.baseUnitId ?? existing.baseUnitId,
+          basePriceKgs:
+            input.patch.basePriceKgs !== undefined
+              ? input.patch.basePriceKgs
+              : decimalToNumber(existing.basePriceKgs),
+          description: existing.description,
+          photoUrl: existing.photoUrl,
+          supplierId: existing.supplierId,
+          barcodes: existing.barcodes.map((barcode) => barcode.value),
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -17,6 +17,7 @@ import {
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 
 const toTokenHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
@@ -39,6 +40,10 @@ const asFiscalDraft = (value: Prisma.JsonValue): FiscalReceiptDraft | null => {
     return null;
   }
   return candidate as unknown as FiscalReceiptDraft;
+};
+
+const assertKkmFeatureEnabled = async (organizationId: string) => {
+  await assertFeatureEnabled({ organizationId, feature: "kkm" });
 };
 
 export const queueFiscalReceipt = async (input: {
@@ -80,6 +85,8 @@ export const createConnectorPairingCode = async (input: {
   actorId: string;
   requestId: string;
 }) => {
+  await assertKkmFeatureEnabled(input.organizationId);
+
   const store = await prisma.store.findFirst({
     where: { id: input.storeId, organizationId: input.organizationId },
     select: { id: true },
@@ -147,6 +154,7 @@ export const pairConnectorDevice = async (input: {
     if (!pairing) {
       throw new AppError("kkmPairingCodeInvalid", "BAD_REQUEST", 400);
     }
+    await assertKkmFeatureEnabled(pairing.organizationId);
 
     const rawToken = randomUUID();
     const tokenHash = toTokenHash(rawToken);
@@ -195,6 +203,7 @@ const resolveConnectorDevice = async (token: string) => {
   if (!device) {
     throw new AppError("unauthorized", "UNAUTHORIZED", 401);
   }
+  await assertKkmFeatureEnabled(device.organizationId);
   return device;
 };
 

@@ -293,7 +293,10 @@ const runExportsCheck = async (input: {
   try {
     await assertFeatureEnabled({ organizationId: input.organizationId, feature: "exports" });
   } catch (error) {
-    if (error instanceof AppError && error.message === "planFeatureUnavailable") {
+    if (
+      error instanceof AppError &&
+      (error.message === "planFeatureUnavailable" || error.message.startsWith("featureLocked"))
+    ) {
       return { status: "warning", code: "planFeatureUnavailable", details: { jobStatus: "skipped" } };
     }
     throw error;

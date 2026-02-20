@@ -21,7 +21,7 @@ describeDb("pos", () => {
   });
 
   it("reuses existing draft for cashier and register", async () => {
-    const { org, store, cashierUser } = await seedBase();
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
     const register = await prisma.posRegister.create({
       data: {
@@ -63,7 +63,7 @@ describeDb("pos", () => {
   });
 
   it("handles concurrent draft creation without 500", async () => {
-    const { org, store, cashierUser } = await seedBase();
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
     const register = await prisma.posRegister.create({
       data: {
@@ -107,7 +107,7 @@ describeDb("pos", () => {
   });
 
   it("filters sales list by statuses", async () => {
-    const { org, store, cashierUser } = await seedBase();
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
     const register = await prisma.posRegister.create({
       data: {
@@ -152,7 +152,7 @@ describeDb("pos", () => {
   });
 
   it("allows receipt registry only for manager and above", async () => {
-    const { org, managerUser, staffUser } = await seedBase();
+    const { org, managerUser, staffUser } = await seedBase({ plan: "BUSINESS" });
 
     const managerCaller = createTestCaller({
       id: managerUser.id,
@@ -184,7 +184,7 @@ describeDb("pos", () => {
   });
 
   it("enforces one open shift per register", async () => {
-    const { org, store, cashierUser } = await seedBase();
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
     const register = await prisma.posRegister.create({
       data: {
@@ -219,7 +219,7 @@ describeDb("pos", () => {
   });
 
   it("completes sale idempotently with inventory and payments", async () => {
-    const { org, store, product, cashierUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -303,7 +303,7 @@ describeDb("pos", () => {
   });
 
   it("requires marking codes when store marking mode is REQUIRED_ON_SALE", async () => {
-    const { org, store, product, cashierUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -408,7 +408,7 @@ describeDb("pos", () => {
   });
 
   it("completes return idempotently and restores inventory", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -526,7 +526,7 @@ describeDb("pos", () => {
   });
 
   it("closes shift with expected cash and discrepancy", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -613,8 +613,24 @@ describeDb("pos", () => {
     expect(close.discrepancyKgs).toBe(-10);
   });
 
+  it("blocks connector workflow when kkm feature is locked", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await expect(
+      createConnectorPairingCode({
+        organizationId: org.id,
+        storeId: store.id,
+        actorId: adminUser.id,
+        requestId: "pair-kkm-locked-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "featureLockedKkm",
+    });
+  });
+
   it("queues connector fiscal receipt and marks it sent through connector workflow", async () => {
-    const { org, store, product, cashierUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "ENTERPRISE" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -732,7 +748,7 @@ describeDb("pos", () => {
   });
 
   it("blocks card refund when original sale shift differs", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -834,7 +850,7 @@ describeDb("pos", () => {
   });
 
   it("creates manual refund request for transfer refunds without inventory reversal", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase();
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },

@@ -5,16 +5,27 @@ import { toTRPCError } from "@/server/trpc/errors";
 import { createImpersonationSession, revokeImpersonationSession } from "@/server/services/impersonation";
 import { getSupportBundle } from "@/server/services/supportBundle";
 import { listStoreFeatureFlags, upsertStoreFeatureFlag } from "@/server/services/storeFeatureFlags";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
+
+const ensureSupportToolkit = async (organizationId: string) => {
+  await assertFeatureEnabled({ organizationId, feature: "supportToolkit" });
+};
 
 export const adminSupportRouter = router({
   storeFlags: adminProcedure.query(async ({ ctx }) => {
-    return listStoreFeatureFlags({ organizationId: ctx.user.organizationId });
+    try {
+      await ensureSupportToolkit(ctx.user.organizationId);
+      return await listStoreFeatureFlags({ organizationId: ctx.user.organizationId });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
   }),
 
   upsertStoreFlag: adminProcedure
     .input(z.object({ storeId: z.string(), key: z.string().min(1), enabled: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await ensureSupportToolkit(ctx.user.organizationId);
         return await upsertStoreFeatureFlag({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -37,6 +48,7 @@ export const adminSupportRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await ensureSupportToolkit(ctx.user.organizationId);
         return await createImpersonationSession({
           organizationId: ctx.user.organizationId,
           createdById: ctx.user.id,
@@ -53,6 +65,7 @@ export const adminSupportRouter = router({
     .input(z.object({ sessionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await ensureSupportToolkit(ctx.user.organizationId);
         return await revokeImpersonationSession({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
@@ -65,10 +78,15 @@ export const adminSupportRouter = router({
     }),
 
   exportBundle: adminProcedure.mutation(async ({ ctx }) => {
-    return getSupportBundle({
-      organizationId: ctx.user.organizationId,
-      actorId: ctx.user.id,
-      requestId: ctx.requestId,
-    });
+    try {
+      await ensureSupportToolkit(ctx.user.organizationId);
+      return await getSupportBundle({
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        requestId: ctx.requestId,
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
   }),
 });

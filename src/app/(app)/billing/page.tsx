@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
+import { Check, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
@@ -10,6 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
@@ -17,19 +26,61 @@ import { formatDateTime } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 
 type PlanTier = "STARTER" | "BUSINESS" | "ENTERPRISE";
+type PlanFeature =
+  | "imports"
+  | "exports"
+  | "analytics"
+  | "compliance"
+  | "supportToolkit"
+  | "pos"
+  | "stockCounts"
+  | "priceTags"
+  | "storePrices"
+  | "bundles"
+  | "expiryLots"
+  | "customerOrders"
+  | "periodClose"
+  | "kkm";
+
 const planRank: Record<PlanTier, number> = {
   STARTER: 1,
   BUSINESS: 2,
   ENTERPRISE: 3,
 };
 
-const baseFeatureKeys = [
-  "catalog",
-  "inventory",
-  "purchaseOrders",
-  "salesOrders",
+const planOrder: PlanTier[] = ["STARTER", "BUSINESS", "ENTERPRISE"];
+
+const featureOrder: PlanFeature[] = [
+  "imports",
+  "exports",
+  "analytics",
+  "compliance",
+  "supportToolkit",
+  "pos",
+  "stockCounts",
   "priceTags",
-] as const;
+  "storePrices",
+  "bundles",
+  "expiryLots",
+  "customerOrders",
+  "periodClose",
+  "kkm",
+];
+
+const comparisonFeatures: PlanFeature[] = [
+  "imports",
+  "exports",
+  "analytics",
+  "pos",
+  "stockCounts",
+  "storePrices",
+  "bundles",
+  "expiryLots",
+  "periodClose",
+  "compliance",
+  "supportToolkit",
+  "kkm",
+];
 
 const BillingPage = () => {
   const t = useTranslations("billing");
@@ -72,8 +123,11 @@ const BillingPage = () => {
     if (!requestedPlan) {
       return "";
     }
-    return t(`plans.${requestedPlan.toLowerCase()}`);
+    return t(`plans.${requestedPlan.toLowerCase()}.name`);
   }, [requestedPlan, t]);
+
+  const formatNumber = (value: number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
 
   if (isForbidden) {
     return (
@@ -95,6 +149,22 @@ const BillingPage = () => {
         </div>
       ) : billingQuery.data ? (
         <div className="space-y-4">
+          {billingQuery.data.limitState === "LIMIT_EXCEEDED" ? (
+            <Card className="border-warning/40 bg-warning/10">
+              <CardHeader>
+                <CardTitle className="text-base">{t("limitExceededTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-foreground">
+                <p>{t("limitExceededDescription")}</p>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {billingQuery.data.limitExceeded.stores ? <li>• {t("limitExceededItems.stores")}</li> : null}
+                  {billingQuery.data.limitExceeded.products ? <li>• {t("limitExceededItems.products")}</li> : null}
+                  {billingQuery.data.limitExceeded.users ? <li>• {t("limitExceededItems.users")}</li> : null}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>{t("planTitle")}</CardTitle>
@@ -102,7 +172,7 @@ const BillingPage = () => {
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
-                  {t(`plans.${billingQuery.data.planTier.toLowerCase()}`)}
+                  {t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
                 </Badge>
                 <Badge variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}>
                   {t(`subscriptionStatuses.${statusKeyMap[billingQuery.data.subscriptionStatus]}`)}
@@ -132,7 +202,7 @@ const BillingPage = () => {
                   <p className="font-semibold">{t("pendingRequestTitle")}</p>
                   <p>
                     {t("pendingRequestDetails", {
-                      plan: t(`plans.${String(pendingRequest.requestedPlan).toLowerCase()}`),
+                      plan: t(`plans.${String(pendingRequest.requestedPlan).toLowerCase()}.name`),
                       date: formatDateTime(pendingRequest.createdAt, locale),
                     })}
                   </p>
@@ -164,13 +234,13 @@ const BillingPage = () => {
                   limit: billingQuery.data.limits.maxProducts,
                 })}
               </p>
-              <p>
-                {t("planPrice", {
-                  amount: new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
-                    billingQuery.data.monthlyPriceKgs,
-                  ),
-                })}
-              </p>
+              <div>
+                <p>
+                  {t("planPricePrimary", {
+                    amount: formatNumber(billingQuery.data.monthlyPriceKgs),
+                  })}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -193,7 +263,7 @@ const BillingPage = () => {
                     <CardHeader className="space-y-2 pb-3">
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-base">
-                          {t(`plans.${tier.toLowerCase()}`)}
+                          {t(`plans.${tier.toLowerCase()}.name`)}
                         </CardTitle>
                         {isCurrent ? (
                           <Badge variant="success">{t("currentPlanBadge")}</Badge>
@@ -204,13 +274,13 @@ const BillingPage = () => {
                       </p>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm text-muted-foreground">
-                      <p className="text-base font-semibold text-foreground">
-                        {t("planPrice", {
-                          amount: new Intl.NumberFormat(locale, {
-                            maximumFractionDigits: 0,
-                          }).format(planItem.monthlyPriceKgs),
-                        })}
-                      </p>
+                      <div>
+                        <p className="text-base font-semibold text-foreground">
+                          {t("planPricePrimary", {
+                            amount: formatNumber(planItem.monthlyPriceKgs),
+                          })}
+                        </p>
+                      </div>
                       <div className="space-y-1">
                         <p>
                           {t("usageStores", {
@@ -232,16 +302,25 @@ const BillingPage = () => {
                         </p>
                       </div>
                       <div>
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {t("includesTitle")}
                         </p>
-                        <ul className="space-y-1 text-xs text-muted-foreground">
-                          {baseFeatureKeys.map((featureKey) => (
-                            <li key={featureKey}>• {t(`featuresBase.${featureKey}`)}</li>
-                          ))}
-                          {planItem.features.map((feature) => (
-                            <li key={feature}>• {t(`features.${feature}`)}</li>
-                          ))}
+                        <ul className="space-y-1 text-xs">
+                          {featureOrder.map((feature) => {
+                            const enabled = Boolean(planItem.featureFlags[feature]);
+                            return (
+                              <li key={feature} className="flex items-center gap-2">
+                                {enabled ? (
+                                  <Check className="h-3.5 w-3.5 text-success" aria-hidden />
+                                ) : (
+                                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                                )}
+                                <span className={enabled ? "text-foreground" : "text-muted-foreground"}>
+                                  {t(`features.${feature}`)}
+                                </span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                       {!isCurrent ? (
@@ -254,16 +333,108 @@ const BillingPage = () => {
                           {!canRequestUpgrade
                             ? t("upgradeOnlyHigherPlans")
                             : requestedThisPlan
-                            ? t("requestPendingButton")
-                            : hasPendingRequest
-                              ? t("requestPendingOtherButton")
-                              : t("requestUpgrade")}
+                              ? t("requestPendingButton")
+                              : hasPendingRequest
+                                ? t("requestPendingOtherButton")
+                                : t("requestUpgrade")}
                         </Button>
                       ) : null}
                     </CardContent>
                   </Card>
                 );
               })}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("comparisonTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table className="min-w-[760px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("comparison.columnFeature")}</TableHead>
+                    {planOrder.map((plan) => (
+                      <TableHead key={plan}>{t(`plans.${plan.toLowerCase()}.name`)}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>{t("comparison.rows.stores")}</TableCell>
+                    {planOrder.map((plan) => {
+                      const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
+                      return <TableCell key={plan}>{planItem ? planItem.limits.maxStores : "-"}</TableCell>;
+                    })}
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>{t("comparison.rows.products")}</TableCell>
+                    {planOrder.map((plan) => {
+                      const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
+                      return <TableCell key={plan}>{planItem ? planItem.limits.maxProducts : "-"}</TableCell>;
+                    })}
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>{t("comparison.rows.users")}</TableCell>
+                    {planOrder.map((plan) => {
+                      const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
+                      return <TableCell key={plan}>{planItem ? planItem.limits.maxUsers : "-"}</TableCell>;
+                    })}
+                  </TableRow>
+                  {comparisonFeatures.map((feature) => (
+                    <TableRow key={feature}>
+                      <TableCell>{t(`features.${feature}`)}</TableCell>
+                      {planOrder.map((plan) => {
+                        const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
+                        const enabled = planItem ? Boolean(planItem.featureFlags[feature]) : false;
+                        return (
+                          <TableCell key={`${feature}-${plan}`}>
+                            {enabled ? (
+                              <span className="inline-flex items-center gap-1 text-success">
+                                <Check className="h-3.5 w-3.5" aria-hidden />
+                                {t("comparison.included")}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                <Lock className="h-3.5 w-3.5" aria-hidden />
+                                {t("comparison.locked")}
+                              </span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("ctaTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>{t("ctaHint")}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  asChild
+                  type="button"
+                  variant="secondary"
+                >
+                  <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
+                    {t("ctaWhatsapp")}
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  disabled={!currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)}
+                  onClick={() => setRequestedPlan("ENTERPRISE")}
+                >
+                  {t("requestUpgrade")}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

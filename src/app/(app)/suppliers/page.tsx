@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -43,15 +43,19 @@ import {
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
+import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const SuppliersPage = () => {
   const t = useTranslations("suppliers");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
@@ -60,7 +64,9 @@ const SuppliersPage = () => {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const trpcUtils = trpc.useUtils();
   const suppliersQuery = trpc.suppliers.list.useQuery();
+  const inlineEditingEnabled = isInlineEditingEnabled();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -110,6 +116,40 @@ const SuppliersPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const inlineUpdateMutation = trpc.suppliers.update.useMutation();
+  const executeInlineSupplierMutation = useCallback(
+    async (operation: InlineMutationOperation) => {
+      if (operation.route !== "suppliers.update") {
+        throw new Error(`Unsupported inline operation: ${operation.route}`);
+      }
+
+      const previous = trpcUtils.suppliers.list.getData();
+      trpcUtils.suppliers.list.setData(undefined, (current) => {
+        if (!current) {
+          return current;
+        }
+        return current.map((supplier) =>
+          supplier.id === operation.input.supplierId
+            ? {
+                ...supplier,
+                name: operation.input.name,
+                email: operation.input.email ?? null,
+                phone: operation.input.phone ?? null,
+                notes: operation.input.notes ?? null,
+              }
+            : supplier,
+        );
+      });
+      try {
+        await inlineUpdateMutation.mutateAsync(operation.input);
+      } catch (error) {
+        trpcUtils.suppliers.list.setData(undefined, previous);
+        throw error;
+      }
+      await trpcUtils.suppliers.list.invalidate();
+    },
+    [inlineUpdateMutation, trpcUtils.suppliers.list],
+  );
   const deleteMutation = trpc.suppliers.delete.useMutation({
     onMutate: (variables) => {
       setDeletingId(variables.supplierId);
@@ -422,7 +462,8 @@ const SuppliersPage = () => {
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
                 <TooltipProvider>
-                  <Table className="min-w-[560px]">
+                  <InlineEditTableProvider>
+                    <Table className="min-w-[560px]">
                     <TableHeader>
                       <TableRow>
                         {canManage ? (
@@ -457,15 +498,69 @@ const SuppliersPage = () => {
                               />
                             </TableCell>
                           ) : null}
-                          <TableCell className="font-medium">{supplier.name}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                            {supplier.email ?? tCommon("notAvailable")}
+                          <TableCell className="font-medium">
+                            <InlineEditableCell
+                              rowId={supplier.id}
+                              row={supplier}
+                              value={supplier.name}
+                              definition={inlineEditRegistry.suppliers.name}
+                              context={{}}
+                              role={role}
+                              locale={locale}
+                              columnLabel={t("name")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineSupplierMutation}
+                            />
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                            {supplier.phone ?? tCommon("notAvailable")}
+                            <InlineEditableCell
+                              rowId={supplier.id}
+                              row={supplier}
+                              value={supplier.email}
+                              definition={inlineEditRegistry.suppliers.email}
+                              context={{}}
+                              role={role}
+                              locale={locale}
+                              columnLabel={t("email")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineSupplierMutation}
+                            />
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                            <InlineEditableCell
+                              rowId={supplier.id}
+                              row={supplier}
+                              value={supplier.phone}
+                              definition={inlineEditRegistry.suppliers.phone}
+                              context={{}}
+                              role={role}
+                              locale={locale}
+                              columnLabel={t("phone")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineSupplierMutation}
+                            />
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
-                            {supplier.notes ?? tCommon("notAvailable")}
+                            <InlineEditableCell
+                              rowId={supplier.id}
+                              row={supplier}
+                              value={supplier.notes}
+                              definition={inlineEditRegistry.suppliers.notes}
+                              context={{}}
+                              role={role}
+                              locale={locale}
+                              columnLabel={t("notes")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineSupplierMutation}
+                            />
                           </TableCell>
                           {canManage ? (
                             <TableCell>
@@ -526,6 +621,7 @@ const SuppliersPage = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </InlineEditTableProvider>
                 </TooltipProvider>
               </div>
             )}

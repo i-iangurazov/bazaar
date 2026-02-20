@@ -11,7 +11,7 @@ describeDb("period close", () => {
   });
 
   it("prevents duplicate period close", async () => {
-    const { org, store, managerUser } = await seedBase();
+    const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,

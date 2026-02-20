@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   addBundleComponent,
   assembleBundle,
@@ -9,8 +10,26 @@ import {
   removeBundleComponent,
 } from "@/server/services/bundles";
 
+const bundlesProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "bundles" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const bundlesManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "bundles" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
 export const bundlesRouter = router({
-  listComponents: protectedProcedure
+  listComponents: bundlesProtectedProcedure
     .input(z.object({ bundleProductId: z.string() }))
     .query(async ({ ctx, input }) => {
       try {
@@ -23,7 +42,7 @@ export const bundlesRouter = router({
       }
     }),
 
-  addComponent: managerProcedure
+  addComponent: bundlesManagerProcedure
     .input(
       z.object({
         bundleProductId: z.string(),
@@ -48,7 +67,7 @@ export const bundlesRouter = router({
       }
     }),
 
-  removeComponent: managerProcedure
+  removeComponent: bundlesManagerProcedure
     .input(z.object({ componentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -63,7 +82,7 @@ export const bundlesRouter = router({
       }
     }),
 
-  assemble: managerProcedure
+  assemble: bundlesManagerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 10, prefix: "bundles-assemble" }))
     .input(
       z.object({

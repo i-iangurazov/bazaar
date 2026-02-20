@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -67,13 +67,17 @@ import {
 } from "@/components/ui/tooltip";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
+import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const StoresPage = () => {
   const t = useTranslations("stores");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const locale = useLocale();
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
@@ -82,7 +86,9 @@ const StoresPage = () => {
   const pathname = usePathname() ?? "/stores";
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
   const storesQuery = trpc.stores.list.useQuery();
+  const inlineEditingEnabled = isInlineEditingEnabled();
 
   type Store = NonNullable<typeof storesQuery.data>[number];
 
@@ -213,6 +219,93 @@ const StoresPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const inlineUpdateMutation = trpc.stores.update.useMutation();
+  const inlineUpdateLegalMutation = trpc.stores.updateLegalDetails.useMutation();
+  const inlineUpdatePolicyMutation = trpc.stores.updatePolicy.useMutation();
+
+  const applyStoreListPatch = useCallback(
+    (
+      storeId: string,
+      patch: (store: NonNullable<typeof storesQuery.data>[number]) => NonNullable<typeof storesQuery.data>[number],
+    ) => {
+      trpcUtils.stores.list.setData(undefined, (current) => {
+        if (!current) {
+          return current;
+        }
+        return current.map((store) => (store.id === storeId ? patch(store) : store));
+      });
+    },
+    [storesQuery, trpcUtils.stores.list],
+  );
+
+  const executeInlineStoreMutation = useCallback(
+    async (operation: InlineMutationOperation) => {
+      const previous = trpcUtils.stores.list.getData();
+      const rollback = () => {
+        trpcUtils.stores.list.setData(undefined, previous);
+      };
+
+      if (operation.route === "stores.update") {
+        applyStoreListPatch(operation.input.storeId, (store) => ({
+          ...store,
+          name: operation.input.name,
+          code: operation.input.code,
+        }));
+        try {
+          await inlineUpdateMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.stores.list.invalidate();
+        return;
+      }
+
+      if (operation.route === "stores.updatePolicy") {
+        applyStoreListPatch(operation.input.storeId, (store) => ({
+          ...store,
+          allowNegativeStock: operation.input.allowNegativeStock,
+          trackExpiryLots: operation.input.trackExpiryLots,
+        }));
+        try {
+          await inlineUpdatePolicyMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.stores.list.invalidate();
+        return;
+      }
+
+      if (operation.route === "stores.updateLegalDetails") {
+        applyStoreListPatch(operation.input.storeId, (store) => ({
+          ...store,
+          legalEntityType: operation.input.legalEntityType,
+          legalName: operation.input.legalName,
+          inn: operation.input.inn,
+          address: operation.input.address,
+          phone: operation.input.phone,
+        }));
+        try {
+          await inlineUpdateLegalMutation.mutateAsync(operation.input);
+        } catch (error) {
+          rollback();
+          throw error;
+        }
+        await trpcUtils.stores.list.invalidate();
+        return;
+      }
+
+      throw new Error(`Unsupported inline operation: ${operation.route}`);
+    },
+    [
+      applyStoreListPatch,
+      inlineUpdateLegalMutation,
+      inlineUpdateMutation,
+      inlineUpdatePolicyMutation,
+      trpcUtils.stores.list,
+    ],
+  );
 
   const openCreateDialog = useCallback(() => {
     setEditingStore(null);
@@ -293,7 +386,8 @@ const StoresPage = () => {
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
                 <TooltipProvider>
-                  <Table className="min-w-[760px]">
+                  <InlineEditTableProvider>
+                    <Table className="min-w-[760px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("name")}</TableHead>
@@ -314,39 +408,101 @@ const StoresPage = () => {
                         const complianceBadge = resolveComplianceBadge(store);
                         return (
                           <TableRow key={store.id}>
-                            <TableCell className="font-medium">{store.name}</TableCell>
+                            <TableCell className="font-medium">
+                              <InlineEditableCell
+                                rowId={store.id}
+                                row={store}
+                                value={store.name}
+                                definition={inlineEditRegistry.stores.name}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("name")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineStoreMutation}
+                              />
+                            </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                              {store.code}
+                              <InlineEditableCell
+                                rowId={store.id}
+                                row={store}
+                                value={store.code}
+                                definition={inlineEditRegistry.stores.code}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("code")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineStoreMutation}
+                              />
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
-                              {store.legalEntityType ? (
-                                <Badge variant="muted">{legalTypeLabels[store.legalEntityType]}</Badge>
-                              ) : (
-                                tCommon("notAvailable")
-                              )}
+                              <InlineEditableCell
+                                rowId={store.id}
+                                row={store}
+                                value={store.legalEntityType}
+                                definition={inlineEditRegistry.stores.legalEntityType}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("legalType")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineStoreMutation}
+                              />
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
-                              {store.inn ?? tCommon("notAvailable")}
+                              <InlineEditableCell
+                                rowId={store.id}
+                                row={store}
+                                value={store.inn}
+                                definition={inlineEditRegistry.stores.inn}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("inn")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineStoreMutation}
+                              />
                             </TableCell>
                             <TableCell>
-                              <Badge variant={store.allowNegativeStock ? "success" : "warning"}>
-                                {store.allowNegativeStock ? (
-                                  <StatusSuccessIcon className="h-3 w-3" aria-hidden />
-                                ) : (
-                                  <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                )}
-                                {store.allowNegativeStock ? tCommon("yes") : tCommon("no")}
-                              </Badge>
+                              <InlineEditableCell
+                                rowId={store.id}
+                                row={store}
+                                value={store.allowNegativeStock}
+                                definition={inlineEditRegistry.stores.allowNegativeStock}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("allowNegativeStock")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineStoreMutation}
+                              />
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              <Badge variant={store.trackExpiryLots ? "success" : "warning"}>
-                                {store.trackExpiryLots ? (
-                                  <StatusSuccessIcon className="h-3 w-3" aria-hidden />
-                                ) : (
-                                  <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                )}
-                                {store.trackExpiryLots ? tCommon("yes") : tCommon("no")}
-                              </Badge>
+                              <InlineEditableCell
+                                rowId={store.id}
+                                row={store}
+                                value={store.trackExpiryLots}
+                                definition={inlineEditRegistry.stores.trackExpiryLots}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("trackExpiryLots")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineStoreMutation}
+                              />
                             </TableCell>
                             <TableCell className="hidden lg:table-cell">
                               <Badge variant={complianceBadge.variant}>
@@ -446,6 +602,7 @@ const StoresPage = () => {
                       })}
                     </TableBody>
                   </Table>
+                  </InlineEditTableProvider>
                 </TooltipProvider>
               </div>
             )}

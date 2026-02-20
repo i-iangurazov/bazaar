@@ -11,7 +11,7 @@ describeDb("support toolkit", () => {
   });
 
   it("allows admins to export support bundle and update flags", async () => {
-    const { org, adminUser, store } = await seedBase();
+    const { org, adminUser, store } = await seedBase({ plan: "ENTERPRISE" });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -43,5 +43,20 @@ describeDb("support toolkit", () => {
     });
 
     await expect(caller.adminSupport.exportBundle()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("returns feature lock key for admin on plan without support toolkit", async () => {
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await expect(caller.adminSupport.exportBundle()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "featureLockedSupportToolkit",
+    });
   });
 });

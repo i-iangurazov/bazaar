@@ -411,12 +411,21 @@
   },
   "billing": {
     "title": "Тарифы",
-    "subtitle": "Статус пробного периода и лимиты.",
+    "subtitle": "Тарифы, лимиты и доступные модули.",
     "planTitle": "План",
     "plans": {
-      "starter": "Starter",
-      "business": "Business",
-      "enterprise": "Enterprise",
+      "starter": {
+        "name": "Новичок",
+        "short": "Старт"
+      },
+      "business": {
+        "name": "Бизнесмен",
+        "short": "Рост"
+      },
+      "enterprise": {
+        "name": "Монополист",
+        "short": "Сеть"
+      },
       "trial": "Пробный",
       "pro": "Профессиональный"
     },
@@ -434,7 +443,9 @@
     "usageStores": "Магазины: {count} из {limit}",
     "usageUsers": "Пользователи: {count} из {limit}",
     "usageProducts": "Товары: {count} из {limit}",
-    "planPrice": "Стоимость плана: {amount} KGS / мес",
+    "planPricePrimary": "≈ {amount} сом/мес",
+    "planPriceSecondary": "{usd} USD / мес",
+    "planPriceRounding": "Округление: до {step} сом (курс: {rate})",
     "featuresEnabled": "Включенные функции: {value}",
     "featuresNone": "Дополнительные функции не включены в текущий план.",
     "features": {
@@ -442,20 +453,22 @@
       "exports": "Экспорт",
       "analytics": "Аналитика",
       "compliance": "Комплаенс",
-      "supportToolkit": "Расширенная поддержка"
-    },
-    "featuresBase": {
-      "catalog": "Каталог товаров",
-      "inventory": "Учет запасов и движение остатков",
-      "purchaseOrders": "Заказы поставщикам",
-      "salesOrders": "Заказы клиентов",
-      "priceTags": "Печать ценников"
+      "supportToolkit": "Инструменты поддержки",
+      "pos": "Касса (POS)",
+      "stockCounts": "Инвентаризации",
+      "priceTags": "Печать ценников",
+      "storePrices": "Цены по магазинам",
+      "bundles": "Наборы",
+      "expiryLots": "Партии по срокам годности",
+      "customerOrders": "Заказы клиентов",
+      "periodClose": "Закрытие периода",
+      "kkm": "Интеграция ККМ"
     },
     "plansCatalogTitle": "Планы и возможности",
     "planDescriptions": {
-      "starter": "Базовый план для одного магазина с ключевыми операциями.",
-      "business": "Для растущего ритейла с расширенной аналитикой и экспортами.",
-      "enterprise": "Для сетей с высоким объемом операций и расширенной поддержкой."
+      "starter": "Для запуска одной точки с базовыми операциями.",
+      "business": "Для роста сети с аналитикой, импортом и расширенными модулями.",
+      "enterprise": "Для крупных сетей с комплаенсом, поддержкой и ККМ."
     },
     "includesTitle": "Включено",
     "currentPlanBadge": "Текущий план",
@@ -471,9 +484,28 @@
     "requestMessagePlaceholder": "Например: открываем новый магазин и расширяем команду.",
     "requestSubmit": "Отправить запрос",
     "requestSentSuccess": "Запрос на смену тарифа отправлен.",
+    "comparisonTitle": "Сравнение тарифов",
+    "comparison": {
+      "columnFeature": "Параметр",
+      "included": "Есть",
+      "locked": "Закрыто",
+      "rows": {
+        "stores": "Лимит магазинов",
+        "products": "Лимит товаров",
+        "users": "Лимит пользователей"
+      }
+    },
+    "limitExceededTitle": "Лимит превышен, требуется обновление тарифа",
+    "limitExceededDescription": "Текущий объем выше лимита тарифа. Существующие данные сохранены, но создание новых сущностей ограничено.",
+    "limitExceededItems": {
+      "stores": "Превышен лимит по магазинам",
+      "products": "Превышен лимит по товарам",
+      "users": "Превышен лимит по пользователям"
+    },
     "ctaTitle": "Нужен больший лимит?",
-    "ctaHint": "Свяжитесь с нами для перехода на Business или Enterprise.",
-    "ctaContact": "sales@BAZAAR.example",
+    "ctaHint": "Для апгрейда свяжитесь с нами в WhatsApp или отправьте запрос на план выше.",
+    "ctaWhatsapp": "Связаться в WhatsApp",
+    "ctaWhatsappLink": "https://wa.me/996700000000",
     "empty": "Данные тарифа недоступны."
   },
   "platformOwner": {
@@ -505,9 +537,18 @@
     "editBillingTitle": "Параметры подписки",
     "billingSaved": "Параметры подписки обновлены",
     "plans": {
-      "starter": "Starter",
-      "business": "Business",
-      "enterprise": "Enterprise",
+      "starter": {
+        "name": "Новичок",
+        "short": "Старт"
+      },
+      "business": {
+        "name": "Бизнесмен",
+        "short": "Рост"
+      },
+      "enterprise": {
+        "name": "Монополист",
+        "short": "Сеть"
+      },
       "trial": "Пробный",
       "pro": "Профессиональный"
     },
@@ -1950,6 +1991,20 @@
     "trialExpired": "Пробный период завершен.",
     "subscriptionInactive": "Подписка неактивна. Обратитесь к администратору.",
     "planFeatureUnavailable": "Функция недоступна в текущем тарифе.",
+    "featureLockedImports": "Модуль импорта недоступен на вашем тарифе.",
+    "featureLockedExports": "Модуль экспорта недоступен на вашем тарифе.",
+    "featureLockedAnalytics": "Модуль аналитики недоступен на вашем тарифе.",
+    "featureLockedCompliance": "Модуль комплаенса недоступен на вашем тарифе.",
+    "featureLockedSupportToolkit": "Инструменты поддержки доступны только на старших тарифах.",
+    "featureLockedPos": "Модуль кассы недоступен на вашем тарифе.",
+    "featureLockedStockCounts": "Модуль инвентаризаций недоступен на вашем тарифе.",
+    "featureLockedPriceTags": "Модуль печати ценников недоступен на вашем тарифе.",
+    "featureLockedStorePrices": "Цены по магазинам недоступны на вашем тарифе.",
+    "featureLockedBundles": "Модуль наборов недоступен на вашем тарифе.",
+    "featureLockedExpiryLots": "Партии по срокам недоступны на вашем тарифе.",
+    "featureLockedCustomerOrders": "Заказы клиентов недоступны на вашем тарифе.",
+    "featureLockedPeriodClose": "Закрытие периода недоступно на вашем тарифе.",
+    "featureLockedKkm": "Интеграция ККМ недоступна на вашем тарифе.",
     "planUpgradeMustBeHigher": "Можно запросить только более высокий тариф.",
     "planUpgradeRequestPending": "Запрос на апгрейд уже отправлен и ожидает обработки.",
     "planUpgradeRequestNotFound": "Запрос на апгрейд не найден.",
@@ -2794,6 +2849,12 @@
         ]
       }
     }
+  },
+  "inlineEditing": {
+    "editorAria": "Редактирование поля: {field}",
+    "savingAria": "Сохранение изменения",
+    "noPermissionTooltip": "Недостаточно прав для редактирования",
+    "editButtonAria": "Редактировать поле: {field}"
   },
   "guidance": {
     "tipsButton": "Подсказки",

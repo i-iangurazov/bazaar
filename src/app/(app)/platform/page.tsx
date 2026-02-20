@@ -152,19 +152,19 @@ const PlatformPage = () => {
             <CardContent className="space-y-1 text-sm text-muted-foreground">
               <p>
                 {t("summary.activePlanCount", {
-                  plan: t("plans.starter"),
+                  plan: t("plans.starter.name"),
                   count: summaryQuery.data.activeByTier.STARTER,
                 })}
               </p>
               <p>
                 {t("summary.activePlanCount", {
-                  plan: t("plans.business"),
+                  plan: t("plans.business.name"),
                   count: summaryQuery.data.activeByTier.BUSINESS,
                 })}
               </p>
               <p>
                 {t("summary.activePlanCount", {
-                  plan: t("plans.enterprise"),
+                  plan: t("plans.enterprise.name"),
                   count: summaryQuery.data.activeByTier.ENTERPRISE,
                 })}
               </p>
@@ -210,8 +210,8 @@ const PlatformPage = () => {
                   {pendingUpgradeRequests.map((request) => (
                     <TableRow key={request.id}>
                       <TableCell className="font-medium">{request.organization.name}</TableCell>
-                      <TableCell>{t(`plans.${normalizePlanForEditor(request.currentPlan).toLowerCase()}`)}</TableCell>
-                      <TableCell>{t(`plans.${normalizePlanForEditor(request.requestedPlan).toLowerCase()}`)}</TableCell>
+                      <TableCell>{t(`plans.${normalizePlanForEditor(request.currentPlan).toLowerCase()}.name`)}</TableCell>
+                      <TableCell>{t(`plans.${normalizePlanForEditor(request.requestedPlan).toLowerCase()}.name`)}</TableCell>
                       <TableCell>
                         <div className="text-sm">
                           <p className="font-medium text-foreground">{request.requestedBy.name || tCommon("notAvailable")}</p>
@@ -300,7 +300,7 @@ const PlatformPage = () => {
                             normalizePlanForEditor(org.plan) === "ENTERPRISE" ? "success" : "warning"
                           }
                         >
-                          {t(`plans.${normalizePlanForEditor(org.plan).toLowerCase()}`)}
+                          {t(`plans.${normalizePlanForEditor(org.plan).toLowerCase()}.name`)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -391,9 +391,9 @@ const PlatformPage = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="STARTER">{t("plans.starter")}</SelectItem>
-                    <SelectItem value="BUSINESS">{t("plans.business")}</SelectItem>
-                    <SelectItem value="ENTERPRISE">{t("plans.enterprise")}</SelectItem>
+                    <SelectItem value="STARTER">{t("plans.starter.name")}</SelectItem>
+                    <SelectItem value="BUSINESS">{t("plans.business.name")}</SelectItem>
+                    <SelectItem value="ENTERPRISE">{t("plans.enterprise.name")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

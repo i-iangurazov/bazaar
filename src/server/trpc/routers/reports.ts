@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   getShrinkageReport,
   getSlowMoversReport,
@@ -20,8 +21,17 @@ const resolveRange = (days?: number) => {
   return { from, to };
 };
 
+const reportsProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
 export const reportsRouter = router({
-  stockouts: managerProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
+  stockouts: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input.days);
       return await getStockoutsReport({
@@ -33,7 +43,7 @@ export const reportsRouter = router({
       throw toTRPCError(error);
     }
   }),
-  slowMovers: managerProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
+  slowMovers: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input.days);
       return await getSlowMoversReport({
@@ -45,7 +55,7 @@ export const reportsRouter = router({
       throw toTRPCError(error);
     }
   }),
-  shrinkage: managerProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
+  shrinkage: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input.days);
       return await getShrinkageReport({
