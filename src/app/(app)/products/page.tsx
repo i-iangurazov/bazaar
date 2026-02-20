@@ -77,7 +77,7 @@ import {
   ViewIcon,
 } from "@/components/icons";
 import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
-import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
+import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
@@ -1308,18 +1308,18 @@ const ProductsPage = () => {
               </TooltipProvider>
             </div>
           ) : null}
-          <ResponsiveDataList
-            items={products}
-            getKey={(product) => product.id}
-            page={productsPage}
-            totalItems={productsTotal}
-            onPageChange={setProductsPage}
-            onPageSizeChange={setProductsPageSize}
-            renderDesktop={(visibleItems) =>
-              viewMode === "table" ? (
-                <div className="overflow-x-auto">
-                  <TooltipProvider>
-                    <InlineEditTableProvider>
+          <InlineEditTableProvider>
+            <ResponsiveDataList
+              items={products}
+              getKey={(product) => product.id}
+              page={productsPage}
+              totalItems={productsTotal}
+              onPageChange={setProductsPage}
+              onPageSizeChange={setProductsPageSize}
+              renderDesktop={(visibleItems) =>
+                viewMode === "table" ? (
+                  <div className="overflow-x-auto">
+                    <TooltipProvider>
                       <Table className="min-w-[720px]">
                     <TableHeader>
                       <TableRow>
@@ -1569,11 +1569,10 @@ const ProductsPage = () => {
                       })}
                     </TableBody>
                   </Table>
-                    </InlineEditTableProvider>
-                  </TooltipProvider>
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    </TooltipProvider>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {visibleItems.map((product) => {
                     const barcodeSummary = getBarcodeSummary(product.barcodes);
                     const previewImageUrl = getProductPreviewUrl(product);
@@ -1645,9 +1644,21 @@ const ProductsPage = () => {
                             </div>
                             <div>
                               <p>{tInventory("onHand")}</p>
-                              <p className="text-sm font-semibold text-foreground">
-                                {formatNumber(product.onHandQty, locale)}
-                              </p>
+                              <InlineEditableCell
+                                rowId={product.id}
+                                row={product}
+                                value={product.onHandQty}
+                                definition={inlineEditRegistry.products.onHand}
+                                context={inlineProductsContext}
+                                role={role}
+                                locale={locale}
+                                columnLabel={tInventory("onHand")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineProductMutation}
+                                className="text-sm font-semibold text-foreground"
+                              />
                             </div>
                             <div>
                               <p>{t("avgCost")}</p>
@@ -1668,10 +1679,10 @@ const ProductsPage = () => {
                       </div>
                     );
                   })}
-                </div>
-              )
-            }
-            renderMobile={(product) => {
+                  </div>
+                )
+              }
+              renderMobile={(product) => {
               const barcodeSummary = getBarcodeSummary(product.barcodes);
               const previewImageUrl = getProductPreviewUrl(product);
               const storeInfo = getStoreInfo(
@@ -1749,9 +1760,21 @@ const ProductsPage = () => {
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{tInventory("onHand")}</span>
-                      <span className="text-foreground">
-                        {formatNumber(product.onHandQty, locale)}
-                      </span>
+                      <InlineEditableCell
+                        rowId={product.id}
+                        row={product}
+                        value={product.onHandQty}
+                        definition={inlineEditRegistry.products.onHand}
+                        context={inlineProductsContext}
+                        role={role}
+                        locale={locale}
+                        columnLabel={tInventory("onHand")}
+                        tTable={t}
+                        tCommon={tCommon}
+                        enabled={inlineEditingEnabled}
+                        executeMutation={executeInlineProductMutation}
+                        className="justify-end text-foreground"
+                      />
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span>{t("avgCost")}</span>
@@ -1772,8 +1795,9 @@ const ProductsPage = () => {
                   </div>
                 </div>
               );
-            }}
-          />
+              }}
+            />
+          </InlineEditTableProvider>
           {productsQuery.isLoading ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
