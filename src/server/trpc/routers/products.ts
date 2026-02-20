@@ -246,7 +246,7 @@ export const productsRouter = router({
             photoUrl: true,
             basePriceKgs: true,
             barcodes: { select: { value: true } },
-            inventorySnapshots: { select: { storeId: true } },
+            inventorySnapshots: { select: { storeId: true, onHand: true } },
             images: {
               where: {
                 url: {
@@ -307,6 +307,16 @@ export const productsRouter = router({
         const purchasePriceByProductId = new Map(
           latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
         );
+        const resolveOnHandQty = (
+          snapshots: Array<{ storeId: string; onHand: number }>,
+          selectedStoreId?: string,
+        ) =>
+          snapshots.reduce((sum, snapshot) => {
+            if (selectedStoreId && snapshot.storeId !== selectedStoreId) {
+              return sum;
+            }
+            return sum + snapshot.onHand;
+          }, 0);
 
         if (!input?.storeId || !products.length) {
           return products.map((product) => ({
@@ -323,6 +333,7 @@ export const productsRouter = router({
               avgCostByProductId.get(product.id) ??
               null,
             avgCostKgs: avgCostByProductId.get(product.id) ?? null,
+            onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
             priceOverridden: false,
           }));
         }
@@ -355,6 +366,7 @@ export const productsRouter = router({
               avgCostByProductId.get(product.id) ??
               null,
             avgCostKgs: avgCostByProductId.get(product.id) ?? null,
+            onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
             priceOverridden: Boolean(override),
           };
         });
@@ -602,7 +614,7 @@ export const productsRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
       }
 
-      const [stores, overrides, cost] = await Promise.all([
+      const [stores, overrides, cost, snapshots] = await Promise.all([
         ctx.prisma.store.findMany({
           where: { organizationId: ctx.user.organizationId },
           select: { id: true, name: true },
@@ -629,11 +641,27 @@ export const productsRouter = router({
           },
           select: { avgCostKgs: true },
         }),
+        ctx.prisma.inventorySnapshot.findMany({
+          where: {
+            productId: input.productId,
+            variantId: null,
+            store: {
+              organizationId: ctx.user.organizationId,
+            },
+          },
+          select: {
+            storeId: true,
+            onHand: true,
+          },
+        }),
       ]);
 
       const basePrice = decimalToNumber(product.basePriceKgs);
       const overrideByStore = new Map(
         overrides.map((override) => [override.storeId, Number(override.priceKgs)]),
+      );
+      const onHandByStore = new Map(
+        snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]),
       );
 
       return {
@@ -648,6 +676,7 @@ export const productsRouter = router({
             effectivePriceKgs: effective,
             overridePriceKgs: override ?? null,
             priceOverridden: override !== undefined,
+            onHand: onHandByStore.get(store.id) ?? 0,
           };
         }),
       };

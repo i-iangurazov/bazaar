@@ -49,7 +49,22 @@ export const inventoryRouter = router({
         ctx.prisma.inventorySnapshot.findMany({
           where,
           include: {
-            product: { include: { baseUnit: true, packs: true } },
+            product: {
+              include: {
+                baseUnit: true,
+                packs: true,
+                images: {
+                  where: {
+                    url: {
+                      not: { startsWith: "data:image/" },
+                    },
+                  },
+                  select: { id: true, url: true, position: true },
+                  orderBy: { position: "asc" },
+                  take: 1,
+                },
+              },
+            },
             variant: true,
           },
           orderBy: { product: { name: "asc" } },
@@ -193,9 +208,7 @@ export const inventoryRouter = router({
         storeId: z.string(),
         productId: z.string(),
         variantId: z.string().optional(),
-        qtyDelta: z.number().int().refine((value) => value !== 0, {
-          message: "nonZeroAdjustment",
-        }),
+        qtyDelta: z.number().int(),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         reason: z.string().min(3),

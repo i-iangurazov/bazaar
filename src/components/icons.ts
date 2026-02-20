@@ -50,6 +50,8 @@ import {
   DollarSign,
   Copy,
   Languages,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
@@ -108,3 +110,5 @@ export const TagIcon = Tag;
 export const PriceIcon = DollarSign;
 export const CopyIcon = Copy;
 export const LanguageIcon = Languages;
+export const GridViewIcon = LayoutGrid;
+export const TableViewIcon = List;

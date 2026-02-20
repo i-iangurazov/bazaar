@@ -5,6 +5,8 @@ type LegacyLocaleRedirectProps = {
   searchParams?: Record<string, string | string[] | undefined>;
 };
 
+export const dynamic = "force-dynamic";
+
 const LegacyLocaleRedirectPage = ({ params, searchParams }: LegacyLocaleRedirectProps) => {
   const path = params.slug?.join("/") ?? "";
   const query = new URLSearchParams();

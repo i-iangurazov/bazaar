@@ -661,7 +661,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto">
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="relative w-full sm:max-w-md">
                 <Input

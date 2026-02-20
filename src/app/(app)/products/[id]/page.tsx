@@ -57,6 +57,13 @@ import { useToast } from "@/components/ui/toast";
 import { RowActions } from "@/components/row-actions";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
+const createIdempotencyKey = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `inventory-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 const ProductDetailPage = () => {
   const params = useParams();
   const productId = String(params?.id ?? "");
@@ -71,6 +78,7 @@ const ProductDetailPage = () => {
   const isAdmin = role === "ADMIN";
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
   const canManageStorePrices = role === "ADMIN" || role === "MANAGER";
+  const canManageInventory = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const [movementsOpen, setMovementsOpen] = useState(false);
@@ -81,6 +89,7 @@ const ProductDetailPage = () => {
   const [componentDialogOpen, setComponentDialogOpen] = useState(false);
   const [componentSearch, setComponentSearch] = useState("");
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
+  const [storeOnHandDrafts, setStoreOnHandDrafts] = useState<Record<string, string>>({});
   const [selectedComponent, setSelectedComponent] = useState<{
     id: string;
     name: string;
@@ -164,6 +173,15 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const adjustStockMutation = trpc.inventory.adjust.useMutation({
+    onSuccess: async () => {
+      await storePricingQuery.refetch();
+      toast({ variant: "success", description: tInventory("adjustSuccess") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
   const addComponentMutation = trpc.bundles.addComponent.useMutation({
     onSuccess: () => {
       bundleComponentsQuery.refetch();
@@ -220,14 +238,20 @@ const ProductDetailPage = () => {
     if (!storePricingQuery.data) {
       return;
     }
-    setStorePriceDrafts(
-      Object.fromEntries(
-        storePricingQuery.data.stores.map((storeRow) => [
-          storeRow.storeId,
-          storeRow.effectivePriceKgs !== null ? String(storeRow.effectivePriceKgs) : "",
-        ]),
-      ),
+    const priceDrafts = Object.fromEntries(
+      storePricingQuery.data.stores.map((storeRow) => [
+        storeRow.storeId,
+        storeRow.effectivePriceKgs !== null ? String(storeRow.effectivePriceKgs) : "",
+      ]),
     );
+    const onHandDrafts = Object.fromEntries(
+      storePricingQuery.data.stores.map((storeRow) => [
+        storeRow.storeId,
+        String(storeRow.onHand),
+      ]),
+    );
+    setStorePriceDrafts(priceDrafts);
+    setStoreOnHandDrafts(onHandDrafts);
   }, [storePricingQuery.data]);
 
   const movementTypeLabel = (type: string) => {
@@ -389,6 +413,22 @@ const ProductDetailPage = () => {
       storeId,
       productId,
       priceKgs: value,
+    });
+  };
+
+  const handleSaveStoreOnHand = async (storeId: string, currentOnHand: number) => {
+    const raw = storeOnHandDrafts[storeId]?.trim() ?? "";
+    const targetOnHand = Number(raw);
+    if (!raw.length || !Number.isFinite(targetOnHand) || !Number.isInteger(targetOnHand)) {
+      toast({ variant: "error", description: tErrors("validationError") });
+      return;
+    }
+    await adjustStockMutation.mutateAsync({
+      storeId,
+      productId,
+      qtyDelta: targetOnHand - currentOnHand,
+      reason: tInventory("stockAdjustment"),
+      idempotencyKey: createIdempotencyKey(),
     });
   };
 
@@ -575,36 +615,73 @@ const ProductDetailPage = () => {
                             ? formatCurrencyKGS(storeRow.effectivePriceKgs, locale)
                             : tCommon("notAvailable")}
                         </span>
+                        <span className="text-xs text-muted-foreground">
+                          {tInventory("onHand")}: {formatNumber(storeRow.onHand, locale)}
+                        </span>
                       </div>
                     </div>
-                    {canManageStorePrices ? (
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.01"
-                          className="w-full sm:w-[160px]"
-                          value={storePriceDrafts[storeRow.storeId] ?? ""}
-                          onChange={(event) =>
-                            setStorePriceDrafts((prev) => ({
-                              ...prev,
-                              [storeRow.storeId]: event.target.value,
-                            }))
-                          }
-                          placeholder={t("pricePlaceholder")}
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="w-full sm:w-auto"
-                          onClick={() => void handleSaveStorePrice(storeRow.storeId)}
-                          disabled={storePriceMutation.isLoading}
-                        >
-                          {storePriceMutation.isLoading ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : null}
-                          {storePriceMutation.isLoading ? tCommon("loading") : t("savePrice")}
-                        </Button>
+                    {canManageStorePrices || canManageInventory ? (
+                      <div className="flex w-full flex-col gap-2 sm:w-auto">
+                        {canManageStorePrices ? (
+                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              className="w-full sm:w-[160px]"
+                              value={storePriceDrafts[storeRow.storeId] ?? ""}
+                              onChange={(event) =>
+                                setStorePriceDrafts((prev) => ({
+                                  ...prev,
+                                  [storeRow.storeId]: event.target.value,
+                                }))
+                              }
+                              placeholder={t("pricePlaceholder")}
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="w-full sm:w-auto"
+                              onClick={() => void handleSaveStorePrice(storeRow.storeId)}
+                              disabled={storePriceMutation.isLoading}
+                            >
+                              {storePriceMutation.isLoading ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : null}
+                              {storePriceMutation.isLoading ? tCommon("loading") : t("savePrice")}
+                            </Button>
+                          </div>
+                        ) : null}
+                        {canManageInventory ? (
+                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              step="1"
+                              className="w-full sm:w-[160px]"
+                              value={storeOnHandDrafts[storeRow.storeId] ?? String(storeRow.onHand)}
+                              onChange={(event) =>
+                                setStoreOnHandDrafts((prev) => ({
+                                  ...prev,
+                                  [storeRow.storeId]: event.target.value,
+                                }))
+                              }
+                              placeholder={tInventory("qtyPlaceholder")}
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="w-full sm:w-auto"
+                              onClick={() => void handleSaveStoreOnHand(storeRow.storeId, storeRow.onHand)}
+                              disabled={adjustStockMutation.isLoading}
+                            >
+                              {adjustStockMutation.isLoading ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : null}
+                              {adjustStockMutation.isLoading ? tCommon("loading") : tInventory("adjustStock")}
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="text-xs text-muted-foreground">{t("storePriceReadOnly")}</div>

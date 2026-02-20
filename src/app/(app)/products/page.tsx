@@ -66,15 +66,17 @@ import {
   DownloadIcon,
   EditIcon,
   EmptyIcon,
+  GridViewIcon,
   GripIcon,
   MoreIcon,
   PriceIcon,
   RestoreIcon,
+  TableViewIcon,
   TagIcon,
   ViewIcon,
 } from "@/components/icons";
 import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
-import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -82,6 +84,7 @@ import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const ProductsPage = () => {
   const t = useTranslations("products");
+  const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const tExports = useTranslations("exports");
@@ -100,6 +103,7 @@ const ProductsPage = () => {
   const [productType, setProductType] = useState<"all" | "product" | "bundle">("all");
   const [storeId, setStoreId] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [productsPage, setProductsPage] = useState(1);
   const [productsPageSize, setProductsPageSize] = useState(25);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
@@ -555,6 +559,61 @@ const ProductsPage = () => {
     photoUrl?: string | null;
     images?: { url: string }[];
   }) => product.images?.[0]?.url ?? product.photoUrl ?? null;
+  type ProductRow = NonNullable<typeof products>[number];
+  const getProductActions = (product: ProductRow) => [
+    ...(isAdmin
+      ? product.isDeleted
+        ? [
+            {
+              key: "restore",
+              label: t("restore"),
+              icon: RestoreIcon,
+              onSelect: async () => {
+                if (!(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))) {
+                  return;
+                }
+                restoreMutation.mutate({ productId: product.id });
+              },
+            },
+          ]
+        : [
+            {
+              key: "edit",
+              label: tCommon("edit"),
+              icon: EditIcon,
+              href: `/products/${product.id}`,
+            },
+            {
+              key: "duplicate",
+              label: t("duplicate"),
+              icon: CopyIcon,
+              onSelect: () =>
+                duplicateMutation.mutate({
+                  productId: product.id,
+                }),
+            },
+            {
+              key: "archive",
+              label: tCommon("archive"),
+              icon: ArchiveIcon,
+              variant: "danger",
+              onSelect: async () => {
+                if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
+                  return;
+                }
+                archiveMutation.mutate({ productId: product.id });
+              },
+            },
+          ]
+      : [
+          {
+            key: "view",
+            label: tCommon("view"),
+            icon: ViewIcon,
+            href: `/products/${product.id}`,
+          },
+        ]),
+  ];
 
   const handleExport = async () => {
     const { data, error } = await exportQuery.refetch();
@@ -917,8 +976,32 @@ const ProductsPage = () => {
       />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
+          <div className="inline-flex w-full items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              className="flex-1 sm:flex-none"
+              onClick={() => setViewMode("table")}
+              aria-label={t("viewTable")}
+            >
+              <TableViewIcon className="h-4 w-4" aria-hidden />
+              {t("viewTable")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              className="flex-1 sm:flex-none"
+              onClick={() => setViewMode("grid")}
+              aria-label={t("viewGrid")}
+            >
+              <GridViewIcon className="h-4 w-4" aria-hidden />
+              {t("viewGrid")}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {products.length ? (
@@ -1091,10 +1174,11 @@ const ProductsPage = () => {
             totalItems={productsTotal}
             onPageChange={setProductsPage}
             onPageSizeChange={setProductsPageSize}
-            renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
-                <TooltipProvider>
-                  <Table className="min-w-[720px]">
+            renderDesktop={(visibleItems) =>
+              viewMode === "table" ? (
+                <div className="overflow-x-auto">
+                  <TooltipProvider>
+                    <Table className="min-w-[720px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">
@@ -1111,8 +1195,8 @@ const ProductsPage = () => {
                         <TableHead>{t("name")}</TableHead>
                         <TableHead className="hidden md:table-cell">{t("category")}</TableHead>
                         <TableHead className="hidden lg:table-cell">{t("unit")}</TableHead>
+                        <TableHead>{tInventory("onHand")}</TableHead>
                         <TableHead>{t("salePrice")}</TableHead>
-                        <TableHead>{t("lastPurchasePrice")}</TableHead>
                         <TableHead>{t("avgCost")}</TableHead>
                         <TableHead>{t("barcodes")}</TableHead>
                         <TableHead>{t("stores")}</TableHead>
@@ -1168,6 +1252,9 @@ const ProductsPage = () => {
                             </TableCell>
                             <TableCell className="hidden lg:table-cell">{product.unit}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">
+                              {formatNumber(product.onHandQty, locale)}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span>
                                   {showEffectivePrice
@@ -1184,12 +1271,6 @@ const ProductsPage = () => {
                                   <Badge variant="muted">{t("priceOverridden")}</Badge>
                                 ) : null}
                               </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {product.purchasePriceKgs !== null &&
-                              product.purchasePriceKgs !== undefined
-                                ? formatCurrencyKGS(product.purchasePriceKgs, locale)
-                                : tCommon("notAvailable")}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {product.avgCostKgs !== null && product.avgCostKgs !== undefined
@@ -1302,69 +1383,114 @@ const ProductsPage = () => {
                       })}
                     </TableBody>
                   </Table>
-                </TooltipProvider>
-              </div>
-            )}
+                  </TooltipProvider>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleItems.map((product) => {
+                    const barcodeSummary = getBarcodeSummary(product.barcodes);
+                    const previewImageUrl = getProductPreviewUrl(product);
+                    const actions = getProductActions(product);
+                    return (
+                      <div
+                        key={product.id}
+                        className="overflow-hidden rounded-lg border border-border bg-card"
+                      >
+                        <div className="relative aspect-[4/3] bg-muted/30">
+                          {previewImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={previewImageUrl}
+                              alt={product.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <EmptyIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
+                            </div>
+                          )}
+                          <label className="absolute right-2 top-2">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              checked={selectedIds.has(product.id)}
+                              onChange={() => toggleSelect(product.id)}
+                              aria-label={t("selectProduct", { name: product.name })}
+                            />
+                          </label>
+                        </div>
+                        <div className="space-y-3 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {product.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{product.sku}</p>
+                            </div>
+                            <RowActions
+                              actions={actions}
+                              maxInline={3}
+                              moreLabel={tCommon("tooltips.moreActions")}
+                              className="shrink-0"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="muted">
+                              {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                            </Badge>
+                            {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
+                            {product.category ? <Badge variant="muted">{product.category}</Badge> : null}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                            <div>
+                              <p>{t("salePrice")}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {showEffectivePrice
+                                  ? product.effectivePriceKgs !== null &&
+                                    product.effectivePriceKgs !== undefined
+                                    ? formatCurrencyKGS(product.effectivePriceKgs, locale)
+                                    : tCommon("notAvailable")
+                                  : product.basePriceKgs !== null &&
+                                      product.basePriceKgs !== undefined
+                                    ? formatCurrencyKGS(product.basePriceKgs, locale)
+                                    : tCommon("notAvailable")}
+                              </p>
+                            </div>
+                            <div>
+                              <p>{tInventory("onHand")}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatNumber(product.onHandQty, locale)}
+                              </p>
+                            </div>
+                            <div>
+                              <p>{t("avgCost")}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {product.avgCostKgs !== null && product.avgCostKgs !== undefined
+                                  ? formatCurrencyKGS(product.avgCostKgs, locale)
+                                  : tCommon("notAvailable")}
+                              </p>
+                            </div>
+                            <div>
+                              <p>{t("barcodes")}</p>
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {barcodeSummary.label}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            }
             renderMobile={(product) => {
               const barcodeSummary = getBarcodeSummary(product.barcodes);
               const previewImageUrl = getProductPreviewUrl(product);
               const storeInfo = getStoreInfo(
                 product.inventorySnapshots.map((snapshot) => snapshot.storeId),
               );
-              const actions = [
-                ...(isAdmin
-                  ? product.isDeleted
-                    ? [
-                        {
-                          key: "restore",
-                          label: t("restore"),
-                          icon: RestoreIcon,
-                          onSelect: async () => {
-                            if (!(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))) {
-                              return;
-                            }
-                            restoreMutation.mutate({ productId: product.id });
-                          },
-                        },
-                      ]
-                    : [
-                        {
-                          key: "edit",
-                          label: tCommon("edit"),
-                          icon: EditIcon,
-                          href: `/products/${product.id}`,
-                        },
-                        {
-                          key: "duplicate",
-                          label: t("duplicate"),
-                          icon: CopyIcon,
-                          onSelect: () =>
-                            duplicateMutation.mutate({
-                              productId: product.id,
-                            }),
-                        },
-                        {
-                          key: "archive",
-                          label: tCommon("archive"),
-                          icon: ArchiveIcon,
-                          variant: "danger",
-                          onSelect: async () => {
-                            if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
-                              return;
-                            }
-                            archiveMutation.mutate({ productId: product.id });
-                          },
-                        },
-                      ]
-                  : [
-                      {
-                        key: "view",
-                        label: tCommon("view"),
-                        icon: ViewIcon,
-                        href: `/products/${product.id}`,
-                      },
-                    ]),
-              ];
+              const actions = getProductActions(product);
 
               return (
                 <div className="rounded-lg border border-border bg-card p-4">
@@ -1435,12 +1561,9 @@ const ProductsPage = () => {
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span>{t("lastPurchasePrice")}</span>
+                      <span>{tInventory("onHand")}</span>
                       <span className="text-foreground">
-                        {product.purchasePriceKgs !== null &&
-                        product.purchasePriceKgs !== undefined
-                          ? formatCurrencyKGS(product.purchasePriceKgs, locale)
-                          : tCommon("notAvailable")}
+                        {formatNumber(product.onHandQty, locale)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">

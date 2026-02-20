@@ -21,12 +21,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -61,7 +55,8 @@ import {
   StatusWarningIcon,
   StatusSuccessIcon,
   EmptyIcon,
-  MoreIcon,
+  GridViewIcon,
+  TableViewIcon,
   ViewIcon,
 } from "@/components/icons";
 import {
@@ -98,6 +93,7 @@ const InventoryPage = () => {
   const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
   const [storeId, setStoreId] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [inventoryPage, setInventoryPage] = useState(1);
   const [inventoryPageSize, setInventoryPageSize] = useState(25);
   const [showPlanning, setShowPlanning] = useState(false);
@@ -149,9 +145,7 @@ const InventoryPage = () => {
       z.object({
         productId: z.string().min(1, t("productRequired")),
         variantId: z.string().optional().nullable(),
-        qtyDelta: z.coerce.number().int().refine((value) => value !== 0, {
-          message: t("qtyNonZero"),
-        }),
+        qtyDelta: z.coerce.number().int(),
         unitSelection: z.string().min(1, t("unitRequired")),
         reason: z.string().min(1, t("reasonRequired")),
         expiryDate: z.string().optional(),
@@ -302,6 +296,13 @@ const InventoryPage = () => {
   );
 
   type InventoryRow = NonNullable<typeof inventoryItems>[number];
+  const getInventoryPreviewUrl = (item: InventoryRow) => {
+    const imageUrl = item.product.images?.[0]?.url ?? item.product.photoUrl ?? null;
+    if (!imageUrl || imageUrl.startsWith("data:image/")) {
+      return null;
+    }
+    return imageUrl;
+  };
 
   const productOptions = useMemo(() => {
     return inventoryItems.map((item) => {
@@ -686,6 +687,49 @@ const InventoryPage = () => {
     setActiveDialog("movements");
   };
 
+  const getInventoryActions = (item: InventoryRow) =>
+    canManage
+      ? [
+          {
+            key: "receive",
+            label: t("receiveStock"),
+            icon: ReceiveIcon,
+            onSelect: () => openActionDialog("receive", item),
+          },
+          {
+            key: "adjust",
+            label: t("stockAdjustment"),
+            icon: AdjustIcon,
+            onSelect: () => openActionDialog("adjust", item),
+          },
+          {
+            key: "transfer",
+            label: t("transferStock"),
+            icon: TransferIcon,
+            onSelect: () => openActionDialog("transfer", item),
+          },
+          {
+            key: "minStock",
+            label: t("minStockTitle"),
+            icon: AddIcon,
+            onSelect: () => openActionDialog("minStock", item),
+          },
+          {
+            key: "movements",
+            label: t("viewMovements"),
+            icon: ViewIcon,
+            onSelect: () => openMovements(item),
+          },
+        ]
+      : [
+          {
+            key: "view",
+            label: tCommon("view"),
+            icon: ViewIcon,
+            onSelect: () => openMovements(item),
+          },
+        ];
+
   const adjustMutation = trpc.inventory.adjust.useMutation({
     onSuccess: () => {
       inventoryQuery.refetch();
@@ -807,7 +851,7 @@ const InventoryPage = () => {
   const transferSelectionKey = transferProductId
     ? buildSelectionKey(transferProductId, transferVariantId)
     : "";
-  const tableColumnCount = showPlanning ? 9 : 8;
+  const tableColumnCount = showPlanning ? 10 : 9;
   const selectedDraftItems = poDraftItems.filter((item) => item.selected);
   const groupedDraftItems = useMemo(() => {
     const groups = new Map<string, typeof poDraftItems>();
@@ -981,8 +1025,32 @@ const InventoryPage = () => {
       ) : null}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("inventoryOverview")}</CardTitle>
+          <div className="inline-flex w-full items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              className="flex-1 sm:flex-none"
+              onClick={() => setViewMode("table")}
+              aria-label={t("viewTable")}
+            >
+              <TableViewIcon className="h-4 w-4" aria-hidden />
+              {t("viewTable")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              className="flex-1 sm:flex-none"
+              onClick={() => setViewMode("grid")}
+              aria-label={t("viewGrid")}
+            >
+              <GridViewIcon className="h-4 w-4" aria-hidden />
+              {t("viewGrid")}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {inventoryItems.length ? (
@@ -1069,277 +1137,302 @@ const InventoryPage = () => {
             totalItems={inventoryTotal}
             onPageChange={setInventoryPage}
             onPageSizeChange={setInventoryPageSize}
-            renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
-                <TooltipProvider>
-                  <Table className="min-w-[520px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                            checked={allSelected}
-                            onChange={toggleSelectAll}
-                            aria-label={t("selectAll")}
-                          />
-                        </TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
-                        <TableHead>{tCommon("product")}</TableHead>
-                        <TableHead>{t("onHand")}</TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
-                        <TableHead>{t("lowStock")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
-                        {showPlanning ? <TableHead>{t("suggestedOrder")}</TableHead> : null}
-                        <TableHead>{tCommon("actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleItems.map((item) => {
-                        const isExpanded = expandedReorderId === item.snapshot.id;
-                        const reorder = item.reorder;
-                        const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
-                        return (
-                          <Fragment key={item.snapshot.id}>
-                            <TableRow>
-                              <TableCell>
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                  checked={selectedIds.has(item.snapshot.id)}
-                                  onChange={() => toggleSelect(item.snapshot.id)}
-                                  aria-label={t("selectInventoryItem", {
-                                    name: item.variant?.name
-                                      ? `${item.product.name} • ${item.variant.name}`
-                                      : item.product.name,
-                                  })}
-                                />
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                                {item.product.sku}
-                              </TableCell>
-                              <TableCell className="font-medium">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span>
-                                    {item.product.name}
-                                    {item.variant?.name ? ` • ${item.variant.name}` : ""}
-                                  </span>
-                                  {trackExpiryLots && expiringSet.has(expiryKey) ? (
-                                    <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
-                                  ) : null}
-                                </div>
-                              </TableCell>
-                              <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
-                              <TableCell className="hidden sm:table-cell">
-                                {formatNumber(item.minStock, locale)}
-                              </TableCell>
-                              <TableCell>
-                                {item.lowStock ? (
-                                  <Badge variant="danger">
-                                    <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                    {t("lowStockBadge")}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground/80">
-                                    {tCommon("notAvailable")}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="hidden md:table-cell">
-                                {formatNumber(item.snapshot.onOrder, locale)}
-                              </TableCell>
-                              {showPlanning ? (
+            renderDesktop={(visibleItems) =>
+              viewMode === "table" ? (
+                <div className="overflow-x-auto">
+                  <TooltipProvider>
+                    <Table className="min-w-[640px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-10">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              checked={allSelected}
+                              onChange={toggleSelectAll}
+                              aria-label={t("selectAll")}
+                            />
+                          </TableHead>
+                          <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
+                          <TableHead>{t("imageLabel")}</TableHead>
+                          <TableHead>{tCommon("product")}</TableHead>
+                          <TableHead>{t("onHand")}</TableHead>
+                          <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
+                          <TableHead>{t("lowStock")}</TableHead>
+                          <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
+                          {showPlanning ? <TableHead>{t("suggestedOrder")}</TableHead> : null}
+                          <TableHead>{tCommon("actions")}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((item) => {
+                          const isExpanded = expandedReorderId === item.snapshot.id;
+                          const reorder = item.reorder;
+                          const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
+                          const previewImageUrl = getInventoryPreviewUrl(item);
+                          const actions = getInventoryActions(item);
+                          return (
+                            <Fragment key={item.snapshot.id}>
+                              <TableRow>
                                 <TableCell>
-                                  {reorder ? (
-                                    <div className="space-y-1">
-                                      <div className="font-medium">
-                                        {formatNumber(reorder.suggestedOrderQty, locale)}
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="h-8 px-2 text-xs"
-                                        onClick={() =>
-                                          setExpandedReorderId(
-                                            isExpanded ? null : item.snapshot.id,
-                                          )
-                                        }
-                                      >
-                                        {isExpanded ? t("hideWhy") : t("why")}
-                                      </Button>
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    checked={selectedIds.has(item.snapshot.id)}
+                                    onChange={() => toggleSelect(item.snapshot.id)}
+                                    aria-label={t("selectInventoryItem", {
+                                      name: item.variant?.name
+                                        ? `${item.product.name} • ${item.variant.name}`
+                                        : item.product.name,
+                                    })}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                                  {item.product.sku}
+                                </TableCell>
+                                <TableCell>
+                                  {previewImageUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={previewImageUrl}
+                                      alt={item.product.name}
+                                      className="h-10 w-10 rounded-md border border-border object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                      <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                                     </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span>
+                                      {item.product.name}
+                                      {item.variant?.name ? ` • ${item.variant.name}` : ""}
+                                    </span>
+                                    {trackExpiryLots && expiringSet.has(expiryKey) ? (
+                                      <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
+                                <TableCell className="hidden sm:table-cell">
+                                  {formatNumber(item.minStock, locale)}
+                                </TableCell>
+                                <TableCell>
+                                  {item.lowStock ? (
+                                    <Badge variant="danger">
+                                      <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                                      {t("lowStockBadge")}
+                                    </Badge>
                                   ) : (
                                     <span className="text-xs text-muted-foreground/80">
-                                      {t("planningUnavailable")}
+                                      {tCommon("notAvailable")}
                                     </span>
                                   )}
                                 </TableCell>
-                              ) : null}
-                              <TableCell>
-                                {canManage ? (
-                                  <DropdownMenu>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="inline-flex">
-                                          <DropdownMenuTrigger asChild>
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon"
-                                              className="shadow-none"
-                                              aria-label={tCommon("actions")}
-                                            >
-                                              <MoreIcon className="h-4 w-4" aria-hidden />
-                                            </Button>
-                                          </DropdownMenuTrigger>
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{tCommon("actions")}</TooltipContent>
-                                    </Tooltip>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem
-                                        onSelect={() => openActionDialog("receive", item)}
-                                      >
-                                        {t("receiveStock")}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onSelect={() => openActionDialog("adjust", item)}
-                                      >
-                                        {t("stockAdjustment")}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onSelect={() => openActionDialog("transfer", item)}
-                                      >
-                                        {t("transferStock")}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onSelect={() => openActionDialog("minStock", item)}
-                                      >
-                                        {t("minStockTitle")}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onSelect={() => openMovements(item)}>
-                                        {t("viewMovements")}
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shadow-none"
-                                        onClick={() => openMovements(item)}
-                                        aria-label={tCommon("view")}
-                                      >
-                                        <ViewIcon className="h-4 w-4" aria-hidden />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{tCommon("view")}</TooltipContent>
-                                  </Tooltip>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                            {showPlanning && isExpanded && reorder ? (
-                              <TableRow>
-                                <TableCell colSpan={tableColumnCount}>
-                                  <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm">
-                                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">
-                                          {t("demandDuringLeadTime")}
-                                        </p>
-                                        <p className="font-semibold">
-                                          {formatNumber(reorder.demandDuringLeadTime, locale)}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">{t("safetyStock")}</p>
-                                        <p className="font-semibold">
-                                          {formatNumber(reorder.safetyStock, locale)}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">{t("reorderPoint")}</p>
-                                        <p className="font-semibold">
-                                          {formatNumber(reorder.reorderPoint, locale)}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">{t("targetLevel")}</p>
-                                        <p className="font-semibold">
-                                          {formatNumber(reorder.targetLevel, locale)}
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">
-                                          {t("suggestedOrder")}
-                                        </p>
-                                        <p className="font-semibold">
+                                <TableCell className="hidden md:table-cell">
+                                  {formatNumber(item.snapshot.onOrder, locale)}
+                                </TableCell>
+                                {showPlanning ? (
+                                  <TableCell>
+                                    {reorder ? (
+                                      <div className="space-y-1">
+                                        <div className="font-medium">
                                           {formatNumber(reorder.suggestedOrderQty, locale)}
-                                        </p>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          className="h-8 px-2 text-xs"
+                                          onClick={() =>
+                                            setExpandedReorderId(
+                                              isExpanded ? null : item.snapshot.id,
+                                            )
+                                          }
+                                        >
+                                          {isExpanded ? t("hideWhy") : t("why")}
+                                        </Button>
                                       </div>
-                                    </div>
-                                  </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground/80">
+                                        {t("planningUnavailable")}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                ) : null}
+                                <TableCell>
+                                  <RowActions
+                                    actions={actions}
+                                    maxInline={2}
+                                    moreLabel={tCommon("tooltips.moreActions")}
+                                  />
                                 </TableCell>
                               </TableRow>
+                              {showPlanning && isExpanded && reorder ? (
+                                <TableRow>
+                                  <TableCell colSpan={tableColumnCount}>
+                                    <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm">
+                                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                        <div>
+                                          <p className="text-xs text-muted-foreground">
+                                            {t("demandDuringLeadTime")}
+                                          </p>
+                                          <p className="font-semibold">
+                                            {formatNumber(reorder.demandDuringLeadTime, locale)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-muted-foreground">
+                                            {t("safetyStock")}
+                                          </p>
+                                          <p className="font-semibold">
+                                            {formatNumber(reorder.safetyStock, locale)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-muted-foreground">
+                                            {t("reorderPoint")}
+                                          </p>
+                                          <p className="font-semibold">
+                                            {formatNumber(reorder.reorderPoint, locale)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-muted-foreground">
+                                            {t("targetLevel")}
+                                          </p>
+                                          <p className="font-semibold">
+                                            {formatNumber(reorder.targetLevel, locale)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-muted-foreground">
+                                            {t("suggestedOrder")}
+                                          </p>
+                                          <p className="font-semibold">
+                                            {formatNumber(reorder.suggestedOrderQty, locale)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TooltipProvider>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleItems.map((item) => {
+                    const reorder = item.reorder;
+                    const label = item.variant?.name
+                      ? `${item.product.name} • ${item.variant.name}`
+                      : item.product.name;
+                    const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
+                    const previewImageUrl = getInventoryPreviewUrl(item);
+                    const actions = getInventoryActions(item);
+                    return (
+                      <div
+                        key={item.snapshot.id}
+                        className="overflow-hidden rounded-lg border border-border bg-card"
+                      >
+                        <div className="relative aspect-[4/3] bg-muted/30">
+                          {previewImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={previewImageUrl}
+                              alt={label}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <EmptyIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
+                            </div>
+                          )}
+                          <label className="absolute right-2 top-2">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              checked={selectedIds.has(item.snapshot.id)}
+                              onChange={() => toggleSelect(item.snapshot.id)}
+                              aria-label={t("selectInventoryItem", { name: label })}
+                            />
+                          </label>
+                        </div>
+                        <div className="space-y-3 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">{label}</p>
+                              <p className="text-xs text-muted-foreground">{item.product.sku}</p>
+                            </div>
+                            <RowActions
+                              actions={actions}
+                              maxInline={2}
+                              moreLabel={tCommon("tooltips.moreActions")}
+                              className="shrink-0"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {trackExpiryLots && expiringSet.has(expiryKey) ? (
+                              <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
                             ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TooltipProvider>
-              </div>
-            )}
+                            {item.lowStock ? (
+                              <Badge variant="danger">
+                                <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                                {t("lowStockBadge")}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                            <div>
+                              <p>{t("onHand")}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatNumber(item.snapshot.onHand, locale)}
+                              </p>
+                            </div>
+                            <div>
+                              <p>{t("minStock")}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatNumber(item.minStock, locale)}
+                              </p>
+                            </div>
+                            <div>
+                              <p>{t("onOrder")}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatNumber(item.snapshot.onOrder, locale)}
+                              </p>
+                            </div>
+                            {showPlanning ? (
+                              <div>
+                                <p>{t("suggestedOrder")}</p>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {reorder
+                                    ? formatNumber(reorder.suggestedOrderQty, locale)
+                                    : t("planningUnavailable")}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            }
             renderMobile={(item) => {
               const reorder = item.reorder;
               const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
               const label = item.variant?.name
                 ? `${item.product.name} • ${item.variant.name}`
                 : item.product.name;
-              const actions = canManage
-                ? [
-                    {
-                      key: "receive",
-                      label: t("receiveStock"),
-                      icon: ReceiveIcon,
-                      onSelect: () => openActionDialog("receive", item),
-                    },
-                    {
-                      key: "adjust",
-                      label: t("stockAdjustment"),
-                      icon: AdjustIcon,
-                      onSelect: () => openActionDialog("adjust", item),
-                    },
-                    {
-                      key: "transfer",
-                      label: t("transferStock"),
-                      icon: TransferIcon,
-                      onSelect: () => openActionDialog("transfer", item),
-                    },
-                    {
-                      key: "minStock",
-                      label: t("minStockTitle"),
-                      icon: AddIcon,
-                      onSelect: () => openActionDialog("minStock", item),
-                    },
-                    {
-                      key: "movements",
-                      label: t("viewMovements"),
-                      icon: ViewIcon,
-                      onSelect: () => openMovements(item),
-                    },
-                  ]
-                : [
-                    {
-                      key: "view",
-                      label: tCommon("view"),
-                      icon: ViewIcon,
-                      onSelect: () => openMovements(item),
-                    },
-                  ];
+              const previewImageUrl = getInventoryPreviewUrl(item);
+              const actions = getInventoryActions(item);
 
               return (
                 <div className="rounded-md border border-border bg-card p-3 shadow-sm">
@@ -1351,6 +1444,18 @@ const InventoryPage = () => {
                       onChange={() => toggleSelect(item.snapshot.id)}
                       aria-label={t("selectInventoryItem", { name: label })}
                     />
+                    {previewImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={previewImageUrl}
+                        alt={label}
+                        className="h-10 w-10 rounded-md border border-border object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                        <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-semibold text-foreground">{label}</p>
