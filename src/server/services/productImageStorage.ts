@@ -169,8 +169,22 @@ const getR2Client = (config: R2Config) => {
   return r2Client;
 };
 
+const normalizeImageMimeType = (value: string | null | undefined) => {
+  const normalized = value?.toLowerCase().split(";")[0]?.trim() ?? "";
+  if (normalized === "image/jpg" || normalized === "image/pjpeg") {
+    return "image/jpeg";
+  }
+  if (normalized === "image/heic-sequence" || normalized === "image/x-heic") {
+    return "image/heic";
+  }
+  if (normalized === "image/heif-sequence" || normalized === "image/x-heif") {
+    return "image/heif";
+  }
+  return normalized;
+};
+
 const detectImageExtension = (contentType: string | null, sourceUrl?: string) => {
-  const normalizedType = contentType?.toLowerCase().split(";")[0]?.trim();
+  const normalizedType = normalizeImageMimeType(contentType);
   if (normalizedType === "image/png") {
     return "png";
   }

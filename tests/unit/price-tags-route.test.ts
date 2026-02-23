@@ -159,4 +159,24 @@ describe("product image upload route", () => {
     await expect(response.json()).resolves.toMatchObject({ message: "imageTooLarge" });
     expect(mockUploadProductImageBuffer).not.toHaveBeenCalled();
   });
+
+  it("normalizes HEIC sequence uploads to HEIC mime type", async () => {
+    const { POST } = await import("../../src/app/api/product-images/upload/route");
+    const formData = new FormData();
+    formData.append("file", new File([new Uint8Array([1, 2, 3])], "camera-upload", { type: "image/heic-sequence" }));
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType: "image/heic",
+      }),
+    );
+  });
 });

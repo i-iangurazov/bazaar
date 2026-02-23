@@ -30,8 +30,22 @@ const imageMimeByExtension: Record<string, string> = {
   heif: "image/heif",
 };
 
+const normalizeImageMimeType = (value: string) => {
+  const normalized = value.toLowerCase().split(";")[0]?.trim() ?? "";
+  if (normalized === "image/jpg" || normalized === "image/pjpeg") {
+    return "image/jpeg";
+  }
+  if (normalized === "image/heic-sequence" || normalized === "image/x-heic") {
+    return "image/heic";
+  }
+  if (normalized === "image/heif-sequence" || normalized === "image/x-heif") {
+    return "image/heif";
+  }
+  return normalized;
+};
+
 const resolveUploadContentType = (file: File) => {
-  const normalizedType = file.type.toLowerCase().split(";")[0]?.trim();
+  const normalizedType = normalizeImageMimeType(file.type);
   if (normalizedType.startsWith("image/")) {
     return normalizedType;
   }
@@ -39,7 +53,8 @@ const resolveUploadContentType = (file: File) => {
   if (!ext) {
     return null;
   }
-  return imageMimeByExtension[ext] ?? null;
+  const byExtension = imageMimeByExtension[ext];
+  return byExtension ? normalizeImageMimeType(byExtension) : null;
 };
 
 export const POST = async (request: Request) => {

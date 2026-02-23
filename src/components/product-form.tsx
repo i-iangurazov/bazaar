@@ -61,6 +61,11 @@ import {
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { buildVariantMatrix, type VariantGeneratorAttribute } from "@/lib/variantGenerator";
+import {
+  normalizeImageMimeType,
+  prepareProductImageFileForUpload,
+  resolvePrimaryImageUrl,
+} from "@/lib/productImageUpload";
 
 export type ProductFormValues = {
   sku: string;
@@ -123,26 +128,6 @@ type AttributeDefinition = {
 
 const defaultProductImageMaxBytes = 5 * 1024 * 1024;
 const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
-const heicMimeTypes = new Set(["image/heic", "image/heif"]);
-const supportedImageExtensions = new Set([
-  "jpg",
-  "jpeg",
-  "png",
-  "webp",
-  "avif",
-  "gif",
-  "bmp",
-  "tif",
-  "tiff",
-  "svg",
-  "heic",
-  "heif",
-]);
-
-const hasSupportedImageExtension = (fileName: string) => {
-  const ext = fileName.split(".").pop()?.toLowerCase();
-  return Boolean(ext && supportedImageExtensions.has(ext));
-};
 
 const resolveClientImageMaxBytes = () => {
   const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES);
@@ -160,6 +145,14 @@ const resolveClientImageMaxInputBytes = (maxImageBytes: number) => {
   return Math.max(defaultProductImageMaxInputBytes, maxImageBytes);
 };
 
+const resolveClientImageUploadConcurrency = () => {
+  const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_CONCURRENCY);
+  if (Number.isFinite(parsed) && parsed >= 1) {
+    return Math.min(6, Math.max(1, Math.trunc(parsed)));
+  }
+  return 2;
+};
+
 const isPhotoUrlValid = (value?: string | null) => {
   const normalized = value?.trim();
   if (!normalized) {
@@ -174,21 +167,6 @@ const isPhotoUrlValid = (value?: string | null) => {
   } catch {
     return false;
   }
-};
-
-const isHeicLikeFile = (file: File) => {
-  const normalizedType = file.type.toLowerCase();
-  if (heicMimeTypes.has(normalizedType)) {
-    return true;
-  }
-  return /\.(heic|heif)$/i.test(file.name);
-};
-
-const isImageLikeFile = (file: File) => {
-  if (file.type.toLowerCase().startsWith("image/")) {
-    return true;
-  }
-  return hasSupportedImageExtension(file.name);
 };
 
 const replaceFileExtension = (fileName: string, extension: string) => {
@@ -209,11 +187,24 @@ const getRotatedBoundingBox = (width: number, height: number, rotation: number) 
 };
 
 const resolveImageExtensionByMime = (mimeType: string) => {
-  if (mimeType === "image/png") {
+  const normalizedMimeType = normalizeImageMimeType(mimeType);
+  if (normalizedMimeType === "image/png") {
     return "png";
   }
-  if (mimeType === "image/webp") {
+  if (normalizedMimeType === "image/webp") {
     return "webp";
+  }
+  if (normalizedMimeType === "image/gif") {
+    return "gif";
+  }
+  if (normalizedMimeType === "image/avif") {
+    return "avif";
+  }
+  if (normalizedMimeType === "image/bmp") {
+    return "bmp";
+  }
+  if (normalizedMimeType === "image/tiff") {
+    return "tiff";
   }
   return "jpg";
 };
@@ -459,14 +450,25 @@ export const ProductForm = ({
 
   const {
     fields: imageFields,
-    append: appendImage,
-    remove: removeImage,
-    move: moveImage,
+    append: appendImageField,
+    remove: removeImageField,
+    move: moveImageField,
   } = useFieldArray({
     control: form.control,
     name: "images",
   });
-  const watchedImages = useWatch({ control: form.control, name: "images" }) ?? [];
+  const watchedImagesValue = useWatch({ control: form.control, name: "images" });
+  const watchedImages = useMemo(() => watchedImagesValue ?? [], [watchedImagesValue]);
+  const orderedImageUrls = useMemo(
+    () =>
+      imageFields
+        .map((image, index) => ({
+          id: image.id,
+          url: watchedImages[index]?.url?.trim() || image.url?.trim() || "",
+        }))
+        .filter((image) => image.url.length > 0),
+    [imageFields, watchedImages],
+  );
 
   const {
     fields: packFields,
@@ -531,6 +533,7 @@ export const ProductForm = ({
   const baseUnit = unitOptions.find((unit) => unit.id === baseUnitId);
   const maxImageBytes = resolveClientImageMaxBytes();
   const maxInputImageBytes = resolveClientImageMaxInputBytes(maxImageBytes);
+  const maxImageUploadConcurrency = resolveClientImageUploadConcurrency();
 
   const bundleSearchQuery = trpc.products.searchQuick.useQuery(
     { q: bundleSearch.trim() },
@@ -556,6 +559,25 @@ export const ProductForm = ({
     },
   });
 
+  const shouldLogImagePrepDebug =
+    process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_IMAGE_UPLOAD_DEBUG === "1";
+  const logImagePrepDebug = (
+    step: string,
+    details?: Record<string, unknown>,
+    error?: unknown,
+  ) => {
+    if (!shouldLogImagePrepDebug) {
+      return;
+    }
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error(`[product-image] ${step}`, details ?? {}, error);
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.warn(`[product-image] ${step}`, details ?? {});
+  };
+
   const encodeCanvasToFile = async (input: {
     canvas: HTMLCanvasElement;
     fileName: string;
@@ -580,14 +602,14 @@ export const ProductForm = ({
   };
 
   const optimizeImageToLimit = async (file: File) => {
-    const sourceType = file.type.toLowerCase();
-    const normalizedType =
-      sourceType === "image/jpg"
-        ? "image/jpeg"
-        : sourceType === "image/pjpeg"
-          ? "image/jpeg"
-          : sourceType;
+    const normalizedType = normalizeImageMimeType(file.type);
     if (!["image/jpeg", "image/png", "image/webp"].includes(normalizedType)) {
+      logImagePrepDebug("optimize-unsupported-type", {
+        fileName: file.name,
+        size: file.size,
+        type: file.type,
+        normalizedType,
+      });
       return null;
     }
 
@@ -603,92 +625,177 @@ export const ProductForm = ({
       const width = image.naturalWidth || image.width;
       const height = image.naturalHeight || image.height;
       if (!width || !height) {
+        logImagePrepDebug("optimize-invalid-dimensions", {
+          fileName: file.name,
+          size: file.size,
+          width,
+          height,
+        });
         return null;
       }
 
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        return null;
-      }
-      context.drawImage(image, 0, 0, width, height);
+      const optimizeFromDimensions = async (
+        targetWidth: number,
+        targetHeight: number,
+        allowAggressiveQuality = false,
+      ) => {
+        const canvas = document.createElement("canvas");
+        const safeWidth = Math.max(1, Math.round(targetWidth));
+        const safeHeight = Math.max(1, Math.round(targetHeight));
+        canvas.width = safeWidth;
+        canvas.height = safeHeight;
 
-      const candidates: File[] = [];
-      const pushCandidate = (candidate: File | null) => {
-        if (!candidate) {
-          return;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          return null;
         }
-        candidates.push(candidate);
-      };
+        context.drawImage(image, 0, 0, safeWidth, safeHeight);
 
-      // First pass: try to keep visual quality максимально близкой к исходнику.
-      pushCandidate(
-        await encodeCanvasToFile({
-          canvas,
-          fileName: file.name,
-          lastModified: file.lastModified || Date.now(),
-          type: normalizedType as "image/jpeg" | "image/png" | "image/webp",
-          quality: 1,
-        }),
-      );
-      pushCandidate(
-        await encodeCanvasToFile({
-          canvas,
-          fileName: file.name,
-          lastModified: file.lastModified || Date.now(),
-          type: "image/webp",
-          quality: 1,
-        }),
-      );
-      if (normalizedType !== "image/png") {
+        const candidates: File[] = [];
+        const pushCandidate = (candidate: File | null) => {
+          if (!candidate) {
+            return;
+          }
+          candidates.push(candidate);
+        };
+
+        // First pass: preserve visual quality as much as possible.
         pushCandidate(
           await encodeCanvasToFile({
             canvas,
             fileName: file.name,
             lastModified: file.lastModified || Date.now(),
-            type: "image/jpeg",
+            type: normalizedType as "image/jpeg" | "image/png" | "image/webp",
             quality: 1,
           }),
         );
-      }
+        pushCandidate(
+          await encodeCanvasToFile({
+            canvas,
+            fileName: file.name,
+            lastModified: file.lastModified || Date.now(),
+            type: "image/webp",
+            quality: 1,
+          }),
+        );
+        if (normalizedType !== "image/png") {
+          pushCandidate(
+            await encodeCanvasToFile({
+              canvas,
+              fileName: file.name,
+              lastModified: file.lastModified || Date.now(),
+              type: "image/jpeg",
+              quality: 1,
+            }),
+          );
+        }
 
-      if (!candidates.length) {
-        return null;
-      }
+        if (!candidates.length) {
+          logImagePrepDebug("optimize-no-candidates", {
+            fileName: file.name,
+            targetWidth: safeWidth,
+            targetHeight: safeHeight,
+          });
+          return null;
+        }
 
-      let best = candidates.reduce((smallest, candidate) =>
-        candidate.size < smallest.size ? candidate : smallest,
-      );
-      if (best.size <= maxImageBytes) {
+        let best = candidates.reduce((smallest, candidate) =>
+          candidate.size < smallest.size ? candidate : smallest,
+        );
+        if (best.size <= maxImageBytes) {
+          return best;
+        }
+
+        // Second pass: quality optimization before lowering dimensions further.
+        const fallbackType: "image/jpeg" | "image/webp" =
+          normalizedType === "image/png" ? "image/webp" : "image/jpeg";
+        const qualitySteps = allowAggressiveQuality
+          ? [0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82, 0.78, 0.74, 0.7, 0.66, 0.62, 0.58] as const
+          : [0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82] as const;
+        for (const quality of qualitySteps) {
+          const optimized = await encodeCanvasToFile({
+            canvas,
+            fileName: file.name,
+            lastModified: file.lastModified || Date.now(),
+            type: fallbackType,
+            quality,
+          });
+          if (!optimized) {
+            continue;
+          }
+          if (optimized.size < best.size) {
+            best = optimized;
+          }
+          if (optimized.size <= maxImageBytes) {
+            return optimized;
+          }
+        }
+
+        return best;
+      };
+
+      const maxCanvasPixels = 28_000_000;
+      const maxCanvasSide = 8192;
+      const areaScale =
+        width * height > maxCanvasPixels ? Math.sqrt(maxCanvasPixels / (width * height)) : 1;
+      const sideScale =
+        Math.max(width, height) > maxCanvasSide ? maxCanvasSide / Math.max(width, height) : 1;
+      const safeBaseScale = Math.min(1, areaScale, sideScale);
+      let targetWidth = Math.max(1, Math.round(width * safeBaseScale));
+      let targetHeight = Math.max(1, Math.round(height * safeBaseScale));
+
+      let best = await optimizeFromDimensions(targetWidth, targetHeight, false);
+      if (best?.size && best.size <= maxImageBytes) {
         return best;
       }
 
-      // Second pass: high-quality optimization without resize.
-      const fallbackType: "image/jpeg" | "image/webp" =
-        normalizedType === "image/png" ? "image/webp" : "image/jpeg";
-      const qualitySteps = [0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82] as const;
-      for (const quality of qualitySteps) {
-        const optimized = await encodeCanvasToFile({
-          canvas,
-          fileName: file.name,
-          lastModified: file.lastModified || Date.now(),
-          type: fallbackType,
-          quality,
-        });
-        if (!optimized) {
+      // Keep compressing/downscaling until target is met or hard minimum is reached.
+      const minDimension = 320;
+      const maxResizePasses = 8;
+      for (let pass = 0; pass < maxResizePasses; pass += 1) {
+        const referenceSize = best?.size ?? file.size;
+        if (referenceSize <= maxImageBytes) {
+          return best;
+        }
+        if (targetWidth <= minDimension && targetHeight <= minDimension) {
+          break;
+        }
+
+        const predictedScale = Math.sqrt(maxImageBytes / Math.max(referenceSize, 1));
+        const stepScale = Math.min(0.9, Math.max(0.55, predictedScale * 0.98));
+        const nextTargetWidth = Math.max(minDimension, Math.round(targetWidth * stepScale));
+        const nextTargetHeight = Math.max(minDimension, Math.round(targetHeight * stepScale));
+
+        if (nextTargetWidth === targetWidth && nextTargetHeight === targetHeight) {
+          break;
+        }
+
+        targetWidth = nextTargetWidth;
+        targetHeight = nextTargetHeight;
+        const resized = await optimizeFromDimensions(targetWidth, targetHeight, true);
+        if (!resized) {
           continue;
         }
-        if (optimized.size < best.size) {
-          best = optimized;
+        if (!best || resized.size < best.size) {
+          best = resized;
         }
-        if (optimized.size <= maxImageBytes) {
-          return optimized;
+        if (resized.size <= maxImageBytes) {
+          return resized;
         }
       }
 
       return best;
+    } catch (error) {
+      logImagePrepDebug(
+        "optimize-failed",
+        {
+          fileName: file.name,
+          size: file.size,
+          type: file.type,
+        },
+        error,
+      );
+      return null;
     } finally {
       URL.revokeObjectURL(objectUrl);
     }
@@ -697,7 +804,31 @@ export const ProductForm = ({
   const convertHeicToJpeg = async (file: File) => {
     try {
       const heic2anyModule = await import("heic2any");
-      const convert = heic2anyModule.default as (
+      const topLevelDefault = (heic2anyModule as { default?: unknown }).default;
+      const nestedDefault =
+        topLevelDefault && typeof topLevelDefault === "object"
+          ? (topLevelDefault as { default?: unknown }).default
+          : undefined;
+      const convertCandidate = (
+        typeof topLevelDefault === "function"
+          ? topLevelDefault
+          : typeof nestedDefault === "function"
+            ? nestedDefault
+            : typeof (heic2anyModule as unknown) === "function"
+              ? (heic2anyModule as unknown)
+              : null
+      );
+      if (typeof convertCandidate !== "function") {
+        logImagePrepDebug("heic-convert-missing-function", {
+          fileName: file.name,
+          type: file.type,
+          moduleKeys: Object.keys(heic2anyModule as Record<string, unknown>),
+          defaultType: typeof topLevelDefault,
+          nestedDefaultType: typeof nestedDefault,
+        });
+        return null;
+      }
+      const convert = convertCandidate as (
         options: { blob: Blob; toType: string; quality?: number },
       ) => Promise<Blob | Blob[]>;
       const converted = await convert({
@@ -707,13 +838,72 @@ export const ProductForm = ({
       });
       const outputBlob = Array.isArray(converted) ? converted[0] : converted;
       if (!(outputBlob instanceof Blob)) {
+        logImagePrepDebug("heic-convert-invalid-output", {
+          fileName: file.name,
+          type: file.type,
+          outputType: typeof outputBlob,
+          isArray: Array.isArray(converted),
+        });
         return null;
       }
       return new File([outputBlob], replaceFileExtension(file.name, "jpg"), {
         type: "image/jpeg",
         lastModified: file.lastModified || Date.now(),
       });
-    } catch {
+    } catch (error) {
+      const rawMessage = (() => {
+        if (error instanceof Error) {
+          return error.message;
+        }
+        if (typeof error === "string") {
+          return error;
+        }
+        if (error && typeof error === "object") {
+          const candidate = (error as { message?: unknown }).message;
+          if (typeof candidate === "string") {
+            return candidate;
+          }
+          try {
+            return JSON.stringify(error);
+          } catch {
+            return String(error);
+          }
+        }
+        return String(error ?? "");
+      })();
+      const browserReadableMatch = rawMessage.match(
+        /Image is already browser readable:\s*(image\/[a-zA-Z0-9.+-]+)/i,
+      );
+      const browserReadableMimeType = browserReadableMatch?.[1]
+        ? normalizeImageMimeType(browserReadableMatch[1])
+        : "";
+      if (browserReadableMimeType.startsWith("image/")) {
+        const fallbackFile = new File(
+          [file],
+          replaceFileExtension(file.name, resolveImageExtensionByMime(browserReadableMimeType)),
+          {
+            type: browserReadableMimeType,
+            lastModified: file.lastModified || Date.now(),
+          },
+        );
+        logImagePrepDebug("heic-convert-browser-readable-fallback", {
+          fileName: file.name,
+          originalType: file.type,
+          fallbackType: browserReadableMimeType,
+          fallbackSize: fallbackFile.size,
+          message: rawMessage,
+        });
+        return fallbackFile;
+      }
+      logImagePrepDebug(
+        "heic-convert-failed",
+        {
+          fileName: file.name,
+          size: file.size,
+          type: file.type,
+        },
+        error,
+      );
       return null;
     }
   };
@@ -734,6 +924,13 @@ export const ProductForm = ({
       | null;
     if (!response.ok) {
       const code = body?.message;
+      logImagePrepDebug("upload-request-failed", {
+        status: response.status,
+        code,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
       if (code === "forbidden") {
         toast({ variant: "error", description: tErrors("forbidden") });
       } else if (code === "imageInvalidType") {
@@ -753,6 +950,12 @@ export const ProductForm = ({
 
     const uploadedUrl = body?.url?.trim();
     if (!uploadedUrl) {
+      logImagePrepDebug("upload-missing-url", {
+        status: response.status,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
       toast({ variant: "error", description: t("imageReadFailed") });
       return null;
     }
@@ -1053,6 +1256,57 @@ export const ProductForm = ({
   const imageEditorZoomPercent = Math.round(imageEditorZoom * 100);
   const imageEditorRotationDegrees = ((Math.round(imageEditorRotation) % 360) + 360) % 360;
 
+  const syncPhotoUrlWithImages = (images: Array<{ url?: string | null }>) => {
+    const nextPrimaryUrl = resolvePrimaryImageUrl(images);
+    if ((form.getValues("photoUrl")?.trim() ?? "") === nextPrimaryUrl) {
+      return;
+    }
+    form.setValue("photoUrl", nextPrimaryUrl, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  const handleAppendImageEntries = (images: { url: string; position?: number }[]) => {
+    if (!images.length) {
+      return;
+    }
+    const currentImages = form.getValues("images") ?? [];
+    appendImageField(images);
+    syncPhotoUrlWithImages([...currentImages, ...images]);
+  };
+
+  const handleRemoveImageAt = (index: number) => {
+    const currentImages = form.getValues("images") ?? [];
+    if (index < 0 || index >= currentImages.length) {
+      return;
+    }
+    const nextImages = currentImages.filter((_, itemIndex) => itemIndex !== index);
+    removeImageField(index);
+    syncPhotoUrlWithImages(nextImages);
+  };
+
+  const handleMoveImage = (fromIndex: number, toIndex: number) => {
+    const currentImages = form.getValues("images") ?? [];
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= currentImages.length ||
+      toIndex >= currentImages.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const nextImages = [...currentImages];
+    const [moved] = nextImages.splice(fromIndex, 1);
+    if (!moved) {
+      return;
+    }
+    nextImages.splice(toIndex, 0, moved);
+    moveImageField(fromIndex, toIndex);
+    syncPhotoUrlWithImages(nextImages);
+  };
+
   const handleImageFiles = async (files: FileList | File[]) => {
     if (readOnly || isUploadingImages) {
       return;
@@ -1063,60 +1317,70 @@ export const ProductForm = ({
     }
     setIsUploadingImages(true);
     try {
-      const nextImages: { url: string; position?: number }[] = [];
-      for (const originalFile of list) {
-        if (originalFile.size > maxInputImageBytes) {
-          toast({
-            variant: "error",
-            description: t("imageTooLargeInput", {
-              size: Math.round(maxInputImageBytes / (1024 * 1024)),
-            }),
+      const results: Array<{ url: string } | null> = new Array(list.length).fill(null);
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(maxImageUploadConcurrency, list.length) }, async () => {
+        while (true) {
+          const nextIndex = cursor;
+          cursor += 1;
+          if (nextIndex >= list.length) {
+            return;
+          }
+
+          const originalFile = list[nextIndex];
+          const prepared = await prepareProductImageFileForUpload({
+            file: originalFile,
+            maxImageBytes,
+            maxInputImageBytes,
+            convertHeicToJpeg,
+            optimizeImageToLimit,
           });
-          continue;
-        }
-
-        let file = originalFile;
-        if (isHeicLikeFile(file)) {
-          const converted = await convertHeicToJpeg(file);
-          if (!converted) {
-            toast({ variant: "error", description: t("imageCompressionFailed") });
-            continue;
-          }
-          file = converted;
-        }
-
-        if (!isImageLikeFile(file)) {
-          toast({ variant: "error", description: t("imageInvalidType") });
-          continue;
-        }
-
-        let uploadFile = file;
-        if (file.size > maxImageBytes) {
-          const optimized = await optimizeImageToLimit(file);
-          if (!optimized) {
-            toast({ variant: "error", description: t("imageCompressionFailed") });
-            continue;
-          }
-          if (optimized.size > maxImageBytes) {
-            toast({
-              variant: "error",
-              description: t("imageTooLargeAfterCompression", {
-                size: Math.round(maxImageBytes / (1024 * 1024)),
-              }),
+          if (!prepared.ok) {
+            logImagePrepDebug("prepare-failed", {
+              fileName: originalFile.name,
+              fileSize: originalFile.size,
+              fileType: originalFile.type,
+              code: prepared.code,
+              reason: prepared.reason,
             });
+            if (prepared.code === "imageTooLargeInput") {
+              toast({
+                variant: "error",
+                description: t("imageTooLargeInput", {
+                  size: Math.round(maxInputImageBytes / (1024 * 1024)),
+                }),
+              });
+              continue;
+            }
+            if (prepared.code === "imageTooLargeAfterCompression") {
+              toast({
+                variant: "error",
+                description: t("imageTooLargeAfterCompression", {
+                  size: Math.round(maxImageBytes / (1024 * 1024)),
+                }),
+              });
+              continue;
+            }
+            if (prepared.code === "imageInvalidType") {
+              toast({ variant: "error", description: t("imageInvalidType") });
+              continue;
+            }
+            toast({ variant: "error", description: t("imageCompressionFailed") });
             continue;
           }
-          uploadFile = optimized;
-        }
 
-        const uploadedUrl = await uploadImageFile(uploadFile);
-        if (uploadedUrl) {
-          nextImages.push({ url: uploadedUrl });
+          const uploadedUrl = await uploadImageFile(prepared.file);
+          if (uploadedUrl) {
+            results[nextIndex] = { url: uploadedUrl };
+          }
         }
-      }
+      });
+
+      await Promise.all(workers);
+      const nextImages = results.filter((result): result is { url: string } => Boolean(result));
 
       if (nextImages.length) {
-        appendImage(nextImages);
+        handleAppendImageEntries(nextImages);
       }
     } finally {
       setIsUploadingImages(false);
@@ -1890,7 +2154,7 @@ export const ProductForm = ({
                                 if (draggedImageIndex === null || draggedImageIndex === index || readOnly) {
                                   return;
                                 }
-                                moveImage(draggedImageIndex, index);
+                                handleMoveImage(draggedImageIndex, index);
                                 setDraggedImageIndex(null);
                               }}
                             >
@@ -1942,7 +2206,7 @@ export const ProductForm = ({
                                       size="icon"
                                       className="shadow-none"
                                       aria-label={t("imageMoveUp")}
-                                      onClick={() => canMoveUp && moveImage(index, index - 1)}
+                                      onClick={() => canMoveUp && handleMoveImage(index, index - 1)}
                                       disabled={!canMoveUp || readOnly}
                                     >
                                       <ArrowUpIcon className="h-4 w-4" aria-hidden />
@@ -1958,7 +2222,7 @@ export const ProductForm = ({
                                       size="icon"
                                       className="shadow-none"
                                       aria-label={t("imageMoveDown")}
-                                      onClick={() => canMoveDown && moveImage(index, index + 1)}
+                                      onClick={() => canMoveDown && handleMoveImage(index, index + 1)}
                                       disabled={!canMoveDown || readOnly}
                                     >
                                       <ArrowDownIcon className="h-4 w-4" aria-hidden />
@@ -1974,7 +2238,7 @@ export const ProductForm = ({
                                       size="icon"
                                       className="text-danger shadow-none hover:text-danger"
                                       aria-label={t("imageRemove")}
-                                      onClick={() => removeImage(index)}
+                                      onClick={() => handleRemoveImageAt(index)}
                                       disabled={readOnly}
                                     >
                                       <DeleteIcon className="h-4 w-4" aria-hidden />
@@ -1990,6 +2254,51 @@ export const ProductForm = ({
                     ) : (
                       <p className="text-xs text-muted-foreground/80">{t("imagesEmpty")}</p>
                     )}
+                    <FormField
+                      control={form.control}
+                      name="photoUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("photoUrl")}</FormLabel>
+                          {orderedImageUrls.length ? (
+                            <div className="space-y-2">
+                              {orderedImageUrls.map((image, index) => (
+                                <a
+                                  key={image.id}
+                                  href={image.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block space-y-1 rounded-md border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {index === 0 ? (
+                                        <Badge variant="success">{t("imagePrimary")}</Badge>
+                                      ) : (
+                                        <Badge variant="muted">{`#${index + 1}`}</Badge>
+                                      )}
+                                      <span className="text-xs text-muted-foreground">
+                                        {t("imagePosition", {
+                                          index: index + 1,
+                                          total: orderedImageUrls.length,
+                                        })}
+                                      </span>
+                                    </div>
+                                    <ViewIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                                  </div>
+                                  <p className="break-all text-xs text-muted-foreground">{image.url}</p>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <FormControl>
+                              <Input {...field} disabled={readOnly} />
+                            </FormControl>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </FormSection>
                   <FormSection>
                     <FormGrid className="items-start">
@@ -2001,19 +2310,6 @@ export const ProductForm = ({
                             <FormLabel>{t("description")}</FormLabel>
                             <FormControl>
                               <Textarea {...field} rows={4} disabled={readOnly} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="photoUrl"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t("photoUrl")}</FormLabel>
-                            <FormControl>
-                              <Input {...field} disabled={readOnly} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

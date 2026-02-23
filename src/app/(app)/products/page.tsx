@@ -1119,7 +1119,7 @@ const ProductsPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
-          <div className="inline-flex w-full items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
+          <div className="hidden items-center gap-1 rounded-lg border border-border p-1 sm:inline-flex">
             <Button
               type="button"
               size="sm"
