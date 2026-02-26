@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 
@@ -18,6 +18,8 @@ export const Modal = ({
   headerClassName,
   bodyClassName,
   usePortal = false,
+  mobileSheet = false,
+  animated = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -28,11 +30,14 @@ export const Modal = ({
   headerClassName?: string;
   bodyClassName?: string;
   usePortal?: boolean;
+  mobileSheet?: boolean;
+  animated?: boolean;
 }) => {
   const tCommon = useTranslations("common");
   const titleId = useId();
   const subtitleId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [entered, setEntered] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -52,15 +57,43 @@ export const Modal = ({
     };
   }, [open, onOpenChange]);
 
+  useEffect(() => {
+    if (!open) {
+      setEntered(false);
+      return;
+    }
+    if (!animated) {
+      setEntered(true);
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      setEntered(true);
+    });
+    return () => {
+      cancelAnimationFrame(id);
+    };
+  }, [animated, open]);
+
   if (!open) {
     return null;
   }
 
   const content = (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden px-3 py-4 sm:px-4 sm:py-6">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 overflow-hidden",
+        mobileSheet
+          ? "flex items-end justify-center px-0 py-0 sm:grid sm:place-items-center sm:px-4 sm:py-6"
+          : "grid place-items-center px-3 py-4 sm:px-4 sm:py-6",
+      )}
+    >
       <button
         type="button"
-        className="absolute inset-0 z-0 bg-black/40 backdrop-blur-[1px]"
+        className={cn(
+          "absolute inset-0 z-0 bg-black/40 backdrop-blur-[1px]",
+          animated && "transition-opacity duration-200",
+          animated && (entered ? "opacity-100" : "opacity-0"),
+        )}
         onClick={() => onOpenChange(false)}
         aria-label={tCommon("close")}
       />
@@ -72,7 +105,19 @@ export const Modal = ({
         aria-describedby={subtitle ? subtitleId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl",
+          "relative z-10 flex w-full flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-2xl",
+          mobileSheet
+            ? "max-h-[90dvh] rounded-t-2xl border-b-0 sm:max-h-[85dvh] sm:rounded-xl sm:border-b"
+            : "max-h-[85dvh] max-w-lg rounded-xl",
+          animated && "transition-all duration-250 ease-out will-change-transform",
+          animated &&
+            (mobileSheet
+              ? entered
+                ? "translate-y-0 opacity-100"
+                : "translate-y-10 opacity-0 sm:translate-y-4"
+              : entered
+                ? "scale-100 opacity-100"
+                : "scale-95 opacity-0"),
           className,
         )}
       >

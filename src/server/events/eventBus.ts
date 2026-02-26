@@ -11,15 +11,30 @@ import {
 } from "@/server/metrics/metrics";
 
 export type EventPayload =
-  | { type: "inventory.updated"; payload: { storeId: string; productId: string; variantId?: string | null } }
+  | {
+      type: "inventory.updated";
+      payload: { storeId: string; productId: string; variantId?: string | null };
+    }
   | { type: "purchaseOrder.updated"; payload: { poId: string; status: string } }
   | {
       type: "lowStock.triggered";
-      payload: { storeId: string; productId: string; variantId?: string | null; onHand: number; minStock: number };
+      payload: {
+        storeId: string;
+        productId: string;
+        variantId?: string | null;
+        onHand: number;
+        minStock: number;
+      };
     }
   | {
       type: "sale.completed";
-      payload: { saleId: string; storeId: string; registerId?: string | null; shiftId?: string | null; number: string };
+      payload: {
+        saleId: string;
+        storeId: string;
+        registerId?: string | null;
+        shiftId?: string | null;
+        number: string;
+      };
     }
   | {
       type: "sale.refunded";
@@ -38,6 +53,10 @@ export type EventPayload =
   | {
       type: "shift.closed";
       payload: { shiftId: string; storeId: string; registerId: string };
+    }
+  | {
+      type: "customerOrder.created";
+      payload: { customerOrderId: string; storeId: string; source: "MANUAL" | "CATALOG" };
     };
 
 type Listener = (event: EventPayload) => void;
@@ -122,12 +141,10 @@ class RedisEventBus {
     }
 
     const envelope: EventEnvelope = { sourceId: this.sourceId, event };
-    publisher
-      .publish(CHANNEL, JSON.stringify(envelope))
-      .catch((error) => {
-        incrementCounter(eventsPublishFailuresTotal, { type: event.type });
-        this.handleRedisFailure(error, "publish", event.type);
-      });
+    publisher.publish(CHANNEL, JSON.stringify(envelope)).catch((error) => {
+      incrementCounter(eventsPublishFailuresTotal, { type: event.type });
+      this.handleRedisFailure(error, "publish", event.type);
+    });
   }
 
   subscribe(listener: Listener) {
@@ -220,7 +237,11 @@ class RedisEventBus {
     }
   }
 
-  private handleRedisFailure(error: unknown, source: "publish" | "subscribe" | "subscriber", eventType: string) {
+  private handleRedisFailure(
+    error: unknown,
+    source: "publish" | "subscribe" | "subscriber",
+    eventType: string,
+  ) {
     if (!this.redisHealthy) {
       return;
     }
@@ -241,7 +262,8 @@ const globalForEventBus = globalThis as typeof globalThis & {
 };
 
 export const eventBus: AnyEventBus =
-  globalForEventBus.__bazaarEventBus ?? (redisConfigured() ? new RedisEventBus() : new InMemoryEventBus());
+  globalForEventBus.__bazaarEventBus ??
+  (redisConfigured() ? new RedisEventBus() : new InMemoryEventBus());
 
 if (!globalForEventBus.__bazaarEventBus) {
   globalForEventBus.__bazaarEventBus = eventBus;

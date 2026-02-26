@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 const OrdersRedirectPage = () => {
-  redirect("/purchase-orders");
+  redirect("/sales/orders");
 };
 
 export default OrdersRedirectPage;

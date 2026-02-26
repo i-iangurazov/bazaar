@@ -3,6 +3,14 @@
 @tailwind utilities;
 
 :root {
+  --font-inter: "Inter";
+  --font-roboto: "Roboto";
+  --font-open-sans: "Open Sans";
+  --font-montserrat: "Montserrat";
+  --font-lato: "Lato";
+  --font-pt-sans: "PT Sans";
+  --font-source-sans-3: "Source Sans 3";
+  --font-manrope: "Manrope";
   --background: 0 0% 100%;
   --foreground: 222 47% 11%; /* slate-900-ish */
 

@@ -7,14 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
 import { FormGrid } from "@/components/form-layout";
-import {
-  AddIcon,
-  CheckIcon,
-  CloseIcon,
-  DeleteIcon,
-  EditIcon,
-  EmptyIcon,
-} from "@/components/icons";
+import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +53,9 @@ const createIdempotencyKey = () => {
   return `sales-order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const statusVariant = (status: CustomerOrderStatus): "default" | "success" | "warning" | "danger" => {
+const statusVariant = (
+  status: CustomerOrderStatus,
+): "default" | "success" | "warning" | "danger" => {
   switch (status) {
     case CustomerOrderStatus.COMPLETED:
       return "success";
@@ -72,6 +67,9 @@ const statusVariant = (status: CustomerOrderStatus): "default" | "success" | "wa
       return "default";
   }
 };
+
+const sourceVariant = (source?: string | null): "warning" | "muted" =>
+  source === "CATALOG" ? "warning" : "muted";
 
 const SalesOrderDetailPage = () => {
   const params = useParams();
@@ -85,6 +83,8 @@ const SalesOrderDetailPage = () => {
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const utils = trpc.useUtils();
+  const sourceLabel = (source?: string | null) =>
+    source === "CATALOG" ? t("source.catalog") : t("source.manual");
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
@@ -373,25 +373,49 @@ const SalesOrderDetailPage = () => {
           onClick={() => void handleConfirm()}
           disabled={confirmMutation.isLoading || !lines.length}
         >
-          {confirmMutation.isLoading ? <Spinner className="h-4 w-4" /> : <CheckIcon className="h-4 w-4" aria-hidden />}
+          {confirmMutation.isLoading ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <CheckIcon className="h-4 w-4" aria-hidden />
+          )}
           {t("confirmOrder")}
         </Button>
       ) : null}
       {order?.status === CustomerOrderStatus.CONFIRMED ? (
-        <Button variant="secondary" onClick={() => void handleMarkReady()} disabled={markReadyMutation.isLoading}>
-          {markReadyMutation.isLoading ? <Spinner className="h-4 w-4" /> : <CheckIcon className="h-4 w-4" aria-hidden />}
+        <Button
+          variant="secondary"
+          onClick={() => void handleMarkReady()}
+          disabled={markReadyMutation.isLoading}
+        >
+          {markReadyMutation.isLoading ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <CheckIcon className="h-4 w-4" aria-hidden />
+          )}
           {t("markReady")}
         </Button>
       ) : null}
       {canFinalize && order?.status === CustomerOrderStatus.READY ? (
         <Button onClick={() => void handleComplete()} disabled={completeMutation.isLoading}>
-          {completeMutation.isLoading ? <Spinner className="h-4 w-4" /> : <CheckIcon className="h-4 w-4" aria-hidden />}
+          {completeMutation.isLoading ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <CheckIcon className="h-4 w-4" aria-hidden />
+          )}
           {t("complete")}
         </Button>
       ) : null}
       {canCancel ? (
-        <Button variant="danger" onClick={() => void handleCancel()} disabled={cancelMutation.isLoading}>
-          {cancelMutation.isLoading ? <Spinner className="h-4 w-4" /> : <CloseIcon className="h-4 w-4" aria-hidden />}
+        <Button
+          variant="danger"
+          onClick={() => void handleCancel()}
+          disabled={cancelMutation.isLoading}
+        >
+          {cancelMutation.isLoading ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <CloseIcon className="h-4 w-4" aria-hidden />
+          )}
           {t("cancel")}
         </Button>
       ) : null}
@@ -400,7 +424,11 @@ const SalesOrderDetailPage = () => {
 
   return (
     <div>
-      <PageHeader title={t("detailsTitle")} subtitle={t("detailsSubtitle")} action={headerActions} />
+      <PageHeader
+        title={t("detailsTitle")}
+        subtitle={t("detailsSubtitle")}
+        action={headerActions}
+      />
 
       {loading ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -411,7 +439,9 @@ const SalesOrderDetailPage = () => {
 
       {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
 
-      {!loading && !error && !order ? <p className="mt-4 text-sm text-danger">{t("notFound")}</p> : null}
+      {!loading && !error && !order ? (
+        <p className="mt-4 text-sm text-danger">{t("notFound")}</p>
+      ) : null}
 
       {order ? (
         <div className="space-y-6">
@@ -419,9 +449,12 @@ const SalesOrderDetailPage = () => {
             <CardHeader>
               <CardTitle className="flex items-center justify-between gap-2">
                 <span>{order.number}</span>
-                <Badge variant={statusVariant(order.status)}>
-                  {getCustomerOrderStatusLabel(t, order.status)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={sourceVariant(order.source)}>{sourceLabel(order.source)}</Badge>
+                  <Badge variant={statusVariant(order.status)}>
+                    {getCustomerOrderStatusLabel(t, order.status)}
+                  </Badge>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -432,7 +465,13 @@ const SalesOrderDetailPage = () => {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t("created")}</p>
-                  <p className="text-sm font-medium text-foreground">{formatDate(order.createdAt, locale)}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {formatDate(order.createdAt, locale)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("sourceLabel")}</p>
+                  <p className="text-sm font-medium text-foreground">{sourceLabel(order.source)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t("subtotal")}</p>
@@ -506,7 +545,12 @@ const SalesOrderDetailPage = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("linesTitle")}</CardTitle>
               {isEditable ? (
-                <Button variant="secondary" size="sm" onClick={openAddLineDialog} disabled={lineActionsDisabled}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={openAddLineDialog}
+                  disabled={lineActionsDisabled}
+                >
                   <AddIcon className="h-4 w-4" aria-hidden />
                   {t("addLine")}
                 </Button>
@@ -536,7 +580,9 @@ const SalesOrderDetailPage = () => {
                         {lines.map((line) => (
                           <TableRow key={line.id}>
                             <TableCell>
-                              <p className="text-sm font-medium text-foreground">{line.product.name}</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {line.product.name}
+                              </p>
                               <p className="text-xs text-muted-foreground">{line.product.sku}</p>
                             </TableCell>
                             <TableCell>{line.variant?.name ?? t("variantBase")}</TableCell>
@@ -571,7 +617,9 @@ const SalesOrderDetailPage = () => {
                                               ) {
                                                 return;
                                               }
-                                              void removeLineMutation.mutateAsync({ lineId: line.id });
+                                              void removeLineMutation.mutateAsync({
+                                                lineId: line.id,
+                                              });
                                             },
                                             disabled: lineActionsDisabled,
                                           },
@@ -593,10 +641,14 @@ const SalesOrderDetailPage = () => {
                         <CardContent className="space-y-3 p-4">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-foreground">{line.product.name}</p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {line.product.name}
+                              </p>
                               <p className="text-xs text-muted-foreground">{line.product.sku}</p>
                             </div>
-                            <p className="text-xs text-muted-foreground">{line.variant?.name ?? t("variantBase")}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {line.variant?.name ?? t("variantBase")}
+                            </p>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                             <div>
@@ -605,11 +657,15 @@ const SalesOrderDetailPage = () => {
                             </div>
                             <div>
                               <p>{t("unitPrice")}</p>
-                              <p className="font-medium text-foreground">{formatCurrencyKGS(line.unitPriceKgs, locale)}</p>
+                              <p className="font-medium text-foreground">
+                                {formatCurrencyKGS(line.unitPriceKgs, locale)}
+                              </p>
                             </div>
                             <div>
                               <p>{t("lineTotal")}</p>
-                              <p className="font-medium text-foreground">{formatCurrencyKGS(line.lineTotalKgs, locale)}</p>
+                              <p className="font-medium text-foreground">
+                                {formatCurrencyKGS(line.lineTotalKgs, locale)}
+                              </p>
                             </div>
                           </div>
                           {isEditable ? (
@@ -715,7 +771,9 @@ const SalesOrderDetailPage = () => {
                         </button>
                       ))
                     ) : (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">{tCommon("nothingFound")}</p>
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        {tCommon("nothingFound")}
+                      </p>
                     )}
                   </div>
                 ) : null}
@@ -733,7 +791,11 @@ const SalesOrderDetailPage = () => {
 
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{t("variant")}</p>
-                <Select value={selectedVariant} onValueChange={setSelectedVariant} disabled={!selectedProduct}>
+                <Select
+                  value={selectedVariant}
+                  onValueChange={setSelectedVariant}
+                  disabled={!selectedProduct}
+                >
                   <SelectTrigger aria-label={t("variant")}>
                     <SelectValue placeholder={t("variantPlaceholder")} />
                   </SelectTrigger>
@@ -750,9 +812,12 @@ const SalesOrderDetailPage = () => {
             </>
           ) : (
             <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-              <p className="font-medium text-foreground">{selectedProduct?.name ?? currentLine?.product.name}</p>
+              <p className="font-medium text-foreground">
+                {selectedProduct?.name ?? currentLine?.product.name}
+              </p>
               <p className="text-xs text-muted-foreground">
-                {selectedProduct?.sku ?? currentLine?.product.sku} · {currentLine?.variant?.name ?? t("variantBase")}
+                {selectedProduct?.sku ?? currentLine?.product.sku} ·{" "}
+                {currentLine?.variant?.name ?? t("variantBase")}
               </p>
             </div>
           )}

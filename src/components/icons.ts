@@ -9,6 +9,7 @@ import {
   Ruler,
   Users,
   Plus,
+  Minus,
   CirclePlus,
   Upload,
   Download,
@@ -52,6 +53,7 @@ import {
   Languages,
   LayoutGrid,
   List,
+  Plug,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
@@ -67,8 +69,10 @@ export const UnitsIcon = Ruler;
 export const UsersIcon = Users;
 
 export const AddIcon = Plus;
+export const MinusIcon = Minus;
 export const CirclePlusIcon = CirclePlus;
 export const UploadIcon = Upload;
+export const IntegrationsIcon = Plug;
 export const DownloadIcon = Download;
 export const ReceiveIcon = ArrowDownToLine;
 export const TransferIcon = ArrowRightLeft;

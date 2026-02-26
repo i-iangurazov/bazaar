@@ -52,6 +52,11 @@ enum CustomerOrderStatus {
   CANCELED
 }
 
+enum CustomerOrderSource {
+  MANUAL
+  CATALOG
+}
+
 enum RegisterShiftStatus {
   OPEN
   CLOSED
@@ -187,129 +192,155 @@ enum ExportType {
   ESF_REFERENCES
 }
 
-model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  plan      OrganizationPlan @default(STARTER)
-  subscriptionStatus OrganizationSubscriptionStatus @default(ACTIVE)
-  trialEndsAt DateTime?
-  currentPeriodEndsAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum BazaarCatalogStatus {
+  DRAFT
+  PUBLISHED
+}
 
-  users           User[]
-  stores          Store[]
-  suppliers       Supplier[]
-  products        Product[]
-  units           Unit[]
-  productCategories ProductCategory[]
-  productBarcodes ProductBarcode[]
-  productImages   ProductImage[]
-  productPacks    ProductPack[]
-  purchaseOrders  PurchaseOrder[]
-  customerOrders  CustomerOrder[]
-  auditLogs       AuditLog[]
-  importBatches   ImportBatch[]
-  stockCounts     StockCount[]
-  storePrices     StorePrice[]
-  productCosts    ProductCost[]
-  productBundleComponents ProductBundleComponent[]
-  stockLots       StockLot[]
-  attributeDefinitions AttributeDefinition[]
-  categoryTemplates CategoryAttributeTemplate[]
-  variantAttributeValues VariantAttributeValue[]
-  onboardingProgress OnboardingProgress?
-  productEvents   ProductEvent[]
-  deadLetterJobs  DeadLetterJob[]
-  impersonationSessions ImpersonationSession[]
-  inviteTokens    InviteToken[]
-  accessRequests  AccessRequest[]
-  complianceProfiles StoreComplianceProfile[]
-  productComplianceFlags ProductComplianceFlags[]
-  exportJobs ExportJob[]
-  periodCloses PeriodClose[]
-  diagnosticsReports DiagnosticsReport[]
-  planUpgradeRequests PlanUpgradeRequest[]
-  counters OrganizationCounter?
-  posRegisters PosRegister[]
-  registerShifts RegisterShift[]
-  salePayments SalePayment[]
-  cashDrawerMovements CashDrawerMovement[]
-  saleReturns SaleReturn[]
-  fiscalReceipts FiscalReceipt[]
-  kkmConnectorDevices KkmConnectorDevice[]
+enum BazaarCatalogFontFamily {
+  NotoSans
+  Inter
+  System
+  Roboto
+  OpenSans
+  Montserrat
+  Lato
+  PTSans
+  SourceSans3
+  Manrope
+}
+
+enum BazaarCatalogHeaderStyle {
+  COMPACT
+  STANDARD
+}
+
+model Organization {
+  id                  String                         @id @default(cuid())
+  name                String
+  plan                OrganizationPlan               @default(STARTER)
+  subscriptionStatus  OrganizationSubscriptionStatus @default(ACTIVE)
+  trialEndsAt         DateTime?
+  currentPeriodEndsAt DateTime?
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+
+  users                    User[]
+  stores                   Store[]
+  suppliers                Supplier[]
+  products                 Product[]
+  units                    Unit[]
+  productCategories        ProductCategory[]
+  productBarcodes          ProductBarcode[]
+  productImages            ProductImage[]
+  productPacks             ProductPack[]
+  purchaseOrders           PurchaseOrder[]
+  customerOrders           CustomerOrder[]
+  auditLogs                AuditLog[]
+  importBatches            ImportBatch[]
+  stockCounts              StockCount[]
+  storePrices              StorePrice[]
+  bazaarCatalogs           BazaarCatalog[]
+  bazaarCatalogImages      BazaarCatalogImage[]
+  productCosts             ProductCost[]
+  productBundleComponents  ProductBundleComponent[]
+  stockLots                StockLot[]
+  attributeDefinitions     AttributeDefinition[]
+  categoryTemplates        CategoryAttributeTemplate[]
+  variantAttributeValues   VariantAttributeValue[]
+  onboardingProgress       OnboardingProgress?
+  productEvents            ProductEvent[]
+  deadLetterJobs           DeadLetterJob[]
+  impersonationSessions    ImpersonationSession[]
+  inviteTokens             InviteToken[]
+  accessRequests           AccessRequest[]
+  complianceProfiles       StoreComplianceProfile[]
+  productComplianceFlags   ProductComplianceFlags[]
+  exportJobs               ExportJob[]
+  periodCloses             PeriodClose[]
+  diagnosticsReports       DiagnosticsReport[]
+  planUpgradeRequests      PlanUpgradeRequest[]
+  counters                 OrganizationCounter?
+  posRegisters             PosRegister[]
+  registerShifts           RegisterShift[]
+  salePayments             SalePayment[]
+  cashDrawerMovements      CashDrawerMovement[]
+  saleReturns              SaleReturn[]
+  fiscalReceipts           FiscalReceipt[]
+  kkmConnectorDevices      KkmConnectorDevice[]
   kkmConnectorPairingCodes KkmConnectorPairingCode[]
-  refundRequests RefundRequest[]
-  markingCodeCaptures MarkingCodeCapture[]
-  ettnReferences EttnReference[]
-  esfReferences EsfReference[]
+  refundRequests           RefundRequest[]
+  markingCodeCaptures      MarkingCodeCapture[]
+  ettnReferences           EttnReference[]
+  esfReferences            EsfReference[]
 }
 
 model User {
-  id           String   @id @default(cuid())
-  organizationId String?
-  email        String   @unique
-  name         String
-  phone        String?
-  jobTitle     String?
-  passwordHash String
-  role         Role
-  isOrgOwner   Boolean  @default(false)
-  preferredLocale String @default("ru")
+  id              String          @id @default(cuid())
+  organizationId  String?
+  email           String          @unique
+  name            String
+  phone           String?
+  jobTitle        String?
+  passwordHash    String
+  role            Role
+  isOrgOwner      Boolean         @default(false)
+  preferredLocale String          @default("ru")
   themePreference ThemePreference @default(LIGHT)
-  isActive     Boolean  @default(true)
+  isActive        Boolean         @default(true)
   emailVerifiedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  auditLogs    AuditLog[]
-  idempotencyKeys IdempotencyKey[]
-  purchaseOrdersCreated PurchaseOrder[] @relation("purchaseOrdersCreated")
-  purchaseOrdersUpdated PurchaseOrder[] @relation("purchaseOrdersUpdated")
-  customerOrdersCreated CustomerOrder[] @relation("customerOrdersCreated")
-  customerOrdersUpdated CustomerOrder[] @relation("customerOrdersUpdated")
-  stockCountsCreated StockCount[] @relation("stockCountCreatedBy")
-  stockCountsApplied StockCount[] @relation("stockCountAppliedBy")
-  storePricesUpdated StorePrice[] @relation("storePricesUpdated")
-  stockMovements StockMovement[]
-  importBatchesCreated ImportBatch[] @relation("importBatchesCreated")
-  importBatchesRolledBack ImportBatch[] @relation("importBatchesRolledBack")
-  importRollbackReportsCreated ImportRollbackReport[] @relation("importRollbackReportsCreated")
-  impersonationSessionsCreated ImpersonationSession[] @relation("impersonationsCreated")
-  impersonationSessionsTargeted ImpersonationSession[] @relation("impersonationsTargeted")
-  deadLetterJobsResolved DeadLetterJob[] @relation("deadLetterResolvedBy")
-  productEventsCreated ProductEvent[] @relation("productEventsCreatedBy")
-  storeFeatureFlagsUpdated StoreFeatureFlag[]
-  inviteTokensCreated InviteToken[] @relation("inviteCreatedBy")
-  authTokens AuthToken[]
-  complianceProfilesUpdated StoreComplianceProfile[] @relation("complianceUpdatedBy")
-  exportJobsRequested ExportJob[] @relation("exportRequestedBy")
-  periodClosesCreated PeriodClose[] @relation("periodClosedBy")
-  diagnosticsReportsCreated DiagnosticsReport[] @relation("diagnosticsCreatedBy")
-  planUpgradeRequestsCreated PlanUpgradeRequest[] @relation("planUpgradeRequestedBy")
-  planUpgradeRequestsReviewed PlanUpgradeRequest[] @relation("planUpgradeReviewedBy")
-  registerShiftsOpened RegisterShift[] @relation("posShiftsOpened")
-  registerShiftsClosed RegisterShift[] @relation("posShiftsClosed")
-  salePaymentsCreated SalePayment[] @relation("salePaymentsCreated")
-  cashDrawerMovementsCreated CashDrawerMovement[] @relation("cashDrawerMovementsCreated")
-  saleReturnsCreated SaleReturn[] @relation("saleReturnsCreated")
-  saleReturnsCompleted SaleReturn[] @relation("saleReturnsCompleted")
-  kkmPairingCodesCreated KkmConnectorPairingCode[] @relation("kkmPairingCodeCreatedBy")
-  refundRequestsCreated RefundRequest[] @relation("refundRequestsCreatedBy")
-  refundRequestsReviewed RefundRequest[] @relation("refundRequestsReviewedBy")
-  markingCodeCaptures MarkingCodeCapture[] @relation("markingCapturedBy")
-  ettnReferencesCreated EttnReference[] @relation("ettnReferenceCreatedBy")
-  esfReferencesCreated EsfReference[] @relation("esfReferenceCreatedBy")
-  guideState UserGuideState?
+  organization                  Organization?             @relation(fields: [organizationId], references: [id])
+  auditLogs                     AuditLog[]
+  idempotencyKeys               IdempotencyKey[]
+  purchaseOrdersCreated         PurchaseOrder[]           @relation("purchaseOrdersCreated")
+  purchaseOrdersUpdated         PurchaseOrder[]           @relation("purchaseOrdersUpdated")
+  customerOrdersCreated         CustomerOrder[]           @relation("customerOrdersCreated")
+  customerOrdersUpdated         CustomerOrder[]           @relation("customerOrdersUpdated")
+  stockCountsCreated            StockCount[]              @relation("stockCountCreatedBy")
+  stockCountsApplied            StockCount[]              @relation("stockCountAppliedBy")
+  storePricesUpdated            StorePrice[]              @relation("storePricesUpdated")
+  stockMovements                StockMovement[]
+  importBatchesCreated          ImportBatch[]             @relation("importBatchesCreated")
+  importBatchesRolledBack       ImportBatch[]             @relation("importBatchesRolledBack")
+  importRollbackReportsCreated  ImportRollbackReport[]    @relation("importRollbackReportsCreated")
+  impersonationSessionsCreated  ImpersonationSession[]    @relation("impersonationsCreated")
+  impersonationSessionsTargeted ImpersonationSession[]    @relation("impersonationsTargeted")
+  deadLetterJobsResolved        DeadLetterJob[]           @relation("deadLetterResolvedBy")
+  productEventsCreated          ProductEvent[]            @relation("productEventsCreatedBy")
+  storeFeatureFlagsUpdated      StoreFeatureFlag[]
+  inviteTokensCreated           InviteToken[]             @relation("inviteCreatedBy")
+  authTokens                    AuthToken[]
+  complianceProfilesUpdated     StoreComplianceProfile[]  @relation("complianceUpdatedBy")
+  exportJobsRequested           ExportJob[]               @relation("exportRequestedBy")
+  periodClosesCreated           PeriodClose[]             @relation("periodClosedBy")
+  diagnosticsReportsCreated     DiagnosticsReport[]       @relation("diagnosticsCreatedBy")
+  planUpgradeRequestsCreated    PlanUpgradeRequest[]      @relation("planUpgradeRequestedBy")
+  planUpgradeRequestsReviewed   PlanUpgradeRequest[]      @relation("planUpgradeReviewedBy")
+  registerShiftsOpened          RegisterShift[]           @relation("posShiftsOpened")
+  registerShiftsClosed          RegisterShift[]           @relation("posShiftsClosed")
+  salePaymentsCreated           SalePayment[]             @relation("salePaymentsCreated")
+  cashDrawerMovementsCreated    CashDrawerMovement[]      @relation("cashDrawerMovementsCreated")
+  saleReturnsCreated            SaleReturn[]              @relation("saleReturnsCreated")
+  saleReturnsCompleted          SaleReturn[]              @relation("saleReturnsCompleted")
+  kkmPairingCodesCreated        KkmConnectorPairingCode[] @relation("kkmPairingCodeCreatedBy")
+  refundRequestsCreated         RefundRequest[]           @relation("refundRequestsCreatedBy")
+  refundRequestsReviewed        RefundRequest[]           @relation("refundRequestsReviewedBy")
+  bazaarCatalogsUpdated         BazaarCatalog[]           @relation("bazaarCatalogUpdatedBy")
+  markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
+  ettnReferencesCreated         EttnReference[]           @relation("ettnReferenceCreatedBy")
+  esfReferencesCreated          EsfReference[]            @relation("esfReferenceCreatedBy")
+  guideState                    UserGuideState?
 }
 
 model OrganizationCounter {
-  organizationId    String  @id
-  salesOrderNumber  Int     @default(0)
-  posSaleNumber     Int     @default(0)
-  posReturnNumber   Int     @default(0)
-  updatedAt         DateTime @updatedAt
+  organizationId   String   @id
+  salesOrderNumber Int      @default(0)
+  posSaleNumber    Int      @default(0)
+  posReturnNumber  Int      @default(0)
+  updatedAt        DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
@@ -328,95 +359,96 @@ model UserGuideState {
 }
 
 model Store {
-  id                String   @id @default(cuid())
-  organizationId    String
-  name              String
-  code              String
-  allowNegativeStock Boolean @default(false)
-  trackExpiryLots   Boolean @default(false)
-  legalEntityType   LegalEntityType?
-  legalName         String?
-  inn               String?
-  address           String?
-  phone             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String           @id @default(cuid())
+  organizationId     String
+  name               String
+  code               String
+  allowNegativeStock Boolean          @default(false)
+  trackExpiryLots    Boolean          @default(false)
+  legalEntityType    LegalEntityType?
+  legalName          String?
+  inn                String?
+  address            String?
+  phone              String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  inventorySnapshots InventorySnapshot[]
-  stockMovements StockMovement[]
-  reorderPolicies ReorderPolicy[]
-  forecastSnapshots ForecastSnapshot[]
-  purchaseOrders PurchaseOrder[]
-  customerOrders CustomerOrder[]
-  stockCounts   StockCount[]
-  stockCountLines StockCountLine[]
-  stockLots     StockLot[]
-  storePrices   StorePrice[]
-  featureFlags StoreFeatureFlag[]
-  complianceProfile StoreComplianceProfile?
-  exportJobs ExportJob[]
-  periodCloses PeriodClose[]
-  posRegisters PosRegister[]
-  registerShifts RegisterShift[]
-  salePayments SalePayment[]
-  cashDrawerMovements CashDrawerMovement[]
-  saleReturns SaleReturn[]
-  fiscalReceipts FiscalReceipt[]
-  kkmConnectorDevices KkmConnectorDevice[]
+  organization             Organization              @relation(fields: [organizationId], references: [id])
+  inventorySnapshots       InventorySnapshot[]
+  stockMovements           StockMovement[]
+  reorderPolicies          ReorderPolicy[]
+  forecastSnapshots        ForecastSnapshot[]
+  purchaseOrders           PurchaseOrder[]
+  customerOrders           CustomerOrder[]
+  stockCounts              StockCount[]
+  stockCountLines          StockCountLine[]
+  stockLots                StockLot[]
+  storePrices              StorePrice[]
+  bazaarCatalog            BazaarCatalog?
+  featureFlags             StoreFeatureFlag[]
+  complianceProfile        StoreComplianceProfile?
+  exportJobs               ExportJob[]
+  periodCloses             PeriodClose[]
+  posRegisters             PosRegister[]
+  registerShifts           RegisterShift[]
+  salePayments             SalePayment[]
+  cashDrawerMovements      CashDrawerMovement[]
+  saleReturns              SaleReturn[]
+  fiscalReceipts           FiscalReceipt[]
+  kkmConnectorDevices      KkmConnectorDevice[]
   kkmConnectorPairingCodes KkmConnectorPairingCode[]
-  refundRequests RefundRequest[]
-  markingCodeCaptures MarkingCodeCapture[]
-  ettnReferences EttnReference[]
-  esfReferences EsfReference[]
+  refundRequests           RefundRequest[]
+  markingCodeCaptures      MarkingCodeCapture[]
+  ettnReferences           EttnReference[]
+  esfReferences            EsfReference[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
 }
 
 model StoreComplianceProfile {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   organizationId String
-  storeId        String   @unique
+  storeId        String      @unique
   defaultLocale  String?
   taxRegime      String?
-  enableKkm      Boolean  @default(false)
-  kkmMode        KkmMode  @default(OFF)
-  enableEsf      Boolean  @default(false)
-  enableEttn     Boolean  @default(false)
-  enableMarking  Boolean  @default(false)
+  enableKkm      Boolean     @default(false)
+  kkmMode        KkmMode     @default(OFF)
+  enableEsf      Boolean     @default(false)
+  enableEttn     Boolean     @default(false)
+  enableMarking  Boolean     @default(false)
   markingMode    MarkingMode @default(OFF)
   kkmProviderKey String?
   kkmSettings    Json?
   updatedById    String?
-  updatedAt      DateTime @updatedAt
-  createdAt      DateTime @default(now())
+  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime    @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  updatedBy    User? @relation("complianceUpdatedBy", fields: [updatedById], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  updatedBy    User?        @relation("complianceUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([organizationId, storeId])
 }
 
 model ProductComplianceFlags {
-  id             String   @id @default(cuid())
-  organizationId String
-  productId      String   @unique
-  requiresMarking Boolean @default(false)
-  requiresEttn    Boolean @default(false)
+  id              String   @id @default(cuid())
+  organizationId  String
+  productId       String   @unique
+  requiresMarking Boolean  @default(false)
+  requiresEttn    Boolean  @default(false)
   markingType     String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
 
   @@index([organizationId, productId])
 }
 
 model ExportJob {
-  id             String   @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
   storeId        String
   type           ExportType
@@ -424,7 +456,7 @@ model ExportJob {
   periodStart    DateTime
   periodEnd      DateTime
   requestedById  String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime        @default(now())
   startedAt      DateTime?
   finishedAt     DateTime?
   fileName       String?
@@ -436,8 +468,8 @@ model ExportJob {
   errorJson      Json?
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  requestedBy  User @relation("exportRequestedBy", fields: [requestedById], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  requestedBy  User         @relation("exportRequestedBy", fields: [requestedById], references: [id])
 
   @@index([organizationId, storeId, createdAt])
   @@index([status, createdAt])
@@ -455,8 +487,8 @@ model PeriodClose {
   totals         Json?
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  closedBy     User @relation("periodClosedBy", fields: [closedById], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  closedBy     User         @relation("periodClosedBy", fields: [closedById], references: [id])
 
   @@unique([organizationId, storeId, periodStart, periodEnd])
   @@index([organizationId, storeId, closedAt])
@@ -470,28 +502,28 @@ model DiagnosticsReport {
   resultsJson    Json
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User @relation("diagnosticsCreatedBy", fields: [createdById], references: [id])
+  createdBy    User         @relation("diagnosticsCreatedBy", fields: [createdById], references: [id])
 
   @@index([organizationId, createdAt])
   @@index([createdById, createdAt])
 }
 
 model PlanUpgradeRequest {
-  id             String   @id @default(cuid())
+  id             String                   @id @default(cuid())
   organizationId String
   requestedById  String
   currentPlan    OrganizationPlan
   requestedPlan  OrganizationPlan
   status         PlanUpgradeRequestStatus @default(PENDING)
-  message        String? @db.Text
-  reviewNote     String? @db.Text
-  createdAt      DateTime @default(now())
+  message        String?                  @db.Text
+  reviewNote     String?                  @db.Text
+  createdAt      DateTime                 @default(now())
   reviewedAt     DateTime?
   reviewedById   String?
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  requestedBy  User @relation("planUpgradeRequestedBy", fields: [requestedById], references: [id])
-  reviewedBy   User? @relation("planUpgradeReviewedBy", fields: [reviewedById], references: [id])
+  requestedBy  User         @relation("planUpgradeRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy   User?        @relation("planUpgradeReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([organizationId, status, createdAt])
   @@index([status, createdAt])
@@ -504,12 +536,12 @@ model Supplier {
   name           String
   email          String?
   phone          String?
-  notes          String? @db.Text
+  notes          String?  @db.Text
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  products     Product[]
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  products       Product[]
   purchaseOrders PurchaseOrder[]
 
   @@index([organizationId])
@@ -525,7 +557,7 @@ model Unit {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  products      Product[]
+  products     Product[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -554,35 +586,35 @@ model Product {
   unit           String
   baseUnitId     String
   basePriceKgs   Decimal? @db.Decimal(12, 2)
-  description    String? @db.Text
+  description    String?  @db.Text
   photoUrl       String?
   isDeleted      Boolean  @default(false)
   isBundle       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  supplier     Supplier? @relation(fields: [supplierId], references: [id])
-  baseUnit     Unit @relation(fields: [baseUnitId], references: [id])
-  barcodes     ProductBarcode[]
-  packs        ProductPack[]
-  variants     ProductVariant[]
+  organization       Organization             @relation(fields: [organizationId], references: [id])
+  supplier           Supplier?                @relation(fields: [supplierId], references: [id])
+  baseUnit           Unit                     @relation(fields: [baseUnitId], references: [id])
+  barcodes           ProductBarcode[]
+  packs              ProductPack[]
+  variants           ProductVariant[]
   inventorySnapshots InventorySnapshot[]
-  stockMovements StockMovement[]
-  reorderPolicies ReorderPolicy[]
-  forecastSnapshots ForecastSnapshot[]
+  stockMovements     StockMovement[]
+  reorderPolicies    ReorderPolicy[]
+  forecastSnapshots  ForecastSnapshot[]
   purchaseOrderLines PurchaseOrderLine[]
-  bundleComponents ProductBundleComponent[] @relation("bundleComponents")
-  bundleParents    ProductBundleComponent[] @relation("bundleParents")
-  stockCounts      StockCountLine[]
-  stockLots        StockLot[]
-  storePrices      StorePrice[]
-  productCosts     ProductCost[]
-  attributeValues  VariantAttributeValue[]
-  images           ProductImage[]
-  complianceFlags  ProductComplianceFlags?
+  bundleComponents   ProductBundleComponent[] @relation("bundleComponents")
+  bundleParents      ProductBundleComponent[] @relation("bundleParents")
+  stockCounts        StockCountLine[]
+  stockLots          StockLot[]
+  storePrices        StorePrice[]
+  productCosts       ProductCost[]
+  attributeValues    VariantAttributeValue[]
+  images             ProductImage[]
+  complianceFlags    ProductComplianceFlags?
   customerOrderLines CustomerOrderLine[]
-  saleReturnLines  SaleReturnLine[]
+  saleReturnLines    SaleReturnLine[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
@@ -600,7 +632,7 @@ model ProductImage {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
 
   @@index([organizationId])
   @@index([productId, position])
@@ -614,7 +646,7 @@ model ProductBarcode {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  product       Product @relation(fields: [productId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
 
   @@unique([organizationId, value])
   @@index([productId])
@@ -628,13 +660,13 @@ model ProductPack {
   packName          String
   packBarcode       String?
   multiplierToBase  Int
-  allowInPurchasing Boolean @default(true)
-  allowInReceiving  Boolean @default(true)
+  allowInPurchasing Boolean  @default(true)
+  allowInReceiving  Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
 
   @@unique([productId, packName])
   @@unique([organizationId, packBarcode])
@@ -643,45 +675,45 @@ model ProductPack {
 }
 
 model ProductVariant {
-  id        String   @id @default(cuid())
-  productId String
-  name      String?
-  sku       String?
+  id         String   @id @default(cuid())
+  productId  String
+  name       String?
+  sku        String?
   attributes Json
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  product Product @relation(fields: [productId], references: [id])
+  product            Product                  @relation(fields: [productId], references: [id])
   inventorySnapshots InventorySnapshot[]
-  stockMovements StockMovement[]
+  stockMovements     StockMovement[]
   purchaseOrderLines PurchaseOrderLine[]
-  stockCounts StockCountLine[]
-  stockLots   StockLot[]
-  storePrices StorePrice[]
-  productCosts ProductCost[]
-  attributeValues VariantAttributeValue[]
-  bundleComponents ProductBundleComponent[] @relation("bundleComponentVariants")
+  stockCounts        StockCountLine[]
+  stockLots          StockLot[]
+  storePrices        StorePrice[]
+  productCosts       ProductCost[]
+  attributeValues    VariantAttributeValue[]
+  bundleComponents   ProductBundleComponent[] @relation("bundleComponentVariants")
   customerOrderLines CustomerOrderLine[]
-  saleReturnLines  SaleReturnLine[]
+  saleReturnLines    SaleReturnLine[]
 
   @@index([productId])
   @@index([sku])
 }
 
 model InventorySnapshot {
-  id                String   @id @default(cuid())
-  storeId           String
-  productId         String
-  variantId         String?
-  variantKey        String   @default("BASE")
-  onHand            Int
-  onOrder           Int      @default(0)
-  allowNegativeStock Boolean @default(false)
-  updatedAt         DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  storeId            String
+  productId          String
+  variantId          String?
+  variantKey         String   @default("BASE")
+  onHand             Int
+  onOrder            Int      @default(0)
+  allowNegativeStock Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
 
-  store   Store   @relation(fields: [storeId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  store   Store           @relation(fields: [storeId], references: [id])
+  product Product         @relation(fields: [productId], references: [id])
   variant ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@unique([storeId, productId, variantKey])
@@ -691,50 +723,50 @@ model InventorySnapshot {
 }
 
 model StockMovement {
-  id          String   @id @default(cuid())
-  storeId     String
-  productId   String
-  variantId   String?
-  stockLotId  String?
-  type        StockMovementType
-  qtyDelta    Int
+  id            String            @id @default(cuid())
+  storeId       String
+  productId     String
+  variantId     String?
+  stockLotId    String?
+  type          StockMovementType
+  qtyDelta      Int
   referenceType String?
   referenceId   String?
-  note        String?
-  createdAt   DateTime @default(now())
-  createdById String?
+  note          String?
+  createdAt     DateTime          @default(now())
+  createdById   String?
 
-  store   Store   @relation(fields: [storeId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-  variant ProductVariant? @relation(fields: [variantId], references: [id])
-  createdBy User? @relation(fields: [createdById], references: [id])
-  stockLot StockLot? @relation(fields: [stockLotId], references: [id])
+  store     Store           @relation(fields: [storeId], references: [id])
+  product   Product         @relation(fields: [productId], references: [id])
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+  createdBy User?           @relation(fields: [createdById], references: [id])
+  stockLot  StockLot?       @relation(fields: [stockLotId], references: [id])
 
   @@index([storeId, productId, variantId, createdAt])
   @@index([type, createdAt])
 }
 
 model PurchaseOrder {
-  id             String   @id @default(cuid())
-  organizationId String
-  storeId        String
-  supplierId     String?
-  status         PurchaseOrderStatus @default(DRAFT)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  submittedAt    DateTime?
-  approvedAt     DateTime?
-  receivedAt     DateTime?
-  receivedEventId String? @unique
-  createdById    String?
-  updatedById    String?
+  id              String              @id @default(cuid())
+  organizationId  String
+  storeId         String
+  supplierId      String?
+  status          PurchaseOrderStatus @default(DRAFT)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  receivedAt      DateTime?
+  receivedEventId String?             @unique
+  createdById     String?
+  updatedById     String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  store        Store               @relation(fields: [storeId], references: [id])
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id])
   lines        PurchaseOrderLine[]
-  createdBy    User? @relation("purchaseOrdersCreated", fields: [createdById], references: [id])
-  updatedBy    User? @relation("purchaseOrdersUpdated", fields: [updatedById], references: [id])
+  createdBy    User?               @relation("purchaseOrdersCreated", fields: [createdById], references: [id])
+  updatedBy    User?               @relation("purchaseOrdersUpdated", fields: [updatedById], references: [id])
 
   @@index([status, createdAt])
   @@index([storeId])
@@ -749,11 +781,11 @@ model PurchaseOrderLine {
   variantId       String?
   variantKey      String   @default("BASE")
   qtyOrdered      Int
-  qtyReceived     Int @default(0)
+  qtyReceived     Int      @default(0)
   unitCost        Decimal? @db.Decimal(12, 2)
 
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  product       Product @relation(fields: [productId], references: [id])
+  purchaseOrder PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
+  product       Product         @relation(fields: [productId], references: [id])
   variant       ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@unique([purchaseOrderId, productId, variantKey])
@@ -770,6 +802,7 @@ model CustomerOrder {
   shiftId          String?
   number           String
   status           CustomerOrderStatus @default(DRAFT)
+  source           CustomerOrderSource @default(MANUAL)
   isPosSale        Boolean             @default(false)
   customerName     String?
   customerPhone    String?
@@ -789,43 +822,44 @@ model CustomerOrder {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
-  organization Organization         @relation(fields: [organizationId], references: [id])
-  store        Store                @relation(fields: [storeId], references: [id])
-  register     PosRegister?         @relation(fields: [registerId], references: [id])
-  shift        RegisterShift?       @relation(fields: [shiftId], references: [id])
-  lines        CustomerOrderLine[]
-  payments     SalePayment[]
-  saleReturns  SaleReturn[]         @relation("saleReturnsOriginal")
-  fiscalReceipts FiscalReceipt[]
-  refundRequests RefundRequest[]
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  store               Store                @relation(fields: [storeId], references: [id])
+  register            PosRegister?         @relation(fields: [registerId], references: [id])
+  shift               RegisterShift?       @relation(fields: [shiftId], references: [id])
+  lines               CustomerOrderLine[]
+  payments            SalePayment[]
+  saleReturns         SaleReturn[]         @relation("saleReturnsOriginal")
+  fiscalReceipts      FiscalReceipt[]
+  refundRequests      RefundRequest[]
   markingCodeCaptures MarkingCodeCapture[]
-  createdBy    User?                @relation("customerOrdersCreated", fields: [createdById], references: [id])
-  updatedBy    User?                @relation("customerOrdersUpdated", fields: [updatedById], references: [id])
+  createdBy           User?                @relation("customerOrdersCreated", fields: [createdById], references: [id])
+  updatedBy           User?                @relation("customerOrdersUpdated", fields: [updatedById], references: [id])
 
   @@unique([organizationId, number])
   @@index([storeId, status, createdAt])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, createdAt])
   @@index([organizationId, isPosSale, createdAt])
+  @@index([organizationId, source, createdAt])
   @@index([shiftId, status, createdAt])
 }
 
 model CustomerOrderLine {
-  id              String    @id @default(cuid())
-  customerOrderId String
-  productId       String
-  variantId       String?
-  variantKey      String    @default("BASE")
-  qty             Int
-  unitPriceKgs    Decimal   @db.Decimal(12, 2)
-  lineTotalKgs    Decimal   @db.Decimal(12, 2)
-  unitCostKgs     Decimal?  @db.Decimal(12, 2)
+  id               String   @id @default(cuid())
+  customerOrderId  String
+  productId        String
+  variantId        String?
+  variantKey       String   @default("BASE")
+  qty              Int
+  unitPriceKgs     Decimal  @db.Decimal(12, 2)
+  lineTotalKgs     Decimal  @db.Decimal(12, 2)
+  unitCostKgs      Decimal? @db.Decimal(12, 2)
   lineCostTotalKgs Decimal? @db.Decimal(12, 2)
 
-  customerOrder CustomerOrder  @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
-  product       Product        @relation(fields: [productId], references: [id])
-  variant       ProductVariant? @relation(fields: [variantId], references: [id])
-  saleReturnLines SaleReturnLine[]
+  customerOrder       CustomerOrder        @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  product             Product              @relation(fields: [productId], references: [id])
+  variant             ProductVariant?      @relation(fields: [variantId], references: [id])
+  saleReturnLines     SaleReturnLine[]
   markingCodeCaptures MarkingCodeCapture[]
 
   @@unique([customerOrderId, productId, variantKey])
@@ -844,8 +878,8 @@ model PosRegister {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  store        Store           @relation(fields: [storeId], references: [id])
   shifts       RegisterShift[]
   sales        CustomerOrder[]
   saleReturns  SaleReturn[]
@@ -871,11 +905,11 @@ model RegisterShift {
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
-  organization  Organization @relation(fields: [organizationId], references: [id])
-  store         Store @relation(fields: [storeId], references: [id])
-  register      PosRegister @relation(fields: [registerId], references: [id])
-  openedBy      User @relation("posShiftsOpened", fields: [openedById], references: [id])
-  closedBy      User? @relation("posShiftsClosed", fields: [closedById], references: [id])
+  organization  Organization         @relation(fields: [organizationId], references: [id])
+  store         Store                @relation(fields: [storeId], references: [id])
+  register      PosRegister          @relation(fields: [registerId], references: [id])
+  openedBy      User                 @relation("posShiftsOpened", fields: [openedById], references: [id])
+  closedBy      User?                @relation("posShiftsClosed", fields: [closedById], references: [id])
   sales         CustomerOrder[]
   payments      SalePayment[]
   cashMovements CashDrawerMovement[]
@@ -899,12 +933,12 @@ model SalePayment {
   createdAt       DateTime         @default(now())
   createdById     String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  shift        RegisterShift @relation(fields: [shiftId], references: [id])
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  store         Store         @relation(fields: [storeId], references: [id])
+  shift         RegisterShift @relation(fields: [shiftId], references: [id])
   customerOrder CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
-  saleReturn   SaleReturn? @relation(fields: [saleReturnId], references: [id])
-  createdBy    User? @relation("salePaymentsCreated", fields: [createdById], references: [id])
+  saleReturn    SaleReturn?   @relation(fields: [saleReturnId], references: [id])
+  createdBy     User?         @relation("salePaymentsCreated", fields: [createdById], references: [id])
 
   @@index([organizationId, storeId, createdAt])
   @@index([shiftId, createdAt])
@@ -922,10 +956,10 @@ model CashDrawerMovement {
   createdAt      DateTime               @default(now())
   createdById    String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  store        Store         @relation(fields: [storeId], references: [id])
   shift        RegisterShift @relation(fields: [shiftId], references: [id])
-  createdBy    User? @relation("cashDrawerMovementsCreated", fields: [createdById], references: [id])
+  createdBy    User?         @relation("cashDrawerMovementsCreated", fields: [createdById], references: [id])
 
   @@index([organizationId, storeId, createdAt])
   @@index([shiftId, createdAt])
@@ -951,16 +985,16 @@ model SaleReturn {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  register     PosRegister @relation(fields: [registerId], references: [id])
-  shift        RegisterShift @relation(fields: [shiftId], references: [id])
-  originalSale CustomerOrder @relation("saleReturnsOriginal", fields: [originalSaleId], references: [id])
-  lines        SaleReturnLine[]
-  payments     SalePayment[]
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  store          Store            @relation(fields: [storeId], references: [id])
+  register       PosRegister      @relation(fields: [registerId], references: [id])
+  shift          RegisterShift    @relation(fields: [shiftId], references: [id])
+  originalSale   CustomerOrder    @relation("saleReturnsOriginal", fields: [originalSaleId], references: [id])
+  lines          SaleReturnLine[]
+  payments       SalePayment[]
   refundRequests RefundRequest[]
-  createdBy    User @relation("saleReturnsCreated", fields: [createdById], references: [id])
-  completedBy  User? @relation("saleReturnsCompleted", fields: [completedById], references: [id])
+  createdBy      User             @relation("saleReturnsCreated", fields: [createdById], references: [id])
+  completedBy    User?            @relation("saleReturnsCompleted", fields: [completedById], references: [id])
 
   @@unique([organizationId, number])
   @@index([organizationId, storeId, status, createdAt])
@@ -968,22 +1002,22 @@ model SaleReturn {
 }
 
 model SaleReturnLine {
-  id                  String    @id @default(cuid())
+  id                  String   @id @default(cuid())
   saleReturnId        String
   customerOrderLineId String
   productId           String
   variantId           String?
-  variantKey          String    @default("BASE")
+  variantKey          String   @default("BASE")
   qty                 Int
-  unitPriceKgs        Decimal   @db.Decimal(12, 2)
-  lineTotalKgs        Decimal   @db.Decimal(12, 2)
-  unitCostKgs         Decimal?  @db.Decimal(12, 2)
-  lineCostTotalKgs    Decimal?  @db.Decimal(12, 2)
+  unitPriceKgs        Decimal  @db.Decimal(12, 2)
+  lineTotalKgs        Decimal  @db.Decimal(12, 2)
+  unitCostKgs         Decimal? @db.Decimal(12, 2)
+  lineCostTotalKgs    Decimal? @db.Decimal(12, 2)
 
-  saleReturn      SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+  saleReturn        SaleReturn        @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
   customerOrderLine CustomerOrderLine @relation(fields: [customerOrderLineId], references: [id])
-  product         Product @relation(fields: [productId], references: [id])
-  variant         ProductVariant? @relation(fields: [variantId], references: [id])
+  product           Product           @relation(fields: [productId], references: [id])
+  variant           ProductVariant?   @relation(fields: [variantId], references: [id])
 
   @@unique([saleReturnId, customerOrderLineId])
   @@index([saleReturnId])
@@ -991,29 +1025,29 @@ model SaleReturnLine {
 }
 
 model FiscalReceipt {
-  id               String              @id @default(cuid())
-  organizationId   String
-  storeId          String
-  customerOrderId  String
-  status           FiscalReceiptStatus @default(QUEUED)
-  mode             KkmMode             @default(EXPORT_ONLY)
-  providerKey      String?
-  idempotencyKey   String              @unique
-  payloadJson      Json
-  attemptCount     Int                 @default(0)
-  lastError        String?
-  nextAttemptAt    DateTime?
+  id                String              @id @default(cuid())
+  organizationId    String
+  storeId           String
+  customerOrderId   String
+  status            FiscalReceiptStatus @default(QUEUED)
+  mode              KkmMode             @default(EXPORT_ONLY)
+  providerKey       String?
+  idempotencyKey    String              @unique
+  payloadJson       Json
+  attemptCount      Int                 @default(0)
+  lastError         String?
+  nextAttemptAt     DateTime?
   providerReceiptId String?
-  fiscalNumber     String?
-  qr               String?
+  fiscalNumber      String?
+  qr                String?
   connectorDeviceId String?
-  sentAt           DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  sentAt            DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  customerOrder CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  organization    Organization        @relation(fields: [organizationId], references: [id])
+  store           Store               @relation(fields: [storeId], references: [id])
+  customerOrder   CustomerOrder       @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
   connectorDevice KkmConnectorDevice? @relation(fields: [connectorDeviceId], references: [id])
 
   @@index([organizationId, storeId, status, createdAt])
@@ -1022,63 +1056,63 @@ model FiscalReceipt {
 }
 
 model KkmConnectorDevice {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   storeId        String
   name           String
-  tokenHash      String   @unique
-  isActive       Boolean  @default(true)
-  pairedAt       DateTime @default(now())
+  tokenHash      String    @unique
+  isActive       Boolean   @default(true)
+  pairedAt       DateTime  @default(now())
   lastSeenAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  store          Store           @relation(fields: [storeId], references: [id])
   fiscalReceipts FiscalReceipt[]
 
   @@index([organizationId, storeId, isActive])
 }
 
 model KkmConnectorPairingCode {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   storeId        String
-  code           String   @unique
+  code           String    @unique
   expiresAt      DateTime
   consumedAt     DateTime?
   createdById    String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  createdBy    User @relation("kkmPairingCodeCreatedBy", fields: [createdById], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  createdBy    User         @relation("kkmPairingCodeCreatedBy", fields: [createdById], references: [id])
 
   @@index([organizationId, storeId, expiresAt])
 }
 
 model RefundRequest {
-  id               String              @id @default(cuid())
-  organizationId   String
-  storeId          String
-  saleReturnId     String              @unique
-  originalSaleId   String
-  status           RefundRequestStatus @default(OPEN)
-  paymentMethod    PosPaymentMethod
-  reasonCode       String
-  notes            String?
-  createdById      String
-  reviewedById     String?
-  reviewedAt       DateTime?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  organizationId String
+  storeId        String
+  saleReturnId   String              @unique
+  originalSaleId String
+  status         RefundRequestStatus @default(OPEN)
+  paymentMethod  PosPaymentMethod
+  reasonCode     String
+  notes          String?
+  createdById    String
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  saleReturn   SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  store        Store         @relation(fields: [storeId], references: [id])
+  saleReturn   SaleReturn    @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
   originalSale CustomerOrder @relation(fields: [originalSaleId], references: [id], onDelete: Cascade)
-  createdBy    User @relation("refundRequestsCreatedBy", fields: [createdById], references: [id])
-  reviewedBy   User? @relation("refundRequestsReviewedBy", fields: [reviewedById], references: [id])
+  createdBy    User          @relation("refundRequestsCreatedBy", fields: [createdById], references: [id])
+  reviewedBy   User?         @relation("refundRequestsReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([organizationId, storeId, status, createdAt])
   @@index([saleReturnId])
@@ -1086,23 +1120,23 @@ model RefundRequest {
 }
 
 model MarkingCodeCapture {
-  id              String            @id @default(cuid())
-  organizationId  String
-  storeId         String
-  saleId          String
-  saleLineId      String
-  code            String
-  status          MarkingCodeStatus @default(CAPTURED)
-  capturedAt      DateTime          @default(now())
-  capturedById    String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  organizationId String
+  storeId        String
+  saleId         String
+  saleLineId     String
+  code           String
+  status         MarkingCodeStatus @default(CAPTURED)
+  capturedAt     DateTime          @default(now())
+  capturedById   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  sale         CustomerOrder @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  store        Store             @relation(fields: [storeId], references: [id])
+  sale         CustomerOrder     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   saleLine     CustomerOrderLine @relation(fields: [saleLineId], references: [id], onDelete: Cascade)
-  capturedBy   User? @relation("markingCapturedBy", fields: [capturedById], references: [id])
+  capturedBy   User?             @relation("markingCapturedBy", fields: [capturedById], references: [id])
 
   @@unique([saleLineId, code])
   @@index([organizationId, storeId, capturedAt])
@@ -1123,8 +1157,8 @@ model EttnReference {
   updatedAt      DateTime                 @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  createdBy    User? @relation("ettnReferenceCreatedBy", fields: [createdById], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  createdBy    User?        @relation("ettnReferenceCreatedBy", fields: [createdById], references: [id])
 
   @@unique([organizationId, storeId, documentType, documentId])
   @@index([organizationId, storeId, documentType, createdAt])
@@ -1145,8 +1179,8 @@ model EsfReference {
   updatedAt        DateTime                 @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  createdBy    User? @relation("esfReferenceCreatedBy", fields: [createdById], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  createdBy    User?        @relation("esfReferenceCreatedBy", fields: [createdById], references: [id])
 
   @@unique([organizationId, storeId, documentType, documentId])
   @@index([organizationId, storeId, documentType, createdAt])
@@ -1161,7 +1195,7 @@ model ReorderPolicy {
   leadTimeDays     Int
   reviewPeriodDays Int
   safetyStockDays  Int
-  minOrderQty      Int @default(0)
+  minOrderQty      Int      @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -1173,13 +1207,13 @@ model ReorderPolicy {
 }
 
 model ForecastSnapshot {
-  id           String   @id @default(cuid())
-  storeId      String
-  productId    String
-  p50Daily     Float
-  p90Daily     Float
-  horizonDays  Int
-  generatedAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  storeId     String
+  productId   String
+  p50Daily    Float
+  p90Daily    Float
+  horizonDays Int
+  generatedAt DateTime @default(now())
 
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -1200,20 +1234,20 @@ model AuditLog {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  actor        User? @relation(fields: [actorId], references: [id])
+  actor        User?        @relation(fields: [actorId], references: [id])
 
   @@index([createdAt])
   @@index([entity, entityId])
 }
 
 model IdempotencyKey {
-  id         String   @id @default(cuid())
-  key        String
-  route      String
-  userId     String
-  response   Json?
+  id           String   @id @default(cuid())
+  key          String
+  route        String
+  userId       String
+  response     Json?
   responseHash String?
-  createdAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
@@ -1222,23 +1256,23 @@ model IdempotencyKey {
 }
 
 model StockCount {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   organizationId String
   storeId        String
   code           String
   status         StockCountStatus @default(DRAFT)
-  notes          String? @db.Text
+  notes          String?          @db.Text
   startedAt      DateTime?
   appliedAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   createdById    String?
   appliedById    String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  createdBy    User? @relation("stockCountCreatedBy", fields: [createdById], references: [id])
-  appliedBy    User? @relation("stockCountAppliedBy", fields: [appliedById], references: [id])
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  store        Store            @relation(fields: [storeId], references: [id])
+  createdBy    User?            @relation("stockCountCreatedBy", fields: [createdById], references: [id])
+  appliedBy    User?            @relation("stockCountAppliedBy", fields: [appliedById], references: [id])
   lines        StockCountLine[]
 
   @@unique([organizationId, code])
@@ -1247,23 +1281,23 @@ model StockCount {
 }
 
 model StockCountLine {
-  id              String   @id @default(cuid())
-  stockCountId    String
-  storeId         String
-  productId       String
-  variantId       String?
-  variantKey      String   @default("BASE")
-  barcodeValue    String?
-  expectedOnHand  Int      @default(0)
-  countedQty      Int      @default(0)
-  deltaQty        Int      @default(0)
-  lastScannedAt   DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  stockCountId   String
+  storeId        String
+  productId      String
+  variantId      String?
+  variantKey     String    @default("BASE")
+  barcodeValue   String?
+  expectedOnHand Int       @default(0)
+  countedQty     Int       @default(0)
+  deltaQty       Int       @default(0)
+  lastScannedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  stockCount StockCount @relation(fields: [stockCountId], references: [id])
-  store      Store @relation(fields: [storeId], references: [id])
-  product    Product @relation(fields: [productId], references: [id])
+  stockCount StockCount      @relation(fields: [stockCountId], references: [id])
+  store      Store           @relation(fields: [storeId], references: [id])
+  product    Product         @relation(fields: [productId], references: [id])
   variant    ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@unique([stockCountId, productId, variantKey])
@@ -1281,30 +1315,71 @@ model StorePrice {
   updatedAt      DateTime @updatedAt
   updatedById    String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  store        Store           @relation(fields: [storeId], references: [id])
+  product      Product         @relation(fields: [productId], references: [id])
   variant      ProductVariant? @relation(fields: [variantId], references: [id])
-  updatedBy    User? @relation("storePricesUpdated", fields: [updatedById], references: [id])
+  updatedBy    User?           @relation("storePricesUpdated", fields: [updatedById], references: [id])
 
   @@unique([organizationId, storeId, productId, variantKey])
   @@index([storeId, productId])
   @@index([organizationId])
 }
 
-model ProductCost {
+model BazaarCatalogImage {
   id             String   @id @default(cuid())
+  organizationId String
+  url            String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  catalogs     BazaarCatalog[] @relation("bazaarCatalogLogoImage")
+
+  @@index([organizationId, createdAt])
+}
+
+model BazaarCatalog {
+  id             String                   @id @default(cuid())
+  organizationId String
+  storeId        String                   @unique
+  status         BazaarCatalogStatus      @default(DRAFT)
+  slug           String                   @unique
+  publicUrlPath  String
+  title          String?
+  logoImageId    String?
+  accentColor    String                   @default("#2a6be4")
+  fontFamily     BazaarCatalogFontFamily  @default(NotoSans)
+  headerStyle    BazaarCatalogHeaderStyle @default(STANDARD)
+  publishedAt    DateTime?
+  updatedAt      DateTime                 @updatedAt
+  updatedById    String?
+  createdAt      DateTime                 @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  store        Store               @relation(fields: [storeId], references: [id])
+  updatedBy    User?               @relation("bazaarCatalogUpdatedBy", fields: [updatedById], references: [id])
+  logoImage    BazaarCatalogImage? @relation("bazaarCatalogLogoImage", fields: [logoImageId], references: [id])
+
+  @@unique([organizationId, storeId])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, slug])
+  @@index([storeId, status])
+}
+
+model ProductCost {
+  id             String    @id @default(cuid())
   organizationId String
   productId      String
   variantId      String?
-  variantKey     String   @default("BASE")
-  avgCostKgs     Decimal  @db.Decimal(12, 2)
-  costBasisQty   Int      @default(0)
+  variantKey     String    @default("BASE")
+  avgCostKgs     Decimal   @db.Decimal(12, 2)
+  costBasisQty   Int       @default(0)
   lastReceiptAt  DateTime?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  product      Product         @relation(fields: [productId], references: [id])
   variant      ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@unique([organizationId, productId, variantKey])
@@ -1312,18 +1387,18 @@ model ProductCost {
 }
 
 model ProductBundleComponent {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  bundleProductId     String
-  componentProductId  String
-  componentVariantId  String?
-  qty                 Int
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  organizationId     String
+  bundleProductId    String
+  componentProductId String
+  componentVariantId String?
+  qty                Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  organization     Organization @relation(fields: [organizationId], references: [id])
-  bundleProduct    Product @relation("bundleComponents", fields: [bundleProductId], references: [id])
-  componentProduct Product @relation("bundleParents", fields: [componentProductId], references: [id])
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  bundleProduct    Product         @relation("bundleComponents", fields: [bundleProductId], references: [id])
+  componentProduct Product         @relation("bundleParents", fields: [componentProductId], references: [id])
   componentVariant ProductVariant? @relation("bundleComponentVariants", fields: [componentVariantId], references: [id])
 
   @@unique([bundleProductId, componentProductId, componentVariantId])
@@ -1331,20 +1406,20 @@ model ProductBundleComponent {
 }
 
 model StockLot {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   storeId        String
   productId      String
   variantId      String?
-  variantKey     String   @default("BASE")
+  variantKey     String    @default("BASE")
   expiryDate     DateTime?
-  receivedAt     DateTime @default(now())
-  onHandQty      Int      @default(0)
-  updatedAt      DateTime @updatedAt
+  receivedAt     DateTime  @default(now())
+  onHandQty      Int       @default(0)
+  updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  store        Store @relation(fields: [storeId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  store        Store           @relation(fields: [storeId], references: [id])
+  product      Product         @relation(fields: [productId], references: [id])
   variant      ProductVariant? @relation(fields: [variantId], references: [id])
   movements    StockMovement[]
 
@@ -1352,7 +1427,7 @@ model StockLot {
 }
 
 model AttributeDefinition {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String
   key            String
   labelRu        String
@@ -1360,12 +1435,12 @@ model AttributeDefinition {
   type           AttributeType
   optionsRu      Json?
   optionsKg      Json?
-  required       Boolean  @default(false)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  required       Boolean       @default(false)
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization                @relation(fields: [organizationId], references: [id])
   values       VariantAttributeValue[]
   templates    CategoryAttributeTemplate[]
 
@@ -1382,7 +1457,7 @@ model CategoryAttributeTemplate {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  organization Organization         @relation(fields: [organizationId], references: [id])
   definition   AttributeDefinition? @relation(fields: [organizationId, attributeKey], references: [organizationId, key])
 
   @@unique([organizationId, category, attributeKey])
@@ -1399,9 +1474,9 @@ model VariantAttributeValue {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  product      Product @relation(fields: [productId], references: [id])
-  variant      ProductVariant @relation(fields: [variantId], references: [id])
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  product      Product              @relation(fields: [productId], references: [id])
+  variant      ProductVariant       @relation(fields: [variantId], references: [id])
   definition   AttributeDefinition? @relation(fields: [organizationId, key], references: [organizationId, key])
 
   @@unique([variantId, key])
@@ -1409,19 +1484,19 @@ model VariantAttributeValue {
 }
 
 model ImportBatch {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   type           String
   createdById    String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
   summary        Json?
   rolledBackAt   DateTime?
   rolledBackById String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User? @relation("importBatchesCreated", fields: [createdById], references: [id])
-  rolledBackBy User? @relation("importBatchesRolledBack", fields: [rolledBackById], references: [id])
-  entities     ImportedEntity[]
+  organization   Organization          @relation(fields: [organizationId], references: [id])
+  createdBy      User?                 @relation("importBatchesCreated", fields: [createdById], references: [id])
+  rolledBackBy   User?                 @relation("importBatchesRolledBack", fields: [rolledBackById], references: [id])
+  entities       ImportedEntity[]
   rollbackReport ImportRollbackReport?
 
   @@index([organizationId, createdAt])
@@ -1448,51 +1523,51 @@ model ImportRollbackReport {
   summary     Json?
 
   batch     ImportBatch @relation(fields: [batchId], references: [id])
-  createdBy User? @relation("importRollbackReportsCreated", fields: [createdById], references: [id])
+  createdBy User?       @relation("importRollbackReportsCreated", fields: [createdById], references: [id])
 }
 
 model OnboardingProgress {
-  id             String   @id @default(cuid())
-  organizationId String   @unique
+  id             String    @id @default(cuid())
+  organizationId String    @unique
   steps          Json
   completedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
 }
 
 model DeadLetterJob {
-  id            String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String?
-  jobName       String
-  payload       Json?
-  attempts      Int      @default(0)
-  lastError     String
-  lastErrorAt   DateTime @default(now())
-  resolvedAt    DateTime?
-  resolvedById  String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  jobName        String
+  payload        Json?
+  attempts       Int       @default(0)
+  lastError      String
+  lastErrorAt    DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedById   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id])
-  resolvedBy User? @relation("deadLetterResolvedBy", fields: [resolvedById], references: [id])
+  resolvedBy   User?         @relation("deadLetterResolvedBy", fields: [resolvedById], references: [id])
 
   @@index([jobName, lastErrorAt])
   @@index([resolvedAt])
 }
 
 model StoreFeatureFlag {
-  id            String   @id @default(cuid())
-  storeId       String
-  key           String
-  enabled       Boolean  @default(false)
-  updatedById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(cuid())
+  storeId     String
+  key         String
+  enabled     Boolean  @default(false)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  store     Store  @relation(fields: [storeId], references: [id])
-  updatedBy User?  @relation(fields: [updatedById], references: [id])
+  store     Store @relation(fields: [storeId], references: [id])
+  updatedBy User? @relation(fields: [updatedById], references: [id])
 
   @@unique([storeId, key])
   @@index([storeId])
@@ -1507,23 +1582,23 @@ model ProductEvent {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  actor        User? @relation("productEventsCreatedBy", fields: [actorId], references: [id])
+  actor        User?        @relation("productEventsCreatedBy", fields: [actorId], references: [id])
 
   @@index([organizationId, type, createdAt])
 }
 
 model ImpersonationSession {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   createdById    String
   targetUserId   String
   expiresAt      DateTime
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
   revokedAt      DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User @relation("impersonationsCreated", fields: [createdById], references: [id])
-  targetUser   User @relation("impersonationsTargeted", fields: [targetUserId], references: [id])
+  createdBy    User         @relation("impersonationsCreated", fields: [createdById], references: [id])
+  targetUser   User         @relation("impersonationsTargeted", fields: [targetUserId], references: [id])
 
   @@index([organizationId, createdAt])
   @@index([targetUserId])
@@ -1531,28 +1606,28 @@ model ImpersonationSession {
 }
 
 model InviteToken {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   email          String
   role           Role
-  tokenHash      String   @unique
+  tokenHash      String    @unique
   expiresAt      DateTime
   createdById    String
   acceptedAt     DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User @relation("inviteCreatedBy", fields: [createdById], references: [id])
+  createdBy    User         @relation("inviteCreatedBy", fields: [createdById], references: [id])
 
   @@index([organizationId, email])
 }
 
 model AccessRequest {
-  id        String   @id @default(cuid())
+  id             String   @id @default(cuid())
   organizationId String?
-  email     String
-  orgName   String?
-  createdAt DateTime @default(now())
+  email          String
+  orgName        String?
+  createdAt      DateTime @default(now())
 
   organization Organization? @relation(fields: [organizationId], references: [id])
 
@@ -1560,14 +1635,14 @@ model AccessRequest {
 }
 
 model AuthToken {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   userId    String?
   email     String
   type      AuthTokenType
-  tokenHash String   @unique
+  tokenHash String        @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime      @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 

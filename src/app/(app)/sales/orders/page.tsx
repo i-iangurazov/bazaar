@@ -18,13 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AddIcon,
-  CheckIcon,
-  CloseIcon,
-  EmptyIcon,
-  ViewIcon,
-} from "@/components/icons";
+import { AddIcon, CheckIcon, CloseIcon, EmptyIcon, ViewIcon } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import {
@@ -93,7 +87,9 @@ const SalesOrdersPage = () => {
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const totalItems = listQuery.data?.total ?? 0;
 
-  const statusVariant = (status: CustomerOrderStatus): "default" | "success" | "warning" | "danger" => {
+  const statusVariant = (
+    status: CustomerOrderStatus,
+  ): "default" | "success" | "warning" | "danger" => {
     switch (status) {
       case CustomerOrderStatus.COMPLETED:
         return "success";
@@ -110,6 +106,9 @@ const SalesOrdersPage = () => {
     status === CustomerOrderStatus.DRAFT ||
     status === CustomerOrderStatus.CONFIRMED ||
     status === CustomerOrderStatus.READY;
+
+  const sourceLabel = (source?: string | null) =>
+    source === "CATALOG" ? t("source.catalog") : t("source.manual");
 
   return (
     <div>
@@ -183,10 +182,16 @@ const SalesOrdersPage = () => {
               <SelectContent>
                 <SelectItem value="all">{t("allStatuses")}</SelectItem>
                 <SelectItem value="DRAFT">{getCustomerOrderStatusLabel(t, "DRAFT")}</SelectItem>
-                <SelectItem value="CONFIRMED">{getCustomerOrderStatusLabel(t, "CONFIRMED")}</SelectItem>
+                <SelectItem value="CONFIRMED">
+                  {getCustomerOrderStatusLabel(t, "CONFIRMED")}
+                </SelectItem>
                 <SelectItem value="READY">{getCustomerOrderStatusLabel(t, "READY")}</SelectItem>
-                <SelectItem value="COMPLETED">{getCustomerOrderStatusLabel(t, "COMPLETED")}</SelectItem>
-                <SelectItem value="CANCELED">{getCustomerOrderStatusLabel(t, "CANCELED")}</SelectItem>
+                <SelectItem value="COMPLETED">
+                  {getCustomerOrderStatusLabel(t, "COMPLETED")}
+                </SelectItem>
+                <SelectItem value="CANCELED">
+                  {getCustomerOrderStatusLabel(t, "CANCELED")}
+                </SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center text-sm text-muted-foreground">
@@ -203,13 +208,14 @@ const SalesOrdersPage = () => {
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
-                <Table className="min-w-[760px]" data-tour="sales-orders-table">
+                <Table className="min-w-[860px]" data-tour="sales-orders-table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t("number")}</TableHead>
                       <TableHead>{t("customer")}</TableHead>
                       <TableHead>{t("store")}</TableHead>
                       <TableHead>{t("statusLabel")}</TableHead>
+                      <TableHead>{t("sourceLabel")}</TableHead>
                       <TableHead>{t("total")}</TableHead>
                       <TableHead>{t("created")}</TableHead>
                       <TableHead className="text-right">{tCommon("actions")}</TableHead>
@@ -219,7 +225,10 @@ const SalesOrdersPage = () => {
                     {visibleItems.map((order) => (
                       <TableRow key={order.id}>
                         <TableCell>
-                          <Link className="font-medium text-foreground" href={`/sales/orders/${order.id}`}>
+                          <Link
+                            className="font-medium text-foreground"
+                            href={`/sales/orders/${order.id}`}
+                          >
                             {order.number}
                           </Link>
                         </TableCell>
@@ -228,6 +237,11 @@ const SalesOrdersPage = () => {
                         <TableCell>
                           <Badge variant={statusVariant(order.status)}>
                             {getCustomerOrderStatusLabel(t, order.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={order.source === "CATALOG" ? "warning" : "muted"}>
+                            {sourceLabel(order.source)}
                           </Badge>
                         </TableCell>
                         <TableCell>{formatCurrencyKGS(order.totalKgs, locale)}</TableCell>
@@ -253,7 +267,8 @@ const SalesOrdersPage = () => {
                                           void completeMutation.mutateAsync({
                                             customerOrderId: order.id,
                                             idempotencyKey:
-                                              typeof crypto !== "undefined" && "randomUUID" in crypto
+                                              typeof crypto !== "undefined" &&
+                                              "randomUUID" in crypto
                                                 ? crypto.randomUUID()
                                                 : `sales-order-${Date.now()}`,
                                           });
@@ -278,7 +293,9 @@ const SalesOrdersPage = () => {
                                           ) {
                                             return;
                                           }
-                                          void cancelMutation.mutateAsync({ customerOrderId: order.id });
+                                          void cancelMutation.mutateAsync({
+                                            customerOrderId: order.id,
+                                          });
                                         },
                                         disabled: cancelMutation.isLoading,
                                       },
@@ -298,7 +315,10 @@ const SalesOrdersPage = () => {
               <Card className="border-border">
                 <CardContent className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <Link className="text-sm font-semibold text-foreground" href={`/sales/orders/${order.id}`}>
+                    <Link
+                      className="text-sm font-semibold text-foreground"
+                      href={`/sales/orders/${order.id}`}
+                    >
                       {order.number}
                     </Link>
                     <Badge variant={statusVariant(order.status)}>
@@ -308,19 +328,29 @@ const SalesOrdersPage = () => {
                   <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     <div>
                       <p>{t("customer")}</p>
-                      <p className="font-medium text-foreground">{order.customerName || tCommon("notAvailable")}</p>
+                      <p className="font-medium text-foreground">
+                        {order.customerName || tCommon("notAvailable")}
+                      </p>
                     </div>
                     <div>
                       <p>{t("store")}</p>
                       <p className="font-medium text-foreground">{order.store.name}</p>
                     </div>
                     <div>
+                      <p>{t("sourceLabel")}</p>
+                      <p className="font-medium text-foreground">{sourceLabel(order.source)}</p>
+                    </div>
+                    <div>
                       <p>{t("total")}</p>
-                      <p className="font-medium text-foreground">{formatCurrencyKGS(order.totalKgs, locale)}</p>
+                      <p className="font-medium text-foreground">
+                        {formatCurrencyKGS(order.totalKgs, locale)}
+                      </p>
                     </div>
                     <div>
                       <p>{t("created")}</p>
-                      <p className="font-medium text-foreground">{formatDate(order.createdAt, locale)}</p>
+                      <p className="font-medium text-foreground">
+                        {formatDate(order.createdAt, locale)}
+                      </p>
                     </div>
                   </div>
                   <div className="flex justify-end">
@@ -360,7 +390,12 @@ const SalesOrdersPage = () => {
                                 icon: CloseIcon,
                                 variant: "danger",
                                 onSelect: async () => {
-                                  if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
+                                  if (
+                                    !(await confirm({
+                                      description: t("confirmCancel"),
+                                      confirmVariant: "danger",
+                                    }))
+                                  ) {
                                     return;
                                   }
                                   void cancelMutation.mutateAsync({ customerOrderId: order.id });

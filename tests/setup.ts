@@ -1,5 +1,6 @@
 const shouldRunDbTests =
-  process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1";
+  process.env.SKIP_DB_TESTS !== "1" &&
+  (process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1");
 
 if (process.env.DATABASE_TEST_URL) {
   process.env.DATABASE_URL = process.env.DATABASE_TEST_URL;

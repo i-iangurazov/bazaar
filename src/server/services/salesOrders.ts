@@ -1,4 +1,9 @@
-import { Prisma, CustomerOrderStatus, StockMovementType } from "@prisma/client";
+import {
+  Prisma,
+  CustomerOrderSource,
+  CustomerOrderStatus,
+  StockMovementType,
+} from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { writeAuditLog } from "@/server/services/audit";
@@ -246,7 +251,7 @@ export const listCustomerOrders = async (input: {
           ],
         }
       : {}),
-    ...((input.dateFrom || input.dateTo)
+    ...(input.dateFrom || input.dateTo
       ? {
           createdAt: {
             ...(input.dateFrom ? { gte: input.dateFrom } : {}),
@@ -496,6 +501,7 @@ export const createCustomerOrderDraft = async (input: {
         organizationId: input.organizationId,
         storeId: input.storeId,
         number,
+        source: CustomerOrderSource.MANUAL,
         customerName: input.customerName ?? null,
         customerPhone: input.customerPhone ?? null,
         notes: input.notes ?? null,
@@ -530,8 +536,7 @@ export const createCustomerOrderDraft = async (input: {
         existingKeys.add(dedupeKey);
 
         const lineTotal = resolved.unitPrice * lineInput.qty;
-        const lineCostTotal =
-          unitCost === null ? null : roundMoney(unitCost * lineInput.qty);
+        const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * lineInput.qty);
         await tx.customerOrderLine.create({
           data: {
             customerOrderId: order.id,
@@ -659,8 +664,7 @@ export const addCustomerOrderLine = async (input: {
     }
 
     const lineTotal = unitPrice * input.qty;
-    const lineCostTotal =
-      unitCost === null ? null : roundMoney(unitCost * input.qty);
+    const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * input.qty);
     const line = await tx.customerOrderLine.create({
       data: {
         customerOrderId: order.id,
@@ -725,9 +729,7 @@ export const updateCustomerOrderLine = async (input: {
         qty: input.qty,
         lineTotalKgs: Number(line.unitPriceKgs) * input.qty,
         lineCostTotalKgs:
-          line.unitCostKgs === null
-            ? null
-            : roundMoney(Number(line.unitCostKgs) * input.qty),
+          line.unitCostKgs === null ? null : roundMoney(Number(line.unitCostKgs) * input.qty),
       },
     });
 

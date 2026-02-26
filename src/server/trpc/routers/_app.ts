@@ -38,6 +38,7 @@ import { orgSettingsRouter } from "@/server/trpc/routers/orgSettings";
 import { posRouter } from "@/server/trpc/routers/pos";
 import { taxReferencesRouter } from "@/server/trpc/routers/taxReferences";
 import { productCategoriesRouter } from "@/server/trpc/routers/productCategories";
+import { bazaarCatalogRouter } from "@/server/trpc/routers/bazaarCatalog";
 
 export const appRouter = router({
   inventory: inventoryRouter,
@@ -79,6 +80,7 @@ export const appRouter = router({
   orgSettings: orgSettingsRouter,
   pos: posRouter,
   taxReferences: taxReferencesRouter,
+  bazaarCatalog: bazaarCatalogRouter,
 });
 
 export type AppRouter = typeof appRouter;

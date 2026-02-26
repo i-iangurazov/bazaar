@@ -38,6 +38,7 @@ import {
   WhatsNewIcon,
   AdjustIcon,
   UploadIcon,
+  IntegrationsIcon,
   MenuIcon,
   CloseIcon,
   UserIcon,
@@ -139,9 +140,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     [user.organizationId, user.role, user.email, user.name],
   );
   const guidanceRole: GuidanceRole =
-    user.role === "ADMIN" || user.role === "MANAGER" || user.role === "STAFF"
-      ? user.role
-      : "STAFF";
+    user.role === "ADMIN" || user.role === "MANAGER" || user.role === "STAFF" ? user.role : "STAFF";
 
   const navGroups = useMemo<NavGroup[]>(
     () => [
@@ -169,6 +168,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         id: "operations",
         labelKey: "groups.operations",
         items: [
+          { key: "integrations", href: "/operations/integrations", icon: IntegrationsIcon },
           { key: "imports", href: "/settings/import", icon: UploadIcon, adminOnly: true },
           { key: "onboarding", href: "/onboarding", icon: OnboardingIcon, adminOnly: true },
         ],
@@ -494,7 +494,8 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               <div className="space-y-1">
                 {visibleItems.map((item) => {
                   const isActive = isItemActive(item);
-                  const visibleChildren = item.children?.filter((child) => isItemVisible(child)) ?? [];
+                  const visibleChildren =
+                    item.children?.filter((child) => isItemVisible(child)) ?? [];
                   if (visibleChildren.length) {
                     return (
                       <div key={item.key} className="space-y-1">
@@ -502,7 +503,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                           className={cn(
                             "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold",
                             isActive
-                              ? "border-primary border-l-4 bg-accent text-accent-foreground"
+                              ? "border-l-4 border-primary bg-accent text-accent-foreground"
                               : "text-muted-foreground",
                           )}
                         >
@@ -521,7 +522,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                 className={cn(
                                   "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
                                   isChildActive
-                                    ? "border-primary border-l-4 bg-accent text-accent-foreground"
+                                    ? "border-l-4 border-primary bg-accent text-accent-foreground"
                                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                                 )}
                               >
@@ -546,7 +547,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       className={cn(
                         "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
                         isActive
-                          ? "border-primary border-l-4 bg-accent text-accent-foreground"
+                          ? "border-l-4 border-primary bg-accent text-accent-foreground"
                           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                       )}
                     >
@@ -573,7 +574,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
         <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-foreground">{displayName}</span>
+          <span className="block truncate text-sm font-semibold text-foreground">
+            {displayName}
+          </span>
           <span className="block truncate text-xs text-muted-foreground">{roleLabel}</span>
         </span>
       </div>
@@ -587,210 +590,213 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   return (
     <GuidanceProvider role={guidanceRole}>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
-      {impersonation ? (
-        <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
-            <span>
-              {tSupport("impersonationActive", {
-                user: impersonation.targetName ?? impersonation.targetEmail ?? tCommon("userFallback"),
-              })}
-            </span>
-            <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
-              {tSupport("exitImpersonation")}
+        {impersonation ? (
+          <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+              <span>
+                {tSupport("impersonationActive", {
+                  user:
+                    impersonation.targetName ??
+                    impersonation.targetEmail ??
+                    tCommon("userFallback"),
+                })}
+              </span>
+              <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
+                {tSupport("exitImpersonation")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        <header
+          className={cn(
+            "sticky z-40 flex items-center justify-between border-b border-border bg-background/90 px-4 py-3 shadow-sm backdrop-blur lg:hidden",
+            impersonation ? "top-10" : "top-0",
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              onClick={() => setMobileOpen(true)}
+              aria-label={tCommon("openMenu")}
+            >
+              <MenuIcon className="h-4 w-4" aria-hidden />
             </Button>
           </div>
-        </div>
-      ) : null}
-      <header
-        className={cn(
-          "sticky z-40 flex items-center justify-between border-b border-border bg-background/90 px-4 py-3 shadow-sm backdrop-blur lg:hidden",
-          impersonation ? "top-10" : "top-0",
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            onClick={() => setMobileOpen(true)}
-            aria-label={tCommon("openMenu")}
-          >
-            <MenuIcon className="h-4 w-4" aria-hidden />
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <PageTipsButton />
-          <LanguageSwitcher />
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <PageTipsButton />
+            <LanguageSwitcher />
+          </div>
+        </header>
 
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="space-y-3">
+        <div className="flex min-h-screen">
+          <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="space-y-3">
+                <Image
+                  src="/brand/logo.png"
+                  alt={tNav("brand")}
+                  width={724}
+                  height={181}
+                  className="h-auto w-[184px] max-w-full"
+                  priority
+                />
+                <Button
+                  type="button"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  size="default"
+                  className="h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                  aria-label={tCommand("openButton")}
+                >
+                  <CirclePlusIcon className="h-5 w-5" aria-hidden />
+                </Button>
+              </div>
+
+              <nav className="scrollbar-soft mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                {renderNavGroups()}
+              </nav>
+
+              <div className="mt-6 border-t border-border pt-6 text-sm">
+                {renderProfileShortcut()}
+                <div className="mt-4">
+                  <SignOutButton />
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+            <div className="mx-auto">
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative w-full sm:max-w-md">
+                  <Input
+                    data-tour="scan-input"
+                    type="search"
+                    placeholder={tHeader("scanPlaceholder")}
+                    value={scanValue}
+                    onChange={(event) => {
+                      setScanValue(event.target.value);
+                      if (scanResults.length) {
+                        setScanResults([]);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleScanSubmit();
+                      }
+                    }}
+                    onFocus={() => setShowResults(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowResults(false), 150);
+                    }}
+                    inputMode="search"
+                    aria-label={tHeader("scanLabel")}
+                    ref={scanInputRef}
+                  />
+                  {showResults && dropdownItems.length ? (
+                    <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-popover shadow-lg">
+                      <div className="max-h-64 overflow-y-auto py-1">
+                        {dropdownItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-accent"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              router.push(`/products/${item.id}`);
+                              setScanValue("");
+                              setScanResults([]);
+                              setShowResults(false);
+                              focusScanInput();
+                            }}
+                          >
+                            <span className="font-medium text-foreground">{item.name}</span>
+                            <span className="text-xs text-muted-foreground">{item.sku}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="hidden lg:flex lg:items-center lg:gap-2">
+                  <PageTipsButton />
+                  <LanguageSwitcher />
+                </div>
+              </div>
+              {children}
+            </div>
+          </main>
+        </div>
+
+        <div
+          className={cn(
+            "fixed inset-0 z-50 lg:hidden",
+            mobileOpen ? "pointer-events-auto" : "pointer-events-none",
+          )}
+          aria-hidden={!mobileOpen}
+        >
+          <button
+            type="button"
+            className={cn(
+              "absolute inset-0 bg-black/30 transition-opacity duration-200",
+              mobileOpen ? "opacity-100" : "opacity-0",
+            )}
+            onClick={() => setMobileOpen(false)}
+            aria-label={tCommon("closeMenu")}
+          />
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            className={cn(
+              "scrollbar-soft absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-border bg-card p-6 shadow-xl transition-transform duration-200 ease-out",
+              mobileOpen ? "translate-x-0" : "-translate-x-full",
+            )}
+          >
+            <div className="flex items-center justify-between">
               <Image
                 src="/brand/logo.png"
                 alt={tNav("brand")}
                 width={724}
                 height={181}
-                className="h-auto w-[184px] max-w-full"
+                className="h-auto w-[132px] max-w-full"
                 priority
               />
               <Button
                 type="button"
-                onClick={() => setCommandPaletteOpen(true)}
-                size="default"
-                className="h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                aria-label={tCommand("openButton")}
+                variant="secondary"
+                size="icon"
+                onClick={() => setMobileOpen(false)}
+                aria-label={tCommon("closeMenu")}
               >
-                <CirclePlusIcon className="h-5 w-5" aria-hidden />
+                <CloseIcon className="h-4 w-4" aria-hidden />
               </Button>
             </div>
+            <Button
+              type="button"
+              onClick={() => {
+                setCommandPaletteOpen(true);
+                setMobileOpen(false);
+              }}
+              size="default"
+              className="mt-3 h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+              aria-label={tCommand("openButton")}
+            >
+              <CirclePlusIcon className="h-5 w-5" aria-hidden />
+            </Button>
 
-            <nav className="scrollbar-soft mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-              {renderNavGroups()}
-            </nav>
+            <nav className="mt-6 space-y-4">{renderNavGroups(() => setMobileOpen(false))}</nav>
 
-            <div className="mt-6 border-t border-border pt-6 text-sm">
-              {renderProfileShortcut()}
+            <div className="mt-8 border-t border-border pt-6 text-sm">
+              {renderProfileShortcut(() => setMobileOpen(false))}
               <div className="mt-4">
                 <SignOutButton />
               </div>
             </div>
           </div>
-        </aside>
-
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-          <div className="mx-auto">
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="relative w-full sm:max-w-md">
-                <Input
-                  data-tour="scan-input"
-                  type="search"
-                  placeholder={tHeader("scanPlaceholder")}
-                  value={scanValue}
-                  onChange={(event) => {
-                    setScanValue(event.target.value);
-                    if (scanResults.length) {
-                      setScanResults([]);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      handleScanSubmit();
-                    }
-                  }}
-                  onFocus={() => setShowResults(true)}
-                  onBlur={() => {
-                    setTimeout(() => setShowResults(false), 150);
-                  }}
-                  inputMode="search"
-                  aria-label={tHeader("scanLabel")}
-                  ref={scanInputRef}
-                />
-                {showResults && dropdownItems.length ? (
-                  <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-popover shadow-lg">
-                    <div className="max-h-64 overflow-y-auto py-1">
-                      {dropdownItems.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-accent"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            router.push(`/products/${item.id}`);
-                            setScanValue("");
-                            setScanResults([]);
-                            setShowResults(false);
-                            focusScanInput();
-                          }}
-                        >
-                          <span className="font-medium text-foreground">{item.name}</span>
-                          <span className="text-xs text-muted-foreground">{item.sku}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div className="hidden lg:flex lg:items-center lg:gap-2">
-                <PageTipsButton />
-                <LanguageSwitcher />
-              </div>
-            </div>
-            {children}
-          </div>
-        </main>
-      </div>
-
-      <div
-        className={cn(
-          "fixed inset-0 z-50 lg:hidden",
-          mobileOpen ? "pointer-events-auto" : "pointer-events-none",
-        )}
-        aria-hidden={!mobileOpen}
-      >
-        <button
-          type="button"
-          className={cn(
-            "absolute inset-0 bg-black/30 transition-opacity duration-200",
-            mobileOpen ? "opacity-100" : "opacity-0",
-          )}
-          onClick={() => setMobileOpen(false)}
-          aria-label={tCommon("closeMenu")}
-        />
-        <div
-          ref={drawerRef}
-          role="dialog"
-          aria-modal="true"
-          className={cn(
-            "scrollbar-soft absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-border bg-card p-6 shadow-xl transition-transform duration-200 ease-out",
-            mobileOpen ? "translate-x-0" : "-translate-x-full",
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <Image
-              src="/brand/logo.png"
-              alt={tNav("brand")}
-              width={724}
-              height={181}
-              className="h-auto w-[132px] max-w-full"
-              priority
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              onClick={() => setMobileOpen(false)}
-              aria-label={tCommon("closeMenu")}
-            >
-              <CloseIcon className="h-4 w-4" aria-hidden />
-            </Button>
-          </div>
-          <Button
-            type="button"
-            onClick={() => {
-              setCommandPaletteOpen(true);
-              setMobileOpen(false);
-            }}
-            size="default"
-            className="mt-3 h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-            aria-label={tCommand("openButton")}
-          >
-            <CirclePlusIcon className="h-5 w-5" aria-hidden />
-          </Button>
-
-          <nav className="mt-6 space-y-4">{renderNavGroups(() => setMobileOpen(false))}</nav>
-
-          <div className="mt-8 border-t border-border pt-6 text-sm">
-            {renderProfileShortcut(() => setMobileOpen(false))}
-            <div className="mt-4">
-              <SignOutButton />
-            </div>
-          </div>
         </div>
-      </div>
         <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
         <GuidanceOverlay />
       </div>

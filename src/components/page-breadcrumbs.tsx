@@ -31,6 +31,8 @@ const LINKABLE_SEGMENTS = new Set([
   "help",
   "onboarding",
   "orders",
+  "operations",
+  "integrations",
 ]);
 
 const isDynamicSegment = (segment: string) =>
@@ -67,6 +69,12 @@ const segmentLabel = (
       return tBreadcrumbs("orders");
     case "orders":
       return tNav("salesOrders");
+    case "operations":
+      return tNav("groups.operations");
+    case "integrations":
+      return tNav("integrations");
+    case "bazaar-catalog":
+      return tBreadcrumbs("bazaarCatalog");
     case "suppliers":
       return tNav("suppliers");
     case "stores":
@@ -174,7 +182,9 @@ export const PageBreadcrumbs = () => {
 
       const tail = items
         .slice(1)
-        .filter((item) => item.label !== tNav("purchaseOrders") && item.label !== tBreadcrumbs("orders"));
+        .filter(
+          (item) => item.label !== tNav("purchaseOrders") && item.label !== tBreadcrumbs("orders"),
+        );
 
       return [...base, ...tail];
     }
@@ -195,7 +205,9 @@ export const PageBreadcrumbs = () => {
             <li key={`${crumb.label}-${index}`} className="inline-flex items-center gap-1">
               {index > 0 ? <span className="text-muted-foreground/60">/</span> : null}
               {isLast || !crumb.href ? (
-                <span className="rounded-sm px-1.5 py-0.5 font-medium text-foreground">{crumb.label}</span>
+                <span className="rounded-sm px-1.5 py-0.5 font-medium text-foreground">
+                  {crumb.label}
+                </span>
               ) : (
                 <Link
                   href={crumb.href}

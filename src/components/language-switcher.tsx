@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -11,7 +12,23 @@ import { trpc } from "@/lib/trpc";
 import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/locales";
 import { cn } from "@/lib/utils";
 
-export const LanguageSwitcher = () => {
+type LanguageSwitcherProps = {
+  className?: string;
+  buttonClassName?: string;
+  activeButtonClassName?: string;
+  inactiveButtonClassName?: string;
+  activeButtonStyle?: CSSProperties;
+  compact?: boolean;
+};
+
+export const LanguageSwitcher = ({
+  className,
+  buttonClassName,
+  activeButtonClassName,
+  inactiveButtonClassName,
+  activeButtonStyle,
+  compact = false,
+}: LanguageSwitcherProps = {}) => {
   const t = useTranslations("common");
   const router = useRouter();
   const locale = normalizeLocale(useLocale()) ?? defaultLocale;
@@ -44,12 +61,19 @@ export const LanguageSwitcher = () => {
 
   return (
     <div
-      className="inline-flex items-center gap-1 rounded-md border border-input bg-secondary p-1 text-secondary-foreground shadow-sm"
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border border-input bg-secondary p-1 text-secondary-foreground shadow-sm",
+        compact && "gap-0.5 rounded-lg",
+        className,
+      )}
       role="group"
       aria-label={t("language")}
     >
       <span
-        className="inline-flex h-7 w-7 items-center justify-center text-muted-foreground"
+        className={cn(
+          "inline-flex items-center justify-center text-muted-foreground",
+          compact ? "h-6 w-6" : "h-7 w-7",
+        )}
         aria-hidden
       >
         {updateLocale.isLoading ? <Spinner className="h-3.5 w-3.5" /> : <LanguageIcon className="h-4 w-4" />}
@@ -61,9 +85,14 @@ export const LanguageSwitcher = () => {
           variant={locale === availableLocale ? "primary" : "ghost"}
           size="sm"
           className={cn(
-            "h-7 px-2 text-xs font-semibold",
-            locale === availableLocale ? "shadow-sm" : "text-muted-foreground hover:text-foreground",
+            compact ? "h-6 px-2 text-[11px]" : "h-7 px-2 text-xs",
+            "font-semibold",
+            locale === availableLocale
+              ? cn("shadow-sm", activeButtonClassName)
+              : cn("text-muted-foreground hover:text-foreground", inactiveButtonClassName),
+            buttonClassName,
           )}
+          style={locale === availableLocale ? activeButtonStyle : undefined}
           aria-label={t("switchLocale", { locale: localeLabels[availableLocale] })}
           aria-pressed={locale === availableLocale}
           disabled={updateLocale.isLoading}

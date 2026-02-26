@@ -4,7 +4,8 @@ import type { OrganizationPlan } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 
 export const shouldRunDbTests =
-  process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1";
+  process.env.SKIP_DB_TESTS !== "1" &&
+  (process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1");
 
 export const resetDatabase = async () => {
   await prisma.refundRequest.deleteMany();
@@ -50,6 +51,8 @@ export const resetDatabase = async () => {
   await prisma.inviteToken.deleteMany();
   await prisma.accessRequest.deleteMany();
   await prisma.storePrice.deleteMany();
+  await prisma.bazaarCatalog.deleteMany();
+  await prisma.bazaarCatalogImage.deleteMany();
   await prisma.productCost.deleteMany();
   await prisma.variantAttributeValue.deleteMany();
   await prisma.categoryAttributeTemplate.deleteMany();
@@ -149,5 +152,15 @@ export const seedBase = async (options?: {
     },
   });
 
-  return { org, store, supplier, product, adminUser, managerUser, staffUser, cashierUser, baseUnit };
+  return {
+    org,
+    store,
+    supplier,
+    product,
+    adminUser,
+    managerUser,
+    staffUser,
+    cashierUser,
+    baseUnit,
+  };
 };
