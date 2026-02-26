@@ -179,4 +179,27 @@ describe("product image upload route", () => {
       }),
     );
   });
+
+  it("resolves HIF extension to HEIF mime type when browser omits image mime", async () => {
+    const { POST } = await import("../../src/app/api/product-images/upload/route");
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "camera.HIF", { type: "application/octet-stream" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType: "image/heif",
+      }),
+    );
+  });
 });

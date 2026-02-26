@@ -11,6 +11,9 @@ export const supportedImageExtensions = new Set([
   "svg",
   "heic",
   "heif",
+  "heics",
+  "heifs",
+  "hif",
 ]);
 
 export const normalizeImageMimeType = (value: string) => {
@@ -21,7 +24,13 @@ export const normalizeImageMimeType = (value: string) => {
   if (normalized === "image/heic-sequence" || normalized === "image/x-heic") {
     return "image/heic";
   }
+  if (normalized === "image/heics" || normalized === "image/x-heics") {
+    return "image/heic";
+  }
   if (normalized === "image/heif-sequence" || normalized === "image/x-heif") {
+    return "image/heif";
+  }
+  if (normalized === "image/heifs" || normalized === "image/x-heifs") {
     return "image/heif";
   }
   return normalized;
@@ -37,7 +46,7 @@ export const isHeicLikeFile = (file: File) => {
   if (normalizedType.includes("heic") || normalizedType.includes("heif")) {
     return true;
   }
-  return /\.(heic|heif)$/i.test(file.name);
+  return /\.(heic|heics|heif|heifs|hif)$/i.test(file.name);
 };
 
 export const isImageLikeFile = (file: File) => {

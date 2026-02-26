@@ -177,10 +177,21 @@ const normalizeImageMimeType = (value: string | null | undefined) => {
   if (normalized === "image/heic-sequence" || normalized === "image/x-heic") {
     return "image/heic";
   }
+  if (normalized === "image/heics" || normalized === "image/x-heics") {
+    return "image/heic";
+  }
   if (normalized === "image/heif-sequence" || normalized === "image/x-heif") {
     return "image/heif";
   }
+  if (normalized === "image/heifs" || normalized === "image/x-heifs") {
+    return "image/heif";
+  }
   return normalized;
+};
+
+const isAppleHeifMimeType = (contentType: string | null | undefined) => {
+  const normalizedType = normalizeImageMimeType(contentType);
+  return normalizedType === "image/heic" || normalizedType === "image/heif";
 };
 
 const detectImageExtension = (contentType: string | null, sourceUrl?: string) => {
@@ -226,7 +237,10 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
           "webp",
           "avif",
           "heic",
+          "heics",
           "heif",
+          "heifs",
+          "hif",
           "gif",
           "bmp",
           "tif",
@@ -234,6 +248,12 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
           "svg",
         ].includes(ext)
       ) {
+        if (ext === "heics") {
+          return "heic";
+        }
+        if (ext === "heifs" || ext === "hif") {
+          return "heif";
+        }
         return ext === "jpeg" ? "jpg" : ext;
       }
     } catch {
@@ -258,6 +278,151 @@ const toManagedR2Url = (config: R2Config, objectKey: string) => {
 const getObjectKey = (organizationId: string, fileName: string, productId?: string | null) =>
   `retails/${normalizeOrgPath(organizationId)}/products/${normalizeProductPath(productId)}/${fileName}`;
 
+let sharpModulePromise: Promise<
+  (input?: Buffer | Uint8Array, options?: { pages?: number }) => SharpPipeline
+> | null = null;
+let heicConvertModulePromise: Promise<
+  (options: { buffer: Buffer; format: "JPEG"; quality?: number }) => Promise<Buffer | Uint8Array>
+> | null = null;
+
+type SharpPipeline = {
+  rotate: () => SharpPipeline;
+  jpeg: (options: {
+    quality: number;
+    mozjpeg: boolean;
+    chromaSubsampling: string;
+  }) => SharpPipeline;
+  toBuffer: () => Promise<Buffer>;
+};
+
+const loadSharp = async () => {
+  if (!sharpModulePromise) {
+    sharpModulePromise = import("sharp").then((module) => {
+      const candidate = module.default;
+      if (typeof candidate !== "function") {
+        throw new Error("imageInvalidType");
+      }
+      return candidate as (
+        input?: Buffer | Uint8Array,
+        options?: { pages?: number },
+      ) => SharpPipeline;
+    });
+  }
+  return sharpModulePromise;
+};
+
+const loadHeicConvert = async () => {
+  if (!heicConvertModulePromise) {
+    heicConvertModulePromise = import("heic-convert").then((module) => {
+      const topLevelDefault = (module as { default?: unknown }).default;
+      const candidate =
+        typeof topLevelDefault === "function"
+          ? topLevelDefault
+          : typeof (module as unknown) === "function"
+            ? (module as unknown)
+            : null;
+      if (typeof candidate !== "function") {
+        throw new Error("imageInvalidType");
+      }
+      return candidate as (
+        options: { buffer: Buffer; format: "JPEG"; quality?: number },
+      ) => Promise<Buffer | Uint8Array>;
+    });
+  }
+  return heicConvertModulePromise;
+};
+
+const transcodeAppleHeifToJpegWithSharp = async (buffer: Buffer) => {
+  const qualitySteps = [90, 84, 78, 72, 66, 60] as const;
+  let smallest: Buffer | null = null;
+  const sharp = await loadSharp();
+
+  for (const quality of qualitySteps) {
+    const converted = await sharp(buffer, { pages: 1 })
+      .rotate()
+      .jpeg({ quality, mozjpeg: true, chromaSubsampling: "4:2:0" })
+      .toBuffer();
+    if (!converted.length) {
+      continue;
+    }
+    if (!smallest || converted.length < smallest.length) {
+      smallest = converted;
+    }
+    if (converted.length <= maxImageBytes) {
+      return converted;
+    }
+  }
+
+  if (!smallest) {
+    throw new Error("imageInvalidType");
+  }
+  return smallest;
+};
+
+const transcodeAppleHeifToJpegWithHeicConvert = async (buffer: Buffer) => {
+  const qualitySteps = [0.96, 0.92, 0.88, 0.84, 0.8, 0.76, 0.72] as const;
+  let smallest: Buffer | null = null;
+  const convert = await loadHeicConvert();
+
+  for (const quality of qualitySteps) {
+    const converted = await convert({
+      buffer,
+      format: "JPEG",
+      quality,
+    });
+    const normalized = Buffer.from(converted);
+    if (!normalized.length) {
+      continue;
+    }
+    if (!smallest || normalized.length < smallest.length) {
+      smallest = normalized;
+    }
+    if (normalized.length <= maxImageBytes) {
+      return normalized;
+    }
+  }
+
+  if (!smallest) {
+    throw new Error("imageInvalidType");
+  }
+  return smallest;
+};
+
+const transcodeAppleHeifToJpeg = async (buffer: Buffer) => {
+  try {
+    return await transcodeAppleHeifToJpegWithSharp(buffer);
+  } catch {
+    return transcodeAppleHeifToJpegWithHeicConvert(buffer);
+  }
+};
+
+const normalizeUploadImage = async (input: { buffer: Buffer; contentType: string }) => {
+  const normalizedType = normalizeImageMimeType(input.contentType);
+  if (!isAppleHeifMimeType(normalizedType)) {
+    return {
+      buffer: input.buffer,
+      contentType: normalizedType || input.contentType,
+    };
+  }
+
+  try {
+    const converted = await transcodeAppleHeifToJpeg(input.buffer);
+    if (!converted.length) {
+      throw new Error("imageInvalidType");
+    }
+    return {
+      buffer: converted,
+      contentType: "image/jpeg",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "imageTooLarge") {
+      throw error;
+    }
+    throw new Error("imageInvalidType");
+  }
+};
+
 const uploadBufferToStorage = async (input: {
   organizationId: string;
   productId?: string | null;
@@ -265,8 +430,15 @@ const uploadBufferToStorage = async (input: {
   contentType: string;
   sourceUrl?: string;
 }) => {
-  const extension = detectImageExtension(input.contentType, input.sourceUrl);
-  const hash = createHash("sha1").update(input.buffer).digest("hex");
+  const prepared = await normalizeUploadImage({
+    buffer: input.buffer,
+    contentType: input.contentType,
+  });
+  if (!prepared.buffer.length || prepared.buffer.length > maxImageBytes) {
+    throw new Error("imageTooLarge");
+  }
+  const extension = detectImageExtension(prepared.contentType, input.sourceUrl);
+  const hash = createHash("sha1").update(prepared.buffer).digest("hex");
   const fileName = `${hash}.${extension}`;
   const storage = resolveStorageProvider();
 
@@ -277,8 +449,8 @@ const uploadBufferToStorage = async (input: {
       new PutObjectCommand({
         Bucket: storage.config.bucketName,
         Key: objectKey,
-        Body: input.buffer,
-        ContentType: input.contentType,
+        Body: prepared.buffer,
+        ContentType: prepared.contentType,
         CacheControl: "public, max-age=31536000, immutable",
       }),
     );
@@ -295,7 +467,7 @@ const uploadBufferToStorage = async (input: {
     normalizeProductPath(input.productId),
   );
   await mkdir(orgDir, { recursive: true });
-  await writeFile(join(orgDir, fileName), input.buffer);
+  await writeFile(join(orgDir, fileName), prepared.buffer);
   return {
     url: toManagedLocalUrl(input.organizationId, fileName, input.productId),
     managed: true,

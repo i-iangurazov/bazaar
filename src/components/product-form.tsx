@@ -191,6 +191,12 @@ const resolveImageExtensionByMime = (mimeType: string) => {
   if (normalizedMimeType === "image/png") {
     return "png";
   }
+  if (normalizedMimeType === "image/heic") {
+    return "heic";
+  }
+  if (normalizedMimeType === "image/heif") {
+    return "heif";
+  }
   if (normalizedMimeType === "image/webp") {
     return "webp";
   }
@@ -207,6 +213,69 @@ const resolveImageExtensionByMime = (mimeType: string) => {
     return "tiff";
   }
   return "jpg";
+};
+
+const resolveImageMimeTypeByExtension = (extension: string) => {
+  const normalized = extension.toLowerCase();
+  if (normalized === "jpg" || normalized === "jpeg") {
+    return "image/jpeg";
+  }
+  if (normalized === "png") {
+    return "image/png";
+  }
+  if (normalized === "webp") {
+    return "image/webp";
+  }
+  if (normalized === "avif") {
+    return "image/avif";
+  }
+  if (normalized === "gif") {
+    return "image/gif";
+  }
+  if (normalized === "bmp") {
+    return "image/bmp";
+  }
+  if (normalized === "tif" || normalized === "tiff") {
+    return "image/tiff";
+  }
+  if (normalized === "svg") {
+    return "image/svg+xml";
+  }
+  if (normalized === "heic" || normalized === "heics") {
+    return "image/heic";
+  }
+  if (normalized === "heif" || normalized === "heifs" || normalized === "hif") {
+    return "image/heif";
+  }
+  return "";
+};
+
+const resolveImageMimeTypeFromUrl = (sourceUrl: string) => {
+  try {
+    const parsed = new URL(sourceUrl, "https://local.invalid");
+    const rawExt = parsed.pathname.split(".").pop()?.trim().toLowerCase() ?? "";
+    if (!rawExt) {
+      return "";
+    }
+    return resolveImageMimeTypeByExtension(rawExt);
+  } catch {
+    return "";
+  }
+};
+
+const resolveHeicLikeMimeType = (file: File) => {
+  const normalizedType = normalizeImageMimeType(file.type);
+  if (normalizedType === "image/heic" || normalizedType === "image/heif") {
+    return normalizedType;
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (ext === "heic" || ext === "heics") {
+    return "image/heic";
+  }
+  if (ext === "heif" || ext === "heifs" || ext === "hif") {
+    return "image/heif";
+  }
+  return "";
 };
 
 
@@ -801,7 +870,54 @@ export const ProductForm = ({
     }
   };
 
+  const convertBrowserReadableImageToJpeg = async (file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const nextImage = new Image();
+        nextImage.onload = () => resolve(nextImage);
+        nextImage.onerror = () => reject(new Error("imageReadFailed"));
+        nextImage.src = objectUrl;
+      });
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      if (!width || !height) {
+        return null;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(width));
+      canvas.height = Math.max(1, Math.round(height));
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return null;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return encodeCanvasToFile({
+        canvas,
+        fileName: replaceFileExtension(file.name, "jpg"),
+        lastModified: file.lastModified || Date.now(),
+        type: "image/jpeg",
+        quality: 0.95,
+      });
+    } catch {
+      return null;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
   const convertHeicToJpeg = async (file: File) => {
+    const browserConverted = await convertBrowserReadableImageToJpeg(file);
+    if (browserConverted) {
+      logImagePrepDebug("heic-convert-browser-decoded", {
+        fileName: file.name,
+        size: file.size,
+        type: file.type,
+        outputSize: browserConverted.size,
+      });
+      return browserConverted;
+    }
+
     try {
       const heic2anyModule = await import("heic2any");
       const topLevelDefault = (heic2anyModule as { default?: unknown }).default;
@@ -878,6 +994,17 @@ export const ProductForm = ({
         ? normalizeImageMimeType(browserReadableMatch[1])
         : "";
       if (browserReadableMimeType.startsWith("image/")) {
+        const browserReadableConverted = await convertBrowserReadableImageToJpeg(file);
+        if (browserReadableConverted) {
+          logImagePrepDebug("heic-convert-browser-readable-decoded", {
+            fileName: file.name,
+            originalType: file.type,
+            fallbackType: browserReadableMimeType,
+            fallbackSize: browserReadableConverted.size,
+            message: rawMessage,
+          });
+          return browserReadableConverted;
+        }
         const fallbackFile = new File(
           [file],
           replaceFileExtension(file.name, resolveImageExtensionByMime(browserReadableMimeType)),
@@ -895,12 +1022,35 @@ export const ProductForm = ({
         });
         return fallbackFile;
       }
+      const isLibHeifFormatUnsupported = /ERR_LIBHEIF\b.*format not supported/i.test(rawMessage);
+      if (isLibHeifFormatUnsupported) {
+        const heicLikeMimeType = resolveHeicLikeMimeType(file);
+        if (heicLikeMimeType) {
+          const passThroughFile = new File(
+            [file],
+            replaceFileExtension(file.name, resolveImageExtensionByMime(heicLikeMimeType)),
+            {
+              type: heicLikeMimeType,
+              lastModified: file.lastModified || Date.now(),
+            },
+          );
+          logImagePrepDebug("heic-convert-pass-through", {
+            fileName: file.name,
+            originalType: file.type,
+            fallbackType: heicLikeMimeType,
+            fallbackSize: passThroughFile.size,
+            message: rawMessage,
+          });
+          return passThroughFile;
+        }
+      }
       logImagePrepDebug(
         "heic-convert-failed",
         {
           fileName: file.name,
           size: file.size,
           type: file.type,
+          message: rawMessage,
         },
         error,
       );
@@ -1023,6 +1173,46 @@ export const ProductForm = ({
     } catch {
       return fallbackName;
     }
+  };
+
+  const resolveImageEditorProxyUrl = (sourceUrl: string) =>
+    `/api/product-images/source?url=${encodeURIComponent(sourceUrl)}`;
+
+  const fetchImageEditorSourceFile = async (sourceUrl: string) => {
+    const candidateUrls = [sourceUrl];
+    const proxyUrl = resolveImageEditorProxyUrl(sourceUrl);
+    if (!candidateUrls.includes(proxyUrl)) {
+      candidateUrls.push(proxyUrl);
+    }
+
+    let lastError: unknown = null;
+    for (const candidateUrl of candidateUrls) {
+      try {
+        const response = await fetch(candidateUrl, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("imageReadFailed");
+        }
+        const blob = await response.blob();
+        const fallbackMimeType = resolveImageMimeTypeFromUrl(sourceUrl);
+        const normalizedBlobType = normalizeImageMimeType(blob.type || fallbackMimeType);
+        const finalMimeType = normalizedBlobType.startsWith("image/")
+          ? normalizedBlobType
+          : normalizeImageMimeType(fallbackMimeType);
+        if (!finalMimeType.startsWith("image/")) {
+          throw new Error("imageInvalidType");
+        }
+
+        const fileName = resolveImageFileNameFromUrl(sourceUrl, finalMimeType || "image/jpeg");
+        return new File([blob], fileName, {
+          type: finalMimeType || "image/jpeg",
+          lastModified: Date.now(),
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error("imageReadFailed");
   };
 
   const withPreviewVersion = (url: string, imageFieldId: string) => {
@@ -1148,20 +1338,7 @@ export const ProductForm = ({
     setIsPreparingImageEditor(true);
 
     try {
-      const response = await fetch(imageUrl, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("imageReadFailed");
-      }
-      const blob = await response.blob();
-      if (!blob.type.startsWith("image/")) {
-        throw new Error("imageInvalidType");
-      }
-
-      const fileName = resolveImageFileNameFromUrl(imageUrl, blob.type || "image/jpeg");
-      const sourceFile = new File([blob], fileName, {
-        type: blob.type || "image/jpeg",
-        lastModified: Date.now(),
-      });
+      const sourceFile = await fetchImageEditorSourceFile(imageUrl);
       const objectUrl = URL.createObjectURL(sourceFile);
       const dimensions = await getImageDimensions(objectUrl);
       const nextAspect =
@@ -2085,7 +2262,7 @@ export const ProductForm = ({
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*,.heic,.heif,image/heic,image/heif"
+                        accept="image/*,.heic,.heics,.heif,.heifs,.hif,image/heic,image/heif,image/heic-sequence,image/heif-sequence"
                         multiple
                         className="hidden"
                         disabled={readOnly || isUploadingImages}

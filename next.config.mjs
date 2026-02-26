@@ -7,7 +7,7 @@ const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
   experimental: {
-    serverComponentsExternalPackages: ["pdfkit"],
+    serverComponentsExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
   },
 };
 
