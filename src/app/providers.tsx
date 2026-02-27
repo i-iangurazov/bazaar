@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpLink, loggerLink } from "@trpc/client";
 import superjson from "superjson";
 import { SessionProvider } from "next-auth/react";
 import { NextIntlClientProvider } from "next-intl";
+import { z } from "zod";
 
 import { trpc, getBaseUrl } from "@/lib/trpc";
 import { createMessageFallback } from "@/lib/i18nFallback";
+import { createLocalizedZodErrorMap } from "@/lib/zodErrorMap";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSync } from "@/components/theme-sync";
@@ -64,6 +66,14 @@ export const Providers = ({
       ],
     }),
   );
+
+  useEffect(() => {
+    const previousErrorMap = z.getErrorMap();
+    z.setErrorMap(createLocalizedZodErrorMap(locale));
+    return () => {
+      z.setErrorMap(previousErrorMap);
+    };
+  }, [locale]);
 
   return (
     <SessionProvider>

@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { DownloadIcon, PrintIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -47,6 +49,11 @@ const PosHistoryPage = () => {
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null);
   const [returnQtyByLine, setReturnQtyByLine] = useState<Record<string, string>>({});
   const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>(PosPaymentMethod.CASH);
+  const [receiptAction, setReceiptAction] = useState<{
+    saleId: string;
+    mode: "download" | "print";
+    kind: "precheck" | "fiscal";
+  } | null>(null);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
@@ -274,6 +281,29 @@ const PosHistoryPage = () => {
     }
   };
 
+  const handleReceiptPdf = async (
+    saleId: string,
+    mode: "download" | "print",
+    kind: "precheck" | "fiscal",
+  ) => {
+    if (receiptAction) {
+      return;
+    }
+    setReceiptAction({ saleId, mode, kind });
+    try {
+      const blob = await fetchPdfBlob({ url: `/api/pos/receipts/${saleId}/pdf?kind=${kind}` });
+      if (mode === "print") {
+        await printPdfBlob(blob);
+      } else {
+        downloadPdfBlob(blob, `pos-receipt-${saleId}-${kind}.pdf`);
+      }
+    } catch {
+      toast({ variant: "error", description: t("history.receiptPdfFailed") });
+    } finally {
+      setReceiptAction(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("history.title")} subtitle={t("history.subtitle")} />
@@ -363,6 +393,72 @@ const PosHistoryPage = () => {
                 >
                   {t("history.return")}
                 </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void handleReceiptPdf(sale.id, "download", "precheck");
+                  }}
+                  disabled={Boolean(receiptAction)}
+                >
+                  {receiptAction?.saleId === sale.id &&
+                  receiptAction.mode === "download" &&
+                  receiptAction.kind === "precheck" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <DownloadIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("history.downloadPrecheck")}
+                </Button>
+                <Button
+                  onClick={() => {
+                    void handleReceiptPdf(sale.id, "print", "precheck");
+                  }}
+                  disabled={Boolean(receiptAction)}
+                >
+                  {receiptAction?.saleId === sale.id &&
+                  receiptAction.mode === "print" &&
+                  receiptAction.kind === "precheck" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("history.printPrecheck")}
+                </Button>
+                {sale.kkmStatus === "SENT" ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        void handleReceiptPdf(sale.id, "download", "fiscal");
+                      }}
+                      disabled={Boolean(receiptAction)}
+                    >
+                      {receiptAction?.saleId === sale.id &&
+                      receiptAction.mode === "download" &&
+                      receiptAction.kind === "fiscal" ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {t("history.downloadFiscalReceipt")}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        void handleReceiptPdf(sale.id, "print", "fiscal");
+                      }}
+                      disabled={Boolean(receiptAction)}
+                    >
+                      {receiptAction?.saleId === sale.id &&
+                      receiptAction.mode === "print" &&
+                      receiptAction.kind === "fiscal" ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <PrintIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {t("history.printFiscalReceipt")}
+                    </Button>
+                  </>
+                ) : null}
                 {canRetryKkm && sale.kkmStatus === "FAILED" ? (
                   <Button
                     variant="secondary"

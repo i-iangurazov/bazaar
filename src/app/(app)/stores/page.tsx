@@ -540,6 +540,11 @@ const StoresPage = () => {
                                         {t("complianceSettings")}
                                       </Link>
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <Link href={`/stores/${store.id}/hardware`}>
+                                        {t("hardwareSettings")}
+                                      </Link>
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onSelect={() => openEditDialog(store)}>
                                       {t("edit")}
                                     </DropdownMenuItem>
@@ -625,6 +630,12 @@ const StoresPage = () => {
                         label: t("complianceSettings"),
                         icon: AdjustIcon,
                         href: `/stores/${store.id}/compliance`,
+                      },
+                      {
+                        key: "hardware",
+                        label: t("hardwareSettings"),
+                        icon: AdjustIcon,
+                        href: `/stores/${store.id}/hardware`,
                       },
                       {
                         key: "edit",

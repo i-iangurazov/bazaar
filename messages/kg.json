@@ -1142,7 +1142,7 @@
       "completeSale": "Сатууну аяктоо",
       "paymentTotal": "Төлөмдөрдүн суммасы",
       "qtyPositive": "Саны нөлдөн чоң болушу керек.",
-      "paymentRequired": "Кеминде бир төлөм кошуңуз.",
+      "paymentRequired": "«Төлөм» бөлүгүндө төлөмдү кошуңуз: ыкмасын тандап, суммасын киргизиңиз.",
       "paymentMismatch": "Төлөмдөр суммасы чек жыйынтыгына барабар болушу керек.",
       "saleCreated": "Сатуу черновиги түзүлдү.",
       "lineAdded": "Позиция кошулду.",
@@ -1152,7 +1152,15 @@
       "markingPlaceholder": "Маркировка коддорун үтүр менен киргизиңиз",
       "markingSave": "Коддорду сактоо",
       "markingSaved": "Маркировка коддору сакталды.",
-      "markingCapturedCount": "Сакталган коддор: {count}"
+      "markingCapturedCount": "Сакталган коддор: {count}",
+      "lastReceiptTitle": "Акыркы чек: {number}",
+      "downloadPrecheck": "Алдын ала чекти PDF жүктөө",
+      "printPrecheck": "Алдын ала чекти басуу",
+      "downloadFiscalReceipt": "Фискалдык чекти PDF жүктөө",
+      "printFiscalReceipt": "Фискалдык чекти басуу",
+      "downloadReceipt": "Чекти PDF жүктөө",
+      "printReceipt": "Чекти басып чыгаруу",
+      "receiptPdfFailed": "Чек PDF даярдоо мүмкүн болгон жок."
     },
     "shifts": {
       "title": "Сменалар",
@@ -1206,7 +1214,14 @@
       "kkmRetryFailedWithReason": "Чекти ККМге жөнөтүү мүмкүн болгон жок: {reason}",
       "returnTotal": "Кайтаруу суммасы",
       "completeReturn": "Кайтарууну аяктоо",
-      "manualRefundRequired": "Кайтаруу кол менен иштетилет. Сурам түзүлдү: {requestId}."
+      "manualRefundRequired": "Кайтаруу кол менен иштетилет. Сурам түзүлдү: {requestId}.",
+      "downloadPrecheck": "Алдын ала чекти PDF жүктөө",
+      "printPrecheck": "Алдын ала чекти басуу",
+      "downloadFiscalReceipt": "Фискалдык чекти PDF жүктөө",
+      "printFiscalReceipt": "Фискалдык чекти басуу",
+      "downloadReceipt": "Чекти PDF жүктөө",
+      "printReceipt": "Чекти басып чыгаруу",
+      "receiptPdfFailed": "Чек PDF даярдоо мүмкүн болгон жок."
     },
     "payments": {
       "cash": "Накталай",
@@ -1263,6 +1278,39 @@
         "status": "Абалы",
         "fiscal": "Фискалдаштыруу"
       }
+    },
+    "receiptPdf": {
+      "title": "Касса чеги",
+      "precheckTitle": "АЛДЫН АЛА ЧЕК (ФИСКАЛДЫК ЭМЕС)",
+      "precheckHint": "Төлөм кабыл алынды, бирок фискалдаштыруу ККМ тарабынан тастыктала элек.",
+      "fiscalBlockTitle": "Фискалдык маалымат",
+      "fiscalStatus": "Фискалдык абал",
+      "fiscalStatusSent": "Маалымат ОФД/ГНСке жөнөтүлдү",
+      "fiscalStatusNotSent": "Жөнөтүлгөн жок",
+      "fiscalStatusFailed": "Жөнөтүү катасы",
+      "fiscalRetryHint": "Кайра жөнөтүү үчүн менеджерге кайрылыңыз.",
+      "fiscalizedAt": "Фискалдаштырылган убакыт",
+      "kkmFactoryNumber": "ККМ заводдук №",
+      "kkmRegistrationNumber": "ККМ каттоо №",
+      "fiscalNumber": "Фискалдык номер",
+      "upfdOrFiscalMemory": "УПФД/ФЖ",
+      "qrPayload": "QR маалыматы",
+      "saleNumber": "Сатуу номери",
+      "createdAt": "Дата",
+      "store": "Дүкөн",
+      "register": "Касса",
+      "cashier": "Кассир",
+      "shift": "Смена",
+      "inn": "ИНН",
+      "address": "Дарек",
+      "phone": "Телефон",
+      "item": "Товар",
+      "qty": "Саны",
+      "price": "Баасы",
+      "lineTotal": "Сумма",
+      "subtotal": "Аралык жыйынтык",
+      "total": "Жалпы",
+      "payments": "Төлөмдөр"
     }
   },
   "dashboard": {
@@ -1314,6 +1362,26 @@
     "template": "Шаблон",
     "template3x8": "3 x 8 (24 даана)",
     "template2x5": "2 x 5 (10 даана)",
+    "templateRollXp365b": "XP-365B (рулон) 58×40",
+    "rollTemplatePreviewTitle": "Рулон баа белгисинин алдын ала көрүнүшү",
+    "rollPreviewName": "Буюмдун аталышы",
+    "rollPreviewPrice": "0,00 KGS",
+    "rollPreviewSku": "SKU",
+    "rollPreviewBarcode": "Штрихкод",
+    "rollGapStoredHint": "Бул аралык параметри келечектеги Connector режими үчүн калибрлөө катары сакталат.",
+    "rollGapMm": "Аралык (мм)",
+    "rollGapHint": "PDF барак-барак басууда параметр калибрлөө катары сакталат.",
+    "rollWidthMm": "Туурасы (мм)",
+    "rollHeightMm": "Бийиктиги (мм)",
+    "rollSizeHint": "Жол берилген диапазон рулонго жана принтерге жараша болот.",
+    "rollGapRange": "Аралык {min} менен {max} мм аралыгында болушу керек.",
+    "rollOffsetRange": "Жылыш {min} менен {max} мм аралыгында болушу керек.",
+    "rollPreviewSize": "Өлчөмү: {width}×{height} мм · аралык: {gap} мм",
+    "rollXOffsetMm": "X жылышы (мм)",
+    "rollYOffsetMm": "Y жылышы (мм)",
+    "printWithoutBarcode": "Штрихкодсуз басуу",
+    "printWithoutBarcodeHint": "Тандалган товарлардын айрымында штрихкод жок болсо гана колдонуңуз.",
+    "printWithoutBarcodeConfirmRequired": "Улантуу үчүн штрихкодсуз басууну ырастаңыз.",
     "printQty": "Баа тагдарынын саны",
     "printQtyMin": "Саны 1ден кем болбошу керек.",
     "printDownload": "PDF жүктөө",
@@ -1403,7 +1471,8 @@
     "noReorderSuggestions": "Заказ үчүн сунуштар жок.",
     "movementNoteImportRollback": "Импортту артка кайтаруу",
     "movementNoteStockCount": "Текшерүү {code}",
-    "movementNoteBundleAssemble": "Комплектти чогултуу {sku}"
+    "movementNoteBundleAssemble": "Комплектти чогултуу {sku}",
+    "printAction": "Басып чыгаруу"
   },
   "products": {
     "title": "Буюмдар",
@@ -1627,6 +1696,27 @@
     "template": "Калып",
     "template3x8": "3 x 8 (24 даана)",
     "template2x5": "2 x 5 (10 даана)",
+    "templateRollXp365b": "XP-365B (рулон) 58×40",
+    "rollTemplatePreviewTitle": "Рулон баа белгисинин алдын ала көрүнүшү",
+    "rollPreviewName": "Буюмдун аталышы",
+    "rollPreviewPrice": "0,00 KGS",
+    "rollPreviewSku": "SKU",
+    "rollPreviewBarcode": "Штрихкод",
+    "rollGapStoredHint": "Бул аралык параметри келечектеги Connector режими үчүн калибрлөө катары сакталат.",
+    "rollGapMm": "Аралык (мм)",
+    "rollGapHint": "PDF барак-барак басууда параметр калибрлөө катары сакталат.",
+    "rollWidthMm": "Туурасы (мм)",
+    "rollHeightMm": "Бийиктиги (мм)",
+    "rollSizeHint": "Жол берилген диапазон рулонго жана принтерге жараша болот.",
+    "rollWidthRange": "Туурасы {min} менен {max} мм аралыгында болушу керек.",
+    "rollHeightRange": "Бийиктиги {min} менен {max} мм аралыгында болушу керек.",
+    "rollPreviewSize": "Өлчөмү: {width}×{height} мм",
+    "rollXOffsetMm": "X жылышы (мм)",
+    "rollYOffsetMm": "Y жылышы (мм)",
+    "printWithoutBarcode": "Штрихкодсуз басуу",
+    "printWithoutBarcodeHint": "Тандалган товарлардын айрымында штрихкод жок болсо гана колдонуңуз.",
+    "printWithoutBarcodeConfirmRequired": "Улантуу үчүн штрихкодсуз басууну ырастаңыз.",
+    "rollMissingBarcodeCount": "Штрихкоду жок: {count}",
     "printQty": "Белги саны",
     "printQtyMin": "Саны 1ден аз болбошу керек.",
     "printDownload": "PDF жүктөө",
@@ -1688,7 +1778,8 @@
     "variantAttributesNoDefinitions": "Атрибут аныктамаларын жөндөөлөрдөн кошуңуз.",
     "selectAttributeValue": "Маанини тандаңыз",
     "attributeRequired": "Милдеттүү атрибутту толтуруңуз: {attribute}.",
-    "attributeNumberInvalid": "Туура сан киргизиңиз."
+    "attributeNumberInvalid": "Туура сан киргизиңиз.",
+    "printAction": "Басып чыгаруу"
   },
   "stores": {
     "title": "Дүкөндөр",
@@ -1748,7 +1839,8 @@
     "complianceDisabled": "Өчүк",
     "complianceNeedsSetup": "Настройка керек",
     "complianceReady": "Настройкаланды",
-    "complianceSettings": "KG compliance"
+    "complianceSettings": "KG compliance",
+    "hardwareSettings": "Жабдуу жөндөөлөрү"
   },
   "purchaseOrders": {
     "title": "Жеткирүү заказдары",
@@ -1862,7 +1954,9 @@
       "partiallyReceived": "Жарым-жартылай кабыл алынган",
       "received": "Алынган",
       "cancelled": "Жокко чыгарылган"
-    }
+    },
+    "printPdf": "Басып чыгаруу",
+    "pdfActionFailed": "PDF даярдоо мүмкүн болгон жок."
   },
   "salesOrders": {
     "title": "Кардар заказдары",
@@ -2016,7 +2110,9 @@
       "jobTitle": "Кызматы",
       "saved": "Жеке маалыматтар сакталды.",
       "validation": {
-        "nameRequired": "Аты-жөнү милдеттүү."
+        "nameRequired": "Аты-жөнү милдеттүү.",
+        "phoneMax": "Телефон {max} белгиден ашпашы керек.",
+        "jobTitleMax": "Кызматы {max} белгиден ашпашы керек."
       }
     },
     "preferences": {
@@ -2043,7 +2139,11 @@
       "saved": "Бизнес маалыматы сакталды.",
       "validation": {
         "organizationNameRequired": "Бизнес аталышы милдеттүү.",
-        "storeRequired": "Дүкөн тандаңыз."
+        "storeRequired": "Дүкөн тандаңыз.",
+        "legalNameMax": "Юридикалык аталышы {max} белгиден ашпашы керек.",
+        "innMax": "ИНН {max} белгиден ашпашы керек.",
+        "addressMax": "Дарек {max} белгиден ашпашы керек.",
+        "phoneMax": "Телефон {max} белгиден ашпашы керек."
       }
     }
   },
@@ -2310,6 +2410,7 @@
     "posRegisterNotFound": "Касса табылган жок.",
     "posShiftAlreadyOpen": "Бул касса үчүн смена мурунтан ачылган.",
     "posSaleNotFound": "Сатуу табылган жок.",
+    "posFiscalReceiptUnavailable": "Фискалдык чек азырынча жеткиликсиз. Алдын ала чекти басып чыгарыңыз.",
     "posSaleNotEditable": "Бул макамда сатууну өзгөртүү мүмкүн эмес.",
     "posSaleLineNotFound": "Сатуу сапы табылган жок.",
     "salesOrderOrgMismatch": "Документ уюмга тиешелүү эмес.",
@@ -2334,7 +2435,12 @@
     "kkmReceiptNotFound": "Фискалдык чек табылган жок.",
     "kkmRetryUnsupportedMode": "Бул ККМ режиминде кайра жөнөтүү жеткиликсиз.",
     "kkmReceiptPayloadInvalid": "Фискалдык чектин жүгү бузулган.",
-    "copyFailed": "Көчүрүү мүмкүн эмес."
+    "copyFailed": "Көчүрүү мүмкүн эмес.",
+    "printerConnectorDeviceNotFound": "Connector түзмөгү табылган жок же бул дүкөнгө жеткиликсиз.",
+    "printerConnectorModeRequired": "Бул аракет үчүн дүкөндүн жабдуу жөндөөлөрүндө Connector режимин күйгүзүңүз.",
+    "printerConnectorNotPaired": "Connector түзмөгү байланган эмес. Адегенде жупташтырууну бүтүрүңүз.",
+    "printerConnectorNotImplemented": "Connector аркылуу басып чыгаруу азырынча даярдалууда. PDF режимин колдонуңуз.",
+    "priceTagsBarcodeConfirmationRequired": "Штрихкодсуз басууну ырастаңыз."
   },
   "adminJobs": {
     "title": "Фондук иштер",
@@ -3352,5 +3458,38 @@
         }
       }
     }
+  },
+  "storesHardware": {
+    "title": "Дүкөн жабдуусу",
+    "subtitle": "Бул дүкөн үчүн чек жана этикетка басып чыгаруу жөндөөлөрү.",
+    "subtitleStore": "Жабдуу: {store}",
+    "settingsTitle": "Басып чыгаруу параметрлери",
+    "modelRequired": "Принтер моделин көрсөтүңүз.",
+    "receiptMode": "Чек басып чыгаруу режими",
+    "labelMode": "Этикетка басып чыгаруу режими",
+    "modePlaceholder": "Режимди тандаңыз",
+    "modePdf": "PDF (браузер аркылуу басуу)",
+    "modeConnector": "Connector (жергиликтүү сервис)",
+    "receiptModeHint": "XP-P501A үчүн азыр PDF колдонуңуз же сервис орнотулгандан кийин Connector тандаңыз.",
+    "labelModeHint": "XP-365B үчүн азыр PDF колдонуңуз же сервис орнотулгандан кийин Connector тандаңыз.",
+    "receiptModel": "Чек принтеринин модели",
+    "labelModel": "Этикетка принтеринин модели",
+    "connectorDevice": "Туташкан Connector түзмөгү",
+    "connectorDevicePlaceholder": "Түзмөктү тандаңыз",
+    "connectorDeviceNone": "Тандалган эмес",
+    "connectorDeviceOption": "{name}",
+    "connectorDeviceHint": "Connector режиминде чек жана этикеткалар үчүн колдонулат.",
+    "connectorDeviceMissingHint": "Connector режими тандалган, бирок активдүү түзмөк байланган эмес.",
+    "saved": "Жабдуу жөндөөлөрү сакталды.",
+    "reset": "Калыбына келтирүү",
+    "pdfModeTitle": "PDF режими (бүгүн)",
+    "pdfModeStep1": "PDF жүктөп алып, macOS системалык басып чыгаруу терезесин ачыңыз.",
+    "pdfModeStep2": "XP-P501A үчүн стандарттуу терезеден түзмөктү/драйверди тандаңыз.",
+    "pdfModeStep3": "XP-365B үчүн басуудан мурун кагаз өлчөмүн жана масштабды 100% текшериңиз.",
+    "connectorModeTitle": "Connector режими (даярдык)",
+    "connectorModeStep1": "Жумушчу Macка жергиликтүү Connector орнотуңуз.",
+    "connectorModeStep2": "Жупташтыруу коду аркылуу түзмөктү дүкөнгө байланыштырыңыз.",
+    "connectorModeStep3": "Туташкандан кийин басуу тапшырмасы түз принтерге жөнөтүлөт.",
+    "readOnly": "Бул бөлүм окуу үчүн гана. Өзгөртүү ADMIN жана MANAGER үчүн жеткиликтүү."
   }
 }

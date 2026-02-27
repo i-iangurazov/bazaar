@@ -28,6 +28,7 @@ import {
 import { queueFiscalReceipt } from "@/server/services/kkmConnector";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
+import { resolveFiscalMetadataFromResult } from "@/server/services/fiscalReceiptMetadata";
 import { applyStockMovement } from "@/server/services/inventory";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
@@ -1366,13 +1367,6 @@ export const addPosSaleLine = async (input: {
       productId: input.productId,
       variantId: input.variantId ?? null,
     });
-    const unitCost = await resolveUnitCost({
-      tx,
-      organizationId: input.organizationId,
-      productId: input.productId,
-      variantId: input.variantId ?? null,
-      isBundle: resolved.isBundle,
-    });
 
     const existing = await tx.customerOrderLine.findUnique({
       where: {
@@ -1385,8 +1379,49 @@ export const addPosSaleLine = async (input: {
     });
 
     if (existing) {
-      throw new AppError("duplicateLineItem", "CONFLICT", 409);
+      const nextQty = existing.qty + input.qty;
+      const updated = await tx.customerOrderLine.update({
+        where: { id: existing.id },
+        data: {
+          qty: nextQty,
+          lineTotalKgs: roundMoney(toMoney(existing.unitPriceKgs) * nextQty),
+          lineCostTotalKgs:
+            existing.unitCostKgs === null
+              ? null
+              : roundMoney(toMoney(existing.unitCostKgs) * nextQty),
+        },
+      });
+
+      await recomputeSaleTotals(tx, sale.id, input.actorId);
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "POS_SALE_LINE_UPDATE",
+        entity: "CustomerOrder",
+        entityId: sale.id,
+        before: toJson(existing),
+        after: toJson(updated),
+        requestId: input.requestId,
+      });
+
+      return {
+        ...updated,
+        unitPriceKgs: toMoney(updated.unitPriceKgs),
+        lineTotalKgs: toMoney(updated.lineTotalKgs),
+        unitCostKgs: updated.unitCostKgs ? toMoney(updated.unitCostKgs) : null,
+        lineCostTotalKgs: updated.lineCostTotalKgs ? toMoney(updated.lineCostTotalKgs) : null,
+        lineAction: "incremented" as const,
+      };
     }
+
+    const unitCost = await resolveUnitCost({
+      tx,
+      organizationId: input.organizationId,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+      isBundle: resolved.isBundle,
+    });
 
     const line = await tx.customerOrderLine.create({
       data: {
@@ -1421,6 +1456,7 @@ export const addPosSaleLine = async (input: {
       lineTotalKgs: toMoney(line.lineTotalKgs),
       unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
       lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
+      lineAction: "created" as const,
     };
   });
 };
@@ -1697,10 +1733,16 @@ export const listPosReceipts = async (input: {
             status: true,
             providerReceiptId: true,
             fiscalNumber: true,
+            kkmFactoryNumber: true,
+            kkmRegistrationNumber: true,
+            fiscalModeStatus: true,
+            upfdOrFiscalMemory: true,
+            qrPayload: true,
             qr: true,
             lastError: true,
             mode: true,
             sentAt: true,
+            fiscalizedAt: true,
           },
         },
       },
@@ -2022,6 +2064,11 @@ export const completePosSale = async (input: {
     try {
       const adapter = getKkmAdapter(result.kkmProviderKey);
       const fiscalized = await adapter.fiscalizeReceipt(result.kkmCandidate);
+      const fiscalMeta = resolveFiscalMetadataFromResult({
+        result: fiscalized,
+        fallbackStatus: "SENT",
+      });
+      const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
       await prisma.$transaction(async (tx) => {
         await tx.customerOrder.update({
           where: { id: result.id },
@@ -2038,7 +2085,14 @@ export const completePosSale = async (input: {
               status: "SENT",
               providerReceiptId: fiscalized.providerReceiptId,
               fiscalNumber: fiscalized.fiscalNumber ?? null,
-              sentAt: new Date(),
+              kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
+              kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
+              fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
+              upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
+              qrPayload: fiscalMeta.qrPayload,
+              qr: fiscalMeta.qrPayload,
+              fiscalizedAt,
+              sentAt: fiscalizedAt,
               attemptCount: { increment: 1 },
               lastError: null,
               nextAttemptAt: null,
@@ -2064,6 +2118,7 @@ export const completePosSale = async (input: {
             where: { id: result.fiscalReceiptId },
             data: {
               status: "FAILED",
+              fiscalModeStatus: "FAILED",
               lastError: message,
               nextAttemptAt: new Date(Date.now() + 60_000),
               attemptCount: { increment: 1 },
@@ -2095,11 +2150,16 @@ export const completePosSale = async (input: {
   });
 
   logger.info({ saleId: result.id, number: result.number }, "pos sale completed");
+  const completedSale = await prisma.customerOrder.findUnique({
+    where: { id: result.id },
+    select: { kkmStatus: true },
+  });
 
   return {
     id: result.id,
     number: result.number,
     status: result.status,
+    kkmStatus: completedSale?.kkmStatus ?? "NOT_SENT",
   };
 };
 
@@ -2824,6 +2884,11 @@ export const retryPosSaleKkm = async (input: {
         where: { isRefund: false },
         orderBy: { createdAt: "asc" },
       },
+      fiscalReceipts: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true },
+      },
     },
   });
 
@@ -2878,14 +2943,44 @@ export const retryPosSaleKkm = async (input: {
   try {
     const adapter = getKkmAdapter(compliance.kkmProviderKey);
     const fiscalized = await adapter.fiscalizeReceipt(draft);
+    const fiscalMeta = resolveFiscalMetadataFromResult({
+      result: fiscalized,
+      fallbackStatus: "SENT",
+    });
+    const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
+    const latestFiscalReceiptId = sale.fiscalReceipts[0]?.id ?? null;
 
-    await prisma.customerOrder.update({
-      where: { id: sale.id },
-      data: {
-        kkmStatus: "SENT",
-        kkmReceiptId: fiscalized.providerReceiptId,
-        kkmRawJson: fiscalized.rawJson ?? Prisma.DbNull,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.customerOrder.update({
+        where: { id: sale.id },
+        data: {
+          kkmStatus: "SENT",
+          kkmReceiptId: fiscalized.providerReceiptId,
+          kkmRawJson: fiscalized.rawJson ?? Prisma.DbNull,
+        },
+      });
+
+      if (latestFiscalReceiptId) {
+        await tx.fiscalReceipt.update({
+          where: { id: latestFiscalReceiptId },
+          data: {
+            status: "SENT",
+            providerReceiptId: fiscalized.providerReceiptId,
+            fiscalNumber: fiscalized.fiscalNumber ?? null,
+            kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
+            kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
+            fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
+            upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
+            qrPayload: fiscalMeta.qrPayload,
+            qr: fiscalMeta.qrPayload,
+            fiscalizedAt,
+            sentAt: fiscalizedAt,
+            lastError: null,
+            nextAttemptAt: null,
+            attemptCount: { increment: 1 },
+          },
+        });
+      }
     });
 
     await writeAuditLog(prisma, {
@@ -2908,16 +3003,32 @@ export const retryPosSaleKkm = async (input: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await prisma.customerOrder.update({
-      where: { id: sale.id },
-      data: {
-        kkmStatus: "FAILED",
-        kkmRawJson: toJson({
-          message,
-          retriedAt: new Date().toISOString(),
-          retriedBy: input.actorId,
-        }) as Prisma.InputJsonValue,
-      },
+    const latestFiscalReceiptId = sale.fiscalReceipts[0]?.id ?? null;
+    await prisma.$transaction(async (tx) => {
+      await tx.customerOrder.update({
+        where: { id: sale.id },
+        data: {
+          kkmStatus: "FAILED",
+          kkmRawJson: toJson({
+            message,
+            retriedAt: new Date().toISOString(),
+            retriedBy: input.actorId,
+          }) as Prisma.InputJsonValue,
+        },
+      });
+
+      if (latestFiscalReceiptId) {
+        await tx.fiscalReceipt.update({
+          where: { id: latestFiscalReceiptId },
+          data: {
+            status: "FAILED",
+            fiscalModeStatus: "FAILED",
+            lastError: message,
+            nextAttemptAt: new Date(Date.now() + 60_000),
+            attemptCount: { increment: 1 },
+          },
+        });
+      }
     });
 
     await writeAuditLog(prisma, {

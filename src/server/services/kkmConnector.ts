@@ -16,6 +16,10 @@ import {
 } from "@/server/metrics/metrics";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
+import {
+  extractFiscalMetadata,
+  resolveFiscalMetadataFromResult,
+} from "@/server/services/fiscalReceiptMetadata";
 import { toJson } from "@/server/services/json";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 
@@ -67,12 +71,19 @@ export const queueFiscalReceipt = async (input: {
       providerKey: input.providerKey ?? null,
       status: FiscalReceiptStatus.QUEUED,
       payloadJson: toJson(input.payload) as Prisma.InputJsonValue,
+      fiscalModeStatus: "NOT_SENT",
     },
     update: {
       payloadJson: toJson(input.payload) as Prisma.InputJsonValue,
       mode: input.mode,
       providerKey: input.providerKey ?? null,
       status: FiscalReceiptStatus.QUEUED,
+      fiscalModeStatus: "NOT_SENT",
+      kkmFactoryNumber: null,
+      kkmRegistrationNumber: null,
+      upfdOrFiscalMemory: null,
+      qrPayload: null,
+      fiscalizedAt: null,
       lastError: null,
       nextAttemptAt: null,
     },
@@ -286,6 +297,10 @@ export const connectorPushResult = async (input: {
   providerReceiptId?: string | null;
   fiscalNumber?: string | null;
   qr?: string | null;
+  kkmFactoryNumber?: string | null;
+  kkmRegistrationNumber?: string | null;
+  upfdOrFiscalMemory?: string | null;
+  qrPayload?: string | null;
   errorMessage?: string | null;
 }) => {
   const device = await resolveConnectorDevice(input.token);
@@ -318,13 +333,28 @@ export const connectorPushResult = async (input: {
 
     const nextStatus =
       input.status === "SENT" ? FiscalReceiptStatus.SENT : FiscalReceiptStatus.FAILED;
+    const connectorMetadata = extractFiscalMetadata({
+      kkmFactoryNumber: input.kkmFactoryNumber ?? null,
+      kkmRegistrationNumber: input.kkmRegistrationNumber ?? null,
+      upfdOrFiscalMemory: input.upfdOrFiscalMemory ?? null,
+      qrPayload: input.qrPayload ?? input.qr ?? null,
+    });
     const updated = await tx.fiscalReceipt.update({
       where: { id: receipt.id },
       data: {
         status: nextStatus,
         providerReceiptId: input.providerReceiptId ?? null,
         fiscalNumber: input.fiscalNumber ?? null,
-        qr: input.qr ?? null,
+        kkmFactoryNumber:
+          input.status === "SENT" ? connectorMetadata.kkmFactoryNumber : null,
+        kkmRegistrationNumber:
+          input.status === "SENT" ? connectorMetadata.kkmRegistrationNumber : null,
+        fiscalModeStatus: input.status,
+        upfdOrFiscalMemory:
+          input.status === "SENT" ? connectorMetadata.upfdOrFiscalMemory : null,
+        qrPayload: input.status === "SENT" ? connectorMetadata.qrPayload : null,
+        qr: input.status === "SENT" ? input.qr ?? connectorMetadata.qrPayload : null,
+        fiscalizedAt: input.status === "SENT" ? now : null,
         lastError: input.status === "FAILED" ? input.errorMessage ?? "connectorFailed" : null,
         nextAttemptAt:
           input.status === "FAILED" ? new Date(Date.now() + 30_000) : null,
@@ -344,7 +374,11 @@ export const connectorPushResult = async (input: {
             ? toJson({
                 connectorDeviceId: device.id,
                 fiscalNumber: input.fiscalNumber ?? null,
-                qr: input.qr ?? null,
+                kkmFactoryNumber: connectorMetadata.kkmFactoryNumber,
+                kkmRegistrationNumber: connectorMetadata.kkmRegistrationNumber,
+                upfdOrFiscalMemory: connectorMetadata.upfdOrFiscalMemory,
+                qrPayload: connectorMetadata.qrPayload,
+                qr: input.qr ?? connectorMetadata.qrPayload,
               })
             : toJson({
                 connectorDeviceId: device.id,
@@ -424,6 +458,7 @@ export const retryFiscalReceipt = async (input: {
       where: { id: receipt.id },
       data: {
         status: FiscalReceiptStatus.QUEUED,
+        fiscalModeStatus: "NOT_SENT",
         lastError: null,
         nextAttemptAt: null,
       },
@@ -453,6 +488,11 @@ export const retryFiscalReceipt = async (input: {
   const adapter = getKkmAdapter(receipt.providerKey);
   try {
     const fiscalized = await adapter.fiscalizeReceipt(draft);
+    const fiscalMeta = resolveFiscalMetadataFromResult({
+      result: fiscalized,
+      fallbackStatus: "SENT",
+    });
+    const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
     const updated = await prisma.$transaction(async (tx) => {
       const next = await tx.fiscalReceipt.update({
         where: { id: receipt.id },
@@ -460,13 +500,16 @@ export const retryFiscalReceipt = async (input: {
           status: FiscalReceiptStatus.SENT,
           lastError: null,
           nextAttemptAt: null,
-          sentAt: new Date(),
+          sentAt: fiscalizedAt,
+          fiscalizedAt,
           providerReceiptId: fiscalized.providerReceiptId,
           fiscalNumber: fiscalized.fiscalNumber ?? null,
-          qr:
-            fiscalized.rawJson && typeof fiscalized.rawJson === "object" && "qr" in fiscalized.rawJson
-              ? String((fiscalized.rawJson as Record<string, unknown>).qr ?? "")
-              : null,
+          kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
+          kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
+          fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
+          upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
+          qrPayload: fiscalMeta.qrPayload,
+          qr: fiscalMeta.qrPayload,
           attemptCount: { increment: 1 },
         },
       });
@@ -499,6 +542,7 @@ export const retryFiscalReceipt = async (input: {
       where: { id: receipt.id },
       data: {
         status: FiscalReceiptStatus.FAILED,
+        fiscalModeStatus: "FAILED",
         lastError: message,
         nextAttemptAt: new Date(Date.now() + 60_000),
         attemptCount: { increment: 1 },
@@ -532,6 +576,11 @@ export const runKkmRetryJob = async () => {
     try {
       const adapter = getKkmAdapter(receipt.providerKey);
       const fiscalized = await adapter.fiscalizeReceipt(draft);
+      const fiscalMeta = resolveFiscalMetadataFromResult({
+        result: fiscalized,
+        fallbackStatus: "SENT",
+      });
+      const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
       await prisma.$transaction(async (tx) => {
         await tx.fiscalReceipt.update({
           where: { id: receipt.id },
@@ -539,9 +588,16 @@ export const runKkmRetryJob = async () => {
             status: FiscalReceiptStatus.SENT,
             lastError: null,
             nextAttemptAt: null,
-            sentAt: new Date(),
+            sentAt: fiscalizedAt,
+            fiscalizedAt,
             providerReceiptId: fiscalized.providerReceiptId,
             fiscalNumber: fiscalized.fiscalNumber ?? null,
+            kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
+            kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
+            fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
+            upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
+            qrPayload: fiscalMeta.qrPayload,
+            qr: fiscalMeta.qrPayload,
             attemptCount: { increment: 1 },
           },
         });
@@ -563,6 +619,7 @@ export const runKkmRetryJob = async () => {
         where: { id: receipt.id },
         data: {
           status: FiscalReceiptStatus.FAILED,
+          fiscalModeStatus: "FAILED",
           lastError: message,
           nextAttemptAt: new Date(Date.now() + 60_000),
           attemptCount: { increment: 1 },

@@ -53,6 +53,13 @@ type ScanInputProps = {
 type FeedbackState = "idle" | "success" | "error";
 
 const hideTimeoutMs = 150;
+const defaultTabSubmitMinLengthByContext: Record<ScanContext, number> = {
+  global: 1,
+  commandPanel: 4,
+  stockCount: 1,
+  pos: 1,
+  linePicker: 1,
+};
 
 export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
   (
@@ -65,7 +72,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       onResolved,
       onSubmitValue,
       supportsTabSubmit = false,
-      tabSubmitMinLength = 4,
+      tabSubmitMinLength,
       autoFocus,
       disabled,
       className,
@@ -91,6 +98,8 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     const [lastTrigger, setLastTrigger] = useState<ScanSubmitTrigger>("enter");
 
     const currentValue = controlled ? value ?? "" : internalValue;
+    const effectiveTabSubmitMinLength =
+      tabSubmitMinLength ?? defaultTabSubmitMinLengthByContext[context];
 
     useImperativeHandle(forwardedRef, () => innerRef.current as HTMLInputElement, []);
 
@@ -220,7 +229,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       const trigger = shouldSubmitFromKey({
         key: event.key,
         supportsTabSubmit,
-        tabSubmitMinLength,
+        tabSubmitMinLength: effectiveTabSubmitMinLength,
         normalizedValue: normalizeScanValue(currentValue),
       });
 
@@ -263,7 +272,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           placeholder={placeholder}
           aria-label={ariaLabel}
           autoFocus={autoFocus}
-          disabled={disabled || submitting}
+          disabled={disabled}
           inputMode="search"
           className={cn(
             "pr-9",

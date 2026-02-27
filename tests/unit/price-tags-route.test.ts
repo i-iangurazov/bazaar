@@ -9,6 +9,7 @@ const { mockGetServerAuthToken, mockRecordFirstEvent, mockUploadProductImageBuff
     store: { findUnique: vi.fn() },
     product: { findMany: vi.fn() },
     storePrice: { findMany: vi.fn() },
+    storePrinterSettings: { upsert: vi.fn() },
   },
 }));
 
@@ -58,6 +59,12 @@ describe("price tags pdf route", () => {
       },
     ]);
     prisma.storePrice.findMany.mockResolvedValue([]);
+    prisma.storePrinterSettings.upsert.mockResolvedValue({
+      storeId: "store-1",
+      labelRollGapMm: 3.5,
+      labelRollXOffsetMm: 0,
+      labelRollYOffsetMm: 0,
+    });
   });
 
   it("returns PDF content", async () => {
@@ -115,6 +122,60 @@ describe("price tags pdf route", () => {
     expect(response.status).toBe(400);
     expect(prisma.product.findMany).not.toHaveBeenCalled();
     expect(prisma.storePrice.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns PDF for roll template with calibration", async () => {
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: JSON.stringify({
+        template: "xp365b-roll-58x40",
+        items: [{ productId: "prod-1", quantity: 1 }],
+        storeId: "store-1",
+        allowWithoutBarcode: false,
+        rollCalibration: {
+          widthMm: 58,
+          heightMm: 40,
+        },
+      }),
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    const pdf = Buffer.from(await response.arrayBuffer());
+    expect(pdf.length).toBeGreaterThan(500);
+  });
+
+  it("requires confirmation when roll template contains products without barcode", async () => {
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: "prod-1",
+        name: "Без кода",
+        sku: "SKU-2",
+        basePriceKgs: 5,
+        barcodes: [],
+      },
+    ]);
+
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: JSON.stringify({
+        template: "xp365b-roll-58x40",
+        items: [{ productId: "prod-1", quantity: 1 }],
+        storeId: "store-1",
+        allowWithoutBarcode: false,
+        rollCalibration: {
+          widthMm: 58,
+          heightMm: 40,
+        },
+      }),
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toContain("штрихкод");
   });
 });
 

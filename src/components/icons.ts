@@ -55,6 +55,7 @@ import {
   LayoutGrid,
   List,
   Plug,
+  Printer,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
@@ -83,6 +84,7 @@ export const GripIcon = GripVertical;
 export const ImagePlusIcon = ImagePlus;
 export const AdjustIcon = SlidersHorizontal;
 export const PdfIcon = FileDown;
+export const PrintIcon = Printer;
 
 export const StatusSuccessIcon = CheckCircle2;
 export const StatusWarningIcon = AlertTriangle;

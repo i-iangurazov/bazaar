@@ -201,12 +201,15 @@ export const GET = async (
 
   const tableTop = doc.y;
   const colX = [40, 240, 330, 400, 470];
+  const drawTableHeader = (y: number) => {
+    doc.fontSize(10).text(labels.product, colX[0], y);
+    doc.text(labels.qty, colX[1], y);
+    doc.text(labels.unit, colX[2], y);
+    doc.text(labels.cost, colX[3], y, { width: 60, align: "right" });
+    doc.text(labels.total, colX[4], y, { width: 60, align: "right" });
+  };
 
-  doc.fontSize(10).text(labels.product, colX[0], tableTop);
-  doc.text(labels.qty, colX[1], tableTop);
-  doc.text(labels.unit, colX[2], tableTop);
-  doc.text(labels.cost, colX[3], tableTop, { width: 60, align: "right" });
-  doc.text(labels.total, colX[4], tableTop, { width: 60, align: "right" });
+  drawTableHeader(tableTop);
 
   let total = 0;
   let y = tableTop + 16;
@@ -216,6 +219,16 @@ export const GET = async (
     total += lineTotal;
 
     const name = `${line.product.name}${line.variant?.name ? ` (${line.variant.name})` : ""}`;
+    const nameHeight = doc.heightOfString(name, { width: 180 });
+    const rowHeight = Math.max(16, nameHeight + 2);
+
+    if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 60) {
+      doc.addPage();
+      const nextTableTop = doc.page.margins.top;
+      drawTableHeader(nextTableTop);
+      y = nextTableTop + 16;
+    }
+
     doc.text(name, colX[0], y, { width: 180 });
     doc.text(String(line.qtyOrdered), colX[1], y);
     doc.text(line.product.unit, colX[2], y);
@@ -224,10 +237,10 @@ export const GET = async (
       align: "right",
     });
     doc.text(formatCurrency(lineTotal, intlLocale), colX[4], y, { width: 60, align: "right" });
-    y += 16;
+    y += rowHeight;
   }
 
-  doc.moveDown();
+  doc.y = y + 12;
   doc.fontSize(12).text(`${labels.total}: ${formatCurrency(total, intlLocale)}`, {
     align: "right",
   });

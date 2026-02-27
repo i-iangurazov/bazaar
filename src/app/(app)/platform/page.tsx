@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
 
 type BillingModalState = {
   organizationId: string;
@@ -62,6 +63,21 @@ const PlatformPage = () => {
   const isPlatformOwner = Boolean(session?.user?.isPlatformOwner);
   const isForbidden = status === "authenticated" && !isPlatformOwner;
   const [billingModal, setBillingModal] = useState<BillingModalState | null>(null);
+  const [billingNumberDraft, setBillingNumberDraft] = useState({
+    trialDays: "",
+    currentPeriodDays: "",
+  });
+
+  useEffect(() => {
+    if (!billingModal) {
+      setBillingNumberDraft({ trialDays: "", currentPeriodDays: "" });
+      return;
+    }
+    setBillingNumberDraft({
+      trialDays: String(billingModal.trialDays),
+      currentPeriodDays: String(billingModal.currentPeriodDays),
+    });
+  }, [billingModal]);
 
   const summaryQuery = trpc.platformOwner.summary.useQuery(undefined, {
     enabled: status === "authenticated" && isPlatformOwner,
@@ -362,12 +378,17 @@ const PlatformPage = () => {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
+              const trialDays = resolveNumberInputOnBlur(billingNumberDraft.trialDays, 0);
+              const currentPeriodDays = resolveNumberInputOnBlur(
+                billingNumberDraft.currentPeriodDays,
+                30,
+              );
               updateBillingMutation.mutate({
                 organizationId: billingModal.organizationId,
                 plan: billingModal.plan,
                 subscriptionStatus: billingModal.subscriptionStatus,
-                trialDays: billingModal.trialDays,
-                currentPeriodDays: billingModal.currentPeriodDays,
+                trialDays,
+                currentPeriodDays,
               });
             }}
           >
@@ -430,12 +451,17 @@ const PlatformPage = () => {
                   type="number"
                   min={0}
                   max={365}
-                  value={billingModal.trialDays}
+                  value={toNumberInputValue(billingNumberDraft.trialDays)}
                   onChange={(event) => {
-                    const next = Number(event.target.value);
+                    const next = event.target.value;
+                    setBillingNumberDraft((prev) => ({ ...prev, trialDays: next }));
+                  }}
+                  onBlur={(event) => {
+                    const next = resolveNumberInputOnBlur(event.target.value, 0);
                     setBillingModal((prev) =>
-                      prev ? { ...prev, trialDays: Number.isFinite(next) ? next : 0 } : prev,
+                      prev ? { ...prev, trialDays: next } : prev,
                     );
+                    setBillingNumberDraft((prev) => ({ ...prev, trialDays: String(next) }));
                   }}
                 />
               </div>
@@ -446,12 +472,20 @@ const PlatformPage = () => {
                   type="number"
                   min={1}
                   max={365}
-                  value={billingModal.currentPeriodDays}
+                  value={toNumberInputValue(billingNumberDraft.currentPeriodDays)}
                   onChange={(event) => {
-                    const next = Number(event.target.value);
+                    const next = event.target.value;
+                    setBillingNumberDraft((prev) => ({ ...prev, currentPeriodDays: next }));
+                  }}
+                  onBlur={(event) => {
+                    const next = resolveNumberInputOnBlur(event.target.value, 30);
                     setBillingModal((prev) =>
-                      prev ? { ...prev, currentPeriodDays: Number.isFinite(next) ? next : 30 } : prev,
+                      prev ? { ...prev, currentPeriodDays: next } : prev,
                     );
+                    setBillingNumberDraft((prev) => ({
+                      ...prev,
+                      currentPeriodDays: String(next),
+                    }));
                   }}
                 />
               </div>

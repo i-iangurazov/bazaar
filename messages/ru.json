@@ -1142,7 +1142,7 @@
       "completeSale": "Завершить продажу",
       "paymentTotal": "Сумма оплат",
       "qtyPositive": "Количество должно быть больше нуля.",
-      "paymentRequired": "Добавьте хотя бы один платеж.",
+      "paymentRequired": "Добавьте оплату в блоке «Оплата»: выберите способ и укажите сумму.",
       "paymentMismatch": "Сумма платежей должна совпадать с итогом чека.",
       "saleCreated": "Черновик продажи создан.",
       "lineAdded": "Позиция добавлена.",
@@ -1152,7 +1152,15 @@
       "markingPlaceholder": "Код(ы) маркировки через запятую",
       "markingSave": "Сохранить коды",
       "markingSaved": "Коды маркировки сохранены.",
-      "markingCapturedCount": "Сохранено кодов: {count}"
+      "markingCapturedCount": "Сохранено кодов: {count}",
+      "lastReceiptTitle": "Последний чек: {number}",
+      "downloadPrecheck": "Скачать предчек PDF",
+      "printPrecheck": "Печать предчека",
+      "downloadFiscalReceipt": "Скачать фискальный чек PDF",
+      "printFiscalReceipt": "Печать фискального чека",
+      "downloadReceipt": "Скачать чек PDF",
+      "printReceipt": "Печать чека",
+      "receiptPdfFailed": "Не удалось подготовить чек PDF."
     },
     "shifts": {
       "title": "Смены",
@@ -1206,7 +1214,14 @@
       "kkmRetryFailedWithReason": "Не удалось отправить чек в ККМ: {reason}",
       "returnTotal": "Сумма возврата",
       "completeReturn": "Завершить возврат",
-      "manualRefundRequired": "Возврат требует ручной обработки. Создан запрос: {requestId}."
+      "manualRefundRequired": "Возврат требует ручной обработки. Создан запрос: {requestId}.",
+      "downloadPrecheck": "Скачать предчек PDF",
+      "printPrecheck": "Печать предчека",
+      "downloadFiscalReceipt": "Скачать фискальный чек PDF",
+      "printFiscalReceipt": "Печать фискального чека",
+      "downloadReceipt": "Скачать чек PDF",
+      "printReceipt": "Печать чека",
+      "receiptPdfFailed": "Не удалось подготовить чек PDF."
     },
     "payments": {
       "cash": "Наличные",
@@ -1263,6 +1278,39 @@
         "status": "Статус",
         "fiscal": "Фискализация"
       }
+    },
+    "receiptPdf": {
+      "title": "Кассовый чек",
+      "precheckTitle": "ПРЕДЧЕК (НЕФИСКАЛЬНЫЙ)",
+      "precheckHint": "Оплата принята, фискализация еще не подтверждена ККМ.",
+      "fiscalBlockTitle": "Фискальные данные",
+      "fiscalStatus": "Фискальный статус",
+      "fiscalStatusSent": "Данные отправлены в ОФД/ГНС",
+      "fiscalStatusNotSent": "Не отправлено",
+      "fiscalStatusFailed": "Ошибка отправки",
+      "fiscalRetryHint": "Обратитесь к менеджеру для повторной отправки.",
+      "fiscalizedAt": "Фискализирован",
+      "kkmFactoryNumber": "Заводской № ККМ",
+      "kkmRegistrationNumber": "Регистрационный № ККМ",
+      "fiscalNumber": "Фискальный номер",
+      "upfdOrFiscalMemory": "УПФД/ФН",
+      "qrPayload": "QR данные",
+      "saleNumber": "Номер продажи",
+      "createdAt": "Дата",
+      "store": "Магазин",
+      "register": "Касса",
+      "cashier": "Кассир",
+      "shift": "Смена",
+      "inn": "ИНН",
+      "address": "Адрес",
+      "phone": "Телефон",
+      "item": "Товар",
+      "qty": "Кол-во",
+      "price": "Цена",
+      "lineTotal": "Сумма",
+      "subtotal": "Подытог",
+      "total": "Итого",
+      "payments": "Оплаты"
     }
   },
   "dashboard": {
@@ -1314,6 +1362,26 @@
     "template": "Шаблон",
     "template3x8": "3 x 8 (24 шт.)",
     "template2x5": "2 x 5 (10 шт.)",
+    "templateRollXp365b": "XP-365B (рулон) 58×40",
+    "rollTemplatePreviewTitle": "Предпросмотр рулонного ценника",
+    "rollPreviewName": "Название товара",
+    "rollPreviewPrice": "0,00 KGS",
+    "rollPreviewSku": "SKU",
+    "rollPreviewBarcode": "Штрихкод",
+    "rollGapStoredHint": "Параметр шага хранится для будущей печати в режиме Connector.",
+    "rollGapMm": "Шаг (мм)",
+    "rollGapHint": "Для PDF постраничной печати параметр сохраняется как калибровка.",
+    "rollWidthMm": "Ширина (мм)",
+    "rollHeightMm": "Высота (мм)",
+    "rollSizeHint": "Допустимый диапазон зависит от рулона и принтера.",
+    "rollGapRange": "Шаг должен быть от {min} до {max} мм.",
+    "rollOffsetRange": "Смещение должно быть от {min} до {max} мм.",
+    "rollPreviewSize": "Размер: {width}×{height} мм · шаг: {gap} мм",
+    "rollXOffsetMm": "Смещение X (мм)",
+    "rollYOffsetMm": "Смещение Y (мм)",
+    "printWithoutBarcode": "Печатать без штрихкода",
+    "printWithoutBarcodeHint": "Используйте только если часть выбранных товаров без штрихкода.",
+    "printWithoutBarcodeConfirmRequired": "Подтвердите печать без штрихкода, чтобы продолжить.",
     "printQty": "Количество ценников",
     "printQtyMin": "Количество должно быть не меньше 1.",
     "printDownload": "Скачать PDF",
@@ -1403,7 +1471,8 @@
     "noReorderSuggestions": "Нет рекомендаций для заказа.",
     "movementNoteImportRollback": "Откат импорта",
     "movementNoteStockCount": "Ревизия {code}",
-    "movementNoteBundleAssemble": "Сборка комплекта {sku}"
+    "movementNoteBundleAssemble": "Сборка комплекта {sku}",
+    "printAction": "Печать"
   },
   "products": {
     "title": "Товары",
@@ -1627,6 +1696,27 @@
     "template": "Шаблон",
     "template3x8": "3 x 8 (24 шт.)",
     "template2x5": "2 x 5 (10 шт.)",
+    "templateRollXp365b": "XP-365B (рулон) 58×40",
+    "rollTemplatePreviewTitle": "Предпросмотр рулонного ценника",
+    "rollPreviewName": "Название товара",
+    "rollPreviewPrice": "0,00 KGS",
+    "rollPreviewSku": "SKU",
+    "rollPreviewBarcode": "Штрихкод",
+    "rollGapStoredHint": "Параметр шага хранится для будущей печати в режиме Connector.",
+    "rollGapMm": "Шаг (мм)",
+    "rollGapHint": "Для PDF постраничной печати параметр сохраняется как калибровка.",
+    "rollWidthMm": "Ширина (мм)",
+    "rollHeightMm": "Высота (мм)",
+    "rollSizeHint": "Допустимый диапазон зависит от рулона и принтера.",
+    "rollWidthRange": "Ширина должна быть от {min} до {max} мм.",
+    "rollHeightRange": "Высота должна быть от {min} до {max} мм.",
+    "rollPreviewSize": "Размер: {width}×{height} мм",
+    "rollXOffsetMm": "Смещение X (мм)",
+    "rollYOffsetMm": "Смещение Y (мм)",
+    "printWithoutBarcode": "Печатать без штрихкода",
+    "printWithoutBarcodeHint": "Используйте только если часть выбранных товаров без штрихкода.",
+    "printWithoutBarcodeConfirmRequired": "Подтвердите печать без штрихкода, чтобы продолжить.",
+    "rollMissingBarcodeCount": "Без штрихкода: {count}",
     "printQty": "Количество ценников",
     "printQtyMin": "Количество должно быть не меньше 1.",
     "printDownload": "Скачать PDF",
@@ -1688,7 +1778,8 @@
     "variantAttributesNoDefinitions": "Добавьте определения атрибутов в настройках.",
     "selectAttributeValue": "Выберите значение",
     "attributeRequired": "Заполните атрибут: {attribute}.",
-    "attributeNumberInvalid": "Введите корректное число."
+    "attributeNumberInvalid": "Введите корректное число.",
+    "printAction": "Печать"
   },
   "stores": {
     "title": "Магазины",
@@ -1748,7 +1839,8 @@
     "complianceDisabled": "Отключено",
     "complianceNeedsSetup": "Требует настройки",
     "complianceReady": "Настроено",
-    "complianceSettings": "KG compliance"
+    "complianceSettings": "KG compliance",
+    "hardwareSettings": "Настройки оборудования"
   },
   "purchaseOrders": {
     "title": "Заказы поставки",
@@ -1862,7 +1954,9 @@
       "partiallyReceived": "Частично получен",
       "received": "Получен",
       "cancelled": "Отменен"
-    }
+    },
+    "printPdf": "Печать",
+    "pdfActionFailed": "Не удалось подготовить PDF."
   },
   "salesOrders": {
     "title": "Заказы клиентов",
@@ -2016,7 +2110,9 @@
       "jobTitle": "Должность",
       "saved": "Личные данные сохранены.",
       "validation": {
-        "nameRequired": "Имя обязательно."
+        "nameRequired": "Имя обязательно.",
+        "phoneMax": "Телефон должен содержать не более {max} символов.",
+        "jobTitleMax": "Должность должна содержать не более {max} символов."
       }
     },
     "preferences": {
@@ -2043,7 +2139,11 @@
       "saved": "Данные бизнеса сохранены.",
       "validation": {
         "organizationNameRequired": "Название бизнеса обязательно.",
-        "storeRequired": "Выберите магазин."
+        "storeRequired": "Выберите магазин.",
+        "legalNameMax": "Юридическое название должно содержать не более {max} символов.",
+        "innMax": "ИНН должен содержать не более {max} символов.",
+        "addressMax": "Адрес должен содержать не более {max} символов.",
+        "phoneMax": "Телефон должен содержать не более {max} символов."
       }
     }
   },
@@ -2310,6 +2410,7 @@
     "posRegisterNotFound": "Касса не найдена.",
     "posShiftAlreadyOpen": "Для этой кассы уже открыта смена.",
     "posSaleNotFound": "Продажа не найдена.",
+    "posFiscalReceiptUnavailable": "Фискальный чек пока недоступен. Распечатайте предчек.",
     "posSaleNotEditable": "Продажу нельзя изменить в текущем статусе.",
     "posSaleLineNotFound": "Позиция продажи не найдена.",
     "salesOrderOrgMismatch": "Документ не относится к организации.",
@@ -2334,7 +2435,12 @@
     "kkmReceiptNotFound": "Фискальный чек не найден.",
     "kkmRetryUnsupportedMode": "Повторная отправка недоступна для этого режима ККМ.",
     "kkmReceiptPayloadInvalid": "Полезная нагрузка фискального чека повреждена.",
-    "copyFailed": "Не удалось скопировать."
+    "copyFailed": "Не удалось скопировать.",
+    "printerConnectorDeviceNotFound": "Устройство Connector не найдено или недоступно для этого магазина.",
+    "printerConnectorModeRequired": "Для этого действия включите режим Connector в настройках оборудования магазина.",
+    "printerConnectorNotPaired": "Устройство Connector не привязано. Сначала выполните сопряжение.",
+    "printerConnectorNotImplemented": "Печать через Connector пока в стадии подготовки. Используйте PDF-режим.",
+    "priceTagsBarcodeConfirmationRequired": "Подтвердите печать без штрихкода."
   },
   "adminJobs": {
     "title": "Фоновые задачи",
@@ -3352,5 +3458,38 @@
         }
       }
     }
+  },
+  "storesHardware": {
+    "title": "Оборудование магазина",
+    "subtitle": "Настройки печати чеков и этикеток для текущего магазина.",
+    "subtitleStore": "Оборудование: {store}",
+    "settingsTitle": "Параметры печати",
+    "modelRequired": "Укажите модель принтера.",
+    "receiptMode": "Режим печати чека",
+    "labelMode": "Режим печати этикеток",
+    "modePlaceholder": "Выберите режим",
+    "modePdf": "PDF (браузерная печать)",
+    "modeConnector": "Connector (локальный сервис)",
+    "receiptModeHint": "Для XP-P501A используйте PDF сегодня или Connector после установки сервиса.",
+    "labelModeHint": "Для XP-365B используйте PDF сегодня или Connector после установки сервиса.",
+    "receiptModel": "Модель чекового принтера",
+    "labelModel": "Модель принтера этикеток",
+    "connectorDevice": "Подключенное устройство Connector",
+    "connectorDevicePlaceholder": "Выберите устройство",
+    "connectorDeviceNone": "Не выбрано",
+    "connectorDeviceOption": "{name}",
+    "connectorDeviceHint": "Используется в режиме Connector для чеков и этикеток.",
+    "connectorDeviceMissingHint": "Режим Connector выбран, но активное устройство не привязано.",
+    "saved": "Настройки оборудования сохранены.",
+    "reset": "Сбросить",
+    "pdfModeTitle": "PDF-режим (сегодня)",
+    "pdfModeStep1": "Скачайте PDF и откройте системный диалог печати на macOS.",
+    "pdfModeStep2": "Для XP-P501A выберите драйвер/устройство в стандартном окне печати.",
+    "pdfModeStep3": "Для XP-365B проверьте размер носителя и масштаб 100% перед печатью.",
+    "connectorModeTitle": "Connector-режим (подготовка)",
+    "connectorModeStep1": "Установите локальный Connector на рабочем Mac.",
+    "connectorModeStep2": "Свяжите устройство с магазином через код сопряжения.",
+    "connectorModeStep3": "После подключения печать будет отправляться напрямую на устройство.",
+    "readOnly": "Доступ только для просмотра. Редактирование доступно ADMIN и MANAGER."
   }
 }

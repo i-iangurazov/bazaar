@@ -379,7 +379,7 @@ export const ProductForm = ({
             attributes: z
               .array(
                 z.object({
-                  key: z.string().min(1),
+                  key: z.string().min(1, tErrors("validationError")),
                   value: z.unknown().optional(),
                 }),
               )
@@ -390,7 +390,7 @@ export const ProductForm = ({
         bundleComponents: z
           .array(
             z.object({
-              componentProductId: z.string().min(1),
+              componentProductId: z.string().min(1, t("bundleSelectComponent")),
               componentVariantId: z.string().optional().nullable(),
               qty: z.coerce.number().int().positive(t("bundleQtyPositive")),
               componentName: z.string().optional(),
@@ -400,7 +400,7 @@ export const ProductForm = ({
           .optional(),
       });
     },
-    [t],
+    [t, tErrors],
   );
   type VariantFormRow = z.infer<typeof schema>["variants"][number];
 
@@ -3495,7 +3495,12 @@ export const ProductForm = ({
                   max={3}
                   step={0.05}
                   value={imageEditorZoom}
-                  onChange={(event) => setImageEditorZoom(Number(event.target.value))}
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget.valueAsNumber;
+                    if (Number.isFinite(nextValue)) {
+                      setImageEditorZoom(nextValue);
+                    }
+                  }}
                   aria-label={t("imageEditorZoom")}
                   className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
                 />
@@ -3513,7 +3518,12 @@ export const ProductForm = ({
                     max={360}
                     step={1}
                     value={imageEditorRotation}
-                    onChange={(event) => setImageEditorRotation(Number(event.target.value))}
+                    onChange={(event) => {
+                      const nextValue = event.currentTarget.valueAsNumber;
+                      if (Number.isFinite(nextValue)) {
+                        setImageEditorRotation(nextValue);
+                      }
+                    }}
                     aria-label={t("imageEditorRotation")}
                     className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
                   />

@@ -64,7 +64,7 @@ describe("ScanInput", () => {
     });
   });
 
-  it("submits on Tab when enabled and input length is at least 4", async () => {
+  it("submits on Tab when enabled for scanner-oriented contexts", async () => {
     lookupFetchMock.mockResolvedValue({ exactMatch: true, items: [exactItem] });
     const onResolved = vi.fn().mockResolvedValue(true);
     const user = userEvent.setup();
@@ -80,11 +80,35 @@ describe("ScanInput", () => {
     );
 
     const input = screen.getByLabelText("scan");
-    await user.type(input, "1234");
+    await user.type(input, "7");
     await user.keyboard("[Tab]");
 
     await waitFor(() => {
-      expect(lookupFetchMock).toHaveBeenCalledWith({ q: "1234" });
+      expect(lookupFetchMock).toHaveBeenCalledWith({ q: "7" });
+    });
+  });
+
+  it("keeps command panel tab guard for short input", async () => {
+    lookupFetchMock.mockResolvedValue({ exactMatch: true, items: [exactItem] });
+    const onResolved = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup();
+
+    render(
+      <ScanInput
+        context="commandPanel"
+        placeholder="scan"
+        ariaLabel="scan"
+        onResolved={onResolved}
+        supportsTabSubmit
+      />,
+    );
+
+    const input = screen.getByLabelText("scan");
+    await user.type(input, "7");
+    await user.keyboard("[Tab]");
+
+    await waitFor(() => {
+      expect(lookupFetchMock).not.toHaveBeenCalled();
     });
   });
 

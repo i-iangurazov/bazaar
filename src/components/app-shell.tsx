@@ -171,8 +171,6 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         labelKey: "groups.insights",
         items: [
           { key: "reports", href: "/reports", icon: ActivityIcon, managerOnly: true },
-          { key: "posReceipts", href: "/pos/receipts", icon: OrdersIcon, managerOnly: true },
-          { key: "posKkm", href: "/pos/kkm", icon: PosIcon, managerOnly: true },
           { key: "adminMetrics", href: "/admin/metrics", icon: MetricsIcon, adminOnly: true },
         ],
       },

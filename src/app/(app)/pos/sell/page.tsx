@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PosPaymentMethod } from "@prisma/client";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
-import { AddIcon, DeleteIcon } from "@/components/icons";
+import { AddIcon, DeleteIcon, DownloadIcon, PrintIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -60,9 +61,20 @@ const PosSellPage = () => {
   const [registerId, setRegisterId] = useState(searchParams.get("registerId") ?? "");
   const [saleId, setSaleId] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
-  const [qtyInput, setQtyInput] = useState("1");
   const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
   const [payments, setPayments] = useState<PaymentDraft[]>([defaultPayment()]);
+  const [lastCompletedSale, setLastCompletedSale] = useState<{
+    id: string;
+    number: string;
+    kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
+  } | null>(null);
+  const [receiptAction, setReceiptAction] = useState<{
+    mode: "download" | "print";
+    kind: "precheck" | "fiscal";
+  } | null>(null);
+  const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const paymentsSectionRef = useRef<HTMLDivElement | null>(null);
+  const firstPaymentAmountRef = useRef<HTMLInputElement | null>(null);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
 
@@ -101,6 +113,27 @@ const PosSellPage = () => {
     { enabled: Boolean(registerId && shiftQuery.data?.id), refetchOnWindowFocus: true },
   );
 
+  const focusLineSearchInput = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      lineSearchInputRef.current?.focus();
+      lineSearchInputRef.current?.select();
+    });
+  }, []);
+
+  const focusPaymentsInput = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      paymentsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      firstPaymentAmountRef.current?.focus();
+      firstPaymentAmountRef.current?.select();
+    });
+  }, []);
+
   const searchTerm = lineSearch.trim();
   const hasSearchTerm = searchTerm.length >= 1;
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -120,10 +153,12 @@ const PosSellPage = () => {
   });
 
   const addLineMutation = trpc.pos.sales.addLine.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       setLineSearch("");
-      setQtyInput("1");
-      toast({ variant: "success", description: t("sell.lineAdded") });
+      if (result.lineAction === "created") {
+        toast({ variant: "success", description: t("sell.lineAdded") });
+      }
+      focusLineSearchInput();
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -160,7 +195,6 @@ const PosSellPage = () => {
       toast({ variant: "success", description: t("sell.saleDiscarded") });
       setSaleId(null);
       setLineSearch("");
-      setQtyInput("1");
       setPayments([defaultPayment()]);
       await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
     },
@@ -172,6 +206,11 @@ const PosSellPage = () => {
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: async (result) => {
       toast({ variant: "success", description: t("sell.completeSuccess", { number: result.number }) });
+      setLastCompletedSale({
+        id: result.id,
+        number: result.number,
+        kkmStatus: result.kkmStatus,
+      });
       setSaleId(null);
       setPayments([defaultPayment()]);
       await Promise.all([
@@ -202,18 +241,24 @@ const PosSellPage = () => {
   useEffect(() => {
     setSaleId(null);
     setLineSearch("");
-    setQtyInput("1");
     setPayments([defaultPayment()]);
+    setLastCompletedSale(null);
   }, [registerId]);
 
   useEffect(() => {
-    if (!saleId || saleQuery.isLoading || saleQuery.data !== null) {
+    if (!saleId) {
+      return;
+    }
+    if (!saleQuery.isFetched || saleQuery.isLoading || saleQuery.isFetching) {
+      return;
+    }
+    if (saleQuery.data !== null) {
       return;
     }
     setSaleId(null);
     setPayments([defaultPayment()]);
     setMarkingInput({});
-  }, [saleId, saleQuery.data, saleQuery.isLoading]);
+  }, [saleId, saleQuery.data, saleQuery.isFetched, saleQuery.isFetching, saleQuery.isLoading]);
 
   useEffect(() => {
     if (!sale?.lines?.length) {
@@ -249,11 +294,6 @@ const PosSellPage = () => {
     if (!registerId) {
       return false;
     }
-    const qty = Math.trunc(Number(qtyInput));
-    if (!Number.isFinite(qty) || qty <= 0) {
-      toast({ variant: "error", description: t("sell.qtyPositive") });
-      return false;
-    }
 
     try {
       let targetSaleId = saleId ?? activeDraft?.id ?? null;
@@ -268,16 +308,30 @@ const PosSellPage = () => {
       await addLineMutation.mutateAsync({
         saleId: targetSaleId,
         productId,
-        qty,
+        qty: 1,
       });
-      await trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId });
-      await trpcUtils.pos.sales.list.invalidate();
+
+      // UI refresh should not turn a successful add into a failed scan flow.
+      void Promise.allSettled([
+        trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }),
+        trpcUtils.pos.sales.list.invalidate(),
+        activeDraftQuery.refetch(),
+      ]);
+
+      focusLineSearchInput();
       return true;
     } catch {
       // handled by mutation onError
       return false;
     }
   };
+
+  useEffect(() => {
+    if (!hasOpenShift) {
+      return;
+    }
+    focusLineSearchInput();
+  }, [focusLineSearchInput, hasOpenShift, saleId]);
 
   const handleScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
     if (result.kind === "notFound") {
@@ -352,11 +406,13 @@ const PosSellPage = () => {
 
     if (!normalized.length) {
       toast({ variant: "error", description: t("sell.paymentRequired") });
+      focusPaymentsInput();
       return;
     }
 
     if (Math.abs(roundMoney(totalPayment - sale.totalKgs)) > 0.009) {
       toast({ variant: "error", description: t("sell.paymentMismatch") });
+      focusPaymentsInput();
       return;
     }
 
@@ -408,6 +464,27 @@ const PosSellPage = () => {
     }
   };
 
+  const handleReceiptPdf = async (mode: "download" | "print", kind: "precheck" | "fiscal") => {
+    if (!lastCompletedSale || receiptAction) {
+      return;
+    }
+    setReceiptAction({ mode, kind });
+    try {
+      const blob = await fetchPdfBlob({
+        url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}`,
+      });
+      if (mode === "print") {
+        await printPdfBlob(blob);
+      } else {
+        downloadPdfBlob(blob, `pos-receipt-${lastCompletedSale.number}-${kind}.pdf`);
+      }
+    } catch {
+      toast({ variant: "error", description: t("sell.receiptPdfFailed") });
+    } finally {
+      setReceiptAction(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("sell.title")} subtitle={t("sell.subtitle")} />
@@ -448,6 +525,78 @@ const PosSellPage = () => {
 
       {!hasOpenShift ? null : (
         <>
+          {lastCompletedSale ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("sell.lastReceiptTitle", { number: lastCompletedSale.number })}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    void handleReceiptPdf("download", "precheck");
+                  }}
+                  disabled={Boolean(receiptAction)}
+                >
+                  {receiptAction?.mode === "download" && receiptAction.kind === "precheck" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <DownloadIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("sell.downloadPrecheck")}
+                </Button>
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    void handleReceiptPdf("print", "precheck");
+                  }}
+                  disabled={Boolean(receiptAction)}
+                >
+                  {receiptAction?.mode === "print" && receiptAction.kind === "precheck" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("sell.printPrecheck")}
+                </Button>
+                {lastCompletedSale.kkmStatus === "SENT" ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      onClick={() => {
+                        void handleReceiptPdf("download", "fiscal");
+                      }}
+                      disabled={Boolean(receiptAction)}
+                    >
+                      {receiptAction?.mode === "download" && receiptAction.kind === "fiscal" ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {t("sell.downloadFiscalReceipt")}
+                    </Button>
+                    <Button
+                      className="w-full sm:w-auto"
+                      onClick={() => {
+                        void handleReceiptPdf("print", "fiscal");
+                      }}
+                      disabled={Boolean(receiptAction)}
+                    >
+                      {receiptAction?.mode === "print" && receiptAction.kind === "fiscal" ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <PrintIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {t("sell.printFiscalReceipt")}
+                    </Button>
+                  </>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>{t("sell.saleTitle")}</CardTitle>
@@ -510,6 +659,7 @@ const PosSellPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("sell.addItem")}</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <ScanInput
+                    ref={lineSearchInputRef}
                     context="pos"
                     value={lineSearch}
                     onValueChange={setLineSearch}
@@ -517,12 +667,8 @@ const PosSellPage = () => {
                     ariaLabel={t("sell.searchProduct")}
                     onResolved={handleScanResolved}
                     supportsTabSubmit
-                  />
-                  <Input
-                    value={qtyInput}
-                    onChange={(event) => setQtyInput(event.target.value)}
-                    inputMode="numeric"
-                    className="w-full sm:w-24"
+                    autoFocus={hasOpenShift}
+                    className="w-full sm:flex-1"
                   />
                 </div>
 
@@ -619,6 +765,7 @@ const PosSellPage = () => {
                         </div>
                         <div className="flex w-full items-center gap-2 sm:w-auto">
                           <Input
+                            key={`${line.id}:${line.qty}`}
                             defaultValue={String(line.qty)}
                             onBlur={(event) => handleUpdateQty(line.id, event.target.value)}
                             className="h-9 w-full sm:w-20"
@@ -654,7 +801,8 @@ const PosSellPage = () => {
           </Card>
 
           {saleId && sale ? (
-            <Card>
+            <div ref={paymentsSectionRef}>
+              <Card>
               <CardHeader>
                 <CardTitle>{t("sell.paymentsTitle")}</CardTitle>
               </CardHeader>
@@ -682,6 +830,7 @@ const PosSellPage = () => {
                       </SelectContent>
                     </Select>
                     <Input
+                      ref={index === 0 ? firstPaymentAmountRef : undefined}
                       value={payment.amount}
                       onChange={(event) =>
                         setPayments((current) =>
@@ -728,7 +877,8 @@ const PosSellPage = () => {
                   {t("sell.paymentTotal")}: {formatCurrencyKGS(totalPayment, locale)}
                 </p>
               </CardContent>
-            </Card>
+              </Card>
+            </div>
           ) : null}
         </>
       )}

@@ -51,6 +51,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -59,8 +60,6 @@ import {
 import { FormActions } from "@/components/form-layout";
 import {
   AddIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
   ArchiveIcon,
   CopyIcon,
   DeleteIcon,
@@ -68,9 +67,9 @@ import {
   EditIcon,
   EmptyIcon,
   GridViewIcon,
-  GripIcon,
   MoreIcon,
   PriceIcon,
+  PrintIcon,
   RestoreIcon,
   TableViewIcon,
   TagIcon,
@@ -78,6 +77,14 @@ import {
 } from "@/components/icons";
 import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import {
+  PRICE_TAG_ROLL_DEFAULTS,
+  PRICE_TAG_ROLL_LIMITS,
+  PRICE_TAG_TEMPLATES,
+  ROLL_PRICE_TAG_TEMPLATE,
+  isRollPriceTagTemplate,
+} from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
@@ -124,8 +131,6 @@ const ProductsPage = () => {
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
-  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
-  const [queueSearch, setQueueSearch] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
 
   const storesQuery = trpc.stores.list.useQuery();
@@ -477,9 +482,42 @@ const ProductsPage = () => {
   const printSchema = useMemo(
     () =>
       z.object({
-        template: z.enum(["3x8", "2x5"]),
+        template: z.enum(PRICE_TAG_TEMPLATES),
         storeId: z.string().optional(),
         quantity: z.coerce.number().int().min(1, t("printQtyMin")),
+        widthMm: z.coerce
+          .number()
+          .min(
+            PRICE_TAG_ROLL_LIMITS.widthMm.min,
+            t("rollWidthRange", {
+              min: PRICE_TAG_ROLL_LIMITS.widthMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.widthMm.max,
+            }),
+          )
+          .max(
+            PRICE_TAG_ROLL_LIMITS.widthMm.max,
+            t("rollWidthRange", {
+              min: PRICE_TAG_ROLL_LIMITS.widthMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.widthMm.max,
+            }),
+          ),
+        heightMm: z.coerce
+          .number()
+          .min(
+            PRICE_TAG_ROLL_LIMITS.heightMm.min,
+            t("rollHeightRange", {
+              min: PRICE_TAG_ROLL_LIMITS.heightMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.heightMm.max,
+            }),
+          )
+          .max(
+            PRICE_TAG_ROLL_LIMITS.heightMm.max,
+            t("rollHeightRange", {
+              min: PRICE_TAG_ROLL_LIMITS.heightMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.heightMm.max,
+            }),
+          ),
+        allowWithoutBarcode: z.boolean().default(false),
       }),
     [t],
   );
@@ -487,11 +525,28 @@ const ProductsPage = () => {
   const printForm = useForm<z.infer<typeof printSchema>>({
     resolver: zodResolver(printSchema),
     defaultValues: {
-      template: "3x8",
+      template: ROLL_PRICE_TAG_TEMPLATE,
       storeId: storeId || "",
       quantity: 1,
+      widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
+      heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
+      allowWithoutBarcode: false,
     },
   });
+  const printTemplate = printForm.watch("template");
+  const rollWidthMm = printForm.watch("widthMm");
+  const rollHeightMm = printForm.watch("heightMm");
+  const parsedRollWidthMm = Number(rollWidthMm);
+  const parsedRollHeightMm = Number(rollHeightMm);
+  const resolvedRollWidthMm = Number.isFinite(parsedRollWidthMm)
+    ? parsedRollWidthMm
+    : PRICE_TAG_ROLL_DEFAULTS.widthMm;
+  const resolvedRollHeightMm = Number.isFinite(parsedRollHeightMm)
+    ? parsedRollHeightMm
+    : PRICE_TAG_ROLL_DEFAULTS.heightMm;
+  const rollPreviewPaddingX = Math.min(40, (5 / Math.max(1, resolvedRollWidthMm)) * 100);
+  const rollPreviewPaddingY = Math.min(40, (5 / Math.max(1, resolvedRollHeightMm)) * 100);
+  const rollTemplateSelected = isRollPriceTagTemplate(printTemplate);
 
   const bulkStorePriceSchema = useMemo(
     () =>
@@ -545,31 +600,20 @@ const ProductsPage = () => {
     });
     return map;
   }, [products, queueProductsQuery.data]);
-  const canDragQueue = printQueue.length <= 50;
-  const filteredQueueEntries = useMemo(() => {
-    const query = queueSearch.trim().toLowerCase();
-    return printQueue.reduce<Array<{ productId: string; queueIndex: number }>>(
-      (acc, productId, queueIndex) => {
-        if (!query) {
-          acc.push({ productId, queueIndex });
-          return acc;
-        }
-        const product = productById.get(productId);
-        const name = product?.name ?? "";
-        const sku = product?.sku ?? "";
-        const barcodes =
-          product?.barcodes?.map((barcode) => barcode.value).join(" ") ?? "";
-        const matched = [name, sku, barcodes].some((value) =>
-          value.toLowerCase().includes(query),
-        );
-        if (matched) {
-          acc.push({ productId, queueIndex });
-        }
-        return acc;
-      },
-      [],
-    );
-  }, [printQueue, productById, queueSearch]);
+  const rollPreviewProduct = useMemo(() => {
+    const firstId = printQueue[0];
+    return firstId ? productById.get(firstId) ?? null : null;
+  }, [printQueue, productById]);
+  const queueMissingBarcodeCount = useMemo(() => {
+    if (!rollTemplateSelected) {
+      return 0;
+    }
+    return printQueue.reduce((count, productId) => {
+      const product = productById.get(productId);
+      const hasBarcode = Boolean(product?.barcodes.some((entry) => entry.value.trim()));
+      return hasBarcode ? count : count + 1;
+    }, 0);
+  }, [printQueue, productById, rollTemplateSelected]);
   const selectedProducts = useMemo(
     () => products.filter((product) => selectedIds.has(product.id)),
     [products, selectedIds],
@@ -625,16 +669,16 @@ const ProductsPage = () => {
   useEffect(() => {
     if (printOpen) {
       printForm.reset({
-        template: "3x8",
+        template: ROLL_PRICE_TAG_TEMPLATE,
         storeId: storeId || "",
         quantity: 1,
+        widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
+        heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
+        allowWithoutBarcode: false,
       });
       setPrintQueue(selectedList);
-      setDraggedQueueIndex(null);
-      setQueueSearch("");
     } else {
       setPrintQueue([]);
-      setQueueSearch("");
     }
   }, [printOpen, printForm, storeId, selectedList]);
 
@@ -655,6 +699,13 @@ const ProductsPage = () => {
       delete target.__seedPrintQueue;
     };
   }, [products]);
+
+  useEffect(() => {
+    if (!rollTemplateSelected || queueMissingBarcodeCount > 0) {
+      return;
+    }
+    printForm.setValue("allowWithoutBarcode", false);
+  }, [printForm, queueMissingBarcodeCount, rollTemplateSelected]);
 
   useEffect(() => {
     if (bulkStorePriceOpen) {
@@ -778,51 +829,52 @@ const ProductsPage = () => {
     });
   };
 
-  const movePrintQueueItem = (fromIndex: number, toIndex: number) => {
-    setPrintQueue((prev) => {
-      if (fromIndex === toIndex) {
-        return prev;
-      }
-      const next = [...prev];
-      const [item] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, item);
-      return next;
-    });
-  };
-
-  const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
+  const handlePrintTags = async (
+    values: z.infer<typeof printSchema>,
+    mode: "download" | "print",
+  ) => {
     const queue = printQueue;
     if (!queue.length) {
       return;
     }
     try {
-      const response = await fetch("/api/price-tags/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          template: values.template,
-          storeId: values.storeId || undefined,
-          items: queue.map((productId) => ({
-            productId,
-            quantity: values.quantity,
-          })),
-        }),
+      const blob = await fetchPdfBlob({
+        url: "/api/price-tags/pdf",
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: values.template,
+            storeId: values.storeId || undefined,
+            allowWithoutBarcode: values.allowWithoutBarcode,
+            rollCalibration: isRollPriceTagTemplate(values.template)
+              ? {
+                  widthMm: values.widthMm,
+                  heightMm: values.heightMm,
+                }
+              : undefined,
+            items: queue.map((productId) => ({
+              productId,
+              quantity: values.quantity,
+            })),
+          }),
+        },
       });
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "priceTagsFailed");
+      const fileName = `price-tags-${values.template}.pdf`;
+      if (mode === "print") {
+        await printPdfBlob(blob);
+      } else {
+        downloadPdfBlob(blob, fileName);
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `price-tags-${values.template}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
       setPrintOpen(false);
       setSelectedIds(new Set());
       setPrintQueue([]);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
+        toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+        return;
+      }
       toast({ variant: "error", description: t("priceTagsFailed") });
     }
   };
@@ -2222,15 +2274,14 @@ const ProductsPage = () => {
         }}
         title={t("printPriceTags")}
         subtitle={t("printSubtitle", { count: printQueue.length })}
-        className="h-[92dvh] sm:h-[85dvh] sm:max-w-2xl"
-        bodyClassName="p-0 min-h-0 overflow-hidden"
+        className="sm:!max-w-6xl"
       >
         <Form {...printForm}>
           <form
-            className="flex h-full min-h-0 flex-col"
-            onSubmit={printForm.handleSubmit((values) => handlePrintTags(values))}
+            className="space-y-4"
+            onSubmit={printForm.handleSubmit((values) => handlePrintTags(values, "download"))}
           >
-            <div className="sticky top-0 z-10 border-b border-border/70 bg-card px-4 py-3 sm:px-6 sm:pt-6 sm:pb-4">
+            <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
                 <FormField
                   control={printForm.control}
@@ -2244,8 +2295,7 @@ const ProductsPage = () => {
                             <SelectValue placeholder={t("template")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="3x8">{t("template3x8")}</SelectItem>
-                            <SelectItem value="2x5">{t("template2x5")}</SelectItem>
+                            <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>{t("templateRollXp365b")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>
@@ -2295,163 +2345,163 @@ const ProductsPage = () => {
                   )}
                 />
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3 sm:mt-4">
-                <div className="w-full sm:max-w-xs">
-                  <Input
-                    value={queueSearch}
-                    onChange={(event) => setQueueSearch(event.target.value)}
-                    placeholder={t("printQueueSearchPlaceholder")}
-                    aria-label={t("printQueueSearchLabel")}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {queueSearch.trim()
-                    ? t("printQueueFiltered", {
-                        filtered: filteredQueueEntries.length,
-                        total: printQueue.length,
-                      })
-                    : t("printQueueSelected", { count: printQueue.length })}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPrintQueue([])}
-                  disabled={!printQueue.length}
-                >
-                  <DeleteIcon className="h-4 w-4" aria-hidden />
-                  {t("printQueueClear")}
-                </Button>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-sm sm:mt-4">
-                <span className="font-medium text-foreground">{t("printQueueTitle")}</span>
-                <span className="text-xs text-muted-foreground">
-                  {canDragQueue ? t("printQueueHint") : t("printQueueNoDragHint")}
-                </span>
-              </div>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col px-4 py-3 sm:px-6 sm:py-4">
-              {printQueue.length ? (
-                filteredQueueEntries.length ? (
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+              {rollTemplateSelected ? (
+                <div className="mt-3 rounded-md border border-border/70 bg-secondary/20 p-3 sm:mt-4">
+                  <div className="grid gap-3 lg:grid-cols-2">
                     <div className="space-y-2">
-                      {filteredQueueEntries.map(({ productId, queueIndex }) => {
-                        const product = productById.get(productId);
-                        const canMoveUp = queueIndex > 0;
-                        const canMoveDown = queueIndex < printQueue.length - 1;
-                        const isDragging = draggedQueueIndex === queueIndex;
-                        return (
+                      <p className="text-xs font-medium text-foreground">{t("rollTemplatePreviewTitle")}</p>
+                      <div className="w-[210px] max-w-full rounded border border-border bg-card p-2">
+                        <div
+                          className="rounded border border-dashed border-border/70"
+                          style={{
+                            aspectRatio: `${Math.max(1, resolvedRollWidthMm)} / ${Math.max(1, resolvedRollHeightMm)}`,
+                          }}
+                        >
                           <div
-                            key={`${productId}-${queueIndex}`}
-                            className={`flex h-[72px] items-center justify-between gap-3 rounded-md border border-border bg-card px-3 ${
-                              isDragging ? "opacity-60" : ""
-                            }`}
-                            draggable={canDragQueue}
-                            onDragStart={() => {
-                              if (!canDragQueue) {
-                                return;
-                              }
-                              setDraggedQueueIndex(queueIndex);
-                            }}
-                            onDragEnd={() => {
-                              if (!canDragQueue) {
-                                return;
-                              }
-                              setDraggedQueueIndex(null);
-                            }}
-                            onDragOver={(event) => {
-                              if (!canDragQueue || draggedQueueIndex === null) {
-                                return;
-                              }
-                              event.preventDefault();
-                            }}
-                            onDrop={(event) => {
-                              if (!canDragQueue) {
-                                return;
-                              }
-                              event.preventDefault();
-                              if (draggedQueueIndex === null || draggedQueueIndex === queueIndex) {
-                                return;
-                              }
-                              movePrintQueueItem(draggedQueueIndex, queueIndex);
-                              setDraggedQueueIndex(null);
+                            className="flex h-full flex-col justify-between"
+                            style={{
+                              padding: `${rollPreviewPaddingY}% ${rollPreviewPaddingX}%`,
                             }}
                           >
-                            <div className="flex min-w-0 items-center gap-2">
-                              {canDragQueue ? (
-                                <GripIcon className="h-4 w-4 text-muted-foreground/80" aria-hidden />
-                              ) : null}
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-foreground">
-                                  {product?.name ?? tCommon("notAvailable")}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {product?.sku ?? productId.slice(0, 8).toUpperCase()}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    aria-label={t("printQueueMoveUp")}
-                                    onClick={() => canMoveUp && movePrintQueueItem(queueIndex, queueIndex - 1)}
-                                    disabled={!canMoveUp}
-                                  >
-                                    <ArrowUpIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t("printQueueMoveUp")}</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    aria-label={t("printQueueMoveDown")}
-                                    onClick={() => canMoveDown && movePrintQueueItem(queueIndex, queueIndex + 1)}
-                                    disabled={!canMoveDown}
-                                  >
-                                    <ArrowDownIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t("printQueueMoveDown")}</TooltipContent>
-                              </Tooltip>
-                            </div>
+                            <p className="line-clamp-2 text-[10px] font-medium text-foreground">
+                              {rollPreviewProduct?.name ?? t("rollPreviewName")}
+                            </p>
+                            <p className="mt-1 text-[11px] font-semibold text-foreground">{t("rollPreviewPrice")}</p>
+                            <p className="mt-1 text-[8px] text-muted-foreground">
+                              {rollPreviewProduct?.sku || t("rollPreviewSku")}
+                            </p>
+                            <div className="mt-1 h-4 rounded bg-muted" />
+                            <p className="mt-1 text-center text-[7px] text-muted-foreground">
+                              {t("rollPreviewBarcode")}
+                            </p>
                           </div>
-                        );
-                      })}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("rollPreviewSize", {
+                          width: resolvedRollWidthMm,
+                          height: resolvedRollHeightMm,
+                        })}
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <FormField
+                        control={printForm.control}
+                        name="widthMm"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("rollWidthMm")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                value={field.value ?? ""}
+                                onChange={(event) => field.onChange(event.target.value)}
+                                onBlur={(event) => {
+                                  const raw = event.target.value.trim();
+                                  if (raw === "") {
+                                    field.onChange(0);
+                                  } else {
+                                    const parsed = Number(raw);
+                                    field.onChange(Number.isFinite(parsed) ? parsed : 0);
+                                  }
+                                  field.onBlur();
+                                }}
+                                type="number"
+                                min={PRICE_TAG_ROLL_LIMITS.widthMm.min}
+                                max={PRICE_TAG_ROLL_LIMITS.widthMm.max}
+                                step={PRICE_TAG_ROLL_LIMITS.widthMm.step}
+                              />
+                            </FormControl>
+                            <FormDescription>{t("rollSizeHint")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={printForm.control}
+                        name="heightMm"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("rollHeightMm")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                value={field.value ?? ""}
+                                onChange={(event) => field.onChange(event.target.value)}
+                                onBlur={(event) => {
+                                  const raw = event.target.value.trim();
+                                  if (raw === "") {
+                                    field.onChange(0);
+                                  } else {
+                                    const parsed = Number(raw);
+                                    field.onChange(Number.isFinite(parsed) ? parsed : 0);
+                                  }
+                                  field.onBlur();
+                                }}
+                                type="number"
+                                min={PRICE_TAG_ROLL_LIMITS.heightMm.min}
+                                max={PRICE_TAG_ROLL_LIMITS.heightMm.max}
+                                step={PRICE_TAG_ROLL_LIMITS.heightMm.step}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={printForm.control}
+                        name="allowWithoutBarcode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card p-2">
+                              <div>
+                                <FormLabel>{t("printWithoutBarcode")}</FormLabel>
+                                <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  disabled={queueMissingBarcodeCount === 0}
+                                />
+                              </FormControl>
+                            </div>
+                            {queueMissingBarcodeCount > 0 ? (
+                              <p className="text-xs text-warning">
+                                {t("rollMissingBarcodeCount", { count: queueMissingBarcodeCount })}
+                              </p>
+                            ) : null}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">{t("printQueueNoResults")}</p>
-                )
-              ) : (
-                <p className="text-xs text-muted-foreground">{t("printQueueEmpty")}</p>
-              )}
+                </div>
+              ) : null}
             </div>
-            <div className="sticky bottom-0 z-10 border-t border-border/70 bg-card px-4 py-3 sm:px-6 sm:py-4">
-              <FormActions>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full sm:w-auto"
-                  onClick={() => setPrintOpen(false)}
-                >
-                  {tCommon("cancel")}
-                </Button>
-                <Button type="submit" className="w-full sm:w-auto">
-                  <DownloadIcon className="h-4 w-4" aria-hidden />
-                  {t("printDownload")}
-                </Button>
-              </FormActions>
-            </div>
+            <FormActions>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setPrintOpen(false)}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  void printForm.handleSubmit((values) => handlePrintTags(values, "print"))();
+                }}
+              >
+                <PrintIcon className="h-4 w-4" aria-hidden />
+                {t("printAction")}
+              </Button>
+              <Button type="submit" variant="secondary" className="w-full sm:w-auto">
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+                {t("printDownload")}
+              </Button>
+            </FormActions>
           </form>
         </Form>
       </Modal>

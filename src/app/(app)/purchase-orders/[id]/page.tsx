@@ -48,6 +48,7 @@ import {
   EditIcon,
   EmptyIcon,
   PdfIcon,
+  PrintIcon,
   ReceiveIcon,
   StatusDangerIcon,
   StatusPendingIcon,
@@ -63,6 +64,8 @@ import {
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
+import { parseNumberInput, resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -83,6 +86,7 @@ const PurchaseOrderDetailPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const role = session?.user?.role ?? "STAFF";
   const canManage = role === "ADMIN" || role === "MANAGER";
+  const [pdfActionPending, setPdfActionPending] = useState<null | "download" | "print">(null);
 
   const poQuery = trpc.purchaseOrders.getById.useQuery({ id: poId }, { enabled: Boolean(poId) });
   type PurchaseOrderLine = NonNullable<typeof poQuery.data>["lines"][number];
@@ -145,6 +149,7 @@ const PurchaseOrderDetailPage = () => {
       unitSelection: string;
     }[]
   >([]);
+  const [receiveQtyInputByLineId, setReceiveQtyInputByLineId] = useState<Record<string, string>>({});
   const [allowOverReceive, setAllowOverReceive] = useState(false);
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -367,7 +372,11 @@ const PurchaseOrderDetailPage = () => {
     return new Map((po?.lines ?? []).map((line) => [line.id, line.product]));
   }, [po]);
   useEffect(() => {
-    if (!receiveDialogOpen || !po) {
+    if (!receiveDialogOpen) {
+      setReceiveQtyInputByLineId({});
+      return;
+    }
+    if (!po) {
       return;
     }
     const nextLines = po.lines
@@ -385,8 +394,23 @@ const PurchaseOrderDetailPage = () => {
       })
       .filter((line) => line.remaining > 0);
     setReceiveLines(nextLines);
+    setReceiveQtyInputByLineId(
+      Object.fromEntries(nextLines.map((line) => [line.lineId, String(line.qtyReceived)])),
+    );
     setAllowOverReceive(false);
   }, [receiveDialogOpen, po, tCommon]);
+  const commitReceiveQtyInput = useCallback((lineId: string, rawValue: string) => {
+    const nextQty = resolveNumberInputOnBlur(rawValue, 0);
+    setReceiveLines((prev) =>
+      prev.map((item) =>
+        item.lineId === lineId ? { ...item, qtyReceived: nextQty } : item,
+      ),
+    );
+    setReceiveQtyInputByLineId((prev) => ({
+      ...prev,
+      [lineId]: String(nextQty),
+    }));
+  }, []);
   const canEditLines = Boolean(po && po.status === "DRAFT" && canManage);
   const statusLabel = (status?: string) => getPurchaseOrderStatusLabel(t, status);
 
@@ -429,6 +453,27 @@ const PurchaseOrderDetailPage = () => {
   }, [receiveLines, lineProductMap, resolveBasePreview]);
 
   const hasCost = po?.lines.some((line) => line.unitCost !== null) ?? false;
+
+  const handlePurchaseOrderPdf = async (mode: "download" | "print") => {
+    if (!poId || pdfActionPending) {
+      return;
+    }
+    setPdfActionPending(mode);
+    try {
+      const blob = await fetchPdfBlob({
+        url: `/api/purchase-orders/${poId}/pdf`,
+      });
+      if (mode === "print") {
+        await printPdfBlob(blob);
+      } else {
+        downloadPdfBlob(blob, `po-${poId}.pdf`);
+      }
+    } catch {
+      toast({ variant: "error", description: t("pdfActionFailed") });
+    } finally {
+      setPdfActionPending(null);
+    }
+  };
 
   if (poQuery.isLoading) {
     return (
@@ -480,17 +525,27 @@ const PurchaseOrderDetailPage = () => {
         subtitle={po.supplier?.name ?? tCommon("supplierUnassigned")}
         action={
           <>
-            <a
-              href={`/api/purchase-orders/${poId}/pdf`}
-              target="_blank"
-              rel="noreferrer"
+            <Button
+              variant="secondary"
               className="w-full sm:w-auto"
+              disabled={pdfActionPending !== null}
+              onClick={() => {
+                void handlePurchaseOrderPdf("download");
+              }}
             >
-              <Button variant="secondary" className="w-full sm:w-auto">
-                <PdfIcon className="h-4 w-4" aria-hidden />
-                {t("downloadPdf")}
-              </Button>
-            </a>
+              {pdfActionPending === "download" ? <Spinner className="h-4 w-4" /> : <PdfIcon className="h-4 w-4" aria-hidden />}
+              {t("downloadPdf")}
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              disabled={pdfActionPending !== null}
+              onClick={() => {
+                void handlePurchaseOrderPdf("print");
+              }}
+            >
+              {pdfActionPending === "print" ? <Spinner className="h-4 w-4" /> : <PrintIcon className="h-4 w-4" aria-hidden />}
+              {t("printPdf")}
+            </Button>
             {canManage ? (
               <>
                 <Button
@@ -791,7 +846,23 @@ const PurchaseOrderDetailPage = () => {
               if (!po) {
                 return;
               }
-              const lines = receiveLines
+              const normalizedReceiveLines = receiveLines.map((line) => {
+                const draftValue = receiveQtyInputByLineId[line.lineId];
+                if (draftValue === undefined) {
+                  return line;
+                }
+                return {
+                  ...line,
+                  qtyReceived: resolveNumberInputOnBlur(draftValue, 0),
+                };
+              });
+              setReceiveLines(normalizedReceiveLines);
+              setReceiveQtyInputByLineId(
+                Object.fromEntries(
+                  normalizedReceiveLines.map((line) => [line.lineId, String(line.qtyReceived)]),
+                ),
+              );
+              const lines = normalizedReceiveLines
                 .filter((line) => line.qtyReceived > 0)
                 .map((line) => ({
                   lineId: line.lineId,
@@ -839,17 +910,26 @@ const PurchaseOrderDetailPage = () => {
                               type="number"
                               inputMode="numeric"
                               min={0}
-                              value={line.qtyReceived}
+                              value={toNumberInputValue(receiveQtyInputByLineId[line.lineId] ?? line.qtyReceived)}
                               onChange={(event) => {
-                                const nextValue = Number(event.target.value);
+                                const nextValue = event.target.value;
+                                setReceiveQtyInputByLineId((prev) => ({
+                                  ...prev,
+                                  [line.lineId]: nextValue,
+                                }));
+                                const parsedValue = parseNumberInput(nextValue);
+                                if (parsedValue === null) {
+                                  return;
+                                }
                                 setReceiveLines((prev) =>
                                   prev.map((item) =>
                                     item.lineId === line.lineId
-                                      ? { ...item, qtyReceived: Number.isFinite(nextValue) ? nextValue : 0 }
+                                      ? { ...item, qtyReceived: parsedValue }
                                       : item,
                                   ),
                                 );
                               }}
+                              onBlur={(event) => commitReceiveQtyInput(line.lineId, event.target.value)}
                             />
                           </TableCell>
                           <TableCell>
@@ -929,17 +1009,26 @@ const PurchaseOrderDetailPage = () => {
                         type="number"
                         inputMode="numeric"
                         min={0}
-                        value={line.qtyReceived}
+                        value={toNumberInputValue(receiveQtyInputByLineId[line.lineId] ?? line.qtyReceived)}
                         onChange={(event) => {
-                          const nextValue = Number(event.target.value);
+                          const nextValue = event.target.value;
+                          setReceiveQtyInputByLineId((prev) => ({
+                            ...prev,
+                            [line.lineId]: nextValue,
+                          }));
+                          const parsedValue = parseNumberInput(nextValue);
+                          if (parsedValue === null) {
+                            return;
+                          }
                           setReceiveLines((prev) =>
                             prev.map((item) =>
                               item.lineId === line.lineId
-                                ? { ...item, qtyReceived: Number.isFinite(nextValue) ? nextValue : 0 }
+                                ? { ...item, qtyReceived: parsedValue }
                                 : item,
                             ),
                           );
                         }}
+                        onBlur={(event) => commitReceiveQtyInput(line.lineId, event.target.value)}
                       />
                       <div className="flex flex-col gap-1">
                         <Select

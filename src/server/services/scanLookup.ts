@@ -17,6 +17,12 @@ export type ScanLookupResult = {
   items: ScanLookupItem[];
 };
 
+const scanMatchRank: Record<ScanLookupMatch, number> = {
+  barcode: 0,
+  sku: 1,
+  name: 2,
+};
+
 type ScanLookupClient = {
   productBarcode: Pick<Prisma.ProductBarcodeDelegate, "findFirst">;
   productPack: Pick<Prisma.ProductPackDelegate, "findFirst">;
@@ -192,6 +198,11 @@ export const lookupScanProducts = async (
         select: { value: true },
         take: 1,
       },
+      packs: {
+        where: { packBarcode: { contains: barcodeNeedle, mode: "insensitive" } },
+        select: { id: true },
+        take: 1,
+      },
       images: {
         select: { url: true },
         where: { url: { not: { startsWith: "data:image/" } } },
@@ -205,13 +216,19 @@ export const lookupScanProducts = async (
 
   return {
     exactMatch: false,
-    items: products.map((product) => {
-      const hasBarcodeMatch = product.barcodes.length > 0;
-      const skuMatchType = product.sku.toLowerCase().includes(fuzzyNeedleLower);
-      return toItem({
-        ...product,
-        matchType: hasBarcodeMatch ? "barcode" : skuMatchType ? "sku" : "name",
-      });
-    }),
+    items: products
+      .map((product) => {
+        const hasBarcodeMatch = product.barcodes.length > 0 || product.packs.length > 0;
+        const hasSkuMatch = product.sku.toLowerCase().includes(fuzzyNeedleLower);
+        return toItem({
+          ...product,
+          matchType: hasBarcodeMatch ? "barcode" : hasSkuMatch ? "sku" : "name",
+        });
+      })
+      .sort(
+        (left, right) =>
+          scanMatchRank[left.matchType] - scanMatchRank[right.matchType] ||
+          left.name.localeCompare(right.name, "ru"),
+      ),
   };
 };

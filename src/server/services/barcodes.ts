@@ -59,13 +59,6 @@ export const resolveBarcodeRenderSpec = (value: string): BarcodeRenderSpec | nul
     return null;
   }
 
-  if (/^\d{12}$/.test(normalized)) {
-    return {
-      bcid: "ean13",
-      text: `${normalized}${computeEan13CheckDigit(normalized)}`,
-    };
-  }
-
   if (isValidEan13(normalized)) {
     return { bcid: "ean13", text: normalized };
   }

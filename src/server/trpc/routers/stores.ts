@@ -1,9 +1,13 @@
 import { z } from "zod";
-import { LegalEntityType } from "@prisma/client";
+import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
 
 import { adminProcedure, managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { createStore, updateStore, updateStoreLegalDetails, updateStorePolicy } from "@/server/services/stores";
+import {
+  getStorePrinterSettings,
+  updateStorePrinterSettings,
+} from "@/server/services/storePrinterSettings";
 
 export const storesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -133,6 +137,48 @@ export const storesRouter = router({
           inn: input.inn ?? null,
           address: input.address ?? null,
           phone: input.phone ?? null,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  hardware: protectedProcedure
+    .input(z.object({ storeId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await getStorePrinterSettings({
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  updateHardware: managerProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        receiptPrintMode: z.nativeEnum(PrinterPrintMode),
+        labelPrintMode: z.nativeEnum(PrinterPrintMode),
+        receiptPrinterModel: z.string().max(120).nullable().optional(),
+        labelPrinterModel: z.string().max(120).nullable().optional(),
+        connectorDeviceId: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateStorePrinterSettings({
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          receiptPrintMode: input.receiptPrintMode,
+          labelPrintMode: input.labelPrintMode,
+          receiptPrinterModel: input.receiptPrinterModel ?? null,
+          labelPrinterModel: input.labelPrinterModel ?? null,
+          connectorDeviceId: input.connectorDeviceId ?? null,
         });
       } catch (error) {
         throw toTRPCError(error);

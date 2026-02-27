@@ -25,6 +25,12 @@ export type FiscalReceiptDraft = {
 export type FiscalReceiptResult = {
   providerReceiptId: string;
   fiscalNumber?: string | null;
+  kkmFactoryNumber?: string | null;
+  kkmRegistrationNumber?: string | null;
+  fiscalModeStatus?: "NOT_SENT" | "SENT" | "FAILED" | null;
+  upfdOrFiscalMemory?: string | null;
+  qrPayload?: string | null;
+  fiscalizedAt?: Date | null;
   printedAt: Date;
   rawJson?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
 };

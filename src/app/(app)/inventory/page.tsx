@@ -51,6 +51,7 @@ import {
   AdjustIcon,
   DownloadIcon,
   ReceiveIcon,
+  PrintIcon,
   TransferIcon,
   StatusWarningIcon,
   StatusSuccessIcon,
@@ -67,6 +68,15 @@ import {
 } from "@/components/ui/tooltip";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
+import { parseNumberInput, resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import {
+  PRICE_TAG_ROLL_DEFAULTS,
+  PRICE_TAG_ROLL_LIMITS,
+  PRICE_TAG_TEMPLATES,
+  ROLL_PRICE_TAG_TEMPLATE,
+  isRollPriceTagTemplate,
+} from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
@@ -124,9 +134,11 @@ const InventoryPage = () => {
       selected: boolean;
     }[]
   >([]);
+  const [poDraftQtyInputByKey, setPoDraftQtyInputByKey] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const [calibrationLoadedStoreKey, setCalibrationLoadedStoreKey] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
 
@@ -189,9 +201,58 @@ const InventoryPage = () => {
   const printSchema = useMemo(
     () =>
       z.object({
-        template: z.enum(["3x8", "2x5"]),
+        template: z.enum(PRICE_TAG_TEMPLATES),
         storeId: z.string().optional(),
         quantity: z.coerce.number().int().min(1, t("printQtyMin")),
+        gapMm: z.coerce
+          .number()
+          .min(
+            PRICE_TAG_ROLL_LIMITS.gapMm.min,
+            t("rollGapRange", {
+              min: PRICE_TAG_ROLL_LIMITS.gapMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.gapMm.max,
+            }),
+          )
+          .max(
+            PRICE_TAG_ROLL_LIMITS.gapMm.max,
+            t("rollGapRange", {
+              min: PRICE_TAG_ROLL_LIMITS.gapMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.gapMm.max,
+            }),
+          ),
+        xOffsetMm: z.coerce
+          .number()
+          .min(
+            PRICE_TAG_ROLL_LIMITS.offsetMm.min,
+            t("rollOffsetRange", {
+              min: PRICE_TAG_ROLL_LIMITS.offsetMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.offsetMm.max,
+            }),
+          )
+          .max(
+            PRICE_TAG_ROLL_LIMITS.offsetMm.max,
+            t("rollOffsetRange", {
+              min: PRICE_TAG_ROLL_LIMITS.offsetMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.offsetMm.max,
+            }),
+          ),
+        yOffsetMm: z.coerce
+          .number()
+          .min(
+            PRICE_TAG_ROLL_LIMITS.offsetMm.min,
+            t("rollOffsetRange", {
+              min: PRICE_TAG_ROLL_LIMITS.offsetMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.offsetMm.max,
+            }),
+          )
+          .max(
+            PRICE_TAG_ROLL_LIMITS.offsetMm.max,
+            t("rollOffsetRange", {
+              min: PRICE_TAG_ROLL_LIMITS.offsetMm.min,
+              max: PRICE_TAG_ROLL_LIMITS.offsetMm.max,
+            }),
+          ),
+        allowWithoutBarcode: z.boolean().default(false),
       }),
     [t],
   );
@@ -246,11 +307,24 @@ const InventoryPage = () => {
   const printForm = useForm<z.infer<typeof printSchema>>({
     resolver: zodResolver(printSchema),
     defaultValues: {
-      template: "3x8",
+      template: ROLL_PRICE_TAG_TEMPLATE,
       storeId: storeId || "",
       quantity: 1,
+      gapMm: PRICE_TAG_ROLL_DEFAULTS.gapMm,
+      xOffsetMm: PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
+      yOffsetMm: PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
+      allowWithoutBarcode: false,
     },
   });
+  const printTemplate = printForm.watch("template");
+  const printStoreId = printForm.watch("storeId")?.trim() ?? "";
+  const rollTemplateSelected = isRollPriceTagTemplate(printTemplate);
+  const printHardwareQuery = trpc.stores.hardware.useQuery(
+    { storeId: printStoreId },
+    {
+      enabled: printOpen && rollTemplateSelected && Boolean(printStoreId),
+    },
+  );
 
   const inventoryListInput = useMemo(
     () => ({
@@ -419,6 +493,11 @@ const InventoryPage = () => {
   }, [inventoryItems]);
 
   const selectedSnapshotIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
+  const selectedPrintItems = useMemo(
+    () => inventoryItems.filter((item) => selectedIds.has(item.snapshot.id)),
+    [inventoryItems, selectedIds],
+  );
+  const rollPreviewItem = selectedPrintItems[0] ?? null;
   const selectedCount = selectedSnapshotIds.length;
   const allSelected =
     Boolean(inventoryItems.length) &&
@@ -482,13 +561,16 @@ const InventoryPage = () => {
 
   useEffect(() => {
     if (!poDraftOpen) {
+      setPoDraftQtyInputByKey({});
       return;
     }
-    setPoDraftItems(
-      reorderCandidates.map((item) => ({
-        ...item,
-        selected: true,
-      })),
+    const nextItems = reorderCandidates.map((item) => ({
+      ...item,
+      selected: true,
+    }));
+    setPoDraftItems(nextItems);
+    setPoDraftQtyInputByKey(
+      Object.fromEntries(nextItems.map((item) => [item.key, String(item.qtyOrdered)])),
     );
   }, [poDraftOpen, reorderCandidates]);
 
@@ -498,14 +580,62 @@ const InventoryPage = () => {
 
   useEffect(() => {
     if (!printOpen) {
+      setCalibrationLoadedStoreKey("");
       return;
     }
     printForm.reset({
-      template: "3x8",
+      template: ROLL_PRICE_TAG_TEMPLATE,
       storeId: storeId || "",
       quantity: 1,
+      gapMm: PRICE_TAG_ROLL_DEFAULTS.gapMm,
+      xOffsetMm: PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
+      yOffsetMm: PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
+      allowWithoutBarcode: false,
     });
+    setCalibrationLoadedStoreKey("");
   }, [printOpen, printForm, storeId]);
+
+  useEffect(() => {
+    if (!printOpen || !rollTemplateSelected) {
+      return;
+    }
+    if (!printStoreId) {
+      if (calibrationLoadedStoreKey !== "default") {
+        printForm.setValue("gapMm", PRICE_TAG_ROLL_DEFAULTS.gapMm);
+        printForm.setValue("xOffsetMm", PRICE_TAG_ROLL_DEFAULTS.xOffsetMm);
+        printForm.setValue("yOffsetMm", PRICE_TAG_ROLL_DEFAULTS.yOffsetMm);
+        printForm.setValue("allowWithoutBarcode", false);
+        setCalibrationLoadedStoreKey("default");
+      }
+      return;
+    }
+    if (!printHardwareQuery.data) {
+      return;
+    }
+    const nextStoreKey = `store:${printStoreId}`;
+    if (calibrationLoadedStoreKey === nextStoreKey) {
+      return;
+    }
+    printForm.setValue("gapMm", printHardwareQuery.data.settings.labelRollGapMm);
+    printForm.setValue("xOffsetMm", printHardwareQuery.data.settings.labelRollXOffsetMm);
+    printForm.setValue("yOffsetMm", printHardwareQuery.data.settings.labelRollYOffsetMm);
+    printForm.setValue("allowWithoutBarcode", false);
+    setCalibrationLoadedStoreKey(nextStoreKey);
+  }, [
+    calibrationLoadedStoreKey,
+    printForm,
+    printHardwareQuery.data,
+    printOpen,
+    printStoreId,
+    rollTemplateSelected,
+  ]);
+
+  useEffect(() => {
+    if (rollTemplateSelected) {
+      return;
+    }
+    printForm.setValue("allowWithoutBarcode", false);
+  }, [printForm, rollTemplateSelected]);
 
   const receiveProductId = receiveForm.watch("productId");
   const receiveVariantId = receiveForm.watch("variantId");
@@ -586,7 +716,10 @@ const InventoryPage = () => {
     }
   }, [minStockProductId, inventoryItems, minStockForm]);
 
-  const handlePrintTags = async (values: z.infer<typeof printSchema>) => {
+  const handlePrintTags = async (
+    values: z.infer<typeof printSchema>,
+    mode: "download" | "print",
+  ) => {
     if (!selectedSnapshotIds.length) {
       return;
     }
@@ -597,32 +730,42 @@ const InventoryPage = () => {
       if (!snapshotProductIds.length) {
         return;
       }
-      const response = await fetch("/api/price-tags/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          template: values.template,
-          storeId: values.storeId || undefined,
-          items: snapshotProductIds.map((productId) => ({
-            productId,
-            quantity: values.quantity,
-          })),
-        }),
+      const blob = await fetchPdfBlob({
+        url: "/api/price-tags/pdf",
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: values.template,
+            storeId: values.storeId || undefined,
+            allowWithoutBarcode: values.allowWithoutBarcode,
+            rollCalibration: isRollPriceTagTemplate(values.template)
+              ? {
+                  gapMm: values.gapMm,
+                  xOffsetMm: values.xOffsetMm,
+                  yOffsetMm: values.yOffsetMm,
+                }
+              : undefined,
+            items: snapshotProductIds.map((productId) => ({
+              productId,
+              quantity: values.quantity,
+            })),
+          }),
+        },
       });
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "priceTagsFailed");
+      if (mode === "print") {
+        await printPdfBlob(blob);
+      } else {
+        downloadPdfBlob(blob, `price-tags-${values.template}.pdf`);
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `price-tags-${values.template}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
       setPrintOpen(false);
       setSelectedIds(new Set());
     } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
+        toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+        return;
+      }
       toast({ variant: "error", description: t("priceTagsFailed") });
     }
   };
@@ -906,7 +1049,6 @@ const InventoryPage = () => {
     ? buildSelectionKey(transferProductId, transferVariantId)
     : "";
   const tableColumnCount = showPlanning ? 10 : 9;
-  const selectedDraftItems = poDraftItems.filter((item) => item.selected);
   const groupedDraftItems = useMemo(() => {
     const groups = new Map<string, typeof poDraftItems>();
     poDraftItems.forEach((item) => {
@@ -917,6 +1059,23 @@ const InventoryPage = () => {
     });
     return groups;
   }, [poDraftItems]);
+  const commitPoDraftQtyInput = useCallback((itemKey: string, rawValue: string) => {
+    const nextQty = resolveNumberInputOnBlur(rawValue, 0);
+    setPoDraftItems((prev) =>
+      prev.map((entry) =>
+        entry.key === itemKey
+          ? {
+              ...entry,
+              qtyOrdered: nextQty,
+            }
+          : entry,
+      ),
+    );
+    setPoDraftQtyInputByKey((prev) => ({
+      ...prev,
+      [itemKey]: String(nextQty),
+    }));
+  }, []);
 
   return (
     <div>
@@ -1646,6 +1805,23 @@ const InventoryPage = () => {
               if (!storeId) {
                 return;
               }
+              const normalizedDraftItems = poDraftItems.map((item) => {
+                const draftValue = poDraftQtyInputByKey[item.key];
+                if (draftValue === undefined) {
+                  return item;
+                }
+                return {
+                  ...item,
+                  qtyOrdered: resolveNumberInputOnBlur(draftValue, 0),
+                };
+              });
+              setPoDraftItems(normalizedDraftItems);
+              setPoDraftQtyInputByKey(
+                Object.fromEntries(
+                  normalizedDraftItems.map((item) => [item.key, String(item.qtyOrdered)]),
+                ),
+              );
+              const selectedDraftItems = normalizedDraftItems.filter((item) => item.selected);
               if (!selectedDraftItems.length) {
                 toast({ variant: "error", description: t("selectDraftItems") });
                 return;
@@ -1716,20 +1892,29 @@ const InventoryPage = () => {
                             type="number"
                             inputMode="numeric"
                             min={0}
-                            value={item.qtyOrdered}
+                            value={poDraftQtyInputByKey[item.key] ?? String(item.qtyOrdered)}
                             onChange={(event) => {
-                              const nextValue = Number(event.target.value);
+                              const nextValue = event.target.value;
+                              setPoDraftQtyInputByKey((prev) => ({
+                                ...prev,
+                                [item.key]: nextValue,
+                              }));
+                              const parsedValue = parseNumberInput(nextValue);
+                              if (parsedValue === null) {
+                                return;
+                              }
                               setPoDraftItems((prev) =>
                                 prev.map((entry) =>
                                   entry.key === item.key
                                     ? {
                                         ...entry,
-                                        qtyOrdered: Number.isFinite(nextValue) ? nextValue : 0,
+                                        qtyOrdered: parsedValue,
                                       }
                                     : entry,
                                 ),
                               );
                             }}
+                            onBlur={(event) => commitPoDraftQtyInput(item.key, event.target.value)}
                           />
                         </div>
                         <div>
@@ -1798,7 +1983,10 @@ const InventoryPage = () => {
         subtitle={t("printSubtitle", { count: selectedCount })}
       >
         <Form {...printForm}>
-          <form className="space-y-4" onSubmit={printForm.handleSubmit(handlePrintTags)}>
+          <form
+            className="space-y-4"
+            onSubmit={printForm.handleSubmit((values) => handlePrintTags(values, "download"))}
+          >
             <FormField
               control={printForm.control}
               name="template"
@@ -1811,8 +1999,7 @@ const InventoryPage = () => {
                         <SelectValue placeholder={t("template")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="3x8">{t("template3x8")}</SelectItem>
-                        <SelectItem value="2x5">{t("template2x5")}</SelectItem>
+                        <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>{t("templateRollXp365b")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -1861,6 +2048,203 @@ const InventoryPage = () => {
                 </FormItem>
               )}
             />
+            {rollTemplateSelected ? (
+              <div className="space-y-3 rounded-md border border-border/70 bg-secondary/20 p-3">
+                <p className="text-xs font-medium text-foreground">{t("rollTemplatePreviewTitle")}</p>
+                <div className="w-[210px] max-w-full rounded border border-border bg-card p-2">
+                  <div className="aspect-[58/40] rounded border border-dashed border-border/70 p-2">
+                    <p className="line-clamp-2 text-[10px] font-medium text-foreground">
+                      {rollPreviewItem?.product.name ?? t("rollPreviewName")}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-foreground">{t("rollPreviewPrice")}</p>
+                    <p className="mt-1 text-[8px] text-muted-foreground">
+                      {rollPreviewItem?.product.sku || t("rollPreviewSku")}
+                    </p>
+                    <div className="mt-1 h-4 rounded bg-muted" />
+                    <p className="mt-1 text-center text-[7px] text-muted-foreground">
+                      {t("rollPreviewBarcode")}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{t("rollGapStoredHint")}</p>
+
+                <FormField
+                  control={printForm.control}
+                  name="gapMm"
+                  render={({ field }) => (
+                    <FormItem>
+                      {(() => {
+                        const resolvedGapMm = resolveNumberInputOnBlur(
+                          field.value === undefined ? "" : String(field.value),
+                          PRICE_TAG_ROLL_DEFAULTS.gapMm,
+                        );
+                        return (
+                          <>
+                            <FormLabel>{t("rollGapMm")}</FormLabel>
+                            <FormControl>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min={PRICE_TAG_ROLL_LIMITS.gapMm.min}
+                                  max={PRICE_TAG_ROLL_LIMITS.gapMm.max}
+                                  step={PRICE_TAG_ROLL_LIMITS.gapMm.step}
+                                  value={resolvedGapMm}
+                                  onChange={(event) => {
+                                    const nextValue = event.currentTarget.valueAsNumber;
+                                    if (Number.isFinite(nextValue)) {
+                                      field.onChange(nextValue);
+                                    }
+                                  }}
+                                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                  aria-label={t("rollGapMm")}
+                                />
+                                <Input
+                                  value={toNumberInputValue(field.value)}
+                                  onChange={(event) => field.onChange(event.target.value)}
+                                  onBlur={(event) => {
+                                    field.onChange(resolveNumberInputOnBlur(event.target.value, 0));
+                                    field.onBlur();
+                                  }}
+                                  type="number"
+                                  className="w-20"
+                                  min={PRICE_TAG_ROLL_LIMITS.gapMm.min}
+                                  max={PRICE_TAG_ROLL_LIMITS.gapMm.max}
+                                  step={PRICE_TAG_ROLL_LIMITS.gapMm.step}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormDescription>{t("rollGapHint")}</FormDescription>
+                            <FormMessage />
+                          </>
+                        );
+                      })()}
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={printForm.control}
+                  name="xOffsetMm"
+                  render={({ field }) => (
+                    <FormItem>
+                      {(() => {
+                        const resolvedXOffset = resolveNumberInputOnBlur(
+                          field.value === undefined ? "" : String(field.value),
+                          PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
+                        );
+                        return (
+                          <>
+                            <FormLabel>{t("rollXOffsetMm")}</FormLabel>
+                            <FormControl>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                  value={resolvedXOffset}
+                                  onChange={(event) => {
+                                    const nextValue = event.currentTarget.valueAsNumber;
+                                    if (Number.isFinite(nextValue)) {
+                                      field.onChange(nextValue);
+                                    }
+                                  }}
+                                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                  aria-label={t("rollXOffsetMm")}
+                                />
+                                <Input
+                                  value={toNumberInputValue(field.value)}
+                                  onChange={(event) => field.onChange(event.target.value)}
+                                  onBlur={(event) => {
+                                    field.onChange(resolveNumberInputOnBlur(event.target.value, 0));
+                                    field.onBlur();
+                                  }}
+                                  type="number"
+                                  className="w-20"
+                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </>
+                        );
+                      })()}
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={printForm.control}
+                  name="yOffsetMm"
+                  render={({ field }) => (
+                    <FormItem>
+                      {(() => {
+                        const resolvedYOffset = resolveNumberInputOnBlur(
+                          field.value === undefined ? "" : String(field.value),
+                          PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
+                        );
+                        return (
+                          <>
+                            <FormLabel>{t("rollYOffsetMm")}</FormLabel>
+                            <FormControl>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                  value={resolvedYOffset}
+                                  onChange={(event) => {
+                                    const nextValue = event.currentTarget.valueAsNumber;
+                                    if (Number.isFinite(nextValue)) {
+                                      field.onChange(nextValue);
+                                    }
+                                  }}
+                                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                  aria-label={t("rollYOffsetMm")}
+                                />
+                                <Input
+                                  value={toNumberInputValue(field.value)}
+                                  onChange={(event) => field.onChange(event.target.value)}
+                                  onBlur={(event) => {
+                                    field.onChange(resolveNumberInputOnBlur(event.target.value, 0));
+                                    field.onBlur();
+                                  }}
+                                  type="number"
+                                  className="w-20"
+                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </>
+                        );
+                      })()}
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={printForm.control}
+                  name="allowWithoutBarcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card p-2">
+                        <div>
+                          <FormLabel>{t("printWithoutBarcode")}</FormLabel>
+                          <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ) : null}
             <FormActions>
               <Button
                 type="button"
@@ -1870,7 +2254,17 @@ const InventoryPage = () => {
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" className="w-full sm:w-auto">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  void printForm.handleSubmit((values) => handlePrintTags(values, "print"))();
+                }}
+              >
+                <PrintIcon className="h-4 w-4" aria-hidden />
+                {t("printAction")}
+              </Button>
+              <Button type="submit" variant="secondary" className="w-full sm:w-auto">
                 <DownloadIcon className="h-4 w-4" aria-hidden />
                 {t("printDownload")}
               </Button>

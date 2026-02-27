@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { PrinterPrintMode } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
@@ -11,6 +12,12 @@ import { buildPriceTagsPdf, type PriceTagLabel } from "@/server/services/priceTa
 import { selectPrimaryBarcodeValue } from "@/server/services/barcodes";
 import { AppError } from "@/server/services/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import {
+  PRICE_TAG_ROLL_DEFAULTS,
+  PRICE_TAG_ROLL_LIMITS,
+  PRICE_TAG_TEMPLATES,
+  ROLL_PRICE_TAG_TEMPLATE,
+} from "@/lib/priceTags";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -18,7 +25,6 @@ export const dynamic = "force-dynamic";
 
 type MessageTree = Record<string, unknown>;
 type PriceTagItem = { productId: string; quantity: number };
-const PRICE_TAG_TEMPLATES = ["3x8", "2x5"] as const;
 const MAX_PRICE_TAG_REQUEST_ITEMS = 200;
 const MAX_PRICE_TAG_QUANTITY_PER_ITEM = 100;
 const MAX_PRICE_TAG_LABELS_TOTAL = 500;
@@ -26,6 +32,36 @@ const MAX_PRICE_TAG_LABELS_TOTAL = 500;
 const priceTagRequestSchema = z
   .object({
     template: z.enum(PRICE_TAG_TEMPLATES),
+    allowWithoutBarcode: z.boolean().optional(),
+    rollCalibration: z
+      .object({
+        gapMm: z.coerce
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.gapMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.gapMm.max)
+          .optional(),
+        xOffsetMm: z.coerce
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.offsetMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.offsetMm.max)
+          .optional(),
+        yOffsetMm: z.coerce
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.offsetMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.offsetMm.max)
+          .optional(),
+        widthMm: z.coerce
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.widthMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.widthMm.max)
+          .optional(),
+        heightMm: z.coerce
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.heightMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.heightMm.max)
+          .optional(),
+      })
+      .optional(),
     items: z
       .array(
         z.object({
@@ -120,6 +156,14 @@ export const POST = async (request: Request) => {
   const template = parsed.data.template;
   const parsedItems = parsed.data.items as PriceTagItem[];
   const storeId = typeof parsed.data.storeId === "string" ? parsed.data.storeId : null;
+  const allowWithoutBarcode = parsed.data.allowWithoutBarcode === true;
+  const rollCalibration = {
+    gapMm: parsed.data.rollCalibration?.gapMm ?? PRICE_TAG_ROLL_DEFAULTS.gapMm,
+    xOffsetMm: parsed.data.rollCalibration?.xOffsetMm ?? PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
+    yOffsetMm: parsed.data.rollCalibration?.yOffsetMm ?? PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
+    widthMm: parsed.data.rollCalibration?.widthMm ?? PRICE_TAG_ROLL_DEFAULTS.widthMm,
+    heightMm: parsed.data.rollCalibration?.heightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
+  };
 
   let storeName: string | null = null;
   if (storeId) {
@@ -178,6 +222,32 @@ export const POST = async (request: Request) => {
   if (!labels.length) {
     return new Response(tErrors("invalidInput"), { status: 400 });
   }
+  const missingBarcodeCount = labels.reduce((count, label) => (label.barcode.trim() ? count : count + 1), 0);
+  if (template === ROLL_PRICE_TAG_TEMPLATE && missingBarcodeCount > 0 && !allowWithoutBarcode) {
+    return new Response(tErrors("priceTagsBarcodeConfirmationRequired"), { status: 400 });
+  }
+
+  if (template === ROLL_PRICE_TAG_TEMPLATE && storeId) {
+    await prisma.storePrinterSettings.upsert({
+      where: { storeId },
+      create: {
+        organizationId: token.organizationId as string,
+        storeId,
+        receiptPrintMode: PrinterPrintMode.PDF,
+        labelPrintMode: PrinterPrintMode.PDF,
+        labelRollGapMm: rollCalibration.gapMm,
+        labelRollXOffsetMm: rollCalibration.xOffsetMm,
+        labelRollYOffsetMm: rollCalibration.yOffsetMm,
+        updatedById: token.sub ?? null,
+      },
+      update: {
+        labelRollGapMm: rollCalibration.gapMm,
+        labelRollXOffsetMm: rollCalibration.xOffsetMm,
+        labelRollYOffsetMm: rollCalibration.yOffsetMm,
+        updatedById: token.sub ?? null,
+      },
+    });
+  }
 
   const pdf = await buildPriceTagsPdf({
     labels,
@@ -187,6 +257,7 @@ export const POST = async (request: Request) => {
     noPriceLabel: tPriceTags("noPrice"),
     noBarcodeLabel: tPriceTags("noBarcode"),
     skuLabel: tPriceTags("sku"),
+    rollCalibration,
   });
   const response = new Response(pdf, {
     headers: {

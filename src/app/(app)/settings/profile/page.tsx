@@ -54,8 +54,8 @@ const ProfilePage = () => {
     () =>
       z.object({
         name: z.string().min(2, t("personal.validation.nameRequired")),
-        phone: z.string().max(40).optional(),
-        jobTitle: z.string().max(120).optional(),
+        phone: z.string().max(40, t("personal.validation.phoneMax", { max: 40 })).optional(),
+        jobTitle: z.string().max(120, t("personal.validation.jobTitleMax", { max: 120 })).optional(),
       }),
     [t],
   );
@@ -75,10 +75,10 @@ const ProfilePage = () => {
         organizationName: z.string().min(2, t("business.validation.organizationNameRequired")),
         storeId: z.string().min(1, t("business.validation.storeRequired")),
         legalEntityType: z.enum(["IP", "OSOO", "AO", "OTHER", "NONE"]),
-        legalName: z.string().max(240).optional(),
-        inn: z.string().max(32).optional(),
-        address: z.string().max(512).optional(),
-        phone: z.string().max(40).optional(),
+        legalName: z.string().max(240, t("business.validation.legalNameMax", { max: 240 })).optional(),
+        inn: z.string().max(32, t("business.validation.innMax", { max: 32 })).optional(),
+        address: z.string().max(512, t("business.validation.addressMax", { max: 512 })).optional(),
+        phone: z.string().max(40, t("business.validation.phoneMax", { max: 40 })).optional(),
       }),
     [t],
   );

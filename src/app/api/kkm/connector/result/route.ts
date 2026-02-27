@@ -24,6 +24,10 @@ export const POST = async (request: Request) => {
         providerReceiptId?: string | null;
         fiscalNumber?: string | null;
         qr?: string | null;
+        kkmFactoryNumber?: string | null;
+        kkmRegistrationNumber?: string | null;
+        upfdOrFiscalMemory?: string | null;
+        qrPayload?: string | null;
         errorMessage?: string | null;
       }
     | null;
@@ -40,6 +44,10 @@ export const POST = async (request: Request) => {
       providerReceiptId: body.providerReceiptId ?? null,
       fiscalNumber: body.fiscalNumber ?? null,
       qr: body.qr ?? null,
+      kkmFactoryNumber: body.kkmFactoryNumber ?? null,
+      kkmRegistrationNumber: body.kkmRegistrationNumber ?? null,
+      upfdOrFiscalMemory: body.upfdOrFiscalMemory ?? null,
+      qrPayload: body.qrPayload ?? null,
       errorMessage: body.errorMessage ?? null,
     });
     return Response.json(result, { status: 200 });

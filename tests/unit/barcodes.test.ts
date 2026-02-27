@@ -19,6 +19,11 @@ describe("barcodes helpers", () => {
     expect(spec).toEqual({ bcid: "ean13", text: "5901234123457" });
   });
 
+  it("falls back to CODE128 for invalid EAN-13 check digit", () => {
+    const spec = resolveBarcodeRenderSpec("5901234123458");
+    expect(spec).toEqual({ bcid: "code128", text: "5901234123458" });
+  });
+
   it("falls back to CODE128 for non EAN values", () => {
     const spec = resolveBarcodeRenderSpec("SKU-ABC-001");
     expect(spec).toEqual({ bcid: "code128", text: "SKU-ABC-001" });

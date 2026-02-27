@@ -61,6 +61,7 @@ describe("lookupScanProducts", () => {
             isBundle: false,
             images: [],
             barcodes: [],
+            packs: [],
           },
         ]),
       },
@@ -71,5 +72,49 @@ describe("lookupScanProducts", () => {
     expect(result.exactMatch).toBe(false);
     expect(result.items[0]).toMatchObject({ id: "prod-3", matchType: "name" });
     expect(client.product.findMany).toHaveBeenCalled();
+  });
+
+  it("orders fuzzy results as barcode then sku then name", async () => {
+    const client = {
+      productBarcode: { findFirst: vi.fn().mockResolvedValue(null) },
+      productPack: { findFirst: vi.fn().mockResolvedValue(null) },
+      product: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "prod-name",
+            sku: "AAA-1",
+            name: "Alpha",
+            isBundle: false,
+            images: [],
+            barcodes: [],
+            packs: [],
+          },
+          {
+            id: "prod-sku",
+            sku: "MILK-1",
+            name: "Beta",
+            isBundle: false,
+            images: [],
+            barcodes: [],
+            packs: [],
+          },
+          {
+            id: "prod-barcode",
+            sku: "ZZZ-1",
+            name: "Gamma",
+            isBundle: false,
+            images: [],
+            barcodes: [{ value: "MILK-123" }],
+            packs: [],
+          },
+        ]),
+      },
+    };
+
+    const result = await lookupScanProducts(client, "org-1", "milk");
+
+    expect(result.exactMatch).toBe(false);
+    expect(result.items.map((item) => item.id)).toEqual(["prod-barcode", "prod-sku", "prod-name"]);
   });
 });

@@ -302,6 +302,59 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("adds the same product line by increasing quantity instead of duplicate error", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-duplicate-merge",
+      idempotencyKey: "pos-seed-duplicate-merge-1",
+      requestId: "pos-seed-duplicate-merge-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-duplicate-merge-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 1 });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    const fetched = await caller.pos.sales.get({ saleId: sale.id });
+    expect(fetched).toBeTruthy();
+    expect(fetched?.lines).toHaveLength(1);
+    expect(fetched?.lines[0]?.qty).toBe(3);
+    expect(fetched?.totalKgs).toBe(300);
+  });
+
   it("requires marking codes when store marking mode is REQUIRED_ON_SALE", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 

@@ -10,6 +10,7 @@ export const shouldRunDbTests =
 export const resetDatabase = async () => {
   await prisma.refundRequest.deleteMany();
   await prisma.fiscalReceipt.deleteMany();
+  await prisma.storePrinterSettings.deleteMany();
   await prisma.kkmConnectorPairingCode.deleteMany();
   await prisma.kkmConnectorDevice.deleteMany();
   await prisma.saleReturnLine.deleteMany();

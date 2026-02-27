@@ -131,6 +131,11 @@ enum KkmMode {
   ADAPTER
 }
 
+enum PrinterPrintMode {
+  PDF
+  CONNECTOR
+}
+
 enum MarkingMode {
   OFF
   OPTIONAL
@@ -300,6 +305,7 @@ model Organization {
   markingCodeCaptures      MarkingCodeCapture[]
   ettnReferences           EttnReference[]
   esfReferences            EsfReference[]
+  printerSettings          StorePrinterSettings[]
 }
 
 model User {
@@ -353,6 +359,7 @@ model User {
   saleReturnsCreated            SaleReturn[]              @relation("saleReturnsCreated")
   saleReturnsCompleted          SaleReturn[]              @relation("saleReturnsCompleted")
   kkmPairingCodesCreated        KkmConnectorPairingCode[] @relation("kkmPairingCodeCreatedBy")
+  storePrinterSettingsUpdated   StorePrinterSettings[]    @relation("storePrinterSettingsUpdatedBy")
   refundRequestsCreated         RefundRequest[]           @relation("refundRequestsCreatedBy")
   refundRequestsReviewed        RefundRequest[]           @relation("refundRequestsReviewedBy")
   bazaarCatalogsUpdated         BazaarCatalog[]           @relation("bazaarCatalogUpdatedBy")
@@ -426,6 +433,7 @@ model Store {
   fiscalReceipts           FiscalReceipt[]
   kkmConnectorDevices      KkmConnectorDevice[]
   kkmConnectorPairingCodes KkmConnectorPairingCode[]
+  printerSettings          StorePrinterSettings?
   refundRequests           RefundRequest[]
   markingCodeCaptures      MarkingCodeCapture[]
   ettnReferences           EttnReference[]
@@ -458,6 +466,31 @@ model StoreComplianceProfile {
   updatedBy    User?        @relation("complianceUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([organizationId, storeId])
+}
+
+model StorePrinterSettings {
+  id                  String           @id @default(cuid())
+  organizationId      String
+  storeId             String           @unique
+  receiptPrintMode    PrinterPrintMode @default(PDF)
+  labelPrintMode      PrinterPrintMode @default(PDF)
+  receiptPrinterModel String?          @default("XP-P501A")
+  labelPrinterModel   String?          @default("XP-365B")
+  labelRollGapMm      Float            @default(3.5)
+  labelRollXOffsetMm  Float            @default(0)
+  labelRollYOffsetMm  Float            @default(0)
+  connectorDeviceId   String?
+  updatedById         String?
+  updatedAt           DateTime         @updatedAt
+  createdAt           DateTime         @default(now())
+
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  store           Store              @relation(fields: [storeId], references: [id])
+  connectorDevice KkmConnectorDevice? @relation(fields: [connectorDeviceId], references: [id])
+  updatedBy       User?              @relation("storePrinterSettingsUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([organizationId, storeId])
+  @@index([connectorDeviceId])
 }
 
 model ProductComplianceFlags {
@@ -1123,7 +1156,13 @@ model FiscalReceipt {
   nextAttemptAt     DateTime?
   providerReceiptId String?
   fiscalNumber      String?
+  kkmFactoryNumber  String?
+  kkmRegistrationNumber String?
+  fiscalModeStatus  PosKkmStatus?
+  upfdOrFiscalMemory String?
+  qrPayload         String?
   qr                String?
+  fiscalizedAt      DateTime?
   connectorDeviceId String?
   sentAt            DateTime?
   createdAt         DateTime            @default(now())
@@ -1154,6 +1193,7 @@ model KkmConnectorDevice {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   store          Store           @relation(fields: [storeId], references: [id])
   fiscalReceipts FiscalReceipt[]
+  printerSettings StorePrinterSettings[]
 
   @@index([organizationId, storeId, isActive])
 }
