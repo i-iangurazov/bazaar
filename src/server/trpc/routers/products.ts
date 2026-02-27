@@ -5,6 +5,7 @@ import { z } from "zod";
 import { adminProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { lookupScanProducts } from "@/server/services/scanLookup";
+import { normalizeScanValue } from "@/lib/scanning/normalize";
 import {
   archiveProduct,
   bulkUpdateProductCategory,
@@ -94,7 +95,7 @@ export const productsRouter = router({
   findByBarcode: protectedProcedure
     .input(z.object({ value: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const normalized = input.value.trim();
+      const normalized = normalizeScanValue(input.value);
       if (!normalized) {
         return null;
       }
@@ -111,7 +112,13 @@ export const productsRouter = router({
               id: true,
               sku: true,
               name: true,
-              barcodes: { select: { value: true } },
+              isBundle: true,
+              images: {
+                select: { url: true },
+                where: { url: { not: { startsWith: "data:image/" } } },
+                orderBy: { position: "asc" },
+                take: 1,
+              },
             },
           },
         },
@@ -122,7 +129,8 @@ export const productsRouter = router({
           id: match.product.id,
           sku: match.product.sku,
           name: match.product.name,
-          barcodes: match.product.barcodes.map((barcode) => barcode.value),
+          type: match.product.isBundle ? ("bundle" as const) : ("product" as const),
+          primaryImage: match.product.images[0]?.url ?? null,
         };
       }
 
@@ -138,21 +146,58 @@ export const productsRouter = router({
               id: true,
               sku: true,
               name: true,
-              barcodes: { select: { value: true } },
+              isBundle: true,
+              images: {
+                select: { url: true },
+                where: { url: { not: { startsWith: "data:image/" } } },
+                orderBy: { position: "asc" },
+                take: 1,
+              },
             },
           },
         },
       });
 
-      if (!packMatch?.product) {
+      if (packMatch?.product) {
+        return {
+          id: packMatch.product.id,
+          sku: packMatch.product.sku,
+          name: packMatch.product.name,
+          type: packMatch.product.isBundle ? ("bundle" as const) : ("product" as const),
+          primaryImage: packMatch.product.images[0]?.url ?? null,
+        };
+      }
+
+      const skuMatch = await ctx.prisma.product.findFirst({
+        where: {
+          organizationId: ctx.user.organizationId,
+          isDeleted: false,
+          sku: { equals: normalized, mode: "insensitive" },
+        },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          isBundle: true,
+          images: {
+            select: { url: true },
+            where: { url: { not: { startsWith: "data:image/" } } },
+            orderBy: { position: "asc" },
+            take: 1,
+          },
+        },
+      });
+
+      if (!skuMatch) {
         return null;
       }
 
       return {
-        id: packMatch.product.id,
-        sku: packMatch.product.sku,
-        name: packMatch.product.name,
-        barcodes: packMatch.product.barcodes.map((barcode) => barcode.value),
+        id: skuMatch.id,
+        sku: skuMatch.sku,
+        name: skuMatch.name,
+        type: skuMatch.isBundle ? ("bundle" as const) : ("product" as const),
+        primaryImage: skuMatch.images[0]?.url ?? null,
       };
     }),
 
@@ -160,47 +205,172 @@ export const productsRouter = router({
     .input(z.object({ q: z.string() }))
     .query(async ({ ctx, input }) => {
       const query = input.q.trim();
-      if (!query) {
+      const normalized = normalizeScanValue(input.q);
+      const exactNeedle = normalized || query;
+      if (!exactNeedle) {
         return [];
       }
 
-      const products = await ctx.prisma.product.findMany({
-        where: {
-          organizationId: ctx.user.organizationId,
-          isDeleted: false,
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { sku: { contains: query, mode: "insensitive" } },
-            {
-              barcodes: {
-                some: { value: { contains: query, mode: "insensitive" } },
+      const fuzzyNeedle = query || exactNeedle;
+      const barcodeNeedle = normalized || fuzzyNeedle;
+      const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
+      const barcodeNeedleLower = barcodeNeedle.toLowerCase();
+
+      const [exactBarcodeMatches, exactSkuMatches, fuzzyMatches] = await Promise.all([
+        ctx.prisma.productBarcode.findMany({
+          where: {
+            organizationId: ctx.user.organizationId,
+            value: exactNeedle,
+            product: { isDeleted: false },
+          },
+          select: {
+            product: {
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                isBundle: true,
+                images: {
+                  select: { url: true },
+                  where: { url: { not: { startsWith: "data:image/" } } },
+                  orderBy: { position: "asc" },
+                  take: 1,
+                },
               },
             },
-            {
-              packs: {
-                some: { packBarcode: { contains: query, mode: "insensitive" } },
-              },
+          },
+          take: 10,
+        }),
+        ctx.prisma.product.findMany({
+          where: {
+            organizationId: ctx.user.organizationId,
+            isDeleted: false,
+            sku: { equals: exactNeedle, mode: "insensitive" },
+          },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            isBundle: true,
+            images: {
+              select: { url: true },
+              where: { url: { not: { startsWith: "data:image/" } } },
+              orderBy: { position: "asc" },
+              take: 1,
             },
-          ],
-        },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          isBundle: true,
-          barcodes: { select: { value: true } },
-        },
-        orderBy: { name: "asc" },
-        take: 10,
+          },
+          take: 10,
+        }),
+        ctx.prisma.product.findMany({
+          where: {
+            organizationId: ctx.user.organizationId,
+            isDeleted: false,
+            OR: [
+              { name: { contains: fuzzyNeedle, mode: "insensitive" } },
+              { sku: { contains: fuzzyNeedle, mode: "insensitive" } },
+              {
+                barcodes: {
+                  some: { value: { contains: barcodeNeedle, mode: "insensitive" } },
+                },
+              },
+              {
+                packs: {
+                  some: { packBarcode: { contains: barcodeNeedle, mode: "insensitive" } },
+                },
+              },
+            ],
+          },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            isBundle: true,
+            barcodes: {
+              where: { value: { contains: barcodeNeedle, mode: "insensitive" } },
+              select: { value: true },
+              take: 1,
+            },
+            images: {
+              select: { url: true },
+              where: { url: { not: { startsWith: "data:image/" } } },
+              orderBy: { position: "asc" },
+              take: 1,
+            },
+          },
+          orderBy: { name: "asc" },
+          take: 10,
+        }),
+      ]);
+
+      const items = new Map<
+        string,
+        {
+          id: string;
+          sku: string;
+          name: string;
+          isBundle: boolean;
+          matchType: "barcode" | "sku" | "name";
+          primaryImage: string | null;
+        }
+      >();
+
+      exactBarcodeMatches.forEach((match) => {
+        if (!match.product || items.has(match.product.id)) {
+          return;
+        }
+        items.set(match.product.id, {
+          id: match.product.id,
+          sku: match.product.sku,
+          name: match.product.name,
+          isBundle: match.product.isBundle,
+          matchType: "barcode",
+          primaryImage: match.product.images[0]?.url ?? null,
+        });
       });
 
-      return products.map((product) => ({
-        id: product.id,
-        sku: product.sku,
-        name: product.name,
-        isBundle: product.isBundle,
-        barcodes: product.barcodes.map((barcode) => barcode.value),
-      }));
+      exactSkuMatches.forEach((product) => {
+        if (items.has(product.id)) {
+          return;
+        }
+        items.set(product.id, {
+          id: product.id,
+          sku: product.sku,
+          name: product.name,
+          isBundle: product.isBundle,
+          matchType: "sku",
+          primaryImage: product.images[0]?.url ?? null,
+        });
+      });
+
+      fuzzyMatches.forEach((product) => {
+        if (items.has(product.id)) {
+          return;
+        }
+        const barcodeMatched = product.barcodes.some((barcode) =>
+          barcode.value.toLowerCase().includes(barcodeNeedleLower),
+        );
+        const skuMatched = product.sku.toLowerCase().includes(fuzzyNeedleLower);
+        items.set(product.id, {
+          id: product.id,
+          sku: product.sku,
+          name: product.name,
+          isBundle: product.isBundle,
+          matchType: barcodeMatched ? "barcode" : skuMatched ? "sku" : "name",
+          primaryImage: product.images[0]?.url ?? null,
+        });
+      });
+
+      return Array.from(items.values())
+        .slice(0, 10)
+        .map((product) => ({
+          id: product.id,
+          sku: product.sku,
+          name: product.name,
+          type: product.isBundle ? ("bundle" as const) : ("product" as const),
+          isBundle: product.isBundle,
+          matchType: product.matchType,
+          primaryImage: product.primaryImage,
+        }));
     }),
 
   list: protectedProcedure

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +69,7 @@ import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
+import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 const PurchaseOrderDetailPage = () => {
   const params = useParams();
@@ -144,6 +146,7 @@ const PurchaseOrderDetailPage = () => {
     }[]
   >([]);
   const [allowOverReceive, setAllowOverReceive] = useState(false);
+  const qtyInputRef = useRef<HTMLInputElement | null>(null);
 
   const lineProductId = lineForm.watch("productId");
   const lineUnitSelection = lineForm.watch("unitSelection");
@@ -157,6 +160,33 @@ const PurchaseOrderDetailPage = () => {
     { enabled: Boolean(lineProductId) },
   );
   const lineProduct = lineProductQuery.data ?? null;
+
+  const applySelectedProduct = (product: { id: string; name: string; sku: string }) => {
+    setSelectedProduct(product);
+    setLineSearch(product.name);
+    lineForm.setValue("productId", product.id, { shouldValidate: true });
+    lineForm.setValue("variantId", null, { shouldValidate: true });
+    lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
+    setShowResults(false);
+    window.setTimeout(() => qtyInputRef.current?.focus(), 0);
+  };
+
+  const handleLineScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
+    if (result.kind === "notFound") {
+      toast({ variant: "info", description: tCommon("nothingFound") });
+      return false;
+    }
+    if (result.kind === "multiple") {
+      setShowResults(true);
+      return true;
+    }
+    applySelectedProduct({
+      id: result.item.id,
+      name: result.item.name,
+      sku: result.item.sku,
+    });
+    return true;
+  };
 
   const resolveUnitLabel = (
     unit?: { labelRu: string; labelKg: string; code: string } | null,
@@ -1041,10 +1071,10 @@ const PurchaseOrderDetailPage = () => {
                     <FormLabel>{tCommon("product")}</FormLabel>
                     <div className="relative">
                       <FormControl>
-                        <Input
+                        <ScanInput
+                          context="linePicker"
                           value={lineSearch}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
+                          onValueChange={(nextValue) => {
                             setLineSearch(nextValue);
                             setShowResults(true);
                             if (selectedProduct && nextValue !== selectedProduct.name) {
@@ -1059,6 +1089,10 @@ const PurchaseOrderDetailPage = () => {
                             setTimeout(() => setShowResults(false), 150);
                           }}
                           placeholder={t("productSearchPlaceholder")}
+                          ariaLabel={t("productSearchPlaceholder")}
+                          supportsTabSubmit
+                          showDropdown={false}
+                          onResolved={handleLineScanResolved}
                         />
                       </FormControl>
                       {showResults && productSearchQuery.data?.length ? (
@@ -1071,16 +1105,11 @@ const PurchaseOrderDetailPage = () => {
                                 className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-muted/30"
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => {
-                                  setSelectedProduct({
+                                  applySelectedProduct({
                                     id: product.id,
                                     name: product.name,
                                     sku: product.sku,
                                   });
-                                  setLineSearch(product.name);
-                                  field.onChange(product.id);
-                                  lineForm.setValue("variantId", null, { shouldValidate: true });
-                                  lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                                  setShowResults(false);
                                 }}
                               >
                                 <span className="font-medium text-foreground">{product.name}</span>
@@ -1138,6 +1167,7 @@ const PurchaseOrderDetailPage = () => {
                     <FormControl>
                       <Input
                         {...field}
+                        ref={qtyInputRef}
                         type="number"
                         inputMode="numeric"
                         placeholder={t("qtyPlaceholder")}

@@ -1018,6 +1018,34 @@
       "create": "түзүү"
     }
   },
+  "scannerTest": {
+    "title": "Сканер тести",
+    "subtitle": "Keyboard-wedge скандоону диагностикалоо.",
+    "inputTitle": "Киргизүүнү текшерүү",
+    "placeholder": "Штрихкод скандаңыз же SKU жазыңыз",
+    "inputHint": "Enter менен жөнөтүлөт; Tab узундугу 4+ болгондо жөнөтөт.",
+    "summaryTitle": "Жыйынтык",
+    "rawValue": "Чийки маани",
+    "normalizedValue": "Нормалдашкан маани",
+    "submitTrigger": "Жөнөтүү триггери",
+    "resolvedAction": "Жыйынтык",
+    "timingMs": "Убакыт",
+    "timingValue": "{value} мс",
+    "keysTitle": "Баскыч окуялары",
+    "keysEmpty": "Азырынча окуя жок.",
+    "clear": "Тазалоо",
+    "empty": "—",
+    "actionPending": "Азырынча жыйынтык жок.",
+    "actionNotFound": "Табылган жок",
+    "actionMultiple": "Бир нече дал келүү ({count})",
+    "actionBarcode": "Штрихкод боюнча дал келди ({sku})",
+    "actionSku": "SKU боюнча дал келди ({sku})",
+    "actionName": "Аталыш боюнча дал келди ({sku})",
+    "trigger": {
+      "enter": "Enter",
+      "tab": "Tab"
+    }
+  },
   "quickActionsPages": {
     "customersNew": {
       "title": "Жаңы кардар",

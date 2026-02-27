@@ -128,6 +128,49 @@ describeDb("products", () => {
     expect(notFound).toBeNull();
   });
 
+  it("normalizes scanned barcode input while keeping org scoping", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-barcode-normalized",
+      sku: "SKU-BC-2",
+      name: "Barcode Product Normalized",
+      baseUnitId: baseUnit.id,
+      barcodes: ["00001234"],
+    });
+
+    const found = await caller.products.findByBarcode({ value: "  0000 1234  " });
+    expect(found).toMatchObject({ id: product.id, sku: "SKU-BC-2" });
+
+    const otherOrg = await prisma.organization.create({ data: { name: "Other Org 4" } });
+    const otherUser = await prisma.user.create({
+      data: {
+        organizationId: otherOrg.id,
+        email: "admin4@test.local",
+        name: "Admin 4",
+        passwordHash: "hash",
+        role: "ADMIN",
+      },
+    });
+    const otherCaller = createTestCaller({
+      id: otherUser.id,
+      email: otherUser.email,
+      role: otherUser.role,
+      organizationId: otherOrg.id,
+    });
+
+    const notFound = await otherCaller.products.findByBarcode({ value: "00001234" });
+    expect(notFound).toBeNull();
+  });
+
   it("resolves scan lookup by exact barcode", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
     const caller = createTestCaller({

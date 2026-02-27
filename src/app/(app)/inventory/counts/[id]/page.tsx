@@ -10,6 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
 import { HelpLink } from "@/components/help-link";
+import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +59,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { getStockMovementLabel } from "@/lib/i18n/status";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
+import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 const statusVariants: Record<string, "default" | "warning" | "success" | "danger"> = {
   DRAFT: "default",
@@ -91,7 +93,6 @@ const StockCountDetailPage = () => {
 
   const count = countQuery.data;
   const scanInputRef = useRef<HTMLInputElement | null>(null);
-  const [scanValue, setScanValue] = useState("");
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
@@ -113,13 +114,41 @@ const StockCountDetailPage = () => {
   const addLineMutation = trpc.stockCounts.addOrUpdateLineByScan.useMutation({
     onSuccess: () => {
       countQuery.refetch();
-      setScanValue("");
-      scanInputRef.current?.focus();
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+
+  const handleScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
+    if (!count || isLocked) {
+      return false;
+    }
+
+    if (result.kind === "notFound") {
+      toast({ variant: "error", description: tErrors("scanNotFound") });
+      return false;
+    }
+
+    if (result.kind === "multiple") {
+      return true;
+    }
+
+    const barcodeOrQuery =
+      result.item.matchType === "barcode" ? result.input : result.item.sku;
+
+    try {
+      await addLineMutation.mutateAsync({
+        stockCountId: count.id,
+        storeId: count.storeId,
+        barcodeOrQuery,
+        mode: "increment",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const setQtyMutation = trpc.stockCounts.setLineCountedQty.useMutation({
     onSuccess: () => {
@@ -321,26 +350,14 @@ const StockCountDetailPage = () => {
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1">
-              <Input
+              <ScanInput
                 ref={scanInputRef}
-                value={scanValue}
-                onChange={(event) => setScanValue(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") {
-                    return;
-                  }
-                  event.preventDefault();
-                  if (!scanValue.trim() || !count || isLocked) {
-                    return;
-                  }
-                  addLineMutation.mutate({
-                    stockCountId: count.id,
-                    storeId: count.storeId,
-                    barcodeOrQuery: scanValue,
-                    mode: "increment",
-                  });
-                }}
+                context="stockCount"
                 placeholder={t("scanPlaceholder")}
+                ariaLabel={t("scanPlaceholder")}
+                onResolved={handleScanResolved}
+                supportsTabSubmit
+                autoFocus={scanMode}
                 disabled={!count || isLocked || addLineMutation.isLoading}
               />
               <p className="mt-2 text-xs text-muted-foreground">{t("scanHint")}</p>

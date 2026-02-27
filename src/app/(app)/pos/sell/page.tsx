@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 const selectedRegisterKey = "pos:selected-register";
 
@@ -243,14 +245,14 @@ const PosSellPage = () => {
     }, 0),
   );
 
-  const handleAddLine = async (productId: string) => {
+  const handleAddLine = async (productId: string): Promise<boolean> => {
     if (!registerId) {
-      return;
+      return false;
     }
     const qty = Math.trunc(Number(qtyInput));
     if (!Number.isFinite(qty) || qty <= 0) {
       toast({ variant: "error", description: t("sell.qtyPositive") });
-      return;
+      return false;
     }
 
     try {
@@ -270,9 +272,22 @@ const PosSellPage = () => {
       });
       await trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId });
       await trpcUtils.pos.sales.list.invalidate();
+      return true;
     } catch {
       // handled by mutation onError
+      return false;
     }
+  };
+
+  const handleScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
+    if (result.kind === "notFound") {
+      toast({ variant: "info", description: t("sell.noSearchResults") });
+      return false;
+    }
+    if (result.kind === "multiple") {
+      return true;
+    }
+    return handleAddLine(result.item.id);
   };
 
   const handleUpdateQty = async (lineId: string, raw: string) => {
@@ -494,10 +509,14 @@ const PosSellPage = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">{t("sell.addItem")}</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
+                  <ScanInput
+                    context="pos"
                     value={lineSearch}
-                    onChange={(event) => setLineSearch(event.target.value)}
+                    onValueChange={setLineSearch}
                     placeholder={t("sell.searchProduct")}
+                    ariaLabel={t("sell.searchProduct")}
+                    onResolved={handleScanResolved}
+                    supportsTabSubmit
                   />
                   <Input
                     value={qtyInput}

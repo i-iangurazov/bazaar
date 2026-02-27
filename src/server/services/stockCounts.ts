@@ -9,6 +9,7 @@ import { applyStockMovement } from "@/server/services/inventory";
 import { writeAuditLog } from "@/server/services/audit";
 import { eventBus } from "@/server/events/eventBus";
 import { toJson } from "@/server/services/json";
+import { normalizeScanValue } from "@/lib/scanning/normalize";
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
 
@@ -23,7 +24,7 @@ const resolveScanMatch = async (
   organizationId: string,
   rawValue: string,
 ) => {
-  const normalized = rawValue.trim();
+  const normalized = normalizeScanValue(rawValue);
   if (!normalized) {
     throw new AppError("scanValueRequired", "BAD_REQUEST", 400);
   }

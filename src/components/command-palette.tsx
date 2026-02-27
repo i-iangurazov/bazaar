@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
-import { Input } from "@/components/ui/input";
+import { ScanInput } from "@/components/ScanInput";
 import { useToast } from "@/components/ui/toast";
 import {
   AdjustIcon,
@@ -351,14 +351,6 @@ export const CommandPalette = ({
   }, [normalizedQuery, filteredActions.length, results.length]);
 
   const findByBarcode = trpc.products.findByBarcode.useMutation({
-    onSuccess: (product) => {
-      if (product) {
-        router.push(`/products/${product.id}`);
-        setOpen(false);
-        return;
-      }
-      toast({ variant: "info", description: t("noResults") });
-    },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -389,22 +381,38 @@ export const CommandPalette = ({
       );
       return;
     }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const selectedIndex = hoveredIndex ?? activeIndex;
-      if (allItems.length) {
-        handleSelect(allItems[selectedIndex]);
-        return;
-      }
-      const trimmed = normalizedQuery;
-      if (trimmed.length >= 2) {
-        findByBarcode.mutate({ value: trimmed });
-      }
-      return;
-    }
     if (event.key === "Escape") {
       event.preventDefault();
       setOpen(false);
+    }
+  };
+
+  const handleScanSubmit = async ({
+    normalizedValue,
+  }: {
+    normalizedValue: string;
+  }): Promise<boolean> => {
+    const selectedIndex = hoveredIndex ?? activeIndex;
+    if (allItems.length) {
+      handleSelect(allItems[selectedIndex]);
+      return true;
+    }
+
+    if (normalizedValue.length < 2) {
+      return false;
+    }
+
+    try {
+      const product = await findByBarcode.mutateAsync({ value: normalizedValue });
+      if (!product) {
+        toast({ variant: "info", description: t("noResults") });
+        return false;
+      }
+      router.push(`/products/${product.id}`);
+      setOpen(false);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -424,17 +432,21 @@ export const CommandPalette = ({
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
           />
-          <Input
+          <ScanInput
+            context="commandPanel"
             ref={inputRef}
             value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
+            onValueChange={(nextValue) => {
+              setQuery(nextValue);
               setKeyboardNavigation(false);
             }}
             onKeyDown={handleInputKeyDown}
+            onSubmitValue={handleScanSubmit}
+            supportsTabSubmit
             placeholder={t("placeholder")}
-            className="h-11 rounded-lg border-border/80 bg-background pl-9 text-sm"
-            aria-label={t("searchLabel")}
+            inputClassName="h-11 rounded-lg border-border/80 bg-background pl-9 text-sm"
+            ariaLabel={t("searchLabel")}
+            showDropdown={false}
           />
         </div>
 

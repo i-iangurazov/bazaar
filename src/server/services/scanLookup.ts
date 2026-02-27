@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { normalizeScanValue } from "@/lib/scanning/normalize";
 
 export type ScanLookupMatch = "barcode" | "sku" | "name";
 
@@ -7,6 +8,8 @@ export type ScanLookupItem = {
   sku: string;
   name: string;
   matchType: ScanLookupMatch;
+  type: "product" | "bundle";
+  primaryImage: string | null;
 };
 
 export type ScanLookupResult = {
@@ -25,30 +28,61 @@ export const lookupScanProducts = async (
   organizationId: string,
   query: string,
 ): Promise<ScanLookupResult> => {
-  const normalized = query.trim();
-  if (!normalized) {
+  const normalized = normalizeScanValue(query);
+  const trimmed = query.trim();
+  const exactNeedle = normalized || trimmed;
+  if (!exactNeedle) {
     return { exactMatch: false, items: [] };
   }
+
+  const toItem = (item: {
+    id: string;
+    sku: string;
+    name: string;
+    isBundle: boolean;
+    images?: Array<{ url: string }>;
+    matchType: ScanLookupMatch;
+  }): ScanLookupItem => ({
+    id: item.id,
+    sku: item.sku,
+    name: item.name,
+    matchType: item.matchType,
+    type: item.isBundle ? "bundle" : "product",
+    primaryImage: item.images?.[0]?.url ?? null,
+  });
 
   const barcodeMatch = await client.productBarcode.findFirst({
     where: {
       organizationId,
-      value: normalized,
+      value: exactNeedle,
       product: { isDeleted: false },
     },
-    select: { product: { select: { id: true, sku: true, name: true } } },
+    select: {
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          isBundle: true,
+          images: {
+            select: { url: true },
+            where: { url: { not: { startsWith: "data:image/" } } },
+            orderBy: { position: "asc" },
+            take: 1,
+          },
+        },
+      },
+    },
   });
 
   if (barcodeMatch?.product) {
     return {
       exactMatch: true,
       items: [
-        {
-          id: barcodeMatch.product.id,
-          sku: barcodeMatch.product.sku,
-          name: barcodeMatch.product.name,
+        toItem({
+          ...barcodeMatch.product,
           matchType: "barcode",
-        },
+        }),
       ],
     };
   }
@@ -56,22 +90,35 @@ export const lookupScanProducts = async (
   const packMatch = await client.productPack.findFirst({
     where: {
       organizationId,
-      packBarcode: normalized,
+      packBarcode: exactNeedle,
       product: { isDeleted: false },
     },
-    select: { product: { select: { id: true, sku: true, name: true } } },
+    select: {
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          isBundle: true,
+          images: {
+            select: { url: true },
+            where: { url: { not: { startsWith: "data:image/" } } },
+            orderBy: { position: "asc" },
+            take: 1,
+          },
+        },
+      },
+    },
   });
 
   if (packMatch?.product) {
     return {
       exactMatch: true,
       items: [
-        {
-          id: packMatch.product.id,
-          sku: packMatch.product.sku,
-          name: packMatch.product.name,
+        toItem({
+          ...packMatch.product,
           matchType: "barcode",
-        },
+        }),
       ],
     };
   }
@@ -80,43 +127,91 @@ export const lookupScanProducts = async (
     where: {
       organizationId,
       isDeleted: false,
-      sku: { equals: normalized, mode: "insensitive" },
+      sku: { equals: exactNeedle, mode: "insensitive" },
     },
-    select: { id: true, sku: true, name: true },
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      isBundle: true,
+      images: {
+        select: { url: true },
+        where: { url: { not: { startsWith: "data:image/" } } },
+        orderBy: { position: "asc" },
+        take: 1,
+      },
+    },
   });
 
   if (skuMatch) {
     return {
       exactMatch: true,
       items: [
-        {
-          id: skuMatch.id,
-          sku: skuMatch.sku,
-          name: skuMatch.name,
+        toItem({
+          ...skuMatch,
           matchType: "sku",
-        },
+        }),
       ],
     };
   }
+
+  const fuzzyNeedle = trimmed || exactNeedle;
+  const barcodeNeedle = normalized || fuzzyNeedle;
+  const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
 
   const products = await client.product.findMany({
     where: {
       organizationId,
       isDeleted: false,
-      name: { contains: normalized, mode: "insensitive" },
+      OR: [
+        { name: { contains: fuzzyNeedle, mode: "insensitive" } },
+        { sku: { contains: fuzzyNeedle, mode: "insensitive" } },
+        {
+          barcodes: {
+            some: {
+              value: { contains: barcodeNeedle, mode: "insensitive" },
+            },
+          },
+        },
+        {
+          packs: {
+            some: {
+              packBarcode: { contains: barcodeNeedle, mode: "insensitive" },
+            },
+          },
+        },
+      ],
     },
-    select: { id: true, sku: true, name: true },
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      isBundle: true,
+      barcodes: {
+        where: { value: { contains: barcodeNeedle, mode: "insensitive" } },
+        select: { value: true },
+        take: 1,
+      },
+      images: {
+        select: { url: true },
+        where: { url: { not: { startsWith: "data:image/" } } },
+        orderBy: { position: "asc" },
+        take: 1,
+      },
+    },
     orderBy: { name: "asc" },
     take: 10,
   });
 
   return {
     exactMatch: false,
-    items: products.map((product) => ({
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      matchType: "name",
-    })),
+    items: products.map((product) => {
+      const hasBarcodeMatch = product.barcodes.length > 0;
+      const skuMatchType = product.sku.toLowerCase().includes(fuzzyNeedleLower);
+      return toItem({
+        ...product,
+        matchType: hasBarcodeMatch ? "barcode" : skuMatchType ? "sku" : "name",
+      });
+    }),
   };
 };

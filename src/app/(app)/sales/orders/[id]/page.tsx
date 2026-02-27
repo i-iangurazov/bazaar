@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CustomerOrderStatus } from "@prisma/client";
 import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { FormGrid } from "@/components/form-layout";
 import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 type ProductSearchResult = {
   id: string;
@@ -104,6 +106,7 @@ const SalesOrderDetailPage = () => {
   const [selectedVariant, setSelectedVariant] = useState<string>("BASE");
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineQtyInput, setLineQtyInput] = useState<string>("1");
+  const lineQtyInputRef = useRef<HTMLInputElement | null>(null);
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch.trim() },
@@ -356,6 +359,35 @@ const SalesOrderDetailPage = () => {
       order?.status === CustomerOrderStatus.READY);
 
   const selectedProductVariants = selectedProductQuery.data?.variants ?? [];
+
+  const applySelectedProduct = (product: ProductSearchResult) => {
+    setSelectedProduct(product);
+    setLineSearch(product.name);
+    setSelectedVariant("BASE");
+    setShowResults(false);
+    window.setTimeout(() => lineQtyInputRef.current?.focus(), 0);
+  };
+
+  const handleLineScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
+    if (lineDialogMode !== "add") {
+      return false;
+    }
+    if (result.kind === "notFound") {
+      toast({ variant: "info", description: tCommon("nothingFound") });
+      return false;
+    }
+    if (result.kind === "multiple") {
+      setShowResults(true);
+      return true;
+    }
+    applySelectedProduct({
+      id: result.item.id,
+      name: result.item.name,
+      sku: result.item.sku,
+      isBundle: result.item.type === "bundle",
+    });
+    return true;
+  };
 
   const loading = orderQuery.isLoading;
   const error = orderQuery.error ? translateError(tErrors, orderQuery.error) : null;
@@ -729,18 +761,23 @@ const SalesOrderDetailPage = () => {
             <>
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{t("product")}</p>
-                <Input
+                <ScanInput
+                  context="linePicker"
                   value={lineSearch}
-                  onChange={(event) => {
-                    setLineSearch(event.target.value);
+                  onValueChange={(nextValue) => {
+                    setLineSearch(nextValue);
                     setShowResults(true);
-                    if (selectedProduct && event.target.value !== selectedProduct.name) {
+                    if (selectedProduct && nextValue !== selectedProduct.name) {
                       setSelectedProduct(null);
                       setSelectedVariant("BASE");
                     }
                   }}
                   placeholder={t("productSearchPlaceholder")}
                   onFocus={() => setShowResults(true)}
+                  ariaLabel={t("productSearchPlaceholder")}
+                  supportsTabSubmit
+                  showDropdown={false}
+                  onResolved={handleLineScanResolved}
                 />
                 {showResults && lineSearch.trim().length >= 1 && !selectedProduct ? (
                   <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background">
@@ -751,14 +788,12 @@ const SalesOrderDetailPage = () => {
                           type="button"
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
                           onClick={() => {
-                            setSelectedProduct({
+                            applySelectedProduct({
                               id: product.id,
                               name: product.name,
                               sku: product.sku,
                               isBundle: product.isBundle,
                             });
-                            setLineSearch(product.name);
-                            setShowResults(false);
                           }}
                         >
                           <div className="min-w-0">
@@ -825,6 +860,7 @@ const SalesOrderDetailPage = () => {
           <div className="space-y-1.5">
             <p className="text-sm font-medium">{t("qty")}</p>
             <Input
+              ref={lineQtyInputRef}
               type="number"
               min={1}
               step={1}

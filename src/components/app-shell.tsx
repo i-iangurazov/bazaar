@@ -11,9 +11,9 @@ import { GuidanceProvider } from "@/components/guidance/guidance-provider";
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { SignOutButton } from "@/components/signout-button";
+import { ScanInput } from "@/components/ScanInput";
 import { CommandPalette } from "@/components/command-palette";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
   CirclePlusIcon,
@@ -47,8 +47,8 @@ import {
 import { cn } from "@/lib/utils";
 import { normalizeLocale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
 import type { GuidanceRole } from "@/lib/guidance";
+import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 type NavItem = {
   key: string;
@@ -121,13 +121,6 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
-  const scanInputRef = useRef<HTMLInputElement>(null);
-  const [scanValue, setScanValue] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [showResults, setShowResults] = useState(false);
-  const [scanResults, setScanResults] = useState<
-    Array<{ id: string; name: string; sku: string; matchType: "barcode" | "sku" | "name" }>
-  >([]);
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
   const { toast } = useToast();
   const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
@@ -312,102 +305,27 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     }
   };
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedQuery(scanValue.trim());
-    }, 200);
-    return () => clearTimeout(handler);
-  }, [scanValue]);
-
-  const quickSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: debouncedQuery },
-    { enabled: debouncedQuery.length >= 2 },
-  );
-
   const canCreateProduct = user.role !== "STAFF";
-
-  const focusScanInput = () => {
-    scanInputRef.current?.focus();
-  };
-
-  type ScanLookupResult = {
-    exactMatch: boolean;
-    items: Array<{ id: string; name: string; sku: string; matchType: "barcode" | "sku" | "name" }>;
-  };
-
-  const lookupScanQuery = trpc.products.lookupScan.useQuery(
-    { q: scanValue.trim() },
-    { enabled: false, refetchOnWindowFocus: false },
-  );
-
-  const handleLookupResult = (result: ScanLookupResult, normalized: string) => {
-    if (result.exactMatch && result.items.length === 1) {
-      router.push(`/products/${result.items[0].id}`);
-      setScanValue("");
-      setScanResults([]);
-      setShowResults(false);
-      return;
+  const handleScanResolved = async (result: ScanResolvedResult) => {
+    if (result.kind === "exact") {
+      router.push(`/products/${result.item.id}`);
+      return true;
     }
-    if (!result.items.length) {
+    if (result.kind === "notFound") {
       toast({
         variant: "info",
-        description: tHeader("barcodeNotFound", { value: normalized }),
+        description: tHeader("barcodeNotFound", { value: result.input }),
         ...(canCreateProduct
           ? {
               actionLabel: tHeader("createWithBarcode"),
-              actionHref: `/products/new?barcode=${encodeURIComponent(normalized)}`,
+              actionHref: `/products/new?barcode=${encodeURIComponent(result.input)}`,
             }
           : {}),
       });
-      setScanValue("");
-      setScanResults([]);
-      setShowResults(false);
-      focusScanInput();
-      return;
+      return false;
     }
-    setScanResults(result.items);
-    setShowResults(true);
-    focusScanInput();
+    return true;
   };
-
-  const handleScanSubmit = () => {
-    const normalized = scanValue.trim();
-    if (!normalized || lookupScanQuery.isFetching) {
-      return;
-    }
-    lookupScanQuery
-      .refetch()
-      .then((result) => {
-        if (result.data) {
-          handleLookupResult(result.data, normalized);
-          return;
-        }
-        if (result.error) {
-          toast({
-            variant: "error",
-            description: translateError(tErrors, result.error),
-          });
-          focusScanInput();
-        }
-      })
-      .catch((error) => {
-        toast({
-          variant: "error",
-          description: translateError(tErrors, error),
-        });
-        focusScanInput();
-      });
-  };
-
-  const dropdownItems =
-    scanResults.length > 0
-      ? scanResults
-      : (quickSearchQuery.data ?? []).map((item) => ({
-          id: item.id,
-          name: item.name,
-          sku: item.sku,
-          matchType: "name" as const,
-        }));
 
   const isItemVisible = (item: NavItem): boolean => {
     if (item.adminOnly && user.role !== "ADMIN") {
@@ -670,55 +588,14 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             <div className="mx-auto">
               <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:max-w-md">
-                  <Input
-                    data-tour="scan-input"
-                    type="search"
+                  <ScanInput
+                    context="global"
+                    dataTour="scan-input"
                     placeholder={tHeader("scanPlaceholder")}
-                    value={scanValue}
-                    onChange={(event) => {
-                      setScanValue(event.target.value);
-                      if (scanResults.length) {
-                        setScanResults([]);
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleScanSubmit();
-                      }
-                    }}
-                    onFocus={() => setShowResults(true)}
-                    onBlur={() => {
-                      setTimeout(() => setShowResults(false), 150);
-                    }}
-                    inputMode="search"
-                    aria-label={tHeader("scanLabel")}
-                    ref={scanInputRef}
+                    ariaLabel={tHeader("scanLabel")}
+                    supportsTabSubmit
+                    onResolved={handleScanResolved}
                   />
-                  {showResults && dropdownItems.length ? (
-                    <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-popover shadow-lg">
-                      <div className="max-h-64 overflow-y-auto py-1">
-                        {dropdownItems.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-accent"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => {
-                              router.push(`/products/${item.id}`);
-                              setScanValue("");
-                              setScanResults([]);
-                              setShowResults(false);
-                              focusScanInput();
-                            }}
-                          >
-                            <span className="font-medium text-foreground">{item.name}</span>
-                            <span className="text-xs text-muted-foreground">{item.sku}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
                 <div className="hidden lg:flex lg:items-center lg:gap-2">
                   <PageTipsButton />

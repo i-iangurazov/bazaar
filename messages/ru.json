@@ -1018,6 +1018,34 @@
       "create": "создать"
     }
   },
+  "scannerTest": {
+    "title": "Тест сканера",
+    "subtitle": "Диагностика keyboard-wedge сканирования.",
+    "inputTitle": "Проверка ввода",
+    "placeholder": "Сканируйте штрихкод или введите SKU",
+    "inputHint": "Отправка по Enter; Tab отправляет при длине от 4 символов.",
+    "summaryTitle": "Сводка",
+    "rawValue": "Сырое значение",
+    "normalizedValue": "Нормализованное значение",
+    "submitTrigger": "Триггер отправки",
+    "resolvedAction": "Результат",
+    "timingMs": "Время",
+    "timingValue": "{value} мс",
+    "keysTitle": "События клавиш",
+    "keysEmpty": "Событий пока нет.",
+    "clear": "Очистить",
+    "empty": "—",
+    "actionPending": "Пока нет результата.",
+    "actionNotFound": "Не найдено",
+    "actionMultiple": "Несколько совпадений ({count})",
+    "actionBarcode": "Совпадение по штрихкоду ({sku})",
+    "actionSku": "Совпадение по SKU ({sku})",
+    "actionName": "Совпадение по названию ({sku})",
+    "trigger": {
+      "enter": "Enter",
+      "tab": "Tab"
+    }
+  },
   "quickActionsPages": {
     "customersNew": {
       "title": "Новый клиент",

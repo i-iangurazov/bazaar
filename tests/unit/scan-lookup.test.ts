@@ -53,7 +53,16 @@ describe("lookupScanProducts", () => {
       productPack: { findFirst: vi.fn().mockResolvedValue(null) },
       product: {
         findFirst: vi.fn().mockResolvedValue(null),
-        findMany: vi.fn().mockResolvedValue([{ id: "prod-3", sku: "SKU-3", name: "Cheese" }]),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "prod-3",
+            sku: "SKU-3",
+            name: "Cheese",
+            isBundle: false,
+            images: [],
+            barcodes: [],
+          },
+        ]),
       },
     };
 

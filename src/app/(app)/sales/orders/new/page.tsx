@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
+import { ScanInput } from "@/components/ScanInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
+import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 type ProductSearchResult = {
   id: string;
@@ -88,17 +90,17 @@ const NewSalesOrderPage = () => {
     },
   });
 
-  const addDraftLine = async (product: ProductSearchResult) => {
+  const addDraftLine = async (product: ProductSearchResult): Promise<boolean> => {
     if (!storeId) {
       toast({ variant: "error", description: t("storeRequired") });
-      return;
+      return false;
     }
 
     const rawQty = pendingQty.trim();
     const qty = Number(rawQty);
     if (!rawQty || !Number.isFinite(qty) || qty <= 0) {
       toast({ variant: "error", description: t("qtyPositive") });
-      return;
+      return false;
     }
     const normalizedQty = Math.trunc(qty);
 
@@ -111,7 +113,7 @@ const NewSalesOrderPage = () => {
       unitPriceKgs = pricing.effectivePriceKgs;
     } catch (error) {
       toast({ variant: "error", description: tErrors("genericMessage") });
-      return;
+      return false;
     }
 
     if (unitPriceKgs === null) {
@@ -151,6 +153,24 @@ const NewSalesOrderPage = () => {
     setLineSearch("");
     setPendingQty("1");
     setShowLineSearchResults(false);
+    return true;
+  };
+
+  const handleLineScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
+    if (result.kind === "notFound") {
+      toast({ variant: "info", description: tCommon("nothingFound") });
+      return false;
+    }
+    if (result.kind === "multiple") {
+      setShowLineSearchResults(true);
+      return true;
+    }
+    return addDraftLine({
+      id: result.item.id,
+      name: result.item.name,
+      sku: result.item.sku,
+      isBundle: result.item.type === "bundle",
+    });
   };
 
   const updateDraftLineQty = (productId: string, rawValue: string) => {
@@ -289,10 +309,11 @@ const NewSalesOrderPage = () => {
 
             <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
               <div className="relative">
-                <Input
+                <ScanInput
+                  context="linePicker"
                   value={lineSearch}
-                  onChange={(event) => {
-                    setLineSearch(event.target.value);
+                  onValueChange={(nextValue) => {
+                    setLineSearch(nextValue);
                     setShowLineSearchResults(true);
                   }}
                   onFocus={() => setShowLineSearchResults(true)}
@@ -300,6 +321,10 @@ const NewSalesOrderPage = () => {
                     window.setTimeout(() => setShowLineSearchResults(false), 150);
                   }}
                   placeholder={t("productSearchPlaceholder")}
+                  ariaLabel={t("productSearchPlaceholder")}
+                  supportsTabSubmit
+                  showDropdown={false}
+                  onResolved={handleLineScanResolved}
                 />
                 {showLineSearchResults && lineSearch.trim().length > 0 ? (
                   <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
