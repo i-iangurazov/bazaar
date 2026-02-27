@@ -66,6 +66,7 @@ type CatalogResponse = CatalogPayload | { message?: string };
 const uncategorizedKey = "__uncategorized";
 const numericPattern = /^\d*$/;
 const baseVariantKey = "BASE";
+const catalogImageWidths = [320, 480, 720] as const;
 
 const catalogTypographyStyle = (fontFamily: CatalogPayload["fontFamily"]) => {
   if (fontFamily === "System") {
@@ -133,6 +134,36 @@ const categoryKeyOf = (category: string | null | undefined) =>
 
 const sanitizeAccent = (value?: string | null) =>
   value && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : "#2a6be4";
+
+const isProxyableCatalogImageUrl = (sourceUrl: string | null | undefined) => {
+  const normalized = sourceUrl?.trim();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized.startsWith("/uploads/imported-products/")) {
+    return true;
+  }
+  try {
+    const parsed = new URL(normalized);
+    const pathname = parsed.pathname.toLowerCase();
+    return pathname.includes("/uploads/imported-products/") || pathname.includes("/retails/");
+  } catch {
+    return false;
+  }
+};
+
+const toCatalogImageUrl = (sourceUrl: string | null | undefined, width: number) => {
+  const normalized = sourceUrl?.trim();
+  if (!normalized || !isProxyableCatalogImageUrl(normalized)) {
+    return null;
+  }
+  const params = new URLSearchParams({
+    url: normalized,
+    w: String(width),
+    q: "78",
+  });
+  return `/api/public/catalog/image?${params.toString()}`;
+};
 
 const cartKeyOf = (productId: string, variantId?: string | null) =>
   `${productId}:${variantId ?? baseVariantKey}`;
@@ -255,6 +286,23 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     );
     return categories;
   }, [visibleProducts]);
+
+  const hasNamedCategories = useMemo(
+    () => (catalog?.categories ?? []).some((category) => Boolean(category.name?.trim())),
+    [catalog?.categories],
+  );
+
+  useEffect(() => {
+    if (hasNamedCategories || categoryFilter === "all") {
+      return;
+    }
+    setCategoryFilter("all");
+  }, [categoryFilter, hasNamedCategories]);
+
+  const priorityProductIds = useMemo(
+    () => new Set(visibleProducts.slice(0, 8).map((product) => product.id)),
+    [visibleProducts],
+  );
 
   const productsById = useMemo(() => {
     const map = new Map<string, CatalogPayload["products"][number]>();
@@ -446,6 +494,156 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     }
   };
 
+  const renderProductCard = (
+    product: CatalogPayload["products"][number],
+    prioritizeImage: boolean,
+  ) => {
+    const selectedVariantId = selectedVariants[product.id];
+    const selectedVariant = selectedVariantId
+      ? product.variants.find((variant) => variant.id === selectedVariantId) ?? null
+      : null;
+    const lineKey = cartKeyOf(product.id, product.variants.length ? selectedVariant?.id ?? null : null);
+    const qty = cart[lineKey] ?? 0;
+    const qtyInput = qtyInputs[lineKey] ?? (qty > 0 ? String(qty) : "");
+    const displayPrice = selectedVariant?.priceKgs ?? product.priceKgs;
+    const canAdjustQty = product.variants.length === 0 || Boolean(selectedVariant);
+    const optimizedImageSources = product.imageUrl
+      ? catalogImageWidths
+          .map((width) => {
+            const optimizedUrl = toCatalogImageUrl(product.imageUrl, width);
+            return optimizedUrl ? `${optimizedUrl} ${width}w` : null;
+          })
+          .filter((value): value is string => Boolean(value))
+      : [];
+    const imageSrc = toCatalogImageUrl(product.imageUrl, 720) ?? product.imageUrl;
+    const imageSrcSet = optimizedImageSources.length ? optimizedImageSources.join(", ") : undefined;
+
+    return (
+      <Card key={product.id} className="overflow-hidden">
+        <CardContent className="space-y-3 p-3">
+          <div className="aspect-[4/3] overflow-hidden rounded-lg bg-secondary">
+            {product.imageUrl ? (
+              <img
+                src={imageSrc ?? undefined}
+                srcSet={imageSrcSet}
+                sizes="(max-width: 640px) calc(100vw - 3rem), (max-width: 1024px) calc(50vw - 3.5rem), (max-width: 1280px) calc(33vw - 3.75rem), 260px"
+                alt={product.name}
+                loading={prioritizeImage ? "eager" : "lazy"}
+                fetchPriority={prioritizeImage ? "high" : "auto"}
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                {t("imageFallback")}
+              </div>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="line-clamp-2 text-sm font-semibold text-foreground">{product.name}</p>
+            <p className="text-sm text-muted-foreground">{formatCurrencyKGS(displayPrice, locale)}</p>
+          </div>
+          {product.variants.length ? (
+            <div className="space-y-2">
+              <Select
+                value={selectedVariantId}
+                onValueChange={(value) =>
+                  setSelectedVariants((prev) => ({
+                    ...prev,
+                    [product.id]: value,
+                  }))
+                }
+              >
+                <SelectTrigger
+                  className="h-9"
+                  aria-label={t("variantSelectAria", { product: product.name })}
+                >
+                  <SelectValue placeholder={t("variantSelectPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {product.variants.map((variant) => (
+                    <SelectItem key={variant.id} value={variant.id}>
+                      {variant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canAdjustQty ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-10 w-10 shrink-0"
+                    aria-label={t("qtyDecrease", { product: product.name })}
+                    onClick={() => adjustLineQty(lineKey, -1)}
+                  >
+                    <MinusIcon className="h-4 w-4" aria-hidden />
+                  </Button>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={qtyInput}
+                    onChange={(event) => handleQtyInputChange(lineKey, event.target.value)}
+                    onBlur={() => handleQtyInputBlur(lineKey)}
+                    aria-label={t("qtyInputAria", { product: product.name })}
+                    className="h-10 text-center"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 text-white hover:opacity-95"
+                    aria-label={t("qtyIncrease", { product: product.name })}
+                    onClick={() => adjustLineQty(lineKey, 1)}
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("variantSelectHint")}</p>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-10 w-10 shrink-0"
+                aria-label={t("qtyDecrease", { product: product.name })}
+                onClick={() => adjustLineQty(lineKey, -1)}
+              >
+                <MinusIcon className="h-4 w-4" aria-hidden />
+              </Button>
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={qtyInput}
+                onChange={(event) => handleQtyInputChange(lineKey, event.target.value)}
+                onBlur={() => handleQtyInputBlur(lineKey)}
+                aria-label={t("qtyInputAria", { product: product.name })}
+                className="h-10 text-center"
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="h-10 w-10 shrink-0 text-white hover:opacity-95"
+                aria-label={t("qtyIncrease", { product: product.name })}
+                onClick={() => adjustLineQty(lineKey, 1)}
+                style={{ backgroundColor: accentColor }}
+              >
+                <AddIcon className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
@@ -486,10 +684,19 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   }
 
   const isCompactHeader = catalog.headerStyle === "COMPACT";
+  const optimizedLogoSources = catalog.logoUrl
+    ? [90, 180]
+        .map((width) => {
+          const optimizedUrl = toCatalogImageUrl(catalog.logoUrl, width);
+          return optimizedUrl ? `${optimizedUrl} ${width}w` : null;
+        })
+        .filter((value): value is string => Boolean(value))
+    : [];
+  const logoSrc = toCatalogImageUrl(catalog.logoUrl, 180) ?? catalog.logoUrl ?? undefined;
 
   return (
     <div
-      className="relative mx-auto w-full max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-20"
+      className="relative mx-auto w-full max-w-7xl px-4 pb-32 pt-4 sm:px-6 sm:pb-20"
       style={catalogTypographyStyle(catalog.fontFamily)}
     >
       <div
@@ -508,8 +715,13 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <div className={cn("flex min-w-0 items-center", isCompactHeader ? "gap-2" : "gap-3")}>
               {catalog.logoUrl ? (
                 <img
-                  src={catalog.logoUrl}
+                  src={logoSrc}
+                  srcSet={optimizedLogoSources.length ? optimizedLogoSources.join(", ") : undefined}
+                  sizes={isCompactHeader ? "44px" : "56px"}
                   alt={t("logoAlt", { store: catalog.storeName })}
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
                   className={cn(
                     "rounded-xl border border-border object-cover",
                     isCompactHeader ? "h-11 w-11" : "h-14 w-14",
@@ -556,9 +768,11 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           <div
             className={cn(
               "grid gap-2",
-              isCompactHeader
-                ? "sm:grid-cols-[minmax(0,1fr)_11.5rem]"
-                : "sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)]",
+              hasNamedCategories
+                ? isCompactHeader
+                  ? "sm:grid-cols-[minmax(0,1fr)_11.5rem]"
+                  : "sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)]"
+                : "grid-cols-1",
             )}
           >
             <Input
@@ -568,25 +782,24 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               aria-label={t("searchAria")}
               className={isCompactHeader ? "h-9" : "h-10"}
             />
-            <Select
-              value={categoryFilter}
-              onValueChange={setCategoryFilter}
-            >
-              <SelectTrigger
-                aria-label={t("categoryFilterAria")}
-                className={isCompactHeader ? "h-9" : "h-10"}
-              >
-                <SelectValue placeholder={t("allCategories")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allCategories")}</SelectItem>
-                {catalog.categories.map((category) => (
-                  <SelectItem key={category.key} value={category.key}>
-                    {(category.name ?? t("uncategorized")) + ` (${category.count})`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {hasNamedCategories ? (
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger
+                  aria-label={t("categoryFilterAria")}
+                  className={isCompactHeader ? "h-9" : "h-10"}
+                >
+                  <SelectValue placeholder={t("allCategories")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("allCategories")}</SelectItem>
+                  {catalog.categories.map((category) => (
+                    <SelectItem key={category.key} value={category.key}>
+                      {(category.name ?? t("uncategorized")) + ` (${category.count})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
           </div>
         </div>
       </div>
@@ -595,6 +808,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
         {groupedProducts.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             {t("emptyProducts")}
+          </div>
+        ) : !hasNamedCategories ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleProducts.map((product) => renderProductCard(product, priorityProductIds.has(product.id)))}
           </div>
         ) : (
           groupedProducts.map((group) => {
@@ -626,146 +843,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 </button>
                 {!collapsed ? (
                   <div className="grid gap-3 border-t border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {group.products.map((product) => {
-                      const selectedVariantId = selectedVariants[product.id];
-                      const selectedVariant = selectedVariantId
-                        ? product.variants.find((variant) => variant.id === selectedVariantId) ?? null
-                        : null;
-                      const lineKey = cartKeyOf(
-                        product.id,
-                        product.variants.length ? selectedVariant?.id ?? null : null,
-                      );
-                      const qty = cart[lineKey] ?? 0;
-                      const qtyInput = qtyInputs[lineKey] ?? (qty > 0 ? String(qty) : "");
-                      const displayPrice = selectedVariant?.priceKgs ?? product.priceKgs;
-                      const canAdjustQty = product.variants.length === 0 || Boolean(selectedVariant);
-
-                      return (
-                        <Card key={product.id} className="overflow-hidden">
-                          <CardContent className="space-y-3 p-3">
-                            <div className="aspect-[4/3] overflow-hidden rounded-lg bg-secondary">
-                              {product.imageUrl ? (
-                                <img
-                                  src={product.imageUrl}
-                                  alt={product.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                                  {t("imageFallback")}
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-1">
-                              <p className="line-clamp-2 text-sm font-semibold text-foreground">
-                                {product.name}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {formatCurrencyKGS(displayPrice, locale)}
-                              </p>
-                            </div>
-                            {product.variants.length ? (
-                              <div className="space-y-2">
-                                <Select
-                                  value={selectedVariantId}
-                                  onValueChange={(value) =>
-                                    setSelectedVariants((prev) => ({
-                                      ...prev,
-                                      [product.id]: value,
-                                    }))
-                                  }
-                                >
-                                  <SelectTrigger
-                                    className="h-9"
-                                    aria-label={t("variantSelectAria", { product: product.name })}
-                                  >
-                                    <SelectValue placeholder={t("variantSelectPlaceholder")} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {product.variants.map((variant) => (
-                                      <SelectItem key={variant.id} value={variant.id}>
-                                        {variant.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {canAdjustQty ? (
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="outline"
-                                      className="h-10 w-10 shrink-0"
-                                      aria-label={t("qtyDecrease", { product: product.name })}
-                                      onClick={() => adjustLineQty(lineKey, -1)}
-                                    >
-                                      <MinusIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                    <Input
-                                      type="text"
-                                      inputMode="numeric"
-                                      pattern="[0-9]*"
-                                      value={qtyInput}
-                                      onChange={(event) =>
-                                        handleQtyInputChange(lineKey, event.target.value)
-                                      }
-                                      onBlur={() => handleQtyInputBlur(lineKey)}
-                                      aria-label={t("qtyInputAria", { product: product.name })}
-                                      className="h-10 text-center"
-                                    />
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      className="h-10 w-10 shrink-0 text-white hover:opacity-95"
-                                      aria-label={t("qtyIncrease", { product: product.name })}
-                                      onClick={() => adjustLineQty(lineKey, 1)}
-                                      style={{ backgroundColor: accentColor }}
-                                    >
-                                      <AddIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground">{t("variantSelectHint")}</p>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="outline"
-                                  className="h-10 w-10 shrink-0"
-                                  aria-label={t("qtyDecrease", { product: product.name })}
-                                  onClick={() => adjustLineQty(lineKey, -1)}
-                                >
-                                  <MinusIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                                <Input
-                                  type="text"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                  value={qtyInput}
-                                  onChange={(event) => handleQtyInputChange(lineKey, event.target.value)}
-                                  onBlur={() => handleQtyInputBlur(lineKey)}
-                                  aria-label={t("qtyInputAria", { product: product.name })}
-                                  className="h-10 text-center"
-                                />
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  className="h-10 w-10 shrink-0 text-white hover:opacity-95"
-                                  aria-label={t("qtyIncrease", { product: product.name })}
-                                  onClick={() => adjustLineQty(lineKey, 1)}
-                                  style={{ backgroundColor: accentColor }}
-                                >
-                                  <AddIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                    {group.products.map((product) => renderProductCard(product, priorityProductIds.has(product.id)))}
                   </div>
                 ) : null}
               </section>
@@ -776,11 +854,14 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
 
       {cartItemsCount > 0 ? (
         <>
-          <div className="fixed bottom-4 left-4 right-4 z-40 sm:hidden">
+          <div
+            className="fixed inset-x-0 bottom-0 z-40 px-3 sm:hidden"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+          >
             <button
               type="button"
               onClick={openCart}
-              className="flex h-16 w-full items-center justify-between rounded-2xl border border-border/80 bg-card px-4 shadow-2xl backdrop-blur"
+              className="mx-auto flex h-[4.35rem] w-full max-w-xl items-center justify-between rounded-2xl border border-border/80 bg-card px-4 shadow-2xl backdrop-blur"
               style={{ borderLeft: `4px solid ${accentColor}` }}
             >
               <span className="inline-flex items-center gap-2">
