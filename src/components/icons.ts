@@ -37,6 +37,7 @@ import {
   Pencil,
   Archive,
   Eye,
+  EyeOff,
   Trash2,
   RotateCcw,
   Rocket,
@@ -101,6 +102,7 @@ export const EditIcon = Pencil;
 export const ArchiveIcon = Archive;
 export const RestoreIcon = RotateCcw;
 export const ViewIcon = Eye;
+export const HideIcon = EyeOff;
 export const DeleteIcon = Trash2;
 export const OnboardingIcon = Rocket;
 export const HelpIcon = HelpCircle;

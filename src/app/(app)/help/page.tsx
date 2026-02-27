@@ -17,6 +17,8 @@ const articleIds = [
   "stockCounts",
   "purchaseOrders",
   "storePrices",
+  "mMarketIntegration",
+  "mMarketSpecsSetup",
   "priceTags",
   "reorder",
   "troubleshooting",
@@ -55,6 +57,21 @@ const HelpPage = () => {
     window.addEventListener("hashchange", resolveHash);
     return () => window.removeEventListener("hashchange", resolveHash);
   }, []);
+
+  useEffect(() => {
+    if (!openId) {
+      return;
+    }
+    const hash = window.location.hash.replace("#", "");
+    if (!hash || hash !== openId) {
+      return;
+    }
+    const target = document.getElementById(openId);
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [openId]);
 
   return (
     <div>

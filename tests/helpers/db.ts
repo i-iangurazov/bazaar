@@ -34,6 +34,9 @@ export const resetDatabase = async () => {
   await prisma.stockMovement.deleteMany();
   await prisma.periodClose.deleteMany();
   await prisma.exportJob.deleteMany();
+  await prisma.mMarketExportJob.deleteMany();
+  await prisma.mMarketBranchMapping.deleteMany();
+  await prisma.mMarketIntegration.deleteMany();
   await prisma.storeComplianceProfile.deleteMany();
   await prisma.productComplianceFlags.deleteMany();
   await prisma.deadLetterJob.deleteMany();

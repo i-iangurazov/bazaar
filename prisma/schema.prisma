@@ -215,6 +215,30 @@ enum BazaarCatalogHeaderStyle {
   STANDARD
 }
 
+enum MMarketIntegrationStatus {
+  DISABLED
+  READY
+  ERROR
+}
+
+enum MMarketEnvironment {
+  DEV
+  PROD
+}
+
+enum MMarketLastSyncStatus {
+  SUCCESS
+  FAILED
+}
+
+enum MMarketExportJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  RATE_LIMITED
+}
+
 model Organization {
   id                  String                         @id @default(cuid())
   name                String
@@ -242,6 +266,9 @@ model Organization {
   storePrices              StorePrice[]
   bazaarCatalogs           BazaarCatalog[]
   bazaarCatalogImages      BazaarCatalogImage[]
+  mMarketIntegrations      MMarketIntegration[]
+  mMarketBranchMappings    MMarketBranchMapping[]
+  mMarketExportJobs        MMarketExportJob[]
   productCosts             ProductCost[]
   productBundleComponents  ProductBundleComponent[]
   stockLots                StockLot[]
@@ -329,6 +356,7 @@ model User {
   refundRequestsCreated         RefundRequest[]           @relation("refundRequestsCreatedBy")
   refundRequestsReviewed        RefundRequest[]           @relation("refundRequestsReviewedBy")
   bazaarCatalogsUpdated         BazaarCatalog[]           @relation("bazaarCatalogUpdatedBy")
+  mMarketExportJobsRequested    MMarketExportJob[]        @relation("mMarketExportRequestedBy")
   markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
   ettnReferencesCreated         EttnReference[]           @relation("ettnReferenceCreatedBy")
   esfReferencesCreated          EsfReference[]            @relation("esfReferenceCreatedBy")
@@ -385,6 +413,7 @@ model Store {
   stockLots                StockLot[]
   storePrices              StorePrice[]
   bazaarCatalog            BazaarCatalog?
+  mMarketBranchMappings    MMarketBranchMapping[]
   featureFlags             StoreFeatureFlag[]
   complianceProfile        StoreComplianceProfile?
   exportJobs               ExportJob[]
@@ -473,6 +502,61 @@ model ExportJob {
 
   @@index([organizationId, storeId, createdAt])
   @@index([status, createdAt])
+}
+
+model MMarketIntegration {
+  id                String                    @id @default(cuid())
+  orgId             String
+  status            MMarketIntegrationStatus  @default(DISABLED)
+  environment       MMarketEnvironment        @default(DEV)
+  apiTokenEncrypted String?
+  lastSyncAt        DateTime?
+  lastSyncStatus    MMarketLastSyncStatus?
+  lastErrorSummary  String?                   @db.Text
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId])
+  @@index([orgId, status, updatedAt])
+}
+
+model MMarketBranchMapping {
+  id              String   @id @default(cuid())
+  orgId           String
+  storeId         String
+  mmarketBranchId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+
+  @@unique([orgId, storeId])
+  @@index([orgId, storeId])
+}
+
+model MMarketExportJob {
+  id                    String                @id @default(cuid())
+  orgId                 String
+  environment           MMarketEnvironment
+  status                MMarketExportJobStatus @default(QUEUED)
+  requestedById         String
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  payloadStatsJson      Json?
+  errorReportJson       Json?
+  requestIdempotencyKey String
+  responseJson          Json?
+  createdAt             DateTime              @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  requestedBy  User         @relation("mMarketExportRequestedBy", fields: [requestedById], references: [id])
+
+  @@unique([requestIdempotencyKey])
+  @@index([orgId, createdAt])
+  @@index([orgId, status, createdAt])
 }
 
 model PeriodClose {

@@ -31,6 +31,7 @@ const IntegrationsPage = () => {
   const { toast } = useToast();
 
   const storesQuery = trpc.bazaarCatalog.listStores.useQuery();
+  const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
 
   const { summaryStatus, publishedEntry, defaultStoreId } = useMemo(() => {
     const stores = storesQuery.data ?? [];
@@ -127,6 +128,51 @@ const IntegrationsPage = () => {
                   </Button>
                 </>
               ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
+                  {t("mMarket.title")}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">{t("mMarket.description")}</p>
+              </div>
+              <Badge
+                variant={
+                  mMarketOverviewQuery.data?.status === "READY"
+                    ? "success"
+                    : mMarketOverviewQuery.data?.status === "ERROR"
+                      ? "danger"
+                      : "muted"
+                }
+              >
+                {mMarketOverviewQuery.data?.status === "READY"
+                  ? t("mMarket.status.ready")
+                  : mMarketOverviewQuery.data?.status === "ERROR"
+                    ? t("mMarket.status.error")
+                    : t("mMarket.status.notConfigured")}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Link href="/operations/integrations/m-market">
+                <Button>{t("mMarket.openSettings")}</Button>
+              </Link>
+              {mMarketOverviewQuery.data?.configured ? (
+                <Link href="/operations/integrations/m-market">
+                  <Button variant="secondary">{t("mMarket.openExport")}</Button>
+                </Link>
+              ) : (
+                <Button variant="secondary" disabled>
+                  {t("mMarket.openExport")}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -23,7 +23,7 @@ export const HelpLink = ({ articleId }: { articleId: string }) => {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button asChild type="button" variant="ghost" size="icon" aria-label={ariaLabel}>
-            <Link href={`/help#${articleId}`}>
+            <Link href={`/help#${articleId}`} target="_blank" rel="noopener noreferrer">
               <HelpIcon className="h-4 w-4" aria-hidden />
             </Link>
           </Button>
