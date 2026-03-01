@@ -213,7 +213,9 @@ export const buildPriceTagsPdf = async ({
         }
 
         const quiet = layout.config.quietZone;
-        const imageWidth = Math.max(30, layout.barcode.width - quiet * 2);
+        const maxBarcodeWidth = layout.barcode.width - quiet * 2;
+        const preferredBarcodeWidth = isRollTemplate ? maxBarcodeWidth * 0.98 : maxBarcodeWidth;
+        const imageWidth = Math.max(30, Math.min(maxBarcodeWidth, preferredBarcodeWidth));
         const imageHeight = Math.max(mmToPoints(12), layout.barcode.height - quiet * 2);
         const imageX = contentX + (layout.barcode.width - imageWidth) / 2;
         const imageY = y + layout.barcode.y + quiet;

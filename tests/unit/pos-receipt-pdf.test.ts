@@ -65,7 +65,7 @@ const baseJob: Omit<ReceiptPrintJob, "variant" | "fiscal"> = {
 };
 
 describe("pos receipt pdf", () => {
-  it("renders precheck without fake fiscal fields", async () => {
+  it("renders operational receipt without fiscal decorations", async () => {
     const pdf = await buildPosReceiptPdf({
       job: {
         ...baseJob,
@@ -87,11 +87,10 @@ describe("pos receipt pdf", () => {
 
     const raw = pdf.toString("latin1");
     expect(pdf.length).toBeGreaterThan(500);
-    expect(raw).toContain("0.9529411764705882 0.9529411764705882 0.9529411764705882 scn");
     expect(raw).not.toContain("/Subtype /Image");
   });
 
-  it("renders fiscal block with QR image when qr payload exists", async () => {
+  it("does not embed fiscal QR/image block even for fiscal variant", async () => {
     const pdf = await buildPosReceiptPdf({
       job: {
         ...baseJob,
@@ -112,7 +111,7 @@ describe("pos receipt pdf", () => {
     });
 
     const raw = pdf.toString("latin1");
-    expect(pdf.length).toBeGreaterThan(700);
-    expect(raw).toContain("/Subtype /Image");
+    expect(pdf.length).toBeGreaterThan(500);
+    expect(raw).not.toContain("/Subtype /Image");
   });
 });

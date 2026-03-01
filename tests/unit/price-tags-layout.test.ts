@@ -47,9 +47,9 @@ describe("price tag layout", () => {
     expect(layout.labelHeight).toBeCloseTo(mmToPoints(50), 3);
   });
 
-  it("uses 5mm padding and keeps roll blocks within printable bounds", () => {
+  it("uses 2.5mm padding and keeps roll blocks within printable bounds", () => {
     const layout = buildPriceTagLayout(ROLL_PRICE_TAG_TEMPLATE, { storeName: null });
-    expect(layout.padding).toBeCloseTo(mmToPoints(5), 3);
+    expect(layout.padding).toBeCloseTo(mmToPoints(2.5), 3);
     expect(layout.name.y).toBeGreaterThanOrEqual(layout.padding);
     expect(layout.barcodeValue.y + layout.barcodeValue.height).toBeLessThanOrEqual(
       layout.labelHeight - layout.padding + 0.1,

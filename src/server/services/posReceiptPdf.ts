@@ -4,8 +4,6 @@ import { join } from "node:path";
 
 import type { ReceiptPrintJob } from "@/server/printing/types";
 
-type BwipModule = { toBuffer: (options: Record<string, unknown>) => Promise<Buffer> };
-
 export type PosReceiptPdfLabels = {
   title: string;
   precheckTitle: string;
@@ -42,7 +40,6 @@ const RECEIPT_MIN_HEIGHT_MM = 62;
 const RECEIPT_HEIGHT_BUFFER_MM = 4;
 const RECEIPT_MARGIN_X_MM = 2;
 const RECEIPT_MARGIN_Y_MM = 3;
-const QR_MM = 16;
 
 const formatCurrency = (amount: number, locale: string) =>
   new Intl.NumberFormat(locale, { style: "currency", currency: "KGS" }).format(amount);
@@ -61,6 +58,8 @@ const formatDateTime = (value: Date, locale: string) =>
     hour: "2-digit",
     minute: "2-digit",
   }).format(value);
+
+const amountsEqual = (left: number, right: number) => Math.abs(left - right) < 0.0001;
 
 const truncateSingleLine = (
   doc: InstanceType<typeof PDFDocument>,
@@ -87,45 +86,15 @@ const truncateSingleLine = (
   return `${text.slice(0, low)}${ellipsis}`;
 };
 
-const createQrPng = async (value: string) => {
-  const qrText = value.trim();
-  if (!qrText) {
-    return null;
-  }
-
-  const bwipModule = (await import("bwip-js")) as unknown as BwipModule & {
-    default?: BwipModule;
-  };
-  const bwip = bwipModule.default ?? bwipModule;
-  return bwip.toBuffer({
-    bcid: "qrcode",
-    text: qrText,
-    scale: 3,
-    includetext: false,
-    paddingwidth: 0,
-    paddingheight: 0,
-  });
-};
-
-const fiscalStatusLabel = (job: ReceiptPrintJob, labels: PosReceiptPdfLabels) => {
-  if (job.fiscal.modeStatus === "SENT") {
-    return labels.fiscalStatusSent;
-  }
-  if (job.fiscal.modeStatus === "FAILED") {
-    return labels.fiscalStatusFailed;
-  }
-  return labels.fiscalStatusNotSent;
-};
-
 const estimateReceiptHeight = (input: {
   job: ReceiptPrintJob;
   labels: PosReceiptPdfLabels;
   doc: InstanceType<typeof PDFDocument>;
   marginY: number;
   contentWidth: number;
-  hasQr: boolean;
 }) => {
   const { doc, contentWidth, marginY } = input;
+  const showSubtotal = !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
   let y = marginY;
 
   const measureMetaLine = (text: string, fontSize: number, gap = 2) => {
@@ -159,16 +128,7 @@ const estimateReceiptHeight = (input: {
     measureMetaLine(`${input.labels.shift}: ${input.job.shiftLabel}`, 7.5);
   }
 
-  if (input.job.variant === "PRECHECK") {
-    y += 6;
-    doc.fontSize(8.6);
-    y += doc.heightOfString(input.labels.precheckTitle, { width: contentWidth - 6 }) + 2;
-    doc.fontSize(6.7);
-    y += doc.heightOfString(input.labels.precheckHint, { width: contentWidth - 6 }) + 7;
-  }
-
-  y += 4;
-  y += 4;
+  y += 6;
 
   for (const item of input.job.items) {
     const title = item.sku ? `${item.name} (${item.sku})` : item.name;
@@ -178,7 +138,9 @@ const estimateReceiptHeight = (input: {
     y += 4;
   }
 
-  y += 12;
+  if (showSubtotal) {
+    y += 12;
+  }
   y += 13;
 
   if (input.job.totals.payments.length) {
@@ -188,33 +150,7 @@ const estimateReceiptHeight = (input: {
     y += input.job.totals.payments.length * 11;
   }
 
-  y += 4;
-  y += 11;
-  measureMetaLine(`${input.labels.fiscalStatus}: ${fiscalStatusLabel(input.job, input.labels)}`, 7.5);
-  if (input.job.variant === "PRECHECK") {
-    if (input.job.fiscal.modeStatus === "FAILED") {
-      measureMetaLine(input.labels.fiscalRetryHint, 7.2);
-    }
-  } else {
-    if (input.job.fiscal.fiscalizedAt) {
-      measureMetaLine(
-        `${input.labels.fiscalizedAt}: ${formatDateTime(input.job.fiscal.fiscalizedAt, input.job.locale)}`,
-        7.5,
-      );
-    }
-    const fields = [
-      input.job.fiscal.kkmFactoryNumber,
-      input.job.fiscal.kkmRegistrationNumber,
-      input.job.fiscal.fiscalNumber,
-      input.job.fiscal.upfdOrFiscalMemory,
-    ].filter(Boolean);
-    y += fields.length * 10;
-    if (input.hasQr) {
-      y += mmToPoints(QR_MM) + 12;
-    } else if (input.job.fiscal.qrPayload) {
-      measureMetaLine(`${input.labels.qrPayload}: ${input.job.fiscal.qrPayload}`, 7.2);
-    }
-  }
+  y += 6;
 
   return y + marginY + mmToPoints(RECEIPT_HEIGHT_BUFFER_MM);
 };
@@ -233,10 +169,8 @@ export const buildPosReceiptPdf = async (input: {
   const rightEdge = receiptWidth - marginX;
   const contentWidth = rightEdge - left;
   const amountColumnWidth = Math.max(56, contentWidth * 0.44);
-  const qrImage =
-    input.job.variant === "FISCAL" && input.job.fiscal.qrPayload
-      ? await createQrPng(input.job.fiscal.qrPayload).catch(() => null)
-      : null;
+  const showSubtotal = !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
+  const showLineTotalPerItem = input.job.items.length > 1;
 
   const measureDoc = new PDFDocument({
     autoFirstPage: false,
@@ -257,7 +191,6 @@ export const buildPosReceiptPdf = async (input: {
       doc: measureDoc,
       marginY,
       contentWidth,
-      hasQr: Boolean(qrImage),
     }),
   );
   measureDoc.end();
@@ -344,30 +277,6 @@ export const buildPosReceiptPdf = async (input: {
     drawMetaLine(`${input.labels.shift}: ${input.job.shiftLabel}`);
   }
 
-  if (input.job.variant === "PRECHECK") {
-    y += 2;
-    const precheckBoxTop = y;
-    const boxWidth = contentWidth;
-    const boxX = left;
-    const boxInnerX = boxX + 3;
-    doc.fontSize(8.6).fillColor("#111111");
-    const titleHeight = doc.heightOfString(input.labels.precheckTitle, { width: boxWidth - 6 });
-    doc.fontSize(6.7);
-    const hintHeight = doc.heightOfString(input.labels.precheckHint, { width: boxWidth - 6 });
-    const boxHeight = titleHeight + hintHeight + 8;
-    doc.rect(boxX, precheckBoxTop, boxWidth, boxHeight).fillColor("#F3F3F3").fill();
-    doc.rect(boxX, precheckBoxTop, boxWidth, boxHeight).strokeColor("#D5D5D5").stroke();
-    doc.fontSize(8.6).fillColor("#111111").text(input.labels.precheckTitle, boxInnerX, precheckBoxTop + 2, {
-      width: boxWidth - 6,
-      align: "center",
-    });
-    doc.fontSize(6.7).fillColor("#444444").text(input.labels.precheckHint, boxInnerX, precheckBoxTop + 4 + titleHeight, {
-      width: boxWidth - 6,
-      align: "left",
-    });
-    y += boxHeight + 2;
-  }
-
   y += 2;
   drawSeparator();
 
@@ -380,27 +289,32 @@ export const buildPosReceiptPdf = async (input: {
     });
     y += nameHeight + 1;
 
+    const detailWidth = showLineTotalPerItem ? contentWidth - amountColumnWidth - 4 : contentWidth;
     const qtyLine = truncateSingleLine(
       doc,
       `${input.labels.qty}: ${item.qty} × ${formatAmount(item.unitPriceKgs, input.job.locale)}`,
-      contentWidth - amountColumnWidth - 4,
+      detailWidth,
       7.5,
     );
     doc.fontSize(7.5).fillColor("#555555");
     doc.text(qtyLine, left, y, {
-      width: contentWidth - amountColumnWidth - 4,
+      width: detailWidth,
       lineBreak: false,
     });
-    doc.text(formatCurrency(item.lineTotalKgs, input.job.locale), rightEdge - amountColumnWidth, y, {
-      width: amountColumnWidth,
-      align: "right",
-      lineBreak: false,
-    });
+    if (showLineTotalPerItem) {
+      doc.text(formatCurrency(item.lineTotalKgs, input.job.locale), rightEdge - amountColumnWidth, y, {
+        width: amountColumnWidth,
+        align: "right",
+        lineBreak: false,
+      });
+    }
     y += 11;
     drawSeparator();
   }
 
-  drawAmountRow(input.labels.subtotal, formatCurrency(input.job.totals.subtotalKgs, input.job.locale));
+  if (showSubtotal) {
+    drawAmountRow(input.labels.subtotal, formatCurrency(input.job.totals.subtotalKgs, input.job.locale));
+  }
   drawAmountRow(input.labels.total, formatCurrency(input.job.totals.totalKgs, input.job.locale), true);
 
   if (input.job.totals.payments.length) {
@@ -428,58 +342,6 @@ export const buildPosReceiptPdf = async (input: {
 
   y += 2;
   drawSeparator();
-  doc.fontSize(8).fillColor("#111111").text(input.labels.fiscalBlockTitle, left, y, {
-    width: contentWidth,
-    lineBreak: false,
-  });
-  y += 11;
-  drawMetaLine(`${input.labels.fiscalStatus}: ${fiscalStatusLabel(input.job, input.labels)}`);
-
-  if (input.job.variant === "PRECHECK") {
-    if (input.job.fiscal.modeStatus === "FAILED") {
-      drawMetaLine(input.labels.fiscalRetryHint, 7.2);
-    }
-  } else {
-    if (input.job.fiscal.fiscalizedAt) {
-      drawMetaLine(
-        `${input.labels.fiscalizedAt}: ${formatDateTime(input.job.fiscal.fiscalizedAt, input.job.locale)}`,
-      );
-    }
-
-    const fiscalFields: Array<[label: string, value: string | null]> = [
-      [input.labels.kkmFactoryNumber, input.job.fiscal.kkmFactoryNumber],
-      [input.labels.kkmRegistrationNumber, input.job.fiscal.kkmRegistrationNumber],
-      [input.labels.fiscalNumber, input.job.fiscal.fiscalNumber],
-      [input.labels.upfdOrFiscalMemory, input.job.fiscal.upfdOrFiscalMemory],
-    ];
-
-    for (const [label, value] of fiscalFields) {
-      if (!value?.trim()) {
-        continue;
-      }
-      const line = truncateSingleLine(doc, `${label}: ${value}`, contentWidth, 7.5);
-      doc.fontSize(7.5).fillColor("#444444").text(line, left, y, {
-        width: contentWidth,
-        lineBreak: false,
-      });
-      y += 10;
-    }
-
-    if (qrImage) {
-      const size = mmToPoints(QR_MM);
-      const qrX = left + (contentWidth - size) / 2;
-      doc.image(qrImage, qrX, y, { width: size, height: size });
-      y += size + 2;
-      const qrValue = truncateSingleLine(doc, input.job.fiscal.qrPayload ?? "", contentWidth, 6.5);
-      doc.fontSize(6.5).fillColor("#444444").text(qrValue, left, y, {
-        width: contentWidth,
-        align: "center",
-      });
-      y += 10;
-    } else if (input.job.fiscal.qrPayload) {
-      drawMetaLine(`${input.labels.qrPayload}: ${input.job.fiscal.qrPayload}`, 7.2);
-    }
-  }
 
   doc.end();
   await new Promise((resolve) => doc.on("end", resolve));
