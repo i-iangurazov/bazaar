@@ -24,6 +24,7 @@ export const GET = async (request: Request) => {
 
   let startup = "ok";
   let db = "ok";
+  let migrations = "ok";
   let redis = "ok";
   const errors: string[] = [];
 
@@ -42,6 +43,21 @@ export const GET = async (request: Request) => {
   }
 
   try {
+    const pending = await prisma.$queryRaw<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count
+      FROM "_prisma_migrations"
+      WHERE finished_at IS NULL
+    `;
+    if ((pending[0]?.count ?? 0) > 0) {
+      migrations = "pending";
+      errors.push("migrations:pending");
+    }
+  } catch (error) {
+    migrations = "failed";
+    errors.push(`migrations:${(error as Error).message}`);
+  }
+
+  try {
     const redisClient = getRedisPublisher();
     if (!redisClient) {
       redis = process.env.NODE_ENV === "production" ? "failed" : "missing";
@@ -56,13 +72,17 @@ export const GET = async (request: Request) => {
     errors.push(`redis:${(error as Error).message}`);
   }
 
-  const ready = startup === "ok" && db === "ok" && (redis === "ok" || (redis === "missing" && process.env.NODE_ENV !== "production"));
+  const ready =
+    startup === "ok" &&
+    db === "ok" &&
+    migrations === "ok" &&
+    (redis === "ok" || (redis === "missing" && process.env.NODE_ENV !== "production"));
   const statusCode = ready ? 200 : 503;
 
   return Response.json(
     {
       status: ready ? "ready" : "not_ready",
-      checks: { startup, db, redis },
+      checks: { startup, db, migrations, redis },
       errors,
     },
     { status: statusCode },

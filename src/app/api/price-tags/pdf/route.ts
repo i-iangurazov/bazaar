@@ -25,9 +25,9 @@ export const dynamic = "force-dynamic";
 
 type MessageTree = Record<string, unknown>;
 type PriceTagItem = { productId: string; quantity: number };
-const MAX_PRICE_TAG_REQUEST_ITEMS = 200;
 const MAX_PRICE_TAG_QUANTITY_PER_ITEM = 100;
 const MAX_PRICE_TAG_LABELS_TOTAL = 500;
+const MAX_PRICE_TAG_REQUEST_ITEMS = MAX_PRICE_TAG_LABELS_TOTAL;
 
 const priceTagRequestSchema = z
   .object({

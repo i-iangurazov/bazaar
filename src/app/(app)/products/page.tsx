@@ -2477,6 +2477,32 @@ const ProductsPage = () => {
                   </div>
                 </div>
               ) : null}
+              <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs font-medium text-foreground">
+                  {tCommon("selectedCount", { count: printQueue.length })}
+                </p>
+                {queueProductsQuery.isLoading && queueIdsForQuery.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">{tCommon("loading")}</p>
+                ) : null}
+                <div className="max-h-48 space-y-1 overflow-y-auto pr-1 text-xs">
+                  {printQueue.map((productId) => {
+                    const product = productById.get(productId);
+                    return (
+                      <div
+                        key={productId}
+                        className="flex items-center justify-between gap-3 rounded border border-border/60 bg-card/80 px-2 py-1"
+                      >
+                        <span className="truncate text-foreground">
+                          {product?.name ?? productId}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {product?.sku ?? tCommon("notAvailable")}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <FormActions>
               <Button
