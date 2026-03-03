@@ -24,11 +24,28 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { resolveScanResult, shouldSubmitFromKey, type ScanResolvedResult } from "@/lib/scanning/scanRouter";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 const selectedRegisterKey = "pos:selected-register";
+const keyboardScanResetMs = 300;
+const keyboardScanMaxLength = 128;
+
+const isEditableElement = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  if (target.closest("[contenteditable='true']")) {
+    return true;
+  }
+  const tagName = target.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+};
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -75,6 +92,9 @@ const PosSellPage = () => {
   const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
   const paymentsSectionRef = useRef<HTMLDivElement | null>(null);
   const firstPaymentAmountRef = useRef<HTMLInputElement | null>(null);
+  const keyboardScanBufferRef = useRef("");
+  const keyboardScanResetTimerRef = useRef<number | null>(null);
+  const keyboardScanSubmittingRef = useRef(false);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
 
@@ -290,41 +310,54 @@ const PosSellPage = () => {
     }, 0),
   );
 
-  const handleAddLine = async (productId: string): Promise<boolean> => {
-    if (!registerId) {
-      return false;
-    }
-
-    try {
-      let targetSaleId = saleId ?? activeDraft?.id ?? null;
-      if (!targetSaleId) {
-        const draft = await createDraftMutation.mutateAsync({
-          registerId,
-        });
-        targetSaleId = draft.id;
+  const handleAddLine = useCallback(
+    async (productId: string): Promise<boolean> => {
+      if (!registerId) {
+        return false;
       }
-      setSaleId(targetSaleId);
 
-      await addLineMutation.mutateAsync({
-        saleId: targetSaleId,
-        productId,
-        qty: 1,
-      });
+      try {
+        let targetSaleId = saleId ?? activeDraft?.id ?? null;
+        if (!targetSaleId) {
+          const draft = await createDraftMutation.mutateAsync({
+            registerId,
+          });
+          targetSaleId = draft.id;
+        }
+        setSaleId(targetSaleId);
 
-      // UI refresh should not turn a successful add into a failed scan flow.
-      void Promise.allSettled([
-        trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }),
-        trpcUtils.pos.sales.list.invalidate(),
-        activeDraftQuery.refetch(),
-      ]);
+        await addLineMutation.mutateAsync({
+          saleId: targetSaleId,
+          productId,
+          qty: 1,
+        });
 
-      focusLineSearchInput();
-      return true;
-    } catch {
-      // handled by mutation onError
-      return false;
-    }
-  };
+        // UI refresh should not turn a successful add into a failed scan flow.
+        void Promise.allSettled([
+          trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }),
+          trpcUtils.pos.sales.list.invalidate(),
+          activeDraftQuery.refetch(),
+        ]);
+
+        focusLineSearchInput();
+        return true;
+      } catch {
+        // handled by mutation onError
+        return false;
+      }
+    },
+    [
+      activeDraft?.id,
+      activeDraftQuery,
+      addLineMutation,
+      createDraftMutation,
+      focusLineSearchInput,
+      registerId,
+      saleId,
+      trpcUtils.pos.sales.get,
+      trpcUtils.pos.sales.list,
+    ],
+  );
 
   useEffect(() => {
     if (!hasOpenShift) {
@@ -333,16 +366,129 @@ const PosSellPage = () => {
     focusLineSearchInput();
   }, [focusLineSearchInput, hasOpenShift, saleId]);
 
-  const handleScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
-    if (result.kind === "notFound") {
-      toast({ variant: "info", description: t("sell.noSearchResults") });
-      return false;
+  const handleScanResolved = useCallback(
+    async (result: ScanResolvedResult): Promise<boolean> => {
+      if (result.kind === "notFound") {
+        toast({ variant: "info", description: t("sell.noSearchResults") });
+        return false;
+      }
+      if (result.kind === "multiple") {
+        return true;
+      }
+      return handleAddLine(result.item.id);
+    },
+    [handleAddLine, t, toast],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (keyboardScanResetTimerRef.current !== null) {
+        window.clearTimeout(keyboardScanResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasOpenShift || typeof window === "undefined") {
+      return;
     }
-    if (result.kind === "multiple") {
-      return true;
-    }
-    return handleAddLine(result.item.id);
-  };
+
+    const resetKeyboardScanBuffer = () => {
+      keyboardScanBufferRef.current = "";
+      if (keyboardScanResetTimerRef.current !== null) {
+        window.clearTimeout(keyboardScanResetTimerRef.current);
+        keyboardScanResetTimerRef.current = null;
+      }
+    };
+
+    const scheduleKeyboardScanReset = () => {
+      if (keyboardScanResetTimerRef.current !== null) {
+        window.clearTimeout(keyboardScanResetTimerRef.current);
+      }
+      keyboardScanResetTimerRef.current = window.setTimeout(() => {
+        keyboardScanBufferRef.current = "";
+        keyboardScanResetTimerRef.current = null;
+      }, keyboardScanResetMs);
+    };
+
+    const handleGlobalScannerInput = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) {
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (document.activeElement === lineSearchInputRef.current) {
+        return;
+      }
+      if (isEditableElement(event.target)) {
+        return;
+      }
+
+      if (event.key.length === 1) {
+        keyboardScanBufferRef.current = `${keyboardScanBufferRef.current}${event.key}`.slice(
+          -keyboardScanMaxLength,
+        );
+        scheduleKeyboardScanReset();
+        return;
+      }
+
+      if (event.key === "Backspace") {
+        keyboardScanBufferRef.current = keyboardScanBufferRef.current.slice(0, -1);
+        scheduleKeyboardScanReset();
+        return;
+      }
+
+      const trigger = shouldSubmitFromKey({
+        key: event.key,
+        supportsTabSubmit: true,
+        tabSubmitMinLength: 1,
+        normalizedValue: normalizeScanValue(keyboardScanBufferRef.current),
+      });
+
+      if (!trigger) {
+        if (event.key === "Escape") {
+          resetKeyboardScanBuffer();
+        }
+        return;
+      }
+
+      const rawScanValue = keyboardScanBufferRef.current;
+      const normalizedScanValue = normalizeScanValue(rawScanValue);
+      if (!normalizedScanValue || keyboardScanSubmittingRef.current) {
+        resetKeyboardScanBuffer();
+        return;
+      }
+
+      event.preventDefault();
+      keyboardScanSubmittingRef.current = true;
+      setLineSearch(rawScanValue);
+
+      void (async () => {
+        try {
+          const lookup = await trpcUtils.products.lookupScan.fetch({ q: normalizedScanValue });
+          const resolved = resolveScanResult({
+            context: "pos",
+            trigger,
+            query: normalizedScanValue,
+            lookup,
+          });
+          await handleScanResolved(resolved);
+        } catch {
+          toast({ variant: "error", description: tErrors("unexpectedError") });
+        } finally {
+          keyboardScanSubmittingRef.current = false;
+          resetKeyboardScanBuffer();
+        }
+      })();
+    };
+
+    window.addEventListener("keydown", handleGlobalScannerInput);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalScannerInput);
+      resetKeyboardScanBuffer();
+    };
+  }, [hasOpenShift, handleScanResolved, tErrors, toast, trpcUtils.products.lookupScan]);
 
   const handleUpdateQty = async (lineId: string, raw: string) => {
     const qty = Math.trunc(Number(raw));
