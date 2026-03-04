@@ -14,6 +14,31 @@ describeDb("products", () => {
     await resetDatabase();
   });
 
+  it("auto-generates unique SKU when create input omits it", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+
+    const first = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-auto-sku-1",
+      name: "Auto SKU Product 1",
+      baseUnitId: baseUnit.id,
+    });
+
+    const second = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-auto-sku-2",
+      name: "Auto SKU Product 2",
+      baseUnitId: baseUnit.id,
+    });
+
+    expect(first.sku).toMatch(/^SKU-\d{6}$/);
+    expect(second.sku).toMatch(/^SKU-\d{6}$/);
+    expect(first.sku).not.toBe(second.sku);
+    expect(Number(second.sku.slice(4))).toBeGreaterThan(Number(first.sku.slice(4)));
+  });
+
   it("enforces barcode uniqueness within an organization", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
 
@@ -302,11 +327,7 @@ describeDb("products", () => {
     const result = await caller.products.bulkGenerateBarcodes({
       mode: "CODE128",
       filter: {
-        productIds: [
-          productWithoutBarcodeA.id,
-          productWithBarcode.id,
-          productWithoutBarcodeC.id,
-        ],
+        productIds: [productWithoutBarcodeA.id, productWithBarcode.id, productWithoutBarcodeC.id],
       },
     });
 

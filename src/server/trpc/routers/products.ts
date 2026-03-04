@@ -714,10 +714,7 @@ export const productsRouter = router({
         const sanitized = sanitizeDetailImageUrl(image.url);
         return sanitized ? [{ ...image, url: sanitized }] : [];
       });
-      const photoUrl =
-        sanitizeDetailImageUrl(product.photoUrl) ??
-        images[0]?.url ??
-        null;
+      const photoUrl = sanitizeDetailImageUrl(product.photoUrl) ?? images[0]?.url ?? null;
       return {
         ...product,
         images,
@@ -871,7 +868,10 @@ export const productsRouter = router({
   create: adminProcedure
     .input(
       z.object({
-        sku: z.string().min(2),
+        sku: z.preprocess(
+          (value) => (typeof value === "string" && value.trim().length === 0 ? undefined : value),
+          z.string().min(2).optional(),
+        ),
         name: z.string().min(2),
         category: z.string().optional(),
         baseUnitId: z.string().min(1),
@@ -1265,15 +1265,7 @@ export const productsRouter = router({
       orderBy: { name: "asc" },
     });
 
-    const header = [
-      "sku",
-      "name",
-      "category",
-      "unit",
-      "description",
-      "photoUrl",
-      "barcodes",
-    ];
+    const header = ["sku", "name", "category", "unit", "description", "photoUrl", "barcodes"];
     const lines = products.map((product) => {
       const barcodes = product.barcodes.map((barcode) => barcode.value).join("|");
       const values = [

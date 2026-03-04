@@ -26,7 +26,7 @@ export type CreateProductInput = {
   organizationId: string;
   actorId: string;
   requestId: string;
-  sku: string;
+  sku?: string | null;
   name: string;
   category?: string | null;
   baseUnitId: string;
@@ -50,13 +50,78 @@ export type CreateProductInput = {
     allowInPurchasing?: boolean | null;
     allowInReceiving?: boolean | null;
   }[];
-  variants?: { id?: string; name?: string | null; sku?: string | null; attributes?: Record<string, unknown> }[];
+  variants?: {
+    id?: string;
+    name?: string | null;
+    sku?: string | null;
+    attributes?: Record<string, unknown>;
+  }[];
   isBundle?: boolean;
   bundleComponents?: {
     componentProductId: string;
     componentVariantId?: string | null;
     qty: number;
   }[];
+};
+
+const GENERATED_SKU_PREFIX = "SKU-";
+const GENERATED_SKU_PAD_LENGTH = 6;
+const GENERATED_SKU_MAX_PROBES = 10_000;
+const GENERATED_SKU_MAX_RETRIES = 5;
+
+const formatGeneratedSku = (sequence: number) =>
+  `${GENERATED_SKU_PREFIX}${String(sequence).padStart(GENERATED_SKU_PAD_LENGTH, "0")}`;
+
+const resolveCreateSku = async (
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; requestedSku?: string | null },
+) => {
+  const requested = input.requestedSku?.trim();
+  if (requested) {
+    return requested;
+  }
+
+  const existingCount = await tx.product.count({
+    where: { organizationId: input.organizationId },
+  });
+
+  const nextSequence = Math.max(existingCount, 0) + 1;
+  for (let probe = 0; probe < GENERATED_SKU_MAX_PROBES; probe += 1) {
+    const candidate = formatGeneratedSku(nextSequence + probe);
+    const existing = await tx.product.findUnique({
+      where: {
+        organizationId_sku: {
+          organizationId: input.organizationId,
+          sku: candidate,
+        },
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
+};
+
+const isOrganizationSkuUniqueConstraintError = (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const candidate = error as { code?: string; meta?: { target?: unknown } };
+  if (candidate.code !== "P2002") {
+    return false;
+  }
+
+  const target = candidate.meta?.target;
+  if (Array.isArray(target)) {
+    return target.includes("organizationId") && target.includes("sku");
+  }
+  if (typeof target === "string") {
+    return target.includes("organizationId") && target.includes("sku");
+  }
+  return false;
 };
 
 const upsertBaseProductCost = async (
@@ -222,9 +287,7 @@ const resolveRemoteImportPhotoUrl = async (
   return resolved.url;
 };
 
-const normalizePacks = (
-  packs?: CreateProductInput["packs"],
-) => {
+const normalizePacks = (packs?: CreateProductInput["packs"]) => {
   if (!packs) {
     return [];
   }
@@ -258,9 +321,7 @@ const normalizePacks = (
   return cleaned;
 };
 
-const normalizeBundleComponents = (
-  components?: CreateProductInput["bundleComponents"],
-) => {
+const normalizeBundleComponents = (components?: CreateProductInput["bundleComponents"]) => {
   if (!components) {
     return [];
   }
@@ -273,8 +334,7 @@ const normalizeBundleComponents = (
     .filter((component) => component.componentProductId.length > 0);
 
   const keys = normalized.map(
-    (component) =>
-      `${component.componentProductId}:${component.componentVariantId ?? "BASE"}`,
+    (component) => `${component.componentProductId}:${component.componentVariantId ?? "BASE"}`,
   );
   if (new Set(keys).size !== keys.length) {
     throw new AppError("bundleComponentDuplicate", "CONFLICT", 409);
@@ -366,9 +426,7 @@ type NormalizedImage = {
   position: number;
 };
 
-const normalizeImages = (
-  images?: CreateProductInput["images"],
-): NormalizedImage[] => {
+const normalizeImages = (images?: CreateProductInput["images"]): NormalizedImage[] => {
   if (!images) {
     return [];
   }
@@ -429,9 +487,7 @@ const syncProductPacks = async (
     return;
   }
   const normalized = normalizePacks(packs);
-  const packBarcodes = normalized
-    .map((pack) => pack.packBarcode)
-    .filter(Boolean) as string[];
+  const packBarcodes = normalized.map((pack) => pack.packBarcode).filter(Boolean) as string[];
   await ensurePackBarcodesAvailable(tx, organizationId, packBarcodes, productId);
 
   await tx.productPack.deleteMany({ where: { productId } });
@@ -459,10 +515,7 @@ type AttributeDefinitionRow = {
   optionsKg: Prisma.JsonValue | null;
 };
 
-const loadAttributeDefinitions = async (
-  tx: Prisma.TransactionClient,
-  organizationId: string,
-) =>
+const loadAttributeDefinitions = async (tx: Prisma.TransactionClient, organizationId: string) =>
   tx.attributeDefinition.findMany({
     where: { organizationId, isActive: true },
     select: { key: true, type: true, required: true, optionsRu: true, optionsKg: true },
@@ -671,8 +724,7 @@ const resolveIncomingProductImages = async (input: {
       : undefined;
 
   const resolvedPhotoUrl =
-    explicitPhotoResolved?.url ??
-    (resolvedImages.length ? resolvedImages[0].url : null);
+    explicitPhotoResolved?.url ?? (resolvedImages.length ? resolvedImages[0].url : null);
 
   if (!resolvedImages.length && resolvedPhotoUrl) {
     resolvedImages.push({ id: undefined, url: resolvedPhotoUrl, position: 0 });
@@ -700,119 +752,153 @@ export const createProduct = async (input: CreateProductInput) => {
         ? input.purchasePriceKgs
         : undefined;
 
-  return prisma.$transaction(async (tx) => {
-    await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
-    await ensureSupplier(tx, input.organizationId, input.supplierId);
-    const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
-    const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
-    ensureRequiredAttributes(input.variants, attributeDefinitions);
-    const barcodes = normalizeBarcodes(input.barcodes);
-    await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
-    const normalizedPacks = normalizePacks(input.packs);
-    const packBarcodes = normalizedPacks
-      .map((pack) => pack.packBarcode)
-      .filter(Boolean) as string[];
-    await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
-    const normalizedImages = resolvedMedia.images;
-    const normalizedCategory = normalizeProductCategoryName(input.category);
-    if (normalizedCategory) {
-      await ensureProductCategory(tx, {
+  const requestedSku = input.sku?.trim();
+  const shouldGenerateSku = !requestedSku;
+
+  const runCreateTransaction = () =>
+    prisma.$transaction(async (tx) => {
+      await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
+      await ensureSupplier(tx, input.organizationId, input.supplierId);
+      const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
+      const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
+      ensureRequiredAttributes(input.variants, attributeDefinitions);
+      const barcodes = normalizeBarcodes(input.barcodes);
+      await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
+      const normalizedPacks = normalizePacks(input.packs);
+      const packBarcodes = normalizedPacks
+        .map((pack) => pack.packBarcode)
+        .filter(Boolean) as string[];
+      await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
+      const normalizedImages = resolvedMedia.images;
+      const normalizedCategory = normalizeProductCategoryName(input.category);
+      if (normalizedCategory) {
+        await ensureProductCategory(tx, {
+          organizationId: input.organizationId,
+          name: normalizedCategory,
+        });
+      }
+      if (input.isBundle && normalizedBundleComponents.length < 1) {
+        throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
+      }
+
+      const resolvedSku = await resolveCreateSku(tx, {
         organizationId: input.organizationId,
-        name: normalizedCategory,
+        requestedSku,
       });
-    }
-    if (input.isBundle && normalizedBundleComponents.length < 1) {
-      throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
-    }
 
-    const product = await tx.product.create({
-      data: {
-        id: productId,
-        organizationId: input.organizationId,
-        sku: input.sku,
-        name: input.name,
-        category: normalizedCategory,
-        unit: baseUnit.code,
-        baseUnitId: baseUnit.id,
-        basePriceKgs: input.basePriceKgs ?? null,
-        description: input.description ?? null,
-        photoUrl: resolvedMedia.photoUrl,
-        supplierId: input.supplierId,
-        isBundle: Boolean(input.isBundle),
-        barcodes: barcodes.length
-          ? {
-              create: barcodes.map((value) => ({
-                organizationId: input.organizationId,
-                value,
-              })),
-            }
-          : undefined,
-      },
-    });
+      const product = await tx.product.create({
+        data: {
+          id: productId,
+          organizationId: input.organizationId,
+          sku: resolvedSku,
+          name: input.name,
+          category: normalizedCategory,
+          unit: baseUnit.code,
+          baseUnitId: baseUnit.id,
+          basePriceKgs: input.basePriceKgs ?? null,
+          description: input.description ?? null,
+          photoUrl: resolvedMedia.photoUrl,
+          supplierId: input.supplierId,
+          isBundle: Boolean(input.isBundle),
+          barcodes: barcodes.length
+            ? {
+                create: barcodes.map((value) => ({
+                  organizationId: input.organizationId,
+                  value,
+                })),
+              }
+            : undefined,
+        },
+      });
 
-    if (normalizedPacks.length) {
-      await tx.productPack.createMany({
-        data: normalizedPacks.map((pack) => ({
+      if (normalizedPacks.length) {
+        await tx.productPack.createMany({
+          data: normalizedPacks.map((pack) => ({
+            organizationId: input.organizationId,
+            productId: product.id,
+            packName: pack.packName,
+            packBarcode: pack.packBarcode,
+            multiplierToBase: pack.multiplierToBase,
+            allowInPurchasing: pack.allowInPurchasing ?? true,
+            allowInReceiving: pack.allowInReceiving ?? true,
+          })),
+        });
+      }
+
+      if (normalizedImages.length) {
+        await tx.productImage.createMany({
+          data: normalizedImages.map((image) => ({
+            organizationId: input.organizationId,
+            productId: product.id,
+            url: image.url,
+            position: image.position,
+          })),
+        });
+      }
+
+      await createVariants(
+        tx,
+        product.id,
+        input.variants,
+        input.organizationId,
+        attributeDefinitions,
+      );
+      if (normalizedBundleComponents.length) {
+        await syncBundleComponents(tx, {
           organizationId: input.organizationId,
           productId: product.id,
-          packName: pack.packName,
-          packBarcode: pack.packBarcode,
-          multiplierToBase: pack.multiplierToBase,
-          allowInPurchasing: pack.allowInPurchasing ?? true,
-          allowInReceiving: pack.allowInReceiving ?? true,
-        })),
-      });
-    }
-
-    if (normalizedImages.length) {
-      await tx.productImage.createMany({
-        data: normalizedImages.map((image) => ({
+          components: normalizedBundleComponents,
+          mode: "create-only",
+        });
+      }
+      await ensureBaseSnapshots(tx, input.organizationId, product.id);
+      if (resolvedBaseCost !== undefined) {
+        await upsertBaseProductCost(tx, {
           organizationId: input.organizationId,
           productId: product.id,
-          url: image.url,
-          position: image.position,
-        })),
-      });
-    }
+          avgCostKgs: resolvedBaseCost,
+        });
+      }
 
-    await createVariants(tx, product.id, input.variants, input.organizationId, attributeDefinitions);
-    if (normalizedBundleComponents.length) {
-      await syncBundleComponents(tx, {
+      await writeAuditLog(tx, {
         organizationId: input.organizationId,
-        productId: product.id,
-        components: normalizedBundleComponents,
-        mode: "create-only",
+        actorId: input.actorId,
+        action: "PRODUCT_CREATE",
+        entity: "Product",
+        entityId: product.id,
+        before: null,
+        after: toJson(product),
+        requestId: input.requestId,
       });
-    }
-    await ensureBaseSnapshots(tx, input.organizationId, product.id);
-    if (resolvedBaseCost !== undefined) {
-      await upsertBaseProductCost(tx, {
-        organizationId: input.organizationId,
-        productId: product.id,
-        avgCostKgs: resolvedBaseCost,
-      });
-    }
 
-    await writeAuditLog(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      action: "PRODUCT_CREATE",
-      entity: "Product",
-      entityId: product.id,
-      before: null,
-      after: toJson(product),
-      requestId: input.requestId,
+      await recordFirstEvent({
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        type: "first_product_created",
+        metadata: { productId: product.id },
+      });
+
+      return product;
     });
 
-    await recordFirstEvent({
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      type: "first_product_created",
-      metadata: { productId: product.id },
-    });
+  if (!shouldGenerateSku) {
+    return runCreateTransaction();
+  }
 
-    return product;
-  });
+  for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
+    try {
+      return await runCreateTransaction();
+    } catch (error) {
+      if (
+        !isOrganizationSkuUniqueConstraintError(error) ||
+        attempt === GENERATED_SKU_MAX_RETRIES - 1
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
 };
 
 export type UpdateProductInput = {
@@ -833,7 +919,12 @@ export type UpdateProductInput = {
   supplierId?: string | null;
   barcodes?: string[];
   packs?: CreateProductInput["packs"];
-  variants?: { id?: string; name?: string | null; sku?: string | null; attributes?: Record<string, unknown> }[];
+  variants?: {
+    id?: string;
+    name?: string | null;
+    sku?: string | null;
+    attributes?: Record<string, unknown>;
+  }[];
   isBundle?: boolean;
   bundleComponents?: CreateProductInput["bundleComponents"];
 };
@@ -846,7 +937,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
     images: input.images,
   });
   const normalizedBundleComponents =
-    input.bundleComponents !== undefined ? normalizeBundleComponents(input.bundleComponents) : undefined;
+    input.bundleComponents !== undefined
+      ? normalizeBundleComponents(input.bundleComponents)
+      : undefined;
   const resolvedBaseCost =
     input.avgCostKgs !== undefined && input.avgCostKgs !== null
       ? input.avgCostKgs
@@ -903,8 +996,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
         basePriceKgs: input.basePriceKgs ?? null,
         description: input.description ?? null,
         photoUrl:
-          resolvedMedia.photoUrl ??
-          (normalizedImages?.length ? normalizedImages[0].url : null),
+          resolvedMedia.photoUrl ?? (normalizedImages?.length ? normalizedImages[0].url : null),
         supplierId: input.supplierId ?? null,
         isBundle: nextIsBundle,
       },
@@ -1322,8 +1414,7 @@ export const bulkGenerateProductBarcodes = async (input: {
   filter?: ProductBulkGenerationFilter;
 }) =>
   prisma.$transaction(async (tx) => {
-    const productIds =
-      input.filter?.productIds?.map((value) => value.trim()).filter(Boolean) ?? [];
+    const productIds = input.filter?.productIds?.map((value) => value.trim()).filter(Boolean) ?? [];
     const uniqueProductIds = Array.from(new Set(productIds));
     const search = input.filter?.search?.trim();
     const category = input.filter?.category?.trim();
@@ -1549,11 +1640,7 @@ export const resolveImportRowsPhotoUrls = async (rows: ImportProductRow[]) => {
         continue;
       }
 
-      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(
-        normalized,
-        undefined,
-        cache,
-      );
+      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(normalized, undefined, cache);
       resolvedRows[index] = { ...row, photoUrl: resolvedPhotoUrl };
     }
   };
@@ -1599,11 +1686,7 @@ export const resolveImportRowsPhotoUrlsForOrganization = async (
         continue;
       }
 
-      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(
-        normalized,
-        organizationId,
-        cache,
-      );
+      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(normalized, organizationId, cache);
       if (isManagedProductImageUrl(resolvedPhotoUrl)) {
         summary.downloaded += 1;
       } else {
@@ -1784,9 +1867,7 @@ export const importProductsTx = async (
     }
 
     const barcodes = shouldApplyField("barcodes") ? normalizeBarcodes(row.barcodes) : [];
-    const photoUrl = shouldApplyField("photoUrl")
-      ? normalizeImportPhotoUrl(row.photoUrl)
-      : null;
+    const photoUrl = shouldApplyField("photoUrl") ? normalizeImportPhotoUrl(row.photoUrl) : null;
     const basePriceKgs = shouldApplyField("basePriceKgs")
       ? resolveOptionalPrice(row.basePriceKgs)
       : undefined;
@@ -1810,12 +1891,7 @@ export const importProductsTx = async (
     });
 
     if (shouldApplyField("barcodes")) {
-      await ensureBarcodesAvailable(
-        tx,
-        input.organizationId,
-        barcodes,
-        existing?.id,
-      );
+      await ensureBarcodesAvailable(tx, input.organizationId, barcodes, existing?.id);
     }
 
     if (existing) {
@@ -1943,7 +2019,8 @@ export const importProductsTx = async (
       if (!unitCode) {
         throw new AppError("unitRequired", "BAD_REQUEST", 400);
       }
-      const resolvedBaseUnit = baseUnit ?? (await ensureUnitByCode(tx, input.organizationId, unitCode));
+      const resolvedBaseUnit =
+        baseUnit ?? (await ensureUnitByCode(tx, input.organizationId, unitCode));
 
       const product = await tx.product.create({
         data: {
@@ -2013,13 +2090,10 @@ export const importProductsTx = async (
 };
 
 export const importProducts = async (input: ImportProductsInput) =>
-  prisma.$transaction(
-    async (tx) => importProductsTx(tx, input),
-    {
-      maxWait: 10_000,
-      timeout: resolveImportTransactionTimeout(),
-    },
-  );
+  prisma.$transaction(async (tx) => importProductsTx(tx, input), {
+    maxWait: 10_000,
+    timeout: resolveImportTransactionTimeout(),
+  });
 
 export type ArchiveProductInput = {
   productId: string;

@@ -42,12 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Form,
   FormControl,
@@ -61,6 +56,8 @@ import { FormActions } from "@/components/form-layout";
 import {
   AddIcon,
   ArchiveIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
   CopyIcon,
   DeleteIcon,
   DownloadIcon,
@@ -95,6 +92,31 @@ import {
 } from "@/lib/inlineEdit/registry";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
+
+type ProductSortKey =
+  | "sku"
+  | "name"
+  | "category"
+  | "unit"
+  | "onHandQty"
+  | "salePrice"
+  | "avgCost"
+  | "barcodes"
+  | "stores";
+
+type ProductSortDirection = "asc" | "desc";
+
+const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = {
+  sku: "asc",
+  name: "asc",
+  category: "asc",
+  unit: "asc",
+  onHandQty: "desc",
+  salePrice: "desc",
+  avgCost: "desc",
+  barcodes: "asc",
+  stores: "asc",
+};
 
 const ProductsPage = () => {
   const t = useTranslations("products");
@@ -131,6 +153,10 @@ const ProductsPage = () => {
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
+  const [productSort, setProductSort] = useState<{
+    key: ProductSortKey;
+    direction: ProductSortDirection;
+  }>({ key: "name", direction: "asc" });
   const inlineEditingEnabled = isInlineEditingEnabled();
 
   const storesQuery = trpc.stores.list.useQuery();
@@ -182,7 +208,9 @@ const ProductsPage = () => {
       productsQuery.refetch();
       toast({
         variant: "success",
-        description: result.copiedBarcodes ? t("duplicateSuccess") : t("duplicateSuccessNoBarcodes"),
+        description: result.copiedBarcodes
+          ? t("duplicateSuccess")
+          : t("duplicateSuccessNoBarcodes"),
       });
       router.push(`/products/${result.productId}`);
     },
@@ -317,9 +345,9 @@ const ProductsPage = () => {
   const applyProductListPatch = useCallback(
     (
       productId: string,
-      patch: (item: NonNullable<typeof productsQuery.data>["items"][number]) => NonNullable<
-        typeof productsQuery.data
-      >["items"][number],
+      patch: (
+        item: NonNullable<typeof productsQuery.data>["items"][number],
+      ) => NonNullable<typeof productsQuery.data>["items"][number],
     ) => {
       trpcUtils.products.list.setData(productsListInput, (current) => {
         if (!current) {
@@ -352,9 +380,7 @@ const ProductsPage = () => {
             baseUnitId: patch.baseUnitId ?? item.baseUnitId,
             unit: item.unit,
             basePriceKgs: nextBasePrice,
-            effectivePriceKgs: showEffectivePrice
-              ? item.effectivePriceKgs
-              : nextBasePrice,
+            effectivePriceKgs: showEffectivePrice ? item.effectivePriceKgs : nextBasePrice,
           };
         });
         try {
@@ -566,13 +592,11 @@ const ProductsPage = () => {
   });
 
   const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
-  const allSelected = Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
+  const allSelected =
+    Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
   const allResultsSelected = productsTotal > 0 && selectedIds.size === productsTotal;
 
-  const queueIdsForQuery = useMemo(
-    () => Array.from(new Set(printQueue)).sort(),
-    [printQueue],
-  );
+  const queueIdsForQuery = useMemo(() => Array.from(new Set(printQueue)).sort(), [printQueue]);
   const queueProductsQuery = trpc.products.byIds.useQuery(
     { ids: queueIdsForQuery },
     { enabled: printOpen && queueIdsForQuery.length > 0 },
@@ -602,7 +626,7 @@ const ProductsPage = () => {
   }, [products, queueProductsQuery.data]);
   const rollPreviewProduct = useMemo(() => {
     const firstId = printQueue[0];
-    return firstId ? productById.get(firstId) ?? null : null;
+    return firstId ? (productById.get(firstId) ?? null) : null;
   }, [printQueue, productById]);
   const queueMissingBarcodeCount = useMemo(() => {
     if (!rollTemplateSelected) {
@@ -752,6 +776,150 @@ const ProductsPage = () => {
     images?: { url: string }[];
   }) => product.images?.[0]?.url ?? product.photoUrl ?? null;
   type ProductRow = NonNullable<typeof products>[number];
+  const sortCollator = useMemo(
+    () =>
+      new Intl.Collator(locale, {
+        numeric: true,
+        sensitivity: "base",
+      }),
+    [locale],
+  );
+  const resolveSalePriceForSort = useCallback(
+    (product: ProductRow) => {
+      const value = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
+      return value ?? Number.NEGATIVE_INFINITY;
+    },
+    [showEffectivePrice],
+  );
+  const resolveBarcodeSortValue = useCallback(
+    (product: ProductRow) => {
+      const values = product.barcodes
+        .map((entry) => entry.value.trim())
+        .filter(Boolean)
+        .sort((left, right) => sortCollator.compare(left, right));
+      return values.join(", ");
+    },
+    [sortCollator],
+  );
+  const resolveStoreSortValue = useCallback(
+    (product: ProductRow) => {
+      const names = Array.from(
+        new Set(
+          product.inventorySnapshots
+            .map((snapshot) => storeNameById.get(snapshot.storeId))
+            .filter((name): name is string => Boolean(name)),
+        ),
+      ).sort((left, right) => sortCollator.compare(left, right));
+      return names.join(", ");
+    },
+    [sortCollator, storeNameById],
+  );
+  const sortedProducts = useMemo(() => {
+    const directionMultiplier = productSort.direction === "asc" ? 1 : -1;
+    const sorted = [...products];
+    sorted.sort((left, right) => {
+      let result = 0;
+      switch (productSort.key) {
+        case "sku":
+          result = sortCollator.compare(left.sku, right.sku);
+          break;
+        case "name":
+          result = sortCollator.compare(left.name, right.name);
+          break;
+        case "category":
+          result = sortCollator.compare(left.category ?? "", right.category ?? "");
+          break;
+        case "unit":
+          result = sortCollator.compare(left.unit ?? "", right.unit ?? "");
+          break;
+        case "onHandQty":
+          result = left.onHandQty - right.onHandQty;
+          break;
+        case "salePrice":
+          result = resolveSalePriceForSort(left) - resolveSalePriceForSort(right);
+          break;
+        case "avgCost":
+          result =
+            (left.avgCostKgs ?? Number.NEGATIVE_INFINITY) -
+            (right.avgCostKgs ?? Number.NEGATIVE_INFINITY);
+          break;
+        case "barcodes":
+          result = sortCollator.compare(
+            resolveBarcodeSortValue(left),
+            resolveBarcodeSortValue(right),
+          );
+          break;
+        case "stores":
+          result = sortCollator.compare(resolveStoreSortValue(left), resolveStoreSortValue(right));
+          break;
+        default:
+          result = 0;
+      }
+
+      if (result === 0) {
+        result = sortCollator.compare(left.name, right.name);
+      }
+      if (result === 0) {
+        result = sortCollator.compare(left.sku, right.sku);
+      }
+      if (result === 0) {
+        result = left.id.localeCompare(right.id);
+      }
+
+      return result * directionMultiplier;
+    });
+    return sorted;
+  }, [
+    productSort.direction,
+    productSort.key,
+    products,
+    resolveBarcodeSortValue,
+    resolveSalePriceForSort,
+    resolveStoreSortValue,
+    sortCollator,
+  ]);
+  const toggleProductSort = useCallback((key: ProductSortKey) => {
+    setProductSort((previous) =>
+      previous.key === key
+        ? {
+            key,
+            direction: previous.direction === "asc" ? "desc" : "asc",
+          }
+        : {
+            key,
+            direction: defaultSortDirectionByKey[key],
+          },
+    );
+  }, []);
+  const renderSortableHead = (key: ProductSortKey, label: string, className?: string) => (
+    <TableHead
+      className={className}
+      aria-sort={
+        productSort.key === key
+          ? productSort.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+    >
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-left"
+        onClick={() => toggleProductSort(key)}
+      >
+        <span>{label}</span>
+        {productSort.key === key ? (
+          productSort.direction === "asc" ? (
+            <ArrowUpIcon className="h-3 w-3 text-foreground" aria-hidden />
+          ) : (
+            <ArrowDownIcon className="h-3 w-3 text-foreground" aria-hidden />
+          )
+        ) : (
+          <ArrowDownIcon className="h-3 w-3 text-muted-foreground/60" aria-hidden />
+        )}
+      </button>
+    </TableHead>
+  );
   const getProductActions = (product: ProductRow) => [
     ...(isAdmin
       ? product.isDeleted
@@ -761,7 +929,9 @@ const ProductsPage = () => {
               label: t("restore"),
               icon: RestoreIcon,
               onSelect: async () => {
-                if (!(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))) {
+                if (
+                  !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
+                ) {
                   return;
                 }
                 restoreMutation.mutate({ productId: product.id });
@@ -790,7 +960,9 @@ const ProductsPage = () => {
               icon: ArchiveIcon,
               variant: "danger",
               onSelect: async () => {
-                if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
+                if (
+                  !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
+                ) {
                   return;
                 }
                 archiveMutation.mutate({ productId: product.id });
@@ -1140,9 +1312,7 @@ const ProductsPage = () => {
             <div className="w-full sm:max-w-xs">
               <Select
                 value={productType}
-                onValueChange={(value) =>
-                  setProductType(value as "all" | "product" | "bundle")
-                }
+                onValueChange={(value) => setProductType(value as "all" | "product" | "bundle")}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={t("typeLabel")} />
@@ -1362,7 +1532,7 @@ const ProductsPage = () => {
           ) : null}
           <InlineEditTableProvider>
             <ResponsiveDataList
-              items={products}
+              items={sortedProducts}
               getKey={(product) => product.id}
               page={productsPage}
               totalItems={productsTotal}
@@ -1373,40 +1543,298 @@ const ProductsPage = () => {
                   <div className="overflow-x-auto">
                     <TooltipProvider>
                       <Table className="min-w-[720px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                            checked={allSelected}
-                            onChange={toggleSelectAll}
-                            aria-label={t("selectAll")}
-                          />
-                        </TableHead>
-                        <TableHead>{t("sku")}</TableHead>
-                        <TableHead>{t("imageLabel")}</TableHead>
-                        <TableHead>{t("name")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("category")}</TableHead>
-                        <TableHead className="hidden lg:table-cell">{t("unit")}</TableHead>
-                        <TableHead className="text-nowrap">{tInventory("onHand")}</TableHead>
-                        <TableHead>{t("salePrice")}</TableHead>
-                        <TableHead>{t("avgCost")}</TableHead>
-                        <TableHead>{t("barcodes")}</TableHead>
-                        <TableHead>{t("stores")}</TableHead>
-                        <TableHead>{tCommon("actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleItems.map((product) => {
-                        const barcodeSummary = getBarcodeSummary(product.barcodes);
-                        const previewImageUrl = getProductPreviewUrl(product);
-                        const storeInfo = getStoreInfo(
-                          product.inventorySnapshots.map((snapshot) => snapshot.storeId),
-                        );
-                        return (
-                          <TableRow key={product.id}>
-                            <TableCell>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                checked={allSelected}
+                                onChange={toggleSelectAll}
+                                aria-label={t("selectAll")}
+                              />
+                            </TableHead>
+                            {renderSortableHead("sku", t("sku"))}
+                            <TableHead>{t("imageLabel")}</TableHead>
+                            {renderSortableHead("name", t("name"))}
+                            {renderSortableHead("category", t("category"), "hidden md:table-cell")}
+                            {renderSortableHead("unit", t("unit"), "hidden lg:table-cell")}
+                            {renderSortableHead("onHandQty", tInventory("onHand"), "text-nowrap")}
+                            {renderSortableHead("salePrice", t("salePrice"))}
+                            {renderSortableHead("avgCost", t("avgCost"))}
+                            {renderSortableHead("barcodes", t("barcodes"))}
+                            {renderSortableHead("stores", t("stores"))}
+                            <TableHead>{tCommon("actions")}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visibleItems.map((product) => {
+                            const barcodeSummary = getBarcodeSummary(product.barcodes);
+                            const previewImageUrl = getProductPreviewUrl(product);
+                            const storeInfo = getStoreInfo(
+                              product.inventorySnapshots.map((snapshot) => snapshot.storeId),
+                            );
+                            return (
+                              <TableRow key={product.id}>
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    checked={selectedIds.has(product.id)}
+                                    onChange={() => toggleSelect(product.id)}
+                                    aria-label={t("selectProduct", { name: product.name })}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {product.sku}
+                                </TableCell>
+                                <TableCell>
+                                  {previewImageUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={previewImageUrl}
+                                      alt={product.name}
+                                      className="h-10 w-10 rounded-md border border-border object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                      <EmptyIcon
+                                        className="h-4 w-4 text-muted-foreground"
+                                        aria-hidden
+                                      />
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <InlineEditableCell
+                                      rowId={product.id}
+                                      row={product}
+                                      value={product.name}
+                                      definition={inlineEditRegistry.products.name}
+                                      context={inlineProductsContext}
+                                      role={role}
+                                      locale={locale}
+                                      columnLabel={t("name")}
+                                      tTable={t}
+                                      tCommon={tCommon}
+                                      enabled={inlineEditingEnabled}
+                                      executeMutation={executeInlineProductMutation}
+                                    />
+                                    <Badge variant="muted">
+                                      {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                                    </Badge>
+                                    {product.isDeleted ? (
+                                      <Badge variant="muted">{t("archived")}</Badge>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                                  <InlineEditableCell
+                                    rowId={product.id}
+                                    row={product}
+                                    value={product.category}
+                                    definition={inlineEditRegistry.products.category}
+                                    context={inlineProductsContext}
+                                    role={role}
+                                    locale={locale}
+                                    columnLabel={t("category")}
+                                    tTable={t}
+                                    tCommon={tCommon}
+                                    enabled={inlineEditingEnabled}
+                                    executeMutation={executeInlineProductMutation}
+                                  />
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell">
+                                  <span>{product.unit}</span>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  <InlineEditableCell
+                                    rowId={product.id}
+                                    row={product}
+                                    value={product.onHandQty}
+                                    definition={inlineEditRegistry.products.onHand}
+                                    context={inlineProductsContext}
+                                    role={role}
+                                    locale={locale}
+                                    columnLabel={tInventory("onHand")}
+                                    tTable={t}
+                                    tCommon={tCommon}
+                                    enabled={inlineEditingEnabled}
+                                    executeMutation={executeInlineProductMutation}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <InlineEditableCell
+                                      rowId={product.id}
+                                      row={product}
+                                      value={
+                                        showEffectivePrice
+                                          ? product.effectivePriceKgs
+                                          : product.basePriceKgs
+                                      }
+                                      definition={inlineEditRegistry.products.salePrice}
+                                      context={inlineProductsContext}
+                                      role={role}
+                                      locale={locale}
+                                      columnLabel={t("salePrice")}
+                                      tTable={t}
+                                      tCommon={tCommon}
+                                      enabled={inlineEditingEnabled}
+                                      executeMutation={executeInlineProductMutation}
+                                    />
+                                    {showEffectivePrice && product.priceOverridden ? (
+                                      <Badge variant="muted">{t("priceOverridden")}</Badge>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {product.avgCostKgs !== null && product.avgCostKgs !== undefined
+                                    ? formatCurrencyKGS(product.avgCostKgs, locale)
+                                    : tCommon("notAvailable")}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {barcodeSummary.label}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {storeInfo.names.length ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="cursor-help text-foreground">
+                                          {storeInfo.summary}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{storeInfo.names.join(", ")}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    storeInfo.summary
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {isAdmin ? (
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="shadow-none"
+                                            aria-label={tCommon("actions")}
+                                          >
+                                            <MoreIcon className="h-4 w-4" aria-hidden />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          {product.isDeleted ? (
+                                            <DropdownMenuItem
+                                              onClick={async () => {
+                                                if (
+                                                  !(await confirm({
+                                                    description: t("confirmRestore"),
+                                                    confirmVariant: "danger",
+                                                  }))
+                                                ) {
+                                                  return;
+                                                }
+                                                restoreMutation.mutate({ productId: product.id });
+                                              }}
+                                            >
+                                              {t("restore")}
+                                            </DropdownMenuItem>
+                                          ) : (
+                                            <>
+                                              <DropdownMenuItem asChild>
+                                                <Link
+                                                  href={`/products/${product.id}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                >
+                                                  {tCommon("edit")}
+                                                </Link>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  duplicateMutation.mutate({
+                                                    productId: product.id,
+                                                  })
+                                                }
+                                              >
+                                                {t("duplicate")}
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                onClick={async () => {
+                                                  if (
+                                                    !(await confirm({
+                                                      description: t("confirmArchive"),
+                                                      confirmVariant: "danger",
+                                                    }))
+                                                  ) {
+                                                    return;
+                                                  }
+                                                  archiveMutation.mutate({ productId: product.id });
+                                                }}
+                                              >
+                                                {tCommon("archive")}
+                                              </DropdownMenuItem>
+                                            </>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    ) : (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="shadow-none"
+                                            onClick={() => router.push(`/products/${product.id}`)}
+                                            aria-label={tCommon("view")}
+                                          >
+                                            <ViewIcon className="h-4 w-4" aria-hidden />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{tCommon("view")}</TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TooltipProvider>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {visibleItems.map((product) => {
+                      const barcodeSummary = getBarcodeSummary(product.barcodes);
+                      const previewImageUrl = getProductPreviewUrl(product);
+                      const actions = getProductActions(product);
+                      return (
+                        <div
+                          key={product.id}
+                          className="overflow-hidden rounded-lg border border-border bg-card"
+                        >
+                          <div className="relative aspect-[4/3] bg-muted/30">
+                            {previewImageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={previewImageUrl}
+                                alt={product.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <EmptyIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
+                              </div>
+                            )}
+                            <label className="absolute right-2 top-2">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -1414,439 +1842,204 @@ const ProductsPage = () => {
                                 onChange={() => toggleSelect(product.id)}
                                 aria-label={t("selectProduct", { name: product.name })}
                               />
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{product.sku}</TableCell>
-                            <TableCell>
-                              {previewImageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={previewImageUrl}
-                                  alt={product.name}
-                                  className="h-10 w-10 rounded-md border border-border object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
-                                  <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <div className="flex flex-wrap items-center gap-2">
+                            </label>
+                          </div>
+                          <div className="space-y-3 p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {product.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{product.sku}</p>
+                              </div>
+                              <RowActions
+                                actions={actions}
+                                maxInline={3}
+                                moreLabel={tCommon("tooltips.moreActions")}
+                                className="shrink-0"
+                              />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="muted">
+                                {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                              </Badge>
+                              {product.isDeleted ? (
+                                <Badge variant="muted">{t("archived")}</Badge>
+                              ) : null}
+                              {product.category ? (
+                                <Badge variant="muted">{product.category}</Badge>
+                              ) : null}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <div>
+                                <p>{t("salePrice")}</p>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {showEffectivePrice
+                                    ? product.effectivePriceKgs !== null &&
+                                      product.effectivePriceKgs !== undefined
+                                      ? formatCurrencyKGS(product.effectivePriceKgs, locale)
+                                      : tCommon("notAvailable")
+                                    : product.basePriceKgs !== null &&
+                                        product.basePriceKgs !== undefined
+                                      ? formatCurrencyKGS(product.basePriceKgs, locale)
+                                      : tCommon("notAvailable")}
+                                </p>
+                              </div>
+                              <div>
+                                <p>{tInventory("onHand")}</p>
                                 <InlineEditableCell
                                   rowId={product.id}
                                   row={product}
-                                  value={product.name}
-                                  definition={inlineEditRegistry.products.name}
+                                  value={product.onHandQty}
+                                  definition={inlineEditRegistry.products.onHand}
                                   context={inlineProductsContext}
                                   role={role}
                                   locale={locale}
-                                  columnLabel={t("name")}
+                                  columnLabel={tInventory("onHand")}
                                   tTable={t}
                                   tCommon={tCommon}
                                   enabled={inlineEditingEnabled}
                                   executeMutation={executeInlineProductMutation}
+                                  className="text-sm font-semibold text-foreground"
                                 />
-                                <Badge variant="muted">
-                                  {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                                </Badge>
-                                {product.isDeleted ? (
-                                  <Badge variant="muted">{t("archived")}</Badge>
-                                ) : null}
                               </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
-                              <InlineEditableCell
-                                rowId={product.id}
-                                row={product}
-                                value={product.category}
-                                definition={inlineEditRegistry.products.category}
-                                context={inlineProductsContext}
-                                role={role}
-                                locale={locale}
-                                columnLabel={t("category")}
-                                tTable={t}
-                                tCommon={tCommon}
-                                enabled={inlineEditingEnabled}
-                                executeMutation={executeInlineProductMutation}
-                              />
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <span>{product.unit}</span>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              <InlineEditableCell
-                                rowId={product.id}
-                                row={product}
-                                value={product.onHandQty}
-                                definition={inlineEditRegistry.products.onHand}
-                                context={inlineProductsContext}
-                                role={role}
-                                locale={locale}
-                                columnLabel={tInventory("onHand")}
-                                tTable={t}
-                                tCommon={tCommon}
-                                enabled={inlineEditingEnabled}
-                                executeMutation={executeInlineProductMutation}
-                              />
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <InlineEditableCell
-                                  rowId={product.id}
-                                  row={product}
-                                  value={showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs}
-                                  definition={inlineEditRegistry.products.salePrice}
-                                  context={inlineProductsContext}
-                                  role={role}
-                                  locale={locale}
-                                  columnLabel={t("salePrice")}
-                                  tTable={t}
-                                  tCommon={tCommon}
-                                  enabled={inlineEditingEnabled}
-                                  executeMutation={executeInlineProductMutation}
-                                />
-                                {showEffectivePrice && product.priceOverridden ? (
-                                  <Badge variant="muted">{t("priceOverridden")}</Badge>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {product.avgCostKgs !== null && product.avgCostKgs !== undefined
-                                ? formatCurrencyKGS(product.avgCostKgs, locale)
-                                : tCommon("notAvailable")}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {barcodeSummary.label}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {storeInfo.names.length ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="cursor-help text-foreground">
-                                      {storeInfo.summary}
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{storeInfo.names.join(", ")}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                storeInfo.summary
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {isAdmin ? (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shadow-none"
-                                        aria-label={tCommon("actions")}
-                                      >
-                                        <MoreIcon className="h-4 w-4" aria-hidden />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      {product.isDeleted ? (
-                                        <DropdownMenuItem
-                                          onClick={async () => {
-                                            if (!(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))) {
-                                              return;
-                                            }
-                                            restoreMutation.mutate({ productId: product.id });
-                                          }}
-                                        >
-                                          {t("restore")}
-                                        </DropdownMenuItem>
-                                      ) : (
-                                        <>
-                                          <DropdownMenuItem
-                                            asChild
-                                          >
-                                            <Link
-                                              href={`/products/${product.id}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                            >
-                                              {tCommon("edit")}
-                                            </Link>
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              duplicateMutation.mutate({
-                                                productId: product.id,
-                                              })
-                                            }
-                                          >
-                                            {t("duplicate")}
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={async () => {
-                                              if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
-                                                return;
-                                              }
-                                              archiveMutation.mutate({ productId: product.id });
-                                            }}
-                                          >
-                                            {tCommon("archive")}
-                                          </DropdownMenuItem>
-                                        </>
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shadow-none"
-                                        onClick={() => router.push(`/products/${product.id}`)}
-                                        aria-label={tCommon("view")}
-                                      >
-                                        <ViewIcon className="h-4 w-4" aria-hidden />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{tCommon("view")}</TooltipContent>
-                                  </Tooltip>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                    </TooltipProvider>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {visibleItems.map((product) => {
-                    const barcodeSummary = getBarcodeSummary(product.barcodes);
-                    const previewImageUrl = getProductPreviewUrl(product);
-                    const actions = getProductActions(product);
-                    return (
-                      <div
-                        key={product.id}
-                        className="overflow-hidden rounded-lg border border-border bg-card"
-                      >
-                        <div className="relative aspect-[4/3] bg-muted/30">
-                          {previewImageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={previewImageUrl}
-                              alt={product.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center">
-                              <EmptyIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
-                            </div>
-                          )}
-                          <label className="absolute right-2 top-2">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                              checked={selectedIds.has(product.id)}
-                              onChange={() => toggleSelect(product.id)}
-                              aria-label={t("selectProduct", { name: product.name })}
-                            />
-                          </label>
-                        </div>
-                        <div className="space-y-3 p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-foreground">
-                                {product.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{product.sku}</p>
-                            </div>
-                            <RowActions
-                              actions={actions}
-                              maxInline={3}
-                              moreLabel={tCommon("tooltips.moreActions")}
-                              className="shrink-0"
-                            />
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="muted">
-                              {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                            </Badge>
-                            {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
-                            {product.category ? <Badge variant="muted">{product.category}</Badge> : null}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                            <div>
-                              <p>{t("salePrice")}</p>
-                              <p className="text-sm font-semibold text-foreground">
-                                {showEffectivePrice
-                                  ? product.effectivePriceKgs !== null &&
-                                    product.effectivePriceKgs !== undefined
-                                    ? formatCurrencyKGS(product.effectivePriceKgs, locale)
-                                    : tCommon("notAvailable")
-                                  : product.basePriceKgs !== null &&
-                                      product.basePriceKgs !== undefined
-                                    ? formatCurrencyKGS(product.basePriceKgs, locale)
+                              <div>
+                                <p>{t("avgCost")}</p>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {product.avgCostKgs !== null && product.avgCostKgs !== undefined
+                                    ? formatCurrencyKGS(product.avgCostKgs, locale)
                                     : tCommon("notAvailable")}
-                              </p>
-                            </div>
-                            <div>
-                              <p>{tInventory("onHand")}</p>
-                              <InlineEditableCell
-                                rowId={product.id}
-                                row={product}
-                                value={product.onHandQty}
-                                definition={inlineEditRegistry.products.onHand}
-                                context={inlineProductsContext}
-                                role={role}
-                                locale={locale}
-                                columnLabel={tInventory("onHand")}
-                                tTable={t}
-                                tCommon={tCommon}
-                                enabled={inlineEditingEnabled}
-                                executeMutation={executeInlineProductMutation}
-                                className="text-sm font-semibold text-foreground"
-                              />
-                            </div>
-                            <div>
-                              <p>{t("avgCost")}</p>
-                              <p className="text-sm font-semibold text-foreground">
-                                {product.avgCostKgs !== null && product.avgCostKgs !== undefined
-                                  ? formatCurrencyKGS(product.avgCostKgs, locale)
-                                  : tCommon("notAvailable")}
-                              </p>
-                            </div>
-                            <div>
-                              <p>{t("barcodes")}</p>
-                              <p className="truncate text-sm font-semibold text-foreground">
-                                {barcodeSummary.label}
-                              </p>
+                                </p>
+                              </div>
+                              <div>
+                                <p>{t("barcodes")}</p>
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {barcodeSummary.label}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   </div>
                 )
               }
               renderMobile={(product) => {
-              const barcodeSummary = getBarcodeSummary(product.barcodes);
-              const previewImageUrl = getProductPreviewUrl(product);
-              const storeInfo = getStoreInfo(
-                product.inventorySnapshots.map((snapshot) => snapshot.storeId),
-              );
-              const actions = getProductActions(product);
+                const barcodeSummary = getBarcodeSummary(product.barcodes);
+                const previewImageUrl = getProductPreviewUrl(product);
+                const storeInfo = getStoreInfo(
+                  product.inventorySnapshots.map((snapshot) => snapshot.storeId),
+                );
+                const actions = getProductActions(product);
 
-              return (
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <label className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        checked={selectedIds.has(product.id)}
-                        onChange={() => toggleSelect(product.id)}
-                        aria-label={t("selectProduct", { name: product.name })}
-                      />
-                      {previewImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={previewImageUrl}
-                          alt={product.name}
-                          className="h-10 w-10 rounded-md border border-border object-cover"
+                return (
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          checked={selectedIds.has(product.id)}
+                          onChange={() => toggleSelect(product.id)}
+                          aria-label={t("selectProduct", { name: product.name })}
                         />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
-                          <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                        {previewImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewImageUrl}
+                            alt={product.name}
+                            className="h-10 w-10 rounded-md border border-border object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-foreground">
+                              {product.name}
+                            </span>
+                            <Badge variant="muted">
+                              {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                            </Badge>
+                            {product.isDeleted ? (
+                              <Badge variant="muted">{t("archived")}</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {t("sku")}: {product.sku}
+                          </p>
                         </div>
-                      )}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-foreground">{product.name}</span>
-                          <Badge variant="muted">
-                            {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                          </Badge>
-                          {product.isDeleted ? (
-                            <Badge variant="muted">{t("archived")}</Badge>
-                          ) : null}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {t("sku")}: {product.sku}
-                        </p>
-                      </div>
-                    </label>
-                    <RowActions
-                      actions={actions}
-                      moreLabel={tCommon("tooltips.moreActions")}
-                      className="shrink-0"
-                    />
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{t("category")}</span>
-                      <span className="text-foreground">
-                        {product.category ?? tCommon("notAvailable")}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{t("unit")}</span>
-                      <span className="text-foreground">{product.unit}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{t("salePrice")}</span>
-                      <span className="text-foreground">
-                        {showEffectivePrice
-                          ? product.effectivePriceKgs !== null &&
-                            product.effectivePriceKgs !== undefined
-                            ? formatCurrencyKGS(product.effectivePriceKgs, locale)
-                            : tCommon("notAvailable")
-                          : product.basePriceKgs !== null && product.basePriceKgs !== undefined
-                            ? formatCurrencyKGS(product.basePriceKgs, locale)
-                            : tCommon("notAvailable")}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{tInventory("onHand")}</span>
-                      <InlineEditableCell
-                        rowId={product.id}
-                        row={product}
-                        value={product.onHandQty}
-                        definition={inlineEditRegistry.products.onHand}
-                        context={inlineProductsContext}
-                        role={role}
-                        locale={locale}
-                        columnLabel={tInventory("onHand")}
-                        tTable={t}
-                        tCommon={tCommon}
-                        enabled={inlineEditingEnabled}
-                        executeMutation={executeInlineProductMutation}
-                        className="justify-end text-foreground"
+                      </label>
+                      <RowActions
+                        actions={actions}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                        className="shrink-0"
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{t("avgCost")}</span>
-                      <span className="text-foreground">
-                        {product.avgCostKgs !== null && product.avgCostKgs !== undefined
-                          ? formatCurrencyKGS(product.avgCostKgs, locale)
-                          : tCommon("notAvailable")}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{t("barcodes")}</span>
-                      <span className="text-foreground">{barcodeSummary.label}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{t("stores")}</span>
-                      <span className="text-foreground">{storeInfo.summary}</span>
+                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{t("category")}</span>
+                        <span className="text-foreground">
+                          {product.category ?? tCommon("notAvailable")}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{t("unit")}</span>
+                        <span className="text-foreground">{product.unit}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{t("salePrice")}</span>
+                        <span className="text-foreground">
+                          {showEffectivePrice
+                            ? product.effectivePriceKgs !== null &&
+                              product.effectivePriceKgs !== undefined
+                              ? formatCurrencyKGS(product.effectivePriceKgs, locale)
+                              : tCommon("notAvailable")
+                            : product.basePriceKgs !== null && product.basePriceKgs !== undefined
+                              ? formatCurrencyKGS(product.basePriceKgs, locale)
+                              : tCommon("notAvailable")}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{tInventory("onHand")}</span>
+                        <InlineEditableCell
+                          rowId={product.id}
+                          row={product}
+                          value={product.onHandQty}
+                          definition={inlineEditRegistry.products.onHand}
+                          context={inlineProductsContext}
+                          role={role}
+                          locale={locale}
+                          columnLabel={tInventory("onHand")}
+                          tTable={t}
+                          tCommon={tCommon}
+                          enabled={inlineEditingEnabled}
+                          executeMutation={executeInlineProductMutation}
+                          className="justify-end text-foreground"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{t("avgCost")}</span>
+                        <span className="text-foreground">
+                          {product.avgCostKgs !== null && product.avgCostKgs !== undefined
+                            ? formatCurrencyKGS(product.avgCostKgs, locale)
+                            : tCommon("notAvailable")}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{t("barcodes")}</span>
+                        <span className="text-foreground">{barcodeSummary.label}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{t("stores")}</span>
+                        <span className="text-foreground">{storeInfo.summary}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
+                );
               }}
             />
           </InlineEditTableProvider>
@@ -2028,7 +2221,11 @@ const ProductsPage = () => {
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" className="w-full sm:w-auto" disabled={bulkPriceMutation.isLoading}>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={bulkPriceMutation.isLoading}
+              >
                 {bulkPriceMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
                 ) : (
@@ -2097,7 +2294,7 @@ const ProductsPage = () => {
           </FormActions>
         </form>
 
-        <div className="space-y-2 mt-4">
+        <div className="mt-4 space-y-2">
           {categories.length ? (
             categories.map((item) => (
               <div
@@ -2295,7 +2492,9 @@ const ProductsPage = () => {
                             <SelectValue placeholder={t("template")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>{t("templateRollXp365b")}</SelectItem>
+                            <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>
+                              {t("templateRollXp365b")}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>
@@ -2349,7 +2548,9 @@ const ProductsPage = () => {
                 <div className="mt-3 rounded-md border border-border/70 bg-secondary/20 p-3 sm:mt-4">
                   <div className="grid gap-3 lg:grid-cols-2">
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-foreground">{t("rollTemplatePreviewTitle")}</p>
+                      <p className="text-xs font-medium text-foreground">
+                        {t("rollTemplatePreviewTitle")}
+                      </p>
                       <div className="w-[210px] max-w-full rounded border border-border bg-card p-2">
                         <div
                           className="rounded border border-dashed border-border/70"
@@ -2366,7 +2567,9 @@ const ProductsPage = () => {
                             <p className="line-clamp-2 text-[10px] font-medium text-foreground">
                               {rollPreviewProduct?.name ?? t("rollPreviewName")}
                             </p>
-                            <p className="mt-1 text-[11px] font-semibold text-foreground">{t("rollPreviewPrice")}</p>
+                            <p className="mt-1 text-[11px] font-semibold text-foreground">
+                              {t("rollPreviewPrice")}
+                            </p>
                             <p className="mt-1 text-[8px] text-muted-foreground">
                               {rollPreviewProduct?.sku || t("rollPreviewSku")}
                             </p>

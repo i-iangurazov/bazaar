@@ -23,12 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  FormActions,
-  FormGrid,
-  FormRow,
-  FormSection,
-} from "@/components/form-layout";
+import { FormActions, FormGrid, FormRow, FormSection } from "@/components/form-layout";
 import {
   Form,
   FormControl,
@@ -38,12 +33,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   AddIcon,
@@ -278,7 +268,6 @@ const resolveHeicLikeMimeType = (file: File) => {
   return "";
 };
 
-
 export const ProductForm = ({
   initialValues,
   onSubmit,
@@ -326,17 +315,16 @@ export const ProductForm = ({
     return Array.isArray(options) ? options : [];
   };
   const unitOptions = useMemo(() => units ?? [], [units]);
-  const resolveUnitLabel = (unit: UnitOption) =>
-    locale === "kg" ? unit.labelKg : unit.labelRu;
-  const schema = useMemo(
-    () => {
-      const optionalPrice = z.preprocess(
-        (value) => (value === "" || value === null || value === undefined ? undefined : value),
-        z.coerce.number().min(0, t("priceNonNegative")).optional(),
-      );
+  const resolveUnitLabel = (unit: UnitOption) => (locale === "kg" ? unit.labelKg : unit.labelRu);
+  const schema = useMemo(() => {
+    const optionalPrice = z.preprocess(
+      (value) => (value === "" || value === null || value === undefined ? undefined : value),
+      z.coerce.number().min(0, t("priceNonNegative")).optional(),
+    );
 
-      return z.object({
-        sku: z.string().min(2, t("skuRequired")),
+    return z
+      .object({
+        sku: z.string(),
         name: z.string().min(2, t("nameRequired")),
         isBundle: z.boolean().optional(),
         category: z.string().optional(),
@@ -398,10 +386,29 @@ export const ProductForm = ({
             }),
           )
           .optional(),
+      })
+      .superRefine((values, context) => {
+        const normalizedSku = values.sku.trim();
+        if (productId) {
+          if (normalizedSku.length < 2) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: normalizedSku.length === 0 ? t("skuRequired") : t("skuMinLength"),
+              path: ["sku"],
+            });
+          }
+          return;
+        }
+
+        if (normalizedSku.length > 0 && normalizedSku.length < 2) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t("skuMinLength"),
+            path: ["sku"],
+          });
+        }
       });
-    },
-    [t, tErrors],
-  );
+  }, [productId, t, tErrors]);
   type VariantFormRow = z.infer<typeof schema>["variants"][number];
 
   const toAttributeEntries = (attributes: Record<string, unknown>) => {
@@ -409,7 +416,7 @@ export const ProductForm = ({
       key,
       value: Array.isArray(value)
         ? value.filter((item) => typeof item === "string").map((item) => item.trim())
-        : value ?? "",
+        : (value ?? ""),
     }));
     const seen = new Set(entries.map((entry) => entry.key));
     for (const definition of requiredDefinitions) {
@@ -454,9 +461,9 @@ export const ProductForm = ({
                 name: "",
                 sku: "",
                 attributes: toAttributeEntries({}),
-              canDelete: true,
-            },
-          ],
+                canDelete: true,
+              },
+            ],
       bundleComponents:
         initialValues.bundleComponents?.map((component) => ({
           componentProductId: component.componentProductId,
@@ -504,7 +511,10 @@ export const ProductForm = ({
       .map((item) => item.attributeKey);
   }, [templateQuery.data]);
   const generatorDefinitions = useMemo(
-    () => definitions.filter((definition) => definition.type === "SELECT" || definition.type === "MULTI_SELECT"),
+    () =>
+      definitions.filter(
+        (definition) => definition.type === "SELECT" || definition.type === "MULTI_SELECT",
+      ),
     [definitions],
   );
   const generatorDefinitionMap = useMemo(
@@ -563,16 +573,15 @@ export const ProductForm = ({
   const [barcodeInput, setBarcodeInput] = useState("");
   const [barcodeGenerateMode, setBarcodeGenerateMode] = useState<"EAN13" | "CODE128">("EAN13");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
-  const [showDetails, setShowDetails] = useState(
-    () =>
-      Boolean(
-        initialValues.description?.trim() ||
-          initialValues.photoUrl?.trim() ||
-          initialValues.images?.length,
-      ),
+  const [showDetails, setShowDetails] = useState(() =>
+    Boolean(
+      initialValues.description?.trim() ||
+      initialValues.photoUrl?.trim() ||
+      initialValues.images?.length,
+    ),
   );
-  const [showAdvanced, setShowAdvanced] = useState(
-    () => Boolean(initialValues.barcodes?.length || initialValues.variants?.length),
+  const [showAdvanced, setShowAdvanced] = useState(() =>
+    Boolean(initialValues.barcodes?.length || initialValues.variants?.length),
   );
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
   const [generatorOpen, setGeneratorOpen] = useState(false);
@@ -630,11 +639,7 @@ export const ProductForm = ({
 
   const shouldLogImagePrepDebug =
     process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_IMAGE_UPLOAD_DEBUG === "1";
-  const logImagePrepDebug = (
-    step: string,
-    details?: Record<string, unknown>,
-    error?: unknown,
-  ) => {
+  const logImagePrepDebug = (step: string, details?: Record<string, unknown>, error?: unknown) => {
     if (!shouldLogImagePrepDebug) {
       return;
     }
@@ -779,8 +784,8 @@ export const ProductForm = ({
         const fallbackType: "image/jpeg" | "image/webp" =
           normalizedType === "image/png" ? "image/webp" : "image/jpeg";
         const qualitySteps = allowAggressiveQuality
-          ? [0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82, 0.78, 0.74, 0.7, 0.66, 0.62, 0.58] as const
-          : [0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82] as const;
+          ? ([0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82, 0.78, 0.74, 0.7, 0.66, 0.62, 0.58] as const)
+          : ([0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82] as const);
         for (const quality of qualitySteps) {
           const optimized = await encodeCanvasToFile({
             canvas,
@@ -925,15 +930,14 @@ export const ProductForm = ({
         topLevelDefault && typeof topLevelDefault === "object"
           ? (topLevelDefault as { default?: unknown }).default
           : undefined;
-      const convertCandidate = (
+      const convertCandidate =
         typeof topLevelDefault === "function"
           ? topLevelDefault
           : typeof nestedDefault === "function"
             ? nestedDefault
             : typeof (heic2anyModule as unknown) === "function"
               ? (heic2anyModule as unknown)
-              : null
-      );
+              : null;
       if (typeof convertCandidate !== "function") {
         logImagePrepDebug("heic-convert-missing-function", {
           fileName: file.name,
@@ -944,9 +948,11 @@ export const ProductForm = ({
         });
         return null;
       }
-      const convert = convertCandidate as (
-        options: { blob: Blob; toType: string; quality?: number },
-      ) => Promise<Blob | Blob[]>;
+      const convert = convertCandidate as (options: {
+        blob: Blob;
+        toType: string;
+        quality?: number;
+      }) => Promise<Blob | Blob[]>;
       const converted = await convert({
         blob: file,
         toType: "image/jpeg",
@@ -1069,9 +1075,10 @@ export const ProductForm = ({
       method: "POST",
       body: formData,
     });
-    const body = (await response.json().catch(() => null)) as
-      | { message?: string; url?: string }
-      | null;
+    const body = (await response.json().catch(() => null)) as {
+      message?: string;
+      url?: string;
+    } | null;
     if (!response.ok) {
       const code = body?.message;
       logImagePrepDebug("upload-request-failed", {
@@ -1253,11 +1260,7 @@ export const ProductForm = ({
         return null;
       }
 
-      const rotatedBounds = getRotatedBoundingBox(
-        sourceWidth,
-        sourceHeight,
-        input.rotation,
-      );
+      const rotatedBounds = getRotatedBoundingBox(sourceWidth, sourceHeight, input.rotation);
       const rotatedCanvas = document.createElement("canvas");
       rotatedCanvas.width = Math.max(1, Math.round(rotatedBounds.width));
       rotatedCanvas.height = Math.max(1, Math.round(rotatedBounds.height));
@@ -1274,14 +1277,8 @@ export const ProductForm = ({
       const cropHeight = Math.max(1, Math.round(input.cropAreaPixels.height));
       const maxCropX = Math.max(0, rotatedCanvas.width - cropWidth);
       const maxCropY = Math.max(0, rotatedCanvas.height - cropHeight);
-      const cropX = Math.max(
-        0,
-        Math.min(Math.round(input.cropAreaPixels.x), maxCropX),
-      );
-      const cropY = Math.max(
-        0,
-        Math.min(Math.round(input.cropAreaPixels.y), maxCropY),
-      );
+      const cropX = Math.max(0, Math.min(Math.round(input.cropAreaPixels.x), maxCropX));
+      const cropY = Math.max(0, Math.min(Math.round(input.cropAreaPixels.y), maxCropY));
 
       const croppedCanvas = document.createElement("canvas");
       croppedCanvas.width = cropWidth;
@@ -1342,9 +1339,7 @@ export const ProductForm = ({
       const objectUrl = URL.createObjectURL(sourceFile);
       const dimensions = await getImageDimensions(objectUrl);
       const nextAspect =
-        dimensions.width > 0 && dimensions.height > 0
-          ? dimensions.width / dimensions.height
-          : 1;
+        dimensions.width > 0 && dimensions.height > 0 ? dimensions.width / dimensions.height : 1;
       setImageEditorAspect(nextAspect || 1);
       setImageEditorSourceFile(sourceFile);
       setImageEditorObjectUrl((previous) => {
@@ -1496,62 +1491,65 @@ export const ProductForm = ({
     try {
       const results: Array<{ url: string } | null> = new Array(list.length).fill(null);
       let cursor = 0;
-      const workers = Array.from({ length: Math.min(maxImageUploadConcurrency, list.length) }, async () => {
-        while (true) {
-          const nextIndex = cursor;
-          cursor += 1;
-          if (nextIndex >= list.length) {
-            return;
-          }
+      const workers = Array.from(
+        { length: Math.min(maxImageUploadConcurrency, list.length) },
+        async () => {
+          while (true) {
+            const nextIndex = cursor;
+            cursor += 1;
+            if (nextIndex >= list.length) {
+              return;
+            }
 
-          const originalFile = list[nextIndex];
-          const prepared = await prepareProductImageFileForUpload({
-            file: originalFile,
-            maxImageBytes,
-            maxInputImageBytes,
-            convertHeicToJpeg,
-            optimizeImageToLimit,
-          });
-          if (!prepared.ok) {
-            logImagePrepDebug("prepare-failed", {
-              fileName: originalFile.name,
-              fileSize: originalFile.size,
-              fileType: originalFile.type,
-              code: prepared.code,
-              reason: prepared.reason,
+            const originalFile = list[nextIndex];
+            const prepared = await prepareProductImageFileForUpload({
+              file: originalFile,
+              maxImageBytes,
+              maxInputImageBytes,
+              convertHeicToJpeg,
+              optimizeImageToLimit,
             });
-            if (prepared.code === "imageTooLargeInput") {
-              toast({
-                variant: "error",
-                description: t("imageTooLargeInput", {
-                  size: Math.round(maxInputImageBytes / (1024 * 1024)),
-                }),
+            if (!prepared.ok) {
+              logImagePrepDebug("prepare-failed", {
+                fileName: originalFile.name,
+                fileSize: originalFile.size,
+                fileType: originalFile.type,
+                code: prepared.code,
+                reason: prepared.reason,
               });
+              if (prepared.code === "imageTooLargeInput") {
+                toast({
+                  variant: "error",
+                  description: t("imageTooLargeInput", {
+                    size: Math.round(maxInputImageBytes / (1024 * 1024)),
+                  }),
+                });
+                continue;
+              }
+              if (prepared.code === "imageTooLargeAfterCompression") {
+                toast({
+                  variant: "error",
+                  description: t("imageTooLargeAfterCompression", {
+                    size: Math.round(maxImageBytes / (1024 * 1024)),
+                  }),
+                });
+                continue;
+              }
+              if (prepared.code === "imageInvalidType") {
+                toast({ variant: "error", description: t("imageInvalidType") });
+                continue;
+              }
+              toast({ variant: "error", description: t("imageCompressionFailed") });
               continue;
             }
-            if (prepared.code === "imageTooLargeAfterCompression") {
-              toast({
-                variant: "error",
-                description: t("imageTooLargeAfterCompression", {
-                  size: Math.round(maxImageBytes / (1024 * 1024)),
-                }),
-              });
-              continue;
-            }
-            if (prepared.code === "imageInvalidType") {
-              toast({ variant: "error", description: t("imageInvalidType") });
-              continue;
-            }
-            toast({ variant: "error", description: t("imageCompressionFailed") });
-            continue;
-          }
 
-          const uploadedUrl = await uploadImageFile(prepared.file);
-          if (uploadedUrl) {
-            results[nextIndex] = { url: uploadedUrl };
+            const uploadedUrl = await uploadImageFile(prepared.file);
+            if (uploadedUrl) {
+              results[nextIndex] = { url: uploadedUrl };
+            }
           }
-        }
-      });
+        },
+      );
 
       await Promise.all(workers);
       const nextImages = results.filter((result): result is { url: string } => Boolean(result));
@@ -1663,7 +1661,7 @@ export const ProductForm = ({
     const normalized = attributes.map((entry) => {
       const value = Array.isArray(entry.value)
         ? [...entry.value].map(String).sort()
-        : entry.value ?? "";
+        : (entry.value ?? "");
       return [entry.key, value];
     });
     normalized.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
@@ -1730,11 +1728,7 @@ export const ProductForm = ({
     setGeneratorOpen(false);
   };
 
-  const addBundleComponentFromSearch = (component: {
-    id: string;
-    name: string;
-    sku: string;
-  }) => {
+  const addBundleComponentFromSearch = (component: { id: string; name: string; sku: string }) => {
     if (readOnly) {
       return;
     }
@@ -1799,7 +1793,9 @@ export const ProductForm = ({
           );
           if (entryIndex >= 0) {
             form.setError(`variants.${index}.attributes.${entryIndex}.value`, {
-              message: t("attributeRequired", { attribute: resolveLabel(definition, definition.key) }),
+              message: t("attributeRequired", {
+                attribute: resolveLabel(definition, definition.key),
+              }),
             });
           }
         }
@@ -1838,9 +1834,7 @@ export const ProductForm = ({
         }
 
         if (definition?.type === "MULTI_SELECT") {
-          const selected = Array.isArray(rawValue)
-            ? rawValue.map((value) => String(value))
-            : [];
+          const selected = Array.isArray(rawValue) ? rawValue.map((value) => String(value)) : [];
           if (selected.length) {
             parsedAttributes[entry.key] = selected;
           }
@@ -1886,15 +1880,11 @@ export const ProductForm = ({
       isBundle: Boolean(values.isBundle),
       category: values.category?.trim() || undefined,
       baseUnitId: values.baseUnitId,
-      basePriceKgs: Number.isFinite(values.basePriceKgs ?? NaN)
-        ? values.basePriceKgs
-        : undefined,
+      basePriceKgs: Number.isFinite(values.basePriceKgs ?? NaN) ? values.basePriceKgs : undefined,
       purchasePriceKgs: Number.isFinite(values.purchasePriceKgs ?? NaN)
         ? values.purchasePriceKgs
         : undefined,
-      avgCostKgs: Number.isFinite(values.avgCostKgs ?? NaN)
-        ? values.avgCostKgs
-        : undefined,
+      avgCostKgs: Number.isFinite(values.avgCostKgs ?? NaN) ? values.avgCostKgs : undefined,
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,
@@ -1958,6 +1948,9 @@ export const ProductForm = ({
                         <FormControl>
                           <Input {...field} disabled={readOnly} />
                         </FormControl>
+                        {!productId ? (
+                          <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -2172,8 +2165,12 @@ export const ProductForm = ({
                                 }
                               >
                                 <div className="min-w-0">
-                                  <p className="truncate font-medium text-foreground">{product.name}</p>
-                                  <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
+                                  <p className="truncate font-medium text-foreground">
+                                    {product.name}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {product.sku}
+                                  </p>
                                 </div>
                                 {product.isBundle ? (
                                   <Badge variant="muted">{t("bundleProductLabel")}</Badge>
@@ -2288,7 +2285,9 @@ export const ProductForm = ({
                         )}
                         {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
                       </Button>
-                      <span className="text-xs text-muted-foreground">{t("imagesReorderHint")}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("imagesReorderHint")}
+                      </span>
                     </div>
                     <div
                       className={`rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
@@ -2328,7 +2327,11 @@ export const ProductForm = ({
                               }}
                               onDrop={(event) => {
                                 event.preventDefault();
-                                if (draggedImageIndex === null || draggedImageIndex === index || readOnly) {
+                                if (
+                                  draggedImageIndex === null ||
+                                  draggedImageIndex === index ||
+                                  readOnly
+                                ) {
                                   return;
                                 }
                                 handleMoveImage(draggedImageIndex, index);
@@ -2349,7 +2352,10 @@ export const ProductForm = ({
                                     <Badge variant="success">{t("imagePrimary")}</Badge>
                                   ) : null}
                                   <span className="text-xs text-muted-foreground">
-                                    {t("imagePosition", { index: index + 1, total: imageFields.length })}
+                                    {t("imagePosition", {
+                                      index: index + 1,
+                                      total: imageFields.length,
+                                    })}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -2399,7 +2405,9 @@ export const ProductForm = ({
                                       size="icon"
                                       className="shadow-none"
                                       aria-label={t("imageMoveDown")}
-                                      onClick={() => canMoveDown && handleMoveImage(index, index + 1)}
+                                      onClick={() =>
+                                        canMoveDown && handleMoveImage(index, index + 1)
+                                      }
                                       disabled={!canMoveDown || readOnly}
                                     >
                                       <ArrowDownIcon className="h-4 w-4" aria-hidden />
@@ -2461,9 +2469,14 @@ export const ProductForm = ({
                                         })}
                                       </span>
                                     </div>
-                                    <ViewIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                                    <ViewIcon
+                                      className="h-3.5 w-3.5 text-muted-foreground"
+                                      aria-hidden
+                                    />
                                   </div>
-                                  <p className="break-all text-xs text-muted-foreground">{image.url}</p>
+                                  <p className="break-all text-xs text-muted-foreground">
+                                    {image.url}
+                                  </p>
                                 </a>
                               ))}
                             </div>
@@ -2565,21 +2578,15 @@ export const ProductForm = ({
                                   setBarcodeGenerateMode(value as "EAN13" | "CODE128")
                                 }
                                 disabled={
-                                  readOnly ||
-                                  !productId ||
-                                  generateBarcodeMutation.isLoading
+                                  readOnly || !productId || generateBarcodeMutation.isLoading
                                 }
                               >
                                 <SelectTrigger aria-label={t("generateBarcodeMode")}>
                                   <SelectValue placeholder={t("generateBarcodeMode")} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="EAN13">
-                                    {t("barcodeModeEan13")}
-                                  </SelectItem>
-                                  <SelectItem value="CODE128">
-                                    {t("barcodeModeCode128")}
-                                  </SelectItem>
+                                  <SelectItem value="EAN13">{t("barcodeModeEan13")}</SelectItem>
+                                  <SelectItem value="CODE128">{t("barcodeModeCode128")}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -2591,21 +2598,18 @@ export const ProductForm = ({
                                 if (!productId || readOnly) {
                                   return;
                                 }
-                                const currentBarcodes = form
-                                  .getValues("barcodes")
-                                  ?.map((value) => value.trim())
-                                  .filter(Boolean) ?? [];
+                                const currentBarcodes =
+                                  form
+                                    .getValues("barcodes")
+                                    ?.map((value) => value.trim())
+                                    .filter(Boolean) ?? [];
                                 generateBarcodeMutation.mutate({
                                   productId,
                                   mode: barcodeGenerateMode,
                                   force: currentBarcodes.length === 0,
                                 });
                               }}
-                              disabled={
-                                readOnly ||
-                                !productId ||
-                                generateBarcodeMutation.isLoading
-                              }
+                              disabled={readOnly || !productId || generateBarcodeMutation.isLoading}
                             >
                               {generateBarcodeMutation.isLoading ? (
                                 <Spinner className="h-4 w-4" />
@@ -2736,7 +2740,9 @@ export const ProductForm = ({
                                     </FormControl>
                                     <FormDescription>
                                       {t("packMultiplierHint", {
-                                        unit: baseUnit ? resolveUnitLabel(baseUnit) : tCommon("notAvailable"),
+                                        unit: baseUnit
+                                          ? resolveUnitLabel(baseUnit)
+                                          : tCommon("notAvailable"),
                                       })}
                                     </FormDescription>
                                     <FormMessage />
@@ -2873,11 +2879,8 @@ export const ProductForm = ({
                     {fields.map((field, index) => {
                       const canDelete = field.canDelete ?? true;
                       const isBlocked = Boolean(field.id) && !canDelete;
-                      const tooltipLabel = isBlocked
-                        ? tErrors("variantInUse")
-                        : t("removeVariant");
-                      const variantAttributes =
-                        form.watch(`variants.${index}.attributes`) ?? [];
+                      const tooltipLabel = isBlocked ? tErrors("variantInUse") : t("removeVariant");
+                      const variantAttributes = form.watch(`variants.${index}.attributes`) ?? [];
                       const availableDefinitions = definitions.filter(
                         (definition) =>
                           !variantAttributes.some((entry) => entry.key === definition.key),
@@ -2954,7 +2957,9 @@ export const ProductForm = ({
                                       }
                                       const current =
                                         form.getValues(`variants.${index}.attributes`) ?? [];
-                                      if (current.some((entry) => entry.key === selectedAttributeKey)) {
+                                      if (
+                                        current.some((entry) => entry.key === selectedAttributeKey)
+                                      ) {
                                         return;
                                       }
                                       const definition = definitionMap.get(selectedAttributeKey);
@@ -2962,7 +2967,10 @@ export const ProductForm = ({
                                         definition?.type === "MULTI_SELECT" ? [] : "";
                                       form.setValue(
                                         `variants.${index}.attributes`,
-                                        [...current, { key: selectedAttributeKey, value: defaultValue }],
+                                        [
+                                          ...current,
+                                          { key: selectedAttributeKey, value: defaultValue },
+                                        ],
                                         { shouldDirty: true, shouldValidate: true },
                                       );
                                       setAttributeDrafts((prev) => ({
@@ -2985,17 +2993,20 @@ export const ProductForm = ({
                                   const label = resolveLabel(definition, attribute.key);
                                   const isRequired = Boolean(definition?.required);
                                   const options = resolveOptions(definition);
-                                  const fieldName = `variants.${index}.attributes.${attrIndex}.value` as const;
+                                  const fieldName =
+                                    `variants.${index}.attributes.${attrIndex}.value` as const;
                                   const selectedValues = Array.isArray(attribute.value)
                                     ? attribute.value.map((value) => String(value))
                                     : [];
                                   const currentValue =
-                                    typeof attribute.value === "string" || typeof attribute.value === "number"
+                                    typeof attribute.value === "string" ||
+                                    typeof attribute.value === "number"
                                       ? String(attribute.value)
                                       : "";
-                                  const selectOptions = currentValue && !options.includes(currentValue)
-                                    ? [currentValue, ...options]
-                                    : options;
+                                  const selectOptions =
+                                    currentValue && !options.includes(currentValue)
+                                      ? [currentValue, ...options]
+                                      : options;
                                   return (
                                     <FormField
                                       key={`${attribute.key}-${attrIndex}`}
@@ -3006,7 +3017,9 @@ export const ProductForm = ({
                                           <div className="flex items-center justify-between gap-2">
                                             <FormLabel>
                                               {label}
-                                              {isRequired ? <span className="text-danger"> *</span> : null}
+                                              {isRequired ? (
+                                                <span className="text-danger"> *</span>
+                                              ) : null}
                                             </FormLabel>
                                             {!readOnly && !isRequired ? (
                                               <Tooltip>
@@ -3031,7 +3044,9 @@ export const ProductForm = ({
                                                     <DeleteIcon className="h-3 w-3" aria-hidden />
                                                   </Button>
                                                 </TooltipTrigger>
-                                                <TooltipContent>{t("removeAttribute")}</TooltipContent>
+                                                <TooltipContent>
+                                                  {t("removeAttribute")}
+                                                </TooltipContent>
                                               </Tooltip>
                                             ) : null}
                                           </div>
@@ -3043,7 +3058,9 @@ export const ProductForm = ({
                                                 disabled={readOnly}
                                               >
                                                 <SelectTrigger>
-                                                  <SelectValue placeholder={t("selectAttributeValue")} />
+                                                  <SelectValue
+                                                    placeholder={t("selectAttributeValue")}
+                                                  />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                   {selectOptions.map((option) => (
@@ -3058,7 +3075,8 @@ export const ProductForm = ({
                                             <FormControl>
                                               <div className="flex flex-wrap gap-2">
                                                 {options.map((option) => {
-                                                  const isSelected = selectedValues.includes(option);
+                                                  const isSelected =
+                                                    selectedValues.includes(option);
                                                   return (
                                                     <Button
                                                       key={option}
@@ -3071,7 +3089,9 @@ export const ProductForm = ({
                                                           return;
                                                         }
                                                         const next = isSelected
-                                                          ? selectedValues.filter((value) => value !== option)
+                                                          ? selectedValues.filter(
+                                                              (value) => value !== option,
+                                                            )
                                                           : [...selectedValues, option];
                                                         attrField.onChange(next);
                                                       }}
@@ -3084,7 +3104,11 @@ export const ProductForm = ({
                                                 {selectedValues
                                                   .filter((value) => !options.includes(value))
                                                   .map((value) => (
-                                                    <Badge key={value} variant="muted" className="gap-1 pr-1">
+                                                    <Badge
+                                                      key={value}
+                                                      variant="muted"
+                                                      className="gap-1 pr-1"
+                                                    >
                                                       <span>{value}</span>
                                                       {!readOnly ? (
                                                         <Button
@@ -3100,7 +3124,10 @@ export const ProductForm = ({
                                                             attrField.onChange(next);
                                                           }}
                                                         >
-                                                          <CloseIcon className="h-3 w-3" aria-hidden />
+                                                          <CloseIcon
+                                                            className="h-3 w-3"
+                                                            aria-hidden
+                                                          />
                                                         </Button>
                                                       ) : null}
                                                     </Badge>
@@ -3116,9 +3143,15 @@ export const ProductForm = ({
                                                   return rest;
                                                 })()}
                                                 value={currentValue}
-                                                onChange={(event) => attrField.onChange(event.target.value)}
-                                                type={definition?.type === "NUMBER" ? "number" : "text"}
-                                                inputMode={definition?.type === "NUMBER" ? "decimal" : "text"}
+                                                onChange={(event) =>
+                                                  attrField.onChange(event.target.value)
+                                                }
+                                                type={
+                                                  definition?.type === "NUMBER" ? "number" : "text"
+                                                }
+                                                inputMode={
+                                                  definition?.type === "NUMBER" ? "decimal" : "text"
+                                                }
                                                 disabled={readOnly}
                                               />
                                             </FormControl>
@@ -3131,7 +3164,9 @@ export const ProductForm = ({
                                 })}
                               </div>
                             ) : (
-                              <p className="text-xs text-muted-foreground">{t("variantAttributesEmpty")}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {t("variantAttributesEmpty")}
+                              </p>
                             )}
                             {definitions.length === 0 ? (
                               <p className="text-xs text-muted-foreground">
@@ -3250,7 +3285,9 @@ export const ProductForm = ({
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold text-foreground">{label}</p>
-                            <p className="text-xs text-muted-foreground">{t("generatorAttributeHint")}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {t("generatorAttributeHint")}
+                            </p>
                           </div>
                           <Button
                             type="button"
@@ -3391,9 +3428,7 @@ export const ProductForm = ({
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{t("generatorPreview", { count: generatorPreviewCount })}</span>
-              {templateKeys.length ? (
-                <span>{t("generatorTemplateHint")}</span>
-              ) : null}
+              {templateKeys.length ? <span>{t("generatorTemplateHint")}</span> : null}
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
@@ -3486,7 +3521,9 @@ export const ProductForm = ({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">{t("imageEditorZoom")}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {t("imageEditorZoom")}
+                  </span>
                   <Badge variant="muted">{imageEditorZoomPercent}%</Badge>
                 </div>
                 <input
@@ -3508,7 +3545,9 @@ export const ProductForm = ({
 
               <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">{t("imageEditorRotation")}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {t("imageEditorRotation")}
+                  </span>
                   <Badge variant="muted">{imageEditorRotationDegrees}°</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-2">
