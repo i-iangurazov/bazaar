@@ -9,7 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -43,6 +42,61 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
   const inlineActions = actions.slice(0, maxInline);
   const menuActions = actions.slice(maxInline);
 
+  const renderMenuAction = (action: RowAction) => {
+    const item = (
+      <div className="flex items-center gap-2">
+        <action.icon className="h-4 w-4" aria-hidden />
+        <span>{action.label}</span>
+      </div>
+    );
+    const openInNewTab = Boolean(action.href && (action.openInNewTab ?? action.key === "edit"));
+
+    if (action.href && !action.disabled) {
+      return (
+        <DropdownMenuItem key={action.key} asChild>
+          {action.href.startsWith("/api/") ? (
+            <a
+              href={action.href}
+              target={openInNewTab ? "_blank" : undefined}
+              rel={openInNewTab ? "noopener noreferrer" : undefined}
+            >
+              {item}
+            </a>
+          ) : action.href.startsWith("/") ? (
+            <Link
+              href={action.href}
+              target={openInNewTab ? "_blank" : undefined}
+              rel={openInNewTab ? "noopener noreferrer" : undefined}
+            >
+              {item}
+            </Link>
+          ) : (
+            <a
+              href={action.href}
+              target={openInNewTab ? "_blank" : undefined}
+              rel={openInNewTab ? "noopener noreferrer" : undefined}
+            >
+              {item}
+            </a>
+          )}
+        </DropdownMenuItem>
+      );
+    }
+
+    return (
+      <DropdownMenuItem
+        key={action.key}
+        onSelect={(event) => {
+          event.preventDefault();
+          action.onSelect?.();
+        }}
+        disabled={action.disabled}
+      >
+        {item}
+      </DropdownMenuItem>
+    );
+  };
+
   return (
     <div className={cn("flex items-center gap-1", className)}>
       {inlineActions.map((action) => (
@@ -65,65 +119,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {menuActions.map((action) => {
-              const item = (
-                <div className="flex items-center gap-2">
-                  <action.icon className="h-4 w-4" aria-hidden />
-                  <span>{action.label}</span>
-                </div>
-              );
-              const openInNewTab = Boolean(
-                action.href && (action.openInNewTab ?? action.key === "edit"),
-              );
-
-              if (action.href && !action.disabled) {
-                return (
-                  <DropdownMenuItem key={action.key} asChild>
-                    {action.href.startsWith("/api/") ? (
-                      <a
-                        href={action.href}
-                        target={openInNewTab ? "_blank" : undefined}
-                        rel={openInNewTab ? "noopener noreferrer" : undefined}
-                      >
-                        {item}
-                      </a>
-                    ) : action.href.startsWith("/") ? (
-                      <Link
-                        href={action.href}
-                        target={openInNewTab ? "_blank" : undefined}
-                        rel={openInNewTab ? "noopener noreferrer" : undefined}
-                      >
-                        {item}
-                      </Link>
-                    ) : (
-                      <a
-                        href={action.href}
-                        target={openInNewTab ? "_blank" : undefined}
-                        rel={openInNewTab ? "noopener noreferrer" : undefined}
-                      >
-                        {item}
-                      </a>
-                    )}
-                  </DropdownMenuItem>
-                );
-              }
-
-              return (
-                <DropdownMenuItem
-                  key={action.key}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    action.onSelect?.();
-                  }}
-                  disabled={action.disabled}
-                >
-                  {item}
-                </DropdownMenuItem>
-              );
-            })}
-            {menuActions.some((action) => action.variant === "danger") ? (
-              <DropdownMenuSeparator />
-            ) : null}
+            {menuActions.map(renderMenuAction)}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}

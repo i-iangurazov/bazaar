@@ -105,6 +105,13 @@ const resolveCreateSku = async (
   throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
 };
 
+export const suggestNextProductSku = async (organizationId: string) =>
+  prisma.$transaction((tx) =>
+    resolveCreateSku(tx, {
+      organizationId,
+    }),
+  );
+
 const isOrganizationSkuUniqueConstraintError = (error: unknown) => {
   if (!error || typeof error !== "object") {
     return false;

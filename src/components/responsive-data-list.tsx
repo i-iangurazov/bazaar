@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ type ResponsiveDataListProps<T> = {
   empty?: ReactNode;
   desktopClassName?: string;
   mobileClassName?: string;
+  mobileItemsClassName?: string;
   paginationKey?: string;
   defaultPageSize?: number;
   pageSizeOptions?: number[];
@@ -29,6 +30,7 @@ type ResponsiveDataListProps<T> = {
   totalItems?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
+  scrollToTopOnPageChange?: boolean;
 };
 
 export const ResponsiveDataList = <T,>({
@@ -39,6 +41,7 @@ export const ResponsiveDataList = <T,>({
   empty,
   desktopClassName,
   mobileClassName,
+  mobileItemsClassName,
   paginationKey,
   defaultPageSize = 25,
   pageSizeOptions = [10, 25, 50, 100],
@@ -46,9 +49,12 @@ export const ResponsiveDataList = <T,>({
   totalItems,
   onPageChange,
   onPageSizeChange,
+  scrollToTopOnPageChange = false,
 }: ResponsiveDataListProps<T>) => {
   const tCommon = useTranslations("common");
   const list = useMemo(() => items ?? [], [items]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const didMountRef = useRef(false);
   const isServerPagination =
     typeof onPageChange === "function" &&
     typeof onPageSizeChange === "function" &&
@@ -104,6 +110,20 @@ export const ResponsiveDataList = <T,>({
     setInternalPage(totalPages);
   }, [isServerPagination, onPageChange, page, totalCount, totalPages]);
 
+  useEffect(() => {
+    if (!scrollToTopOnPageChange) {
+      return;
+    }
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    containerRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [page, scrollToTopOnPageChange]);
+
   const pagedItems = useMemo(() => {
     if (isServerPagination) {
       return list;
@@ -120,11 +140,11 @@ export const ResponsiveDataList = <T,>({
   const showPagination = totalPages > 1;
 
   return (
-    <>
+    <div ref={containerRef}>
       <div className={cn("hidden md:block", desktopClassName)}>{renderDesktop(pagedItems)}</div>
       <div className={cn("md:hidden", mobileClassName)}>
         {pagedItems.length ? (
-          <div className="space-y-3">
+          <div className={cn(mobileItemsClassName ?? "space-y-3")}>
             {pagedItems.map((item, index) => {
               const itemIndex = (page - 1) * pageSize + index;
               return (
@@ -221,6 +241,6 @@ export const ResponsiveDataList = <T,>({
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 };

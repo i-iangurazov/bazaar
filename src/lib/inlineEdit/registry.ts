@@ -33,6 +33,7 @@ export type InlineMutationInputByRoute = {
       name?: string;
       baseUnitId?: string;
       basePriceKgs?: number | null;
+      avgCostKgs?: number | null;
     };
   };
   "products.bulkUpdateCategory": {
@@ -143,6 +144,7 @@ export type InlineProductsRow = {
   unit: string;
   baseUnitId: string;
   basePriceKgs: number | null;
+  avgCostKgs?: number | null;
   onHandQty: number;
 };
 
@@ -310,6 +312,7 @@ export type InlineEditRegistry = {
     name: InlineEditColumnDefinition<InlineProductsRow, string, InlineProductsContext>;
     category: InlineEditColumnDefinition<InlineProductsRow, string | null, InlineProductsContext>;
     salePrice: InlineEditColumnDefinition<InlineProductsRow, number | null, InlineProductsContext>;
+    avgCost: InlineEditColumnDefinition<InlineProductsRow, number | null, InlineProductsContext>;
     onHand: InlineEditColumnDefinition<InlineProductsRow, number, InlineProductsContext>;
   };
   inventory: {
@@ -407,6 +410,19 @@ export const inlineEditRegistry: InlineEditRegistry = {
       },
       permissionCheck: (role, _row, context) =>
         context.storeId ? isManagerOrAdmin(role) : isAdmin(role),
+    },
+    avgCost: {
+      tableKey: "products",
+      columnKey: "avgCost",
+      inputType: "money",
+      formatter: (value, _row, _context, display) =>
+        formatMoney(value, display.locale, display.notAvailableLabel),
+      parser: (raw) => parseNonNegativeMoney(raw),
+      mutation: (row, value) => ({
+        route: "products.inlineUpdate",
+        input: { productId: row.id, patch: { avgCostKgs: value } },
+      }),
+      permissionCheck: (role) => isAdmin(role),
     },
     onHand: {
       tableKey: "products",

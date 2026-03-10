@@ -268,6 +268,22 @@ const resolveHeicLikeMimeType = (file: File) => {
   return "";
 };
 
+const resolveDefaultUnitId = (options: UnitOption[]) => {
+  const preferred = options.find((unit) => {
+    const haystack = [unit.code, unit.labelRu, unit.labelKg]
+      .map((value) => value.trim().toLowerCase())
+      .join(" ");
+    return (
+      haystack.includes("шт") ||
+      haystack.includes("шту") ||
+      haystack.includes("pcs") ||
+      haystack.includes("piece") ||
+      haystack.includes("pc")
+    );
+  });
+  return preferred?.id ?? options[0]?.id ?? "";
+};
+
 export const ProductForm = ({
   initialValues,
   onSubmit,
@@ -477,7 +493,7 @@ export const ProductForm = ({
 
   useEffect(() => {
     if (!form.getValues("baseUnitId") && unitOptions.length) {
-      form.setValue("baseUnitId", unitOptions[0].id, { shouldValidate: true });
+      form.setValue("baseUnitId", resolveDefaultUnitId(unitOptions), { shouldValidate: true });
     }
   }, [form, unitOptions]);
 
@@ -573,13 +589,6 @@ export const ProductForm = ({
   const [barcodeInput, setBarcodeInput] = useState("");
   const [barcodeGenerateMode, setBarcodeGenerateMode] = useState<"EAN13" | "CODE128">("EAN13");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
-  const [showDetails, setShowDetails] = useState(() =>
-    Boolean(
-      initialValues.description?.trim() ||
-      initialValues.photoUrl?.trim() ||
-      initialValues.images?.length,
-    ),
-  );
   const [showAdvanced, setShowAdvanced] = useState(() =>
     Boolean(initialValues.barcodes?.length || initialValues.variants?.length),
   );
@@ -1928,6 +1937,233 @@ export const ProductForm = ({
     setVariantToRemove(null);
   };
 
+  const imageManagementSection = (
+    <FormSection title={t("imagesTitle")} description={t("imagesHint")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.heic,.heics,.heif,.heifs,.hif,image/heic,image/heif,image/heic-sequence,image/heif-sequence"
+          multiple
+          className="hidden"
+          disabled={readOnly || isUploadingImages}
+          onChange={(event) => {
+            const files = event.target.files;
+            if (files && files.length) {
+              void handleImageFiles(files);
+            }
+            event.target.value = "";
+          }}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full sm:w-auto"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={readOnly || isUploadingImages}
+        >
+          {isUploadingImages ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <ImagePlusIcon className="h-4 w-4" aria-hidden />
+          )}
+          {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+        </Button>
+        <span className="text-xs text-muted-foreground">{t("imagesReorderHint")}</span>
+      </div>
+      <div
+        className={`rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
+          isDragActive ? "border-ink bg-muted/30" : "border-border"
+        }`}
+        onDragOver={handleImageDragOver}
+        onDragLeave={handleImageDragLeave}
+        onDrop={handleImageDrop}
+      >
+        {t("imagesDrop")}
+      </div>
+      {imageFields.length ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {imageFields.map((image, index) => {
+            const imageUrl = watchedImages[index]?.url?.trim() || image.url;
+            const canMoveUp = index > 0;
+            const canMoveDown = index < imageFields.length - 1;
+            return (
+              <div
+                key={image.id}
+                className={`flex items-start gap-3 rounded-md border border-border bg-card p-3 ${
+                  draggedImageIndex === index ? "opacity-60" : ""
+                }`}
+                draggable={!readOnly}
+                onDragStart={() => {
+                  if (readOnly) {
+                    return;
+                  }
+                  setDraggedImageIndex(index);
+                }}
+                onDragEnd={() => setDraggedImageIndex(null)}
+                onDragOver={(event) => {
+                  if (draggedImageIndex === null || readOnly) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (draggedImageIndex === null || draggedImageIndex === index || readOnly) {
+                    return;
+                  }
+                  handleMoveImage(draggedImageIndex, index);
+                  setDraggedImageIndex(null);
+                }}
+              >
+                <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-md bg-muted/30">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={withPreviewVersion(imageUrl, image.id)}
+                    alt={t("imageAlt", { index: index + 1 })}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {index === 0 ? <Badge variant="success">{t("imagePrimary")}</Badge> : null}
+                    <span className="text-xs text-muted-foreground">
+                      {t("imagePosition", {
+                        index: index + 1,
+                        total: imageFields.length,
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <GripIcon className="h-4 w-4" aria-hidden />
+                    {t("imageDragHint")}
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => void openImageEditor(index, imageUrl)}
+                      disabled={isUploadingImages || isSavingImageEdit}
+                    >
+                      {readOnly ? (
+                        <ViewIcon className="h-3.5 w-3.5" aria-hidden />
+                      ) : (
+                        <EditIcon className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {readOnly ? t("imagePreview") : t("imagePreviewEdit")}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shadow-none"
+                        aria-label={t("imageMoveUp")}
+                        onClick={() => canMoveUp && handleMoveImage(index, index - 1)}
+                        disabled={!canMoveUp || readOnly}
+                      >
+                        <ArrowUpIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("imageMoveUp")}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shadow-none"
+                        aria-label={t("imageMoveDown")}
+                        onClick={() => canMoveDown && handleMoveImage(index, index + 1)}
+                        disabled={!canMoveDown || readOnly}
+                      >
+                        <ArrowDownIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("imageMoveDown")}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-danger shadow-none hover:text-danger"
+                        aria-label={t("imageRemove")}
+                        onClick={() => handleRemoveImageAt(index)}
+                        disabled={readOnly}
+                      >
+                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("imageRemove")}</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground/80">{t("imagesEmpty")}</p>
+      )}
+      <FormField
+        control={form.control}
+        name="photoUrl"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{t("photoUrl")}</FormLabel>
+            {orderedImageUrls.length ? (
+              <div className="space-y-2">
+                {orderedImageUrls.map((image, index) => (
+                  <a
+                    key={image.id}
+                    href={image.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block space-y-1 rounded-md border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {index === 0 ? (
+                          <Badge variant="success">{t("imagePrimary")}</Badge>
+                        ) : (
+                          <Badge variant="muted">{`#${index + 1}`}</Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {t("imagePosition", {
+                            index: index + 1,
+                            total: orderedImageUrls.length,
+                          })}
+                        </span>
+                      </div>
+                      <ViewIcon
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        aria-hidden
+                      />
+                    </div>
+                    <p className="break-all text-xs text-muted-foreground">{image.url}</p>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <FormControl>
+                <Input {...field} disabled={readOnly} />
+              </FormControl>
+            )}
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </FormSection>
+  );
+
   return (
     <Form {...form}>
       <form className="space-y-6" onSubmit={form.handleSubmit(handleSubmit)}>
@@ -1937,190 +2173,186 @@ export const ProductForm = ({
               <CardTitle>{isBundle ? t("detailsBundleTitle") : t("detailsTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {imageManagementSection}
+
               <FormSection title={isBundle ? t("basicInfoBundleTitle") : t("basicInfoTitle")}>
-                <FormGrid className="items-start">
-                  <FormField
-                    control={form.control}
-                    name="sku"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("sku")}</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={readOnly} />
-                        </FormControl>
-                        {!productId ? (
-                          <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
-                        ) : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("name")}</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={readOnly} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="isBundle"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("typeLabel")}</FormLabel>
-                        <Select
-                          value={field.value ? "bundle" : "product"}
-                          onValueChange={(value) => field.onChange(value === "bundle")}
-                          disabled={readOnly}
-                        >
+                <div className="space-y-6">
+                  <FormGrid className="items-start">
+                    <FormField
+                      control={form.control}
+                      name="sku"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("sku")}</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Input {...field} disabled={readOnly} />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="product">{t("typeProduct")}</SelectItem>
-                            <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("category")}</FormLabel>
-                        <FormControl>
+                          {!productId ? (
+                            <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
+                          ) : null}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("name")}</FormLabel>
+                          <FormControl>
+                            <Input {...field} disabled={readOnly} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="isBundle"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("typeLabel")}</FormLabel>
                           <Select
-                            value={field.value?.trim() || emptyCategoryOptionValue}
-                            onValueChange={(value) =>
-                              field.onChange(value === emptyCategoryOptionValue ? "" : value)
-                            }
+                            value={field.value ? "bundle" : "product"}
+                            onValueChange={(value) => field.onChange(value === "bundle")}
                             disabled={readOnly}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder={t("categoryPlaceholder")} />
-                            </SelectTrigger>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
                             <SelectContent>
-                              <SelectItem value={emptyCategoryOptionValue}>
-                                {tCommon("notAvailable")}
-                              </SelectItem>
-                              {categoryOptions.map((value) => (
-                                <SelectItem key={value} value={value}>
-                                  {value}
+                              <SelectItem value="product">{t("typeProduct")}</SelectItem>
+                              <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("category")}</FormLabel>
+                          <FormControl>
+                            <Select
+                              value={field.value?.trim() || emptyCategoryOptionValue}
+                              onValueChange={(value) =>
+                                field.onChange(value === emptyCategoryOptionValue ? "" : value)
+                              }
+                              disabled={readOnly}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={t("categoryPlaceholder")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={emptyCategoryOptionValue}>
+                                  {tCommon("notAvailable")}
+                                </SelectItem>
+                                {categoryOptions.map((value) => (
+                                  <SelectItem key={value} value={value}>
+                                    {value}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormDescription>{t("categoryHint")}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="baseUnitId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("unit")}</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            disabled={readOnly || !unitOptions.length}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={t("unitPlaceholder")} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {unitOptions.map((unit) => (
+                                <SelectItem key={unit.id} value={unit.id}>
+                                  {resolveUnitLabel(unit)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                        </FormControl>
-                        <FormDescription>{t("categoryHint")}</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="baseUnitId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("unit")}</FormLabel>
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                          disabled={readOnly || !unitOptions.length}
-                        >
+                          {!unitOptions.length ? (
+                            <FormDescription>{t("unitMissingHint")}</FormDescription>
+                          ) : null}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="basePriceKgs"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("salePrice")}</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t("unitPlaceholder")} />
-                            </SelectTrigger>
+                            <Input
+                              {...field}
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              placeholder={t("pricePlaceholder")}
+                              disabled={readOnly}
+                            />
                           </FormControl>
-                          <SelectContent>
-                            {unitOptions.map((unit) => (
-                              <SelectItem key={unit.id} value={unit.id}>
-                                {resolveUnitLabel(unit)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {!unitOptions.length ? (
-                          <FormDescription>{t("unitMissingHint")}</FormDescription>
-                        ) : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="avgCostKgs"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("avgCost")}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              placeholder={t("pricePlaceholder")}
+                              disabled={readOnly}
+                            />
+                          </FormControl>
+                          <FormDescription>{t("avgCostHint")}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </FormGrid>
                   <FormField
                     control={form.control}
-                    name="basePriceKgs"
+                    name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{t("basePrice")}</FormLabel>
+                        <FormLabel>{t("description")}</FormLabel>
                         <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            placeholder={t("pricePlaceholder")}
-                            disabled={readOnly}
-                          />
+                          <Textarea {...field} rows={4} disabled={readOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="purchasePriceKgs"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("purchasePrice")}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            placeholder={t("pricePlaceholder")}
-                            disabled={readOnly}
-                          />
-                        </FormControl>
-                        <FormDescription>{t("purchasePriceHint")}</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="avgCostKgs"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("avgCost")}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            placeholder={t("pricePlaceholder")}
-                            disabled={readOnly}
-                          />
-                        </FormControl>
-                        <FormDescription>{t("avgCostHint")}</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </FormGrid>
+                </div>
               </FormSection>
 
               {isBundle ? (
@@ -2238,276 +2470,6 @@ export const ProductForm = ({
                     )}
                   </div>
                 </FormSection>
-              ) : null}
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-foreground">{t("descriptionTitle")}</h3>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowDetails((prev) => !prev)}
-                >
-                  {showDetails ? t("hideDetails") : t("showDetails")}
-                </Button>
-              </div>
-              {showDetails ? (
-                <>
-                  <Separator />
-                  <FormSection title={t("imagesTitle")} description={t("imagesHint")}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*,.heic,.heics,.heif,.heifs,.hif,image/heic,image/heif,image/heic-sequence,image/heif-sequence"
-                        multiple
-                        className="hidden"
-                        disabled={readOnly || isUploadingImages}
-                        onChange={(event) => {
-                          const files = event.target.files;
-                          if (files && files.length) {
-                            void handleImageFiles(files);
-                          }
-                          event.target.value = "";
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full sm:w-auto"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={readOnly || isUploadingImages}
-                      >
-                        {isUploadingImages ? (
-                          <Spinner className="h-4 w-4" />
-                        ) : (
-                          <ImagePlusIcon className="h-4 w-4" aria-hidden />
-                        )}
-                        {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
-                      </Button>
-                      <span className="text-xs text-muted-foreground">
-                        {t("imagesReorderHint")}
-                      </span>
-                    </div>
-                    <div
-                      className={`rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
-                        isDragActive ? "border-ink bg-muted/30" : "border-border"
-                      }`}
-                      onDragOver={handleImageDragOver}
-                      onDragLeave={handleImageDragLeave}
-                      onDrop={handleImageDrop}
-                    >
-                      {t("imagesDrop")}
-                    </div>
-                    {imageFields.length ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {imageFields.map((image, index) => {
-                          const imageUrl = watchedImages[index]?.url?.trim() || image.url;
-                          const canMoveUp = index > 0;
-                          const canMoveDown = index < imageFields.length - 1;
-                          return (
-                            <div
-                              key={image.id}
-                              className={`flex items-start gap-3 rounded-md border border-border bg-card p-3 ${
-                                draggedImageIndex === index ? "opacity-60" : ""
-                              }`}
-                              draggable={!readOnly}
-                              onDragStart={() => {
-                                if (readOnly) {
-                                  return;
-                                }
-                                setDraggedImageIndex(index);
-                              }}
-                              onDragEnd={() => setDraggedImageIndex(null)}
-                              onDragOver={(event) => {
-                                if (draggedImageIndex === null || readOnly) {
-                                  return;
-                                }
-                                event.preventDefault();
-                              }}
-                              onDrop={(event) => {
-                                event.preventDefault();
-                                if (
-                                  draggedImageIndex === null ||
-                                  draggedImageIndex === index ||
-                                  readOnly
-                                ) {
-                                  return;
-                                }
-                                handleMoveImage(draggedImageIndex, index);
-                                setDraggedImageIndex(null);
-                              }}
-                            >
-                              <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-md bg-muted/30">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={withPreviewVersion(imageUrl, image.id)}
-                                  alt={t("imageAlt", { index: index + 1 })}
-                                  className="h-full w-full object-cover"
-                                />
-                              </div>
-                              <div className="min-w-0 flex-1 space-y-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  {index === 0 ? (
-                                    <Badge variant="success">{t("imagePrimary")}</Badge>
-                                  ) : null}
-                                  <span className="text-xs text-muted-foreground">
-                                    {t("imagePosition", {
-                                      index: index + 1,
-                                      total: imageFields.length,
-                                    })}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <GripIcon className="h-4 w-4" aria-hidden />
-                                  {t("imageDragHint")}
-                                </div>
-                                <div>
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    className="h-8 px-3 text-xs"
-                                    onClick={() => void openImageEditor(index, imageUrl)}
-                                    disabled={isUploadingImages || isSavingImageEdit}
-                                  >
-                                    {readOnly ? (
-                                      <ViewIcon className="h-3.5 w-3.5" aria-hidden />
-                                    ) : (
-                                      <EditIcon className="h-3.5 w-3.5" aria-hidden />
-                                    )}
-                                    {readOnly ? t("imagePreview") : t("imagePreviewEdit")}
-                                  </Button>
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-center gap-2">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      aria-label={t("imageMoveUp")}
-                                      onClick={() => canMoveUp && handleMoveImage(index, index - 1)}
-                                      disabled={!canMoveUp || readOnly}
-                                    >
-                                      <ArrowUpIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t("imageMoveUp")}</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      aria-label={t("imageMoveDown")}
-                                      onClick={() =>
-                                        canMoveDown && handleMoveImage(index, index + 1)
-                                      }
-                                      disabled={!canMoveDown || readOnly}
-                                    >
-                                      <ArrowDownIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t("imageMoveDown")}</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="text-danger shadow-none hover:text-danger"
-                                      aria-label={t("imageRemove")}
-                                      onClick={() => handleRemoveImageAt(index)}
-                                      disabled={readOnly}
-                                    >
-                                      <DeleteIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t("imageRemove")}</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground/80">{t("imagesEmpty")}</p>
-                    )}
-                    <FormField
-                      control={form.control}
-                      name="photoUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("photoUrl")}</FormLabel>
-                          {orderedImageUrls.length ? (
-                            <div className="space-y-2">
-                              {orderedImageUrls.map((image, index) => (
-                                <a
-                                  key={image.id}
-                                  href={image.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="block space-y-1 rounded-md border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
-                                >
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {index === 0 ? (
-                                        <Badge variant="success">{t("imagePrimary")}</Badge>
-                                      ) : (
-                                        <Badge variant="muted">{`#${index + 1}`}</Badge>
-                                      )}
-                                      <span className="text-xs text-muted-foreground">
-                                        {t("imagePosition", {
-                                          index: index + 1,
-                                          total: orderedImageUrls.length,
-                                        })}
-                                      </span>
-                                    </div>
-                                    <ViewIcon
-                                      className="h-3.5 w-3.5 text-muted-foreground"
-                                      aria-hidden
-                                    />
-                                  </div>
-                                  <p className="break-all text-xs text-muted-foreground">
-                                    {image.url}
-                                  </p>
-                                </a>
-                              ))}
-                            </div>
-                          ) : (
-                            <FormControl>
-                              <Input {...field} disabled={readOnly} />
-                            </FormControl>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </FormSection>
-                  <FormSection>
-                    <FormGrid className="items-start">
-                      <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t("description")}</FormLabel>
-                            <FormControl>
-                              <Textarea {...field} rows={4} disabled={readOnly} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </FormGrid>
-                  </FormSection>
-                </>
               ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-3">

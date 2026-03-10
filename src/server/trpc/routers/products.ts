@@ -14,6 +14,7 @@ import {
   duplicateProduct,
   generateProductBarcode,
   restoreProduct,
+  suggestNextProductSku,
   type ImportUpdateField,
   updateProduct,
 } from "@/server/services/products";
@@ -66,12 +67,25 @@ const importUpdateFieldEnum = z.enum([
 ]);
 
 const barcodeGenerationModeEnum = z.enum(["EAN13", "CODE128"]);
+const productSortKeyEnum = z.enum([
+  "sku",
+  "name",
+  "category",
+  "unit",
+  "onHandQty",
+  "salePrice",
+  "avgCost",
+  "barcodes",
+  "stores",
+]);
+const productSortDirectionEnum = z.enum(["asc", "desc"]);
 
 const inlineUpdatePatchSchema = z
   .object({
     name: z.string().min(2).optional(),
     baseUnitId: z.string().min(1).optional(),
     basePriceKgs: z.number().min(0).nullable().optional(),
+    avgCostKgs: z.number().min(0).nullable().optional(),
   })
   .superRefine((value, ctx) => {
     if (Object.keys(value).length === 0) {
@@ -83,6 +97,13 @@ const inlineUpdatePatchSchema = z
   });
 
 export const productsRouter = router({
+  suggestSku: adminProcedure.query(async ({ ctx }) => {
+    try {
+      return await suggestNextProductSku(ctx.user.organizationId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
   lookupScan: protectedProcedure
     .input(z.object({ q: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -384,6 +405,8 @@ export const productsRouter = router({
           storeId: z.string().optional(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(200).optional(),
+          sortKey: productSortKeyEnum.optional(),
+          sortDirection: productSortDirectionEnum.optional(),
         })
         .optional(),
     )
@@ -397,6 +420,8 @@ export const productsRouter = router({
 
       const page = input?.page ?? 1;
       const pageSize = input?.pageSize ?? 25;
+      const sortKey = input?.sortKey ?? "name";
+      const sortDirection = input?.sortDirection ?? "asc";
       const where = {
         ...(input?.includeArchived ? {} : { isDeleted: false }),
         ...(input?.search
@@ -416,43 +441,39 @@ export const productsRouter = router({
         organizationId: ctx.user.organizationId,
       };
 
-      const [total, products] = await Promise.all([
-        ctx.prisma.product.count({ where }),
-        ctx.prisma.product.findMany({
-          where,
-          select: {
-            id: true,
-            sku: true,
-            name: true,
-            category: true,
-            unit: true,
-            baseUnitId: true,
-            isBundle: true,
-            isDeleted: true,
-            photoUrl: true,
-            basePriceKgs: true,
-            barcodes: { select: { value: true } },
-            inventorySnapshots: { select: { storeId: true, onHand: true } },
-            images: {
-              where: {
-                url: {
-                  not: { startsWith: "data:image/" },
-                },
+      const products = await ctx.prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          category: true,
+          unit: true,
+          baseUnitId: true,
+          isBundle: true,
+          isDeleted: true,
+          photoUrl: true,
+          basePriceKgs: true,
+          barcodes: { select: { value: true } },
+          inventorySnapshots: { select: { storeId: true, onHand: true } },
+          images: {
+            where: {
+              url: {
+                not: { startsWith: "data:image/" },
               },
-              select: { id: true, url: true, position: true },
-              orderBy: { position: "asc" },
-              take: 1,
             },
+            select: { id: true, url: true, position: true },
+            orderBy: { position: "asc" },
+            take: 1,
           },
-          orderBy: { name: "asc" },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ]);
+        },
+        orderBy: [{ name: "asc" }, { sku: "asc" }],
+      });
+      const total = products.length;
 
       const items = await (async () => {
         const productIds = products.map((product) => product.id);
-        const [baseCosts, latestPurchaseLines] = productIds.length
+        const [baseCosts, latestPurchaseLines, stores] = productIds.length
           ? await Promise.all([
               ctx.prisma.productCost.findMany({
                 where: {
@@ -484,8 +505,14 @@ export const productsRouter = router({
                 orderBy: [{ productId: "asc" }, { purchaseOrder: { receivedAt: "desc" } }],
                 distinct: ["productId"],
               }),
+              sortKey === "stores"
+                ? ctx.prisma.store.findMany({
+                    where: { organizationId: ctx.user.organizationId },
+                    select: { id: true, name: true },
+                  })
+                : Promise.resolve([] as Array<{ id: string; name: string }>),
             ])
-          : [[], []];
+          : [[], [], []];
 
         const avgCostByProductId = new Map(
           baseCosts.map((cost) => [cost.productId, Number(cost.avgCostKgs)]),
@@ -493,6 +520,7 @@ export const productsRouter = router({
         const purchasePriceByProductId = new Map(
           latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
         );
+        const storeNameById = new Map(stores.map((store) => [store.id, store.name]));
         const resolveOnHandQty = (
           snapshots: Array<{ storeId: string; onHand: number }>,
           selectedStoreId?: string,
@@ -504,8 +532,8 @@ export const productsRouter = router({
             return sum + snapshot.onHand;
           }, 0);
 
-        if (!input?.storeId || !products.length) {
-          return products.map((product) => ({
+        const baseItems = !input?.storeId || !products.length
+          ? products.map((product) => ({
             ...product,
             images: product.images.flatMap((image) => {
               const sanitized = sanitizeListImageUrl(image.url);
@@ -521,41 +549,123 @@ export const productsRouter = router({
             avgCostKgs: avgCostByProductId.get(product.id) ?? null,
             onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
             priceOverridden: false,
-          }));
-        }
+          }))
+          : await (async () => {
+              const storePrices = await ctx.prisma.storePrice.findMany({
+                where: {
+                  organizationId: ctx.user.organizationId,
+                  storeId: input.storeId,
+                  productId: { in: products.map((product) => product.id) },
+                  variantKey: "BASE",
+                },
+              });
+              const priceMap = new Map(storePrices.map((price) => [price.productId, price]));
 
-        const storePrices = await ctx.prisma.storePrice.findMany({
-          where: {
-            organizationId: ctx.user.organizationId,
-            storeId: input.storeId,
-            productId: { in: products.map((product) => product.id) },
-            variantKey: "BASE",
-          },
-        });
-        const priceMap = new Map(storePrices.map((price) => [price.productId, price]));
+              return products.map((product) => {
+                const basePrice = decimalToNumber(product.basePriceKgs);
+                const override = priceMap.get(product.id);
+                const effectivePrice = override ? decimalToNumber(override.priceKgs) : basePrice;
+                return {
+                  ...product,
+                  images: product.images.flatMap((image) => {
+                    const sanitized = sanitizeListImageUrl(image.url);
+                    return sanitized ? [{ ...image, url: sanitized }] : [];
+                  }),
+                  photoUrl: sanitizeListImageUrl(product.photoUrl),
+                  basePriceKgs: basePrice,
+                  effectivePriceKgs: effectivePrice,
+                  purchasePriceKgs:
+                    purchasePriceByProductId.get(product.id) ??
+                    avgCostByProductId.get(product.id) ??
+                    null,
+                  avgCostKgs: avgCostByProductId.get(product.id) ?? null,
+                  onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
+                  priceOverridden: Boolean(override),
+                };
+              });
+            })();
 
-        return products.map((product) => {
-          const basePrice = decimalToNumber(product.basePriceKgs);
-          const override = priceMap.get(product.id);
-          const effectivePrice = override ? decimalToNumber(override.priceKgs) : basePrice;
-          return {
-            ...product,
-            images: product.images.flatMap((image) => {
-              const sanitized = sanitizeListImageUrl(image.url);
-              return sanitized ? [{ ...image, url: sanitized }] : [];
-            }),
-            photoUrl: sanitizeListImageUrl(product.photoUrl),
-            basePriceKgs: basePrice,
-            effectivePriceKgs: effectivePrice,
-            purchasePriceKgs:
-              purchasePriceByProductId.get(product.id) ??
-              avgCostByProductId.get(product.id) ??
-              null,
-            avgCostKgs: avgCostByProductId.get(product.id) ?? null,
-            onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
-            priceOverridden: Boolean(override),
-          };
+        const sortCollator = new Intl.Collator(undefined, {
+          numeric: true,
+          sensitivity: "base",
         });
+        const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+        const resolveSalePriceForSort = (
+          product: (typeof baseItems)[number],
+        ) => {
+          const value = input?.storeId ? product.effectivePriceKgs : product.basePriceKgs;
+          return value ?? Number.NEGATIVE_INFINITY;
+        };
+        const resolveBarcodeSortValue = (product: (typeof baseItems)[number]) =>
+          product.barcodes
+            .map((entry) => entry.value.trim())
+            .filter(Boolean)
+            .sort((left, right) => sortCollator.compare(left, right))
+            .join(", ");
+        const resolveStoreSortValue = (product: (typeof baseItems)[number]) =>
+          Array.from(
+            new Set(
+              product.inventorySnapshots
+                .map((snapshot) => storeNameById.get(snapshot.storeId))
+                .filter((name): name is string => Boolean(name)),
+            ),
+          )
+            .sort((left, right) => sortCollator.compare(left, right))
+            .join(", ");
+
+        baseItems.sort((left, right) => {
+          let result = 0;
+          switch (sortKey) {
+            case "sku":
+              result = sortCollator.compare(left.sku, right.sku);
+              break;
+            case "name":
+              result = sortCollator.compare(left.name, right.name);
+              break;
+            case "category":
+              result = sortCollator.compare(left.category ?? "", right.category ?? "");
+              break;
+            case "unit":
+              result = sortCollator.compare(left.unit ?? "", right.unit ?? "");
+              break;
+            case "onHandQty":
+              result = left.onHandQty - right.onHandQty;
+              break;
+            case "salePrice":
+              result = resolveSalePriceForSort(left) - resolveSalePriceForSort(right);
+              break;
+            case "avgCost":
+              result =
+                (left.avgCostKgs ?? Number.NEGATIVE_INFINITY) -
+                (right.avgCostKgs ?? Number.NEGATIVE_INFINITY);
+              break;
+            case "barcodes":
+              result = sortCollator.compare(
+                resolveBarcodeSortValue(left),
+                resolveBarcodeSortValue(right),
+              );
+              break;
+            case "stores":
+              result = sortCollator.compare(resolveStoreSortValue(left), resolveStoreSortValue(right));
+              break;
+            default:
+              result = 0;
+          }
+
+          if (result === 0) {
+            result = sortCollator.compare(left.name, right.name);
+          }
+          if (result === 0) {
+            result = sortCollator.compare(left.sku, right.sku);
+          }
+          if (result === 0) {
+            result = left.id.localeCompare(right.id);
+          }
+
+          return result * directionMultiplier;
+        });
+
+        return baseItems.slice((page - 1) * pageSize, page * pageSize);
       })();
 
       return {
@@ -1068,6 +1178,16 @@ export const productsRouter = router({
         if (!existing || existing.organizationId !== ctx.user.organizationId) {
           throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
         }
+        const existingCost = await ctx.prisma.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: ctx.user.organizationId,
+              productId: existing.id,
+              variantKey: "BASE",
+            },
+          },
+          select: { avgCostKgs: true },
+        });
 
         return await updateProduct({
           productId: existing.id,
@@ -1082,6 +1202,10 @@ export const productsRouter = router({
             input.patch.basePriceKgs !== undefined
               ? input.patch.basePriceKgs
               : decimalToNumber(existing.basePriceKgs),
+          avgCostKgs:
+            input.patch.avgCostKgs !== undefined
+              ? input.patch.avgCostKgs
+              : decimalToNumber(existingCost?.avgCostKgs),
           description: existing.description,
           photoUrl: existing.photoUrl,
           supplierId: existing.supplierId,

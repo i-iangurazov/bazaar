@@ -36,12 +36,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Form,
@@ -64,7 +58,6 @@ import {
   EditIcon,
   EmptyIcon,
   GridViewIcon,
-  MoreIcon,
   PriceIcon,
   PrintIcon,
   RestoreIcon,
@@ -73,7 +66,6 @@ import {
   ViewIcon,
 } from "@/components/icons";
 import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
-import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
@@ -84,7 +76,6 @@ import {
 } from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import {
   inlineEditRegistry,
   type InlineMutationOperation,
@@ -157,7 +148,7 @@ const ProductsPage = () => {
     key: ProductSortKey;
     direction: ProductSortDirection;
   }>({ key: "name", direction: "asc" });
-  const inlineEditingEnabled = isInlineEditingEnabled();
+  const inlineEditingEnabled = true;
 
   const storesQuery = trpc.stores.list.useQuery();
   const categoriesQuery = trpc.productCategories.list.useQuery();
@@ -170,8 +161,21 @@ const ProductsPage = () => {
       storeId: storeId || undefined,
       page: productsPage,
       pageSize: productsPageSize,
+      sortKey: productSort.key,
+      sortDirection: productSort.direction,
     }),
-    [category, isAdmin, productType, productsPage, productsPageSize, search, showArchived, storeId],
+    [
+      category,
+      isAdmin,
+      productSort.direction,
+      productSort.key,
+      productType,
+      productsPage,
+      productsPageSize,
+      search,
+      showArchived,
+      storeId,
+    ],
   );
   const productsQuery = trpc.products.list.useQuery(productsListInput, { keepPreviousData: true });
   const products = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
@@ -314,6 +318,10 @@ const ProductsPage = () => {
   }, [search, category, showArchived, storeId, productType]);
 
   useEffect(() => {
+    setProductsPage(1);
+  }, [productSort.direction, productSort.key]);
+
+  useEffect(() => {
     setSelectedIds(new Set());
   }, [search, category, showArchived, storeId, productType]);
 
@@ -380,6 +388,7 @@ const ProductsPage = () => {
             baseUnitId: patch.baseUnitId ?? item.baseUnitId,
             unit: item.unit,
             basePriceKgs: nextBasePrice,
+            avgCostKgs: patch.avgCostKgs !== undefined ? patch.avgCostKgs : item.avgCostKgs,
             effectivePriceKgs: showEffectivePrice ? item.effectivePriceKgs : nextBasePrice,
           };
         });
@@ -944,6 +953,7 @@ const ProductsPage = () => {
               label: tCommon("edit"),
               icon: EditIcon,
               href: `/products/${product.id}`,
+              openInNewTab: true,
             },
             {
               key: "duplicate",
@@ -975,6 +985,7 @@ const ProductsPage = () => {
             label: tCommon("view"),
             icon: ViewIcon,
             href: `/products/${product.id}`,
+            openInNewTab: false,
           },
         ]),
   ];
@@ -1341,7 +1352,7 @@ const ProductsPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
-          <div className="hidden items-center gap-1 rounded-lg border border-border p-1 sm:inline-flex">
+          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
             <Button
               type="button"
               size="sm"
@@ -1538,6 +1549,10 @@ const ProductsPage = () => {
               totalItems={productsTotal}
               onPageChange={setProductsPage}
               onPageSizeChange={setProductsPageSize}
+              scrollToTopOnPageChange
+              mobileItemsClassName={
+                viewMode === "grid" ? "grid grid-cols-2 gap-3" : undefined
+              }
               renderDesktop={(visibleItems) =>
                 viewMode === "table" ? (
                   <div className="overflow-x-auto">
@@ -1690,9 +1705,20 @@ const ProductsPage = () => {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground">
-                                  {product.avgCostKgs !== null && product.avgCostKgs !== undefined
-                                    ? formatCurrencyKGS(product.avgCostKgs, locale)
-                                    : tCommon("notAvailable")}
+                                  <InlineEditableCell
+                                    rowId={product.id}
+                                    row={product}
+                                    value={product.avgCostKgs}
+                                    definition={inlineEditRegistry.products.avgCost}
+                                    context={inlineProductsContext}
+                                    role={role}
+                                    locale={locale}
+                                    columnLabel={t("avgCost")}
+                                    tTable={t}
+                                    tCommon={tCommon}
+                                    enabled={inlineEditingEnabled}
+                                    executeMutation={executeInlineProductMutation}
+                                  />
                                 </TableCell>
                                 <TableCell className="text-xs text-muted-foreground">
                                   {barcodeSummary.label}
@@ -1714,94 +1740,11 @@ const ProductsPage = () => {
                                   )}
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    {isAdmin ? (
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="shadow-none"
-                                            aria-label={tCommon("actions")}
-                                          >
-                                            <MoreIcon className="h-4 w-4" aria-hidden />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                          {product.isDeleted ? (
-                                            <DropdownMenuItem
-                                              onClick={async () => {
-                                                if (
-                                                  !(await confirm({
-                                                    description: t("confirmRestore"),
-                                                    confirmVariant: "danger",
-                                                  }))
-                                                ) {
-                                                  return;
-                                                }
-                                                restoreMutation.mutate({ productId: product.id });
-                                              }}
-                                            >
-                                              {t("restore")}
-                                            </DropdownMenuItem>
-                                          ) : (
-                                            <>
-                                              <DropdownMenuItem asChild>
-                                                <Link
-                                                  href={`/products/${product.id}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                >
-                                                  {tCommon("edit")}
-                                                </Link>
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem
-                                                onClick={() =>
-                                                  duplicateMutation.mutate({
-                                                    productId: product.id,
-                                                  })
-                                                }
-                                              >
-                                                {t("duplicate")}
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem
-                                                onClick={async () => {
-                                                  if (
-                                                    !(await confirm({
-                                                      description: t("confirmArchive"),
-                                                      confirmVariant: "danger",
-                                                    }))
-                                                  ) {
-                                                    return;
-                                                  }
-                                                  archiveMutation.mutate({ productId: product.id });
-                                                }}
-                                              >
-                                                {tCommon("archive")}
-                                              </DropdownMenuItem>
-                                            </>
-                                          )}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    ) : (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="shadow-none"
-                                            onClick={() => router.push(`/products/${product.id}`)}
-                                            aria-label={tCommon("view")}
-                                          >
-                                            <ViewIcon className="h-4 w-4" aria-hidden />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>{tCommon("view")}</TooltipContent>
-                                      </Tooltip>
-                                    )}
-                                  </div>
+                                  <RowActions
+                                    actions={getProductActions(product)}
+                                    maxInline={1}
+                                    moreLabel={tCommon("tooltips.moreActions")}
+                                  />
                                 </TableCell>
                               </TableRow>
                             );
@@ -1847,14 +1790,14 @@ const ProductsPage = () => {
                           <div className="space-y-3 p-3">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-foreground">
+                                <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
                                   {product.name}
                                 </p>
                                 <p className="text-xs text-muted-foreground">{product.sku}</p>
                               </div>
                               <RowActions
                                 actions={actions}
-                                maxInline={3}
+                                maxInline={2}
                                 moreLabel={tCommon("tooltips.moreActions")}
                                 className="shrink-0"
                               />
@@ -1873,17 +1816,25 @@ const ProductsPage = () => {
                             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                               <div>
                                 <p>{t("salePrice")}</p>
-                                <p className="text-sm font-semibold text-foreground">
-                                  {showEffectivePrice
-                                    ? product.effectivePriceKgs !== null &&
-                                      product.effectivePriceKgs !== undefined
-                                      ? formatCurrencyKGS(product.effectivePriceKgs, locale)
-                                      : tCommon("notAvailable")
-                                    : product.basePriceKgs !== null &&
-                                        product.basePriceKgs !== undefined
-                                      ? formatCurrencyKGS(product.basePriceKgs, locale)
-                                      : tCommon("notAvailable")}
-                                </p>
+                                <InlineEditableCell
+                                  rowId={product.id}
+                                  row={product}
+                                  value={
+                                    showEffectivePrice
+                                      ? product.effectivePriceKgs
+                                      : product.basePriceKgs
+                                  }
+                                  definition={inlineEditRegistry.products.salePrice}
+                                  context={inlineProductsContext}
+                                  role={role}
+                                  locale={locale}
+                                  columnLabel={t("salePrice")}
+                                  tTable={t}
+                                  tCommon={tCommon}
+                                  enabled={inlineEditingEnabled}
+                                  executeMutation={executeInlineProductMutation}
+                                  className="text-sm font-semibold text-foreground"
+                                />
                               </div>
                               <div>
                                 <p>{tInventory("onHand")}</p>
@@ -1905,11 +1856,21 @@ const ProductsPage = () => {
                               </div>
                               <div>
                                 <p>{t("avgCost")}</p>
-                                <p className="text-sm font-semibold text-foreground">
-                                  {product.avgCostKgs !== null && product.avgCostKgs !== undefined
-                                    ? formatCurrencyKGS(product.avgCostKgs, locale)
-                                    : tCommon("notAvailable")}
-                                </p>
+                                <InlineEditableCell
+                                  rowId={product.id}
+                                  row={product}
+                                  value={product.avgCostKgs}
+                                  definition={inlineEditRegistry.products.avgCost}
+                                  context={inlineProductsContext}
+                                  role={role}
+                                  locale={locale}
+                                  columnLabel={t("avgCost")}
+                                  tTable={t}
+                                  tCommon={tCommon}
+                                  enabled={inlineEditingEnabled}
+                                  executeMutation={executeInlineProductMutation}
+                                  className="text-sm font-semibold text-foreground"
+                                />
                               </div>
                               <div>
                                 <p>{t("barcodes")}</p>
@@ -1932,6 +1893,120 @@ const ProductsPage = () => {
                   product.inventorySnapshots.map((snapshot) => snapshot.storeId),
                 );
                 const actions = getProductActions(product);
+
+                if (viewMode === "grid") {
+                  return (
+                    <div className="overflow-hidden rounded-lg border border-border bg-card">
+                      <div className="relative aspect-[4/3] bg-muted/30">
+                        {previewImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewImageUrl}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <EmptyIcon className="h-6 w-6 text-muted-foreground" aria-hidden />
+                          </div>
+                        )}
+                        <label className="absolute left-2 top-2">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            checked={selectedIds.has(product.id)}
+                            onChange={() => toggleSelect(product.id)}
+                            aria-label={t("selectProduct", { name: product.name })}
+                          />
+                        </label>
+                      </div>
+                      <div className="space-y-3 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
+                              {product.name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
+                          </div>
+                          <RowActions
+                            actions={actions}
+                            maxInline={1}
+                            moreLabel={tCommon("tooltips.moreActions")}
+                            className="shrink-0"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="muted">
+                            {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                          </Badge>
+                          {product.isDeleted ? (
+                            <Badge variant="muted">{t("archived")}</Badge>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2 text-xs text-muted-foreground">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{t("salePrice")}</span>
+                            <InlineEditableCell
+                              rowId={product.id}
+                              row={product}
+                              value={
+                                showEffectivePrice
+                                  ? product.effectivePriceKgs
+                                  : product.basePriceKgs
+                              }
+                              definition={inlineEditRegistry.products.salePrice}
+                              context={inlineProductsContext}
+                              role={role}
+                              locale={locale}
+                              columnLabel={t("salePrice")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineProductMutation}
+                              className="justify-end text-sm font-semibold text-foreground"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{tInventory("onHand")}</span>
+                            <InlineEditableCell
+                              rowId={product.id}
+                              row={product}
+                              value={product.onHandQty}
+                              definition={inlineEditRegistry.products.onHand}
+                              context={inlineProductsContext}
+                              role={role}
+                              locale={locale}
+                              columnLabel={tInventory("onHand")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineProductMutation}
+                              className="justify-end text-sm font-semibold text-foreground"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{t("avgCost")}</span>
+                            <InlineEditableCell
+                              rowId={product.id}
+                              row={product}
+                              value={product.avgCostKgs}
+                              definition={inlineEditRegistry.products.avgCost}
+                              context={inlineProductsContext}
+                              role={role}
+                              locale={locale}
+                              columnLabel={t("avgCost")}
+                              tTable={t}
+                              tCommon={tCommon}
+                              enabled={inlineEditingEnabled}
+                              executeMutation={executeInlineProductMutation}
+                              className="justify-end text-sm font-semibold text-foreground"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div className="rounded-lg border border-border bg-card p-4">
@@ -1958,7 +2033,7 @@ const ProductsPage = () => {
                         )}
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-semibold text-foreground">
+                            <span className="text-base font-semibold leading-tight text-foreground">
                               {product.name}
                             </span>
                             <Badge variant="muted">
@@ -1975,6 +2050,7 @@ const ProductsPage = () => {
                       </label>
                       <RowActions
                         actions={actions}
+                        maxInline={1}
                         moreLabel={tCommon("tooltips.moreActions")}
                         className="shrink-0"
                       />
@@ -1992,16 +2068,25 @@ const ProductsPage = () => {
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span>{t("salePrice")}</span>
-                        <span className="text-foreground">
-                          {showEffectivePrice
-                            ? product.effectivePriceKgs !== null &&
-                              product.effectivePriceKgs !== undefined
-                              ? formatCurrencyKGS(product.effectivePriceKgs, locale)
-                              : tCommon("notAvailable")
-                            : product.basePriceKgs !== null && product.basePriceKgs !== undefined
-                              ? formatCurrencyKGS(product.basePriceKgs, locale)
-                              : tCommon("notAvailable")}
-                        </span>
+                        <InlineEditableCell
+                          rowId={product.id}
+                          row={product}
+                          value={
+                            showEffectivePrice
+                              ? product.effectivePriceKgs
+                              : product.basePriceKgs
+                          }
+                          definition={inlineEditRegistry.products.salePrice}
+                          context={inlineProductsContext}
+                          role={role}
+                          locale={locale}
+                          columnLabel={t("salePrice")}
+                          tTable={t}
+                          tCommon={tCommon}
+                          enabled={inlineEditingEnabled}
+                          executeMutation={executeInlineProductMutation}
+                          className="justify-end text-foreground"
+                        />
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span>{tInventory("onHand")}</span>
@@ -2023,11 +2108,21 @@ const ProductsPage = () => {
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span>{t("avgCost")}</span>
-                        <span className="text-foreground">
-                          {product.avgCostKgs !== null && product.avgCostKgs !== undefined
-                            ? formatCurrencyKGS(product.avgCostKgs, locale)
-                            : tCommon("notAvailable")}
-                        </span>
+                        <InlineEditableCell
+                          rowId={product.id}
+                          row={product}
+                          value={product.avgCostKgs}
+                          definition={inlineEditRegistry.products.avgCost}
+                          context={inlineProductsContext}
+                          role={role}
+                          locale={locale}
+                          columnLabel={t("avgCost")}
+                          tTable={t}
+                          tCommon={tCommon}
+                          enabled={inlineEditingEnabled}
+                          executeMutation={executeInlineProductMutation}
+                          className="justify-end text-foreground"
+                        />
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span>{t("barcodes")}</span>

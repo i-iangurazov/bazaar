@@ -96,6 +96,8 @@ const ProductDetailPage = () => {
     sku: string;
   } | null>(null);
   const [assembleOpen, setAssembleOpen] = useState(false);
+  const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
+  const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
 
   const productQuery = trpc.products.getById.useQuery(
     { productId },
@@ -390,9 +392,10 @@ const ProductDetailPage = () => {
     }
   }, [assembleOpen, assembleForm]);
 
-  const basePrice = pricingQuery.data?.basePriceKgs ?? null;
   const effectivePrice = pricingQuery.data?.effectivePriceKgs ?? null;
   const avgCost = pricingQuery.data?.avgCostKgs ?? null;
+  const previewImageUrl =
+    productQuery.data?.images[0]?.url ?? productQuery.data?.photoUrl ?? null;
   const markupPct =
     avgCost && avgCost > 0 && effectivePrice !== null
       ? ((effectivePrice - avgCost) / avgCost) * 100
@@ -409,11 +412,21 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: t("priceNonNegative") });
       return;
     }
-    await storePriceMutation.mutateAsync({
-      storeId,
-      productId,
-      priceKgs: value,
-    });
+    const currentValue =
+      storePricingQuery.data?.stores.find((store) => store.storeId === storeId)?.effectivePriceKgs ?? null;
+    if (currentValue !== null && value === currentValue) {
+      return;
+    }
+    setSavingStorePriceId(storeId);
+    try {
+      await storePriceMutation.mutateAsync({
+        storeId,
+        productId,
+        priceKgs: value,
+      });
+    } finally {
+      setSavingStorePriceId(null);
+    }
   };
 
   const handleSaveStoreOnHand = async (storeId: string, currentOnHand: number) => {
@@ -423,13 +436,21 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: tErrors("validationError") });
       return;
     }
-    await adjustStockMutation.mutateAsync({
-      storeId,
-      productId,
-      qtyDelta: targetOnHand - currentOnHand,
-      reason: tInventory("stockAdjustment"),
-      idempotencyKey: createIdempotencyKey(),
-    });
+    if (targetOnHand === currentOnHand) {
+      return;
+    }
+    setSavingStoreOnHandId(storeId);
+    try {
+      await adjustStockMutation.mutateAsync({
+        storeId,
+        productId,
+        qtyDelta: targetOnHand - currentOnHand,
+        reason: tInventory("stockAdjustment"),
+        idempotencyKey: createIdempotencyKey(),
+      });
+    } finally {
+      setSavingStoreOnHandId(null);
+    }
   };
 
   if (productQuery.isLoading || !formValues) {
@@ -521,65 +542,85 @@ const ProductDetailPage = () => {
         }
       />
 
-      <Card className="mb-6">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("profitabilityTitle")}</CardTitle>
-          <div className="w-full sm:max-w-xs">
-            <Select
-              value={pricingStoreId || "all"}
-              onValueChange={(value) => setPricingStoreId(value === "all" ? "" : value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={tCommon("selectStore")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allStores")}</SelectItem>
-                {storesQuery.data?.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <Card className="mb-6 overflow-hidden">
+        <CardContent className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
+            {previewImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewImageUrl}
+                alt={productQuery.data.name}
+                className="aspect-square h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex aspect-square items-center justify-center">
+                <EmptyIcon className="h-10 w-10 text-muted-foreground" aria-hidden />
+              </div>
+            )}
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border border-border/70 bg-card p-3">
-            <p className="text-xs text-muted-foreground">{t("basePrice")}</p>
-            <p className="text-sm font-semibold">
-              {basePrice !== null ? formatCurrencyKGS(basePrice, locale) : tCommon("notAvailable")}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/70 bg-card p-3">
-            <div className="flex items-center gap-2">
-              <p className="text-xs text-muted-foreground">{t("effectivePrice")}</p>
-              {pricingQuery.data?.priceOverridden ? (
-                <Badge variant="muted">{t("priceOverridden")}</Badge>
-              ) : null}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {productQuery.data.sku}
+              </p>
+              <h2 className="text-2xl font-semibold leading-tight text-foreground sm:text-3xl">
+                {productQuery.data.name}
+              </h2>
             </div>
-            <p className="text-sm font-semibold">
-              {effectivePrice !== null
-                ? formatCurrencyKGS(effectivePrice, locale)
-                : tCommon("notAvailable")}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/70 bg-card p-3">
-            <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
-            <p className="text-sm font-semibold">
-              {avgCost !== null ? formatCurrencyKGS(avgCost, locale) : tCommon("notAvailable")}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/70 bg-card p-3">
-            <p className="text-xs text-muted-foreground">{t("markupMargin")}</p>
-            <p className="text-sm font-semibold">
-              {markupPct !== null ? `${formatNumber(markupPct, locale)}%` : tCommon("notAvailable")}
-              {" · "}
-              {marginPct !== null ? `${formatNumber(marginPct, locale)}%` : tCommon("notAvailable")}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground/80">{t("profitabilityHint")}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="muted">
+                {productQuery.data.isBundle ? t("typeBundle") : t("typeProduct")}
+              </Badge>
+              {productQuery.data.category ? (
+                <Badge variant="muted">{productQuery.data.category}</Badge>
+              ) : null}
+              <Badge variant="muted">{productQuery.data.baseUnit.code}</Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/70 bg-card p-3">
+                <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
+                <p className="text-base font-semibold text-foreground">
+                  {effectivePrice !== null
+                    ? formatCurrencyKGS(effectivePrice, locale)
+                    : tCommon("notAvailable")}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-card p-3">
+                <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
+                <p className="text-base font-semibold text-foreground">
+                  {avgCost !== null ? formatCurrencyKGS(avgCost, locale) : tCommon("notAvailable")}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-card p-3">
+                <p className="text-xs text-muted-foreground">{tInventory("onHand")}</p>
+                <p className="text-base font-semibold text-foreground">
+                  {formatNumber(
+                    storePricingQuery.data?.stores.reduce((sum, store) => sum + store.onHand, 0) ?? 0,
+                    locale,
+                  )}
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      <div className="mb-6">
+        <ProductForm
+          initialValues={formValues}
+          onSubmit={(values) =>
+            updateMutation.mutate({
+              productId,
+              ...values,
+            })
+          }
+          attributeDefinitions={attributesQuery.data ?? []}
+          units={unitsQuery.data ?? []}
+          isSubmitting={updateMutation.isLoading}
+          readOnly={!isAdmin}
+          productId={productId}
+        />
+      </div>
 
       <Card className="mb-6">
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -636,20 +677,22 @@ const ProductDetailPage = () => {
                                   [storeRow.storeId]: event.target.value,
                                 }))
                               }
+                              onBlur={() => void handleSaveStorePrice(storeRow.storeId)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  event.currentTarget.blur();
+                                }
+                              }}
                               placeholder={t("pricePlaceholder")}
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full sm:w-auto"
-                              onClick={() => void handleSaveStorePrice(storeRow.storeId)}
                               disabled={storePriceMutation.isLoading}
-                            >
-                              {storePriceMutation.isLoading ? (
+                            />
+                            {savingStorePriceId === storeRow.storeId ? (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Spinner className="h-4 w-4" />
-                              ) : null}
-                              {storePriceMutation.isLoading ? tCommon("loading") : t("savePrice")}
-                            </Button>
+                                {tCommon("saving")}
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                         {canManageInventory ? (
@@ -666,20 +709,24 @@ const ProductDetailPage = () => {
                                   [storeRow.storeId]: event.target.value,
                                 }))
                               }
+                              onBlur={() =>
+                                void handleSaveStoreOnHand(storeRow.storeId, storeRow.onHand)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  event.currentTarget.blur();
+                                }
+                              }}
                               placeholder={tInventory("qtyPlaceholder")}
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full sm:w-auto"
-                              onClick={() => void handleSaveStoreOnHand(storeRow.storeId, storeRow.onHand)}
                               disabled={adjustStockMutation.isLoading}
-                            >
-                              {adjustStockMutation.isLoading ? (
+                            />
+                            {savingStoreOnHandId === storeRow.storeId ? (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Spinner className="h-4 w-4" />
-                              ) : null}
-                              {adjustStockMutation.isLoading ? tCommon("loading") : tInventory("adjustStock")}
-                            </Button>
+                                {tCommon("saving")}
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -693,6 +740,60 @@ const ProductDetailPage = () => {
           ) : (
             <p className="text-sm text-muted-foreground">{tCommon("notAvailable")}</p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>{t("profitabilityTitle")}</CardTitle>
+          <div className="w-full sm:max-w-xs">
+            <Select
+              value={pricingStoreId || "all"}
+              onValueChange={(value) => setPricingStoreId(value === "all" ? "" : value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={tCommon("selectStore")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allStores")}</SelectItem>
+                {storesQuery.data?.map((store) => (
+                  <SelectItem key={store.id} value={store.id}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-lg border border-border/70 bg-card p-3">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
+              {pricingQuery.data?.priceOverridden ? (
+                <Badge variant="muted">{t("priceOverridden")}</Badge>
+              ) : null}
+            </div>
+            <p className="text-sm font-semibold">
+              {effectivePrice !== null
+                ? formatCurrencyKGS(effectivePrice, locale)
+                : tCommon("notAvailable")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-card p-3">
+            <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
+            <p className="text-sm font-semibold">
+              {avgCost !== null ? formatCurrencyKGS(avgCost, locale) : tCommon("notAvailable")}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-card p-3">
+            <p className="text-xs text-muted-foreground">{t("markupMargin")}</p>
+            <p className="text-sm font-semibold">
+              {markupPct !== null ? `${formatNumber(markupPct, locale)}%` : tCommon("notAvailable")}
+              {" · "}
+              {marginPct !== null ? `${formatNumber(marginPct, locale)}%` : tCommon("notAvailable")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground/80">{t("profitabilityHint")}</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -853,20 +954,6 @@ const ProductDetailPage = () => {
         </CardContent>
       </Card>
 
-      <ProductForm
-        initialValues={formValues}
-        onSubmit={(values) =>
-          updateMutation.mutate({
-            productId,
-            ...values,
-          })
-        }
-        attributeDefinitions={attributesQuery.data ?? []}
-        units={unitsQuery.data ?? []}
-        isSubmitting={updateMutation.isLoading}
-        readOnly={!isAdmin}
-        productId={productId}
-      />
       <Card className="mt-6">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("expiryLotsTitle")}</CardTitle>
