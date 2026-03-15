@@ -21,6 +21,7 @@ import {
   resolveProductImageUrl,
   type ResolveProductImageUrlResult,
 } from "@/server/services/productImageStorage";
+import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 
 export type CreateProductInput = {
   organizationId: string;
@@ -1413,6 +1414,14 @@ type ProductBulkGenerationFilter = {
   limit?: number;
 };
 
+type ProductBulkDescriptionLogger = {
+  info: (obj: Record<string, unknown>, msg?: string) => void;
+  warn: (obj: Record<string, unknown>, msg?: string) => void;
+  error: (obj: Record<string, unknown>, msg?: string) => void;
+};
+
+const MAX_BULK_DESCRIPTION_PRODUCTS = 25;
+
 export const bulkGenerateProductBarcodes = async (input: {
   organizationId: string;
   actorId: string;
@@ -1520,6 +1529,152 @@ export const bulkGenerateProductBarcodes = async (input: {
       updatedProductIds,
     };
   });
+
+export const bulkGenerateProductDescriptions = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productIds: string[];
+  locale?: string | null;
+  logger?: ProductBulkDescriptionLogger;
+  maxProducts?: number;
+}) => {
+  const uniqueProductIds = Array.from(
+    new Set(input.productIds.map((value) => value.trim()).filter(Boolean)),
+  );
+  if (!uniqueProductIds.length) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  const maxProducts = Math.max(1, Math.trunc(input.maxProducts ?? MAX_BULK_DESCRIPTION_PRODUCTS));
+  if (uniqueProductIds.length > maxProducts) {
+    throw new AppError("bulkGenerateDescriptionsLimitExceeded", "BAD_REQUEST", 400);
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId: input.organizationId,
+      id: { in: uniqueProductIds },
+      isDeleted: false,
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      isBundle: true,
+      description: true,
+      photoUrl: true,
+      images: {
+        where: {
+          url: {
+            not: { startsWith: "data:image/" },
+          },
+        },
+        select: { url: true },
+        orderBy: { position: "asc" },
+        take: 3,
+      },
+    },
+  });
+
+  const productById = new Map(products.map((product) => [product.id, product]));
+  let updatedCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+  let rateLimited = false;
+  const updatedProductIds: string[] = [];
+
+  for (const productId of uniqueProductIds) {
+    const product = productById.get(productId);
+    if (!product) {
+      skippedCount += 1;
+      continue;
+    }
+
+    const imageUrls = Array.from(
+      new Set(
+        [product.photoUrl, ...product.images.map((image) => image.url)]
+          .map((value) => normalizeProductImageUrl(value ?? null))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).slice(0, 3);
+
+    if (!imageUrls.length) {
+      skippedCount += 1;
+      continue;
+    }
+
+    try {
+      const result = await generateProductDescriptionFromImages({
+        name: product.name,
+        category: product.category,
+        isBundle: product.isBundle,
+        locale: input.locale,
+        imageUrls,
+        logger: input.logger,
+      });
+
+      const nextDescription = result.description.trim();
+      const previousDescription = product.description?.trim() ?? "";
+      if (!nextDescription || nextDescription === previousDescription) {
+        skippedCount += 1;
+        continue;
+      }
+
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { description: nextDescription },
+      });
+      await writeAuditLog(prisma, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_UPDATE",
+        entity: "Product",
+        entityId: product.id,
+        before: toJson({ description: previousDescription || null }),
+        after: toJson({ description: nextDescription, generated: true }),
+        requestId: input.requestId,
+      });
+
+      updatedCount += 1;
+      updatedProductIds.push(product.id);
+    } catch (error) {
+      if (error instanceof Error && error.message === "rateLimited") {
+        rateLimited = true;
+        break;
+      }
+      if (
+        error instanceof Error &&
+        (error.message === "aiDescriptionNoUsableImages" ||
+          error.message === "aiDescriptionImageRequired")
+      ) {
+        skippedCount += 1;
+        continue;
+      }
+
+      failedCount += 1;
+      input.logger?.warn(
+        {
+          phase: "bulk-description-item",
+          productId: product.id,
+          error: error instanceof Error ? { message: error.message, name: error.name } : error,
+        },
+        "bulk product description generation failed for item",
+      );
+    }
+  }
+
+  const processedCount = updatedCount + skippedCount + failedCount;
+  const deferredCount = rateLimited ? Math.max(0, uniqueProductIds.length - processedCount) : 0;
+
+  return {
+    updatedCount,
+    skippedCount,
+    failedCount,
+    deferredCount,
+    rateLimited,
+    updatedProductIds,
+  };
+};
 
 export const bulkUpdateProductCategory = async (input: {
   organizationId: string;

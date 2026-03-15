@@ -9,6 +9,7 @@ import { normalizeScanValue } from "@/lib/scanning/normalize";
 import {
   archiveProduct,
   bulkUpdateProductCategory,
+  bulkGenerateProductDescriptions,
   bulkGenerateProductBarcodes,
   createProduct,
   duplicateProduct,
@@ -18,6 +19,7 @@ import {
   type ImportUpdateField,
   updateProduct,
 } from "@/server/services/products";
+import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { runProductImport } from "@/server/services/imports";
 import { sanitizeSpreadsheetValue } from "@/server/services/csv";
 
@@ -532,67 +534,66 @@ export const productsRouter = router({
             return sum + snapshot.onHand;
           }, 0);
 
-        const baseItems = !input?.storeId || !products.length
-          ? products.map((product) => ({
-            ...product,
-            images: product.images.flatMap((image) => {
-              const sanitized = sanitizeListImageUrl(image.url);
-              return sanitized ? [{ ...image, url: sanitized }] : [];
-            }),
-            photoUrl: sanitizeListImageUrl(product.photoUrl),
-            basePriceKgs: decimalToNumber(product.basePriceKgs),
-            effectivePriceKgs: decimalToNumber(product.basePriceKgs),
-            purchasePriceKgs:
-              purchasePriceByProductId.get(product.id) ??
-              avgCostByProductId.get(product.id) ??
-              null,
-            avgCostKgs: avgCostByProductId.get(product.id) ?? null,
-            onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
-            priceOverridden: false,
-          }))
-          : await (async () => {
-              const storePrices = await ctx.prisma.storePrice.findMany({
-                where: {
-                  organizationId: ctx.user.organizationId,
-                  storeId: input.storeId,
-                  productId: { in: products.map((product) => product.id) },
-                  variantKey: "BASE",
-                },
-              });
-              const priceMap = new Map(storePrices.map((price) => [price.productId, price]));
+        const baseItems =
+          !input?.storeId || !products.length
+            ? products.map((product) => ({
+                ...product,
+                images: product.images.flatMap((image) => {
+                  const sanitized = sanitizeListImageUrl(image.url);
+                  return sanitized ? [{ ...image, url: sanitized }] : [];
+                }),
+                photoUrl: sanitizeListImageUrl(product.photoUrl),
+                basePriceKgs: decimalToNumber(product.basePriceKgs),
+                effectivePriceKgs: decimalToNumber(product.basePriceKgs),
+                purchasePriceKgs:
+                  purchasePriceByProductId.get(product.id) ??
+                  avgCostByProductId.get(product.id) ??
+                  null,
+                avgCostKgs: avgCostByProductId.get(product.id) ?? null,
+                onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
+                priceOverridden: false,
+              }))
+            : await (async () => {
+                const storePrices = await ctx.prisma.storePrice.findMany({
+                  where: {
+                    organizationId: ctx.user.organizationId,
+                    storeId: input.storeId,
+                    productId: { in: products.map((product) => product.id) },
+                    variantKey: "BASE",
+                  },
+                });
+                const priceMap = new Map(storePrices.map((price) => [price.productId, price]));
 
-              return products.map((product) => {
-                const basePrice = decimalToNumber(product.basePriceKgs);
-                const override = priceMap.get(product.id);
-                const effectivePrice = override ? decimalToNumber(override.priceKgs) : basePrice;
-                return {
-                  ...product,
-                  images: product.images.flatMap((image) => {
-                    const sanitized = sanitizeListImageUrl(image.url);
-                    return sanitized ? [{ ...image, url: sanitized }] : [];
-                  }),
-                  photoUrl: sanitizeListImageUrl(product.photoUrl),
-                  basePriceKgs: basePrice,
-                  effectivePriceKgs: effectivePrice,
-                  purchasePriceKgs:
-                    purchasePriceByProductId.get(product.id) ??
-                    avgCostByProductId.get(product.id) ??
-                    null,
-                  avgCostKgs: avgCostByProductId.get(product.id) ?? null,
-                  onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
-                  priceOverridden: Boolean(override),
-                };
-              });
-            })();
+                return products.map((product) => {
+                  const basePrice = decimalToNumber(product.basePriceKgs);
+                  const override = priceMap.get(product.id);
+                  const effectivePrice = override ? decimalToNumber(override.priceKgs) : basePrice;
+                  return {
+                    ...product,
+                    images: product.images.flatMap((image) => {
+                      const sanitized = sanitizeListImageUrl(image.url);
+                      return sanitized ? [{ ...image, url: sanitized }] : [];
+                    }),
+                    photoUrl: sanitizeListImageUrl(product.photoUrl),
+                    basePriceKgs: basePrice,
+                    effectivePriceKgs: effectivePrice,
+                    purchasePriceKgs:
+                      purchasePriceByProductId.get(product.id) ??
+                      avgCostByProductId.get(product.id) ??
+                      null,
+                    avgCostKgs: avgCostByProductId.get(product.id) ?? null,
+                    onHandQty: resolveOnHandQty(product.inventorySnapshots, input?.storeId),
+                    priceOverridden: Boolean(override),
+                  };
+                });
+              })();
 
         const sortCollator = new Intl.Collator(undefined, {
           numeric: true,
           sensitivity: "base",
         });
         const directionMultiplier = sortDirection === "asc" ? 1 : -1;
-        const resolveSalePriceForSort = (
-          product: (typeof baseItems)[number],
-        ) => {
+        const resolveSalePriceForSort = (product: (typeof baseItems)[number]) => {
           const value = input?.storeId ? product.effectivePriceKgs : product.basePriceKgs;
           return value ?? Number.NEGATIVE_INFINITY;
         };
@@ -646,7 +647,10 @@ export const productsRouter = router({
               );
               break;
             case "stores":
-              result = sortCollator.compare(resolveStoreSortValue(left), resolveStoreSortValue(right));
+              result = sortCollator.compare(
+                resolveStoreSortValue(left),
+                resolveStoreSortValue(right),
+              );
               break;
             default:
               result = 0;
@@ -1260,6 +1264,32 @@ export const productsRouter = router({
       }
     }),
 
+  generateDescription: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "products-description-generate" }))
+    .input(
+      z.object({
+        name: z.string().max(300).optional(),
+        category: z.string().max(200).optional(),
+        isBundle: z.boolean().optional(),
+        locale: z.enum(["ru", "kg"]).optional(),
+        imageUrls: z.array(z.string().min(1)).min(1).max(6),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await generateProductDescriptionFromImages({
+          name: input.name,
+          category: input.category,
+          isBundle: input.isBundle,
+          locale: input.locale,
+          imageUrls: input.imageUrls,
+          logger: ctx.logger,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   bulkGenerateBarcodes: adminProcedure
     .use(rateLimit({ windowMs: 60_000, max: 3, prefix: "products-barcodes-bulk" }))
     .input(
@@ -1286,6 +1316,29 @@ export const productsRouter = router({
           requestId: ctx.requestId,
           mode: input.mode,
           filter: input.filter,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkGenerateDescriptions: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "products-descriptions-bulk" }))
+    .input(
+      z.object({
+        productIds: z.array(z.string().min(1)).min(1).max(25),
+        locale: z.enum(["ru", "kg"]).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await bulkGenerateProductDescriptions({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productIds: input.productIds,
+          locale: input.locale,
+          logger: ctx.logger,
         });
       } catch (error) {
         throw toTRPCError(error);

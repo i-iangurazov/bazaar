@@ -61,6 +61,7 @@ import {
   PriceIcon,
   PrintIcon,
   RestoreIcon,
+  SparklesIcon,
   TableViewIcon,
   TagIcon,
   ViewIcon,
@@ -108,6 +109,8 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
   barcodes: "asc",
   stores: "asc",
 };
+
+const bulkGenerateDescriptionsMaxSelection = 25;
 
 const ProductsPage = () => {
   const t = useTranslations("products");
@@ -291,6 +294,40 @@ const ProductsPage = () => {
           generated: result.generatedCount,
           skipped: result.skippedCount,
         }),
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error),
+      });
+    },
+  });
+  const bulkGenerateDescriptionsMutation = trpc.products.bulkGenerateDescriptions.useMutation({
+    onSuccess: (result) => {
+      productsQuery.refetch();
+      if (!result.rateLimited && result.failedCount === 0) {
+        setSelectedIds(new Set());
+      }
+      toast({
+        variant: result.rateLimited || result.failedCount > 0 ? "info" : "success",
+        description: result.rateLimited
+          ? t("bulkGenerateDescriptionsRateLimited", {
+              updated: result.updatedCount,
+              skipped: result.skippedCount,
+              failed: result.failedCount,
+              deferred: result.deferredCount,
+            })
+          : result.failedCount > 0
+            ? t("bulkGenerateDescriptionsPartial", {
+                updated: result.updatedCount,
+                skipped: result.skippedCount,
+                failed: result.failedCount,
+              })
+            : t("bulkGenerateDescriptionsSuccess", {
+                updated: result.updatedCount,
+                skipped: result.skippedCount,
+              }),
       });
     },
     onError: (error) => {
@@ -1185,6 +1222,34 @@ const ProductsPage = () => {
     });
   };
 
+  const handleBulkGenerateDescriptions = async () => {
+    if (!selectedList.length || !isAdmin) {
+      return;
+    }
+    if (selectedList.length > bulkGenerateDescriptionsMaxSelection) {
+      toast({
+        variant: "error",
+        description: t("bulkGenerateDescriptionsLimit", {
+          count: bulkGenerateDescriptionsMaxSelection,
+        }),
+      });
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("confirmBulkGenerateDescriptions", {
+          count: selectedList.length,
+        }),
+      }))
+    ) {
+      return;
+    }
+    bulkGenerateDescriptionsMutation.mutate({
+      productIds: selectedList,
+      locale: locale === "kg" ? "kg" : "ru",
+    });
+  };
+
   return (
     <div>
       <PageHeader
@@ -1521,11 +1586,33 @@ const ProductsPage = () => {
                   {isAdmin ? (
                     <Button
                       type="button"
+                      variant="primary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleBulkGenerateDescriptions()}
+                      disabled={bulkGenerateDescriptionsMutation.isLoading}
+                    >
+                      {bulkGenerateDescriptionsMutation.isLoading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <SparklesIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {bulkGenerateDescriptionsMutation.isLoading
+                        ? tCommon("loading")
+                        : t("bulkGenerateDescriptions")}
+                    </Button>
+                  ) : null}
+                  {isAdmin ? (
+                    <Button
+                      type="button"
                       variant="secondary"
                       size="sm"
                       className="w-full sm:w-auto"
                       onClick={() => void handleBulkGenerateBarcodes()}
-                      disabled={bulkGenerateBarcodesMutation.isLoading}
+                      disabled={
+                        bulkGenerateBarcodesMutation.isLoading ||
+                        bulkGenerateDescriptionsMutation.isLoading
+                      }
                     >
                       {bulkGenerateBarcodesMutation.isLoading ? (
                         <Spinner className="h-4 w-4" />
@@ -1550,9 +1637,7 @@ const ProductsPage = () => {
               onPageChange={setProductsPage}
               onPageSizeChange={setProductsPageSize}
               scrollToTopOnPageChange
-              mobileItemsClassName={
-                viewMode === "grid" ? "grid grid-cols-2 gap-3" : undefined
-              }
+              mobileItemsClassName={viewMode === "grid" ? "grid grid-cols-2 gap-3" : undefined}
               renderDesktop={(visibleItems) =>
                 viewMode === "table" ? (
                   <div className="overflow-x-auto">
@@ -2072,9 +2157,7 @@ const ProductsPage = () => {
                           rowId={product.id}
                           row={product}
                           value={
-                            showEffectivePrice
-                              ? product.effectivePriceKgs
-                              : product.basePriceKgs
+                            showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs
                           }
                           definition={inlineEditRegistry.products.salePrice}
                           context={inlineProductsContext}

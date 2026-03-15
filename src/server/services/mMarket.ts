@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
   MMarketEnvironment,
@@ -20,6 +14,10 @@ import { getRedisPublisher } from "@/server/redis";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
+import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
+import { bulkGenerateProductDescriptions } from "@/server/services/products";
+import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
+import { setCategoryTemplate } from "@/server/services/categoryTemplates";
 
 export const MMARKET_IMPORT_ENDPOINTS: Record<MMarketEnvironment, string> = {
   DEV: "https://dev.m-market.kg/api/crm/products/import_products/",
@@ -39,8 +37,10 @@ const MMARKET_SPEC_REQUEST_TIMEOUT_MS = 5_000;
 
 const MMARKET_MIN_NAME_LEN = 7;
 const MMARKET_MAX_NAME_LEN = 250;
-const MMARKET_MIN_DESCRIPTION_LEN = 50;
+const MMARKET_MIN_DESCRIPTION_LEN = 150;
 const MMARKET_MIN_IMAGES = 3;
+const DEFAULT_MMARTKET_PLACEHOLDER_IMAGE_URL =
+  "https://pub-75076a8067634fa3a91a6df2248d729c.r2.dev/bazaar-placeholder.png";
 
 const IMAGE_EXTENSION_PATTERN = /\.(jpg|png|webp)$/i;
 
@@ -115,6 +115,7 @@ export type MMarketPreflightResult = {
     global: MMarketPreflightWarningCode[];
   };
   failedProducts: Array<{
+    productId: string;
     sku: string;
     name: string;
     issues: MMarketPreflightIssueCode[];
@@ -146,6 +147,63 @@ type RemoteApiResult = {
   body: unknown;
 };
 
+type MMarketBulkDescriptionLogger = {
+  info: (obj: Record<string, unknown>, msg?: string) => void;
+  warn: (obj: Record<string, unknown>, msg?: string) => void;
+  error: (obj: Record<string, unknown>, msg?: string) => void;
+};
+
+type MMarketBulkSpecsLogger = MMarketBulkDescriptionLogger;
+
+type MMarketBaseTemplateLogger = MMarketBulkDescriptionLogger;
+
+type AutofillSpecKind = "manufacturer" | "model" | "type" | "color";
+
+type AutofillTemplateSpec = {
+  attributeKey: string;
+  labelRu: string;
+  type: "TEXT" | "NUMBER" | "SELECT" | "MULTI_SELECT";
+  optionsRu: string[];
+  autofillKind: AutofillSpecKind | null;
+};
+
+type BulkAutofillSkipReasonCounts = {
+  noCategory: number;
+  noTemplate: number;
+  noSupportedFields: number;
+  noResolvedValues: number;
+};
+
+const MMARKET_DEFAULT_MANUFACTURER = process.env.MMARKET_SPECS_DEFAULT_MANUFACTURER?.trim() ?? "";
+const MMARKET_DEFAULT_MODEL = process.env.MMARKET_SPECS_DEFAULT_MODEL?.trim() ?? "";
+
+const MMARKET_BASE_TEMPLATE_DEFINITIONS = [
+  {
+    key: "mmarket_type",
+    labelRu: "Тип",
+    labelKg: "Түрү",
+    type: "TEXT" as const,
+  },
+  {
+    key: "mmarket_color",
+    labelRu: "Цвет",
+    labelKg: "Түсү",
+    type: "TEXT" as const,
+  },
+  {
+    key: "mmarket_manufacturer",
+    labelRu: "Производители",
+    labelKg: "Өндүрүүчү",
+    type: "TEXT" as const,
+  },
+  {
+    key: "mmarket_model",
+    labelRu: "Модель",
+    labelKg: "Модели",
+    type: "TEXT" as const,
+  },
+] as const;
+
 class MMarketRemoteError extends Error {
   status: number;
   body: unknown;
@@ -173,6 +231,112 @@ const hasAllowedImageExtension = (value: string) => {
     return /\.(jpg|png|webp)(?:$|[?#])/i.test(trimmed);
   }
 };
+
+const resolveMMarketPlaceholderImageUrl = () => {
+  const value =
+    process.env.MMARKET_PLACEHOLDER_IMAGE_URL?.trim() || DEFAULT_MMARTKET_PLACEHOLDER_IMAGE_URL;
+  return hasAllowedImageExtension(value) ? value : "";
+};
+
+const appendPlaceholderVariant = (baseUrl: string, index: number) => {
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.set("slot", String(index));
+    return url.toString();
+  } catch {
+    return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}slot=${index}`;
+  }
+};
+
+const buildMMarketImageUrls = (inputUrls: string[]) => {
+  const nonDirectImageUrls = inputUrls.filter((url) => !hasAllowedImageExtension(url));
+  const directImageUrls = inputUrls.filter((url) => hasAllowedImageExtension(url));
+  const placeholderUrl = resolveMMarketPlaceholderImageUrl();
+  const missingCount = Math.max(0, MMARKET_MIN_IMAGES - directImageUrls.length);
+  const placeholderImageUrls =
+    placeholderUrl && missingCount > 0
+      ? Array.from({ length: missingCount }, (_, index) =>
+          appendPlaceholderVariant(placeholderUrl, index + 1),
+        )
+      : [];
+
+  return {
+    nonDirectImageUrls,
+    directImageUrls,
+    placeholderImageUrls,
+    exportImageUrls: [...directImageUrls, ...placeholderImageUrls],
+  };
+};
+
+const normalizeSpecLabel = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+
+const resolveAutofillKind = (input: {
+  labelRu?: string | null;
+  attributeKey?: string | null;
+}): AutofillSpecKind | null => {
+  const values = [normalizeSpecLabel(input.labelRu), normalizeSpecLabel(input.attributeKey)].filter(
+    (value) => value.length > 0,
+  );
+
+  if (
+    values.some(
+      (value) =>
+        value.includes("производ") ||
+        value.includes("бренд") ||
+        value.includes("manufacturer") ||
+        value.includes("brand") ||
+        value.includes("maker"),
+    )
+  ) {
+    return "manufacturer";
+  }
+  if (values.some((value) => value.includes("модел") || value.includes("model"))) {
+    return "model";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("цвет") ||
+        value.includes("расцвет") ||
+        value.includes("color") ||
+        value.includes("colour"),
+    )
+  ) {
+    return "color";
+  }
+  if (
+    values.some((value) => value.includes("тип") || value.includes("вид") || value.includes("type"))
+  ) {
+    return "type";
+  }
+  return null;
+};
+
+const parseOptionStrings = (value: Prisma.JsonValue | null) =>
+  Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter((item) => item.length > 0)
+    : [];
+
+const toStoredAttributeValue = (type: AutofillTemplateSpec["type"], value: string) => {
+  if (type === "MULTI_SELECT") {
+    return [value];
+  }
+  return value;
+};
+
+const createBulkAutofillSkipReasonCounts = (): BulkAutofillSkipReasonCounts => ({
+  noCategory: 0,
+  noTemplate: 0,
+  noSupportedFields: 0,
+  noResolvedValues: 0,
+});
 
 const normalizeNumber = (value: unknown) => {
   if (typeof value === "number") {
@@ -393,7 +557,10 @@ const acquireCooldownLock = async (orgId: string) => {
         "NX",
       );
       if (result === "OK") {
-        return { acquired: true as const, remainingSeconds: normalizeCooldownSeconds(MMARKET_EXPORT_COOLDOWN_MS) };
+        return {
+          acquired: true as const,
+          remainingSeconds: normalizeCooldownSeconds(MMARKET_EXPORT_COOLDOWN_MS),
+        };
       }
       const remainingSeconds = await getCooldownSeconds(orgId);
       return { acquired: false as const, remainingSeconds };
@@ -408,7 +575,10 @@ const acquireCooldownLock = async (orgId: string) => {
   }
 
   memoryCooldownStore.set(orgId, Date.now() + MMARKET_EXPORT_COOLDOWN_MS);
-  return { acquired: true as const, remainingSeconds: normalizeCooldownSeconds(MMARKET_EXPORT_COOLDOWN_MS) };
+  return {
+    acquired: true as const,
+    remainingSeconds: normalizeCooldownSeconds(MMARKET_EXPORT_COOLDOWN_MS),
+  };
 };
 
 const parseSpecCatalogResponse = (payload: unknown) => {
@@ -661,7 +831,10 @@ const buildMMarketExportPlan = async (input: {
     }),
   ]);
 
-  const templateSpecsByCategory = new Map<string, Array<{ attributeKey: string; specKey: string }>>();
+  const templateSpecsByCategory = new Map<
+    string,
+    Array<{ attributeKey: string; specKey: string }>
+  >();
   for (const template of categoryTemplates) {
     const specKey = template.definition?.labelRu?.trim() || template.attributeKey;
     if (!specKey) {
@@ -740,12 +913,11 @@ const buildMMarketExportPlan = async (input: {
     }
 
     const imageUrls = collectImageUrls(product);
-    const nonDirectImageUrls = imageUrls.filter((url) => !hasAllowedImageExtension(url));
-    const directImageUrls = imageUrls.filter((url) => hasAllowedImageExtension(url));
+    const { nonDirectImageUrls, exportImageUrls } = buildMMarketImageUrls(imageUrls);
     if (nonDirectImageUrls.length > 0) {
       addIssue(issues, "NON_DIRECT_IMAGE_URL");
     }
-    if (directImageUrls.length < MMARKET_MIN_IMAGES) {
+    if (exportImageUrls.length < MMARKET_MIN_IMAGES) {
       addIssue(issues, "INVALID_IMAGES_COUNT");
     }
 
@@ -759,7 +931,7 @@ const buildMMarketExportPlan = async (input: {
       branch_id: branchId,
     }));
 
-    const categoryTemplateSpecs = category ? templateSpecsByCategory.get(category) ?? [] : [];
+    const categoryTemplateSpecs = category ? (templateSpecsByCategory.get(category) ?? []) : [];
     const valueMap = specValuesByProduct.get(product.id) ?? new Map<string, string[]>();
     const specs: Record<string, string> = {};
 
@@ -797,6 +969,7 @@ const buildMMarketExportPlan = async (input: {
 
     if (issues.length > 0) {
       failedProducts.push({
+        productId: product.id,
         sku,
         name,
         issues,
@@ -811,27 +984,21 @@ const buildMMarketExportPlan = async (input: {
       price: price ?? 0,
       category,
       description,
-      images: directImageUrls,
+      images: exportImageUrls,
       stock: stockPayload,
       specs,
     });
   }
 
   const payload = buildMMarketPayload(readyProducts);
-  const blockerCounts = countByCode(
-    failedProducts.map((item) => ({ codes: item.issues })),
-  );
-  const warningCounts = countByCode(
-    failedProducts.map((item) => ({ codes: item.warnings })),
-  );
+  const blockerCounts = countByCode(failedProducts.map((item) => ({ codes: item.issues })));
+  const warningCounts = countByCode(failedProducts.map((item) => ({ codes: item.warnings })));
   for (const globalWarning of remoteSpecCatalog.globalWarnings) {
     warningCounts[globalWarning] = (warningCounts[globalWarning] ?? 0) + 1;
   }
 
   const cooldownSeconds = await getCooldownSeconds(input.organizationId);
-  const nextAllowedAt = cooldownSeconds
-    ? new Date(Date.now() + cooldownSeconds * 1_000)
-    : null;
+  const nextAllowedAt = cooldownSeconds ? new Date(Date.now() + cooldownSeconds * 1_000) : null;
 
   const preflight: MMarketPreflightResult = {
     generatedAt: new Date(),
@@ -850,8 +1017,7 @@ const buildMMarketExportPlan = async (input: {
       missingStoreMappings,
     },
     warnings: {
-      total:
-        Object.values(warningCounts).reduce((sum, value) => sum + (value ?? 0), 0),
+      total: Object.values(warningCounts).reduce((sum, value) => sum + (value ?? 0), 0),
       byCode: warningCounts,
       global: remoteSpecCatalog.globalWarnings,
     },
@@ -1000,8 +1166,9 @@ export const getMMarketSettings = async (organizationId: string) => {
   const mappingByStoreId = new Map(
     mappings.map((mapping) => [mapping.storeId, normalizeBranchId(mapping.mmarketBranchId)]),
   );
-  const mappedCount = stores.filter((store) => (mappingByStoreId.get(store.id) ?? "").length > 0)
-    .length;
+  const mappedCount = stores.filter(
+    (store) => (mappingByStoreId.get(store.id) ?? "").length > 0,
+  ).length;
   const mappingsComplete = stores.length > 0 && mappedCount === stores.length;
   const status = resolveOverviewStatus({ integration, mappingsComplete });
 
@@ -1086,7 +1253,7 @@ export const updateMMarketConnection = async (input: {
       ? null
       : tokenInput.length > 0
         ? encryptToken(tokenInput)
-        : existing?.apiTokenEncrypted ?? null;
+        : (existing?.apiTokenEncrypted ?? null);
 
     const [storesCount, mappedCount] = await Promise.all([
       tx.store.count({ where: { organizationId: input.organizationId } }),
@@ -1301,6 +1468,617 @@ export const runMMarketPreflight = async (organizationId: string) => {
   });
 
   return plan.preflight;
+};
+
+export const bulkGenerateMMarketShortDescriptions = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  locale?: string | null;
+  logger?: MMarketBulkDescriptionLogger;
+}) => {
+  const preflight = await runMMarketPreflight(input.organizationId);
+  const productIds = Array.from(
+    new Set(
+      preflight.failedProducts
+        .filter((product) => product.issues.includes("SHORT_DESCRIPTION"))
+        .map((product) => product.productId),
+    ),
+  );
+
+  if (!productIds.length) {
+    return {
+      updatedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      deferredCount: 0,
+      rateLimited: false,
+      updatedProductIds: [] as string[],
+      targetedCount: 0,
+    };
+  }
+
+  const result = await bulkGenerateProductDescriptions({
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    requestId: input.requestId,
+    productIds,
+    locale: input.locale,
+    logger: input.logger,
+    maxProducts: productIds.length,
+  });
+
+  return {
+    ...result,
+    targetedCount: productIds.length,
+  };
+};
+
+export const bulkCreateMMarketBaseTemplates = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  logger?: MMarketBaseTemplateLogger;
+}) => {
+  const preflight = await runMMarketPreflight(input.organizationId);
+  const productIds = Array.from(
+    new Set(
+      preflight.failedProducts
+        .filter((product) => product.issues.includes("MISSING_SPECS"))
+        .map((product) => product.productId),
+    ),
+  );
+
+  if (!productIds.length) {
+    return {
+      targetedCount: 0,
+      createdCategoryCount: 0,
+      createdAttributeCount: 0,
+      reactivatedAttributeCount: 0,
+      categories: [] as string[],
+      attributeKeys: [] as string[],
+    };
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId: input.organizationId,
+      id: { in: productIds },
+      isDeleted: false,
+      category: { not: null },
+    },
+    select: {
+      category: true,
+    },
+  });
+
+  const categories = Array.from(
+    new Set(products.map((product) => product.category?.trim() ?? "").filter(Boolean)),
+  );
+  if (!categories.length) {
+    return {
+      targetedCount: 0,
+      createdCategoryCount: 0,
+      createdAttributeCount: 0,
+      reactivatedAttributeCount: 0,
+      categories: [] as string[],
+      attributeKeys: [] as string[],
+    };
+  }
+
+  const existingTemplates = await prisma.categoryAttributeTemplate.findMany({
+    where: {
+      organizationId: input.organizationId,
+      category: { in: categories },
+    },
+    select: {
+      category: true,
+    },
+    distinct: ["category"],
+  });
+
+  const templateCategories = new Set(existingTemplates.map((row) => row.category.trim()));
+  const missingTemplateCategories = categories.filter(
+    (category) => !templateCategories.has(category),
+  );
+
+  if (!missingTemplateCategories.length) {
+    return {
+      targetedCount: 0,
+      createdCategoryCount: 0,
+      createdAttributeCount: 0,
+      reactivatedAttributeCount: 0,
+      categories: [] as string[],
+      attributeKeys: [] as string[],
+    };
+  }
+
+  const labelSet = new Set(MMARKET_BASE_TEMPLATE_DEFINITIONS.map((item) => item.labelRu));
+  const keySet = new Set(MMARKET_BASE_TEMPLATE_DEFINITIONS.map((item) => item.key));
+  const existingDefinitions = await prisma.attributeDefinition.findMany({
+    where: {
+      organizationId: input.organizationId,
+      OR: [{ key: { in: Array.from(keySet) } }, { labelRu: { in: Array.from(labelSet) } }],
+    },
+    orderBy: { key: "asc" },
+  });
+
+  let createdAttributeCount = 0;
+  let reactivatedAttributeCount = 0;
+  const resolvedAttributeKeys: string[] = [];
+
+  for (const baseDefinition of MMARKET_BASE_TEMPLATE_DEFINITIONS) {
+    const existing =
+      existingDefinitions.find((definition) => definition.key === baseDefinition.key) ??
+      existingDefinitions.find(
+        (definition) => definition.labelRu.trim() === baseDefinition.labelRu,
+      );
+
+    if (existing) {
+      if (!existing.isActive) {
+        await prisma.attributeDefinition.update({
+          where: { id: existing.id },
+          data: {
+            isActive: true,
+            labelKg: existing.labelKg?.trim() || baseDefinition.labelKg,
+          },
+        });
+        reactivatedAttributeCount += 1;
+      }
+      resolvedAttributeKeys.push(existing.key);
+      continue;
+    }
+
+    const created = await prisma.attributeDefinition.create({
+      data: {
+        organizationId: input.organizationId,
+        key: baseDefinition.key,
+        labelRu: baseDefinition.labelRu,
+        labelKg: baseDefinition.labelKg,
+        type: baseDefinition.type,
+        required: false,
+        isActive: true,
+      },
+    });
+    createdAttributeCount += 1;
+    resolvedAttributeKeys.push(created.key);
+
+    await writeAuditLog(prisma, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "ATTRIBUTE_CREATE",
+      entity: "AttributeDefinition",
+      entityId: created.id,
+      before: null,
+      after: toJson(created),
+      requestId: input.requestId,
+    });
+  }
+
+  for (const category of missingTemplateCategories) {
+    await setCategoryTemplate({
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      requestId: input.requestId,
+      category,
+      attributeKeys: resolvedAttributeKeys,
+    });
+  }
+
+  input.logger?.info(
+    {
+      phase: "create-base-templates",
+      categories: missingTemplateCategories,
+      createdCategoryCount: missingTemplateCategories.length,
+      createdAttributeCount,
+      reactivatedAttributeCount,
+      attributeKeys: resolvedAttributeKeys,
+    },
+    "created base MMarket category templates",
+  );
+
+  return {
+    targetedCount: missingTemplateCategories.length,
+    createdCategoryCount: missingTemplateCategories.length,
+    createdAttributeCount,
+    reactivatedAttributeCount,
+    categories: missingTemplateCategories,
+    attributeKeys: resolvedAttributeKeys,
+  };
+};
+
+export const bulkAutofillMMarketSpecs = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  logger?: MMarketBulkSpecsLogger;
+}) => {
+  const preflight = await runMMarketPreflight(input.organizationId);
+  const productIds = Array.from(
+    new Set(
+      preflight.failedProducts
+        .filter((product) => product.issues.includes("MISSING_SPECS"))
+        .map((product) => product.productId),
+    ),
+  );
+
+  if (!productIds.length) {
+    return {
+      updatedCount: 0,
+      filledValueCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      deferredCount: 0,
+      rateLimited: false,
+      updatedProductIds: [] as string[],
+      targetedCount: 0,
+      skipReasonCounts: createBulkAutofillSkipReasonCounts(),
+    };
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId: input.organizationId,
+      id: { in: productIds },
+      isDeleted: false,
+    },
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      category: true,
+      photoUrl: true,
+      supplier: {
+        select: { name: true },
+      },
+      images: {
+        where: {
+          url: {
+            not: { startsWith: "data:image/" },
+          },
+        },
+        select: { url: true },
+        orderBy: { position: "asc" },
+        take: 3,
+      },
+      variants: {
+        where: { isActive: true },
+        select: { id: true, attributes: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  const categories = Array.from(
+    new Set(
+      products
+        .map((product) => product.category?.trim() ?? "")
+        .filter((category) => category.length > 0),
+    ),
+  );
+
+  const [categoryTemplates, variantValues] = await Promise.all([
+    categories.length
+      ? prisma.categoryAttributeTemplate.findMany({
+          where: {
+            organizationId: input.organizationId,
+            category: { in: categories },
+          },
+          select: {
+            category: true,
+            attributeKey: true,
+            order: true,
+            definition: {
+              select: {
+                labelRu: true,
+                type: true,
+                optionsRu: true,
+              },
+            },
+          },
+          orderBy: [{ category: "asc" }, { order: "asc" }],
+        })
+      : Promise.resolve([]),
+    productIds.length
+      ? prisma.variantAttributeValue.findMany({
+          where: {
+            organizationId: input.organizationId,
+            productId: { in: productIds },
+          },
+          select: {
+            productId: true,
+            key: true,
+            value: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const templatesByCategory = new Map<string, AutofillTemplateSpec[]>();
+  for (const template of categoryTemplates) {
+    if (!template.definition?.labelRu?.trim()) {
+      continue;
+    }
+    const list = templatesByCategory.get(template.category) ?? [];
+    list.push({
+      attributeKey: template.attributeKey,
+      labelRu: template.definition.labelRu.trim(),
+      type: template.definition.type,
+      optionsRu: parseOptionStrings(template.definition.optionsRu),
+      autofillKind: resolveAutofillKind({
+        labelRu: template.definition.labelRu,
+        attributeKey: template.attributeKey,
+      }),
+    });
+    templatesByCategory.set(template.category, list);
+  }
+
+  const currentValuesByProduct = new Map<string, Map<string, string[]>>();
+  for (const valueRow of variantValues) {
+    const value = toSpecString(valueRow.value);
+    if (!value) {
+      continue;
+    }
+    const byKey = currentValuesByProduct.get(valueRow.productId) ?? new Map<string, string[]>();
+    const existing = byKey.get(valueRow.key) ?? [];
+    if (!existing.includes(value)) {
+      existing.push(value);
+      byKey.set(valueRow.key, existing);
+      currentValuesByProduct.set(valueRow.productId, byKey);
+    }
+  }
+
+  const productById = new Map(products.map((product) => [product.id, product]));
+  let updatedCount = 0;
+  let filledValueCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+  let rateLimited = false;
+  const updatedProductIds: string[] = [];
+  const skipReasonCounts = createBulkAutofillSkipReasonCounts();
+
+  for (const productId of productIds) {
+    const product = productById.get(productId);
+    if (!product || !product.category?.trim()) {
+      skippedCount += 1;
+      skipReasonCounts.noCategory += 1;
+      continue;
+    }
+
+    const templateSpecs = templatesByCategory.get(product.category.trim()) ?? [];
+    if (!templateSpecs.length) {
+      skippedCount += 1;
+      skipReasonCounts.noTemplate += 1;
+      continue;
+    }
+
+    const currentValues = currentValuesByProduct.get(product.id) ?? new Map<string, string[]>();
+    const nextValues = new Map<string, unknown>();
+    let stopAfterCurrentProduct = false;
+    let supportedFieldCount = 0;
+    const aiRequests: Array<{
+      attributeKey: string;
+      type: AutofillTemplateSpec["type"];
+      kind: "type" | "color";
+      labelRu: string;
+      options?: string[];
+    }> = [];
+
+    for (const templateSpec of templateSpecs) {
+      const hasValue = (currentValues.get(templateSpec.attributeKey) ?? []).length > 0;
+      if (hasValue || !templateSpec.autofillKind) {
+        continue;
+      }
+      supportedFieldCount += 1;
+
+      if (templateSpec.autofillKind === "manufacturer") {
+        const manufacturerValue = product.supplier?.name?.trim() || MMARKET_DEFAULT_MANUFACTURER;
+        if (manufacturerValue) {
+          nextValues.set(
+            templateSpec.attributeKey,
+            toStoredAttributeValue(templateSpec.type, manufacturerValue),
+          );
+        }
+        continue;
+      }
+
+      if (templateSpec.autofillKind === "model") {
+        const modelValue = MMARKET_DEFAULT_MODEL || product.sku.trim();
+        if (modelValue) {
+          nextValues.set(
+            templateSpec.attributeKey,
+            toStoredAttributeValue(templateSpec.type, modelValue),
+          );
+        }
+        continue;
+      }
+
+      if (
+        (templateSpec.autofillKind === "type" || templateSpec.autofillKind === "color") &&
+        !aiRequests.some((entry) => entry.attributeKey === templateSpec.attributeKey)
+      ) {
+        aiRequests.push({
+          attributeKey: templateSpec.attributeKey,
+          type: templateSpec.type,
+          kind: templateSpec.autofillKind,
+          labelRu: templateSpec.labelRu,
+          options: templateSpec.optionsRu,
+        });
+      }
+    }
+
+    if (aiRequests.length > 0) {
+      const imageUrls = Array.from(
+        new Set(
+          [product.photoUrl, ...product.images.map((image) => image.url)]
+            .map((value) => normalizeProductImageUrl(value ?? null))
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ).slice(0, 3);
+
+      if (imageUrls.length > 0) {
+        try {
+          const aiResult = await suggestProductSpecsFromImages({
+            imageUrls,
+            requestedSpecs: aiRequests.map((entry) => ({
+              kind: entry.kind,
+              labelRu: entry.labelRu,
+              options: entry.options,
+            })),
+            logger: input.logger,
+          });
+
+          for (const request of aiRequests) {
+            const suggestedValue = aiResult.suggestions[request.kind];
+            if (!suggestedValue) {
+              continue;
+            }
+            nextValues.set(
+              request.attributeKey,
+              toStoredAttributeValue(request.type, suggestedValue),
+            );
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message === "rateLimited") {
+            rateLimited = true;
+            stopAfterCurrentProduct = true;
+          }
+          if (error instanceof Error && error.message === "aiSpecNoUsableImages") {
+            // Keep rule-based values if any; otherwise this product will be skipped below.
+          } else if (!(error instanceof Error && error.message === "rateLimited")) {
+            throw error;
+          }
+        }
+      }
+    }
+
+    if (!nextValues.size) {
+      skippedCount += 1;
+      if (supportedFieldCount === 0) {
+        skipReasonCounts.noSupportedFields += 1;
+      } else {
+        skipReasonCounts.noResolvedValues += 1;
+      }
+      continue;
+    }
+
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        let targetVariant = product.variants[0];
+        if (!targetVariant) {
+          targetVariant = await tx.productVariant.create({
+            data: {
+              productId: product.id,
+              attributes: toJson({}),
+            },
+            select: { id: true, attributes: true },
+          });
+        }
+
+        const currentAttributes =
+          targetVariant.attributes &&
+          typeof targetVariant.attributes === "object" &&
+          !Array.isArray(targetVariant.attributes)
+            ? { ...(targetVariant.attributes as Record<string, unknown>) }
+            : {};
+
+        const beforeValues = Array.from(nextValues.keys()).reduce<Record<string, string | null>>(
+          (accumulator, key) => {
+            accumulator[key] = currentValues.get(key)?.[0] ?? null;
+            return accumulator;
+          },
+          {},
+        );
+
+        for (const [key, value] of nextValues.entries()) {
+          currentAttributes[key] = value;
+        }
+
+        await tx.productVariant.update({
+          where: { id: targetVariant.id },
+          data: {
+            attributes: toJson(currentAttributes),
+          },
+        });
+
+        for (const [key, value] of nextValues.entries()) {
+          await tx.variantAttributeValue.upsert({
+            where: {
+              variantId_key: {
+                variantId: targetVariant.id,
+                key,
+              },
+            },
+            update: {
+              value: toJson(value),
+            },
+            create: {
+              organizationId: input.organizationId,
+              productId: product.id,
+              variantId: targetVariant.id,
+              key,
+              value: toJson(value),
+            },
+          });
+        }
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "PRODUCT_UPDATE",
+          entity: "Product",
+          entityId: product.id,
+          before: toJson({ specsAutofill: beforeValues }),
+          after: toJson({
+            specsAutofill: Array.from(nextValues.entries()).reduce<Record<string, unknown>>(
+              (accumulator, [key, value]) => {
+                accumulator[key] = value;
+                return accumulator;
+              },
+              {},
+            ),
+            generated: true,
+          }),
+          requestId: input.requestId,
+        });
+
+        return nextValues.size;
+      });
+
+      updatedCount += 1;
+      filledValueCount += updated;
+      updatedProductIds.push(product.id);
+    } catch (error) {
+      failedCount += 1;
+      input.logger?.warn(
+        {
+          phase: "bulk-specs-item",
+          productId: product.id,
+          error: error instanceof Error ? { message: error.message, name: error.name } : error,
+        },
+        "bulk MMarket specs autofill failed for item",
+      );
+    }
+
+    if (stopAfterCurrentProduct) {
+      break;
+    }
+  }
+
+  const processedCount = updatedCount + skippedCount + failedCount;
+  const deferredCount = rateLimited ? Math.max(0, productIds.length - processedCount) : 0;
+
+  return {
+    updatedCount,
+    filledValueCount,
+    skippedCount,
+    failedCount,
+    deferredCount,
+    rateLimited,
+    updatedProductIds,
+    targetedCount: productIds.length,
+    skipReasonCounts,
+  };
 };
 
 export const listMMarketExportJobs = async (organizationId: string, limit = 50) => {

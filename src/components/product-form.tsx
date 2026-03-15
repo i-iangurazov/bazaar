@@ -45,6 +45,7 @@ import {
   GripIcon,
   ImagePlusIcon,
   RestoreIcon,
+  SparklesIcon,
   StatusSuccessIcon,
   ViewIcon,
 } from "@/components/icons";
@@ -553,6 +554,7 @@ export const ProductForm = ({
     name: "images",
   });
   const watchedImagesValue = useWatch({ control: form.control, name: "images" });
+  const watchedPhotoUrl = useWatch({ control: form.control, name: "photoUrl" });
   const watchedImages = useMemo(() => watchedImagesValue ?? [], [watchedImagesValue]);
   const orderedImageUrls = useMemo(
     () =>
@@ -564,6 +566,16 @@ export const ProductForm = ({
         .filter((image) => image.url.length > 0),
     [imageFields, watchedImages],
   );
+  const descriptionSourceImageUrls = useMemo(() => {
+    const directImages = orderedImageUrls
+      .map((image) => image.url.trim())
+      .filter((url) => url.length > 0);
+    if (directImages.length) {
+      return directImages;
+    }
+    const fallbackPhotoUrl = watchedPhotoUrl?.trim() ?? "";
+    return fallbackPhotoUrl ? [fallbackPhotoUrl] : [];
+  }, [orderedImageUrls, watchedPhotoUrl]);
 
   const {
     fields: packFields,
@@ -636,6 +648,25 @@ export const ProductForm = ({
       toast({
         variant: "success",
         description: t("barcodeGenerated", { value: result.value }),
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error),
+      });
+    },
+  });
+  const generateDescriptionMutation = trpc.products.generateDescription.useMutation({
+    onSuccess: (result) => {
+      form.setValue("description", result.description, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+      form.clearErrors("description");
+      toast({
+        variant: "success",
+        description: t("aiDescriptionGenerated"),
       });
     },
     onError: (error) => {
@@ -1760,6 +1791,21 @@ export const ProductForm = ({
     setShowBundleResults(false);
   };
 
+  const handleGenerateDescription = () => {
+    if (readOnly || generateDescriptionMutation.isLoading) {
+      return;
+    }
+    if (!descriptionSourceImageUrls.length) {
+      toast({ variant: "error", description: t("aiDescriptionImageRequired") });
+      return;
+    }
+
+    generateDescriptionMutation.mutate({
+      locale: locale === "kg" ? "kg" : "ru",
+      imageUrls: descriptionSourceImageUrls,
+    });
+  };
+
   const handleSubmit = (values: z.infer<typeof schema>) => {
     if (readOnly) {
       return;
@@ -2143,10 +2189,7 @@ export const ProductForm = ({
                           })}
                         </span>
                       </div>
-                      <ViewIcon
-                        className="h-3.5 w-3.5 text-muted-foreground"
-                        aria-hidden
-                      />
+                      <ViewIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                     </div>
                     <p className="break-all text-xs text-muted-foreground">{image.url}</p>
                   </a>
@@ -2344,10 +2387,42 @@ export const ProductForm = ({
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{t("description")}</FormLabel>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <FormLabel>{t("description")}</FormLabel>
+                          {!readOnly ? (
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={handleGenerateDescription}
+                              disabled={
+                                isUploadingImages ||
+                                generateDescriptionMutation.isLoading ||
+                                !descriptionSourceImageUrls.length
+                              }
+                            >
+                              {generateDescriptionMutation.isLoading ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : (
+                                <SparklesIcon className="h-4 w-4" />
+                              )}
+                              {generateDescriptionMutation.isLoading
+                                ? t("aiDescriptionGenerating")
+                                : t("aiDescriptionGenerate")}
+                            </Button>
+                          ) : null}
+                        </div>
                         <FormControl>
                           <Textarea {...field} rows={4} disabled={readOnly} />
                         </FormControl>
+                        {!readOnly ? (
+                          <FormDescription>
+                            {descriptionSourceImageUrls.length
+                              ? t("aiDescriptionHint")
+                              : t("aiDescriptionImageHint")}
+                          </FormDescription>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     )}

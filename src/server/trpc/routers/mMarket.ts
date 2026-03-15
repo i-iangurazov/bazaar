@@ -2,6 +2,9 @@ import { MMarketEnvironment } from "@prisma/client";
 import { z } from "zod";
 
 import {
+  bulkAutofillMMarketSpecs,
+  bulkCreateMMarketBaseTemplates,
+  bulkGenerateMMarketShortDescriptions,
   getMMarketOverview,
   getMMarketSavedToken,
   getMMarketSettings,
@@ -14,7 +17,13 @@ import {
   validateMMarketLocally,
 } from "@/server/services/mMarket";
 import { toTRPCError } from "@/server/trpc/errors";
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import {
+  adminProcedure,
+  managerProcedure,
+  protectedProcedure,
+  rateLimit,
+  router,
+} from "@/server/trpc/trpc";
 
 export const mMarketRouter = router({
   overview: protectedProcedure.query(async ({ ctx }) => {
@@ -107,6 +116,59 @@ export const mMarketRouter = router({
       throw toTRPCError(error);
     }
   }),
+
+  bulkGenerateDescriptions: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-descriptions-bulk" }))
+    .input(
+      z
+        .object({
+          locale: z.enum(["ru", "kg"]).optional(),
+        })
+        .optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await bulkGenerateMMarketShortDescriptions({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          locale: input?.locale,
+          logger: ctx.logger,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkAutofillSpecs: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-specs-bulk" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await bulkAutofillMMarketSpecs({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          logger: ctx.logger,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkCreateBaseTemplates: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-templates-bulk" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await bulkCreateMMarketBaseTemplates({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          logger: ctx.logger,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   exportNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-export-now" }))

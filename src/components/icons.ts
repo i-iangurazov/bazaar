@@ -56,6 +56,7 @@ import {
   List,
   Plug,
   Printer,
+  Sparkles,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
@@ -120,3 +121,4 @@ export const CopyIcon = Copy;
 export const LanguageIcon = Languages;
 export const GridViewIcon = LayoutGrid;
 export const TableViewIcon = List;
+export const SparklesIcon = Sparkles;

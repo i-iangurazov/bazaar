@@ -27,7 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FormActions, FormGrid } from "@/components/form-layout";
-import { CopyIcon, HideIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
+import { CopyIcon, HideIcon, IntegrationsIcon, SparklesIcon, ViewIcon } from "@/components/icons";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -73,11 +74,14 @@ const MMarketSettingsPage = () => {
   const t = useTranslations("mMarketSettings");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tProducts = useTranslations("products");
   const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const role = session?.user?.role ?? "STAFF";
+  const isAdmin = role === "ADMIN";
   const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
   const canEdit = role === "ADMIN" || role === "MANAGER";
 
@@ -163,6 +167,105 @@ const MMarketSettingsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const bulkGenerateDescriptionsMutation = trpc.mMarket.bulkGenerateDescriptions.useMutation({
+    onSuccess: async (result) => {
+      await preflightQuery.refetch();
+      if (result.targetedCount === 0) {
+        toast({ variant: "info", description: t("preflight.generateDescriptionsNothingToDo") });
+        return;
+      }
+      toast({
+        variant: result.rateLimited || result.failedCount > 0 ? "info" : "success",
+        description: result.rateLimited
+          ? tProducts("bulkGenerateDescriptionsRateLimited", {
+              updated: result.updatedCount,
+              skipped: result.skippedCount,
+              failed: result.failedCount,
+              deferred: result.deferredCount,
+            })
+          : result.failedCount > 0
+            ? tProducts("bulkGenerateDescriptionsPartial", {
+                updated: result.updatedCount,
+                skipped: result.skippedCount,
+                failed: result.failedCount,
+              })
+            : tProducts("bulkGenerateDescriptionsSuccess", {
+                updated: result.updatedCount,
+                skipped: result.skippedCount,
+              }),
+      });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const bulkAutofillSpecsMutation = trpc.mMarket.bulkAutofillSpecs.useMutation({
+    onSuccess: async (result) => {
+      await preflightQuery.refetch();
+      if (result.targetedCount === 0) {
+        toast({ variant: "info", description: t("preflight.autofillSpecsNothingToDo") });
+        return;
+      }
+      if (result.updatedCount === 0 && result.skippedCount > 0 && result.failedCount === 0) {
+        toast({
+          variant: "info",
+          description: t("preflight.autofillSpecsSkippedOnly", {
+            noTemplate: result.skipReasonCounts.noTemplate,
+            noSupportedFields: result.skipReasonCounts.noSupportedFields,
+            noResolvedValues: result.skipReasonCounts.noResolvedValues,
+            noCategory: result.skipReasonCounts.noCategory,
+          }),
+        });
+        return;
+      }
+      toast({
+        variant: result.rateLimited || result.failedCount > 0 ? "info" : "success",
+        description: result.rateLimited
+          ? t("preflight.autofillSpecsRateLimited", {
+              updated: result.updatedCount,
+              filled: result.filledValueCount,
+              skipped: result.skippedCount,
+              failed: result.failedCount,
+              deferred: result.deferredCount,
+            })
+          : result.failedCount > 0
+            ? t("preflight.autofillSpecsPartial", {
+                updated: result.updatedCount,
+                filled: result.filledValueCount,
+                skipped: result.skippedCount,
+                failed: result.failedCount,
+              })
+            : t("preflight.autofillSpecsSuccess", {
+                updated: result.updatedCount,
+                filled: result.filledValueCount,
+                skipped: result.skippedCount,
+              }),
+      });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const bulkCreateBaseTemplatesMutation = trpc.mMarket.bulkCreateBaseTemplates.useMutation({
+    onSuccess: async (result) => {
+      await preflightQuery.refetch();
+      if (result.targetedCount === 0) {
+        toast({ variant: "info", description: t("preflight.createBaseTemplatesNothingToDo") });
+        return;
+      }
+      toast({
+        variant: "success",
+        description: t("preflight.createBaseTemplatesSuccess", {
+          categories: result.createdCategoryCount,
+          createdAttributes: result.createdAttributeCount,
+          reactivatedAttributes: result.reactivatedAttributeCount,
+        }),
+      });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
 
   const [environment, setEnvironment] = useState<MMarketEnvironment>(MMarketEnvironment.DEV);
   const [apiToken, setApiToken] = useState("");
@@ -228,6 +331,54 @@ const MMarketSettingsPage = () => {
     }
   };
 
+  const handleGenerateShortDescriptions = async () => {
+    if (!isAdmin || shortDescriptionCount <= 0) {
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("preflight.confirmGenerateDescriptions", {
+          count: shortDescriptionCount,
+        }),
+      }))
+    ) {
+      return;
+    }
+    bulkGenerateDescriptionsMutation.mutate({
+      locale: locale === "kg" ? "kg" : "ru",
+    });
+  };
+
+  const handleAutofillSpecs = async () => {
+    if (!isAdmin || missingSpecsCount <= 0) {
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("preflight.confirmAutofillSpecs", {
+          count: missingSpecsCount,
+        }),
+      }))
+    ) {
+      return;
+    }
+    bulkAutofillSpecsMutation.mutate();
+  };
+
+  const handleCreateBaseTemplates = async () => {
+    if (!isAdmin || missingSpecsCount <= 0) {
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("preflight.confirmCreateBaseTemplates"),
+      }))
+    ) {
+      return;
+    }
+    bulkCreateBaseTemplatesMutation.mutate();
+  };
+
   const handleSaveConnection = () => {
     if (!canEdit) {
       return;
@@ -277,6 +428,8 @@ const MMarketSettingsPage = () => {
 
   const preflightData = preflightQuery.data;
   const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
+  const missingSpecsCount = preflightData?.blockers.byCode.MISSING_SPECS ?? 0;
+  const shortDescriptionCount = preflightData?.blockers.byCode.SHORT_DESCRIPTION ?? 0;
   const effectiveCooldownSeconds = Math.max(
     cooldownRemainingSeconds,
     preflightData?.cooldown.remainingSeconds ?? 0,
@@ -397,10 +550,9 @@ const MMarketSettingsPage = () => {
 
           <p className="text-xs text-muted-foreground">
             {t("connection.endpoint", {
-              endpoint:
-                settingsQuery.data?.integration.environment
-                  ? settingsQuery.data.endpoints[settingsQuery.data.integration.environment]
-                  : settingsQuery.data?.endpoints[MMarketEnvironment.DEV] ?? "",
+              endpoint: settingsQuery.data?.integration.environment
+                ? settingsQuery.data.endpoints[settingsQuery.data.integration.environment]
+                : (settingsQuery.data?.endpoints[MMarketEnvironment.DEV] ?? ""),
             })}
           </p>
 
@@ -420,15 +572,17 @@ const MMarketSettingsPage = () => {
               onClick={() => validateLocalMutation.mutate()}
               disabled={!canEdit || validateLocalMutation.isLoading}
             >
-              {validateLocalMutation.isLoading
-                ? tCommon("loading")
-                : t("connection.validateLocal")}
+              {validateLocalMutation.isLoading ? tCommon("loading") : t("connection.validateLocal")}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={handleClearToken}
-              disabled={!canEdit || !settingsQuery.data?.integration.hasToken || saveConnectionMutation.isLoading}
+              disabled={
+                !canEdit ||
+                !settingsQuery.data?.integration.hasToken ||
+                saveConnectionMutation.isLoading
+              }
             >
               {t("connection.clearToken")}
             </Button>
@@ -508,8 +662,12 @@ const MMarketSettingsPage = () => {
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border border-border p-3">
-                  <p className="text-xs text-muted-foreground">{t("preflight.metrics.considered")}</p>
-                  <p className="text-lg font-semibold">{preflightData.summary.productsConsidered}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("preflight.metrics.considered")}
+                  </p>
+                  <p className="text-lg font-semibold">
+                    {preflightData.summary.productsConsidered}
+                  </p>
                 </div>
                 <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.ready")}</p>
@@ -526,18 +684,20 @@ const MMarketSettingsPage = () => {
               </div>
 
               <div className="rounded-md border border-border p-3">
-                <p className="text-sm font-medium text-foreground">{t("preflight.blockersTitle")}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {t("preflight.blockersTitle")}
+                </p>
                 {preflightData.blockers.total === 0 ? (
                   <p className="mt-2 text-sm text-muted-foreground">{t("preflight.noBlockers")}</p>
                 ) : (
                   <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    {ISSUE_CODES.filter((code) => (preflightData.blockers.byCode[code] ?? 0) > 0).map(
-                      (code) => (
-                        <p key={code}>
-                          {t(`issues.${code}`)}: {preflightData.blockers.byCode[code]}
-                        </p>
-                      ),
-                    )}
+                    {ISSUE_CODES.filter(
+                      (code) => (preflightData.blockers.byCode[code] ?? 0) > 0,
+                    ).map((code) => (
+                      <p key={code}>
+                        {t(`issues.${code}`)}: {preflightData.blockers.byCode[code]}
+                      </p>
+                    ))}
                     {(preflightData.blockers.byCode.MISSING_SPECS ?? 0) > 0 ? (
                       <p className="pt-1 text-xs">
                         <Link
@@ -569,6 +729,53 @@ const MMarketSettingsPage = () => {
                     ))}
                   </div>
                 ) : null}
+
+                {isAdmin && (missingSpecsCount > 0 || shortDescriptionCount > 0) ? (
+                  <FormActions className="mt-3 justify-start">
+                    {missingSpecsCount > 0 ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void handleCreateBaseTemplates()}
+                          disabled={bulkCreateBaseTemplatesMutation.isLoading}
+                        >
+                          {bulkCreateBaseTemplatesMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : null}
+                          {t("preflight.createBaseTemplates")}
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => void handleAutofillSpecs()}
+                          disabled={bulkAutofillSpecsMutation.isLoading}
+                        >
+                          {bulkAutofillSpecsMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {t("preflight.autofillSpecs")} ({missingSpecsCount})
+                        </Button>
+                      </>
+                    ) : null}
+
+                    {shortDescriptionCount > 0 ? (
+                      <Button
+                        type="button"
+                        onClick={() => void handleGenerateShortDescriptions()}
+                        disabled={bulkGenerateDescriptionsMutation.isLoading}
+                      >
+                        {bulkGenerateDescriptionsMutation.isLoading ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : (
+                          <SparklesIcon className="h-4 w-4" aria-hidden />
+                        )}
+                        {tProducts("bulkGenerateDescriptions")} ({shortDescriptionCount})
+                      </Button>
+                    ) : null}
+                  </FormActions>
+                ) : null}
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
@@ -579,7 +786,7 @@ const MMarketSettingsPage = () => {
                 />
                 <Select value={filterIssue} onValueChange={setFilterIssue}>
                   <SelectTrigger>
-                    <SelectValue placeholder={t("preflight.filters.issue")}/>
+                    <SelectValue placeholder={t("preflight.filters.issue")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">{t("preflight.filters.all")}</SelectItem>
@@ -641,7 +848,12 @@ const MMarketSettingsPage = () => {
             <Button
               type="button"
               onClick={() => exportMutation.mutate()}
-              disabled={!canEdit || exportMutation.isLoading || !preflightCanExport || effectiveCooldownSeconds > 0}
+              disabled={
+                !canEdit ||
+                exportMutation.isLoading ||
+                !preflightCanExport ||
+                effectiveCooldownSeconds > 0
+              }
               title={exportDisabledReason}
             >
               {exportMutation.isLoading ? tCommon("loading") : t("export.run")}
@@ -675,10 +887,13 @@ const MMarketSettingsPage = () => {
                   <TableBody>
                     {jobsQuery.data.map((job) => {
                       const stats =
-                        job.payloadStatsJson && typeof job.payloadStatsJson === "object" && !Array.isArray(job.payloadStatsJson)
+                        job.payloadStatsJson &&
+                        typeof job.payloadStatsJson === "object" &&
+                        !Array.isArray(job.payloadStatsJson)
                           ? (job.payloadStatsJson as Record<string, unknown>)
                           : {};
-                      const productCount = typeof stats.productCount === "number" ? stats.productCount : 0;
+                      const productCount =
+                        typeof stats.productCount === "number" ? stats.productCount : 0;
 
                       return (
                         <TableRow key={job.id}>
@@ -702,7 +917,9 @@ const MMarketSettingsPage = () => {
                                 {t("history.downloadError")}
                               </a>
                             ) : (
-                              <span className="text-xs text-muted-foreground">{t("history.noError")}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {t("history.noError")}
+                              </span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -717,6 +934,8 @@ const MMarketSettingsPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      {confirmDialog}
     </div>
   );
 };

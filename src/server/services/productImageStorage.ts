@@ -324,9 +324,11 @@ const loadHeicConvert = async () => {
       if (typeof candidate !== "function") {
         throw new Error("imageInvalidType");
       }
-      return candidate as (
-        options: { buffer: Buffer; format: "JPEG"; quality?: number },
-      ) => Promise<Buffer | Uint8Array>;
+      return candidate as (options: {
+        buffer: Buffer;
+        format: "JPEG";
+        quality?: number;
+      }) => Promise<Buffer | Uint8Array>;
     });
   }
   return heicConvertModulePromise;
@@ -583,7 +585,7 @@ const isRemoteHostAllowed = async (hostName: string) => {
   }
 };
 
-const downloadRemoteImage = async (url: string) => {
+export const downloadRemoteImage = async (url: string) => {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -649,8 +651,7 @@ export const isManagedProductImageUrl = (url: string) => {
   return prefixes.some((prefix) => value.startsWith(prefix));
 };
 
-const isUnassignedManagedProductImageUrl = (url: string) =>
-  url.includes("/products/unassigned/");
+const isUnassignedManagedProductImageUrl = (url: string) => url.includes("/products/unassigned/");
 
 export const normalizeProductImageUrl = (value?: string | null) => {
   const normalized = value?.trim();
