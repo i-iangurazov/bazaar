@@ -692,6 +692,7 @@
       },
       "columns": {
         "sku": "SKU",
+        "image": "Фото",
         "name": "Товар",
         "category": "Категория",
         "price": "Цена",
@@ -814,6 +815,7 @@
       },
       "columns": {
         "sku": "SKU",
+        "image": "Фото",
         "name": "Товар",
         "category": "Категория",
         "onHand": "Остаток",

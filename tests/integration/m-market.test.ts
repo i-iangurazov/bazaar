@@ -178,6 +178,11 @@ describeDb("m-market integration", () => {
   it("defaults products to excluded until the user includes them", async () => {
     const { org, product } = await seedBase();
 
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: "https://cdn.example.com/images/default-excluded.jpg" },
+    });
+
     const list = await listMMarketProducts({
       organizationId: org.id,
       page: 1,
@@ -192,6 +197,11 @@ describeDb("m-market integration", () => {
   it("treats legacy backfilled inclusions as excluded until the first explicit selection", async () => {
     const { org, product, adminUser, supplier, baseUnit } = await seedBase();
 
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: "https://cdn.example.com/images/first-product.jpg" },
+    });
+
     const secondProduct = await prisma.product.create({
       data: {
         organizationId: org.id,
@@ -200,6 +210,7 @@ describeDb("m-market integration", () => {
         name: "Second Product",
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
+        photoUrl: "https://cdn.example.com/images/second-product.jpg",
       },
     });
 
@@ -247,6 +258,37 @@ describeDb("m-market integration", () => {
     expect(nextList.summary.excludedProducts).toBe(1);
     expect(nextList.items.find((row) => row.id === product.id)?.included).toBe(true);
     expect(nextList.items.find((row) => row.id === secondProduct.id)?.included).toBe(false);
+  });
+
+  it("lists only products that have at least one image", async () => {
+    const { org, product, supplier, baseUnit } = await seedBase();
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: "https://cdn.example.com/images/listable-product.jpg" },
+    });
+
+    const hiddenFromList = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "NO-IMAGE",
+        name: "No Image Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    const list = await listMMarketProducts({
+      organizationId: org.id,
+      page: 1,
+      pageSize: 25,
+    });
+
+    expect(list.summary.totalProducts).toBe(1);
+    expect(list.items.map((row) => row.id)).toEqual([product.id]);
+    expect(list.items[0]?.imageUrl).toBe("https://cdn.example.com/images/listable-product.jpg");
+    expect(list.items.some((row) => row.id === hiddenFromList.id)).toBe(false);
   });
 
   it("pads missing images with the Bazaar placeholder for export", async () => {

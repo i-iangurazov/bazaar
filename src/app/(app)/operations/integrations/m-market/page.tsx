@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -58,6 +59,32 @@ const formatCountdown = (seconds: number) => {
   const minutes = Math.floor(safeSeconds / 60);
   const remSeconds = safeSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(remSeconds).padStart(2, "0")}`;
+};
+
+const ProductImageThumb = ({
+  imageUrl,
+  name,
+}: {
+  imageUrl?: string | null;
+  name: string;
+}) => {
+  const fallbackLabel = name.trim().charAt(0).toUpperCase() || "#";
+
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+      {fallbackLabel}
+    </div>
+  );
 };
 
 const statusBadgeVariant = (status: MMarketExportJobStatus) => {
@@ -855,6 +882,9 @@ const MMarketSettingsPage = () => {
                             </TableHead>
                           ) : null}
                           <TableHead>{t("productsSelection.columns.sku")}</TableHead>
+                          <TableHead className="w-16">
+                            {t("productsSelection.columns.image")}
+                          </TableHead>
                           <TableHead>{t("productsSelection.columns.name")}</TableHead>
                           <TableHead>{t("productsSelection.columns.category")}</TableHead>
                           <TableHead>{t("productsSelection.columns.onHand")}</TableHead>
@@ -881,6 +911,9 @@ const MMarketSettingsPage = () => {
                               </TableCell>
                             ) : null}
                             <TableCell className="font-mono text-xs">{product.sku}</TableCell>
+                            <TableCell>
+                              <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
+                            </TableCell>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell>{product.category ?? "-"}</TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
@@ -920,11 +953,14 @@ const MMarketSettingsPage = () => {
               renderMobile={(product) => (
                 <div className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{product.sku}</p>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {product.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{product.sku}</p>
+                      </div>
                     </div>
                     <Badge variant={product.included ? "success" : "muted"}>
                       {product.included

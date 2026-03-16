@@ -692,6 +692,7 @@
       },
       "columns": {
         "sku": "SKU",
+        "image": "Сүрөт",
         "name": "Товар",
         "category": "Категория",
         "price": "Баасы",
@@ -814,6 +815,7 @@
       },
       "columns": {
         "sku": "SKU",
+        "image": "Сүрөт",
         "name": "Товар",
         "category": "Категория",
         "onHand": "Калдык",

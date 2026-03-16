@@ -14,6 +14,7 @@ import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
+import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
@@ -48,6 +49,19 @@ const sanitizeImageUrl = (value?: string | null) => {
     return null;
   }
   return value;
+};
+
+const resolveProductListImageUrl = (product: {
+  photoUrl: string | null;
+  images: Array<{ url: string }>;
+}) => {
+  for (const candidate of [product.images[0]?.url, product.photoUrl]) {
+    const normalized = normalizeProductImageUrl(candidate);
+    if (normalized && !nonDataImagePattern.test(normalized)) {
+      return normalized;
+    }
+  }
+  return null;
 };
 
 const createSlugCandidate = () => {
@@ -355,6 +369,15 @@ export const listBazaarCatalogProducts = async (input: {
         name: true,
         category: true,
         basePriceKgs: true,
+        photoUrl: true,
+        images: {
+          where: {
+            AND: [{ url: { not: "" } }, { NOT: { url: { startsWith: "data:image/" } } }],
+          },
+          select: { url: true },
+          orderBy: { position: "asc" },
+          take: 1,
+        },
         hiddenInBazaarCatalogs: {
           where: { storeId: input.storeId },
           select: { id: true },
@@ -418,6 +441,7 @@ export const listBazaarCatalogProducts = async (input: {
       priceKgs: roundMoney(
         storePriceByProductId.get(product.id) ?? toMoney(product.basePriceKgs),
       ),
+      imageUrl: resolveProductListImageUrl(product),
       onHandQty: onHandByProductId.get(product.id) ?? 0,
       hidden: product.hiddenInBazaarCatalogs.length > 0,
     })),
@@ -770,7 +794,7 @@ export const getPublicBazaarCatalog = async (
 
     const basePrice = toMoney(product.basePriceKgs);
     const effectivePrice = basePriceByProductId.get(product.id) ?? basePrice;
-    const imageUrl = sanitizeImageUrl(product.images[0]?.url ?? product.photoUrl);
+    const imageUrl = resolveProductListImageUrl(product);
     const variants = product.variants.map((variant) => {
       const variantPrice =
         priceByProductVariantKey.get(`${product.id}:${variant.id}`) ?? effectivePrice;

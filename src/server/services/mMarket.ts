@@ -181,7 +181,40 @@ type BulkAutofillSkipReasonCounts = {
 const MMARKET_DEFAULT_MANUFACTURER = process.env.MMARKET_SPECS_DEFAULT_MANUFACTURER?.trim() ?? "";
 const MMARKET_DEFAULT_MODEL = process.env.MMARKET_SPECS_DEFAULT_MODEL?.trim() ?? "";
 const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
+const nonDataImagePattern = /^data:image\//i;
 type MMarketDbClient = Prisma.TransactionClient | PrismaClient;
+
+const mMarketListableImageWhere: Prisma.ProductWhereInput = {
+  OR: [
+    {
+      AND: [
+        { photoUrl: { not: null } },
+        { NOT: { photoUrl: "" } },
+        { NOT: { photoUrl: { startsWith: "data:image/" } } },
+      ],
+    },
+    {
+      images: {
+        some: {
+          AND: [{ url: { not: "" } }, { NOT: { url: { startsWith: "data:image/" } } }],
+        },
+      },
+    },
+  ],
+};
+
+const resolveMMarketListImageUrl = (product: {
+  photoUrl: string | null;
+  images: Array<{ url: string }>;
+}) => {
+  for (const candidate of [product.images[0]?.url, product.photoUrl]) {
+    const normalized = normalizeProductImageUrl(candidate);
+    if (normalized && !nonDataImagePattern.test(normalized)) {
+      return normalized;
+    }
+  }
+  return null;
+};
 
 const hasExplicitMMarketProductSelection = async (
   db: MMarketDbClient,
@@ -1311,6 +1344,7 @@ export const listMMarketProducts = async (input: {
   const baseWhere: Prisma.ProductWhereInput = {
     organizationId: input.organizationId,
     isDeleted: false,
+    ...mMarketListableImageWhere,
   };
 
   const searchWhere: Prisma.ProductWhereInput = search
@@ -1367,6 +1401,15 @@ export const listMMarketProducts = async (input: {
         sku: true,
         name: true,
         category: true,
+        photoUrl: true,
+        images: {
+          where: {
+            AND: [{ url: { not: "" } }, { NOT: { url: { startsWith: "data:image/" } } }],
+          },
+          select: { url: true },
+          orderBy: { position: "asc" },
+          take: 1,
+        },
         mMarketInclusions: {
           where: { orgId: input.organizationId },
           select: { id: true },
@@ -1410,6 +1453,7 @@ export const listMMarketProducts = async (input: {
       sku: product.sku,
       name: product.name,
       category: product.category?.trim() || null,
+      imageUrl: resolveMMarketListImageUrl(product),
       onHandQty: onHandByProductId.get(product.id) ?? 0,
       included: hasExplicitSelection && product.mMarketInclusions.length > 0,
     })),

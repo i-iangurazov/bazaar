@@ -10,6 +10,7 @@ import { prisma } from "@/server/db/prisma";
 import {
   createCatalogCheckoutOrder,
   getPublicBazaarCatalog,
+  listBazaarCatalogProducts,
   updateBazaarCatalogProductVisibility,
   upsertBazaarCatalogSettings,
 } from "@/server/services/bazaarCatalog";
@@ -183,6 +184,26 @@ describeDb("bazaar catalog integration", () => {
     ).rejects.toMatchObject({
       message: "productNotFound",
     });
+  });
+
+  it("returns product preview images for the catalog products table", async () => {
+    const { org, store, product } = await seedBase();
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: "https://cdn.example.com/images/catalog-product.jpg" },
+    });
+
+    const list = await listBazaarCatalogProducts({
+      organizationId: org.id,
+      storeId: store.id,
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(list.items.find((row) => row.id === product.id)?.imageUrl).toBe(
+      "https://cdn.example.com/images/catalog-product.jpg",
+    );
   });
 
   it("does not leak products across orgs when resolving by slug", async () => {

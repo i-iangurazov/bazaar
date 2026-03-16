@@ -142,6 +142,32 @@ const resolveAbsoluteCatalogUrl = (publicUrlPath: string) => {
   return publicUrlPath;
 };
 
+const ProductImageThumb = ({
+  imageUrl,
+  name,
+}: {
+  imageUrl?: string | null;
+  name: string;
+}) => {
+  const fallbackLabel = name.trim().charAt(0).toUpperCase() || "#";
+
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+      {fallbackLabel}
+    </div>
+  );
+};
+
 const BazaarCatalogSettingsPage = () => {
   const t = useTranslations("bazaarCatalogSettings");
   const tErrors = useTranslations("errors");
@@ -600,6 +626,9 @@ const BazaarCatalogSettingsPage = () => {
                                 </TableHead>
                               ) : null}
                               <TableHead>{t("productsVisibility.columns.sku")}</TableHead>
+                              <TableHead className="w-16">
+                                {t("productsVisibility.columns.image")}
+                              </TableHead>
                               <TableHead>{t("productsVisibility.columns.name")}</TableHead>
                               <TableHead>{t("productsVisibility.columns.category")}</TableHead>
                               <TableHead>{t("productsVisibility.columns.price")}</TableHead>
@@ -627,6 +656,12 @@ const BazaarCatalogSettingsPage = () => {
                                   </TableCell>
                                 ) : null}
                                 <TableCell className="font-mono text-xs">{product.sku}</TableCell>
+                                <TableCell>
+                                  <ProductImageThumb
+                                    imageUrl={product.imageUrl}
+                                    name={product.name}
+                                  />
+                                </TableCell>
                                 <TableCell className="font-medium">{product.name}</TableCell>
                                 <TableCell>{product.category ?? "-"}</TableCell>
                                 <TableCell>{formatCurrencyKGS(product.priceKgs, locale)}</TableCell>
@@ -669,11 +704,14 @@ const BazaarCatalogSettingsPage = () => {
                   renderMobile={(product) => (
                     <div className="rounded-lg border border-border bg-card p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">
-                            {product.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{product.sku}</p>
+                        <div className="flex min-w-0 items-start gap-3">
+                          <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {product.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{product.sku}</p>
+                          </div>
                         </div>
                         <Badge variant={product.hidden ? "muted" : "success"}>
                           {product.hidden
