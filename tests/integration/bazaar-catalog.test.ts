@@ -10,6 +10,7 @@ import { prisma } from "@/server/db/prisma";
 import {
   createCatalogCheckoutOrder,
   getPublicBazaarCatalog,
+  updateBazaarCatalogProductVisibility,
   upsertBazaarCatalogSettings,
 } from "@/server/services/bazaarCatalog";
 
@@ -143,6 +144,45 @@ describeDb("bazaar catalog integration", () => {
     expect(dbOrder?.lines[0]?.variantKey).toBe(variant.id);
     expect(Number(dbOrder?.lines[0]?.unitPriceKgs ?? 0)).toBe(210);
     expect(Number(dbOrder?.lines[0]?.lineTotalKgs ?? 0)).toBe(420);
+  });
+
+  it("hides selected products from the public catalog and checkout", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 180 },
+    });
+
+    const saved = await upsertBazaarCatalogSettings({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      status: BazaarCatalogStatus.PUBLISHED,
+    });
+
+    await updateBazaarCatalogProductVisibility({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "hide-product",
+      productIds: [product.id],
+      hidden: true,
+    });
+
+    const payload = await getPublicBazaarCatalog(saved.catalog.slug);
+
+    expect(payload?.products.some((row) => row.id === product.id)).toBe(false);
+    await expect(
+      createCatalogCheckoutOrder({
+        slug: saved.catalog.slug,
+        customerName: "Hidden Product Customer",
+        customerPhone: "+996555000100",
+        lines: [{ productId: product.id, qty: 1 }],
+      }),
+    ).rejects.toMatchObject({
+      message: "productNotFound",
+    });
   });
 
   it("does not leak products across orgs when resolving by slug", async () => {

@@ -369,15 +369,17 @@ const PosHistoryPage = () => {
                     {t("history.returnedTotal")}: {formatCurrencyKGS(sale.returnedTotalKgs, locale)}
                   </p>
                 ) : null}
-                <div className="mt-1">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
-                      sale.kkmStatus,
-                    )}`}
-                  >
-                    {t("history.kkmStatusLabel")}: {kkmStatusLabel(sale.kkmStatus)}
-                  </span>
-                </div>
+                {sale.kkmStatus !== "NOT_SENT" ? (
+                  <div className="mt-1">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
+                        sale.kkmStatus,
+                      )}`}
+                    >
+                      {t("history.kkmStatusLabel")}: {kkmStatusLabel(sale.kkmStatus)}
+                    </span>
+                  </div>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <p className="text-sm font-semibold text-foreground">

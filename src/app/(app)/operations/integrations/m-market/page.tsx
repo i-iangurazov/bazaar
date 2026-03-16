@@ -7,6 +7,8 @@ import { useSession } from "next-auth/react";
 import { MMarketEnvironment, MMarketExportJobStatus } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +38,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const ISSUE_CODES = [
+  "NO_PRODUCTS_SELECTED",
   "MISSING_SKU",
   "DUPLICATE_SKU",
   "INVALID_NAME_LENGTH",
@@ -275,6 +278,42 @@ const MMarketSettingsPage = () => {
   const [filterSku, setFilterSku] = useState("");
   const [filterIssue, setFilterIssue] = useState<string>("ALL");
   const [cooldownRemainingSeconds, setCooldownRemainingSeconds] = useState(0);
+  const [productSearch, setProductSearch] = useState("");
+  const [productSelectionFilter, setProductSelectionFilter] = useState<
+    "all" | "included" | "excluded"
+  >("all");
+  const [productsPage, setProductsPage] = useState(1);
+  const [productsPageSize, setProductsPageSize] = useState(10);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+
+  const productsQuery = trpc.mMarket.products.useQuery(
+    {
+      search: productSearch.trim() || undefined,
+      selection: productSelectionFilter,
+      page: productsPage,
+      pageSize: productsPageSize,
+    },
+    {
+      enabled: canView,
+      keepPreviousData: true,
+    },
+  );
+  const updateProductsMutation = trpc.mMarket.updateProducts.useMutation({
+    onSuccess: async (result, variables) => {
+      setPreflightFresh(false);
+      setSelectedProductIds(new Set());
+      await productsQuery.refetch();
+      toast({
+        variant: "success",
+        description: variables.included
+          ? t("productsSelection.includedSuccess", { count: result.updatedCount })
+          : t("productsSelection.excludedSuccess", { count: result.updatedCount }),
+      });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
 
   useEffect(() => {
     const integration = settingsQuery.data?.integration;
@@ -323,6 +362,10 @@ const MMarketSettingsPage = () => {
     }, 1_000);
     return () => clearInterval(timer);
   }, [cooldownRemainingSeconds]);
+
+  useEffect(() => {
+    setProductsPage(1);
+  }, [productSearch, productSelectionFilter]);
 
   const handleRunPreflight = async () => {
     const result = await preflightQuery.refetch();
@@ -426,6 +469,55 @@ const MMarketSettingsPage = () => {
     });
   };
 
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllProductsOnPage = () => {
+    const pageIds = (productsQuery.data?.items ?? []).map((product) => product.id);
+    if (!pageIds.length) {
+      return;
+    }
+    const allSelected = pageIds.every((id) => selectedProductIds.has(id));
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      for (const id of pageIds) {
+        if (allSelected) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const clearProductSelection = () => {
+    setSelectedProductIds(new Set());
+  };
+
+  const handleUpdateProducts = (included: boolean, productIds?: string[]) => {
+    if (!canEdit) {
+      return;
+    }
+    const targetIds = productIds ?? Array.from(selectedProductIds);
+    if (!targetIds.length) {
+      return;
+    }
+    updateProductsMutation.mutate({
+      productIds: targetIds,
+      included,
+    });
+  };
+
   const preflightData = preflightQuery.data;
   const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
   const missingSpecsCount = preflightData?.blockers.byCode.MISSING_SPECS ?? 0;
@@ -434,6 +526,10 @@ const MMarketSettingsPage = () => {
     cooldownRemainingSeconds,
     preflightData?.cooldown.remainingSeconds ?? 0,
   );
+  const productItems = productsQuery.data?.items ?? [];
+  const productSummary = productsQuery.data?.summary;
+  const allProductsSelectedOnPage =
+    productItems.length > 0 && productItems.every((product) => selectedProductIds.has(product.id));
 
   const filteredFailedProducts = useMemo(() => {
     const failedProducts = preflightData?.failedProducts ?? [];
@@ -635,6 +731,246 @@ const MMarketSettingsPage = () => {
               {saveMappingsMutation.isLoading ? tCommon("loading") : t("branches.save")}
             </Button>
           </FormActions>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>{t("productsSelection.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("productsSelection.subtitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("productsSelection.note")}</p>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">
+                {t("productsSelection.metrics.total")}
+              </p>
+              <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">
+                {t("productsSelection.metrics.included")}
+              </p>
+              <p className="text-lg font-semibold">{productSummary?.includedProducts ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">
+                {t("productsSelection.metrics.excluded")}
+              </p>
+              <p className="text-lg font-semibold">{productSummary?.excludedProducts ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
+            <Input
+              value={productSearch}
+              onChange={(event) => setProductSearch(event.target.value)}
+              placeholder={t("productsSelection.search")}
+            />
+            <Select
+              value={productSelectionFilter}
+              onValueChange={(value) =>
+                setProductSelectionFilter(value as "all" | "included" | "excluded")
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("productsSelection.filters.all")}</SelectItem>
+                <SelectItem value="included">{t("productsSelection.filters.included")}</SelectItem>
+                <SelectItem value="excluded">{t("productsSelection.filters.excluded")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {!canEdit ? <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p> : null}
+
+          {canEdit && selectedProductIds.size > 0 ? (
+            <SelectionToolbar
+              count={selectedProductIds.size}
+              label={t("productsSelection.selectedLabel", { count: selectedProductIds.size })}
+              onClear={clearProductSelection}
+              clearLabel={t("productsSelection.clearSelection")}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => handleUpdateProducts(true)}
+                disabled={updateProductsMutation.isLoading}
+              >
+                {t("productsSelection.includeSelected")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => handleUpdateProducts(false)}
+                disabled={updateProductsMutation.isLoading}
+              >
+                {t("productsSelection.excludeSelected")}
+              </Button>
+            </SelectionToolbar>
+          ) : null}
+
+          {productsQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : productsQuery.error ? (
+            <p className="text-sm text-danger">{translateError(tErrors, productsQuery.error)}</p>
+          ) : (
+            <ResponsiveDataList
+              items={productItems}
+              page={productsPage}
+              totalItems={productsQuery.data?.total ?? 0}
+              defaultPageSize={10}
+              pageSizeOptions={[10]}
+              onPageChange={setProductsPage}
+              onPageSizeChange={setProductsPageSize}
+              scrollToTopOnPageChange
+              empty={
+                <p className="text-sm text-muted-foreground">{t("productsSelection.empty")}</p>
+              }
+              renderDesktop={(visibleItems) =>
+                visibleItems.length ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {canEdit ? (
+                            <TableHead className="w-10">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                checked={allProductsSelectedOnPage}
+                                onChange={toggleSelectAllProductsOnPage}
+                                aria-label={t("productsSelection.selectAll")}
+                              />
+                            </TableHead>
+                          ) : null}
+                          <TableHead>{t("productsSelection.columns.sku")}</TableHead>
+                          <TableHead>{t("productsSelection.columns.name")}</TableHead>
+                          <TableHead>{t("productsSelection.columns.category")}</TableHead>
+                          <TableHead>{t("productsSelection.columns.onHand")}</TableHead>
+                          <TableHead>{t("productsSelection.columns.status")}</TableHead>
+                          {canEdit ? (
+                            <TableHead>{t("productsSelection.columns.actions")}</TableHead>
+                          ) : null}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((product) => (
+                          <TableRow key={product.id}>
+                            {canEdit ? (
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  checked={selectedProductIds.has(product.id)}
+                                  onChange={() => toggleProductSelection(product.id)}
+                                  aria-label={t("productsSelection.selectProduct", {
+                                    name: product.name,
+                                  })}
+                                />
+                              </TableCell>
+                            ) : null}
+                            <TableCell className="font-mono text-xs">{product.sku}</TableCell>
+                            <TableCell className="font-medium">{product.name}</TableCell>
+                            <TableCell>{product.category ?? "-"}</TableCell>
+                            <TableCell>{product.onHandQty}</TableCell>
+                            <TableCell>
+                              <Badge variant={product.included ? "success" : "muted"}>
+                                {product.included
+                                  ? t("productsSelection.statusIncluded")
+                                  : t("productsSelection.statusExcluded")}
+                              </Badge>
+                            </TableCell>
+                            {canEdit ? (
+                              <TableCell>
+                                <Button
+                                  type="button"
+                                  variant={product.included ? "outline" : "secondary"}
+                                  size="sm"
+                                  onClick={() =>
+                                    handleUpdateProducts(!product.included, [product.id])
+                                  }
+                                  disabled={updateProductsMutation.isLoading}
+                                >
+                                  {product.included
+                                    ? t("productsSelection.rowExclude")
+                                    : t("productsSelection.rowInclude")}
+                                </Button>
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("productsSelection.empty")}</p>
+                )
+              }
+              renderMobile={(product) => (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {product.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{product.sku}</p>
+                    </div>
+                    <Badge variant={product.included ? "success" : "muted"}>
+                      {product.included
+                        ? t("productsSelection.statusIncluded")
+                        : t("productsSelection.statusExcluded")}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      {t("productsSelection.columns.category")}: {product.category ?? "-"}
+                    </p>
+                    <p>
+                      {t("productsSelection.columns.onHand")}: {product.onHandQty}
+                    </p>
+                  </div>
+                  {canEdit ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          checked={selectedProductIds.has(product.id)}
+                          onChange={() => toggleProductSelection(product.id)}
+                          aria-label={t("productsSelection.selectProduct", { name: product.name })}
+                        />
+                        {t("productsSelection.selectProductShort")}
+                      </label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={product.included ? "outline" : "secondary"}
+                        className="ml-auto"
+                        onClick={() => handleUpdateProducts(!product.included, [product.id])}
+                        disabled={updateProductsMutation.isLoading}
+                      >
+                        {product.included
+                          ? t("productsSelection.rowExclude")
+                          : t("productsSelection.rowInclude")}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              getKey={(product) => product.id}
+            />
+          )}
         </CardContent>
       </Card>
 

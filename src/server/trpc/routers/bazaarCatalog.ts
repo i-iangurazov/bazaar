@@ -9,7 +9,9 @@ import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   getBazaarCatalogSettings,
+  listBazaarCatalogProducts,
   listBazaarCatalogStores,
+  updateBazaarCatalogProductVisibility,
   upsertBazaarCatalogSettings,
 } from "@/server/services/bazaarCatalog";
 
@@ -33,6 +35,54 @@ export const bazaarCatalogRouter = router({
         return await getBazaarCatalogSettings({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  products: protectedProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        search: z.string().max(200).optional(),
+        visibility: z.enum(["all", "visible", "hidden"]).optional(),
+        page: z.number().int().min(1).optional(),
+        pageSize: z.number().int().min(1).max(10).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listBazaarCatalogProducts({
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+          search: input.search,
+          visibility: input.visibility,
+          page: input.page,
+          pageSize: input.pageSize,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  updateProducts: managerProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        productIds: z.array(z.string().min(1)).min(1).max(500),
+        hidden: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateBazaarCatalogProductVisibility({
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productIds: input.productIds,
+          hidden: input.hidden,
         });
       } catch (error) {
         throw toTRPCError(error);

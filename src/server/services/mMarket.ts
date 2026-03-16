@@ -6,6 +6,7 @@ import {
   MMarketIntegrationStatus,
   MMarketLastSyncStatus,
   Prisma,
+  type PrismaClient,
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -41,12 +42,14 @@ const MMARKET_MIN_DESCRIPTION_LEN = 150;
 const MMARKET_MIN_IMAGES = 3;
 const DEFAULT_MMARTKET_PLACEHOLDER_IMAGE_URL =
   "https://pub-75076a8067634fa3a91a6df2248d729c.r2.dev/bazaar-placeholder.png";
+const MMARKET_PRODUCT_SELECTION_AUDIT_ACTION = "MMARKET_PRODUCT_SELECTION_UPDATED";
 
 const IMAGE_EXTENSION_PATTERN = /\.(jpg|png|webp)$/i;
 
 const memoryCooldownStore = new Map<string, number>();
 
 export type MMarketOverviewStatus = "NOT_CONFIGURED" | "READY" | "ERROR";
+export type MMarketProductSelectionFilter = "all" | "included" | "excluded";
 
 export type MMarketPayloadProduct = {
   sku: string;
@@ -77,6 +80,7 @@ export type MMarketPayload = {
 };
 
 export type MMarketPreflightIssueCode =
+  | "NO_PRODUCTS_SELECTED"
   | "MISSING_SKU"
   | "DUPLICATE_SKU"
   | "INVALID_NAME_LENGTH"
@@ -176,6 +180,23 @@ type BulkAutofillSkipReasonCounts = {
 
 const MMARKET_DEFAULT_MANUFACTURER = process.env.MMARKET_SPECS_DEFAULT_MANUFACTURER?.trim() ?? "";
 const MMARKET_DEFAULT_MODEL = process.env.MMARKET_SPECS_DEFAULT_MODEL?.trim() ?? "";
+const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
+type MMarketDbClient = Prisma.TransactionClient | PrismaClient;
+
+const hasExplicitMMarketProductSelection = async (
+  db: MMarketDbClient,
+  organizationId: string,
+) => {
+  const auditLog = await db.auditLog.findFirst({
+    where: {
+      organizationId,
+      action: MMARKET_PRODUCT_SELECTION_AUDIT_ACTION,
+    },
+    select: { id: true },
+  });
+
+  return Boolean(auditLog);
+};
 
 const MMARKET_BASE_TEMPLATE_DEFINITIONS = [
   {
@@ -711,7 +732,7 @@ const buildMMarketExportPlan = async (input: {
   environment: MMarketEnvironment;
   token: string | null;
 }): Promise<MMarketExportPlan> => {
-  const [stores, mappings] = await Promise.all([
+  const [stores, mappings, hasExplicitSelection, rawIncludedCount] = await Promise.all([
     prisma.store.findMany({
       where: { organizationId: input.organizationId },
       select: { id: true, name: true },
@@ -721,15 +742,33 @@ const buildMMarketExportPlan = async (input: {
       where: { orgId: input.organizationId },
       select: { storeId: true, mmarketBranchId: true },
     }),
+    hasExplicitMMarketProductSelection(prisma, input.organizationId),
+    prisma.product.count({
+      where: {
+        organizationId: input.organizationId,
+        isDeleted: false,
+        mMarketInclusions: {
+          some: { orgId: input.organizationId },
+        },
+      },
+    }),
   ]);
+  const activeIncludedCount = hasExplicitSelection ? rawIncludedCount : 0;
 
   const storeIdList = stores.map((store) => store.id);
-  const positiveSnapshots = storeIdList.length
+  const positiveSnapshots = storeIdList.length && hasExplicitSelection
     ? await prisma.inventorySnapshot.findMany({
         where: {
           storeId: { in: storeIdList },
           variantKey: "BASE",
           onHand: { gt: 0 },
+          product: {
+            organizationId: input.organizationId,
+            isDeleted: false,
+            mMarketInclusions: {
+              some: { orgId: input.organizationId },
+            },
+          },
         },
         select: { storeId: true, productId: true, onHand: true },
       })
@@ -748,12 +787,15 @@ const buildMMarketExportPlan = async (input: {
   const inStockProductIds = Array.from(inStockProductIdSet);
 
   const [products, stockRows] = await Promise.all([
-    inStockProductIds.length
+    inStockProductIds.length && hasExplicitSelection
       ? prisma.product.findMany({
           where: {
             organizationId: input.organizationId,
             isDeleted: false,
             id: { in: inStockProductIds },
+            mMarketInclusions: {
+              some: { orgId: input.organizationId },
+            },
           },
           select: {
             id: true,
@@ -771,7 +813,7 @@ const buildMMarketExportPlan = async (input: {
           orderBy: { sku: "asc" },
         })
       : Promise.resolve([]),
-    inStockProductIds.length
+    inStockProductIds.length && hasExplicitSelection
       ? prisma.inventorySnapshot.findMany({
           where: {
             storeId: { in: storeIdList },
@@ -992,6 +1034,9 @@ const buildMMarketExportPlan = async (input: {
 
   const payload = buildMMarketPayload(readyProducts);
   const blockerCounts = countByCode(failedProducts.map((item) => ({ codes: item.issues })));
+  if (activeIncludedCount === 0) {
+    blockerCounts.NO_PRODUCTS_SELECTED = 1;
+  }
   const warningCounts = countByCode(failedProducts.map((item) => ({ codes: item.warnings })));
   for (const globalWarning of remoteSpecCatalog.globalWarnings) {
     warningCounts[globalWarning] = (warningCounts[globalWarning] ?? 0) + 1;
@@ -1002,7 +1047,7 @@ const buildMMarketExportPlan = async (input: {
 
   const preflight: MMarketPreflightResult = {
     generatedAt: new Date(),
-    canExport: failedProducts.length === 0,
+    canExport: failedProducts.length === 0 && activeIncludedCount > 0,
     summary: {
       mode: "IN_STOCK_ONLY",
       storesTotal: stores.length,
@@ -1012,7 +1057,7 @@ const buildMMarketExportPlan = async (input: {
       productsFailed: failedProducts.length,
     },
     blockers: {
-      total: failedProducts.length,
+      total: failedProducts.length + (activeIncludedCount === 0 ? 1 : 0),
       byCode: blockerCounts,
       missingStoreMappings,
     },
@@ -1035,6 +1080,7 @@ const buildMMarketExportPlan = async (input: {
     payload,
     payloadStats: {
       productCount: payload.products.length,
+      selectedProducts: activeIncludedCount,
       storesTotal: stores.length,
       storesMapped: mappedStores.length,
       failedProducts: failedProducts.length,
@@ -1065,6 +1111,27 @@ const ensureStoreOwnership = async (organizationId: string, storeIds: string[]) 
   if (stores.length !== new Set(storeIds).size) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
   }
+};
+
+const ensureProductOwnership = async (organizationId: string, productIds: string[]) => {
+  const uniqueIds = Array.from(new Set(productIds.map((id) => id.trim()).filter(Boolean)));
+  if (!uniqueIds.length) {
+    return [];
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId,
+      id: { in: uniqueIds },
+    },
+    select: { id: true },
+  });
+
+  if (products.length !== uniqueIds.length) {
+    throw new AppError("productNotFound", "NOT_FOUND", 404);
+  }
+
+  return uniqueIds;
 };
 
 const sendMMarketPayload = async (input: {
@@ -1222,6 +1289,200 @@ export const getMMarketSavedToken = async (organizationId: string) => {
 
   return {
     apiToken: decryptToken(integration.apiTokenEncrypted),
+  };
+};
+
+export const listMMarketProducts = async (input: {
+  organizationId: string;
+  search?: string;
+  selection?: MMarketProductSelectionFilter;
+  page?: number;
+  pageSize?: number;
+}) => {
+  const page = Math.max(1, Math.trunc(input.page ?? 1));
+  const pageSize = Math.min(10, Math.max(1, Math.trunc(input.pageSize ?? 10)));
+  const search = normalizeSearch(input.search);
+  const selection = input.selection ?? "all";
+  const hasExplicitSelection = await hasExplicitMMarketProductSelection(
+    prisma,
+    input.organizationId,
+  );
+
+  const baseWhere: Prisma.ProductWhereInput = {
+    organizationId: input.organizationId,
+    isDeleted: false,
+  };
+
+  const searchWhere: Prisma.ProductWhereInput = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { sku: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const selectionWhere: Prisma.ProductWhereInput =
+    selection === "excluded"
+      ? hasExplicitSelection
+        ? {
+            mMarketInclusions: {
+              none: { orgId: input.organizationId },
+            },
+          }
+        : {}
+      : selection === "included"
+        ? hasExplicitSelection
+          ? {
+              mMarketInclusions: {
+                some: { orgId: input.organizationId },
+              },
+            }
+          : { id: { in: [] } }
+        : {};
+
+  const where: Prisma.ProductWhereInput = {
+    ...baseWhere,
+    ...searchWhere,
+    ...selectionWhere,
+  };
+
+  const [totalProducts, includedProducts, total, products] = await Promise.all([
+    prisma.product.count({ where: baseWhere }),
+    hasExplicitSelection
+      ? prisma.product.count({
+          where: {
+            ...baseWhere,
+            mMarketInclusions: {
+              some: { orgId: input.organizationId },
+            },
+          },
+        })
+      : Promise.resolve(0),
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        category: true,
+        mMarketInclusions: {
+          where: { orgId: input.organizationId },
+          select: { id: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ name: "asc" }, { sku: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  const productIds = products.map((product) => product.id);
+  const snapshots = productIds.length
+    ? await prisma.inventorySnapshot.findMany({
+        where: {
+          productId: { in: productIds },
+          variantKey: "BASE",
+          store: {
+            organizationId: input.organizationId,
+          },
+        },
+        select: {
+          productId: true,
+          onHand: true,
+        },
+      })
+    : [];
+
+  const onHandByProductId = new Map<string, number>();
+  for (const snapshot of snapshots) {
+    onHandByProductId.set(
+      snapshot.productId,
+      (onHandByProductId.get(snapshot.productId) ?? 0) + snapshot.onHand,
+    );
+  }
+
+  return {
+    items: products.map((product) => ({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category?.trim() || null,
+      onHandQty: onHandByProductId.get(product.id) ?? 0,
+      included: hasExplicitSelection && product.mMarketInclusions.length > 0,
+    })),
+    total,
+    page,
+    pageSize,
+    summary: {
+      totalProducts,
+      includedProducts,
+      excludedProducts: Math.max(0, totalProducts - includedProducts),
+    },
+  };
+};
+
+export const updateMMarketProductSelection = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productIds: string[];
+  included: boolean;
+}) => {
+  const productIds = await ensureProductOwnership(input.organizationId, input.productIds);
+  if (!productIds.length) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const hasExplicitSelection = await hasExplicitMMarketProductSelection(
+      tx,
+      input.organizationId,
+    );
+
+    if (!hasExplicitSelection) {
+      // Drop legacy backfilled rows before the first explicit opt-in update.
+      await tx.mMarketIncludedProduct.deleteMany({
+        where: { orgId: input.organizationId },
+      });
+    }
+
+    if (input.included) {
+      await tx.mMarketIncludedProduct.createMany({
+        data: productIds.map((productId) => ({
+          orgId: input.organizationId,
+          productId,
+        })),
+        skipDuplicates: true,
+      });
+    } else {
+      await tx.mMarketIncludedProduct.deleteMany({
+        where: {
+          orgId: input.organizationId,
+          productId: { in: productIds },
+        },
+      });
+    }
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: MMARKET_PRODUCT_SELECTION_AUDIT_ACTION,
+      entity: "MMarketIntegration",
+      entityId: input.organizationId,
+      before: null,
+      after: toJson({
+        included: input.included,
+        productIds,
+      }),
+      requestId: input.requestId,
+    });
+  });
+
+  return {
+    updatedCount: productIds.length,
   };
 };
 

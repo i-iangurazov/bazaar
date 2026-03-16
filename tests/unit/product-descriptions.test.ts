@@ -26,8 +26,6 @@ describe("product description generation", () => {
   });
 
   it("requires OpenAI configuration", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "");
-    vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OPENAI_API_KEY", "");
     const { generateProductDescriptionFromImages } =
       await import("../../src/server/services/productDescriptions");
@@ -41,8 +39,6 @@ describe("product description generation", () => {
   });
 
   it("sends product images as data urls and returns cleaned text", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "openai");
-    vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([1, 2, 3, 4]),
@@ -51,7 +47,24 @@ describe("product description generation", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          output_text: `  "${LONG_RU_DESCRIPTION}"  `,
+          status: "completed",
+          output: [
+            {
+              type: "reasoning",
+              summary: [],
+            },
+            {
+              type: "message",
+              status: "completed",
+              role: "assistant",
+              content: [
+                {
+                  type: "output_text",
+                  text: `  "${LONG_RU_DESCRIPTION}"  `,
+                },
+              ],
+            },
+          ],
         }),
         {
           status: 200,
@@ -82,17 +95,17 @@ describe("product description generation", () => {
 
     const body = JSON.parse(String(request?.body)) as {
       model: string;
+      reasoning?: { effort?: string };
       input: Array<{ content: Array<{ type: string; image_url?: string; text?: string }> }>;
     };
-    expect(body.model).toBe("gpt-4.1-mini");
+    expect(body.model).toBe("gpt-5-mini");
+    expect(body.reasoning?.effort).toBe("minimal");
     expect(body.input[1]?.content[0]?.type).toBe("input_text");
     expect(body.input[1]?.content[1]?.type).toBe("input_image");
     expect(body.input[1]?.content[1]?.image_url).toMatch(/^data:image\/jpeg;base64,/);
   });
 
   it("maps provider rate limits to application rate limit errors", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "openai");
-    vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([9, 9, 9]),
@@ -122,8 +135,6 @@ describe("product description generation", () => {
   });
 
   it("retries a transient 429 and returns the next successful response", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "openai");
-    vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([7, 7, 7]),
@@ -140,7 +151,15 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            output_text: LONG_KG_DESCRIPTION,
+            status: "completed",
+            output: [
+              {
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: LONG_KG_DESCRIPTION }],
+              },
+            ],
           }),
           {
             status: 200,
@@ -164,69 +183,8 @@ describe("product description generation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("uses Gemini when GEMINI_API_KEY is configured", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "gemini");
-    vi.stubEnv("OPENAI_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
-    mockDownloadRemoteImage.mockResolvedValue({
-      buffer: Buffer.from([5, 6, 7, 8]),
-      contentType: "image/png",
-    });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [
-                  {
-                    text: LONG_RU_DESCRIPTION,
-                  },
-                ],
-              },
-            },
-          ],
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { generateProductDescriptionFromImages } =
-      await import("../../src/server/services/productDescriptions");
-
-    await expect(
-      generateProductDescriptionFromImages({
-        locale: "ru",
-        imageUrls: ["https://cdn.example.com/photo.png"],
-      }),
-    ).resolves.toEqual({
-      description: LONG_RU_DESCRIPTION,
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "generativelanguage.googleapis.com/v1beta/models/",
-    );
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(":generateContent");
-    const request = fetchMock.mock.calls[0]?.[1];
-    expect((request?.headers as Record<string, string>)["x-goog-api-key"]).toBe("gemini-test-key");
-    const body = JSON.parse(String(request?.body)) as {
-      contents: Array<{
-        parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }>;
-      }>;
-    };
-    expect("contents" in body).toBe(true);
-    expect("generationConfig" in (body as Record<string, unknown>)).toBe(true);
-  });
-
-  it("includes the minimum length requirement in the Gemini prompt", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "gemini");
-    vi.stubEnv("OPENAI_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+  it("includes the minimum length requirement in the OpenAI prompt", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([5, 6, 7, 8]),
       contentType: "image/png",
@@ -234,15 +192,13 @@ describe("product description generation", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          candidates: [
+          status: "completed",
+          output: [
             {
-              content: {
-                parts: [
-                  {
-                    text: LONG_RU_DESCRIPTION,
-                  },
-                ],
-              },
+              type: "message",
+              status: "completed",
+              role: "assistant",
+              content: [{ type: "output_text", text: LONG_RU_DESCRIPTION }],
             },
           ],
         }),
@@ -266,28 +222,25 @@ describe("product description generation", () => {
       description: LONG_RU_DESCRIPTION,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
     const request = fetchMock.mock.calls[0]?.[1];
     const body = JSON.parse(String(request?.body)) as {
-      contents: Array<{
-        parts: Array<{ text?: string } | { inline_data?: { mime_type: string; data: string } }>;
-      }>;
+      input: Array<{ content: Array<{ text?: string }> }>;
     };
-    const promptPart = body.contents[0]?.parts.find(
-      (part): part is { text: string } => typeof (part as { text?: string }).text === "string",
-    );
-    expect(promptPart?.text).toContain("Длина ответа должна быть не меньше 150 символов.");
-    expect(promptPart?.text).toContain(
+    const systemPrompt = body.input[0]?.content[0]?.text ?? "";
+    const userPrompt = body.input[1]?.content[0]?.text ?? "";
+
+    expect(systemPrompt).toContain("Длина ответа должна быть не меньше 150 символов.");
+    expect(userPrompt).toContain(
       "Не используй название, категорию или другие метаданные вне самой картинки.",
     );
-    expect(promptPart?.text).not.toContain("Название:");
-    expect(promptPart?.text).not.toContain("Категория:");
-    expect(promptPart?.text).not.toContain("Тип:");
+    expect(userPrompt).not.toContain("Название:");
+    expect(userPrompt).not.toContain("Категория:");
+    expect(userPrompt).not.toContain("Тип:");
   });
 
-  it("retries short Gemini descriptions with a stricter image-only prompt", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "gemini");
-    vi.stubEnv("OPENAI_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+  it("retries short descriptions with a stricter image-only prompt", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([5, 6, 7, 8]),
       contentType: "image/png",
@@ -299,15 +252,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [
-                    {
-                      text: 'Настольная игра "Тви"',
-                    },
-                  ],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: 'Настольная игра "Тви"' }],
               },
             ],
           }),
@@ -320,15 +271,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [
-                    {
-                      text: improvedDescription,
-                    },
-                  ],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: improvedDescription }],
               },
             ],
           }),
@@ -349,15 +298,12 @@ describe("product description generation", () => {
     });
     expect(result).toEqual({ description: improvedDescription });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
     const retryRequest = fetchMock.mock.calls[1]?.[1];
     const retryBody = JSON.parse(String(retryRequest?.body)) as {
-      contents: Array<{
-        parts: Array<{ text?: string } | { inline_data?: { mime_type: string; data: string } }>;
-      }>;
+      input: Array<{ content: Array<{ text?: string }> }>;
     };
-    const retryPrompt = retryBody.contents[0]?.parts.find(
-      (part): part is { text: string } => typeof (part as { text?: string }).text === "string",
-    )?.text;
+    const retryPrompt = retryBody.input[1]?.content[0]?.text ?? "";
     expect(retryPrompt).toContain("Предыдущий ответ не подходит:");
     expect(retryPrompt).toContain('Настольная игра "Тви"');
     expect(retryPrompt).toContain("Не пиши фразы вроде «на изображении видно», «товар показан»");
@@ -366,9 +312,7 @@ describe("product description generation", () => {
   });
 
   it("rewrites long caption-like descriptions into product-focused copy", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "gemini");
-    vi.stubEnv("OPENAI_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([5, 6, 7, 8]),
       contentType: "image/png",
@@ -382,11 +326,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [{ text: captionLikeDescription }],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: captionLikeDescription }],
               },
             ],
           }),
@@ -399,11 +345,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [{ text: improvedDescription }],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: improvedDescription }],
               },
             ],
           }),
@@ -427,9 +375,7 @@ describe("product description generation", () => {
   });
 
   it("builds a final description from extracted visual facts when rewrites stay weak", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "gemini");
-    vi.stubEnv("OPENAI_API_KEY", "");
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([5, 6, 7, 8]),
       contentType: "image/png",
@@ -441,11 +387,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [{ text: 'Настольная игра "Тви"' }],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: 'Настольная игра "Тви"' }],
               },
             ],
           }),
@@ -458,11 +406,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [{ text: "Яркая коробка настольной игры." }],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: "Яркая коробка настольной игры." }],
               },
             ],
           }),
@@ -475,15 +425,18 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [
-                    {
-                      text: "яркая коробка || контрастные цветовые акценты || крупное название на лицевой стороне || настольный формат || иллюстрация на упаковке || аккуратное оформление",
-                    },
-                  ],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [
+                  {
+                    type: "output_text",
+                    text: "яркая коробка || контрастные цветовые акценты || крупное название на лицевой стороне || настольный формат || иллюстрация на упаковке || аккуратное оформление",
+                  },
+                ],
               },
             ],
           }),
@@ -496,11 +449,13 @@ describe("product description generation", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            candidates: [
+            status: "completed",
+            output: [
               {
-                content: {
-                  parts: [{ text: composedFromFacts }],
-                },
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [{ type: "output_text", text: composedFromFacts }],
               },
             ],
           }),
@@ -526,8 +481,6 @@ describe("product description generation", () => {
   });
 
   it("fails when none of the provided images can be processed", async () => {
-    vi.stubEnv("AI_DESCRIPTION_PROVIDER", "openai");
-    vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue(null);
     const fetchMock = vi.fn();

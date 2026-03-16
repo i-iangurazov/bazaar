@@ -9,12 +9,13 @@ import {
   normalizeProductImageUrl,
 } from "@/server/services/productImageStorage";
 
-const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
 const MAX_INPUT_IMAGES = 3;
+const MAX_OUTPUT_TOKENS = 180;
 const AI_IMAGE_MAX_DIMENSION = 1024;
 const AI_IMAGE_TARGET_BYTES = 350_000;
-const GEMINI_MAX_ATTEMPTS = 3;
+const OPENAI_MAX_ATTEMPTS = 3;
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
 const isTestRuntime = process.env.NODE_ENV === "test";
@@ -30,18 +31,22 @@ type ProductSpecSuggestionLogger = {
   error: (obj: Record<string, unknown>, msg?: string) => void;
 };
 
-type GeminiResponseBody = {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-      }>;
-    };
+type OpenAiResponseBody = {
+  status?: string | null;
+  incomplete_details?: {
+    reason?: string | null;
+  } | null;
+  output_text?: string;
+  output?: Array<{
+    type?: string;
+    status?: string;
+    content?: Array<{
+      type?: string;
+      text?: string | { value?: string | null } | null;
+    }>;
   }>;
   error?: {
-    code?: number;
     message?: string;
-    status?: string;
   };
 };
 
@@ -75,10 +80,10 @@ const invalidSuggestionPatterns = [
   /неизвест/i,
 ];
 
-const resolveGeminiModel = () =>
+const resolveOpenAiModel = () =>
   process.env.PRODUCT_SPEC_AI_MODEL?.trim() ||
-  process.env.GEMINI_MODEL?.trim() ||
-  DEFAULT_GEMINI_MODEL;
+  process.env.OPENAI_MODEL?.trim() ||
+  DEFAULT_OPENAI_MODEL;
 
 const sleep = (ms: number) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 
@@ -216,19 +221,36 @@ const optimizeImageForModel = async (image: DownloadedImage): Promise<Downloaded
   };
 };
 
-const extractGeminiResponseText = (responseBody: GeminiResponseBody | null) => {
+const toDataUrl = (image: DownloadedImage) =>
+  `data:${image.contentType};base64,${image.buffer.toString("base64")}`;
+
+const extractResponseText = (responseBody: OpenAiResponseBody | null) => {
+  if (typeof responseBody?.output_text === "string" && responseBody.output_text.trim()) {
+    return responseBody.output_text.trim();
+  }
+
   const parts: string[] = [];
-  for (const candidate of responseBody?.candidates ?? []) {
-    for (const part of candidate.content?.parts ?? []) {
-      if (typeof part.text === "string" && part.text.trim()) {
-        parts.push(part.text.trim());
+  for (const item of responseBody?.output ?? []) {
+    for (const content of item.content ?? []) {
+      if (typeof content.text === "string" && content.text.trim()) {
+        parts.push(content.text.trim());
+        continue;
+      }
+      if (
+        content.text &&
+        typeof content.text === "object" &&
+        typeof content.text.value === "string" &&
+        content.text.value.trim()
+      ) {
+        parts.push(content.text.value.trim());
       }
     }
   }
+
   return parts.join("\n").trim();
 };
 
-const callGeminiGenerateContent = async (input: {
+const callOpenAiResponses = async (input: {
   apiKey: string;
   model: string;
   body: string;
@@ -238,20 +260,20 @@ const callGeminiGenerateContent = async (input: {
   payloadImageBytes: number;
 }) => {
   let lastResponse: Response | null = null;
-  let lastResponseBody: GeminiResponseBody | null = null;
+  let lastResponseBody: OpenAiResponseBody | null = null;
 
-  for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt += 1) {
-    const response = await fetch(`${GEMINI_API_BASE_URL}/${input.model}:generateContent`, {
+  for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
-        "x-goog-api-key": input.apiKey,
+        Authorization: `Bearer ${input.apiKey}`,
         "Content-Type": "application/json",
       },
       body: input.body,
     });
     lastResponse = response;
 
-    const responseBody = (await response.json().catch(() => null)) as GeminiResponseBody | null;
+    const responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
     lastResponseBody = responseBody;
     if (response.ok) {
       return { response, responseBody, attempts: attempt };
@@ -261,7 +283,7 @@ const callGeminiGenerateContent = async (input: {
     const retryAfterHeader = response.headers.get("retry-after");
     const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
     const quotaLike = isQuotaLikeProviderMessage(providerError);
-    const canRetry = response.status === 429 && attempt < GEMINI_MAX_ATTEMPTS && !quotaLike;
+    const canRetry = response.status === 429 && attempt < OPENAI_MAX_ATTEMPTS && !quotaLike;
     if (!canRetry) {
       return { response, responseBody, attempts: attempt };
     }
@@ -271,7 +293,7 @@ const callGeminiGenerateContent = async (input: {
       : Math.max(500, Math.min(retryAfterMs ?? 1000 * attempt, 10_000));
     input.logger?.warn(
       {
-        provider: "gemini",
+        provider: "openai",
         phase: "spec-suggestion-retry",
         attempt,
         nextAttempt: attempt + 1,
@@ -296,7 +318,7 @@ const callGeminiGenerateContent = async (input: {
   return {
     response: lastResponse,
     responseBody: lastResponseBody,
-    attempts: GEMINI_MAX_ATTEMPTS,
+    attempts: OPENAI_MAX_ATTEMPTS,
   };
 };
 
@@ -337,6 +359,18 @@ const matchOption = (value: string, options: string[]) => {
   return looseMatch ?? value;
 };
 
+const findMulticolorOption = (options: string[]) =>
+  options.find((option) => {
+    const normalized = normalizeComparable(option);
+    return (
+      normalized.includes("разноцвет") ||
+      normalized.includes("многоцвет") ||
+      normalized.includes("multicolor") ||
+      normalized.includes("multi color") ||
+      normalized.includes("multi-color")
+    );
+  }) ?? null;
+
 const extractJsonObject = (value: string) => {
   const trimmed = value.trim();
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -365,31 +399,72 @@ const extractJsonObject = (value: string) => {
   return null;
 };
 
-const buildPrompt = (requestedSpecs: RequestedSpecSuggestion[]) => {
+const buildSystemPrompt = () =>
+  [
+    "Ты заполняешь характеристики товара для маркетплейса по изображениям.",
+    "Определи характеристики продаваемого товара, а не просто опиши фотографию.",
+    "Верни строго один JSON-объект без markdown, пояснений и лишнего текста.",
+    "Используй только то, что уверенно видно на самом товаре, прозрачной упаковке или ясно читается на упаковке как описание товара.",
+    "Не придумывай бренд, производителя, модель, состав, материал, размер и другие внешние данные.",
+    "Если значение нельзя определить надежно, верни null.",
+    "Для поля type возвращай краткий тип продаваемого товара в форме короткого названия.",
+    "Для поля color возвращай основной цвет самого товара. Игнорируй фон, реквизит, тени и случайные акценты.",
+    "Если сам товар не виден, а видна только коробка, тип можно определить по надписям и оформлению коробки, но цвет возвращай только если цвет варианта товара действительно подтверждается изображением; иначе null.",
+    "Если у товара явно несколько основных цветов, используй разноцветный вариант только когда это действительно лучший ответ.",
+  ].join(" ");
+
+const buildUserPrompt = (requestedSpecs: RequestedSpecSuggestion[]) => {
   const requestedFields = requestedSpecs.map((spec) => spec.kind);
   const lines = [
-    "Ты заполняешь характеристики товара для маркетплейса только по изображениям.",
-    "Верни строго один JSON-объект без markdown, пояснений и лишнего текста.",
     `Разрешенные поля ответа: ${requestedFields.join(", ")}.`,
-    "Используй только то, что уверенно видно на фото или читается на упаковке.",
-    "Если характеристику нельзя определить надежно, верни null для этого поля.",
-    "Не придумывай бренд, производителя, модель, состав, материал, размер и другие внешние данные.",
-    "Для цвета и типа возвращай короткое значение, а не описание предложения.",
+    "Верни JSON только с запрошенными полями.",
   ];
 
   for (const spec of requestedSpecs) {
+    if (spec.kind === "type") {
+      lines.push(
+        `Для поля "${spec.kind}" определи тип продаваемого товара для характеристики "${spec.labelRu}".`,
+      );
+      if (spec.options?.length) {
+        lines.push(
+          `Выбери одно наиболее подходящее значение строго из списка: ${spec.options.join(", ")}.`,
+        );
+      } else {
+        lines.push('Верни короткое значение без пояснений, например: "Настольная игра".');
+      }
+      continue;
+    }
+
+    const multicolorOption = spec.options?.length ? findMulticolorOption(spec.options) : null;
+    lines.push(
+      `Для поля "${spec.kind}" определи основной цвет товара для характеристики "${spec.labelRu}".`,
+    );
+    lines.push(
+      "Ориентируйся на цвет самого товара или явно показанного варианта товара, а не на декоративный фон или случайный цвет упаковки.",
+    );
+    if (multicolorOption) {
+      lines.push(
+        `Если отчетливо видны несколько основных цветов товара, используй значение "${multicolorOption}".`,
+      );
+    }
     if (spec.options?.length) {
       lines.push(
-        `Для поля "${spec.kind}" выбери одно наиболее подходящее значение для характеристики "${spec.labelRu}" из списка: ${spec.options.join(", ")}.`,
+        `Выбери одно наиболее подходящее значение строго из списка: ${spec.options.join(", ")}.`,
       );
     } else {
-      lines.push(
-        `Для поля "${spec.kind}" верни короткое значение для характеристики "${spec.labelRu}".`,
-      );
+      lines.push('Верни короткое значение без пояснений, например: "Черный".');
     }
   }
 
-  lines.push('Пример ответа: {"type":"Настольная игра","color":"Разноцветный"}');
+  const exampleFields = requestedSpecs.reduce<Record<string, string | null>>((accumulator, spec) => {
+    accumulator[spec.kind] =
+      spec.kind === "type"
+        ? spec.options?.[0] ?? "Настольная игра"
+        : spec.options?.[0] ?? "Черный";
+    return accumulator;
+  }, {});
+  lines.push(`Пример ответа: ${JSON.stringify(exampleFields)}`);
+
   return lines.join("\n");
 };
 
@@ -398,7 +473,7 @@ export const suggestProductSpecsFromImages = async (input: {
   requestedSpecs: RequestedSpecSuggestion[];
   logger?: ProductSpecSuggestionLogger;
 }) => {
-  const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
+  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   if (!apiKey) {
     throw new AppError("aiSpecsNotConfigured", "BAD_REQUEST", 400);
   }
@@ -432,38 +507,40 @@ export const suggestProductSpecsFromImages = async (input: {
     (sum, image) => sum + image.buffer.byteLength,
     0,
   );
-  const loadedImageCount = optimizedImages.length;
+  const imageDataUrls = optimizedImages.map(toDataUrl);
+  const loadedImageCount = imageDataUrls.length;
 
-  if (!optimizedImages.length) {
+  if (!imageDataUrls.length) {
     throw new AppError("aiSpecNoUsableImages", "BAD_REQUEST", 400);
   }
 
-  const model = resolveGeminiModel();
-  const prompt = buildPrompt(normalizedRequestedSpecs);
+  const model = resolveOpenAiModel();
   const requestBody = JSON.stringify({
-    contents: [
+    model,
+    reasoning: {
+      effort: "minimal",
+    },
+    max_output_tokens: MAX_OUTPUT_TOKENS,
+    input: [
+      {
+        role: "system",
+        content: [{ type: "input_text", text: buildSystemPrompt() }],
+      },
       {
         role: "user",
-        parts: [
-          ...optimizedImages.map((image) => ({
-            inline_data: {
-              mime_type: image.contentType,
-              data: image.buffer.toString("base64"),
-            },
+        content: [
+          { type: "input_text", text: buildUserPrompt(normalizedRequestedSpecs) },
+          ...imageDataUrls.map((imageUrl) => ({
+            type: "input_image" as const,
+            image_url: imageUrl,
           })),
-          { text: prompt },
         ],
       },
     ],
-    generationConfig: {
-      maxOutputTokens: 180,
-      temperature: 0.1,
-      responseMimeType: "application/json",
-    },
   });
 
   const providerStartedAt = Date.now();
-  const { response, responseBody, attempts } = await callGeminiGenerateContent({
+  const { response, responseBody, attempts } = await callOpenAiResponses({
     apiKey,
     model,
     body: requestBody,
@@ -478,7 +555,7 @@ export const suggestProductSpecsFromImages = async (input: {
 
   input.logger?.info(
     {
-      provider: "gemini",
+      provider: "openai",
       phase: "spec-suggestion-complete",
       model,
       requestedKinds: normalizedRequestedSpecs.map((spec) => spec.kind),
@@ -503,10 +580,31 @@ export const suggestProductSpecsFromImages = async (input: {
     if (response.status === 401 || response.status === 403) {
       throw new AppError("aiSpecsNotConfigured", "BAD_REQUEST", response.status);
     }
+    const providerMessage = providerError?.toLowerCase() ?? "";
+    if (providerMessage.includes("model")) {
+      throw new AppError("aiSpecsNotConfigured", "BAD_REQUEST", response.status);
+    }
     throw new AppError("aiSpecsGenerationFailed", "INTERNAL_SERVER_ERROR", response.status);
   }
 
-  const rawText = extractGeminiResponseText(responseBody);
+  if (responseBody?.status === "incomplete") {
+    input.logger?.warn(
+      {
+        provider: "openai",
+        phase: "spec-suggestion-incomplete",
+        model,
+        loadedImageCount,
+        sourceImageBytes,
+        payloadImageBytes,
+        incompleteReason: responseBody.incomplete_details?.reason ?? null,
+        attempts,
+      },
+      "product spec suggestion provider returned incomplete response",
+    );
+    throw new AppError("aiSpecsGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
+  }
+
+  const rawText = extractResponseText(responseBody);
   const parsed = extractJsonObject(rawText);
   if (!parsed) {
     throw new AppError("aiSpecsGenerationFailed", "INTERNAL_SERVER_ERROR", 502);

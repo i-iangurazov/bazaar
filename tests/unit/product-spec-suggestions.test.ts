@@ -19,8 +19,8 @@ describe("product spec suggestions", () => {
     mockNormalizeProductImageUrl.mockImplementation((value: string) => value);
   });
 
-  it("requires Gemini configuration", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "");
+  it("requires OpenAI configuration", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
     const { suggestProductSpecsFromImages } =
       await import("../../src/server/services/productSpecSuggestions");
 
@@ -32,8 +32,8 @@ describe("product spec suggestions", () => {
     ).rejects.toMatchObject({ message: "aiSpecsNotConfigured" });
   });
 
-  it("returns normalized type and color suggestions from Gemini JSON", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+  it("returns normalized type and color suggestions from OpenAI JSON", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([1, 2, 3, 4]),
       contentType: "image/png",
@@ -41,15 +41,18 @@ describe("product spec suggestions", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          candidates: [
+          status: "completed",
+          output: [
             {
-              content: {
-                parts: [
-                  {
-                    text: '```json\n{"type":"настольная игра","color":"разноцветный"}\n```',
-                  },
-                ],
-              },
+              type: "message",
+              status: "completed",
+              role: "assistant",
+              content: [
+                {
+                  type: "output_text",
+                  text: '```json\n{"type":"настольная игра","color":"разноцветный"}\n```',
+                },
+              ],
             },
           ],
         }),
@@ -87,22 +90,36 @@ describe("product spec suggestions", () => {
       },
     });
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/responses");
+
     const request = fetchMock.mock.calls[0]?.[1];
+    expect((request?.headers as Record<string, string>).Authorization).toBe("Bearer sk-test");
+
     const body = JSON.parse(String(request?.body)) as {
-      contents: Array<{
-        parts: Array<{ text?: string } | { inline_data?: { mime_type: string; data: string } }>;
+      model: string;
+      reasoning?: { effort?: string };
+      input: Array<{
+        content: Array<{ type: string; text?: string; image_url?: string }>;
       }>;
     };
-    const promptPart = body.contents[0]?.parts.find(
-      (part): part is { text: string } => typeof (part as { text?: string }).text === "string",
-    );
-    expect(promptPart?.text).toContain("Разрешенные поля ответа: type, color.");
-    expect(promptPart?.text).toContain("Настольная игра, Пазл");
-    expect(promptPart?.text).toContain("Разноцветный, Синий");
+    expect(body.model).toBe("gpt-5-mini");
+    expect(body.reasoning?.effort).toBe("minimal");
+    expect(body.input[1]?.content[1]?.type).toBe("input_image");
+    expect(body.input[1]?.content[1]?.image_url).toMatch(/^data:image\/png;base64,/);
+
+    const systemText = body.input[0]?.content[0]?.text ?? "";
+    const userText = body.input[1]?.content[0]?.text ?? "";
+    expect(systemText).toContain("Определи характеристики продаваемого товара");
+    expect(systemText).toContain("Для поля color возвращай основной цвет самого товара");
+    expect(userText).toContain("Разрешенные поля ответа: type, color.");
+    expect(userText).toContain("Настольная игра, Пазл");
+    expect(userText).toContain("Разноцветный, Синий");
+    expect(userText).toContain("цвет самого товара");
   });
 
-  it("maps Gemini rate limits to application rate limit errors", async () => {
-    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+  it("maps OpenAI rate limits to application rate limit errors", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({
       buffer: Buffer.from([9, 9, 9]),
       contentType: "image/png",

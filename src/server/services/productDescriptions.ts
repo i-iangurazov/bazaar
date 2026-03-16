@@ -10,9 +10,7 @@ import {
 import { AppError } from "@/server/services/errors";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
 const MAX_INPUT_IMAGES = 3;
 const MAX_OUTPUT_TOKENS = 220;
 const MIN_DESCRIPTION_LENGTH = 150;
@@ -20,12 +18,10 @@ const MAX_DESCRIPTION_ATTEMPTS = 2;
 const AI_IMAGE_MAX_DIMENSION = 1024;
 const AI_IMAGE_TARGET_BYTES = 350_000;
 const OPENAI_MAX_ATTEMPTS = 3;
-const GEMINI_MAX_ATTEMPTS = 3;
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
 
 type ProductDescriptionLocale = "ru" | "kg";
-type AiProvider = "openai" | "gemini";
 
 type GenerateProductDescriptionInput = {
   name?: string | null;
@@ -48,35 +44,21 @@ type ProductDescriptionLogger = {
 };
 
 type OpenAiResponseBody = {
+  status?: string | null;
+  incomplete_details?: {
+    reason?: string | null;
+  } | null;
   output_text?: string;
   output?: Array<{
+    type?: string;
+    status?: string;
     content?: Array<{
+      type?: string;
       text?: string | { value?: string | null } | null;
     }>;
   }>;
   error?: {
     message?: string;
-  };
-};
-
-type GeminiResponseBody = {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-      }>;
-    };
-    finishReason?: string;
-    finishMessage?: string;
-  }>;
-  promptFeedback?: {
-    blockReason?: string;
-    blockReasonMessage?: string;
-  };
-  error?: {
-    code?: number;
-    message?: string;
-    status?: string;
   };
 };
 
@@ -103,37 +85,17 @@ const resolveOpenAiModel = () =>
   process.env.OPENAI_MODEL?.trim() ||
   DEFAULT_OPENAI_MODEL;
 
-const resolveGeminiModel = () =>
-  process.env.PRODUCT_DESCRIPTION_GEMINI_MODEL?.trim() ||
-  process.env.GEMINI_MODEL?.trim() ||
-  DEFAULT_GEMINI_MODEL;
-
 const resolveProviderConfig = (): {
-  provider: AiProvider;
   apiKey: string;
   model: string;
 } | null => {
-  const preferredProvider = (process.env.AI_DESCRIPTION_PROVIDER ?? "").trim().toLowerCase();
-  const geminiApiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
   const openAiApiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
-
-  if (preferredProvider === "gemini") {
-    return geminiApiKey
-      ? { provider: "gemini", apiKey: geminiApiKey, model: resolveGeminiModel() }
-      : null;
-  }
-  if (preferredProvider === "openai") {
-    return openAiApiKey
-      ? { provider: "openai", apiKey: openAiApiKey, model: resolveOpenAiModel() }
-      : null;
-  }
-  if (geminiApiKey) {
-    return { provider: "gemini", apiKey: geminiApiKey, model: resolveGeminiModel() };
-  }
-  if (openAiApiKey) {
-    return { provider: "openai", apiKey: openAiApiKey, model: resolveOpenAiModel() };
-  }
-  return null;
+  return openAiApiKey
+    ? {
+        apiKey: openAiApiKey,
+        model: resolveOpenAiModel(),
+      }
+    : null;
 };
 
 const slowPhaseThresholdMs = 2_000;
@@ -206,18 +168,6 @@ const extractResponseText = (responseBody: OpenAiResponseBody | null) => {
     }
   }
 
-  return parts.join("\n").trim();
-};
-
-const extractGeminiResponseText = (responseBody: GeminiResponseBody | null) => {
-  const parts: string[] = [];
-  for (const candidate of responseBody?.candidates ?? []) {
-    for (const part of candidate.content?.parts ?? []) {
-      if (typeof part.text === "string" && part.text.trim()) {
-        parts.push(part.text.trim());
-      }
-    }
-  }
   return parts.join("\n").trim();
 };
 
@@ -426,78 +376,6 @@ const callOpenAiResponses = async (input: {
     response: lastResponse,
     responseBody: lastResponseBody,
     attempts: OPENAI_MAX_ATTEMPTS,
-  };
-};
-
-const callGeminiGenerateContent = async (input: {
-  apiKey: string;
-  model: string;
-  body: string;
-  logger?: ProductDescriptionLogger;
-  loadedImageCount: number;
-  sourceImageBytes: number;
-  payloadImageBytes: number;
-}) => {
-  let lastResponse: Response | null = null;
-  let lastResponseBody: GeminiResponseBody | null = null;
-
-  for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt += 1) {
-    const response = await fetch(`${GEMINI_API_BASE_URL}/${input.model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "x-goog-api-key": input.apiKey,
-        "Content-Type": "application/json",
-      },
-      body: input.body,
-    });
-    lastResponse = response;
-
-    const responseBody = (await response.json().catch(() => null)) as GeminiResponseBody | null;
-    lastResponseBody = responseBody;
-    if (response.ok) {
-      return { response, responseBody, attempts: attempt };
-    }
-
-    const providerError = responseBody?.error?.message?.trim() ?? "";
-    const retryAfterHeader = response.headers.get("retry-after");
-    const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-    const quotaLike = isQuotaLikeProviderMessage(providerError);
-    const canRetry = response.status === 429 && attempt < GEMINI_MAX_ATTEMPTS && !quotaLike;
-    if (!canRetry) {
-      return { response, responseBody, attempts: attempt };
-    }
-
-    const retryDelayMs = isTestRuntime
-      ? 1
-      : Math.max(500, Math.min(retryAfterMs ?? 1000 * attempt, 10_000));
-    input.logger?.warn(
-      {
-        provider: "gemini",
-        phase: "provider-retry",
-        attempt,
-        nextAttempt: attempt + 1,
-        status: response.status,
-        retryDelayMs,
-        retryAfterHeader,
-        providerError: providerError || null,
-        loadedImageCount: input.loadedImageCount,
-        sourceImageBytes: input.sourceImageBytes,
-        payloadImageBytes: input.payloadImageBytes,
-        model: input.model,
-      },
-      "retrying product description provider request after rate limit",
-    );
-    await sleep(retryDelayMs);
-  }
-
-  if (!lastResponse) {
-    throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
-  }
-
-  return {
-    response: lastResponse,
-    responseBody: lastResponseBody,
-    attempts: GEMINI_MAX_ATTEMPTS,
   };
 };
 
@@ -780,52 +658,31 @@ export const generateProductDescriptionFromImages = async (
     throw new AppError("aiDescriptionNoUsableImages", "BAD_REQUEST", 400);
   }
 
-  const { provider, apiKey, model } = providerConfig;
+  const { apiKey, model } = providerConfig;
+  const provider = "openai";
   const buildProviderRequestBody = (promptText: string) =>
     JSON.stringify({
-      ...(provider === "openai"
-        ? {
-            model,
-            max_output_tokens: MAX_OUTPUT_TOKENS,
-            input: [
-              {
-                role: "system",
-                content: [{ type: "input_text", text: buildSystemPrompt(locale) }],
-              },
-              {
-                role: "user",
-                content: [
-                  { type: "input_text", text: promptText },
-                  ...imageDataUrls.map((imageUrl) => ({
-                    type: "input_image" as const,
-                    image_url: imageUrl,
-                  })),
-                ],
-              },
-            ],
-          }
-        : {
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  ...optimizedImages.map((image) => ({
-                    inline_data: {
-                      mime_type: image.contentType,
-                      data: image.buffer.toString("base64"),
-                    },
-                  })),
-                  {
-                    text: `${buildSystemPrompt(locale)}\n\n${promptText}`,
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              maxOutputTokens: MAX_OUTPUT_TOKENS,
-              temperature: 0.2,
-            },
-          }),
+      model,
+      reasoning: {
+        effort: "minimal",
+      },
+      max_output_tokens: MAX_OUTPUT_TOKENS,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: buildSystemPrompt(locale) }],
+        },
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: promptText },
+            ...imageDataUrls.map((imageUrl) => ({
+              type: "input_image" as const,
+              image_url: imageUrl,
+            })),
+          ],
+        },
+      ],
     });
 
   const runProviderRequest = async (
@@ -835,32 +692,18 @@ export const generateProductDescriptionFromImages = async (
     const requestBody = buildProviderRequestBody(inputPrompt);
 
     const providerStartedAt = Date.now();
-    const { response, responseBody, attempts } =
-      provider === "openai"
-        ? await callOpenAiResponses({
-            apiKey,
-            model,
-            body: requestBody,
-            logger,
-            loadedImageCount,
-            sourceImageBytes,
-            payloadImageBytes,
-          })
-        : await callGeminiGenerateContent({
-            apiKey,
-            model,
-            body: requestBody,
-            logger,
-            loadedImageCount,
-            sourceImageBytes,
-            payloadImageBytes,
-          });
+    const { response, responseBody, attempts } = await callOpenAiResponses({
+      apiKey,
+      model,
+      body: requestBody,
+      logger,
+      loadedImageCount,
+      sourceImageBytes,
+      payloadImageBytes,
+    });
     const providerDurationMs = Date.now() - providerStartedAt;
     const parseDurationMs = 0;
-    const providerError =
-      provider === "openai"
-        ? ((responseBody as OpenAiResponseBody | null)?.error?.message?.trim() ?? null)
-        : ((responseBody as GeminiResponseBody | null)?.error?.message?.trim() ?? null);
+    const providerError = (responseBody as OpenAiResponseBody | null)?.error?.message?.trim() ?? null;
     const retryAfterHeader = response.headers.get("retry-after");
 
     logger?.info(
@@ -981,10 +824,25 @@ export const generateProductDescriptionFromImages = async (
       throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", response.status);
     }
 
+    if (responseBody?.status === "incomplete") {
+      logger?.warn(
+        {
+          provider,
+          phase: `${phase}-incomplete`,
+          model,
+          loadedImageCount,
+          sourceImageBytes,
+          payloadImageBytes,
+          incompleteReason: responseBody.incomplete_details?.reason ?? null,
+          attempts,
+        },
+        "product description provider returned incomplete response",
+      );
+      throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
+    }
+
     const description = cleanGeneratedDescription(
-      provider === "openai"
-        ? extractResponseText(responseBody as OpenAiResponseBody | null)
-        : extractGeminiResponseText(responseBody as GeminiResponseBody | null),
+      extractResponseText(responseBody as OpenAiResponseBody | null),
     );
     if (!description) {
       throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", 502);

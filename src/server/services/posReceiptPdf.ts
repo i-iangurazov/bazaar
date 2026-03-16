@@ -61,6 +61,36 @@ const formatDateTime = (value: Date, locale: string) =>
 
 const amountsEqual = (left: number, right: number) => Math.abs(left - right) < 0.0001;
 
+const buildReceiptMetaLines = (input: {
+  job: ReceiptPrintJob;
+  labels: PosReceiptPdfLabels;
+}) => {
+  const businessName = input.job.legalName?.trim() || input.job.storeName;
+  const businessLines: string[] = [];
+  const saleLines = [
+    `${input.labels.saleNumber}: ${input.job.number}`,
+    `${input.labels.createdAt}: ${formatDateTime(input.job.createdAt, input.job.locale)}`,
+  ];
+
+  if (input.job.address?.trim()) {
+    businessLines.push(`${input.labels.address}: ${input.job.address}`);
+  }
+  if (input.job.registerName) {
+    saleLines.push(`${input.labels.register}: ${input.job.registerName}`);
+  }
+  if (input.job.cashierName) {
+    saleLines.push(`${input.labels.cashier}: ${input.job.cashierName}`);
+  }
+
+  return {
+    businessName,
+    businessLines,
+    saleLines,
+  };
+};
+
+export const __buildReceiptMetaLinesForTests = buildReceiptMetaLines;
+
 const truncateSingleLine = (
   doc: InstanceType<typeof PDFDocument>,
   text: string,
@@ -95,6 +125,10 @@ const estimateReceiptHeight = (input: {
 }) => {
   const { doc, contentWidth, marginY } = input;
   const showSubtotal = !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
+  const metaLines = buildReceiptMetaLines({
+    job: input.job,
+    labels: input.labels,
+  });
   let y = marginY;
 
   const measureMetaLine = (text: string, fontSize: number, gap = 2) => {
@@ -104,28 +138,14 @@ const estimateReceiptHeight = (input: {
 
   y += 14;
 
-  measureMetaLine(input.job.legalName?.trim() || input.job.storeName, 8.8);
-  if (input.job.inn?.trim()) {
-    measureMetaLine(`${input.labels.inn}: ${input.job.inn}`, 7.5);
-  }
-  if (input.job.address?.trim()) {
-    measureMetaLine(`${input.labels.address}: ${input.job.address}`, 7.5);
-  }
-  if (input.job.phone?.trim()) {
-    measureMetaLine(`${input.labels.phone}: ${input.job.phone}`, 7.5);
+  measureMetaLine(metaLines.businessName, 8.8);
+  for (const line of metaLines.businessLines) {
+    measureMetaLine(line, 7.5);
   }
 
   y += 2;
-  measureMetaLine(`${input.labels.saleNumber}: ${input.job.number}`, 7.5);
-  measureMetaLine(`${input.labels.createdAt}: ${formatDateTime(input.job.createdAt, input.job.locale)}`, 7.5);
-  if (input.job.registerName) {
-    measureMetaLine(`${input.labels.register}: ${input.job.registerName}`, 7.5);
-  }
-  if (input.job.cashierName) {
-    measureMetaLine(`${input.labels.cashier}: ${input.job.cashierName}`, 7.5);
-  }
-  if (input.job.shiftLabel) {
-    measureMetaLine(`${input.labels.shift}: ${input.job.shiftLabel}`, 7.5);
+  for (const line of metaLines.saleLines) {
+    measureMetaLine(line, 7.5);
   }
 
   y += 6;
@@ -171,6 +191,10 @@ export const buildPosReceiptPdf = async (input: {
   const amountColumnWidth = Math.max(56, contentWidth * 0.44);
   const showSubtotal = !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
   const showLineTotalPerItem = input.job.items.length > 1;
+  const metaLines = buildReceiptMetaLines({
+    job: input.job,
+    labels: input.labels,
+  });
 
   const measureDoc = new PDFDocument({
     autoFirstPage: false,
@@ -248,33 +272,18 @@ export const buildPosReceiptPdf = async (input: {
   });
   y += 14;
 
-  const businessName = input.job.legalName?.trim() || input.job.storeName;
   doc.fontSize(8.8).fillColor("#111111");
-  const businessHeight = doc.heightOfString(businessName, { width: contentWidth });
-  doc.text(businessName, left, y, { width: contentWidth, align: "left" });
+  const businessHeight = doc.heightOfString(metaLines.businessName, { width: contentWidth });
+  doc.text(metaLines.businessName, left, y, { width: contentWidth, align: "left" });
   y += businessHeight + 2;
 
-  if (input.job.inn?.trim()) {
-    drawMetaLine(`${input.labels.inn}: ${input.job.inn}`);
-  }
-  if (input.job.address?.trim()) {
-    drawMetaLine(`${input.labels.address}: ${input.job.address}`);
-  }
-  if (input.job.phone?.trim()) {
-    drawMetaLine(`${input.labels.phone}: ${input.job.phone}`);
+  for (const line of metaLines.businessLines) {
+    drawMetaLine(line);
   }
 
   y += 2;
-  drawMetaLine(`${input.labels.saleNumber}: ${input.job.number}`);
-  drawMetaLine(`${input.labels.createdAt}: ${formatDateTime(input.job.createdAt, input.job.locale)}`);
-  if (input.job.registerName) {
-    drawMetaLine(`${input.labels.register}: ${input.job.registerName}`);
-  }
-  if (input.job.cashierName) {
-    drawMetaLine(`${input.labels.cashier}: ${input.job.cashierName}`);
-  }
-  if (input.job.shiftLabel) {
-    drawMetaLine(`${input.labels.shift}: ${input.job.shiftLabel}`);
+  for (const line of metaLines.saleLines) {
+    drawMetaLine(line);
   }
 
   y += 2;

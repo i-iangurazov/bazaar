@@ -274,6 +274,7 @@ model Organization {
   mMarketIntegrations      MMarketIntegration[]
   mMarketBranchMappings    MMarketBranchMapping[]
   mMarketExportJobs        MMarketExportJob[]
+  mMarketIncludedProducts  MMarketIncludedProduct[]
   productCosts             ProductCost[]
   productBundleComponents  ProductBundleComponent[]
   stockLots                StockLot[]
@@ -306,6 +307,7 @@ model Organization {
   ettnReferences           EttnReference[]
   esfReferences            EsfReference[]
   printerSettings          StorePrinterSettings[]
+  bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
 }
 
 model User {
@@ -438,6 +440,7 @@ model Store {
   markingCodeCaptures      MarkingCodeCapture[]
   ettnReferences           EttnReference[]
   esfReferences            EsfReference[]
+  bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -592,6 +595,21 @@ model MMarketExportJob {
   @@index([orgId, status, createdAt])
 }
 
+model MMarketIncludedProduct {
+  id        String   @id @default(cuid())
+  orgId     String
+  productId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([orgId, productId])
+  @@index([orgId, productId])
+  @@index([productId])
+}
+
 model PeriodClose {
   id             String   @id @default(cuid())
   organizationId String
@@ -730,6 +748,8 @@ model Product {
   attributeValues    VariantAttributeValue[]
   images             ProductImage[]
   complianceFlags    ProductComplianceFlags?
+  mMarketInclusions  MMarketIncludedProduct[]
+  hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
   customerOrderLines CustomerOrderLine[]
   saleReturnLines    SaleReturnLine[]
 
@@ -1489,6 +1509,23 @@ model BazaarCatalog {
   @@index([organizationId, status, updatedAt])
   @@index([organizationId, slug])
   @@index([storeId, status])
+}
+
+model BazaarCatalogHiddenProduct {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  productId      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([storeId, productId])
+  @@index([organizationId, storeId, productId])
+  @@index([productId, storeId])
 }
 
 model ProductCost {

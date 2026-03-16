@@ -36,6 +36,7 @@ export const resetDatabase = async () => {
   await prisma.periodClose.deleteMany();
   await prisma.exportJob.deleteMany();
   await prisma.mMarketExportJob.deleteMany();
+  await prisma.mMarketIncludedProduct.deleteMany();
   await prisma.mMarketBranchMapping.deleteMany();
   await prisma.mMarketIntegration.deleteMany();
   await prisma.storeComplianceProfile.deleteMany();
@@ -55,6 +56,7 @@ export const resetDatabase = async () => {
   await prisma.inviteToken.deleteMany();
   await prisma.accessRequest.deleteMany();
   await prisma.storePrice.deleteMany();
+  await prisma.bazaarCatalogHiddenProduct.deleteMany();
   await prisma.bazaarCatalog.deleteMany();
   await prisma.bazaarCatalogImage.deleteMany();
   await prisma.productCost.deleteMany();

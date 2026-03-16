@@ -9,9 +9,11 @@ import {
   getMMarketSavedToken,
   getMMarketSettings,
   getMMarketExportJob,
+  listMMarketProducts,
   listMMarketExportJobs,
   requestMMarketExport,
   runMMarketPreflight,
+  updateMMarketProductSelection,
   updateMMarketBranchMappings,
   updateMMarketConnection,
   validateMMarketLocally,
@@ -103,6 +105,53 @@ export const mMarketRouter = router({
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           mappings: input.mappings,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  products: protectedProcedure
+    .input(
+      z
+        .object({
+          search: z.string().max(200).optional(),
+          selection: z.enum(["all", "included", "excluded"]).optional(),
+          page: z.number().int().min(1).optional(),
+          pageSize: z.number().int().min(1).max(10).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listMMarketProducts({
+          organizationId: ctx.user.organizationId,
+          search: input?.search,
+          selection: input?.selection,
+          page: input?.page,
+          pageSize: input?.pageSize,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  updateProducts: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "mmarket-update-products" }))
+    .input(
+      z.object({
+        productIds: z.array(z.string().min(1)).min(1).max(500),
+        included: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateMMarketProductSelection({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productIds: input.productIds,
+          included: input.included,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -10,6 +10,8 @@ import {
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
+import { writeAuditLog } from "@/server/services/audit";
+import { toJson } from "@/server/services/json";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
 
@@ -118,6 +120,9 @@ const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
   typeof value === "number" ? value : value ? Number(value) : 0;
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
+const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
+
+export type BazaarCatalogProductVisibilityFilter = "all" | "visible" | "hidden";
 
 const nextSalesOrderNumber = async (
   tx: Prisma.TransactionClient,
@@ -185,6 +190,43 @@ export const listBazaarCatalogStores = async (organizationId: string) => {
   });
 };
 
+const ensureProductAccess = async (organizationId: string, productIds: string[]) => {
+  const uniqueIds = Array.from(new Set(productIds.map((id) => id.trim()).filter(Boolean)));
+  if (!uniqueIds.length) {
+    return [];
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId,
+      id: { in: uniqueIds },
+    },
+    select: { id: true },
+  });
+
+  if (products.length !== uniqueIds.length) {
+    throw new AppError("productNotFound", "NOT_FOUND", 404);
+  }
+
+  return uniqueIds;
+};
+
+const invalidateCatalogCacheForStore = async (organizationId: string, storeId: string) => {
+  const catalog = await prisma.bazaarCatalog.findUnique({
+    where: {
+      organizationId_storeId: {
+        organizationId,
+        storeId,
+      },
+    },
+    select: { slug: true },
+  });
+
+  if (catalog?.slug) {
+    await cacheDel(cacheKeyBySlug(catalog.slug));
+  }
+};
+
 export const getBazaarCatalogSettings = async (input: {
   organizationId: string;
   storeId: string;
@@ -239,6 +281,210 @@ export const getBazaarCatalogSettings = async (input: {
           publishedAt: null,
           updatedAt: null,
         },
+  };
+};
+
+export const listBazaarCatalogProducts = async (input: {
+  organizationId: string;
+  storeId: string;
+  search?: string;
+  visibility?: BazaarCatalogProductVisibilityFilter;
+  page?: number;
+  pageSize?: number;
+}) => {
+  await ensureStoreAccess(input.organizationId, input.storeId);
+
+  const page = Math.max(1, Math.trunc(input.page ?? 1));
+  const pageSize = Math.min(10, Math.max(1, Math.trunc(input.pageSize ?? 10)));
+  const search = normalizeSearch(input.search);
+  const visibility = input.visibility ?? "all";
+
+  const baseWhere: Prisma.ProductWhereInput = {
+    organizationId: input.organizationId,
+    isDeleted: false,
+  };
+
+  const searchWhere: Prisma.ProductWhereInput = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { sku: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const visibilityWhere: Prisma.ProductWhereInput =
+    visibility === "hidden"
+      ? {
+          hiddenInBazaarCatalogs: {
+            some: { storeId: input.storeId },
+          },
+        }
+      : visibility === "visible"
+        ? {
+            hiddenInBazaarCatalogs: {
+              none: { storeId: input.storeId },
+            },
+          }
+        : {};
+
+  const where: Prisma.ProductWhereInput = {
+    ...baseWhere,
+    ...searchWhere,
+    ...visibilityWhere,
+  };
+
+  const [totalProducts, hiddenProducts, total, products] = await Promise.all([
+    prisma.product.count({
+      where: baseWhere,
+    }),
+    prisma.product.count({
+      where: {
+        ...baseWhere,
+        hiddenInBazaarCatalogs: {
+          some: { storeId: input.storeId },
+        },
+      },
+    }),
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        category: true,
+        basePriceKgs: true,
+        hiddenInBazaarCatalogs: {
+          where: { storeId: input.storeId },
+          select: { id: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ name: "asc" }, { sku: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  const productIds = products.map((product) => product.id);
+  const [storePrices, snapshots] = await Promise.all([
+    productIds.length
+      ? prisma.storePrice.findMany({
+          where: {
+            organizationId: input.organizationId,
+            storeId: input.storeId,
+            productId: { in: productIds },
+            variantKey: "BASE",
+          },
+          select: {
+            productId: true,
+            priceKgs: true,
+          },
+        })
+      : Promise.resolve([]),
+    productIds.length
+      ? prisma.inventorySnapshot.findMany({
+          where: {
+            storeId: input.storeId,
+            productId: { in: productIds },
+            variantKey: "BASE",
+          },
+          select: {
+            productId: true,
+            onHand: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const storePriceByProductId = new Map(
+    storePrices.map((storePrice) => [storePrice.productId, Number(storePrice.priceKgs)]),
+  );
+  const onHandByProductId = new Map<string, number>();
+  for (const snapshot of snapshots) {
+    onHandByProductId.set(
+      snapshot.productId,
+      (onHandByProductId.get(snapshot.productId) ?? 0) + snapshot.onHand,
+    );
+  }
+
+  return {
+    items: products.map((product) => ({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: normalizeOptionalText(product.category),
+      priceKgs: roundMoney(
+        storePriceByProductId.get(product.id) ?? toMoney(product.basePriceKgs),
+      ),
+      onHandQty: onHandByProductId.get(product.id) ?? 0,
+      hidden: product.hiddenInBazaarCatalogs.length > 0,
+    })),
+    total,
+    page,
+    pageSize,
+    summary: {
+      totalProducts,
+      hiddenProducts,
+      visibleProducts: Math.max(0, totalProducts - hiddenProducts),
+    },
+  };
+};
+
+export const updateBazaarCatalogProductVisibility = async (input: {
+  organizationId: string;
+  storeId: string;
+  actorId: string;
+  requestId: string;
+  productIds: string[];
+  hidden: boolean;
+}) => {
+  await ensureStoreAccess(input.organizationId, input.storeId);
+  const productIds = await ensureProductAccess(input.organizationId, input.productIds);
+  if (!productIds.length) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (input.hidden) {
+      await tx.bazaarCatalogHiddenProduct.createMany({
+        data: productIds.map((productId) => ({
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          productId,
+        })),
+        skipDuplicates: true,
+      });
+    } else {
+      await tx.bazaarCatalogHiddenProduct.deleteMany({
+        where: {
+          storeId: input.storeId,
+          productId: { in: productIds },
+        },
+      });
+    }
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "BAZAAR_CATALOG_PRODUCT_VISIBILITY_UPDATED",
+      entity: "BazaarCatalog",
+      entityId: input.storeId,
+      before: null,
+      after: toJson({
+        storeId: input.storeId,
+        hidden: input.hidden,
+        productIds,
+      }),
+      requestId: input.requestId,
+    });
+  });
+
+  await invalidateCatalogCacheForStore(input.organizationId, input.storeId);
+
+  return {
+    updatedCount: productIds.length,
   };
 };
 
@@ -445,6 +691,9 @@ export const getPublicBazaarCatalog = async (
     where: {
       organizationId: catalog.organizationId,
       isDeleted: false,
+      hiddenInBazaarCatalogs: {
+        none: { storeId: catalog.storeId },
+      },
     },
     select: {
       id: true,
@@ -637,6 +886,9 @@ export const createCatalogCheckoutOrder = async (input: {
           organizationId: catalog.organizationId,
           isDeleted: false,
           id: { in: productIds },
+          hiddenInBazaarCatalogs: {
+            none: { storeId: catalog.storeId },
+          },
         },
         select: {
           id: true,
@@ -683,7 +935,7 @@ export const createCatalogCheckoutOrder = async (input: {
     ]);
 
     const productsById = new Map(products.map((product) => [product.id, product]));
-    if (productsById.size !== normalizedLines.length) {
+    if (productsById.size !== productIds.length) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 

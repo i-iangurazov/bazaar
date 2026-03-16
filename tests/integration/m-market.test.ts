@@ -5,17 +5,19 @@ import { prisma } from "@/server/db/prisma";
 import {
   __buildMMarketExportPlanForTests,
   __resetMMarketCooldownForTests,
+  listMMarketProducts,
   requestMMarketExport,
   runMMarketPreflight,
   updateMMarketBranchMappings,
   updateMMarketConnection,
+  updateMMarketProductSelection,
 } from "@/server/services/mMarket";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
 const prepareReadyMMarketData = async () => {
-  const { org, store, product, adminUser } = await seedBase();
+  const { org, store, product, adminUser, supplier, baseUnit } = await seedBase();
 
   await prisma.product.update({
     where: { id: product.id },
@@ -112,7 +114,15 @@ const prepareReadyMMarketData = async () => {
     mappings: [{ storeId: store.id, mmarketBranchId: "branch-main" }],
   });
 
-  return { org, store, product, adminUser };
+  await updateMMarketProductSelection({
+    organizationId: org.id,
+    actorId: adminUser.id,
+    requestId: "test-selection",
+    productIds: [product.id],
+    included: true,
+  });
+
+  return { org, store, product, adminUser, supplier, baseUnit };
 };
 
 describeDb("m-market integration", () => {
@@ -165,6 +175,80 @@ describeDb("m-market integration", () => {
     }
   });
 
+  it("defaults products to excluded until the user includes them", async () => {
+    const { org, product } = await seedBase();
+
+    const list = await listMMarketProducts({
+      organizationId: org.id,
+      page: 1,
+      pageSize: 25,
+    });
+
+    expect(list.items.find((row) => row.id === product.id)?.included).toBe(false);
+    expect(list.summary.includedProducts).toBe(0);
+    expect(list.summary.excludedProducts).toBe(1);
+  });
+
+  it("treats legacy backfilled inclusions as excluded until the first explicit selection", async () => {
+    const { org, product, adminUser, supplier, baseUnit } = await seedBase();
+
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "TEST-2",
+        name: "Second Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    await prisma.mMarketIncludedProduct.createMany({
+      data: [
+        { orgId: org.id, productId: product.id },
+        { orgId: org.id, productId: secondProduct.id },
+      ],
+    });
+
+    const initialList = await listMMarketProducts({
+      organizationId: org.id,
+      page: 1,
+      pageSize: 25,
+    });
+    const initialPreflight = await runMMarketPreflight(org.id);
+
+    expect(initialList.summary.includedProducts).toBe(0);
+    expect(initialList.summary.excludedProducts).toBe(2);
+    expect(initialList.items.every((row) => !row.included)).toBe(true);
+    expect(initialPreflight.summary.productsConsidered).toBe(0);
+    expect(initialPreflight.blockers.byCode.NO_PRODUCTS_SELECTED).toBe(1);
+
+    await updateMMarketProductSelection({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "first-explicit-selection",
+      productIds: [product.id],
+      included: true,
+    });
+
+    const includedRows = await prisma.mMarketIncludedProduct.findMany({
+      where: { orgId: org.id },
+      orderBy: { productId: "asc" },
+      select: { productId: true },
+    });
+    const nextList = await listMMarketProducts({
+      organizationId: org.id,
+      page: 1,
+      pageSize: 25,
+    });
+
+    expect(includedRows).toEqual([{ productId: product.id }]);
+    expect(nextList.summary.includedProducts).toBe(1);
+    expect(nextList.summary.excludedProducts).toBe(1);
+    expect(nextList.items.find((row) => row.id === product.id)?.included).toBe(true);
+    expect(nextList.items.find((row) => row.id === secondProduct.id)?.included).toBe(false);
+  });
+
   it("pads missing images with the Bazaar placeholder for export", async () => {
     const { org, product } = await prepareReadyMMarketData();
     const previousPlaceholder = process.env.MMARKET_PLACEHOLDER_IMAGE_URL;
@@ -214,6 +298,41 @@ describeDb("m-market integration", () => {
     expect(failure?.issues).toContain("SHORT_DESCRIPTION");
   });
 
+  it("checks and exports only explicitly included products", async () => {
+    const { org, store, product, supplier, baseUnit } = await prepareReadyMMarketData();
+
+    const excludedProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "EXCLUDED-1",
+        name: "Bad",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    await prisma.inventorySnapshot.create({
+      data: {
+        storeId: store.id,
+        productId: excludedProduct.id,
+        variantKey: "BASE",
+        onHand: 7,
+        onOrder: 0,
+        allowNegativeStock: store.allowNegativeStock,
+      },
+    });
+
+    const preflight = await runMMarketPreflight(org.id);
+    const plan = await __buildMMarketExportPlanForTests(org.id);
+
+    expect(preflight.summary.productsConsidered).toBe(1);
+    expect(preflight.failedProducts.some((row) => row.productId === excludedProduct.id)).toBe(
+      false,
+    );
+    expect(plan.payload.products.map((row) => row.sku)).toEqual([product.sku]);
+  });
+
   it("omits optional null fields in generated export payload", async () => {
     const { org } = await prepareReadyMMarketData();
 
@@ -261,5 +380,25 @@ describeDb("m-market integration", () => {
     expect(firstProduct?.specs).toEqual({
       Материал: "metal",
     });
+  });
+
+  it("skips products that are manually excluded from export", async () => {
+    const { org, product, adminUser } = await prepareReadyMMarketData();
+
+    await updateMMarketProductSelection({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "exclude-product",
+      productIds: [product.id],
+      included: false,
+    });
+
+    const preflight = await runMMarketPreflight(org.id);
+    const plan = await __buildMMarketExportPlanForTests(org.id);
+
+    expect(preflight.canExport).toBe(true);
+    expect(preflight.summary.productsConsidered).toBe(0);
+    expect(preflight.summary.productsReady).toBe(0);
+    expect(plan.payload.products).toHaveLength(0);
   });
 });

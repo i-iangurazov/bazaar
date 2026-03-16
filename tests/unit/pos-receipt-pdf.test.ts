@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPosReceiptPdf, type PosReceiptPdfLabels } from "@/server/services/posReceiptPdf";
+import {
+  __buildReceiptMetaLinesForTests,
+  buildPosReceiptPdf,
+  type PosReceiptPdfLabels,
+} from "@/server/services/posReceiptPdf";
 import type { ReceiptPrintJob } from "@/server/printing/types";
 
 const labels: PosReceiptPdfLabels = {
@@ -65,6 +69,36 @@ const baseJob: Omit<ReceiptPrintJob, "variant" | "fiscal"> = {
 };
 
 describe("pos receipt pdf", () => {
+  it("omits INN, phone, and shift from payment receipt meta lines", () => {
+    const meta = __buildReceiptMetaLinesForTests({
+      job: {
+        ...baseJob,
+        variant: "PRECHECK",
+        fiscal: {
+          modeStatus: "NOT_SENT",
+          providerReceiptId: null,
+          fiscalNumber: null,
+          kkmFactoryNumber: null,
+          kkmRegistrationNumber: null,
+          upfdOrFiscalMemory: null,
+          qrPayload: null,
+          fiscalizedAt: null,
+          lastError: null,
+        },
+      },
+      labels,
+    });
+
+    expect(meta.businessLines).toEqual(["Address: Bishkek"]);
+    expect(meta.saleLines[0]).toBe("Sale no: S-000001");
+    expect(meta.saleLines[1]?.startsWith("Date: ")).toBe(true);
+    expect(meta.saleLines[2]).toBe("Register: Front (F1)");
+    expect(meta.saleLines[3]).toBe("Cashier: Cashier");
+    expect([...meta.businessLines, ...meta.saleLines].join(" ")).not.toContain("INN");
+    expect([...meta.businessLines, ...meta.saleLines].join(" ")).not.toContain("Phone");
+    expect([...meta.businessLines, ...meta.saleLines].join(" ")).not.toContain("Shift");
+  });
+
   it("renders operational receipt without fiscal decorations", async () => {
     const pdf = await buildPosReceiptPdf({
       job: {

@@ -10,15 +10,25 @@ import {
   BazaarCatalogHeaderStyle,
   BazaarCatalogStatus,
 } from "@prisma/client";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -29,6 +39,7 @@ import {
 import { ChevronDownIcon, CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
+import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { cn } from "@/lib/utils";
@@ -135,6 +146,7 @@ const BazaarCatalogSettingsPage = () => {
   const t = useTranslations("bazaarCatalogSettings");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
   const pathname = usePathname();
@@ -171,11 +183,46 @@ const BazaarCatalogSettingsPage = () => {
       enabled: canView && Boolean(selectedStoreId),
     },
   );
+  const [productSearch, setProductSearch] = useState("");
+  const [productVisibilityFilter, setProductVisibilityFilter] = useState<
+    "all" | "visible" | "hidden"
+  >("all");
+  const [productsPage, setProductsPage] = useState(1);
+  const [productsPageSize, setProductsPageSize] = useState(10);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const productsQuery = trpc.bazaarCatalog.products.useQuery(
+    {
+      storeId: selectedStoreId,
+      search: productSearch.trim() || undefined,
+      visibility: productVisibilityFilter,
+      page: productsPage,
+      pageSize: productsPageSize,
+    },
+    {
+      enabled: canView && Boolean(selectedStoreId),
+      keepPreviousData: true,
+    },
+  );
 
   const upsertMutation = trpc.bazaarCatalog.upsert.useMutation({
     onSuccess: async () => {
       await Promise.all([settingsQuery.refetch(), storesQuery.refetch()]);
       toast({ variant: "success", description: t("saved") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const updateProductsMutation = trpc.bazaarCatalog.updateProducts.useMutation({
+    onSuccess: async (result, variables) => {
+      setSelectedProductIds(new Set());
+      await productsQuery.refetch();
+      toast({
+        variant: "success",
+        description: variables.hidden
+          ? t("productsVisibility.hiddenSuccess", { count: result.updatedCount })
+          : t("productsVisibility.visibleSuccess", { count: result.updatedCount }),
+      });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -202,6 +249,15 @@ const BazaarCatalogSettingsPage = () => {
     });
   }, [settingsQuery.data]);
 
+  useEffect(() => {
+    setProductsPage(1);
+  }, [productSearch, productVisibilityFilter]);
+
+  useEffect(() => {
+    setSelectedProductIds(new Set());
+    setProductsPage(1);
+  }, [selectedStoreId]);
+
   const publicLink = useMemo(() => {
     if (
       settingsQuery.data?.catalog.status !== BazaarCatalogStatus.PUBLISHED ||
@@ -211,12 +267,66 @@ const BazaarCatalogSettingsPage = () => {
     }
     return resolveAbsoluteCatalogUrl(settingsQuery.data.catalog.publicUrlPath);
   }, [settingsQuery.data?.catalog.publicUrlPath, settingsQuery.data?.catalog.status]);
+  const productItems = productsQuery.data?.items ?? [];
+  const productSummary = productsQuery.data?.summary;
+  const allProductsSelectedOnPage =
+    productItems.length > 0 && productItems.every((product) => selectedProductIds.has(product.id));
 
   const syncStoreParam = (nextStoreId: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("storeId", nextStoreId);
     const next = params.toString();
     router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllProductsOnPage = () => {
+    const pageIds = productItems.map((product) => product.id);
+    if (!pageIds.length) {
+      return;
+    }
+    const allSelected = pageIds.every((id) => selectedProductIds.has(id));
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      for (const id of pageIds) {
+        if (allSelected) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const clearProductSelection = () => {
+    setSelectedProductIds(new Set());
+  };
+
+  const handleUpdateProducts = (hidden: boolean, productIds?: string[]) => {
+    if (!canEdit || !selectedStoreId) {
+      return;
+    }
+    const targetIds = productIds ?? Array.from(selectedProductIds);
+    if (!targetIds.length) {
+      return;
+    }
+    updateProductsMutation.mutate({
+      storeId: selectedStoreId,
+      productIds: targetIds,
+      hidden,
+    });
   };
 
   const handleCopyPublicLink = async () => {
@@ -360,6 +470,264 @@ const BazaarCatalogSettingsPage = () => {
               </CardContent>
             </Card>
           ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("productsVisibility.title")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">{t("productsVisibility.subtitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("productsVisibility.note")}</p>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border border-border p-3">
+                  <p className="text-xs text-muted-foreground">
+                    {t("productsVisibility.metrics.total")}
+                  </p>
+                  <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <p className="text-xs text-muted-foreground">
+                    {t("productsVisibility.metrics.visible")}
+                  </p>
+                  <p className="text-lg font-semibold">{productSummary?.visibleProducts ?? 0}</p>
+                </div>
+                <div className="rounded-md border border-border p-3">
+                  <p className="text-xs text-muted-foreground">
+                    {t("productsVisibility.metrics.hidden")}
+                  </p>
+                  <p className="text-lg font-semibold">{productSummary?.hiddenProducts ?? 0}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
+                <Input
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                  placeholder={t("productsVisibility.search")}
+                />
+                <Select
+                  value={productVisibilityFilter}
+                  onValueChange={(value) =>
+                    setProductVisibilityFilter(value as "all" | "visible" | "hidden")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("productsVisibility.filters.all")}</SelectItem>
+                    <SelectItem value="visible">
+                      {t("productsVisibility.filters.visible")}
+                    </SelectItem>
+                    <SelectItem value="hidden">
+                      {t("productsVisibility.filters.hidden")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {!canEdit ? (
+                <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p>
+              ) : null}
+
+              {canEdit && selectedProductIds.size > 0 ? (
+                <SelectionToolbar
+                  count={selectedProductIds.size}
+                  label={t("productsVisibility.selectedLabel", { count: selectedProductIds.size })}
+                  onClear={clearProductSelection}
+                  clearLabel={t("productsVisibility.clearSelection")}
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => handleUpdateProducts(false)}
+                    disabled={updateProductsMutation.isLoading}
+                  >
+                    {t("productsVisibility.showSelected")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => handleUpdateProducts(true)}
+                    disabled={updateProductsMutation.isLoading}
+                  >
+                    {t("productsVisibility.hideSelected")}
+                  </Button>
+                </SelectionToolbar>
+              ) : null}
+
+              {productsQuery.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner className="h-4 w-4" />
+                  {tCommon("loading")}
+                </div>
+              ) : productsQuery.error ? (
+                <p className="text-sm text-danger">{translateError(tErrors, productsQuery.error)}</p>
+              ) : (
+                <ResponsiveDataList
+                  items={productItems}
+                  page={productsPage}
+                  totalItems={productsQuery.data?.total ?? 0}
+                  defaultPageSize={10}
+                  pageSizeOptions={[10]}
+                  onPageChange={setProductsPage}
+                  onPageSizeChange={setProductsPageSize}
+                  scrollToTopOnPageChange
+                  empty={
+                    <p className="text-sm text-muted-foreground">
+                      {t("productsVisibility.empty")}
+                    </p>
+                  }
+                  renderDesktop={(visibleItems) =>
+                    visibleItems.length ? (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              {canEdit ? (
+                                <TableHead className="w-10">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    checked={allProductsSelectedOnPage}
+                                    onChange={toggleSelectAllProductsOnPage}
+                                    aria-label={t("productsVisibility.selectAll")}
+                                  />
+                                </TableHead>
+                              ) : null}
+                              <TableHead>{t("productsVisibility.columns.sku")}</TableHead>
+                              <TableHead>{t("productsVisibility.columns.name")}</TableHead>
+                              <TableHead>{t("productsVisibility.columns.category")}</TableHead>
+                              <TableHead>{t("productsVisibility.columns.price")}</TableHead>
+                              <TableHead>{t("productsVisibility.columns.onHand")}</TableHead>
+                              <TableHead>{t("productsVisibility.columns.status")}</TableHead>
+                              {canEdit ? (
+                                <TableHead>{t("productsVisibility.columns.actions")}</TableHead>
+                              ) : null}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {visibleItems.map((product) => (
+                              <TableRow key={product.id}>
+                                {canEdit ? (
+                                  <TableCell>
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      checked={selectedProductIds.has(product.id)}
+                                      onChange={() => toggleProductSelection(product.id)}
+                                      aria-label={t("productsVisibility.selectProduct", {
+                                        name: product.name,
+                                      })}
+                                    />
+                                  </TableCell>
+                                ) : null}
+                                <TableCell className="font-mono text-xs">{product.sku}</TableCell>
+                                <TableCell className="font-medium">{product.name}</TableCell>
+                                <TableCell>{product.category ?? "-"}</TableCell>
+                                <TableCell>{formatCurrencyKGS(product.priceKgs, locale)}</TableCell>
+                                <TableCell>{product.onHandQty}</TableCell>
+                                <TableCell>
+                                  <Badge variant={product.hidden ? "muted" : "success"}>
+                                    {product.hidden
+                                      ? t("productsVisibility.statusHidden")
+                                      : t("productsVisibility.statusVisible")}
+                                  </Badge>
+                                </TableCell>
+                                {canEdit ? (
+                                  <TableCell>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant={product.hidden ? "secondary" : "outline"}
+                                      onClick={() =>
+                                        handleUpdateProducts(!product.hidden, [product.id])
+                                      }
+                                      disabled={updateProductsMutation.isLoading}
+                                    >
+                                      {product.hidden
+                                        ? t("productsVisibility.rowShow")
+                                        : t("productsVisibility.rowHide")}
+                                    </Button>
+                                  </TableCell>
+                                ) : null}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {t("productsVisibility.empty")}
+                      </p>
+                    )
+                  }
+                  renderMobile={(product) => (
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {product.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{product.sku}</p>
+                        </div>
+                        <Badge variant={product.hidden ? "muted" : "success"}>
+                          {product.hidden
+                            ? t("productsVisibility.statusHidden")
+                            : t("productsVisibility.statusVisible")}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                        <p>
+                          {t("productsVisibility.columns.category")}: {product.category ?? "-"}
+                        </p>
+                        <p>
+                          {t("productsVisibility.columns.price")}:{" "}
+                          {formatCurrencyKGS(product.priceKgs, locale)}
+                        </p>
+                        <p>
+                          {t("productsVisibility.columns.onHand")}: {product.onHandQty}
+                        </p>
+                      </div>
+                      {canEdit ? (
+                        <div className="mt-3 flex items-center gap-2">
+                          <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              checked={selectedProductIds.has(product.id)}
+                              onChange={() => toggleProductSelection(product.id)}
+                              aria-label={t("productsVisibility.selectProduct", {
+                                name: product.name,
+                              })}
+                            />
+                            {t("productsVisibility.selectProductShort")}
+                          </label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={product.hidden ? "secondary" : "outline"}
+                            className="ml-auto"
+                            onClick={() => handleUpdateProducts(!product.hidden, [product.id])}
+                            disabled={updateProductsMutation.isLoading}
+                          >
+                            {product.hidden
+                              ? t("productsVisibility.rowShow")
+                              : t("productsVisibility.rowHide")}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                  getKey={(product) => product.id}
+                />
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="space-y-2">
