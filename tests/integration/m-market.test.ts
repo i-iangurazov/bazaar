@@ -458,6 +458,22 @@ describeDb("m-market integration", () => {
     const firstProduct = plan.payload.products[0];
 
     expect(plan.preflight.canExport).toBe(true);
+    expect(plan.errorReport).toMatchObject({
+      environment: "DEV",
+      endpoint: "https://dev.m-market.kg/api/crm/products/import_products/",
+      payloadStats: {
+        productCount: 1,
+        selectedProducts: 1,
+      },
+      payload: {
+        products: [
+          {
+            sku: firstProduct?.sku,
+          },
+        ],
+      },
+      specValidationMode: plan.preflight.specValidationMode,
+    });
     expect(firstProduct?.stock).toEqual([
       {
         branch_id: "branch-main",

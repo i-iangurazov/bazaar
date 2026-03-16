@@ -140,6 +140,11 @@ type MMarketExportPlan = {
   errorReport: Record<string, unknown>;
 };
 
+type MMarketRemoteErrorResponse = {
+  httpStatus: number;
+  body: unknown;
+};
+
 type RemoteSpecCatalog = {
   mode: "REMOTE" | "SEND_AS_IS";
   globalWarnings: MMarketPreflightWarningCode[];
@@ -761,6 +766,30 @@ export const buildMMarketPayload = (products: MMarketPayloadProduct[]): MMarketP
     }),
 });
 
+const buildMMarketErrorReport = (input: {
+  environment: MMarketEnvironment;
+  requestIdempotencyKey?: string;
+  preflight: MMarketPreflightResult;
+  payload: MMarketPayload;
+  payloadStats: Record<string, unknown>;
+  reason?: string;
+  remoteResponse?: MMarketRemoteErrorResponse | null;
+}) => ({
+  generatedAt: input.preflight.generatedAt.toISOString(),
+  environment: input.environment,
+  endpoint: MMARKET_IMPORT_ENDPOINTS[input.environment],
+  requestIdempotencyKey: input.requestIdempotencyKey,
+  reason: input.reason,
+  summary: input.preflight.summary,
+  blockers: input.preflight.blockers,
+  warnings: input.preflight.warnings,
+  failedProducts: input.preflight.failedProducts,
+  payloadStats: input.payloadStats,
+  payload: input.payload,
+  specValidationMode: input.preflight.specValidationMode,
+  remoteResponse: input.remoteResponse ?? undefined,
+});
+
 const buildMMarketExportPlan = async (input: {
   organizationId: string;
   environment: MMarketEnvironment;
@@ -1109,25 +1138,26 @@ const buildMMarketExportPlan = async (input: {
     specValidationMode: remoteSpecCatalog.mode,
   };
 
+  const payloadStats = {
+    productCount: payload.products.length,
+    selectedProducts: activeIncludedCount,
+    storesTotal: stores.length,
+    storesMapped: mappedStores.length,
+    failedProducts: failedProducts.length,
+    warningCount: preflight.warnings.total,
+    consideredProducts: products.length,
+  };
+
   return {
     preflight,
     payload,
-    payloadStats: {
-      productCount: payload.products.length,
-      selectedProducts: activeIncludedCount,
-      storesTotal: stores.length,
-      storesMapped: mappedStores.length,
-      failedProducts: failedProducts.length,
-      warningCount: preflight.warnings.total,
-      consideredProducts: products.length,
-    },
-    errorReport: {
-      generatedAt: preflight.generatedAt.toISOString(),
-      summary: preflight.summary,
-      blockers: preflight.blockers,
-      warnings: preflight.warnings,
-      failedProducts: preflight.failedProducts,
-    },
+    payloadStats,
+    errorReport: buildMMarketErrorReport({
+      environment: input.environment,
+      preflight,
+      payload,
+      payloadStats,
+    }),
   };
 };
 
@@ -2684,7 +2714,7 @@ const runMMarketExportJob = async (
           ? error.message
           : "mMarketExportFailed";
 
-    const remoteResponse =
+    const remoteResponse: MMarketRemoteErrorResponse | null =
       error instanceof MMarketRemoteError
         ? {
             httpStatus: error.status,
@@ -2693,9 +2723,23 @@ const runMMarketExportJob = async (
         : null;
 
     const errorReport = toJson(
-      plan?.errorReport ?? {
-        reason: message,
-      },
+      plan
+        ? buildMMarketErrorReport({
+            environment: job.environment,
+            requestIdempotencyKey: job.requestIdempotencyKey,
+            preflight: plan.preflight,
+            payload: plan.payload,
+            payloadStats: plan.payloadStats,
+            reason: message,
+            remoteResponse,
+          })
+        : {
+            environment: job.environment,
+            endpoint: MMARKET_IMPORT_ENDPOINTS[job.environment],
+            requestIdempotencyKey: job.requestIdempotencyKey,
+            reason: message,
+            remoteResponse: remoteResponse ?? undefined,
+          },
     );
 
     const failed = await prisma.mMarketExportJob.update({
