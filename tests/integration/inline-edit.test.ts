@@ -127,6 +127,46 @@ describeDb("inline edit mutations", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
+  it("bulk updates inventory minStock for all active products in a store", async () => {
+    const { org, store, product, supplier, baseUnit, managerUser } = await seedBase();
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "BULK-MIN-2",
+        name: "Bulk Min Product 2",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    await managerCaller.inventory.setDefaultMinStock({
+      storeId: store.id,
+      minStock: 9,
+    });
+
+    const policies = await prisma.reorderPolicy.findMany({
+      where: {
+        storeId: store.id,
+        productId: { in: [product.id, secondProduct.id] },
+      },
+      orderBy: { productId: "asc" },
+      select: { productId: true, minStock: true },
+    });
+
+    expect(policies).toEqual([
+      { productId: product.id, minStock: 9 },
+      { productId: secondProduct.id, minStock: 9 },
+    ]);
+  });
+
   it("updates user role/locale via users.update and enforces RBAC and validation", async () => {
     const { org, adminUser, managerUser, staffUser } = await seedBase({ plan: "BUSINESS" });
     const adminCaller = createTestCaller({

@@ -5,6 +5,7 @@ import { prisma } from "@/server/db/prisma";
 import {
   __buildMMarketExportPlanForTests,
   __resetMMarketCooldownForTests,
+  assignDefaultCategoryToMMarketProducts,
   listMMarketProducts,
   requestMMarketExport,
   runMMarketPreflight,
@@ -289,6 +290,50 @@ describeDb("m-market integration", () => {
     expect(list.items.map((row) => row.id)).toEqual([product.id]);
     expect(list.items[0]?.imageUrl).toBe("https://cdn.example.com/images/listable-product.jpg");
     expect(list.items.some((row) => row.id === hiddenFromList.id)).toBe(false);
+  });
+
+  it("assigns the fallback category only to exported products missing category", async () => {
+    const { org, product, adminUser, supplier, baseUnit } = await prepareReadyMMarketData();
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { category: null },
+    });
+
+    const excludedProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "NO-CATEGORY-EXCLUDED",
+        name: "Excluded No Category Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        photoUrl: "https://cdn.example.com/images/no-category-excluded.jpg",
+      },
+    });
+
+    const before = await runMMarketPreflight(org.id);
+    expect(before.blockers.byCode.MISSING_CATEGORY).toBe(1);
+
+    const result = await assignDefaultCategoryToMMarketProducts({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "assign-default-category",
+    });
+
+    const refreshedIncludedProduct = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { category: true },
+    });
+    const refreshedExcludedProduct = await prisma.product.findUnique({
+      where: { id: excludedProduct.id },
+      select: { category: true },
+    });
+
+    expect(result.targetedCount).toBe(1);
+    expect(result.updatedCount).toBe(1);
+    expect(refreshedIncludedProduct?.category).toBe("Без категории");
+    expect(refreshedExcludedProduct?.category).toBeNull();
   });
 
   it("pads missing images with the Bazaar placeholder for export", async () => {

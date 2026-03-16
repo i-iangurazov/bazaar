@@ -296,6 +296,25 @@ const MMarketSettingsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const assignMissingCategoryMutation = trpc.mMarket.assignMissingCategory.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
+      if (result.targetedCount === 0) {
+        toast({ variant: "info", description: t("preflight.assignMissingCategoryNothingToDo") });
+        return;
+      }
+      toast({
+        variant: "success",
+        description: t("preflight.assignMissingCategorySuccess", {
+          count: result.updatedCount,
+          category: result.category,
+        }),
+      });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
 
   const [environment, setEnvironment] = useState<MMarketEnvironment>(MMarketEnvironment.DEV);
   const [apiToken, setApiToken] = useState("");
@@ -420,13 +439,13 @@ const MMarketSettingsPage = () => {
   };
 
   const handleAutofillSpecs = async () => {
-    if (!isAdmin || missingSpecsCount <= 0) {
+    if (!isAdmin || actionableMissingSpecsCount <= 0) {
       return;
     }
     if (
       !(await confirm({
         description: t("preflight.confirmAutofillSpecs", {
-          count: missingSpecsCount,
+          count: actionableMissingSpecsCount,
         }),
       }))
     ) {
@@ -436,7 +455,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleCreateBaseTemplates = async () => {
-    if (!isAdmin || missingSpecsCount <= 0) {
+    if (!isAdmin || actionableMissingSpecsCount <= 0) {
       return;
     }
     if (
@@ -447,6 +466,23 @@ const MMarketSettingsPage = () => {
       return;
     }
     bulkCreateBaseTemplatesMutation.mutate();
+  };
+
+  const handleAssignMissingCategory = async () => {
+    if (!isAdmin || missingCategoryCount <= 0) {
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("preflight.confirmAssignMissingCategory", {
+          count: missingCategoryCount,
+          category: "Без категории",
+        }),
+      }))
+    ) {
+      return;
+    }
+    assignMissingCategoryMutation.mutate();
   };
 
   const handleSaveConnection = () => {
@@ -547,8 +583,13 @@ const MMarketSettingsPage = () => {
 
   const preflightData = preflightQuery.data;
   const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
-  const missingSpecsCount = preflightData?.blockers.byCode.MISSING_SPECS ?? 0;
+  const missingCategoryCount = preflightData?.blockers.byCode.MISSING_CATEGORY ?? 0;
   const shortDescriptionCount = preflightData?.blockers.byCode.SHORT_DESCRIPTION ?? 0;
+  const actionableMissingSpecsCount =
+    preflightData?.failedProducts.filter(
+      (row) =>
+        row.issues.includes("MISSING_SPECS") && !row.issues.includes("MISSING_CATEGORY"),
+    ).length ?? 0;
   const effectiveCooldownSeconds = Math.max(
     cooldownRemainingSeconds,
     preflightData?.cooldown.remainingSeconds ?? 0,
@@ -1102,9 +1143,26 @@ const MMarketSettingsPage = () => {
                   </div>
                 ) : null}
 
-                {isAdmin && (missingSpecsCount > 0 || shortDescriptionCount > 0) ? (
+                {isAdmin &&
+                (actionableMissingSpecsCount > 0 ||
+                  missingCategoryCount > 0 ||
+                  shortDescriptionCount > 0) ? (
                   <FormActions className="mt-3 justify-start">
-                    {missingSpecsCount > 0 ? (
+                    {missingCategoryCount > 0 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleAssignMissingCategory()}
+                        disabled={assignMissingCategoryMutation.isLoading}
+                      >
+                        {assignMissingCategoryMutation.isLoading ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : null}
+                        {t("preflight.assignMissingCategory")} ({missingCategoryCount})
+                      </Button>
+                    ) : null}
+
+                    {actionableMissingSpecsCount > 0 ? (
                       <>
                         <Button
                           type="button"
@@ -1127,7 +1185,7 @@ const MMarketSettingsPage = () => {
                           ) : (
                             <SparklesIcon className="h-4 w-4" aria-hidden />
                           )}
-                          {t("preflight.autofillSpecs")} ({missingSpecsCount})
+                          {t("preflight.autofillSpecs")} ({actionableMissingSpecsCount})
                         </Button>
                       </>
                     ) : null}

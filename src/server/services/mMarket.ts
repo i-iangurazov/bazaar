@@ -16,7 +16,7 @@ import { registerJob, runJob, type JobPayload } from "@/server/jobs";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
-import { bulkGenerateProductDescriptions } from "@/server/services/products";
+import { bulkGenerateProductDescriptions, bulkUpdateProductCategory } from "@/server/services/products";
 import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 import { setCategoryTemplate } from "@/server/services/categoryTemplates";
 
@@ -180,6 +180,7 @@ type BulkAutofillSkipReasonCounts = {
 
 const MMARKET_DEFAULT_MANUFACTURER = process.env.MMARKET_SPECS_DEFAULT_MANUFACTURER?.trim() ?? "";
 const MMARKET_DEFAULT_MODEL = process.env.MMARKET_SPECS_DEFAULT_MODEL?.trim() ?? "";
+const MMARKET_DEFAULT_UNCATEGORIZED_NAME = "Без категории";
 const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
 const nonDataImagePattern = /^data:image\//i;
 type MMarketDbClient = Prisma.TransactionClient | PrismaClient;
@@ -1989,6 +1990,56 @@ export const bulkCreateMMarketBaseTemplates = async (input: {
     reactivatedAttributeCount,
     categories: missingTemplateCategories,
     attributeKeys: resolvedAttributeKeys,
+  };
+};
+
+export const assignDefaultCategoryToMMarketProducts = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  logger?: MMarketBaseTemplateLogger;
+}) => {
+  const preflight = await runMMarketPreflight(input.organizationId);
+  const productIds = Array.from(
+    new Set(
+      preflight.failedProducts
+        .filter((product) => product.issues.includes("MISSING_CATEGORY"))
+        .map((product) => product.productId),
+    ),
+  );
+
+  if (!productIds.length) {
+    return {
+      targetedCount: 0,
+      updatedCount: 0,
+      updatedProductIds: [] as string[],
+      category: MMARKET_DEFAULT_UNCATEGORIZED_NAME,
+    };
+  }
+
+  const result = await bulkUpdateProductCategory({
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    requestId: input.requestId,
+    productIds,
+    category: MMARKET_DEFAULT_UNCATEGORIZED_NAME,
+  });
+
+  input.logger?.info(
+    {
+      phase: "assign-default-category",
+      targetedCount: productIds.length,
+      updatedCount: result.updated,
+      category: MMARKET_DEFAULT_UNCATEGORIZED_NAME,
+    },
+    "assigned default MMarket category to exported products without category",
+  );
+
+  return {
+    targetedCount: productIds.length,
+    updatedCount: result.updated,
+    updatedProductIds: productIds,
+    category: MMARKET_DEFAULT_UNCATEGORIZED_NAME,
   };
 };
 

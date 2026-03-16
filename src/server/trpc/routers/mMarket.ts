@@ -2,6 +2,7 @@ import { MMarketEnvironment } from "@prisma/client";
 import { z } from "zod";
 
 import {
+  assignDefaultCategoryToMMarketProducts,
   bulkAutofillMMarketSpecs,
   bulkCreateMMarketBaseTemplates,
   bulkGenerateMMarketShortDescriptions,
@@ -209,6 +210,21 @@ export const mMarketRouter = router({
     .mutation(async ({ ctx }) => {
       try {
         return await bulkCreateMMarketBaseTemplates({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          logger: ctx.logger,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  assignMissingCategory: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-category-bulk" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await assignDefaultCategoryToMMarketProducts({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,

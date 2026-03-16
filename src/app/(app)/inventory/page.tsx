@@ -191,10 +191,24 @@ const InventoryPage = () => {
 
   const minStockSchema = useMemo(
     () =>
-      z.object({
-        productId: z.string().min(1, t("productRequired")),
-        minStock: z.coerce.number().int().min(0, t("minStockNonNegative")),
-      }),
+      z
+        .object({
+          productId: z.string().optional(),
+          minStock: z.coerce.number().int().min(0, t("minStockNonNegative")),
+          applyToAll: z.boolean().default(false),
+        })
+        .superRefine((values, context) => {
+          if (values.applyToAll) {
+            return;
+          }
+          if (!values.productId?.trim()) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: t("productRequired"),
+              path: ["productId"],
+            });
+          }
+        }),
     [t],
   );
 
@@ -301,6 +315,7 @@ const InventoryPage = () => {
     defaultValues: {
       productId: "",
       minStock: 0,
+      applyToAll: false,
     },
   });
 
@@ -651,6 +666,7 @@ const InventoryPage = () => {
   const transferQty = transferForm.watch("qty");
   const transferFromStoreId = transferForm.watch("fromStoreId");
   const minStockProductId = minStockForm.watch("productId");
+  const minStockApplyToAll = minStockForm.watch("applyToAll");
   const receiveProduct = receiveProductId ? productMap.get(receiveProductId) : undefined;
   const adjustProduct = adjustProductId ? productMap.get(adjustProductId) : undefined;
   const transferProduct = transferProductId ? productMap.get(transferProductId) : undefined;
@@ -773,6 +789,9 @@ const InventoryPage = () => {
   const openActionDialog = useCallback(
     (type: "receive" | "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
       setActiveDialog(type);
+      if (type === "minStock") {
+        minStockForm.setValue("applyToAll", false, { shouldValidate: false });
+      }
       if (!item) {
         return;
       }
@@ -791,6 +810,7 @@ const InventoryPage = () => {
         transferForm.setValue("variantId", variantId, { shouldValidate: true });
       }
       if (type === "minStock") {
+        minStockForm.setValue("applyToAll", false, { shouldValidate: true });
         minStockForm.setValue("productId", productId, { shouldValidate: true });
         minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
       }
@@ -924,6 +944,16 @@ const InventoryPage = () => {
     onSuccess: () => {
       inventoryQuery.refetch();
       toast({ variant: "success", description: t("minStockSaved") });
+      setActiveDialog(null);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const defaultMinStockMutation = trpc.inventory.setDefaultMinStock.useMutation({
+    onSuccess: (result) => {
+      inventoryQuery.refetch();
+      toast({ variant: "success", description: t("minStockAppliedAll", { count: result.count }) });
       setActiveDialog(null);
     },
     onError: (error) => {
@@ -2934,13 +2964,35 @@ const InventoryPage = () => {
               if (!storeId) {
                 return;
               }
+              if (values.applyToAll) {
+                defaultMinStockMutation.mutate({
+                  storeId,
+                  minStock: values.minStock,
+                });
+                return;
+              }
               minStockMutation.mutate({
                 storeId,
-                productId: values.productId,
+                productId: values.productId ?? "",
                 minStock: values.minStock,
               });
             })}
           >
+            <FormField
+              control={minStockForm.control}
+              name="applyToAll"
+              render={({ field }) => (
+                <FormItem className="flex items-start justify-between gap-4 rounded-md border border-border p-4">
+                  <div className="space-y-1">
+                    <FormLabel>{t("minStockApplyAllLabel")}</FormLabel>
+                    <FormDescription>{t("minStockApplyAllHint")}</FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
             <FormGrid>
               <FormField
                 control={minStockForm.control}
@@ -2951,11 +3003,17 @@ const InventoryPage = () => {
                     <Select
                       value={field.value}
                       onValueChange={field.onChange}
-                      disabled={!minStockOptions.length}
+                      disabled={minStockApplyToAll || !minStockOptions.length}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={tCommon("selectProduct")} />
+                          <SelectValue
+                            placeholder={
+                              minStockApplyToAll
+                                ? t("minStockApplyAllLabel")
+                                : tCommon("selectProduct")
+                            }
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -2966,7 +3024,7 @@ const InventoryPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                    {!minStockOptions.length ? (
+                    {!minStockApplyToAll && !minStockOptions.length ? (
                       <FormDescription>{t("noInventory")}</FormDescription>
                     ) : null}
                     <FormMessage />
@@ -3005,14 +3063,21 @@ const InventoryPage = () => {
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={minStockMutation.isLoading || !storeId || !minStockOptions.length}
+                disabled={
+                  minStockMutation.isLoading ||
+                  defaultMinStockMutation.isLoading ||
+                  !storeId ||
+                  (!minStockApplyToAll && !minStockOptions.length)
+                }
               >
-                {minStockMutation.isLoading ? (
+                {minStockMutation.isLoading || defaultMinStockMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
                 ) : (
                   <StatusSuccessIcon className="h-4 w-4" aria-hidden />
                 )}
-                {minStockMutation.isLoading ? tCommon("loading") : t("minStockSave")}
+                {minStockMutation.isLoading || defaultMinStockMutation.isLoading
+                  ? tCommon("loading")
+                  : t("minStockSave")}
               </Button>
             </FormActions>
           </form>
