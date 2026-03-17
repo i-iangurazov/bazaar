@@ -71,6 +71,7 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
     ...(hasOwn(existingReport, "payloadStats") || !job.payloadStatsJson
       ? {}
       : { payloadStats: job.payloadStatsJson }),
+    ...(hasOwn(existingReport, "networkError") ? {} : { networkError: null }),
     ...(hasOwn(existingReport, "remoteResponse")
       ? {}
       : { remoteResponse: job.responseJson ?? null }),

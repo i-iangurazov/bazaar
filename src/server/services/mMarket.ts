@@ -50,6 +50,7 @@ const memoryCooldownStore = new Map<string, number>();
 
 export type MMarketOverviewStatus = "NOT_CONFIGURED" | "READY" | "ERROR";
 export type MMarketProductSelectionFilter = "all" | "included" | "excluded";
+export type MMarketProductExportStatus = "EXCLUDED" | "INCLUDED" | "EXPORTED";
 
 export type MMarketPayloadProduct = {
   sku: string;
@@ -136,6 +137,7 @@ export type MMarketPreflightResult = {
 type MMarketExportPlan = {
   preflight: MMarketPreflightResult;
   payload: MMarketPayload;
+  exportedProductIds: string[];
   payloadStats: Record<string, unknown>;
   errorReport: Record<string, unknown>;
 };
@@ -143,6 +145,18 @@ type MMarketExportPlan = {
 type MMarketRemoteErrorResponse = {
   httpStatus: number;
   body: unknown;
+};
+
+type MMarketNetworkErrorDiagnostic = {
+  name: string | null;
+  message: string | null;
+  code: string | null;
+};
+
+type MMarketNetworkErrorDetails = {
+  error: MMarketNetworkErrorDiagnostic;
+  cause: MMarketNetworkErrorDiagnostic | null;
+  nested: MMarketNetworkErrorDiagnostic[];
 };
 
 type RemoteSpecCatalog = {
@@ -220,6 +234,16 @@ const resolveMMarketListImageUrl = (product: {
     }
   }
   return null;
+};
+
+const resolveMMarketProductExportStatus = (input: {
+  included: boolean;
+  lastExportedAt: Date | null;
+}): MMarketProductExportStatus => {
+  if (!input.included) {
+    return "EXCLUDED";
+  }
+  return input.lastExportedAt ? "EXPORTED" : "INCLUDED";
 };
 
 const hasExplicitMMarketProductSelection = async (
@@ -768,15 +792,120 @@ export const buildMMarketPayload = (products: MMarketPayloadProduct[]): MMarketP
 
 const getPayloadBytes = (payload: MMarketPayload) => Buffer.byteLength(JSON.stringify(payload), "utf8");
 
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+};
+
+const toNullableString = (value: unknown) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+};
+
+const toNetworkDiagnostic = (value: unknown): MMarketNetworkErrorDiagnostic | null => {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const name = toNullableString(record.name);
+  const message = toNullableString(record.message);
+  const code = toNullableString(record.code);
+
+  if (!name && !message && !code) {
+    return null;
+  }
+
+  return {
+    name,
+    message,
+    code,
+  };
+};
+
+const toNestedDiagnostics = (value: unknown): MMarketNetworkErrorDiagnostic[] => {
+  if (value instanceof AggregateError) {
+    return Array.from(value.errors).map(toNetworkDiagnostic).filter(Boolean) as MMarketNetworkErrorDiagnostic[];
+  }
+
+  const record = asRecord(value);
+  if (!record || !Array.isArray(record.errors)) {
+    return [];
+  }
+
+  return record.errors.map(toNetworkDiagnostic).filter(Boolean) as MMarketNetworkErrorDiagnostic[];
+};
+
 const isAbortError = (error: unknown): error is Error =>
   error instanceof Error && error.name === "AbortError";
 
-const resolveMMarketExportFailureReason = (error: unknown) => {
+const resolveMMarketNetworkError = (error: unknown): MMarketNetworkErrorDetails | null => {
+  if (
+    !(error instanceof Error) ||
+    error instanceof AppError ||
+    error instanceof MMarketRemoteError ||
+    isAbortError(error)
+  ) {
+    return null;
+  }
+
+  const baseError = error as Error & { cause?: unknown };
+  const errorDiagnostic = toNetworkDiagnostic(baseError);
+  const causeValue = baseError.cause;
+  const causeDiagnostic = toNetworkDiagnostic(causeValue);
+  const nestedDiagnostics = toNestedDiagnostics(causeValue);
+  const hasSpecificNetworkSignal = Boolean(
+    errorDiagnostic?.code || causeDiagnostic?.code || causeDiagnostic?.message || nestedDiagnostics.length > 0,
+  );
+
+  if (!hasSpecificNetworkSignal && baseError.message !== "fetch failed") {
+    return null;
+  }
+
+  return {
+    error: errorDiagnostic ?? {
+      name: baseError.name,
+      message: baseError.message,
+      code: null,
+    },
+    cause: causeDiagnostic,
+    nested: nestedDiagnostics,
+  };
+};
+
+const formatMMarketNetworkFailureReason = (details: MMarketNetworkErrorDetails) => {
+  const preferred = details.cause ?? details.nested[0] ?? details.error;
+  const parts = [preferred.code, preferred.message].filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
+
+  if (!parts.length) {
+    return "MMarket request failed before receiving a response";
+  }
+
+  return `MMarket request failed: ${parts.join(" ")}`;
+};
+
+const resolveMMarketExportFailureReason = (
+  error: unknown,
+  networkError: MMarketNetworkErrorDetails | null = resolveMMarketNetworkError(error),
+) => {
   if (error instanceof AppError) {
     return error.message;
   }
   if (isAbortError(error)) {
     return `MMarket request timed out after ${Math.round(MMARKET_REQUEST_TIMEOUT_MS / 1_000)}s`;
+  }
+  if (networkError) {
+    return formatMMarketNetworkFailureReason(networkError);
   }
   if (error instanceof Error) {
     return error.message;
@@ -793,6 +922,7 @@ const buildMMarketErrorReport = (input: {
   payloadStats: Record<string, unknown>;
   reason?: string;
   remoteResponse?: MMarketRemoteErrorResponse | null;
+  networkError?: MMarketNetworkErrorDetails | null;
 }) => ({
   generatedAt: input.preflight.generatedAt.toISOString(),
   environment: input.environment,
@@ -808,6 +938,7 @@ const buildMMarketErrorReport = (input: {
   payload: input.payload,
   specValidationMode: input.preflight.specValidationMode,
   remoteResponse: input.remoteResponse ?? null,
+  networkError: input.networkError ?? null,
 });
 
 const buildMMarketExportPlan = async (input: {
@@ -999,6 +1130,7 @@ const buildMMarketExportPlan = async (input: {
 
   const seenSkus = new Set<string>();
   const readyProducts: MMarketPayloadProduct[] = [];
+  const exportedProductIds: string[] = [];
   const failedProducts: MMarketPreflightResult["failedProducts"] = [];
 
   for (const product of products) {
@@ -1113,6 +1245,7 @@ const buildMMarketExportPlan = async (input: {
       stock: stockPayload,
       specs,
     });
+    exportedProductIds.push(product.id);
   }
 
   const payload = buildMMarketPayload(readyProducts);
@@ -1173,6 +1306,7 @@ const buildMMarketExportPlan = async (input: {
   return {
     preflight,
     payload,
+    exportedProductIds,
     payloadStats,
     errorReport: buildMMarketErrorReport({
       environment: input.environment,
@@ -1467,7 +1601,7 @@ export const listMMarketProducts = async (input: {
         },
         mMarketInclusions: {
           where: { orgId: input.organizationId },
-          select: { id: true },
+          select: { id: true, lastExportedAt: true },
           take: 1,
         },
       },
@@ -1503,15 +1637,25 @@ export const listMMarketProducts = async (input: {
   }
 
   return {
-    items: products.map((product) => ({
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      category: product.category?.trim() || null,
-      imageUrl: resolveMMarketListImageUrl(product),
-      onHandQty: onHandByProductId.get(product.id) ?? 0,
-      included: hasExplicitSelection && product.mMarketInclusions.length > 0,
-    })),
+    items: products.map((product) => {
+      const included = hasExplicitSelection && product.mMarketInclusions.length > 0;
+      const lastExportedAt = product.mMarketInclusions[0]?.lastExportedAt ?? null;
+
+      return {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        category: product.category?.trim() || null,
+        imageUrl: resolveMMarketListImageUrl(product),
+        onHandQty: onHandByProductId.get(product.id) ?? 0,
+        included,
+        lastExportedAt,
+        exportStatus: resolveMMarketProductExportStatus({
+          included,
+          lastExportedAt,
+        }),
+      };
+    }),
     total,
     page,
     pageSize,
@@ -2686,11 +2830,12 @@ const runMMarketExportJob = async (
       payload: plan.payload,
     });
 
+    const exportedAt = new Date();
     const finished = await prisma.mMarketExportJob.update({
       where: { id: job.id },
       data: {
         status: MMarketExportJobStatus.DONE,
-        finishedAt: new Date(),
+        finishedAt: exportedAt,
         payloadStatsJson: toJson({
           ...plan.payloadStats,
           httpStatus: remoteResult.status,
@@ -2703,11 +2848,23 @@ const runMMarketExportJob = async (
       },
     });
 
+    if (plan.exportedProductIds.length > 0) {
+      await prisma.mMarketIncludedProduct.updateMany({
+        where: {
+          orgId: job.orgId,
+          productId: { in: plan.exportedProductIds },
+        },
+        data: {
+          lastExportedAt: exportedAt,
+        },
+      });
+    }
+
     await prisma.mMarketIntegration.updateMany({
       where: { orgId: job.orgId },
       data: {
         status: MMarketIntegrationStatus.READY,
-        lastSyncAt: new Date(),
+        lastSyncAt: exportedAt,
         lastSyncStatus: MMarketLastSyncStatus.SUCCESS,
         lastErrorSummary: null,
       },
@@ -2731,7 +2888,8 @@ const runMMarketExportJob = async (
       details: { jobId: finished.id, exportedProducts: plan.payload.products.length },
     };
   } catch (error) {
-    const message = resolveMMarketExportFailureReason(error);
+    const networkError = resolveMMarketNetworkError(error);
+    const message = resolveMMarketExportFailureReason(error, networkError);
 
     const remoteResponse: MMarketRemoteErrorResponse | null =
       error instanceof MMarketRemoteError
@@ -2752,13 +2910,15 @@ const runMMarketExportJob = async (
             payloadStats: plan.payloadStats,
             reason: message,
             remoteResponse,
+            networkError,
           })
         : {
             environment: job.environment,
             endpoint: MMARKET_IMPORT_ENDPOINTS[job.environment],
             requestIdempotencyKey: job.requestIdempotencyKey,
             reason: message,
-            remoteResponse: remoteResponse ?? undefined,
+            remoteResponse: remoteResponse ?? null,
+            networkError: networkError ?? null,
           },
     );
 

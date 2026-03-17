@@ -96,6 +96,7 @@ describe("m-market error report route", () => {
         selectedProducts: 58,
         payloadBytes: 43210,
       },
+      networkError: null,
       remoteResponse: {
         httpStatus: 400,
         body: {
@@ -123,6 +124,19 @@ describe("m-market error report route", () => {
         payloadBytes: 321,
         payload: {
           products: [{ sku: "SKU-1" }],
+        },
+        networkError: {
+          error: {
+            name: "TypeError",
+            message: "fetch failed",
+            code: null,
+          },
+          cause: {
+            name: "Error",
+            message: "socket hang up",
+            code: "ECONNRESET",
+          },
+          nested: [],
         },
         remoteResponse: {
           httpStatus: 422,
@@ -154,6 +168,19 @@ describe("m-market error report route", () => {
       payloadBytes: 321,
       payload: {
         products: [{ sku: "SKU-1" }],
+      },
+      networkError: {
+        error: {
+          name: "TypeError",
+          message: "fetch failed",
+          code: null,
+        },
+        cause: {
+          name: "Error",
+          message: "socket hang up",
+          code: "ECONNRESET",
+        },
+        nested: [],
       },
       remoteResponse: {
         httpStatus: 422,
@@ -195,6 +222,7 @@ describe("m-market error report route", () => {
     expect(payload).toMatchObject({
       jobId: "job-3",
       reason: "MMarket request timed out after 90s",
+      networkError: null,
       remoteResponse: null,
       payloadStats: {
         productCount: 2,

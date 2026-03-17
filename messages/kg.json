@@ -793,6 +793,7 @@
       "clearSelection": "Тандоону тазалоо",
       "includeSelected": "Тандалгандарды кошуу",
       "excludeSelected": "Тандалгандарды чыгаруу",
+      "statusExported": "Экспорттолгон",
       "statusIncluded": "Экспортто",
       "statusExcluded": "Чыгарылган",
       "rowInclude": "Кошуу",

@@ -82,4 +82,14 @@ describe("m-market payload builder", () => {
       "MMarket request timed out after 90s",
     );
   });
+
+  it("formats fetch failures using the network cause details", () => {
+    const cause = Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+    const error = new TypeError("fetch failed") as TypeError & { cause?: unknown };
+    error.cause = cause;
+
+    expect(__resolveMMarketExportFailureReasonForTests(error)).toBe(
+      "MMarket request failed: ECONNRESET socket hang up",
+    );
+  });
 });

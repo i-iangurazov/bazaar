@@ -100,6 +100,16 @@ const statusBadgeVariant = (status: MMarketExportJobStatus) => {
   return "muted" as const;
 };
 
+const productStatusBadgeVariant = (status: "EXCLUDED" | "INCLUDED" | "EXPORTED") => {
+  if (status === "EXPORTED") {
+    return "success" as const;
+  }
+  if (status === "INCLUDED") {
+    return "warning" as const;
+  }
+  return "muted" as const;
+};
+
 const MMarketSettingsPage = () => {
   const t = useTranslations("mMarketSettings");
   const tCommon = useTranslations("common");
@@ -116,7 +126,20 @@ const MMarketSettingsPage = () => {
   const canEdit = role === "ADMIN" || role === "MANAGER";
 
   const settingsQuery = trpc.mMarket.settings.useQuery(undefined, { enabled: canView });
-  const jobsQuery = trpc.mMarket.jobs.useQuery({ limit: 100 }, { enabled: canView });
+  const jobsQuery = trpc.mMarket.jobs.useQuery(
+    { limit: 100 },
+    {
+      enabled: canView,
+      refetchInterval: (data) =>
+        data?.some(
+          (job) =>
+            job.status === MMarketExportJobStatus.QUEUED ||
+            job.status === MMarketExportJobStatus.RUNNING,
+        )
+          ? 5_000
+          : false,
+    },
+  );
   const preflightQuery = trpc.mMarket.preflight.useQuery(undefined, {
     enabled: false,
     refetchOnWindowFocus: false,
@@ -331,6 +354,12 @@ const MMarketSettingsPage = () => {
   const [productsPage, setProductsPage] = useState(1);
   const [productsPageSize, setProductsPageSize] = useState(10);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const hasActiveExportJob =
+    jobsQuery.data?.some(
+      (job) =>
+        job.status === MMarketExportJobStatus.QUEUED ||
+        job.status === MMarketExportJobStatus.RUNNING,
+    ) ?? false;
 
   const productsQuery = trpc.mMarket.products.useQuery(
     {
@@ -342,6 +371,7 @@ const MMarketSettingsPage = () => {
     {
       enabled: canView,
       keepPreviousData: true,
+      refetchInterval: hasActiveExportJob ? 5_000 : false,
     },
   );
   const updateProductsMutation = trpc.mMarket.updateProducts.useMutation({
@@ -959,10 +989,12 @@ const MMarketSettingsPage = () => {
                             <TableCell>{product.category ?? "-"}</TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
                             <TableCell>
-                              <Badge variant={product.included ? "success" : "muted"}>
-                                {product.included
-                                  ? t("productsSelection.statusIncluded")
-                                  : t("productsSelection.statusExcluded")}
+                              <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
+                                {product.exportStatus === "EXPORTED"
+                                  ? t("productsSelection.statusExported")
+                                  : product.exportStatus === "INCLUDED"
+                                    ? t("productsSelection.statusIncluded")
+                                    : t("productsSelection.statusExcluded")}
                               </Badge>
                             </TableCell>
                             {canEdit ? (
@@ -1003,10 +1035,12 @@ const MMarketSettingsPage = () => {
                         <p className="text-xs text-muted-foreground">{product.sku}</p>
                       </div>
                     </div>
-                    <Badge variant={product.included ? "success" : "muted"}>
-                      {product.included
-                        ? t("productsSelection.statusIncluded")
-                        : t("productsSelection.statusExcluded")}
+                    <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
+                      {product.exportStatus === "EXPORTED"
+                        ? t("productsSelection.statusExported")
+                        : product.exportStatus === "INCLUDED"
+                          ? t("productsSelection.statusIncluded")
+                          : t("productsSelection.statusExcluded")}
                     </Badge>
                   </div>
                   <div className="mt-3 space-y-1 text-xs text-muted-foreground">

@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AttributeType, MMarketEnvironment, MMarketExportJobStatus } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { runJob } from "@/server/jobs";
 import {
   __buildMMarketExportPlanForTests,
   __resetMMarketCooldownForTests,
@@ -132,6 +133,10 @@ describeDb("m-market integration", () => {
     __resetMMarketCooldownForTests();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("blocks products when images are less than 3 or include non-direct extensions", async () => {
     const { org, product } = await prepareReadyMMarketData();
     const previousPlaceholder = process.env.MMARKET_PLACEHOLDER_IMAGE_URL;
@@ -191,6 +196,7 @@ describeDb("m-market integration", () => {
     });
 
     expect(list.items.find((row) => row.id === product.id)?.included).toBe(false);
+    expect(list.items.find((row) => row.id === product.id)?.exportStatus).toBe("EXCLUDED");
     expect(list.summary.includedProducts).toBe(0);
     expect(list.summary.excludedProducts).toBe(1);
   });
@@ -232,6 +238,7 @@ describeDb("m-market integration", () => {
     expect(initialList.summary.includedProducts).toBe(0);
     expect(initialList.summary.excludedProducts).toBe(2);
     expect(initialList.items.every((row) => !row.included)).toBe(true);
+    expect(initialList.items.every((row) => row.exportStatus === "EXCLUDED")).toBe(true);
     expect(initialPreflight.summary.productsConsidered).toBe(0);
     expect(initialPreflight.blockers.byCode.NO_PRODUCTS_SELECTED).toBe(1);
 
@@ -258,7 +265,11 @@ describeDb("m-market integration", () => {
     expect(nextList.summary.includedProducts).toBe(1);
     expect(nextList.summary.excludedProducts).toBe(1);
     expect(nextList.items.find((row) => row.id === product.id)?.included).toBe(true);
+    expect(nextList.items.find((row) => row.id === product.id)?.exportStatus).toBe("INCLUDED");
     expect(nextList.items.find((row) => row.id === secondProduct.id)?.included).toBe(false);
+    expect(nextList.items.find((row) => row.id === secondProduct.id)?.exportStatus).toBe(
+      "EXCLUDED",
+    );
   });
 
   it("lists only products that have at least one image", async () => {
@@ -451,6 +462,57 @@ describeDb("m-market integration", () => {
     expect(second.remainingSeconds).toBeGreaterThan(0);
   });
 
+  it("marks successfully exported products as exported in the products table", async () => {
+    const { org, adminUser, product } = await prepareReadyMMarketData();
+    const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+    delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const requested = await requestMMarketExport({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "export-success",
+      });
+
+      const result = await runJob("mmarket-export", { jobId: requested.job.id });
+      const list = await listMMarketProducts({
+        organizationId: org.id,
+        page: 1,
+        pageSize: 25,
+      });
+      const inclusion = await prisma.mMarketIncludedProduct.findUnique({
+        where: {
+          orgId_productId: {
+            orgId: org.id,
+            productId: product.id,
+          },
+        },
+        select: {
+          lastExportedAt: true,
+        },
+      });
+
+      expect(result.status).toBe("ok");
+      expect(fetchMock).toHaveBeenCalled();
+      expect(inclusion?.lastExportedAt).toBeInstanceOf(Date);
+      expect(list.items.find((row) => row.id === product.id)?.exportStatus).toBe("EXPORTED");
+    } finally {
+      if (previousSpecsEndpoint === undefined) {
+        delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+      } else {
+        process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV = previousSpecsEndpoint;
+      }
+    }
+  });
+
   it("builds stock payload with mapped branch_id values", async () => {
     const { org } = await prepareReadyMMarketData();
 
@@ -463,6 +525,7 @@ describeDb("m-market integration", () => {
       environment: "DEV",
       endpoint: "https://dev.m-market.kg/api/crm/products/import_products/",
       payloadBytes,
+      networkError: null,
       payloadStats: {
         productCount: 1,
         selectedProducts: 1,

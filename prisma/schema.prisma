@@ -600,6 +600,7 @@ model MMarketIncludedProduct {
   orgId     String
   productId String
   createdAt DateTime @default(now())
+  lastExportedAt DateTime?
   updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])

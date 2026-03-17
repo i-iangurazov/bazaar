@@ -793,6 +793,7 @@
       "clearSelection": "Снять выделение",
       "includeSelected": "Включить выбранные",
       "excludeSelected": "Исключить выбранные",
+      "statusExported": "Экспортирован",
       "statusIncluded": "В экспорте",
       "statusExcluded": "Исключен",
       "rowInclude": "Включить",
