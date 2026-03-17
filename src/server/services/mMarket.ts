@@ -858,17 +858,15 @@ const resolveMMarketNetworkError = (error: unknown): MMarketNetworkErrorDetails 
   }
 
   const baseError = error as Error & { cause?: unknown };
+  const isFetchFailure = baseError.name === "TypeError" && baseError.message === "fetch failed";
+  if (!isFetchFailure) {
+    return null;
+  }
+
   const errorDiagnostic = toNetworkDiagnostic(baseError);
   const causeValue = baseError.cause;
   const causeDiagnostic = toNetworkDiagnostic(causeValue);
   const nestedDiagnostics = toNestedDiagnostics(causeValue);
-  const hasSpecificNetworkSignal = Boolean(
-    errorDiagnostic?.code || causeDiagnostic?.code || causeDiagnostic?.message || nestedDiagnostics.length > 0,
-  );
-
-  if (!hasSpecificNetworkSignal && baseError.message !== "fetch failed") {
-    return null;
-  }
 
   return {
     error: errorDiagnostic ?? {

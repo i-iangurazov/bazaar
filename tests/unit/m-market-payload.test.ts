@@ -92,4 +92,20 @@ describe("m-market payload builder", () => {
       "MMarket request failed: ECONNRESET socket hang up",
     );
   });
+
+  it("does not classify prisma connectivity errors as mmarket network failures", () => {
+    const error = Object.assign(
+      new Error(
+        "Invalid `prisma.mMarketBranchMapping.findMany()` invocation:\n\n\nCan't reach database server at `db.example:5432`",
+      ),
+      {
+        code: "P1001",
+        name: "PrismaClientKnownRequestError",
+      },
+    );
+
+    expect(__resolveMMarketExportFailureReasonForTests(error)).toBe(
+      "Invalid `prisma.mMarketBranchMapping.findMany()` invocation:\n\n\nCan't reach database server at `db.example:5432`",
+    );
+  });
 });
