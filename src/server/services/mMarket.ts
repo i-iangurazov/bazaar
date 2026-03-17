@@ -33,7 +33,7 @@ const MMARKET_SPECS_ENDPOINTS: Partial<Record<MMarketEnvironment, string>> = {
 const MMARKET_EXPORT_LOCK_PREFIX = "mmarket:export:";
 const MMARKET_EXPORT_COOLDOWN_MS = 15 * 60 * 1000;
 const MMARKET_EXPORT_JOB_NAME = "mmarket-export";
-const MMARKET_REQUEST_TIMEOUT_MS = 30_000;
+const MMARKET_REQUEST_TIMEOUT_MS = 90_000;
 const MMARKET_SPEC_REQUEST_TIMEOUT_MS = 5_000;
 
 const MMARKET_MIN_NAME_LEN = 7;
@@ -766,11 +766,30 @@ export const buildMMarketPayload = (products: MMarketPayloadProduct[]): MMarketP
     }),
 });
 
+const getPayloadBytes = (payload: MMarketPayload) => Buffer.byteLength(JSON.stringify(payload), "utf8");
+
+const isAbortError = (error: unknown): error is Error =>
+  error instanceof Error && error.name === "AbortError";
+
+const resolveMMarketExportFailureReason = (error: unknown) => {
+  if (error instanceof AppError) {
+    return error.message;
+  }
+  if (isAbortError(error)) {
+    return `MMarket request timed out after ${Math.round(MMARKET_REQUEST_TIMEOUT_MS / 1_000)}s`;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "mMarketExportFailed";
+};
+
 const buildMMarketErrorReport = (input: {
   environment: MMarketEnvironment;
   requestIdempotencyKey?: string;
   preflight: MMarketPreflightResult;
   payload: MMarketPayload;
+  payloadBytes: number;
   payloadStats: Record<string, unknown>;
   reason?: string;
   remoteResponse?: MMarketRemoteErrorResponse | null;
@@ -780,6 +799,7 @@ const buildMMarketErrorReport = (input: {
   endpoint: MMARKET_IMPORT_ENDPOINTS[input.environment],
   requestIdempotencyKey: input.requestIdempotencyKey,
   reason: input.reason,
+  payloadBytes: input.payloadBytes,
   summary: input.preflight.summary,
   blockers: input.preflight.blockers,
   warnings: input.preflight.warnings,
@@ -787,7 +807,7 @@ const buildMMarketErrorReport = (input: {
   payloadStats: input.payloadStats,
   payload: input.payload,
   specValidationMode: input.preflight.specValidationMode,
-  remoteResponse: input.remoteResponse ?? undefined,
+  remoteResponse: input.remoteResponse ?? null,
 });
 
 const buildMMarketExportPlan = async (input: {
@@ -1138,6 +1158,7 @@ const buildMMarketExportPlan = async (input: {
     specValidationMode: remoteSpecCatalog.mode,
   };
 
+  const payloadBytes = getPayloadBytes(payload);
   const payloadStats = {
     productCount: payload.products.length,
     selectedProducts: activeIncludedCount,
@@ -1146,6 +1167,7 @@ const buildMMarketExportPlan = async (input: {
     failedProducts: failedProducts.length,
     warningCount: preflight.warnings.total,
     consideredProducts: products.length,
+    payloadBytes,
   };
 
   return {
@@ -1156,6 +1178,7 @@ const buildMMarketExportPlan = async (input: {
       environment: input.environment,
       preflight,
       payload,
+      payloadBytes,
       payloadStats,
     }),
   };
@@ -1208,13 +1231,14 @@ const sendMMarketPayload = async (input: {
   const timeout = setTimeout(() => controller.abort(), MMARKET_REQUEST_TIMEOUT_MS);
 
   try {
+    const payloadJson = JSON.stringify(input.payload);
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Token ${input.token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(input.payload),
+      body: payloadJson,
       signal: controller.signal,
     });
     const raw = await response.text();
@@ -2707,12 +2731,7 @@ const runMMarketExportJob = async (
       details: { jobId: finished.id, exportedProducts: plan.payload.products.length },
     };
   } catch (error) {
-    const message =
-      error instanceof AppError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "mMarketExportFailed";
+    const message = resolveMMarketExportFailureReason(error);
 
     const remoteResponse: MMarketRemoteErrorResponse | null =
       error instanceof MMarketRemoteError
@@ -2729,6 +2748,7 @@ const runMMarketExportJob = async (
             requestIdempotencyKey: job.requestIdempotencyKey,
             preflight: plan.preflight,
             payload: plan.payload,
+            payloadBytes: getPayloadBytes(plan.payload),
             payloadStats: plan.payloadStats,
             reason: message,
             remoteResponse,
@@ -2811,4 +2831,11 @@ export const __buildMMarketExportPlanForTests = async (organizationId: string) =
     environment: integration?.environment ?? MMarketEnvironment.DEV,
     token,
   });
+};
+
+export const __resolveMMarketExportFailureReasonForTests = (error: unknown) => {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("testOnly");
+  }
+  return resolveMMarketExportFailureReason(error);
 };

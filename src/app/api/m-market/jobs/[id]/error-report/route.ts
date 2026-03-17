@@ -54,6 +54,7 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
 
   const fileName = `mmarket-export-error-${job.id}.json`;
   const existingReport = asRecord(job.errorReportJson) ?? {};
+  const payloadStats = asRecord(job.payloadStatsJson);
   const report = {
     ...existingReport,
     ...(hasOwn(existingReport, "jobId") ? {} : { jobId: job.id }),
@@ -64,12 +65,15 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
     ...(hasOwn(existingReport, "requestIdempotencyKey")
       ? {}
       : { requestIdempotencyKey: job.requestIdempotencyKey }),
+    ...(hasOwn(existingReport, "payloadBytes") || typeof payloadStats?.payloadBytes !== "number"
+      ? {}
+      : { payloadBytes: payloadStats.payloadBytes }),
     ...(hasOwn(existingReport, "payloadStats") || !job.payloadStatsJson
       ? {}
       : { payloadStats: job.payloadStatsJson }),
-    ...(hasOwn(existingReport, "remoteResponse") || !job.responseJson
+    ...(hasOwn(existingReport, "remoteResponse")
       ? {}
-      : { remoteResponse: job.responseJson }),
+      : { remoteResponse: job.responseJson ?? null }),
   };
   const body = `${JSON.stringify(report, null, 2)}\n`;
 

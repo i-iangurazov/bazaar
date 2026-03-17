@@ -456,14 +456,17 @@ describeDb("m-market integration", () => {
 
     const plan = await __buildMMarketExportPlanForTests(org.id);
     const firstProduct = plan.payload.products[0];
+    const payloadBytes = Buffer.byteLength(JSON.stringify(plan.payload), "utf8");
 
     expect(plan.preflight.canExport).toBe(true);
     expect(plan.errorReport).toMatchObject({
       environment: "DEV",
       endpoint: "https://dev.m-market.kg/api/crm/products/import_products/",
+      payloadBytes,
       payloadStats: {
         productCount: 1,
         selectedProducts: 1,
+        payloadBytes,
       },
       payload: {
         products: [

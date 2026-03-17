@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildMMarketPayload } from "@/server/services/mMarket";
+import {
+  __resolveMMarketExportFailureReasonForTests,
+  buildMMarketPayload,
+} from "@/server/services/mMarket";
 
 describe("m-market payload builder", () => {
   it("returns stable JSON shape and omits optional null fields", () => {
@@ -69,5 +72,14 @@ describe("m-market payload builder", () => {
         },
       ],
     });
+  });
+
+  it("formats abort errors as explicit timeout messages", () => {
+    const error = new Error("This operation was aborted");
+    error.name = "AbortError";
+
+    expect(__resolveMMarketExportFailureReasonForTests(error)).toBe(
+      "MMarket request timed out after 90s",
+    );
   });
 });

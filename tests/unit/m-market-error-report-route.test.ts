@@ -65,6 +65,7 @@ describe("m-market error report route", () => {
       payloadStatsJson: {
         productCount: 58,
         selectedProducts: 58,
+        payloadBytes: 43210,
       },
       responseJson: {
         httpStatus: 400,
@@ -89,9 +90,11 @@ describe("m-market error report route", () => {
       environment: "PROD",
       endpoint: "https://market.mbank.kg/api/crm/products/import_products/",
       requestIdempotencyKey: "req-1",
+      payloadBytes: 43210,
       payloadStats: {
         productCount: 58,
         selectedProducts: 58,
+        payloadBytes: 43210,
       },
       remoteResponse: {
         httpStatus: 400,
@@ -117,6 +120,7 @@ describe("m-market error report route", () => {
         endpoint: "https://dev.m-market.kg/api/crm/products/import_products/",
         requestIdempotencyKey: "req-2",
         reason: "mMarketRemoteRejected",
+        payloadBytes: 321,
         payload: {
           products: [{ sku: "SKU-1" }],
         },
@@ -129,6 +133,7 @@ describe("m-market error report route", () => {
       },
       payloadStatsJson: {
         productCount: 1,
+        payloadBytes: 999,
       },
       responseJson: {
         httpStatus: 400,
@@ -146,6 +151,7 @@ describe("m-market error report route", () => {
 
     const payload = JSON.parse(await response.text());
     expect(payload).toMatchObject({
+      payloadBytes: 321,
       payload: {
         products: [{ sku: "SKU-1" }],
       },
@@ -157,6 +163,42 @@ describe("m-market error report route", () => {
       },
       payloadStats: {
         productCount: 1,
+        payloadBytes: 999,
+      },
+    });
+  });
+
+  it("returns remoteResponse as null when MMarket did not reply", async () => {
+    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
+    prisma.mMarketExportJob.findFirst.mockResolvedValue({
+      id: "job-3",
+      environment: "DEV",
+      requestIdempotencyKey: "req-3",
+      errorReportJson: {
+        reason: "MMarket request timed out after 90s",
+        payloadBytes: 1234,
+      },
+      payloadStatsJson: {
+        productCount: 2,
+        payloadBytes: 1234,
+      },
+      responseJson: null,
+    });
+
+    const response = await mMarketErrorReportGet(new Request("http://localhost"), {
+      params: { id: "job-3" },
+    });
+
+    expect(response.status).toBe(200);
+
+    const payload = JSON.parse(await response.text());
+    expect(payload).toMatchObject({
+      jobId: "job-3",
+      reason: "MMarket request timed out after 90s",
+      remoteResponse: null,
+      payloadStats: {
+        productCount: 2,
+        payloadBytes: 1234,
       },
     });
   });
