@@ -989,13 +989,20 @@ const MMarketSettingsPage = () => {
                             <TableCell>{product.category ?? "-"}</TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
                             <TableCell>
-                              <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
-                                {product.exportStatus === "EXPORTED"
-                                  ? t("productsSelection.statusExported")
-                                  : product.exportStatus === "INCLUDED"
+                              <div className="space-y-1">
+                                <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
+                                  {product.included
                                     ? t("productsSelection.statusIncluded")
                                     : t("productsSelection.statusExcluded")}
-                              </Badge>
+                                </Badge>
+                                {product.lastExportedAt ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {t("productsSelection.lastExportedAt", {
+                                      date: formatDateTime(product.lastExportedAt, locale),
+                                    })}
+                                  </p>
+                                ) : null}
+                              </div>
                             </TableCell>
                             {canEdit ? (
                               <TableCell>
@@ -1035,13 +1042,20 @@ const MMarketSettingsPage = () => {
                         <p className="text-xs text-muted-foreground">{product.sku}</p>
                       </div>
                     </div>
-                    <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
-                      {product.exportStatus === "EXPORTED"
-                        ? t("productsSelection.statusExported")
-                        : product.exportStatus === "INCLUDED"
+                    <div className="text-right">
+                      <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
+                        {product.included
                           ? t("productsSelection.statusIncluded")
                           : t("productsSelection.statusExcluded")}
-                    </Badge>
+                      </Badge>
+                      {product.lastExportedAt ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t("productsSelection.lastExportedAt", {
+                            date: formatDateTime(product.lastExportedAt, locale),
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                     <p>
