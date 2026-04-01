@@ -719,6 +719,7 @@ model Product {
   sku            String
   name           String
   category       String?
+  categories     String[] @default([])
   unit           String
   baseUnitId     String
   basePriceKgs   Decimal? @db.Decimal(12, 2)

@@ -63,6 +63,7 @@ export type ProductFormValues = {
   name: string;
   isBundle?: boolean;
   category?: string;
+  categories?: string[];
   baseUnitId: string;
   basePriceKgs?: number;
   purchasePriceKgs?: number;
@@ -158,6 +159,11 @@ const isPhotoUrlValid = (value?: string | null) => {
   } catch {
     return false;
   }
+};
+
+const normalizeCategoryName = (value?: string | null) => {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized ? normalized : null;
 };
 
 const replaceFileExtension = (fileName: string, extension: string) => {
@@ -344,7 +350,7 @@ export const ProductForm = ({
         sku: z.string(),
         name: z.string().min(2, t("nameRequired")),
         isBundle: z.boolean().optional(),
-        category: z.string().optional(),
+        categories: z.array(z.string()).optional(),
         baseUnitId: z.string().min(1, t("unitRequired")),
         basePriceKgs: optionalPrice,
         purchasePriceKgs: optionalPrice,
@@ -453,7 +459,9 @@ export const ProductForm = ({
       sku: initialValues.sku,
       name: initialValues.name,
       isBundle: initialValues.isBundle ?? false,
-      category: initialValues.category ?? "",
+      categories:
+        initialValues.categories ??
+        (initialValues.category?.trim() ? [initialValues.category.trim()] : []),
       baseUnitId: initialValues.baseUnitId,
       basePriceKgs: initialValues.basePriceKgs ?? undefined,
       purchasePriceKgs: initialValues.purchasePriceKgs ?? undefined,
@@ -498,29 +506,63 @@ export const ProductForm = ({
     }
   }, [form, unitOptions]);
 
-  const categoryValue = form.watch("category");
-  const emptyCategoryOptionValue = "__category_none__";
+  const watchedCategoryValues = useWatch({ control: form.control, name: "categories" });
+  const categoryValues = useMemo(() => watchedCategoryValues ?? [], [watchedCategoryValues]);
+  const primaryCategoryValue = categoryValues[0]?.trim() ?? "";
   const categoryOptionsQuery = trpc.productCategories.list.useQuery(undefined, {
     enabled: !readOnly,
   });
   const templateQuery = trpc.categoryTemplates.list.useQuery(
-    { category: categoryValue?.trim() || "" },
-    { enabled: !readOnly && Boolean(categoryValue?.trim()) },
+    { category: primaryCategoryValue },
+    { enabled: !readOnly && Boolean(primaryCategoryValue) },
   );
   const categoryOptions = useMemo(() => {
     const categories = new Set<string>();
     (categoryOptionsQuery.data ?? []).forEach((value) => {
-      const normalized = value.trim();
+      const normalized = normalizeCategoryName(value);
       if (normalized) {
         categories.add(normalized);
       }
     });
-    const selected = categoryValue?.trim();
-    if (selected) {
-      categories.add(selected);
-    }
+    categoryValues.forEach((value) => {
+      const normalized = normalizeCategoryName(value);
+      if (normalized) {
+        categories.add(normalized);
+      }
+    });
     return Array.from(categories).sort((a, b) => a.localeCompare(b));
-  }, [categoryOptionsQuery.data, categoryValue]);
+  }, [categoryOptionsQuery.data, categoryValues]);
+  const suggestedCategoryOptions = useMemo(
+    () => categoryOptions.filter((value) => !categoryValues.includes(value)),
+    [categoryOptions, categoryValues],
+  );
+  const setProductCategories = (values: string[]) => {
+    form.setValue("categories", values, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  };
+  const addProductCategory = (rawValue: string) => {
+    const normalized = normalizeCategoryName(rawValue);
+    if (!normalized) {
+      return false;
+    }
+    if (categoryValues.includes(normalized)) {
+      return true;
+    }
+    setProductCategories([...categoryValues, normalized]);
+    return true;
+  };
+  const removeProductCategory = (value: string) => {
+    setProductCategories(categoryValues.filter((item) => item !== value));
+  };
+  const promoteProductCategory = (value: string) => {
+    if (!categoryValues.includes(value) || categoryValues[0] === value) {
+      return;
+    }
+    setProductCategories([value, ...categoryValues.filter((item) => item !== value)]);
+  };
   const templateKeys = useMemo(() => {
     return (templateQuery.data ?? [])
       .slice()
@@ -599,6 +641,7 @@ export const ProductForm = ({
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [categoryDraft, setCategoryDraft] = useState("");
   const [barcodeGenerateMode, setBarcodeGenerateMode] = useState<"EAN13" | "CODE128">("EAN13");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(() =>
@@ -1933,7 +1976,8 @@ export const ProductForm = ({
       sku: values.sku.trim(),
       name: values.name.trim(),
       isBundle: Boolean(values.isBundle),
-      category: values.category?.trim() || undefined,
+      category: categoryValues[0],
+      categories: categoryValues,
       baseUnitId: values.baseUnitId,
       basePriceKgs: Number.isFinite(values.basePriceKgs ?? NaN) ? values.basePriceKgs : undefined,
       purchasePriceKgs: Number.isFinite(values.purchasePriceKgs ?? NaN)
@@ -2277,33 +2321,102 @@ export const ProductForm = ({
                     />
                     <FormField
                       control={form.control}
-                      name="category"
-                      render={({ field }) => (
+                      name="categories"
+                      render={() => (
                         <FormItem>
                           <FormLabel>{t("category")}</FormLabel>
-                          <FormControl>
-                            <Select
-                              value={field.value?.trim() || emptyCategoryOptionValue}
-                              onValueChange={(value) =>
-                                field.onChange(value === emptyCategoryOptionValue ? "" : value)
-                              }
-                              disabled={readOnly}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder={t("categoryPlaceholder")} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={emptyCategoryOptionValue}>
+                          <div className="space-y-3">
+                            <div className="flex min-h-10 flex-wrap gap-2 rounded-md border border-border bg-muted/20 p-2">
+                              {categoryValues.length ? (
+                                categoryValues.map((value, index) => (
+                                  <div
+                                    key={value}
+                                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground"
+                                  >
+                                    <span>{value}</span>
+                                    {index === 0 ? (
+                                      <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                        {t("categoryPrimaryBadge")}
+                                      </span>
+                                    ) : null}
+                                    {!readOnly && index > 0 ? (
+                                      <button
+                                        type="button"
+                                        className="rounded p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                        onClick={() => promoteProductCategory(value)}
+                                        aria-label={t("categoryPromote")}
+                                      >
+                                        <ArrowUpIcon className="h-3 w-3" aria-hidden />
+                                      </button>
+                                    ) : null}
+                                    {!readOnly ? (
+                                      <button
+                                        type="button"
+                                        className="rounded p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                        onClick={() => removeProductCategory(value)}
+                                        aria-label={tCommon("delete")}
+                                      >
+                                        <CloseIcon className="h-3 w-3" aria-hidden />
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
                                   {tCommon("notAvailable")}
-                                </SelectItem>
-                                {categoryOptions.map((value) => (
-                                  <SelectItem key={value} value={value}>
-                                    {value}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
+                                </span>
+                              )}
+                            </div>
+                            {!readOnly ? (
+                              <>
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                  <Input
+                                    value={categoryDraft}
+                                    onChange={(event) => setCategoryDraft(event.target.value)}
+                                    placeholder={t("categoryPlaceholder")}
+                                    onKeyDown={(event) => {
+                                      if (event.key !== "Enter") {
+                                        return;
+                                      }
+                                      event.preventDefault();
+                                      if (addProductCategory(categoryDraft)) {
+                                        setCategoryDraft("");
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => {
+                                      if (addProductCategory(categoryDraft)) {
+                                        setCategoryDraft("");
+                                      }
+                                    }}
+                                  >
+                                    <AddIcon className="h-4 w-4" aria-hidden />
+                                    {t("categoryAdd")}
+                                  </Button>
+                                </div>
+                                {suggestedCategoryOptions.length ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {suggestedCategoryOptions.map((value) => (
+                                      <Button
+                                        key={value}
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-auto rounded-full border border-dashed border-border px-3 py-1.5 text-xs"
+                                        onClick={() => addProductCategory(value)}
+                                      >
+                                        <AddIcon className="h-3 w-3" aria-hidden />
+                                        {value}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </div>
                           <FormDescription>{t("categoryHint")}</FormDescription>
                           <FormMessage />
                         </FormItem>

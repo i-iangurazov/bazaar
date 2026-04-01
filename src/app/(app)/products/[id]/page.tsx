@@ -300,6 +300,12 @@ const ProductDetailPage = () => {
       name: productQuery.data.name,
       isBundle: productQuery.data.isBundle,
       category: productQuery.data.category ?? "",
+      categories:
+        productQuery.data.categories?.length
+          ? productQuery.data.categories
+          : productQuery.data.category
+            ? [productQuery.data.category]
+            : [],
       baseUnitId: productQuery.data.baseUnitId,
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
       purchasePriceKgs: productQuery.data.purchasePriceKgs ?? undefined,
@@ -571,9 +577,16 @@ const ProductDetailPage = () => {
               <Badge variant="muted">
                 {productQuery.data.isBundle ? t("typeBundle") : t("typeProduct")}
               </Badge>
-              {productQuery.data.category ? (
-                <Badge variant="muted">{productQuery.data.category}</Badge>
-              ) : null}
+              {(productQuery.data.categories?.length
+                ? productQuery.data.categories
+                : productQuery.data.category
+                  ? [productQuery.data.category]
+                  : []
+              ).map((category) => (
+                <Badge key={category} variant="muted">
+                  {category}
+                </Badge>
+              ))}
               <Badge variant="muted">{productQuery.data.baseUnit.code}</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">

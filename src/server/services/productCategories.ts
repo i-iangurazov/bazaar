@@ -10,6 +10,22 @@ export const normalizeProductCategoryName = (value?: string | null) => {
   return normalized ? normalized : null;
 };
 
+export const normalizeProductCategoryNames = (values?: Array<string | null | undefined>) => {
+  const seen = new Set<string>();
+  const categories: string[] = [];
+  for (const value of values ?? []) {
+    const normalized = normalizeProductCategoryName(value);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    categories.push(normalized);
+  }
+  return categories;
+};
+
+export const resolvePrimaryProductCategory = (categories: string[]) => categories[0] ?? null;
+
 export const listProductCategories = async (organizationId: string) => {
   const [savedCategories, productCategories, templateCategories] = await Promise.all([
     prisma.productCategory.findMany({
@@ -18,9 +34,8 @@ export const listProductCategories = async (organizationId: string) => {
       orderBy: { name: "asc" },
     }),
     prisma.product.findMany({
-      where: { organizationId, category: { not: null } },
-      select: { category: true },
-      distinct: ["category"],
+      where: { organizationId },
+      select: { category: true, categories: true },
     }),
     prisma.categoryAttributeTemplate.findMany({
       where: { organizationId },
@@ -40,6 +55,9 @@ export const listProductCategories = async (organizationId: string) => {
     const normalized = normalizeProductCategoryName(item.category);
     if (normalized) {
       categories.add(normalized);
+    }
+    for (const value of normalizeProductCategoryNames(item.categories)) {
+      categories.add(value);
     }
   });
   templateCategories.forEach((item) => {
@@ -156,7 +174,7 @@ export const removeProductCategory = async (input: {
       tx.product.count({
         where: {
           organizationId: input.organizationId,
-          category: normalized,
+          OR: [{ category: normalized }, { categories: { has: normalized } }],
         },
       }),
       tx.categoryAttributeTemplate.count({

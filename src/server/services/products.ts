@@ -13,7 +13,9 @@ import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import {
   ensureProductCategory,
+  normalizeProductCategoryNames,
   normalizeProductCategoryName,
+  resolvePrimaryProductCategory,
 } from "@/server/services/productCategories";
 import {
   isManagedProductImageUrl,
@@ -30,6 +32,7 @@ export type CreateProductInput = {
   sku?: string | null;
   name: string;
   category?: string | null;
+  categories?: string[] | null;
   baseUnitId: string;
   basePriceKgs?: number | null;
   purchasePriceKgs?: number | null;
@@ -69,6 +72,22 @@ const GENERATED_SKU_PREFIX = "SKU-";
 const GENERATED_SKU_PAD_LENGTH = 6;
 const GENERATED_SKU_MAX_PROBES = 10_000;
 const GENERATED_SKU_MAX_RETRIES = 5;
+
+const resolveNormalizedProductCategories = (input: {
+  category?: string | null;
+  categories?: Array<string | null | undefined> | null;
+}) => {
+  if (input.categories !== undefined) {
+    return normalizeProductCategoryNames([
+      normalizeProductCategoryName(input.category),
+      ...(input.categories ?? []),
+    ]);
+  }
+  return normalizeProductCategoryNames([input.category]);
+};
+
+const areProductCategoryListsEqual = (left: string[], right: string[]) =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
 
 const formatGeneratedSku = (sequence: number) =>
   `${GENERATED_SKU_PREFIX}${String(sequence).padStart(GENERATED_SKU_PAD_LENGTH, "0")}`;
@@ -778,11 +797,14 @@ export const createProduct = async (input: CreateProductInput) => {
         .filter(Boolean) as string[];
       await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
       const normalizedImages = resolvedMedia.images;
-      const normalizedCategory = normalizeProductCategoryName(input.category);
-      if (normalizedCategory) {
+      const normalizedCategories = resolveNormalizedProductCategories({
+        category: input.category,
+        categories: input.categories,
+      });
+      for (const category of normalizedCategories) {
         await ensureProductCategory(tx, {
           organizationId: input.organizationId,
-          name: normalizedCategory,
+          name: category,
         });
       }
       if (input.isBundle && normalizedBundleComponents.length < 1) {
@@ -800,7 +822,8 @@ export const createProduct = async (input: CreateProductInput) => {
           organizationId: input.organizationId,
           sku: resolvedSku,
           name: input.name,
-          category: normalizedCategory,
+          category: resolvePrimaryProductCategory(normalizedCategories),
+          categories: normalizedCategories,
           unit: baseUnit.code,
           baseUnitId: baseUnit.id,
           basePriceKgs: input.basePriceKgs ?? null,
@@ -917,6 +940,7 @@ export type UpdateProductInput = {
   sku: string;
   name: string;
   category?: string | null;
+  categories?: string[] | null;
   baseUnitId: string;
   basePriceKgs?: number | null;
   purchasePriceKgs?: number | null;
@@ -977,11 +1001,14 @@ export const updateProduct = async (input: UpdateProductInput) => {
     }
 
     const normalizedImages = input.images ? resolvedMedia.images : undefined;
-    const normalizedCategory = normalizeProductCategoryName(input.category);
-    if (normalizedCategory) {
+    const normalizedCategories = resolveNormalizedProductCategories({
+      category: input.category,
+      categories: input.categories,
+    });
+    for (const category of normalizedCategories) {
       await ensureProductCategory(tx, {
         organizationId: input.organizationId,
-        name: normalizedCategory,
+        name: category,
       });
     }
     const nextIsBundle = input.isBundle ?? before.isBundle;
@@ -998,7 +1025,8 @@ export const updateProduct = async (input: UpdateProductInput) => {
       data: {
         sku: input.sku,
         name: input.name,
-        category: normalizedCategory,
+        category: resolvePrimaryProductCategory(normalizedCategories),
+        categories: normalizedCategories,
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
         basePriceKgs: input.basePriceKgs ?? null,
@@ -1247,6 +1275,11 @@ export const duplicateProduct = async (input: {
         sku: nextSku,
         name: source.name,
         category: source.category,
+        categories: source.categories.length
+          ? source.categories
+          : source.category
+            ? [source.category]
+            : [],
         unit: source.unit,
         baseUnitId: source.baseUnitId,
         basePriceKgs: source.basePriceKgs,
@@ -1446,31 +1479,36 @@ export const bulkGenerateProductBarcodes = async (input: {
       }
     }
 
+    const filters: Prisma.ProductWhereInput[] = [];
+    if (search) {
+      filters.push({
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { sku: { contains: search, mode: "insensitive" } },
+        ],
+      });
+    }
+    if (category) {
+      filters.push({ OR: [{ category }, { categories: { has: category } }] });
+    }
+    if (input.filter?.type === "product") {
+      filters.push({ isBundle: false });
+    } else if (input.filter?.type === "bundle") {
+      filters.push({ isBundle: true });
+    }
+    if (input.filter?.storeId) {
+      filters.push({
+        inventorySnapshots: {
+          some: { storeId: input.filter.storeId },
+        },
+      });
+    }
+
     const where: Prisma.ProductWhereInput = {
       organizationId: input.organizationId,
       ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
       ...(uniqueProductIds.length ? { id: { in: uniqueProductIds } } : {}),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { sku: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(category ? { category } : {}),
-      ...(input.filter?.type === "product"
-        ? { isBundle: false }
-        : input.filter?.type === "bundle"
-          ? { isBundle: true }
-          : {}),
-      ...(input.filter?.storeId
-        ? {
-            inventorySnapshots: {
-              some: { storeId: input.filter.storeId },
-            },
-          }
-        : {}),
+      ...(filters.length ? { AND: filters } : {}),
     };
 
     const products = await tx.product.findMany({
@@ -1682,6 +1720,7 @@ export const bulkUpdateProductCategory = async (input: {
   requestId: string;
   productIds: string[];
   category?: string | null;
+  mode?: "add" | "setPrimary" | "replace";
 }) =>
   prisma.$transaction(async (tx) => {
     if (!input.productIds.length) {
@@ -1690,7 +1729,7 @@ export const bulkUpdateProductCategory = async (input: {
 
     const products = await tx.product.findMany({
       where: { organizationId: input.organizationId, id: { in: input.productIds } },
-      select: { id: true, category: true },
+      select: { id: true, category: true, categories: true },
     });
 
     if (!products.length) {
@@ -1704,27 +1743,70 @@ export const bulkUpdateProductCategory = async (input: {
         name: nextCategory,
       });
     }
-    await tx.product.updateMany({
-      where: { organizationId: input.organizationId, id: { in: input.productIds } },
-      data: { category: nextCategory },
-    });
+    const mode = input.mode ?? "add";
+    let updated = 0;
 
-    await Promise.all(
-      products.map((product) =>
-        writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "PRODUCT_UPDATE",
-          entity: "Product",
-          entityId: product.id,
-          before: toJson({ id: product.id, category: product.category }),
-          after: toJson({ id: product.id, category: nextCategory }),
-          requestId: input.requestId,
+    for (const product of products) {
+      const currentCategories = normalizeProductCategoryNames([
+        product.category,
+        ...product.categories,
+      ]);
+      let nextCategories: string[];
+
+      if (!nextCategory) {
+        nextCategories = [];
+      } else if (mode === "replace") {
+        nextCategories = [nextCategory];
+      } else if (mode === "setPrimary") {
+        nextCategories = [
+          nextCategory,
+          ...currentCategories.filter((category) => category !== nextCategory),
+        ];
+      } else {
+        nextCategories = currentCategories.includes(nextCategory)
+          ? currentCategories
+          : [...currentCategories, nextCategory];
+      }
+
+      const nextPrimaryCategory = resolvePrimaryProductCategory(nextCategories);
+      if (
+        product.category === nextPrimaryCategory &&
+        areProductCategoryListsEqual(product.categories, nextCategories)
+      ) {
+        continue;
+      }
+
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          category: nextPrimaryCategory,
+          categories: nextCategories,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_UPDATE",
+        entity: "Product",
+        entityId: product.id,
+        before: toJson({
+          id: product.id,
+          category: product.category,
+          categories: product.categories,
         }),
-      ),
-    );
+        after: toJson({
+          id: product.id,
+          category: nextPrimaryCategory,
+          categories: nextCategories,
+        }),
+        requestId: input.requestId,
+      });
 
-    return { updated: products.length };
+      updated += 1;
+    }
+
+    return { updated };
   });
 
 export type ImportProductRow = {
@@ -2043,6 +2125,12 @@ export const importProductsTx = async (
       ? resolveOptionalInteger(row.minStock)
       : undefined;
     const resolvedBaseCost = avgCostKgs ?? purchasePriceKgs;
+    const normalizedRowCategories = normalizeProductCategoryNames(
+      (row.category ?? "")
+        .split("|")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    );
     const unitCode = row.unit?.trim() ?? "";
     const baseUnit =
       shouldApplyField("unit") && unitCode
@@ -2055,6 +2143,14 @@ export const importProductsTx = async (
     if (shouldApplyField("barcodes")) {
       await ensureBarcodesAvailable(tx, input.organizationId, barcodes, existing?.id);
     }
+    if (shouldApplyField("category")) {
+      for (const category of normalizedRowCategories) {
+        await ensureProductCategory(tx, {
+          organizationId: input.organizationId,
+          name: category,
+        });
+      }
+    }
 
     if (existing) {
       const updateData: Prisma.ProductUpdateInput = {};
@@ -2063,7 +2159,8 @@ export const importProductsTx = async (
           updateData.name = row.name.trim();
         }
         if (shouldApplyField("category")) {
-          updateData.category = row.category ?? null;
+          updateData.category = resolvePrimaryProductCategory(normalizedRowCategories);
+          updateData.categories = normalizedRowCategories;
         }
         if (shouldApplyField("description")) {
           updateData.description = row.description ?? null;
@@ -2090,7 +2187,8 @@ export const importProductsTx = async (
           throw new AppError("unitRequired", "BAD_REQUEST", 400);
         }
         updateData.name = name;
-        updateData.category = row.category ?? null;
+        updateData.category = resolvePrimaryProductCategory(normalizedRowCategories);
+        updateData.categories = normalizedRowCategories;
         updateData.unit = baseUnit.code;
         updateData.baseUnit = { connect: { id: baseUnit.id } };
         updateData.description = row.description ?? null;
@@ -2189,7 +2287,8 @@ export const importProductsTx = async (
           organizationId: input.organizationId,
           sku,
           name,
-          category: row.category ?? null,
+          category: resolvePrimaryProductCategory(normalizedRowCategories),
+          categories: normalizedRowCategories,
           unit: resolvedBaseUnit.code,
           baseUnitId: resolvedBaseUnit.id,
           basePriceKgs: basePriceKgs ?? null,

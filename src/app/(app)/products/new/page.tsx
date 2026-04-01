@@ -78,6 +78,7 @@ const NewProductPage = () => {
           name: "",
           isBundle: isBundleDefault,
           category: "",
+          categories: [],
           baseUnitId: "",
           basePriceKgs: undefined,
           purchasePriceKgs: undefined,

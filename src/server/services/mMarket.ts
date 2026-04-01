@@ -39,9 +39,9 @@ const MMARKET_SPEC_REQUEST_TIMEOUT_MS = 5_000;
 const MMARKET_MIN_NAME_LEN = 7;
 const MMARKET_MAX_NAME_LEN = 250;
 const MMARKET_MIN_DESCRIPTION_LEN = 150;
-const MMARKET_MIN_IMAGES = 3;
-const DEFAULT_MMARTKET_PLACEHOLDER_IMAGE_URL =
-  "https://pub-75076a8067634fa3a91a6df2248d729c.r2.dev/bazaar-placeholder.png";
+const MMARKET_MIN_IMAGES = 1;
+const MMARKET_EXPORT_PRICE_MULTIPLIER = 1.1;
+const MMARKET_EXPORT_PRICE_SURCHARGE_KGS = 100;
 const MMARKET_PRODUCT_SELECTION_AUDIT_ACTION = "MMARKET_PRODUCT_SELECTION_UPDATED";
 
 const IMAGE_EXTENSION_PATTERN = /\.(jpg|png|webp)$/i;
@@ -316,41 +316,20 @@ const hasAllowedImageExtension = (value: string) => {
   }
 };
 
-const resolveMMarketPlaceholderImageUrl = () => {
-  const value =
-    process.env.MMARKET_PLACEHOLDER_IMAGE_URL?.trim() || DEFAULT_MMARTKET_PLACEHOLDER_IMAGE_URL;
-  return hasAllowedImageExtension(value) ? value : "";
-};
-
-const appendPlaceholderVariant = (baseUrl: string, index: number) => {
-  try {
-    const url = new URL(baseUrl);
-    url.searchParams.set("slot", String(index));
-    return url.toString();
-  } catch {
-    return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}slot=${index}`;
-  }
-};
-
 const buildMMarketImageUrls = (inputUrls: string[]) => {
   const nonDirectImageUrls = inputUrls.filter((url) => !hasAllowedImageExtension(url));
   const directImageUrls = inputUrls.filter((url) => hasAllowedImageExtension(url));
-  const placeholderUrl = resolveMMarketPlaceholderImageUrl();
-  const missingCount = Math.max(0, MMARKET_MIN_IMAGES - directImageUrls.length);
-  const placeholderImageUrls =
-    placeholderUrl && missingCount > 0
-      ? Array.from({ length: missingCount }, (_, index) =>
-          appendPlaceholderVariant(placeholderUrl, index + 1),
-        )
-      : [];
 
   return {
     nonDirectImageUrls,
     directImageUrls,
-    placeholderImageUrls,
-    exportImageUrls: [...directImageUrls, ...placeholderImageUrls],
+    exportImageUrls: [...directImageUrls],
   };
 };
+
+const resolveMMarketExportPrice = (value: number) =>
+  Math.round((value * MMARKET_EXPORT_PRICE_MULTIPLIER + MMARKET_EXPORT_PRICE_SURCHARGE_KGS) * 100) /
+  100;
 
 const normalizeSpecLabel = (value?: string | null) =>
   (value ?? "")
@@ -1236,7 +1215,7 @@ const buildMMarketExportPlan = async (input: {
     readyProducts.push({
       sku,
       name,
-      price: price ?? 0,
+      price: resolveMMarketExportPrice(price ?? 0),
       category,
       description,
       images: exportImageUrls,
@@ -2219,6 +2198,7 @@ export const assignDefaultCategoryToMMarketProducts = async (input: {
     requestId: input.requestId,
     productIds,
     category: MMARKET_DEFAULT_UNCATEGORIZED_NAME,
+    mode: "add",
   });
 
   input.logger?.info(

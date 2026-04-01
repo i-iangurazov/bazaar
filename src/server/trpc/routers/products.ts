@@ -55,6 +55,13 @@ const sanitizeDetailImageUrl = (value: string | null | undefined) => {
 const decimalToNumber = (value: Prisma.Decimal | null | undefined) =>
   value === null || value === undefined ? null : Number(value);
 
+const buildProductCategoryWhere = (category?: string) =>
+  category
+    ? {
+        OR: [{ category }, { categories: { has: category } }],
+      }
+    : {};
+
 const importUpdateFieldEnum = z.enum([
   "name",
   "unit",
@@ -424,23 +431,27 @@ export const productsRouter = router({
       const pageSize = input?.pageSize ?? 25;
       const sortKey = input?.sortKey ?? "name";
       const sortDirection = input?.sortDirection ?? "asc";
-      const where = {
+      const filters: Prisma.ProductWhereInput[] = [];
+      if (input?.search) {
+        filters.push({
+          OR: [
+            { name: { contains: input.search, mode: "insensitive" as const } },
+            { sku: { contains: input.search, mode: "insensitive" as const } },
+          ],
+        });
+      }
+      if (input?.category) {
+        filters.push(buildProductCategoryWhere(input.category));
+      }
+      if (input?.type === "product") {
+        filters.push({ isBundle: false });
+      } else if (input?.type === "bundle") {
+        filters.push({ isBundle: true });
+      }
+      const where: Prisma.ProductWhereInput = {
         ...(input?.includeArchived ? {} : { isDeleted: false }),
-        ...(input?.search
-          ? {
-              OR: [
-                { name: { contains: input.search, mode: "insensitive" as const } },
-                { sku: { contains: input.search, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-        ...(input?.category ? { category: input.category } : {}),
-        ...(input?.type === "product"
-          ? { isBundle: false }
-          : input?.type === "bundle"
-            ? { isBundle: true }
-            : {}),
         organizationId: ctx.user.organizationId,
+        ...(filters.length ? { AND: filters } : {}),
       };
 
       const products = await ctx.prisma.product.findMany({
@@ -450,6 +461,7 @@ export const productsRouter = router({
           sku: true,
           name: true,
           category: true,
+          categories: true,
           unit: true,
           baseUnitId: true,
           isBundle: true,
@@ -700,23 +712,27 @@ export const productsRouter = router({
         }
       }
 
-      const where = {
+      const filters: Prisma.ProductWhereInput[] = [];
+      if (input?.search) {
+        filters.push({
+          OR: [
+            { name: { contains: input.search, mode: "insensitive" as const } },
+            { sku: { contains: input.search, mode: "insensitive" as const } },
+          ],
+        });
+      }
+      if (input?.category) {
+        filters.push(buildProductCategoryWhere(input.category));
+      }
+      if (input?.type === "product") {
+        filters.push({ isBundle: false });
+      } else if (input?.type === "bundle") {
+        filters.push({ isBundle: true });
+      }
+      const where: Prisma.ProductWhereInput = {
         ...(input?.includeArchived ? {} : { isDeleted: false }),
-        ...(input?.search
-          ? {
-              OR: [
-                { name: { contains: input.search, mode: "insensitive" as const } },
-                { sku: { contains: input.search, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-        ...(input?.category ? { category: input.category } : {}),
-        ...(input?.type === "product"
-          ? { isBundle: false }
-          : input?.type === "bundle"
-            ? { isBundle: true }
-            : {}),
         organizationId: ctx.user.organizationId,
+        ...(filters.length ? { AND: filters } : {}),
       };
 
       const rows = await ctx.prisma.product.findMany({
@@ -988,6 +1004,7 @@ export const productsRouter = router({
         ),
         name: z.string().min(2),
         category: z.string().optional(),
+        categories: z.array(z.string()).optional(),
         baseUnitId: z.string().min(1),
         basePriceKgs: z.number().min(0).optional(),
         purchasePriceKgs: z.number().min(0).optional(),
@@ -1048,6 +1065,7 @@ export const productsRouter = router({
           sku: input.sku,
           name: input.name,
           category: input.category,
+          categories: input.categories,
           baseUnitId: input.baseUnitId,
           basePriceKgs: input.basePriceKgs,
           purchasePriceKgs: input.purchasePriceKgs,
@@ -1074,6 +1092,7 @@ export const productsRouter = router({
         sku: z.string().min(2),
         name: z.string().min(2),
         category: z.string().optional(),
+        categories: z.array(z.string()).optional(),
         baseUnitId: z.string().min(1),
         basePriceKgs: z.number().min(0).optional(),
         purchasePriceKgs: z.number().min(0).optional(),
@@ -1135,6 +1154,7 @@ export const productsRouter = router({
           sku: input.sku,
           name: input.name,
           category: input.category,
+          categories: input.categories,
           baseUnitId: input.baseUnitId,
           basePriceKgs: input.basePriceKgs,
           purchasePriceKgs: input.purchasePriceKgs,
@@ -1171,6 +1191,7 @@ export const productsRouter = router({
             sku: true,
             name: true,
             category: true,
+            categories: true,
             baseUnitId: true,
             basePriceKgs: true,
             description: true,
@@ -1201,6 +1222,7 @@ export const productsRouter = router({
           sku: existing.sku,
           name: input.patch.name ?? existing.name,
           category: existing.category,
+          categories: existing.categories,
           baseUnitId: input.patch.baseUnitId ?? existing.baseUnitId,
           basePriceKgs:
             input.patch.basePriceKgs !== undefined
@@ -1350,6 +1372,7 @@ export const productsRouter = router({
       z.object({
         productIds: z.array(z.string()).min(1),
         category: z.string().optional().nullable(),
+        mode: z.enum(["add", "setPrimary", "replace"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1360,6 +1383,7 @@ export const productsRouter = router({
           requestId: ctx.requestId,
           productIds: input.productIds,
           category: input.category ?? null,
+          mode: input.mode ?? "add",
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -1445,10 +1469,12 @@ export const productsRouter = router({
     const header = ["sku", "name", "category", "unit", "description", "photoUrl", "barcodes"];
     const lines = products.map((product) => {
       const barcodes = product.barcodes.map((barcode) => barcode.value).join("|");
+      const exportedCategory =
+        product.categories.length > 0 ? product.categories.join("|") : (product.category ?? "");
       const values = [
         product.sku,
         product.name,
-        product.category ?? "",
+        exportedCategory,
         product.unit,
         product.description ?? "",
         product.photoUrl ?? "",

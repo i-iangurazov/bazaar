@@ -362,6 +362,24 @@ const ProductsPage = () => {
     setSelectedIds(new Set());
   }, [search, category, showArchived, storeId, productType]);
 
+  const getProductCategories = useCallback(
+    (product: { category?: string | null; categories?: string[] }) => {
+      const seen = new Set<string>();
+      const values = [
+        ...(product.category ? [product.category] : []),
+        ...(product.categories ?? []),
+      ].filter((value): value is string => Boolean(value?.trim()));
+      return values.filter((value) => {
+        if (seen.has(value)) {
+          return false;
+        }
+        seen.add(value);
+        return true;
+      });
+    },
+    [],
+  );
+
   const categories = useMemo(() => {
     const set = new Set<string>();
     (categoriesQuery.data ?? []).forEach((value) => {
@@ -370,12 +388,12 @@ const ProductsPage = () => {
       }
     });
     products.forEach((product) => {
-      if (product.category) {
-        set.add(product.category);
+      for (const value of getProductCategories(product)) {
+        set.add(value);
       }
     });
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
-  }, [categoriesQuery.data, products]);
+  }, [categoriesQuery.data, getProductCategories, products]);
 
   const showEffectivePrice = Boolean(storeId);
   const inlineProductsContext = useMemo<InlineProductsContext>(
@@ -440,10 +458,27 @@ const ProductsPage = () => {
       }
 
       if (operation.route === "products.bulkUpdateCategory") {
-        applyProductListPatch(operation.input.productIds[0], (item) => ({
-          ...item,
-          category: operation.input.category,
-        }));
+        applyProductListPatch(operation.input.productIds[0], (item) => {
+          const currentCategories = getProductCategories(item);
+          const nextCategories =
+            !operation.input.category
+              ? []
+              : operation.input.mode === "setPrimary"
+                ? [
+                    operation.input.category,
+                    ...currentCategories.filter((value) => value !== operation.input.category),
+                  ]
+                : operation.input.mode === "replace"
+                  ? [operation.input.category]
+                  : currentCategories.includes(operation.input.category)
+                    ? currentCategories
+                    : [...currentCategories, operation.input.category];
+          return {
+            ...item,
+            category: nextCategories[0] ?? null,
+            categories: nextCategories,
+          };
+        });
         try {
           await inlineCategoryMutation.mutateAsync(operation.input);
         } catch (error) {
@@ -492,6 +527,7 @@ const ProductsPage = () => {
     },
     [
       applyProductListPatch,
+      getProductCategories,
       inlineCategoryMutation,
       inlineInventoryAdjustMutation,
       inlineProductMutation,
@@ -690,6 +726,9 @@ const ProductsPage = () => {
   );
   const hasActiveSelected = selectedProducts.some((product) => !product.isDeleted);
   const hasArchivedSelected = selectedProducts.some((product) => product.isDeleted);
+  const bulkCategorySelectValue = categories.includes(bulkCategoryValue)
+    ? bulkCategoryValue
+    : "__custom__";
 
   const toggleSelectAll = () => {
     if (!products.length) {
@@ -1159,6 +1198,7 @@ const ProductsPage = () => {
     bulkCategoryMutation.mutate({
       productIds: selectedList,
       category: trimmed ? trimmed : null,
+      mode: trimmed ? "add" : "replace",
     });
   };
 
@@ -1674,6 +1714,7 @@ const ProductsPage = () => {
                             const storeInfo = getStoreInfo(
                               product.inventorySnapshots.map((snapshot) => snapshot.storeId),
                             );
+                            const productCategories = getProductCategories(product);
                             return (
                               <TableRow key={product.id}>
                                 <TableCell>
@@ -1730,20 +1771,29 @@ const ProductsPage = () => {
                                   </div>
                                 </TableCell>
                                 <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                                  <InlineEditableCell
-                                    rowId={product.id}
-                                    row={product}
-                                    value={product.category}
-                                    definition={inlineEditRegistry.products.category}
-                                    context={inlineProductsContext}
-                                    role={role}
-                                    locale={locale}
-                                    columnLabel={t("category")}
-                                    tTable={t}
-                                    tCommon={tCommon}
-                                    enabled={inlineEditingEnabled}
-                                    executeMutation={executeInlineProductMutation}
-                                  />
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <InlineEditableCell
+                                      rowId={product.id}
+                                      row={product}
+                                      value={product.category}
+                                      definition={inlineEditRegistry.products.category}
+                                      context={inlineProductsContext}
+                                      role={role}
+                                      locale={locale}
+                                      columnLabel={t("category")}
+                                      tTable={t}
+                                      tCommon={tCommon}
+                                      enabled={inlineEditingEnabled}
+                                      executeMutation={executeInlineProductMutation}
+                                    />
+                                    {productCategories
+                                      .filter((value) => value !== product.category)
+                                      .map((value) => (
+                                        <Badge key={value} variant="muted">
+                                          {value}
+                                        </Badge>
+                                      ))}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="hidden lg:table-cell">
                                   <span>{product.unit}</span>
@@ -1844,6 +1894,7 @@ const ProductsPage = () => {
                       const barcodeSummary = getBarcodeSummary(product.barcodes);
                       const previewImageUrl = getProductPreviewUrl(product);
                       const actions = getProductActions(product);
+                      const productCategories = getProductCategories(product);
                       return (
                         <div
                           key={product.id}
@@ -1894,9 +1945,11 @@ const ProductsPage = () => {
                               {product.isDeleted ? (
                                 <Badge variant="muted">{t("archived")}</Badge>
                               ) : null}
-                              {product.category ? (
-                                <Badge variant="muted">{product.category}</Badge>
-                              ) : null}
+                              {productCategories.map((value) => (
+                                <Badge key={value} variant="muted">
+                                  {value}
+                                </Badge>
+                              ))}
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                               <div>
@@ -1978,6 +2031,7 @@ const ProductsPage = () => {
                   product.inventorySnapshots.map((snapshot) => snapshot.storeId),
                 );
                 const actions = getProductActions(product);
+                const productCategories = getProductCategories(product);
 
                 if (viewMode === "grid") {
                   return (
@@ -2027,6 +2081,11 @@ const ProductsPage = () => {
                           {product.isDeleted ? (
                             <Badge variant="muted">{t("archived")}</Badge>
                           ) : null}
+                          {productCategories.map((value) => (
+                            <Badge key={value} variant="muted">
+                              {value}
+                            </Badge>
+                          ))}
                         </div>
                         <div className="space-y-2 text-xs text-muted-foreground">
                           <div className="flex items-center justify-between gap-2">
@@ -2144,7 +2203,9 @@ const ProductsPage = () => {
                       <div className="flex items-center justify-between gap-2">
                         <span>{t("category")}</span>
                         <span className="text-foreground">
-                          {product.category ?? tCommon("notAvailable")}
+                          {productCategories.length
+                            ? productCategories.join(", ")
+                            : tCommon("notAvailable")}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
@@ -2518,18 +2579,30 @@ const ProductsPage = () => {
         >
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{t("category")}</label>
+            <Select
+              value={bulkCategorySelectValue}
+              onValueChange={(value) =>
+                setBulkCategoryValue(value === "__custom__" ? "" : value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("bulkCategorySelectPlaceholder")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__custom__">{t("bulkCategorySelectPlaceholder")}</SelectItem>
+                {categories.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
-              value={bulkCategoryValue}
+              value={categories.includes(bulkCategoryValue) ? "" : bulkCategoryValue}
               onChange={(event) => setBulkCategoryValue(event.target.value)}
               placeholder={t("bulkCategoryPlaceholder")}
-              list="bulk-category-options"
             />
             <p className="text-xs text-muted-foreground">{t("bulkCategoryHint")}</p>
-            <datalist id="bulk-category-options">
-              {categories.map((item) => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
           </div>
           <FormActions>
             <Button

@@ -39,6 +39,7 @@ export type InlineMutationInputByRoute = {
   "products.bulkUpdateCategory": {
     productIds: string[];
     category: string | null;
+    mode?: "add" | "setPrimary" | "replace";
   };
   "inventory.adjust": {
     storeId: string;
@@ -141,6 +142,7 @@ export type InlineProductsRow = {
   id: string;
   name: string;
   category: string | null;
+  categories?: string[];
   unit: string;
   baseUnitId: string;
   basePriceKgs: number | null;
@@ -375,7 +377,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
       parser: (raw) => (raw === "__none" ? { ok: true, value: null } : parseNullableText(raw)),
       mutation: (row, value) => ({
         route: "products.bulkUpdateCategory",
-        input: { productIds: [row.id], category: value },
+        input: { productIds: [row.id], category: value, mode: "setPrimary" },
       }),
       permissionCheck: (role) => isAdmin(role),
       selectOptions: (_row, context, display) => [

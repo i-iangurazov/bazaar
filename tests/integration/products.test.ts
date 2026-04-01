@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createProduct, importProducts, updateProduct } from "@/server/services/products";
+import {
+  bulkUpdateProductCategory,
+  createProduct,
+  importProducts,
+  updateProduct,
+} from "@/server/services/products";
 import { computeEan13CheckDigit } from "@/server/services/barcodes";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { prisma } from "@/server/db/prisma";
@@ -37,6 +42,121 @@ describeDb("products", () => {
     expect(second.sku).toMatch(/^SKU-\d{6}$/);
     expect(first.sku).not.toBe(second.sku);
     expect(Number(second.sku.slice(4))).toBeGreaterThan(Number(first.sku.slice(4)));
+  });
+
+  it("stores multiple categories and keeps the first one as primary", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-multi-category-create",
+      sku: "MULTI-CAT-1",
+      name: "Multi Category Product",
+      baseUnitId: baseUnit.id,
+      categories: ["Phones", "Featured", "Phones"],
+    });
+
+    const created = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { category: true, categories: true },
+    });
+
+    expect(created).toEqual({
+      category: "Phones",
+      categories: ["Phones", "Featured"],
+    });
+
+    await updateProduct({
+      productId: product.id,
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-multi-category-update",
+      sku: product.sku,
+      name: "Multi Category Product",
+      baseUnitId: baseUnit.id,
+      categories: ["Featured", "Phones", "Clearance"],
+      barcodes: [],
+    });
+
+    const updated = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { category: true, categories: true },
+    });
+
+    expect(updated).toEqual({
+      category: "Featured",
+      categories: ["Featured", "Phones", "Clearance"],
+    });
+  });
+
+  it("adds bulk categories without replacing the existing primary category", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+
+    const firstProduct = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-category-first",
+      sku: "BULK-CAT-1",
+      name: "Bulk Category Product 1",
+      baseUnitId: baseUnit.id,
+      categories: ["Phones"],
+    });
+    const secondProduct = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-category-second",
+      sku: "BULK-CAT-2",
+      name: "Bulk Category Product 2",
+      baseUnitId: baseUnit.id,
+    });
+
+    await bulkUpdateProductCategory({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-category-add",
+      productIds: [firstProduct.id, secondProduct.id],
+      category: "Featured",
+      mode: "add",
+    });
+
+    const afterAdd = await prisma.product.findMany({
+      where: { id: { in: [firstProduct.id, secondProduct.id] } },
+      orderBy: { sku: "asc" },
+      select: { sku: true, category: true, categories: true },
+    });
+
+    expect(afterAdd).toEqual([
+      {
+        sku: "BULK-CAT-1",
+        category: "Phones",
+        categories: ["Phones", "Featured"],
+      },
+      {
+        sku: "BULK-CAT-2",
+        category: "Featured",
+        categories: ["Featured"],
+      },
+    ]);
+
+    await bulkUpdateProductCategory({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-bulk-category-primary",
+      productIds: [firstProduct.id],
+      category: "Featured",
+      mode: "setPrimary",
+    });
+
+    const afterPromote = await prisma.product.findUnique({
+      where: { id: firstProduct.id },
+      select: { category: true, categories: true },
+    });
+
+    expect(afterPromote).toEqual({
+      category: "Featured",
+      categories: ["Featured", "Phones"],
+    });
   });
 
   it("enforces barcode uniqueness within an organization", async () => {

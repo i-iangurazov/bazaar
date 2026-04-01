@@ -137,48 +137,31 @@ describeDb("m-market integration", () => {
     vi.unstubAllGlobals();
   });
 
-  it("blocks products when images are less than 3 or include non-direct extensions", async () => {
+  it("blocks products when direct images are missing or use non-direct extensions", async () => {
     const { org, product } = await prepareReadyMMarketData();
-    const previousPlaceholder = process.env.MMARKET_PLACEHOLDER_IMAGE_URL;
-    process.env.MMARKET_PLACEHOLDER_IMAGE_URL = "";
 
-    try {
-      const firstImage = await prisma.productImage.findFirst({ where: { productId: product.id } });
-      if (!firstImage) {
-        throw new Error("missing image");
-      }
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: null },
+    });
+    await prisma.productImage.deleteMany({ where: { productId: product.id } });
 
-      await prisma.productImage.delete({ where: { id: firstImage.id } });
+    const tooFewImages = await runMMarketPreflight(org.id);
+    const tooFewFailure = tooFewImages.failedProducts.find((row) => row.sku === product.sku);
 
-      const tooFewImages = await runMMarketPreflight(org.id);
-      const tooFewFailure = tooFewImages.failedProducts.find((row) => row.sku === product.sku);
+    expect(tooFewImages.canExport).toBe(false);
+    expect(tooFewFailure?.issues).toContain("INVALID_IMAGES_COUNT");
 
-      expect(tooFewImages.canExport).toBe(false);
-      expect(tooFewFailure?.issues).toContain("INVALID_IMAGES_COUNT");
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: "https://cdn.example.com/images/test-4.gif" },
+    });
 
-      await prisma.productImage.create({
-        data: {
-          organizationId: org.id,
-          productId: product.id,
-          url: "https://cdn.example.com/images/test-4.gif",
-          position: 9,
-        },
-      });
+    const badExtension = await runMMarketPreflight(org.id);
+    const badExtensionFailure = badExtension.failedProducts.find((row) => row.sku === product.sku);
 
-      const badExtension = await runMMarketPreflight(org.id);
-      const badExtensionFailure = badExtension.failedProducts.find(
-        (row) => row.sku === product.sku,
-      );
-
-      expect(badExtension.canExport).toBe(false);
-      expect(badExtensionFailure?.issues).toContain("NON_DIRECT_IMAGE_URL");
-    } finally {
-      if (previousPlaceholder === undefined) {
-        delete process.env.MMARKET_PLACEHOLDER_IMAGE_URL;
-      } else {
-        process.env.MMARKET_PLACEHOLDER_IMAGE_URL = previousPlaceholder;
-      }
-    }
+    expect(badExtension.canExport).toBe(false);
+    expect(badExtensionFailure?.issues).toContain("NON_DIRECT_IMAGE_URL");
   });
 
   it("defaults products to excluded until the user includes them", async () => {
@@ -347,35 +330,25 @@ describeDb("m-market integration", () => {
     expect(refreshedExcludedProduct?.category).toBeNull();
   });
 
-  it("pads missing images with the Bazaar placeholder for export", async () => {
+  it("allows export with fewer than three direct images without padding placeholders", async () => {
     const { org, product } = await prepareReadyMMarketData();
-    const previousPlaceholder = process.env.MMARKET_PLACEHOLDER_IMAGE_URL;
-    process.env.MMARKET_PLACEHOLDER_IMAGE_URL =
-      "https://pub-75076a8067634fa3a91a6df2248d729c.r2.dev/bazaar-placeholder.png";
-
-    try {
-      const firstImage = await prisma.productImage.findFirst({ where: { productId: product.id } });
-      if (!firstImage) {
-        throw new Error("missing image");
-      }
-
-      await prisma.productImage.delete({ where: { id: firstImage.id } });
-
-      const preflight = await runMMarketPreflight(org.id);
-      const failure = preflight.failedProducts.find((row) => row.sku === product.sku);
-      const plan = await __buildMMarketExportPlanForTests(org.id);
-      const payloadProduct = plan.payload.products.find((row) => row.sku === product.sku);
-
-      expect(failure?.issues).not.toContain("INVALID_IMAGES_COUNT");
-      expect(payloadProduct?.images).toHaveLength(3);
-      expect(payloadProduct?.images[2]).toContain("bazaar-placeholder.png");
-    } finally {
-      if (previousPlaceholder === undefined) {
-        delete process.env.MMARKET_PLACEHOLDER_IMAGE_URL;
-      } else {
-        process.env.MMARKET_PLACEHOLDER_IMAGE_URL = previousPlaceholder;
-      }
+    const firstImage = await prisma.productImage.findFirst({ where: { productId: product.id } });
+    if (!firstImage) {
+      throw new Error("missing image");
     }
+
+    await prisma.productImage.delete({ where: { id: firstImage.id } });
+
+    const preflight = await runMMarketPreflight(org.id);
+    const failure = preflight.failedProducts.find((row) => row.sku === product.sku);
+    const plan = await __buildMMarketExportPlanForTests(org.id);
+    const payloadProduct = plan.payload.products.find((row) => row.sku === product.sku);
+
+    expect(failure?.issues).not.toContain("INVALID_IMAGES_COUNT");
+    expect(payloadProduct?.images).toHaveLength(2);
+    expect(payloadProduct?.images.some((value) => value.includes("bazaar-placeholder"))).toBe(
+      false,
+    );
   });
 
   it("blocks products when description is shorter than 150 symbols", async () => {
@@ -440,6 +413,15 @@ describeDb("m-market integration", () => {
     expect(firstProduct).toBeTruthy();
     expect(Object.prototype.hasOwnProperty.call(firstProduct, "discount")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(firstProduct, "similar_products_sku")).toBe(false);
+  });
+
+  it("adds 10 percent and 100 KGS to the exported price", async () => {
+    const { org } = await prepareReadyMMarketData();
+
+    const plan = await __buildMMarketExportPlanForTests(org.id);
+    const firstProduct = plan.payload.products[0];
+
+    expect(firstProduct?.price).toBe(1420);
   });
 
   it("prevents second export request within the 15-minute cooldown window", async () => {
