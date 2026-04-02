@@ -8,6 +8,7 @@ export const shouldRunDbTests =
   (process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1");
 
 export const resetDatabase = async () => {
+  await prisma.planUpgradeRequest.deleteMany();
   await prisma.refundRequest.deleteMany();
   await prisma.fiscalReceipt.deleteMany();
   await prisma.storePrinterSettings.deleteMany();
@@ -62,6 +63,7 @@ export const resetDatabase = async () => {
   await prisma.productCost.deleteMany();
   await prisma.variantAttributeValue.deleteMany();
   await prisma.categoryAttributeTemplate.deleteMany();
+  await prisma.productCategory.deleteMany();
   await prisma.attributeDefinition.deleteMany();
   await prisma.productBarcode.deleteMany();
   await prisma.productImage.deleteMany();
@@ -73,6 +75,7 @@ export const resetDatabase = async () => {
   await prisma.supplier.deleteMany();
   await prisma.store.deleteMany();
   await prisma.onboardingProgress.deleteMany();
+  await prisma.userGuideState.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.deleteMany();
 };
