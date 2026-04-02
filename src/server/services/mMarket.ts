@@ -1567,6 +1567,7 @@ export const listMMarketProducts = async (input: {
         sku: true,
         name: true,
         category: true,
+        basePriceKgs: true,
         photoUrl: true,
         images: {
           where: {
@@ -1623,6 +1624,10 @@ export const listMMarketProducts = async (input: {
         sku: product.sku,
         name: product.name,
         category: product.category?.trim() || null,
+        exportPriceKgs:
+          product.basePriceKgs === null
+            ? null
+            : resolveMMarketExportPrice(Number(product.basePriceKgs)),
         imageUrl: resolveMMarketListImageUrl(product),
         onHandQty: onHandByProductId.get(product.id) ?? 0,
         included,

@@ -260,7 +260,10 @@ describeDb("m-market integration", () => {
 
     await prisma.product.update({
       where: { id: product.id },
-      data: { photoUrl: "https://cdn.example.com/images/listable-product.jpg" },
+      data: {
+        photoUrl: "https://cdn.example.com/images/listable-product.jpg",
+        basePriceKgs: 1200,
+      },
     });
 
     const hiddenFromList = await prisma.product.create({
@@ -283,6 +286,7 @@ describeDb("m-market integration", () => {
     expect(list.summary.totalProducts).toBe(1);
     expect(list.items.map((row) => row.id)).toEqual([product.id]);
     expect(list.items[0]?.imageUrl).toBe("https://cdn.example.com/images/listable-product.jpg");
+    expect(list.items[0]?.exportPriceKgs).toBe(1420);
     expect(list.items.some((row) => row.id === hiddenFromList.id)).toBe(false);
   });
 

@@ -34,7 +34,7 @@ import { CopyIcon, HideIcon, IntegrationsIcon, SparklesIcon, ViewIcon } from "@/
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatDateTime } from "@/lib/i18nFormat";
+import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -958,6 +958,7 @@ const MMarketSettingsPage = () => {
                           </TableHead>
                           <TableHead>{t("productsSelection.columns.name")}</TableHead>
                           <TableHead>{t("productsSelection.columns.category")}</TableHead>
+                          <TableHead>{t("productsSelection.columns.exportPrice")}</TableHead>
                           <TableHead>{t("productsSelection.columns.onHand")}</TableHead>
                           <TableHead>{t("productsSelection.columns.status")}</TableHead>
                           {canEdit ? (
@@ -987,6 +988,11 @@ const MMarketSettingsPage = () => {
                             </TableCell>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell>{product.category ?? "-"}</TableCell>
+                            <TableCell>
+                              {product.exportPriceKgs === null
+                                ? "-"
+                                : formatCurrencyKGS(product.exportPriceKgs, locale)}
+                            </TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
                             <TableCell>
                               <div className="space-y-1">
@@ -1060,6 +1066,12 @@ const MMarketSettingsPage = () => {
                   <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                     <p>
                       {t("productsSelection.columns.category")}: {product.category ?? "-"}
+                    </p>
+                    <p>
+                      {t("productsSelection.columns.exportPrice")}:{" "}
+                      {product.exportPriceKgs === null
+                        ? "-"
+                        : formatCurrencyKGS(product.exportPriceKgs, locale)}
                     </p>
                     <p>
                       {t("productsSelection.columns.onHand")}: {product.onHandQty}

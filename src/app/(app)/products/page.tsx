@@ -111,6 +111,8 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
 };
 
 const bulkGenerateDescriptionsMaxSelection = 25;
+const customCategorySelectValue = "__custom__";
+const clearCategorySelectValue = "__clear__";
 
 const ProductsPage = () => {
   const t = useTranslations("products");
@@ -140,7 +142,11 @@ const ProductsPage = () => {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [categoryInputValue, setCategoryInputValue] = useState("");
+  const [categoryToRemove, setCategoryToRemove] = useState("");
   const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkCategoryMode, setBulkCategoryMode] = useState<"existing" | "custom" | "clear">(
+    "existing",
+  );
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -257,6 +263,9 @@ const ProductsPage = () => {
       if (category === input.name) {
         setCategory("");
       }
+      if (categoryToRemove === input.name) {
+        setCategoryToRemove("");
+      }
       toast({ variant: "success", description: t("categoryRemoveSuccess") });
     },
     onError: (error) => {
@@ -345,7 +354,8 @@ const ProductsPage = () => {
   }, [storeId, storesQuery.data]);
 
   useEffect(() => {
-    if (bulkCategoryOpen) {
+    if (!bulkCategoryOpen) {
+      setBulkCategoryMode("existing");
       setBulkCategoryValue("");
     }
   }, [bulkCategoryOpen]);
@@ -394,6 +404,15 @@ const ProductsPage = () => {
     });
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
   }, [categoriesQuery.data, getProductCategories, products]);
+
+  useEffect(() => {
+    if (!categoryManagerOpen) {
+      setCategoryInputValue("");
+      setCategoryToRemove("");
+      return;
+    }
+    setCategoryToRemove((current) => (current && categories.includes(current) ? current : ""));
+  }, [categories, categoryManagerOpen]);
 
   const showEffectivePrice = Boolean(storeId);
   const inlineProductsContext = useMemo<InlineProductsContext>(
@@ -726,9 +745,17 @@ const ProductsPage = () => {
   );
   const hasActiveSelected = selectedProducts.some((product) => !product.isDeleted);
   const hasArchivedSelected = selectedProducts.some((product) => product.isDeleted);
-  const bulkCategorySelectValue = categories.includes(bulkCategoryValue)
-    ? bulkCategoryValue
-    : "__custom__";
+  const bulkCategorySelectValue =
+    bulkCategoryMode === "custom"
+      ? customCategorySelectValue
+      : bulkCategoryMode === "clear"
+        ? clearCategorySelectValue
+        : bulkCategoryValue || undefined;
+  const bulkCategoryCanSubmit =
+    bulkCategoryMode === "clear" ||
+    (bulkCategoryMode === "custom"
+      ? Boolean(bulkCategoryValue.trim())
+      : Boolean(bulkCategoryValue));
 
   const toggleSelectAll = () => {
     if (!products.length) {
@@ -1194,11 +1221,22 @@ const ProductsPage = () => {
     if (!selectedList.length) {
       return;
     }
+    if (bulkCategoryMode === "clear") {
+      bulkCategoryMutation.mutate({
+        productIds: selectedList,
+        category: null,
+        mode: "replace",
+      });
+      return;
+    }
     const trimmed = bulkCategoryValue.trim();
+    if (!trimmed) {
+      return;
+    }
     bulkCategoryMutation.mutate({
       productIds: selectedList,
-      category: trimmed ? trimmed : null,
-      mode: trimmed ? "add" : "replace",
+      category: trimmed,
+      mode: "add",
     });
   };
 
@@ -1208,6 +1246,13 @@ const ProductsPage = () => {
       return;
     }
     createCategoryMutation.mutate({ name: trimmed });
+  };
+
+  const handleCategoryRemove = () => {
+    if (!categoryToRemove) {
+      return;
+    }
+    removeCategoryMutation.mutate({ name: categoryToRemove });
   };
 
   const handleBulkStorePriceApply = async (values: z.infer<typeof bulkStorePriceSchema>) => {
@@ -2495,18 +2540,14 @@ const ProductsPage = () => {
           }}
         >
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">{t("category")}</label>
+            <label className="text-sm font-medium text-foreground">
+              {t("categoriesManageCreateLabel")}
+            </label>
             <Input
               value={categoryInputValue}
               onChange={(event) => setCategoryInputValue(event.target.value)}
               placeholder={t("categoriesManagePlaceholder")}
-              list="manage-category-options"
             />
-            <datalist id="manage-category-options">
-              {categories.map((item) => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
           </div>
 
           <FormActions>
@@ -2535,25 +2576,37 @@ const ProductsPage = () => {
 
         <div className="mt-4 space-y-2">
           {categories.length ? (
-            categories.map((item) => (
-              <div
-                key={item}
-                className="flex items-center justify-between gap-3 rounded-md border border-border bg-card p-2"
+            <>
+              <label className="text-sm font-medium text-foreground">
+                {t("categoriesManageRemoveLabel")}
+              </label>
+              <Select value={categoryToRemove || undefined} onValueChange={setCategoryToRemove}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("categoriesManageRemovePlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-center text-danger sm:w-auto"
+                onClick={handleCategoryRemove}
+                disabled={!categoryToRemove || removeCategoryMutation.isLoading}
               >
-                <span className="text-sm text-foreground">{item}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-danger"
-                  aria-label={tCommon("delete")}
-                  onClick={() => removeCategoryMutation.mutate({ name: item })}
-                  disabled={removeCategoryMutation.isLoading}
-                >
+                {removeCategoryMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
                   <DeleteIcon className="h-4 w-4" aria-hidden />
-                </Button>
-              </div>
-            ))
+                )}
+                {removeCategoryMutation.isLoading ? tCommon("loading") : tCommon("delete")}
+              </Button>
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">{t("categoriesManageEmpty")}</p>
           )}
@@ -2581,27 +2634,45 @@ const ProductsPage = () => {
             <label className="text-sm font-medium text-foreground">{t("category")}</label>
             <Select
               value={bulkCategorySelectValue}
-              onValueChange={(value) =>
-                setBulkCategoryValue(value === "__custom__" ? "" : value)
-              }
+              onValueChange={(value) => {
+                if (value === customCategorySelectValue) {
+                  setBulkCategoryMode("custom");
+                  setBulkCategoryValue("");
+                  return;
+                }
+                if (value === clearCategorySelectValue) {
+                  setBulkCategoryMode("clear");
+                  setBulkCategoryValue("");
+                  return;
+                }
+                setBulkCategoryMode("existing");
+                setBulkCategoryValue(value);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder={t("bulkCategorySelectPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__custom__">{t("bulkCategorySelectPlaceholder")}</SelectItem>
                 {categories.map((item) => (
                   <SelectItem key={item} value={item}>
                     {item}
                   </SelectItem>
                 ))}
+                <SelectItem value={customCategorySelectValue}>
+                  {t("bulkCategoryCustomOption")}
+                </SelectItem>
+                <SelectItem value={clearCategorySelectValue}>
+                  {t("bulkCategoryClearOption")}
+                </SelectItem>
               </SelectContent>
             </Select>
-            <Input
-              value={categories.includes(bulkCategoryValue) ? "" : bulkCategoryValue}
-              onChange={(event) => setBulkCategoryValue(event.target.value)}
-              placeholder={t("bulkCategoryPlaceholder")}
-            />
+            {bulkCategoryMode === "custom" ? (
+              <Input
+                value={bulkCategoryValue}
+                onChange={(event) => setBulkCategoryValue(event.target.value)}
+                placeholder={t("bulkCategoryPlaceholder")}
+              />
+            ) : null}
             <p className="text-xs text-muted-foreground">{t("bulkCategoryHint")}</p>
           </div>
           <FormActions>
@@ -2616,7 +2687,7 @@ const ProductsPage = () => {
             <Button
               type="submit"
               className="w-full sm:w-auto"
-              disabled={bulkCategoryMutation.isLoading}
+              disabled={bulkCategoryMutation.isLoading || !bulkCategoryCanSubmit}
             >
               {bulkCategoryMutation.isLoading ? (
                 <Spinner className="h-4 w-4" />
