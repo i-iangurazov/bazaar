@@ -28,7 +28,7 @@ const prepareReadyMMarketData = async () => {
       category: "Phones",
       basePriceKgs: 1200,
       description:
-        "Надежный смартфон для ежедневного использования с хорошей автономностью и стабильной связью.",
+        "Надежный смартфон для ежедневного использования с хорошей автономностью, стабильной связью, ярким экраном, прочным корпусом и понятным интерфейсом для повседневных задач.",
       photoUrl: "https://cdn.example.com/images/test-1.jpg",
     },
   });
@@ -551,7 +551,8 @@ describeDb("m-market integration", () => {
     const preflight = await runMMarketPreflight(org.id);
     const plan = await __buildMMarketExportPlanForTests(org.id);
 
-    expect(preflight.canExport).toBe(true);
+    expect(preflight.canExport).toBe(false);
+    expect(preflight.blockers.byCode.NO_PRODUCTS_SELECTED).toBe(1);
     expect(preflight.summary.productsConsidered).toBe(0);
     expect(preflight.summary.productsReady).toBe(0);
     expect(plan.payload.products).toHaveLength(0);
