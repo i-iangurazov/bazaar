@@ -8,76 +8,25 @@ export const shouldRunDbTests =
   (process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1");
 
 export const resetDatabase = async () => {
-  await prisma.planUpgradeRequest.deleteMany();
-  await prisma.refundRequest.deleteMany();
-  await prisma.fiscalReceipt.deleteMany();
-  await prisma.storePrinterSettings.deleteMany();
-  await prisma.kkmConnectorPairingCode.deleteMany();
-  await prisma.kkmConnectorDevice.deleteMany();
-  await prisma.saleReturnLine.deleteMany();
-  await prisma.salePayment.deleteMany();
-  await prisma.saleReturn.deleteMany();
-  await prisma.markingCodeCapture.deleteMany();
-  await prisma.ettnReference.deleteMany();
-  await prisma.esfReference.deleteMany();
-  await prisma.cashDrawerMovement.deleteMany();
-  await prisma.registerShift.deleteMany();
-  await prisma.posRegister.deleteMany();
-  await prisma.customerOrderLine.deleteMany();
-  await prisma.customerOrder.deleteMany();
-  await prisma.organizationCounter.deleteMany();
-  await prisma.purchaseOrderLine.deleteMany();
-  await prisma.purchaseOrder.deleteMany();
-  await prisma.importedEntity.deleteMany();
-  await prisma.importRollbackReport.deleteMany();
-  await prisma.importBatch.deleteMany();
-  await prisma.stockCountLine.deleteMany();
-  await prisma.stockCount.deleteMany();
-  await prisma.stockMovement.deleteMany();
-  await prisma.periodClose.deleteMany();
-  await prisma.exportJob.deleteMany();
-  await prisma.mMarketExportJob.deleteMany();
-  await prisma.mMarketIncludedProduct.deleteMany();
-  await prisma.mMarketBranchMapping.deleteMany();
-  await prisma.mMarketIntegration.deleteMany();
-  await prisma.storeComplianceProfile.deleteMany();
-  await prisma.productComplianceFlags.deleteMany();
-  await prisma.deadLetterJob.deleteMany();
-  await prisma.stockLot.deleteMany();
-  await prisma.inventorySnapshot.deleteMany();
-  await prisma.reorderPolicy.deleteMany();
-  await prisma.forecastSnapshot.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.diagnosticsReport.deleteMany();
-  await prisma.idempotencyKey.deleteMany();
-  await prisma.authToken.deleteMany();
-  await prisma.productEvent.deleteMany();
-  await prisma.storeFeatureFlag.deleteMany();
-  await prisma.impersonationSession.deleteMany();
-  await prisma.inviteToken.deleteMany();
-  await prisma.accessRequest.deleteMany();
-  await prisma.storePrice.deleteMany();
-  await prisma.bazaarCatalogHiddenProduct.deleteMany();
-  await prisma.bazaarCatalog.deleteMany();
-  await prisma.bazaarCatalogImage.deleteMany();
-  await prisma.productCost.deleteMany();
-  await prisma.variantAttributeValue.deleteMany();
-  await prisma.categoryAttributeTemplate.deleteMany();
-  await prisma.productCategory.deleteMany();
-  await prisma.attributeDefinition.deleteMany();
-  await prisma.productBarcode.deleteMany();
-  await prisma.productImage.deleteMany();
-  await prisma.productPack.deleteMany();
-  await prisma.productBundleComponent.deleteMany();
-  await prisma.productVariant.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.unit.deleteMany();
-  await prisma.supplier.deleteMany();
-  await prisma.store.deleteMany();
-  await prisma.onboardingProgress.deleteMany();
-  await prisma.userGuideState.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.organization.deleteMany();
+  await prisma.$executeRawUnsafe(`
+    DO $$
+    DECLARE
+      truncate_sql text;
+    BEGIN
+      SELECT
+        'TRUNCATE TABLE ' ||
+        string_agg(format('%I.%I', schemaname, tablename), ', ') ||
+        ' RESTART IDENTITY CASCADE'
+      INTO truncate_sql
+      FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename <> '_prisma_migrations';
+
+      IF truncate_sql IS NOT NULL THEN
+        EXECUTE truncate_sql;
+      END IF;
+    END $$;
+  `);
 };
 
 export const seedBase = async (options?: {
