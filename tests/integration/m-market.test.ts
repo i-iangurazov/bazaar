@@ -348,7 +348,7 @@ describeDb("m-market integration", () => {
     const plan = await __buildMMarketExportPlanForTests(org.id);
     const payloadProduct = plan.payload.products.find((row) => row.sku === product.sku);
 
-    expect(failure?.issues).not.toContain("INVALID_IMAGES_COUNT");
+    expect(failure).toBeUndefined();
     expect(payloadProduct?.images).toHaveLength(2);
     expect(payloadProduct?.images.some((value) => value.includes("bazaar-placeholder"))).toBe(
       false,
