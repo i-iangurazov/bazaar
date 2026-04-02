@@ -6,6 +6,7 @@ const rawEnvSchema = z
     NEXT_PHASE: z.string().optional(),
     npm_lifecycle_event: z.string().optional(),
     DATABASE_URL: z.string().optional(),
+    ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION: z.string().optional(),
     REDIS_URL: z.string().optional(),
     NEXTAUTH_SECRET: z.string().optional(),
     NEXTAUTH_URL: z.string().optional(),
@@ -45,6 +46,7 @@ export type RuntimeEnv = {
   nodeEnv: "development" | "test" | "production";
   isBuildPhase: boolean;
   databaseUrl: string;
+  allowLocalhostDatabaseInProduction: boolean;
   redisUrl: string;
   nextAuthSecret: string;
   nextAuthUrl: string;
@@ -69,6 +71,7 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     nodeEnv,
     isBuildPhase,
     databaseUrl: parsed.DATABASE_URL?.trim() ?? "",
+    allowLocalhostDatabaseInProduction: parseBool(parsed.ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION),
     redisUrl: parsed.REDIS_URL?.trim() ?? "",
     nextAuthSecret: parsed.NEXTAUTH_SECRET?.trim() ?? "",
     nextAuthUrl: parsed.NEXTAUTH_URL?.trim() ?? "",
@@ -105,10 +108,16 @@ const assertValidUrl = (value: string, key: string) => {
   }
 };
 
-const assertDatabaseUrlSafeForProduction = (databaseUrl: string) => {
+const assertDatabaseUrlSafeForProduction = (
+  databaseUrl: string,
+  allowLocalhostDatabaseInProduction: boolean,
+) => {
   assertValidUrl(databaseUrl, "DATABASE_URL");
   const host = new URL(databaseUrl).hostname.toLowerCase();
-  if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0") {
+  if (
+    !allowLocalhostDatabaseInProduction &&
+    (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0")
+  ) {
     throw new Error("DATABASE_URL cannot point to localhost in production.");
   }
 };
@@ -122,7 +131,7 @@ const assertProductionEnv = (env: RuntimeEnv, target: "build" | "runtime") => {
   }
 
   assertPresent(env.databaseUrl, "DATABASE_URL is required in production.");
-  assertDatabaseUrlSafeForProduction(env.databaseUrl);
+  assertDatabaseUrlSafeForProduction(env.databaseUrl, env.allowLocalhostDatabaseInProduction);
   assertPresent(env.nextAuthSecret, "NEXTAUTH_SECRET is required in production.");
   assertPresent(env.nextAuthUrl, "NEXTAUTH_URL is required in production.");
   assertValidUrl(env.nextAuthUrl, "NEXTAUTH_URL");

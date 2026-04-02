@@ -46,4 +46,22 @@ describe("redis requirements", () => {
 
     expect(() => getRuntimeEnv()).toThrow("AUTH_TRUSTED_PROXY_HOPS must be a non-negative integer.");
   });
+
+  it("allows localhost database in production only when explicitly enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "postgresql://user:pass@localhost:5432/app?schema=public");
+    vi.stubEnv("ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION", "true");
+    vi.stubEnv("REDIS_URL", "redis://redis.example.com:6379");
+    vi.stubEnv("NEXTAUTH_URL", "https://app.example.com");
+    vi.stubEnv("JOBS_SECRET", "jobs-secret");
+    vi.stubEnv("NEXTAUTH_SECRET", "nextauth-secret");
+    vi.stubEnv("EMAIL_PROVIDER", "resend");
+    vi.stubEnv("EMAIL_FROM", "no-reply@example.com");
+    vi.stubEnv("RESEND_API_KEY", "resend-key");
+
+    vi.resetModules();
+    const { assertBuildEnvConfigured } = await import("@/server/config/runtime");
+
+    expect(() => assertBuildEnvConfigured()).not.toThrow();
+  });
 });
