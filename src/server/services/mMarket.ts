@@ -327,6 +327,63 @@ const buildMMarketImageUrls = (inputUrls: string[]) => {
   };
 };
 
+const buildMMarketProductListWhere = async (input: {
+  organizationId: string;
+  search?: string;
+  selection?: MMarketProductSelectionFilter;
+}) => {
+  const search = normalizeSearch(input.search);
+  const selection = input.selection ?? "all";
+  const hasExplicitSelection = await hasExplicitMMarketProductSelection(
+    prisma,
+    input.organizationId,
+  );
+
+  const baseWhere: Prisma.ProductWhereInput = {
+    organizationId: input.organizationId,
+    isDeleted: false,
+    ...mMarketListableImageWhere,
+  };
+
+  const searchWhere: Prisma.ProductWhereInput = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { sku: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const selectionWhere: Prisma.ProductWhereInput =
+    selection === "excluded"
+      ? hasExplicitSelection
+        ? {
+            mMarketInclusions: {
+              none: { orgId: input.organizationId },
+            },
+          }
+        : {}
+      : selection === "included"
+        ? hasExplicitSelection
+          ? {
+              mMarketInclusions: {
+                some: { orgId: input.organizationId },
+              },
+            }
+          : { id: { in: [] } }
+        : {};
+
+  return {
+    hasExplicitSelection,
+    baseWhere,
+    where: {
+      ...baseWhere,
+      ...searchWhere,
+      ...selectionWhere,
+    } satisfies Prisma.ProductWhereInput,
+  };
+};
+
 const resolveMMarketExportPrice = (value: number) =>
   Math.round((value * MMARKET_EXPORT_PRICE_MULTIPLIER + MMARKET_EXPORT_PRICE_SURCHARGE_KGS) * 100) /
   100;
@@ -1500,52 +1557,11 @@ export const listMMarketProducts = async (input: {
 }) => {
   const page = Math.max(1, Math.trunc(input.page ?? 1));
   const pageSize = Math.min(10, Math.max(1, Math.trunc(input.pageSize ?? 10)));
-  const search = normalizeSearch(input.search);
-  const selection = input.selection ?? "all";
-  const hasExplicitSelection = await hasExplicitMMarketProductSelection(
-    prisma,
-    input.organizationId,
-  );
-
-  const baseWhere: Prisma.ProductWhereInput = {
+  const { hasExplicitSelection, baseWhere, where } = await buildMMarketProductListWhere({
     organizationId: input.organizationId,
-    isDeleted: false,
-    ...mMarketListableImageWhere,
-  };
-
-  const searchWhere: Prisma.ProductWhereInput = search
-    ? {
-        OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { sku: { contains: search, mode: "insensitive" } },
-        ],
-      }
-    : {};
-
-  const selectionWhere: Prisma.ProductWhereInput =
-    selection === "excluded"
-      ? hasExplicitSelection
-        ? {
-            mMarketInclusions: {
-              none: { orgId: input.organizationId },
-            },
-          }
-        : {}
-      : selection === "included"
-        ? hasExplicitSelection
-          ? {
-              mMarketInclusions: {
-                some: { orgId: input.organizationId },
-              },
-            }
-          : { id: { in: [] } }
-        : {};
-
-  const where: Prisma.ProductWhereInput = {
-    ...baseWhere,
-    ...searchWhere,
-    ...selectionWhere,
-  };
+    search: input.search,
+    selection: input.selection,
+  });
 
   const [totalProducts, includedProducts, total, products] = await Promise.all([
     prisma.product.count({ where: baseWhere }),
@@ -1647,6 +1663,21 @@ export const listMMarketProducts = async (input: {
       excludedProducts: Math.max(0, totalProducts - includedProducts),
     },
   };
+};
+
+export const listMMarketProductIds = async (input: {
+  organizationId: string;
+  search?: string;
+  selection?: MMarketProductSelectionFilter;
+}) => {
+  const { where } = await buildMMarketProductListWhere(input);
+  const products = await prisma.product.findMany({
+    where,
+    select: { id: true },
+    orderBy: [{ name: "asc" }, { sku: "asc" }, { id: "asc" }],
+  });
+
+  return products.map((product) => product.id);
 };
 
 export const updateMMarketProductSelection = async (input: {

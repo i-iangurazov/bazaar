@@ -119,6 +119,7 @@ const MMarketSettingsPage = () => {
   const { data: session } = useSession();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const trpcUtils = trpc.useUtils();
 
   const role = session?.user?.role ?? "STAFF";
   const isAdmin = role === "ADMIN";
@@ -354,6 +355,7 @@ const MMarketSettingsPage = () => {
   const [productsPage, setProductsPage] = useState(1);
   const [productsPageSize, setProductsPageSize] = useState(10);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [selectingAllProducts, setSelectingAllProducts] = useState(false);
   const hasActiveExportJob =
     jobsQuery.data?.some(
       (job) =>
@@ -597,6 +599,24 @@ const MMarketSettingsPage = () => {
     setSelectedProductIds(new Set());
   };
 
+  const handleSelectAllProductResults = async () => {
+    setSelectingAllProducts(true);
+    try {
+      const ids = await trpcUtils.mMarket.listIds.fetch({
+        search: productSearch.trim() || undefined,
+        selection: productSelectionFilter,
+      });
+      setSelectedProductIds(new Set(ids));
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setSelectingAllProducts(false);
+    }
+  };
+
   const handleUpdateProducts = (included: boolean, productIds?: string[]) => {
     if (!canEdit) {
       return;
@@ -628,6 +648,9 @@ const MMarketSettingsPage = () => {
   const productSummary = productsQuery.data?.summary;
   const allProductsSelectedOnPage =
     productItems.length > 0 && productItems.every((product) => selectedProductIds.has(product.id));
+  const allProductResultsSelected =
+    (productsQuery.data?.total ?? 0) > 0 &&
+    selectedProductIds.size === (productsQuery.data?.total ?? 0);
 
   const filteredFailedProducts = useMemo(() => {
     const failedProducts = preflightData?.failedProducts ?? [];
@@ -886,6 +909,30 @@ const MMarketSettingsPage = () => {
 
           {!canEdit ? <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p> : null}
 
+          {canEdit && productItems.length ? (
+            <div className="mb-3 sm:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                {productsQuery.data &&
+                productsQuery.data.total > productItems.length &&
+                !allProductResultsSelected ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void handleSelectAllProductResults()}
+                    disabled={selectingAllProducts}
+                  >
+                    {selectingAllProducts ? <Spinner className="h-4 w-4" /> : null}
+                    {selectingAllProducts
+                      ? tCommon("loading")
+                      : tCommon("selectAllResults", { count: productsQuery.data.total })}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {canEdit && selectedProductIds.size > 0 ? (
             <SelectionToolbar
               count={selectedProductIds.size}
@@ -893,6 +940,23 @@ const MMarketSettingsPage = () => {
               onClear={clearProductSelection}
               clearLabel={t("productsSelection.clearSelection")}
             >
+              {productsQuery.data &&
+              productsQuery.data.total > productItems.length &&
+              !allProductResultsSelected ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleSelectAllProductResults()}
+                  disabled={selectingAllProducts}
+                >
+                  {selectingAllProducts ? <Spinner className="h-4 w-4" /> : null}
+                  {selectingAllProducts
+                    ? tCommon("loading")
+                    : tCommon("selectAllResults", { count: productsQuery.data.total })}
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"

@@ -1345,7 +1345,7 @@ export const productsRouter = router({
     }),
 
   bulkGenerateDescriptions: adminProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "products-descriptions-bulk" }))
+    .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-descriptions-bulk" }))
     .input(
       z.object({
         productIds: z.array(z.string().min(1)).min(1).max(25),

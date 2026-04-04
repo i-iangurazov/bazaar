@@ -10,6 +10,7 @@ import {
   getMMarketSavedToken,
   getMMarketSettings,
   getMMarketExportJob,
+  listMMarketProductIds,
   listMMarketProducts,
   listMMarketExportJobs,
   requestMMarketExport,
@@ -131,6 +132,27 @@ export const mMarketRouter = router({
           selection: input?.selection,
           page: input?.page,
           pageSize: input?.pageSize,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  listIds: protectedProcedure
+    .input(
+      z
+        .object({
+          search: z.string().max(200).optional(),
+          selection: z.enum(["all", "included", "excluded"]).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listMMarketProductIds({
+          organizationId: ctx.user.organizationId,
+          search: input?.search,
+          selection: input?.selection,
         });
       } catch (error) {
         throw toTRPCError(error);
