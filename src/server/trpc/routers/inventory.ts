@@ -1,7 +1,9 @@
+import type { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { logProfileSection } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
@@ -12,47 +14,109 @@ import {
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
 
+const inventoryListInputSchema = z.object({
+  storeId: z.string(),
+  search: z.string().optional(),
+  page: z.number().int().min(1).optional(),
+  pageSize: z.number().int().min(10).max(200).optional(),
+});
+
+const inventoryListIdsInputSchema = z.object({
+  storeId: z.string(),
+  search: z.string().optional(),
+});
+
+type PrismaClientLike = Pick<Prisma.TransactionClient, "store">;
+
+const assertStoreAccess = async ({
+  prisma,
+  storeId,
+  organizationId,
+}: {
+  prisma: PrismaClientLike;
+  storeId: string;
+  organizationId: string;
+}) => {
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { id: true, organizationId: true },
+  });
+  if (!store || store.organizationId !== organizationId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+  }
+};
+
+const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInputSchema>) => ({
+  storeId: input.storeId,
+  product: {
+    isDeleted: false,
+    ...(input.search
+      ? {
+          OR: [
+            { name: { contains: input.search, mode: "insensitive" as const } },
+            { sku: { contains: input.search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  },
+});
+
 export const inventoryRouter = router({
   list: protectedProcedure
-    .input(
-      z.object({
-        storeId: z.string(),
-        search: z.string().optional(),
-        page: z.number().int().min(1).optional(),
-        pageSize: z.number().int().min(10).max(200).optional(),
-      }),
-    )
+    .input(inventoryListInputSchema)
     .query(async ({ ctx, input }) => {
       const page = input.page ?? 1;
       const pageSize = input.pageSize ?? 25;
-      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
-      }
-
-      const where = {
+      const storeAccessStartedAt = Date.now();
+      await assertStoreAccess({
+        prisma: ctx.prisma,
         storeId: input.storeId,
-        product: {
-          isDeleted: false,
-          ...(input.search
-            ? {
-                OR: [
-                  { name: { contains: input.search, mode: "insensitive" as const } },
-                  { sku: { contains: input.search, mode: "insensitive" as const } },
-                ],
-              }
-            : {}),
+        organizationId: ctx.user.organizationId,
+      });
+      logProfileSection({
+        logger: ctx.logger,
+        scope: "inventory.list",
+        section: "storeAccess",
+        startedAt: storeAccessStartedAt,
+        details: {
+          hasStoreId: true,
         },
-      };
+      });
+
+      const where = buildInventorySnapshotWhere(input);
+      const primaryReadsStartedAt = Date.now();
       const [total, snapshots] = await Promise.all([
         ctx.prisma.inventorySnapshot.count({ where }),
         ctx.prisma.inventorySnapshot.findMany({
           where,
-          include: {
+          select: {
+            id: true,
+            storeId: true,
+            productId: true,
+            variantId: true,
+            variantKey: true,
+            onHand: true,
+            onOrder: true,
+            allowNegativeStock: true,
+            updatedAt: true,
             product: {
-              include: {
+              select: {
+                id: true,
+                supplierId: true,
+                sku: true,
+                name: true,
+                baseUnitId: true,
+                photoUrl: true,
                 baseUnit: true,
-                packs: true,
+                packs: {
+                  select: {
+                    id: true,
+                    packName: true,
+                    multiplierToBase: true,
+                    allowInPurchasing: true,
+                    allowInReceiving: true,
+                  },
+                },
                 images: {
                   where: {
                     url: {
@@ -65,15 +129,34 @@ export const inventoryRouter = router({
                 },
               },
             },
-            variant: true,
+            variant: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
           orderBy: { product: { name: "asc" } },
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
       ]);
+      logProfileSection({
+        logger: ctx.logger,
+        scope: "inventory.list",
+        section: "primaryReads",
+        startedAt: primaryReadsStartedAt,
+        details: {
+          total,
+          page,
+          pageSize,
+          snapshots: snapshots.length,
+          hasSearch: Boolean(input.search?.trim()),
+        },
+      });
 
       const productIds = snapshots.map((snapshot) => snapshot.productId);
+      const enrichmentReadsStartedAt = Date.now();
       const [policies, forecasts] =
         productIds.length > 0
           ? await Promise.all([
@@ -87,6 +170,17 @@ export const inventoryRouter = router({
               }),
             ])
           : [[], []];
+      logProfileSection({
+        logger: ctx.logger,
+        scope: "inventory.list",
+        section: "enrichmentReads",
+        startedAt: enrichmentReadsStartedAt,
+        details: {
+          productIds: productIds.length,
+          policies: policies.length,
+          forecasts: forecasts.length,
+        },
+      });
 
       const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
       const forecastMap = new Map(
@@ -114,32 +208,15 @@ export const inventoryRouter = router({
     }),
 
   listIds: protectedProcedure
-    .input(
-      z.object({
-        storeId: z.string(),
-        search: z.string().optional(),
-      }),
-    )
+    .input(inventoryListIdsInputSchema)
     .query(async ({ ctx, input }) => {
-      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
-      }
-
-      const where = {
+      await assertStoreAccess({
+        prisma: ctx.prisma,
         storeId: input.storeId,
-        product: {
-          isDeleted: false,
-          ...(input.search
-            ? {
-                OR: [
-                  { name: { contains: input.search, mode: "insensitive" as const } },
-                  { sku: { contains: input.search, mode: "insensitive" as const } },
-                ],
-              }
-            : {}),
-        },
-      };
+        organizationId: ctx.user.organizationId,
+      });
+
+      const where = buildInventorySnapshotWhere(input);
 
       const rows = await ctx.prisma.inventorySnapshot.findMany({
         where,

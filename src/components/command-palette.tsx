@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useDeferredValue,
   useEffect,
   useMemo,
   useCallback,
@@ -10,6 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
@@ -34,9 +36,18 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { filterCommandPaletteActions, type CommandPaletteCategory } from "@/lib/command-palette";
+import {
+  addRecentCommandPaletteSearch,
+  parseRecentCommandPaletteSearches,
+} from "@/lib/command-palette-recent";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import {
+  buildScopedStorageKey,
+  useScopedLocalStorageState,
+} from "@/lib/useScopedLocalStorageState";
 import { cn } from "@/lib/utils";
+import type { SearchResult } from "@/server/services/search/global";
 
 type PaletteItem = {
   id: string;
@@ -44,15 +55,19 @@ type PaletteItem = {
   sublabel?: string | null;
   href: string;
   icon: ComponentType<{ className?: string }>;
-  group: "actions" | "results";
+  group: "actions" | "recent" | "results";
   category?: CommandPaletteCategory;
+  resultType?: SearchResult["type"];
   keywords?: string[];
+  queryValue?: string;
 };
 
 const actionCategories: CommandPaletteCategory[] = ["documents", "products", "other", "payments"];
 
 const normalizeQuery = (value: string) => value.trim();
 const itemKey = (item: PaletteItem) => `${item.group}:${item.id}`;
+const resultGroupOrder = ["product", "supplier", "store", "purchaseOrder"] as const;
+const defaultRecentSearches: string[] = [];
 
 export const CommandPalette = ({
   open,
@@ -65,6 +80,7 @@ export const CommandPalette = ({
   const tErrors = useTranslations("errors");
   const router = useRouter();
   const { toast } = useToast();
+  const { data: session } = useSession();
   const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -106,11 +122,36 @@ export const CommandPalette = ({
     }
   }, [isOpen]);
 
+  const deferredQuery = useDeferredValue(query);
   const normalizedQuery = normalizeQuery(query);
+  const normalizedSearchQuery = normalizeQuery(deferredQuery);
+  const recentSearchesStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "command-palette-recent-searches",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
+  const { value: recentSearches, setValue: setRecentSearches } = useScopedLocalStorageState({
+    storageKey: recentSearchesStorageKey,
+    defaultValue: defaultRecentSearches,
+    parse: parseRecentCommandPaletteSearches,
+  });
+  const rememberRecentSearch = useCallback(
+    (value: string) => {
+      setRecentSearches((current) => addRecentCommandPaletteSearch(current, value));
+    },
+    [setRecentSearches],
+  );
+  const clearRecentSearches = useCallback(() => {
+    setRecentSearches([]);
+  }, [setRecentSearches]);
 
   const searchQuery = trpc.search.global.useQuery(
-    { q: normalizedQuery },
-    { enabled: normalizedQuery.length >= 2 && isOpen },
+    { q: normalizedSearchQuery },
+    { enabled: normalizedSearchQuery.length >= 2 && isOpen },
   );
 
   const actions = useMemo<PaletteItem[]>(
@@ -297,6 +338,7 @@ export const CommandPalette = ({
             href: item.href,
             icon: SuppliersIcon,
             group: "results",
+            resultType: item.type,
           };
         case "store":
           return {
@@ -306,6 +348,7 @@ export const CommandPalette = ({
             href: item.href,
             icon: StoresIcon,
             group: "results",
+            resultType: item.type,
           };
         case "purchaseOrder":
           return {
@@ -315,6 +358,7 @@ export const CommandPalette = ({
             href: item.href,
             icon: PurchaseOrdersIcon,
             group: "results",
+            resultType: item.type,
           };
         default:
           return {
@@ -324,12 +368,46 @@ export const CommandPalette = ({
             href: item.href,
             icon: ProductsIcon,
             group: "results",
+            resultType: item.type,
           };
       }
     });
   }, [searchQuery.data]);
 
-  const allItems = useMemo(() => [...filteredActions, ...results], [filteredActions, results]);
+  const resultGroups = useMemo(
+    () =>
+      resultGroupOrder
+        .map((type) => ({
+          type,
+          items: results.filter((item) => item.resultType === type),
+        }))
+        .filter((group) => group.items.length > 0),
+    [results],
+  );
+
+  const orderedResults = useMemo(
+    () => resultGroups.flatMap((group) => group.items),
+    [resultGroups],
+  );
+  const recentItems = useMemo<PaletteItem[]>(
+    () =>
+      normalizedQuery.length >= 2
+        ? []
+        : recentSearches.map((value) => ({
+            id: value,
+            label: value,
+            href: "#",
+            icon: SearchIcon,
+            group: "recent",
+            queryValue: value,
+          })),
+    [normalizedQuery.length, recentSearches],
+  );
+
+  const allItems = useMemo(
+    () => [...recentItems, ...filteredActions, ...orderedResults],
+    [filteredActions, orderedResults, recentItems],
+  );
   const activeItem = allItems[activeIndex];
   const indexByItemId = useMemo(
     () => new Map(allItems.map((item, index) => [itemKey(item), index])),
@@ -348,7 +426,7 @@ export const CommandPalette = ({
     setActiveIndex(0);
     setHoveredIndex(null);
     setKeyboardNavigation(false);
-  }, [normalizedQuery, filteredActions.length, results.length]);
+  }, [normalizedQuery, filteredActions.length, orderedResults.length]);
 
   const findByBarcode = trpc.products.findByBarcode.useMutation({
     onError: (error) => {
@@ -359,6 +437,17 @@ export const CommandPalette = ({
   const handleSelect = (item?: PaletteItem) => {
     if (!item) {
       return;
+    }
+    if (item.queryValue) {
+      setQuery(item.queryValue);
+      setKeyboardNavigation(false);
+      setHoveredIndex(null);
+      setActiveIndex(0);
+      setTimeout(() => inputRef.current?.focus(), 0);
+      return;
+    }
+    if (normalizedQuery) {
+      rememberRecentSearch(normalizedQuery);
     }
     router.push(item.href);
     setOpen(false);
@@ -393,7 +482,10 @@ export const CommandPalette = ({
     normalizedValue: string;
   }): Promise<boolean> => {
     const selectedIndex = hoveredIndex ?? activeIndex;
-    if (allItems.length) {
+    const shouldSelectActiveItem =
+      allItems.length > 0 &&
+      (hoveredIndex !== null || keyboardNavigation || normalizedQuery.length >= 2);
+    if (shouldSelectActiveItem) {
       handleSelect(allItems[selectedIndex]);
       return true;
     }
@@ -408,6 +500,7 @@ export const CommandPalette = ({
         toast({ variant: "info", description: t("noResults") });
         return false;
       }
+      rememberRecentSearch(normalizedValue);
       router.push(`/products/${product.id}`);
       setOpen(false);
       return true;
@@ -455,66 +548,146 @@ export const CommandPalette = ({
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("resultsTitle")}
             </div>
-            {searchQuery.isFetching ? (
+            {searchQuery.isFetching && orderedResults.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("loading")}</p>
-            ) : results.length ? (
-              <div className="grid grid-cols-1 gap-2">
-                {results.map((item) => {
-                  const key = itemKey(item);
-                  const index = indexByItemId.get(key) ?? 0;
-                  const Icon = item.icon;
-                  const isActive =
-                    hoveredIndex === index ||
-                    (keyboardNavigation && activeItem ? itemKey(activeItem) === key : false);
-                  return (
-                    <button
-                      key={`${item.group}-${item.id}`}
-                      type="button"
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition",
-                        isActive
-                          ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
-                          : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
-                      )}
-                      onMouseEnter={() => {
-                        setKeyboardNavigation(false);
-                        setActiveIndex(index);
-                        setHoveredIndex(index);
-                      }}
-                      onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        setKeyboardNavigation(false);
-                      }}
-                      onClick={() => handleSelect(item)}
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex h-8 w-8 items-center justify-center rounded-md border",
-                          isActive
-                            ? "border-primary/40 bg-primary/15 text-primary"
-                            : "border-border bg-secondary/70 text-muted-foreground",
-                        )}
-                      >
-                        <Icon className="h-4 w-4" aria-hidden />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{item.label}</p>
-                        {item.sublabel ? (
-                          <p className="truncate text-xs text-muted-foreground">{item.sublabel}</p>
-                        ) : null}
-                      </div>
-                    </button>
-                  );
-                })}
+            ) : orderedResults.length ? (
+              <div className="space-y-4">
+                {resultGroups.map((group) => (
+                  <div key={group.type} className="space-y-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t(`resultSections.${group.type}`)}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {group.items.map((item) => {
+                        const key = itemKey(item);
+                        const index = indexByItemId.get(key) ?? 0;
+                        const Icon = item.icon;
+                        const isActive =
+                          hoveredIndex === index ||
+                          (keyboardNavigation && activeItem ? itemKey(activeItem) === key : false);
+                        return (
+                          <button
+                            key={`${item.group}-${item.id}`}
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition",
+                              isActive
+                                ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
+                                : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
+                            )}
+                            onMouseEnter={() => {
+                              setKeyboardNavigation(false);
+                              setActiveIndex(index);
+                              setHoveredIndex(index);
+                            }}
+                            onMouseLeave={() =>
+                              setHoveredIndex((current) => (current === index ? null : current))
+                            }
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setKeyboardNavigation(false);
+                            }}
+                            onClick={() => handleSelect(item)}
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                                isActive
+                                  ? "border-primary/40 bg-primary/15 text-primary"
+                                  : "border-border bg-secondary/70 text-muted-foreground",
+                              )}
+                            >
+                              <Icon className="h-4 w-4" aria-hidden />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {item.label}
+                              </p>
+                              {item.sublabel ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {item.sublabel}
+                                </p>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">{t("noResults")}</p>
             )}
           </section>
         ) : (
-          <div className="rounded-xl border border-border/70 bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
-            {t("typeMoreToSearch")}
+          <div className="space-y-3">
+            {recentItems.length ? (
+              <section className="rounded-xl border border-border/70 bg-secondary/20 p-3 sm:p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t("recentSearchesTitle")}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-muted-foreground transition hover:text-foreground"
+                    onClick={clearRecentSearches}
+                  >
+                    {t("clearRecentSearches")}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {recentItems.map((item) => {
+                    const key = itemKey(item);
+                    const index = indexByItemId.get(key) ?? 0;
+                    const Icon = item.icon;
+                    const isActive =
+                      hoveredIndex === index ||
+                      (keyboardNavigation && activeItem ? itemKey(activeItem) === key : false);
+                    return (
+                      <button
+                        key={`${item.group}-${item.id}`}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition",
+                          isActive
+                            ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
+                            : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
+                        )}
+                        onMouseEnter={() => {
+                          setKeyboardNavigation(false);
+                          setActiveIndex(index);
+                          setHoveredIndex(index);
+                        }}
+                        onMouseLeave={() =>
+                          setHoveredIndex((current) => (current === index ? null : current))
+                        }
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setKeyboardNavigation(false);
+                        }}
+                        onClick={() => handleSelect(item)}
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                            isActive
+                              ? "border-primary/40 bg-primary/15 text-primary"
+                              : "border-border bg-secondary/70 text-muted-foreground",
+                          )}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </span>
+                        <span className="truncate font-medium text-foreground">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+            <div className="rounded-xl border border-border/70 bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
+              {t("typeMoreToSearch")}
+            </div>
           </div>
         )}
 
@@ -554,7 +727,9 @@ export const CommandPalette = ({
                           setActiveIndex(index);
                           setHoveredIndex(index);
                         }}
-                        onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
+                        onMouseLeave={() =>
+                          setHoveredIndex((current) => (current === index ? null : current))
+                        }
                         onMouseDown={(event) => {
                           event.preventDefault();
                           setKeyboardNavigation(false);

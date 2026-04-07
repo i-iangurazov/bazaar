@@ -1,4 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
+
+import {
+  isPrismaQueryProfilingEnabled,
+  recordPrismaQueryTiming,
+} from "@/server/profiling/perf";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const localDatabaseUrl = process.env.DATABASE_URL;
@@ -26,7 +31,9 @@ const datasourceUrl = localDatabaseUrl ? withDefaultConnectionParams(localDataba
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: ["error", "warn"],
+    log: isPrismaQueryProfilingEnabled()
+      ? [{ emit: "event", level: "query" }, "error", "warn"]
+      : ["error", "warn"],
     ...(datasourceUrl
       ? {
           datasources: {
@@ -37,6 +44,16 @@ export const prisma =
         }
       : {}),
   });
+
+if (isPrismaQueryProfilingEnabled()) {
+  prisma.$on("query" as never, (event: Prisma.QueryEvent) => {
+    recordPrismaQueryTiming({
+      query: event.query,
+      durationMs: event.duration,
+      target: event.target,
+    });
+  });
+}
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

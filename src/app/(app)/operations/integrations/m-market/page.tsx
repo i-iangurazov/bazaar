@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -53,6 +54,24 @@ const ISSUE_CODES = [
 ] as const;
 
 type IssueCode = (typeof ISSUE_CODES)[number];
+
+const mMarketBulkProgressBatchSize = 25;
+
+type MMarketBulkProgressState = {
+  kind: "descriptions" | "specs";
+  status: "running" | "done" | "rateLimited" | "error";
+  totalCount: number;
+  processedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  deferredCount: number;
+  filledCount: number;
+  batchIndex: number;
+  batchCount: number;
+  startedAt: number;
+  errorMessage: string | null;
+};
 
 const formatCountdown = (seconds: number) => {
   const safeSeconds = Math.max(0, Math.trunc(seconds));
@@ -125,6 +144,8 @@ const MMarketSettingsPage = () => {
   const isAdmin = role === "ADMIN";
   const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
   const canEdit = role === "ADMIN" || role === "MANAGER";
+  const [bulkProgress, setBulkProgress] = useState<MMarketBulkProgressState | null>(null);
+  const [bulkElapsedSeconds, setBulkElapsedSeconds] = useState(0);
 
   const settingsQuery = trpc.mMarket.settings.useQuery(undefined, { enabled: canView });
   const jobsQuery = trpc.mMarket.jobs.useQuery(
@@ -221,85 +242,8 @@ const MMarketSettingsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const bulkGenerateDescriptionsMutation = trpc.mMarket.bulkGenerateDescriptions.useMutation({
-    onSuccess: async (result) => {
-      await preflightQuery.refetch();
-      if (result.targetedCount === 0) {
-        toast({ variant: "info", description: t("preflight.generateDescriptionsNothingToDo") });
-        return;
-      }
-      toast({
-        variant: result.rateLimited || result.failedCount > 0 ? "info" : "success",
-        description: result.rateLimited
-          ? tProducts("bulkGenerateDescriptionsRateLimited", {
-              updated: result.updatedCount,
-              skipped: result.skippedCount,
-              failed: result.failedCount,
-              deferred: result.deferredCount,
-            })
-          : result.failedCount > 0
-            ? tProducts("bulkGenerateDescriptionsPartial", {
-                updated: result.updatedCount,
-                skipped: result.skippedCount,
-                failed: result.failedCount,
-              })
-            : tProducts("bulkGenerateDescriptionsSuccess", {
-                updated: result.updatedCount,
-                skipped: result.skippedCount,
-              }),
-      });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-  const bulkAutofillSpecsMutation = trpc.mMarket.bulkAutofillSpecs.useMutation({
-    onSuccess: async (result) => {
-      await preflightQuery.refetch();
-      if (result.targetedCount === 0) {
-        toast({ variant: "info", description: t("preflight.autofillSpecsNothingToDo") });
-        return;
-      }
-      if (result.updatedCount === 0 && result.skippedCount > 0 && result.failedCount === 0) {
-        toast({
-          variant: "info",
-          description: t("preflight.autofillSpecsSkippedOnly", {
-            noTemplate: result.skipReasonCounts.noTemplate,
-            noSupportedFields: result.skipReasonCounts.noSupportedFields,
-            noResolvedValues: result.skipReasonCounts.noResolvedValues,
-            noCategory: result.skipReasonCounts.noCategory,
-          }),
-        });
-        return;
-      }
-      toast({
-        variant: result.rateLimited || result.failedCount > 0 ? "info" : "success",
-        description: result.rateLimited
-          ? t("preflight.autofillSpecsRateLimited", {
-              updated: result.updatedCount,
-              filled: result.filledValueCount,
-              skipped: result.skippedCount,
-              failed: result.failedCount,
-              deferred: result.deferredCount,
-            })
-          : result.failedCount > 0
-            ? t("preflight.autofillSpecsPartial", {
-                updated: result.updatedCount,
-                filled: result.filledValueCount,
-                skipped: result.skippedCount,
-                failed: result.failedCount,
-              })
-            : t("preflight.autofillSpecsSuccess", {
-                updated: result.updatedCount,
-                filled: result.filledValueCount,
-                skipped: result.skippedCount,
-              }),
-      });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
+  const bulkGenerateDescriptionsMutation = trpc.mMarket.bulkGenerateDescriptions.useMutation();
+  const bulkAutofillSpecsMutation = trpc.mMarket.bulkAutofillSpecs.useMutation();
   const bulkCreateBaseTemplatesMutation = trpc.mMarket.bulkCreateBaseTemplates.useMutation({
     onSuccess: async (result) => {
       await preflightQuery.refetch();
@@ -442,6 +386,21 @@ const MMarketSettingsPage = () => {
   }, [cooldownRemainingSeconds]);
 
   useEffect(() => {
+    if (!bulkProgress) {
+      setBulkElapsedSeconds(0);
+      return;
+    }
+    setBulkElapsedSeconds(Math.max(0, Math.floor((Date.now() - bulkProgress.startedAt) / 1000)));
+    if (bulkProgress.status !== "running") {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setBulkElapsedSeconds(Math.max(0, Math.floor((Date.now() - bulkProgress.startedAt) / 1000)));
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [bulkProgress]);
+
+  useEffect(() => {
     setProductsPage(1);
   }, [productSearch, productSelectionFilter]);
 
@@ -453,37 +412,374 @@ const MMarketSettingsPage = () => {
   };
 
   const handleGenerateShortDescriptions = async () => {
-    if (!isAdmin || shortDescriptionCount <= 0) {
+    if (!isAdmin || shortDescriptionTargetIds.length <= 0 || bulkProgressRunning) {
       return;
     }
     if (
       !(await confirm({
         description: t("preflight.confirmGenerateDescriptions", {
-          count: shortDescriptionCount,
+          count: shortDescriptionTargetIds.length,
         }),
       }))
     ) {
       return;
     }
-    bulkGenerateDescriptionsMutation.mutate({
-      locale: locale === "kg" ? "kg" : "ru",
+    const batches = Array.from(
+      { length: Math.ceil(shortDescriptionTargetIds.length / mMarketBulkProgressBatchSize) },
+      (_value, index) =>
+        shortDescriptionTargetIds.slice(
+          index * mMarketBulkProgressBatchSize,
+          (index + 1) * mMarketBulkProgressBatchSize,
+        ),
+    ).filter((batch) => batch.length > 0);
+    const summary = {
+      processedCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      deferredCount: 0,
+    };
+
+    setBulkProgress({
+      kind: "descriptions",
+      status: "running",
+      totalCount: shortDescriptionTargetIds.length,
+      processedCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      deferredCount: 0,
+      filledCount: 0,
+      batchIndex: 0,
+      batchCount: batches.length,
+      startedAt: Date.now(),
+      errorMessage: null,
     });
+
+    try {
+      for (const [batchIndex, batch] of batches.entries()) {
+        setBulkProgress((current) =>
+          current
+            ? {
+                ...current,
+                batchIndex: batchIndex + 1,
+              }
+            : current,
+        );
+
+        const result = await bulkGenerateDescriptionsMutation.mutateAsync({
+          locale: locale === "kg" ? "kg" : "ru",
+          productIds: batch,
+        });
+        const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
+        const remainingAfterBatch = Math.max(
+          0,
+          shortDescriptionTargetIds.length - (batchIndex + 1) * mMarketBulkProgressBatchSize,
+        );
+
+        summary.processedCount += handledInBatch;
+        summary.updatedCount += result.updatedCount;
+        summary.skippedCount += result.skippedCount;
+        summary.failedCount += result.failedCount;
+
+        if (result.rateLimited) {
+          summary.deferredCount += result.deferredCount + remainingAfterBatch;
+          setBulkProgress((current) =>
+            current
+              ? {
+                  ...current,
+                  status: "rateLimited",
+                  processedCount: summary.processedCount,
+                  updatedCount: summary.updatedCount,
+                  skippedCount: summary.skippedCount,
+                  failedCount: summary.failedCount,
+                  deferredCount: summary.deferredCount,
+                  batchIndex: batchIndex + 1,
+                }
+              : current,
+          );
+          await preflightQuery.refetch();
+          toast({
+            variant: "info",
+            description: tProducts("bulkGenerateDescriptionsRateLimited", {
+              updated: summary.updatedCount,
+              skipped: summary.skippedCount,
+              failed: summary.failedCount,
+              deferred: summary.deferredCount,
+            }),
+          });
+          return;
+        }
+
+        setBulkProgress((current) =>
+          current
+            ? {
+                ...current,
+                processedCount: summary.processedCount,
+                updatedCount: summary.updatedCount,
+                skippedCount: summary.skippedCount,
+                failedCount: summary.failedCount,
+                deferredCount: 0,
+                batchIndex: batchIndex + 1,
+              }
+            : current,
+        );
+      }
+
+      setBulkProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "done",
+              processedCount: summary.processedCount,
+              updatedCount: summary.updatedCount,
+              skippedCount: summary.skippedCount,
+              failedCount: summary.failedCount,
+              deferredCount: 0,
+              batchIndex: batches.length,
+            }
+          : current,
+      );
+      await preflightQuery.refetch();
+      if (summary.processedCount === 0) {
+        toast({ variant: "info", description: t("preflight.generateDescriptionsNothingToDo") });
+        return;
+      }
+      toast({
+        variant: summary.failedCount > 0 ? "info" : "success",
+        description:
+          summary.failedCount > 0
+            ? tProducts("bulkGenerateDescriptionsPartial", {
+                updated: summary.updatedCount,
+                skipped: summary.skippedCount,
+                failed: summary.failedCount,
+              })
+            : tProducts("bulkGenerateDescriptionsSuccess", {
+                updated: summary.updatedCount,
+                skipped: summary.skippedCount,
+              }),
+      });
+    } catch (error) {
+      await preflightQuery.refetch();
+      const errorMessage = translateError(
+        tErrors,
+        error as Parameters<typeof translateError>[1],
+      );
+      setBulkProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "error",
+              deferredCount: Math.max(0, current.totalCount - current.processedCount),
+              errorMessage,
+            }
+          : current,
+      );
+      toast({ variant: "error", description: errorMessage });
+    }
   };
 
   const handleAutofillSpecs = async () => {
-    if (!isAdmin || actionableMissingSpecsCount <= 0) {
+    if (!isAdmin || actionableMissingSpecsTargetIds.length <= 0 || bulkProgressRunning) {
       return;
     }
     if (
       !(await confirm({
         description: t("preflight.confirmAutofillSpecs", {
-          count: actionableMissingSpecsCount,
+          count: actionableMissingSpecsTargetIds.length,
         }),
       }))
     ) {
       return;
     }
-    bulkAutofillSpecsMutation.mutate();
+    const batches = Array.from(
+      { length: Math.ceil(actionableMissingSpecsTargetIds.length / mMarketBulkProgressBatchSize) },
+      (_value, index) =>
+        actionableMissingSpecsTargetIds.slice(
+          index * mMarketBulkProgressBatchSize,
+          (index + 1) * mMarketBulkProgressBatchSize,
+        ),
+    ).filter((batch) => batch.length > 0);
+    const summary = {
+      processedCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      deferredCount: 0,
+      filledCount: 0,
+      skipReasonCounts: {
+        noTemplate: 0,
+        noSupportedFields: 0,
+        noResolvedValues: 0,
+        noCategory: 0,
+      },
+    };
+
+    setBulkProgress({
+      kind: "specs",
+      status: "running",
+      totalCount: actionableMissingSpecsTargetIds.length,
+      processedCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      deferredCount: 0,
+      filledCount: 0,
+      batchIndex: 0,
+      batchCount: batches.length,
+      startedAt: Date.now(),
+      errorMessage: null,
+    });
+
+    try {
+      for (const [batchIndex, batch] of batches.entries()) {
+        setBulkProgress((current) =>
+          current
+            ? {
+                ...current,
+                batchIndex: batchIndex + 1,
+              }
+            : current,
+        );
+
+        const result = await bulkAutofillSpecsMutation.mutateAsync({
+          productIds: batch,
+        });
+        const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
+        const remainingAfterBatch = Math.max(
+          0,
+          actionableMissingSpecsTargetIds.length -
+            (batchIndex + 1) * mMarketBulkProgressBatchSize,
+        );
+
+        summary.processedCount += handledInBatch;
+        summary.updatedCount += result.updatedCount;
+        summary.skippedCount += result.skippedCount;
+        summary.failedCount += result.failedCount;
+        summary.filledCount += result.filledValueCount;
+        summary.skipReasonCounts.noTemplate += result.skipReasonCounts.noTemplate;
+        summary.skipReasonCounts.noSupportedFields += result.skipReasonCounts.noSupportedFields;
+        summary.skipReasonCounts.noResolvedValues += result.skipReasonCounts.noResolvedValues;
+        summary.skipReasonCounts.noCategory += result.skipReasonCounts.noCategory;
+
+        if (result.rateLimited) {
+          summary.deferredCount += result.deferredCount + remainingAfterBatch;
+          setBulkProgress((current) =>
+            current
+              ? {
+                  ...current,
+                  status: "rateLimited",
+                  processedCount: summary.processedCount,
+                  updatedCount: summary.updatedCount,
+                  skippedCount: summary.skippedCount,
+                  failedCount: summary.failedCount,
+                  deferredCount: summary.deferredCount,
+                  filledCount: summary.filledCount,
+                  batchIndex: batchIndex + 1,
+                }
+              : current,
+          );
+          await preflightQuery.refetch();
+          toast({
+            variant: "info",
+            description: t("preflight.autofillSpecsRateLimited", {
+              updated: summary.updatedCount,
+              filled: summary.filledCount,
+              skipped: summary.skippedCount,
+              failed: summary.failedCount,
+              deferred: summary.deferredCount,
+            }),
+          });
+          return;
+        }
+
+        setBulkProgress((current) =>
+          current
+            ? {
+                ...current,
+                processedCount: summary.processedCount,
+                updatedCount: summary.updatedCount,
+                skippedCount: summary.skippedCount,
+                failedCount: summary.failedCount,
+                deferredCount: 0,
+                filledCount: summary.filledCount,
+                batchIndex: batchIndex + 1,
+              }
+            : current,
+        );
+      }
+
+      setBulkProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "done",
+              processedCount: summary.processedCount,
+              updatedCount: summary.updatedCount,
+              skippedCount: summary.skippedCount,
+              failedCount: summary.failedCount,
+              deferredCount: 0,
+              filledCount: summary.filledCount,
+              batchIndex: batches.length,
+            }
+          : current,
+      );
+      await preflightQuery.refetch();
+      if (summary.processedCount === 0) {
+        toast({ variant: "info", description: t("preflight.autofillSpecsNothingToDo") });
+        return;
+      }
+      if (
+        summary.updatedCount === 0 &&
+        summary.skippedCount > 0 &&
+        summary.failedCount === 0 &&
+        summary.deferredCount === 0
+      ) {
+        toast({
+          variant: "info",
+          description: t("preflight.autofillSpecsSkippedOnly", {
+            noTemplate: summary.skipReasonCounts.noTemplate,
+            noSupportedFields: summary.skipReasonCounts.noSupportedFields,
+            noResolvedValues: summary.skipReasonCounts.noResolvedValues,
+            noCategory: summary.skipReasonCounts.noCategory,
+          }),
+        });
+        return;
+      }
+      toast({
+        variant: summary.failedCount > 0 ? "info" : "success",
+        description:
+          summary.failedCount > 0
+            ? t("preflight.autofillSpecsPartial", {
+                updated: summary.updatedCount,
+                filled: summary.filledCount,
+                skipped: summary.skippedCount,
+                failed: summary.failedCount,
+              })
+            : t("preflight.autofillSpecsSuccess", {
+                updated: summary.updatedCount,
+                filled: summary.filledCount,
+                skipped: summary.skippedCount,
+              }),
+      });
+    } catch (error) {
+      await preflightQuery.refetch();
+      const errorMessage = translateError(
+        tErrors,
+        error as Parameters<typeof translateError>[1],
+      );
+      setBulkProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "error",
+              deferredCount: Math.max(0, current.totalCount - current.processedCount),
+              errorMessage,
+            }
+          : current,
+      );
+      toast({ variant: "error", description: errorMessage });
+    }
   };
 
   const handleCreateBaseTemplates = async () => {
@@ -634,16 +930,67 @@ const MMarketSettingsPage = () => {
   const preflightData = preflightQuery.data;
   const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
   const missingCategoryCount = preflightData?.blockers.byCode.MISSING_CATEGORY ?? 0;
-  const shortDescriptionCount = preflightData?.blockers.byCode.SHORT_DESCRIPTION ?? 0;
-  const actionableMissingSpecsCount =
-    preflightData?.failedProducts.filter(
-      (row) =>
-        row.issues.includes("MISSING_SPECS") && !row.issues.includes("MISSING_CATEGORY"),
-    ).length ?? 0;
+  const shortDescriptionTargetIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (preflightData?.failedProducts ?? [])
+            .filter((row) => row.issues.includes("SHORT_DESCRIPTION"))
+            .map((row) => row.productId),
+        ),
+      ),
+    [preflightData?.failedProducts],
+  );
+  const actionableMissingSpecsTargetIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (preflightData?.failedProducts ?? [])
+            .filter(
+              (row) =>
+                row.issues.includes("MISSING_SPECS") && !row.issues.includes("MISSING_CATEGORY"),
+            )
+            .map((row) => row.productId),
+        ),
+      ),
+    [preflightData?.failedProducts],
+  );
+  const shortDescriptionCount = shortDescriptionTargetIds.length;
+  const actionableMissingSpecsCount = actionableMissingSpecsTargetIds.length;
   const effectiveCooldownSeconds = Math.max(
     cooldownRemainingSeconds,
     preflightData?.cooldown.remainingSeconds ?? 0,
   );
+  const bulkProgressPercent = bulkProgress
+    ? Math.round((bulkProgress.processedCount / Math.max(1, bulkProgress.totalCount)) * 100)
+    : 0;
+  const bulkProgressRunning = bulkProgress?.status === "running";
+  const bulkProgressTitle = bulkProgress
+    ? bulkProgress.kind === "specs"
+      ? t("preflight.autofillSpecsProgressTitle")
+      : tProducts("bulkGenerateDescriptionsProgressTitle")
+    : "";
+  const bulkProgressSubtitle = bulkProgress
+    ? bulkProgress.kind === "specs"
+      ? bulkProgress.status === "running"
+        ? t("preflight.autofillSpecsProgressRunning")
+        : bulkProgress.status === "rateLimited"
+          ? t("preflight.autofillSpecsProgressRateLimited")
+          : bulkProgress.status === "error"
+            ? t("preflight.autofillSpecsProgressError")
+            : bulkProgress.failedCount > 0
+              ? t("preflight.autofillSpecsProgressPartial")
+              : t("preflight.autofillSpecsProgressDone")
+      : bulkProgress.status === "running"
+        ? tProducts("bulkGenerateDescriptionsProgressRunning")
+        : bulkProgress.status === "rateLimited"
+          ? tProducts("bulkGenerateDescriptionsProgressRateLimited")
+          : bulkProgress.status === "error"
+            ? tProducts("bulkGenerateDescriptionsProgressError")
+            : bulkProgress.failedCount > 0
+              ? tProducts("bulkGenerateDescriptionsProgressPartial")
+              : tProducts("bulkGenerateDescriptionsProgressDone")
+    : undefined;
   const productItems = productsQuery.data?.items ?? [];
   const productSummary = productsQuery.data?.summary;
   const allProductsSelectedOnPage =
@@ -1302,7 +1649,7 @@ const MMarketSettingsPage = () => {
                         <Button
                           type="button"
                           onClick={() => void handleAutofillSpecs()}
-                          disabled={bulkAutofillSpecsMutation.isLoading}
+                          disabled={bulkProgressRunning || bulkAutofillSpecsMutation.isLoading}
                         >
                           {bulkAutofillSpecsMutation.isLoading ? (
                             <Spinner className="h-4 w-4" />
@@ -1318,7 +1665,7 @@ const MMarketSettingsPage = () => {
                       <Button
                         type="button"
                         onClick={() => void handleGenerateShortDescriptions()}
-                        disabled={bulkGenerateDescriptionsMutation.isLoading}
+                        disabled={bulkProgressRunning || bulkGenerateDescriptionsMutation.isLoading}
                       >
                         {bulkGenerateDescriptionsMutation.isLoading ? (
                           <Spinner className="h-4 w-4" />
@@ -1488,6 +1835,130 @@ const MMarketSettingsPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Modal
+        open={Boolean(bulkProgress)}
+        onOpenChange={(open) => {
+          if (!open && !bulkProgressRunning) {
+            setBulkProgress(null);
+          }
+        }}
+        title={bulkProgressTitle}
+        subtitle={bulkProgressSubtitle}
+      >
+        {bulkProgress ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="font-medium text-foreground">
+                  {tProducts("bulkGenerateDescriptionsProgressLabel", {
+                    processed: bulkProgress.processedCount,
+                    total: bulkProgress.totalCount,
+                  })}
+                </p>
+                <span className="text-sm font-semibold text-foreground">
+                  {bulkProgressPercent}%
+                </span>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-border/70">
+                <div
+                  className="h-2 rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${bulkProgressPercent}%` }}
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span>
+                  {tProducts("bulkGenerateDescriptionsProgressBatch", {
+                    current:
+                      bulkProgress.batchCount > 0
+                        ? Math.min(
+                            bulkProgress.batchCount,
+                            Math.max(1, bulkProgress.batchIndex),
+                          )
+                        : 0,
+                    total: bulkProgress.batchCount,
+                  })}
+                </span>
+                <span>
+                  {tProducts("bulkGenerateDescriptionsProgressElapsed", {
+                    seconds: bulkElapsedSeconds,
+                  })}
+                </span>
+              </div>
+            </div>
+
+            <div
+              className={
+                bulkProgress.kind === "specs"
+                  ? "grid grid-cols-2 gap-3 sm:grid-cols-5"
+                  : "grid grid-cols-2 gap-3 sm:grid-cols-4"
+              }
+            >
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {tProducts("bulkGenerateDescriptionsProgressUpdated")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {bulkProgress.updatedCount}
+                </p>
+              </div>
+              {bulkProgress.kind === "specs" ? (
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">
+                    {t("preflight.bulkProgressFilled")}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {bulkProgress.filledCount}
+                  </p>
+                </div>
+              ) : null}
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {tProducts("bulkGenerateDescriptionsProgressSkipped")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {bulkProgress.skippedCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {tProducts("bulkGenerateDescriptionsProgressFailed")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {bulkProgress.failedCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {tProducts("bulkGenerateDescriptionsProgressDeferred")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {bulkProgress.deferredCount}
+                </p>
+              </div>
+            </div>
+
+            {bulkProgress.errorMessage ? (
+              <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+                {bulkProgress.errorMessage}
+              </div>
+            ) : null}
+
+            {!bulkProgressRunning ? (
+              <FormActions>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => setBulkProgress(null)}
+                >
+                  {tCommon("close")}
+                </Button>
+              </FormActions>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       {confirmDialog}
     </div>

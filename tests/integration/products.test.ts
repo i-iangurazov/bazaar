@@ -273,6 +273,39 @@ describeDb("products", () => {
     expect(notFound).toBeNull();
   });
 
+  it("bootstraps products with the resolved single-store context", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await prisma.storePrice.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        priceKgs: 777,
+      },
+    });
+
+    const result = await caller.products.bootstrap({
+      page: 1,
+      pageSize: 25,
+      sortKey: "name",
+      sortDirection: "asc",
+    });
+
+    const item = result.list.items.find((entry) => entry.id === product.id);
+
+    expect(result.selectedStoreId).toBe(store.id);
+    expect(result.stores).toHaveLength(1);
+    expect(item?.effectivePriceKgs).toBe(777);
+  });
+
   it("normalizes scanned barcode input while keeping org scoping", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
@@ -314,6 +347,386 @@ describeDb("products", () => {
 
     const notFound = await otherCaller.products.findByBarcode({ value: "00001234" });
     expect(notFound).toBeNull();
+  });
+
+  it("keeps paginated product list ordering stable for default sortable fields", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-list-a",
+      sku: "SKU-C",
+      name: "Charlie Product",
+      baseUnitId: baseUnit.id,
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-list-b",
+      sku: "SKU-A",
+      name: "Alpha Product",
+      baseUnitId: baseUnit.id,
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-list-c",
+      sku: "SKU-B",
+      name: "Bravo Product",
+      baseUnitId: baseUnit.id,
+    });
+
+    const pageOne = await caller.products.list({
+      page: 1,
+      pageSize: 2,
+      sortKey: "name",
+      sortDirection: "asc",
+    });
+    const pageTwo = await caller.products.list({
+      page: 2,
+      pageSize: 2,
+      sortKey: "name",
+      sortDirection: "asc",
+    });
+
+    expect(pageOne.total).toBeGreaterThanOrEqual(3);
+    expect(pageOne.items.map((item) => item.name)).toEqual(["Alpha Product", "Bravo Product"]);
+    expect(pageTwo.items.map((item) => item.name)).toContain("Charlie Product");
+  });
+
+  it("sorts paginated product lists by computed on-hand quantity", async () => {
+    const { org, adminUser, baseUnit, store } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const lowQty = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-sort-on-hand-low",
+      sku: "SKU-QTY-LOW",
+      name: "Low Qty Product",
+      baseUnitId: baseUnit.id,
+    });
+    const midQty = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-sort-on-hand-mid",
+      sku: "SKU-QTY-MID",
+      name: "Mid Qty Product",
+      baseUnitId: baseUnit.id,
+    });
+    const highQty = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-sort-on-hand-high",
+      sku: "SKU-QTY-HIGH",
+      name: "High Qty Product",
+      baseUnitId: baseUnit.id,
+    });
+
+    await adjustStock({
+      storeId: store.id,
+      productId: lowQty.id,
+      qtyDelta: 2,
+      reason: "Seed low quantity",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-product-sort-stock-low",
+      idempotencyKey: "idem-product-sort-stock-low",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: midQty.id,
+      qtyDelta: 5,
+      reason: "Seed mid quantity",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-product-sort-stock-mid",
+      idempotencyKey: "idem-product-sort-stock-mid",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: highQty.id,
+      qtyDelta: 9,
+      reason: "Seed high quantity",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-product-sort-stock-high",
+      idempotencyKey: "idem-product-sort-stock-high",
+    });
+
+    const pageOne = await caller.products.list({
+      storeId: store.id,
+      page: 1,
+      pageSize: 2,
+      sortKey: "onHandQty",
+      sortDirection: "desc",
+    });
+    const pageTwo = await caller.products.list({
+      storeId: store.id,
+      page: 2,
+      pageSize: 2,
+      sortKey: "onHandQty",
+      sortDirection: "desc",
+    });
+
+    expect(pageOne.items.map((item) => [item.name, item.onHandQty])).toEqual([
+      ["High Qty Product", 9],
+      ["Mid Qty Product", 5],
+    ]);
+    expect(pageTwo.items[0]).toMatchObject({
+      name: "Low Qty Product",
+      onHandQty: 2,
+    });
+  });
+
+  it("returns detailed product reads with numeric prices and variant delete flags", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-detail-read",
+      sku: "SKU-DETAIL-1",
+      name: "Detail Read Product",
+      category: "Tea",
+      categories: ["Tea", "Featured"],
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 180,
+      avgCostKgs: 125,
+      description: "Detailed product description for contract coverage.",
+      barcodes: ["DETAIL-001"],
+      variants: [{ name: "Large", sku: "SKU-DETAIL-1-L" }],
+    });
+
+    const detail = await caller.products.getById({ productId: product.id });
+
+    expect(detail).toMatchObject({
+      id: product.id,
+      sku: "SKU-DETAIL-1",
+      name: "Detail Read Product",
+      category: "Tea",
+      categories: ["Tea", "Featured"],
+      basePriceKgs: 180,
+      avgCostKgs: 125,
+      purchasePriceKgs: 125,
+      barcodes: ["DETAIL-001"],
+      baseUnitId: baseUnit.id,
+      baseUnit: {
+        id: baseUnit.id,
+      },
+    });
+    expect(detail?.variants).toHaveLength(1);
+    expect(detail?.variants[0]).toMatchObject({
+      name: "Large",
+      canDelete: true,
+    });
+  });
+
+  it("reflects create, update, archive, and restore flows in subsequent product lists", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const created = await caller.products.create({
+      sku: "SKU-LIST-FLOW",
+      name: "List Flow Product",
+      category: "Initial",
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 199,
+      barcodes: ["LIST-FLOW-001"],
+    });
+
+    const afterCreate = await caller.products.list({
+      search: "SKU-LIST-FLOW",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(afterCreate.items.find((item) => item.id === created.id)).toMatchObject({
+      name: "List Flow Product",
+      category: "Initial",
+      isDeleted: false,
+    });
+
+    await caller.products.update({
+      productId: created.id,
+      sku: "SKU-LIST-FLOW",
+      name: "List Flow Product Updated",
+      category: "Updated",
+      categories: ["Updated", "Featured"],
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 249,
+      barcodes: ["LIST-FLOW-001"],
+    });
+
+    const afterUpdate = await caller.products.list({
+      search: "Updated",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(afterUpdate.items.find((item) => item.id === created.id)).toMatchObject({
+      name: "List Flow Product Updated",
+      category: "Updated",
+      basePriceKgs: 249,
+      isDeleted: false,
+    });
+
+    await caller.products.archive({ productId: created.id });
+
+    const activeListAfterArchive = await caller.products.list({
+      search: "SKU-LIST-FLOW",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(activeListAfterArchive.items.find((item) => item.id === created.id)).toBeUndefined();
+
+    const archivedList = await caller.products.list({
+      search: "SKU-LIST-FLOW",
+      includeArchived: true,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(archivedList.items.find((item) => item.id === created.id)).toMatchObject({
+      name: "List Flow Product Updated",
+      isDeleted: true,
+    });
+
+    await caller.products.restore({ productId: created.id });
+
+    const afterRestore = await caller.products.list({
+      search: "SKU-LIST-FLOW",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(afterRestore.items.find((item) => item.id === created.id)).toMatchObject({
+      name: "List Flow Product Updated",
+      category: "Updated",
+      isDeleted: false,
+    });
+  });
+
+  it("returns duplicate diagnostics for exact sku, barcode, and normalized-name matches", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-dup-sku",
+      sku: "DUP-SKU-1",
+      name: "SKU Collision Product",
+      baseUnitId: baseUnit.id,
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-dup-barcode",
+      sku: "DUP-BARCODE-1",
+      name: "Barcode Collision Product",
+      baseUnitId: baseUnit.id,
+      barcodes: ["DUP-BC-1"],
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-dup-name",
+      sku: "DUP-NAME-1",
+      name: "Apple iPhone 15 Pro",
+      baseUnitId: baseUnit.id,
+    });
+
+    const diagnostics = await caller.products.duplicateDiagnostics({
+      sku: "DUP-SKU-1",
+      name: " Apple   iPhone-15   Pro ",
+      barcodes: ["DUP-BC-1"],
+    });
+
+    expect(diagnostics.exactSkuMatch).toMatchObject({
+      sku: "DUP-SKU-1",
+      name: "SKU Collision Product",
+    });
+    expect(diagnostics.exactBarcodeMatches).toEqual([
+      expect.objectContaining({
+        barcode: "DUP-BC-1",
+        sku: "DUP-BARCODE-1",
+      }),
+    ]);
+    expect(diagnostics.likelyNameMatches).toEqual([
+      expect.objectContaining({
+        sku: "DUP-NAME-1",
+        name: "Apple iPhone 15 Pro",
+      }),
+    ]);
+  });
+
+  it("avoids false-positive duplicate diagnostics and excludes the current product on edit", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-dup-self",
+      sku: "SELF-DUP-1",
+      name: "Fresh Milk 1L",
+      baseUnitId: baseUnit.id,
+      barcodes: ["SELF-BC-1"],
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-dup-other",
+      sku: "OTHER-DUP-1",
+      name: "Fresh Milk 2L",
+      baseUnitId: baseUnit.id,
+    });
+
+    const falsePositiveCheck = await caller.products.duplicateDiagnostics({
+      name: "Fresh Milk 500ml",
+    });
+    expect(falsePositiveCheck.likelyNameMatches).toEqual([]);
+
+    const selfCheck = await caller.products.duplicateDiagnostics({
+      productId: product.id,
+      sku: product.sku,
+      name: product.name,
+      barcodes: ["SELF-BC-1"],
+    });
+
+    expect(selfCheck.exactSkuMatch).toBeNull();
+    expect(selfCheck.exactBarcodeMatches).toEqual([]);
+    expect(selfCheck.likelyNameMatches).toEqual([]);
   });
 
   it("resolves scan lookup by exact barcode", async () => {

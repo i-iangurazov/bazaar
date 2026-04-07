@@ -3,6 +3,7 @@ import { PurchaseOrderStatus, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { runProductImport, rollbackImportBatch } from "@/server/services/imports";
+import { createProduct } from "@/server/services/products";
 import {
   approvePurchaseOrder,
   createPurchaseOrder,
@@ -292,5 +293,151 @@ describeDb("import batches", () => {
     await expect(caller.imports.rollback({ batchId: result.batch.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+  });
+
+  it("previews create, update, and skipped product imports before apply", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-preview-existing",
+      sku: "PREVIEW-UPD-1",
+      name: "Preview Existing",
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 100,
+    });
+
+    const fullPreview = await caller.products.previewImportCsv({
+      source: "csv",
+      mode: "full",
+      rows: [
+        {
+          sku: "PREVIEW-UPD-1",
+          name: "Preview Existing Updated",
+          unit: baseUnit.code,
+          basePriceKgs: 125,
+          sourceRowNumber: 1,
+        },
+        {
+          sku: "PREVIEW-NEW-1",
+          name: "Preview New",
+          unit: baseUnit.code,
+          basePriceKgs: 99,
+          sourceRowNumber: 2,
+        },
+      ],
+    });
+
+    expect(fullPreview.summary).toEqual({
+      creates: 1,
+      updates: 1,
+      skipped: 0,
+      warningCount: 0,
+      blockingWarningCount: 0,
+    });
+    expect(fullPreview.rows.find((row) => row.sku === "PREVIEW-UPD-1")).toMatchObject({
+      action: "update",
+      existingProduct: expect.objectContaining({
+        sku: "PREVIEW-UPD-1",
+      }),
+    });
+    expect(
+      fullPreview.rows
+        .find((row) => row.sku === "PREVIEW-UPD-1")
+        ?.changes.some(
+          (change) =>
+            change.field === "basePriceKgs" && change.before === 100 && change.after === 125,
+        ),
+    ).toBe(true);
+
+    const selectivePreview = await caller.products.previewImportCsv({
+      source: "csv",
+      mode: "update_selected",
+      updateMask: ["basePriceKgs"],
+      rows: [
+        {
+          sku: "PREVIEW-UPD-1",
+          basePriceKgs: 130,
+          sourceRowNumber: 1,
+        },
+        {
+          sku: "PREVIEW-MISSING-1",
+          basePriceKgs: 50,
+          sourceRowNumber: 2,
+        },
+      ],
+    });
+
+    expect(selectivePreview.summary).toEqual({
+      creates: 0,
+      updates: 1,
+      skipped: 1,
+      warningCount: 1,
+      blockingWarningCount: 0,
+    });
+    expect(selectivePreview.rows.find((row) => row.sku === "PREVIEW-MISSING-1")).toMatchObject({
+      action: "skipped",
+      warnings: [expect.objectContaining({ code: "missingExistingProduct" })],
+    });
+  });
+
+  it("shows blocking barcode conflicts and likely duplicate-name warnings in import preview", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-preview-duplicate",
+      sku: "PREVIEW-DUP-1",
+      name: "Organic Milk 1L",
+      baseUnitId: baseUnit.id,
+      barcodes: ["PREVIEW-BC-1"],
+    });
+
+    const preview = await caller.products.previewImportCsv({
+      source: "csv",
+      mode: "full",
+      rows: [
+        {
+          sku: "PREVIEW-CONFLICT-1",
+          name: "Organic-Milk 1L",
+          unit: baseUnit.code,
+          barcodes: ["PREVIEW-BC-1"],
+          sourceRowNumber: 1,
+        },
+        {
+          sku: "PREVIEW-LIKELY-1",
+          name: "Organic Milk 1L",
+          unit: baseUnit.code,
+          sourceRowNumber: 2,
+        },
+      ],
+    });
+
+    const conflictingRow = preview.rows.find((row) => row.sku === "PREVIEW-CONFLICT-1");
+    const likelyDuplicateRow = preview.rows.find((row) => row.sku === "PREVIEW-LIKELY-1");
+
+    expect(preview.summary.blockingWarningCount).toBe(1);
+    expect(conflictingRow?.hasBlockingWarnings).toBe(true);
+    expect(conflictingRow?.warnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "barcodeConflict" })]),
+    );
+    expect(likelyDuplicateRow?.hasBlockingWarnings).toBe(false);
+    expect(likelyDuplicateRow?.warnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "likelyDuplicateName" })]),
+    );
   });
 });

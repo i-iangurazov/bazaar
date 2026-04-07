@@ -1,5 +1,8 @@
 # Production Readiness Runbook
 
+See also:
+- [Deployment Rollout Checklist](/Users/ilias_iangurazov/Commercial/bazaar/docs/deployment-rollout-checklist.md)
+
 This checklist is the minimum release gate for a customer-facing deployment.
 
 ## 1) Environment and startup checks

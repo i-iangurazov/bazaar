@@ -10,7 +10,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
 import { HelpLink } from "@/components/help-link";
+import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,12 +81,56 @@ import {
 } from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { buildScopedStorageKey, useScopedLocalStorageState } from "@/lib/useScopedLocalStorageState";
+import {
+  createSavedTableView,
+  findMatchingSavedTableView,
+  overwriteSavedTableView,
+  parseSavedTableViews,
+  renameSavedTableView,
+} from "@/lib/saved-table-views";
 import { useSse } from "@/lib/useSse";
 import { useToast } from "@/components/ui/toast";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
+
+const inventoryViewModeSchema = z.enum(["table", "grid"]);
+const inventoryVisibleColumnSchema = z.enum([
+  "sku",
+  "image",
+  "product",
+  "onHand",
+  "minStock",
+  "lowStock",
+  "onOrder",
+  "suggestedOrder",
+]);
+const defaultInventoryVisibleColumns = [
+  "sku",
+  "image",
+  "product",
+  "onHand",
+  "minStock",
+  "lowStock",
+  "onOrder",
+  "suggestedOrder",
+] as const;
+const inventoryTableStateSchema = z.object({
+  storeId: z.string(),
+  search: z.string(),
+  viewMode: inventoryViewModeSchema,
+  pageSize: z.number().int().min(1).max(200),
+  showPlanning: z.boolean(),
+  visibleColumns: z
+    .array(inventoryVisibleColumnSchema)
+    .optional()
+    .default([...defaultInventoryVisibleColumns]),
+});
+
+type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
+type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
 
 const InventoryPage = () => {
   const t = useTranslations("inventory");
@@ -101,15 +147,9 @@ const InventoryPage = () => {
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
   const storesQuery = trpc.stores.list.useQuery();
-  const suppliersQuery = trpc.suppliers.list.useQuery();
   type StoreRow = NonNullable<typeof storesQuery.data>[number] & { trackExpiryLots?: boolean };
   const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
-  const [storeId, setStoreId] = useState<string>("");
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [inventoryPage, setInventoryPage] = useState(1);
-  const [inventoryPageSize, setInventoryPageSize] = useState(25);
-  const [showPlanning, setShowPlanning] = useState(false);
   const [expandedReorderId, setExpandedReorderId] = useState<string | null>(null);
   const [expiryWindow, setExpiryWindow] = useState<30 | 60 | 90>(30);
   const [activeDialog, setActiveDialog] = useState<
@@ -140,7 +180,155 @@ const InventoryPage = () => {
   const [printOpen, setPrintOpen] = useState(false);
   const [calibrationLoadedStoreKey, setCalibrationLoadedStoreKey] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
+  const suppliersQuery = trpc.suppliers.list.useQuery(undefined, {
+    enabled: canManage && poDraftOpen,
+  });
+  const defaultInventoryTableState = useMemo<InventoryTableState>(
+    () => ({
+      storeId: "",
+      search: "",
+      viewMode: "table",
+      pageSize: 25,
+      showPlanning: false,
+      visibleColumns: [...defaultInventoryVisibleColumns],
+    }),
+    [],
+  );
+  const inventoryTableStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "inventory-table-state",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
+  const parseInventoryTableState = useCallback((raw: string) => {
+    try {
+      const parsed = inventoryTableStateSchema.safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }, []);
+  const {
+    value: inventoryTableState,
+    setValue: setInventoryTableState,
+    isReady: inventoryTableStateReady,
+    hasStoredValue: hasStoredInventoryTableState,
+  } = useScopedLocalStorageState({
+    storageKey: inventoryTableStorageKey,
+    defaultValue: defaultInventoryTableState,
+    parse: parseInventoryTableState,
+  });
+  const defaultInventorySavedViewsState = useMemo(
+    () => ({ views: [], defaultViewId: null }),
+    [],
+  );
+  const inventorySavedViewsStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "inventory-saved-views",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
+  const parseInventorySavedViews = useCallback(
+    (raw: string) =>
+      parseSavedTableViews(raw, (value) => {
+        const parsed = inventoryTableStateSchema.safeParse(value);
+        return parsed.success ? parsed.data : null;
+      }),
+    [],
+  );
+  const {
+    value: inventorySavedViewsState,
+    setValue: setInventorySavedViewsState,
+    isReady: inventorySavedViewsReady,
+  } = useScopedLocalStorageState({
+    storageKey: inventorySavedViewsStorageKey,
+    defaultValue: defaultInventorySavedViewsState,
+    parse: parseInventorySavedViews,
+  });
+  const storeId = inventoryTableState.storeId;
+  const search = inventoryTableState.search;
+  const viewMode = inventoryTableState.viewMode;
+  const inventoryPageSize = inventoryTableState.pageSize;
+  const showPlanning = inventoryTableState.showPlanning;
+  const visibleInventoryColumns = inventoryTableState.visibleColumns;
+  const setStoreId = useCallback(
+    (nextValue: string) =>
+      setInventoryTableState((current) => ({
+        ...current,
+        storeId: nextValue,
+      })),
+    [setInventoryTableState],
+  );
+  const setSearch = useCallback(
+    (nextValue: string) =>
+      setInventoryTableState((current) => ({
+        ...current,
+        search: nextValue,
+      })),
+    [setInventoryTableState],
+  );
+  const setViewMode = useCallback(
+    (nextValue: "table" | "grid") =>
+      setInventoryTableState((current) => ({
+        ...current,
+        viewMode: nextValue,
+      })),
+    [setInventoryTableState],
+  );
+  const setInventoryPageSize = useCallback(
+    (nextValue: number) =>
+      setInventoryTableState((current) => ({
+        ...current,
+        pageSize: nextValue,
+      })),
+    [setInventoryTableState],
+  );
+  const setShowPlanning = useCallback(
+    (nextValue: boolean) =>
+      setInventoryTableState((current) => ({
+        ...current,
+        showPlanning: nextValue,
+      })),
+    [setInventoryTableState],
+  );
+  const toggleVisibleInventoryColumn = useCallback(
+    (columnKey: InventoryVisibleColumnKey) =>
+      setInventoryTableState((current) => ({
+        ...current,
+        visibleColumns: current.visibleColumns.includes(columnKey)
+          ? current.visibleColumns.filter((value) => value !== columnKey)
+          : [...current.visibleColumns, columnKey],
+      })),
+    [setInventoryTableState],
+  );
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
+  const matchingInventorySavedView = useMemo(
+    () => findMatchingSavedTableView(inventorySavedViewsState.views, inventoryTableState),
+    [inventorySavedViewsState.views, inventoryTableState],
+  );
+  const inventoryColumnOptions = useMemo(
+    () => [
+      { key: "sku", label: t("sku") },
+      { key: "image", label: t("imageLabel") },
+      { key: "product", label: tCommon("product"), required: true },
+      { key: "onHand", label: t("onHand") },
+      { key: "minStock", label: t("minStock") },
+      { key: "lowStock", label: t("lowStock") },
+      { key: "onOrder", label: t("onOrder") },
+      { key: "suggestedOrder", label: t("suggestedOrder") },
+    ],
+    [t, tCommon],
+  );
+  const visibleInventoryColumnSet = useMemo(
+    () => new Set<InventoryVisibleColumnKey>(visibleInventoryColumns),
+    [visibleInventoryColumns],
+  );
 
   const receiveSchema = useMemo(
     () =>
@@ -351,7 +539,7 @@ const InventoryPage = () => {
     [inventoryPage, inventoryPageSize, search, storeId],
   );
   const inventoryQuery = trpc.inventory.list.useQuery(inventoryListInput, {
-    enabled: Boolean(storeId),
+    enabled: Boolean(storeId) && inventoryTableStateReady,
     keepPreviousData: true,
   });
   const inventoryItems = useMemo(
@@ -564,11 +752,99 @@ const InventoryPage = () => {
     });
   };
 
+  const applyInventorySavedView = useCallback(
+    (viewId: string) => {
+      const view = inventorySavedViewsState.views.find((item) => item.id === viewId);
+      if (!view) {
+        return;
+      }
+      setInventoryTableState(view.state);
+      setInventoryPage(1);
+      setSelectedIds(new Set());
+    },
+    [inventorySavedViewsState.views, setInventoryTableState],
+  );
+
+  const saveInventoryView = useCallback(
+    (name: string) => {
+      setInventorySavedViewsState((current) => ({
+        ...current,
+        views: [...current.views, createSavedTableView({ name, state: inventoryTableState })],
+      }));
+    },
+    [inventoryTableState, setInventorySavedViewsState],
+  );
+
+  const renameInventoryView = useCallback(
+    (viewId: string, nextName: string) => {
+      setInventorySavedViewsState((current) => ({
+        ...current,
+        views: current.views.map((view) =>
+          view.id === viewId ? renameSavedTableView(view, nextName) : view,
+        ),
+      }));
+    },
+    [setInventorySavedViewsState],
+  );
+
+  const overwriteInventoryView = useCallback(
+    (viewId: string) => {
+      setInventorySavedViewsState((current) => ({
+        ...current,
+        views: current.views.map((view) =>
+          view.id === viewId ? overwriteSavedTableView(view, inventoryTableState) : view,
+        ),
+      }));
+    },
+    [inventoryTableState, setInventorySavedViewsState],
+  );
+
+  const deleteInventoryView = useCallback(
+    (viewId: string) => {
+      setInventorySavedViewsState((current) => ({
+        views: current.views.filter((view) => view.id !== viewId),
+        defaultViewId: current.defaultViewId === viewId ? null : current.defaultViewId,
+      }));
+    },
+    [setInventorySavedViewsState],
+  );
+
+  const setDefaultInventoryView = useCallback(
+    (viewId: string | null) => {
+      setInventorySavedViewsState((current) => ({
+        ...current,
+        defaultViewId:
+          viewId && current.views.some((view) => view.id === viewId) ? viewId : null,
+      }));
+    },
+    [setInventorySavedViewsState],
+  );
+
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
       setStoreId(storesQuery.data[0].id);
     }
-  }, [storeId, storesQuery.data]);
+  }, [setStoreId, storeId, storesQuery.data]);
+
+  useEffect(() => {
+    if (!inventoryTableStateReady || !inventorySavedViewsReady || hasStoredInventoryTableState) {
+      return;
+    }
+    const defaultView = inventorySavedViewsState.views.find(
+      (view) => view.id === inventorySavedViewsState.defaultViewId,
+    );
+    if (!defaultView) {
+      return;
+    }
+    setInventoryTableState(defaultView.state);
+  }, [
+    hasStoredInventoryTableState,
+    inventorySavedViewsReady,
+    inventorySavedViewsState.defaultViewId,
+    inventorySavedViewsState.views,
+    inventoryTableStateReady,
+    setInventoryTableState,
+  ]);
 
   useEffect(() => {
     setInventoryPage(1);
@@ -1078,7 +1354,16 @@ const InventoryPage = () => {
   const transferSelectionKey = transferProductId
     ? buildSelectionKey(transferProductId, transferVariantId)
     : "";
-  const tableColumnCount = showPlanning ? 10 : 9;
+  const tableColumnCount =
+    2 +
+    (visibleInventoryColumnSet.has("sku") ? 1 : 0) +
+    (visibleInventoryColumnSet.has("image") ? 1 : 0) +
+    (visibleInventoryColumnSet.has("product") ? 1 : 0) +
+    (visibleInventoryColumnSet.has("onHand") ? 1 : 0) +
+    (visibleInventoryColumnSet.has("minStock") ? 1 : 0) +
+    (visibleInventoryColumnSet.has("lowStock") ? 1 : 0) +
+    (visibleInventoryColumnSet.has("onOrder") ? 1 : 0) +
+    (showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? 1 : 0);
   const groupedDraftItems = useMemo(() => {
     const groups = new Map<string, typeof poDraftItems>();
     poDraftItems.forEach((item) => {
@@ -1270,29 +1555,54 @@ const InventoryPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("inventoryOverview")}</CardTitle>
-          <div className="inline-flex w-full items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === "table" ? "secondary" : "ghost"}
-              className="flex-1 sm:flex-none"
-              onClick={() => setViewMode("table")}
-              aria-label={t("viewTable")}
-            >
-              <TableViewIcon className="h-4 w-4" aria-hidden />
-              {t("viewTable")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              className="flex-1 sm:flex-none"
-              onClick={() => setViewMode("grid")}
-              aria-label={t("viewGrid")}
-            >
-              <GridViewIcon className="h-4 w-4" aria-hidden />
-              {t("viewGrid")}
-            </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <SavedTableViews
+                views={inventorySavedViewsState.views}
+                matchingViewId={matchingInventorySavedView?.id ?? null}
+                defaultViewId={inventorySavedViewsState.defaultViewId}
+                disabled={!inventorySavedViewsReady || !inventoryTableStateReady}
+                onApplyView={applyInventorySavedView}
+                onSaveView={saveInventoryView}
+                onRenameView={renameInventoryView}
+                onOverwriteView={overwriteInventoryView}
+                onDeleteView={deleteInventoryView}
+                onSetDefaultView={setDefaultInventoryView}
+              />
+              {viewMode === "table" ? (
+                <ColumnVisibilityMenu
+                  columns={inventoryColumnOptions}
+                  visibleColumns={visibleInventoryColumns}
+                  onToggleColumn={(columnKey) =>
+                    toggleVisibleInventoryColumn(columnKey as InventoryVisibleColumnKey)
+                  }
+                />
+              ) : null}
+            </div>
+            <div className="inline-flex w-full items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "table" ? "secondary" : "ghost"}
+                className="flex-1 sm:flex-none"
+                onClick={() => setViewMode("table")}
+                aria-label={t("viewTable")}
+              >
+                <TableViewIcon className="h-4 w-4" aria-hidden />
+                {t("viewTable")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                className="flex-1 sm:flex-none"
+                onClick={() => setViewMode("grid")}
+                aria-label={t("viewGrid")}
+              >
+                <GridViewIcon className="h-4 w-4" aria-hidden />
+                {t("viewGrid")}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1397,14 +1707,30 @@ const InventoryPage = () => {
                               aria-label={t("selectAll")}
                             />
                           </TableHead>
-                          <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
-                          <TableHead>{t("imageLabel")}</TableHead>
-                          <TableHead>{tCommon("product")}</TableHead>
-                          <TableHead>{t("onHand")}</TableHead>
-                          <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
-                          <TableHead>{t("lowStock")}</TableHead>
-                          <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
-                          {showPlanning ? <TableHead>{t("suggestedOrder")}</TableHead> : null}
+                          {visibleInventoryColumnSet.has("sku") ? (
+                            <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
+                          ) : null}
+                          {visibleInventoryColumnSet.has("image") ? (
+                            <TableHead>{t("imageLabel")}</TableHead>
+                          ) : null}
+                          {visibleInventoryColumnSet.has("product") ? (
+                            <TableHead>{tCommon("product")}</TableHead>
+                          ) : null}
+                          {visibleInventoryColumnSet.has("onHand") ? (
+                            <TableHead>{t("onHand")}</TableHead>
+                          ) : null}
+                          {visibleInventoryColumnSet.has("minStock") ? (
+                            <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
+                          ) : null}
+                          {visibleInventoryColumnSet.has("lowStock") ? (
+                            <TableHead>{t("lowStock")}</TableHead>
+                          ) : null}
+                          {visibleInventoryColumnSet.has("onOrder") ? (
+                            <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
+                          ) : null}
+                          {showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? (
+                            <TableHead>{t("suggestedOrder")}</TableHead>
+                          ) : null}
                           <TableHead>{tCommon("actions")}</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1431,67 +1757,81 @@ const InventoryPage = () => {
                                     })}
                                   />
                                 </TableCell>
-                                <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                                  {item.product.sku}
-                                </TableCell>
-                                <TableCell>
-                                  {previewImageUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={previewImageUrl}
-                                      alt={item.product.name}
-                                      className="h-10 w-10 rounded-md border border-border object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
-                                      <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                {visibleInventoryColumnSet.has("sku") ? (
+                                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
+                                    {item.product.sku}
+                                  </TableCell>
+                                ) : null}
+                                {visibleInventoryColumnSet.has("image") ? (
+                                  <TableCell>
+                                    {previewImageUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={previewImageUrl}
+                                        alt={item.product.name}
+                                        className="h-10 w-10 rounded-md border border-border object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                        <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                ) : null}
+                                {visibleInventoryColumnSet.has("product") ? (
+                                  <TableCell className="font-medium">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span>
+                                        {item.product.name}
+                                        {item.variant?.name ? ` • ${item.variant.name}` : ""}
+                                      </span>
+                                      {trackExpiryLots && expiringSet.has(expiryKey) ? (
+                                        <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
+                                      ) : null}
                                     </div>
-                                  )}
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span>
-                                      {item.product.name}
-                                      {item.variant?.name ? ` • ${item.variant.name}` : ""}
-                                    </span>
-                                    {trackExpiryLots && expiringSet.has(expiryKey) ? (
-                                      <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                                <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
-                                <TableCell className="hidden sm:table-cell">
-                                  <InlineEditableCell
-                                    rowId={item.snapshot.id}
-                                    row={item}
-                                    value={item.minStock}
-                                    definition={inlineEditRegistry.inventory.minStock}
-                                    context={{}}
-                                    role={role}
-                                    locale={locale}
-                                    columnLabel={t("minStock")}
-                                    tTable={t}
-                                    tCommon={tCommon}
-                                    enabled={inlineEditingEnabled}
-                                    executeMutation={executeInlineInventoryMutation}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  {item.lowStock ? (
-                                    <Badge variant="danger">
-                                      <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                      {t("lowStockBadge")}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground/80">
-                                      {tCommon("notAvailable")}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell">
-                                  {formatNumber(item.snapshot.onOrder, locale)}
-                                </TableCell>
-                                {showPlanning ? (
+                                  </TableCell>
+                                ) : null}
+                                {visibleInventoryColumnSet.has("onHand") ? (
+                                  <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
+                                ) : null}
+                                {visibleInventoryColumnSet.has("minStock") ? (
+                                  <TableCell className="hidden sm:table-cell">
+                                    <InlineEditableCell
+                                      rowId={item.snapshot.id}
+                                      row={item}
+                                      value={item.minStock}
+                                      definition={inlineEditRegistry.inventory.minStock}
+                                      context={{}}
+                                      role={role}
+                                      locale={locale}
+                                      columnLabel={t("minStock")}
+                                      tTable={t}
+                                      tCommon={tCommon}
+                                      enabled={inlineEditingEnabled}
+                                      executeMutation={executeInlineInventoryMutation}
+                                    />
+                                  </TableCell>
+                                ) : null}
+                                {visibleInventoryColumnSet.has("lowStock") ? (
+                                  <TableCell>
+                                    {item.lowStock ? (
+                                      <Badge variant="danger">
+                                        <StatusWarningIcon className="h-3 w-3" aria-hidden />
+                                        {t("lowStockBadge")}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground/80">
+                                        {tCommon("notAvailable")}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                ) : null}
+                                {visibleInventoryColumnSet.has("onOrder") ? (
+                                  <TableCell className="hidden md:table-cell">
+                                    {formatNumber(item.snapshot.onOrder, locale)}
+                                  </TableCell>
+                                ) : null}
+                                {showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? (
                                   <TableCell>
                                     {reorder ? (
                                       <div className="space-y-1">

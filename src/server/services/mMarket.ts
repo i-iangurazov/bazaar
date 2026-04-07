@@ -1992,16 +1992,20 @@ export const bulkGenerateMMarketShortDescriptions = async (input: {
   actorId: string;
   requestId: string;
   locale?: string | null;
+  productIds?: string[];
   logger?: MMarketBulkDescriptionLogger;
 }) => {
   const preflight = await runMMarketPreflight(input.organizationId);
+  const requestedProductIds = input.productIds?.length
+    ? new Set(input.productIds.map((value) => value.trim()).filter(Boolean))
+    : null;
   const productIds = Array.from(
     new Set(
       preflight.failedProducts
         .filter((product) => product.issues.includes("SHORT_DESCRIPTION"))
         .map((product) => product.productId),
     ),
-  );
+  ).filter((productId) => (requestedProductIds ? requestedProductIds.has(productId) : true));
 
   if (!productIds.length) {
     return {
@@ -2259,16 +2263,20 @@ export const bulkAutofillMMarketSpecs = async (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
+  productIds?: string[];
   logger?: MMarketBulkSpecsLogger;
 }) => {
   const preflight = await runMMarketPreflight(input.organizationId);
+  const requestedProductIds = input.productIds?.length
+    ? new Set(input.productIds.map((value) => value.trim()).filter(Boolean))
+    : null;
   const productIds = Array.from(
     new Set(
       preflight.failedProducts
         .filter((product) => product.issues.includes("MISSING_SPECS"))
         .map((product) => product.productId),
     ),
-  );
+  ).filter((productId) => (requestedProductIds ? requestedProductIds.has(productId) : true));
 
   if (!productIds.length) {
     return {

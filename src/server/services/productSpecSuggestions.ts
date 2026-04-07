@@ -15,7 +15,8 @@ const MAX_INPUT_IMAGES = 3;
 const MAX_OUTPUT_TOKENS = 180;
 const AI_IMAGE_MAX_DIMENSION = 1024;
 const AI_IMAGE_TARGET_BYTES = 350_000;
-const OPENAI_MAX_ATTEMPTS = 3;
+const OPENAI_MAX_ATTEMPTS = 6;
+const OPENAI_MAX_RETRY_DELAY_MS = 30_000;
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
 const isTestRuntime = process.env.NODE_ENV === "test";
@@ -290,7 +291,10 @@ const callOpenAiResponses = async (input: {
 
     const retryDelayMs = isTestRuntime
       ? 1
-      : Math.max(500, Math.min(retryAfterMs ?? 1000 * attempt, 10_000));
+      : Math.max(
+          1_000,
+          Math.min(retryAfterMs ?? 1_500 * 2 ** (attempt - 1), OPENAI_MAX_RETRY_DELAY_MS),
+        );
     input.logger?.warn(
       {
         provider: "openai",

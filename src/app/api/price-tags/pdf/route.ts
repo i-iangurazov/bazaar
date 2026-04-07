@@ -185,6 +185,23 @@ export const POST = async (request: Request) => {
   });
 
   const productMap = new Map(products.map((product) => [product.id, product]));
+  const hasStoreSpecificPrices =
+    !storeId &&
+    products.length > 0 &&
+    (
+      await prisma.storePrice.findMany({
+        where: {
+          organizationId: token.organizationId as string,
+          productId: { in: products.map((product) => product.id) },
+          variantKey: "BASE",
+        },
+        select: { productId: true },
+        take: 1,
+      })
+    ).length > 0;
+  if (hasStoreSpecificPrices) {
+    return new Response(tErrors("priceTagsStoreSelectionRequired"), { status: 400 });
+  }
   const storePrices = storeId
     ? await prisma.storePrice.findMany({
         where: {
@@ -206,9 +223,16 @@ export const POST = async (request: Request) => {
     if (!product) {
       return [] as PriceTagLabel[];
     }
-    const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : null;
+    const basePrice =
+      product.basePriceKgs === null || product.basePriceKgs === undefined
+        ? null
+        : Number(product.basePriceKgs);
     const override = priceMap.get(product.id);
-    const effectivePrice = override ? Number(override.priceKgs) : basePrice;
+    const overridePrice =
+      override?.priceKgs === null || override?.priceKgs === undefined
+        ? null
+        : Number(override.priceKgs);
+    const effectivePrice = override ? overridePrice : basePrice;
     const barcode = selectPrimaryBarcodeValue(product.barcodes.map((entry) => entry.value));
     const label = {
       name: product.name,
@@ -221,6 +245,10 @@ export const POST = async (request: Request) => {
 
   if (!labels.length) {
     return new Response(tErrors("invalidInput"), { status: 400 });
+  }
+  const missingPriceCount = labels.reduce((count, label) => (label.price === null ? count + 1 : count), 0);
+  if (missingPriceCount > 0) {
+    return new Response(tErrors("priceTagsPriceMissing"), { status: 400 });
   }
   const missingBarcodeCount = labels.reduce((count, label) => (label.barcode.trim() ? count : count + 1), 0);
   if (template === ROLL_PRICE_TAG_TEMPLATE && missingBarcodeCount > 0 && !allowWithoutBarcode) {

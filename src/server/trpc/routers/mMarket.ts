@@ -190,11 +190,12 @@ export const mMarketRouter = router({
   }),
 
   bulkGenerateDescriptions: adminProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-descriptions-bulk" }))
+    .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "mmarket-descriptions-bulk" }))
     .input(
       z
         .object({
           locale: z.enum(["ru", "kg"]).optional(),
+          productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
         })
         .optional(),
     )
@@ -205,6 +206,7 @@ export const mMarketRouter = router({
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           locale: input?.locale,
+          productIds: input?.productIds,
           logger: ctx.logger,
         });
       } catch (error) {
@@ -213,13 +215,21 @@ export const mMarketRouter = router({
     }),
 
   bulkAutofillSpecs: adminProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-specs-bulk" }))
-    .mutation(async ({ ctx }) => {
+    .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "mmarket-specs-bulk" }))
+    .input(
+      z
+        .object({
+          productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
+        })
+        .optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
       try {
         return await bulkAutofillMMarketSpecs({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
+          productIds: input?.productIds,
           logger: ctx.logger,
         });
       } catch (error) {

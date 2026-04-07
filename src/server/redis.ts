@@ -1,6 +1,6 @@
 import Redis from "ioredis";
 
-import { isProductionRuntime } from "@/server/config/runtime";
+import { isBuildPhase, isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
 
 type RedisState = {
@@ -49,11 +49,17 @@ const getRedisUrl = () => {
   return url;
 };
 
+export const shouldSkipRedisInitialization = () => isBuildPhase();
+
 export const assertRedisConfigured = () => {
   getRedisUrl();
 };
 
 const createClient = (role: "publisher" | "subscriber") => {
+  if (shouldSkipRedisInitialization()) {
+    // Build/static generation should not open Redis sockets; cache callers fall back to direct reads.
+    return null;
+  }
   const url = getRedisUrl();
   const logger = getLogger();
   if (!url) {
@@ -135,7 +141,7 @@ export const getRedisSubscriber = () => {
   return state.subscriber;
 };
 
-export const redisConfigured = () => Boolean(getRedisUrl());
+export const redisConfigured = () => Boolean(getRedisUrl()) && !shouldSkipRedisInitialization();
 
 export const assertRedisReady = async () => {
   const url = getRedisUrl();

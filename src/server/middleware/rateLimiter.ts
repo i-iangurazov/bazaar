@@ -1,5 +1,5 @@
 import { getLogger } from "@/server/logging";
-import { isProductionRuntime } from "@/server/config/runtime";
+import { isBuildPhase, isProductionRuntime } from "@/server/config/runtime";
 import { getRedisPublisher } from "@/server/redis";
 
 export type RateLimitConfig = {
@@ -81,6 +81,9 @@ class RedisRateLimiter implements RateLimiter {
 }
 
 export const createRateLimiter = (config: RateLimitConfig): RateLimiter => {
+  if (isBuildPhase()) {
+    return new MemoryRateLimiter(config);
+  }
   const redis = getRedisPublisher();
   if (!redis) {
     const logger = getLogger();

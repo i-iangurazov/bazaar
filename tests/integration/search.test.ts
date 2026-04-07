@@ -100,7 +100,7 @@ describeDb("search router", () => {
       isOrgOwner: true,
     });
 
-    const result = await caller.search.global({ q: "ac" });
+    const result = await caller.search.global({ q: "acm" });
     const productResult = result.results.find((item) => item.type === "product" && item.id === product.id);
     const supplierResult = result.results.find((item) => item.type === "supplier" && item.id === supplier.id);
     const storeResult = result.results.find((item) => item.type === "store" && item.id === store.id);
@@ -113,6 +113,48 @@ describeDb("search router", () => {
 
     expect(result.results.some((item) => item.id === otherProduct.id)).toBe(false);
     expect(result.results.some((item) => item.label.includes("Hidden"))).toBe(false);
+  });
+
+  it("ranks exact product matches ahead of fuzzy entity matches", async () => {
+    const { org, store, supplier, product, adminUser } = await seedBase();
+
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { name: "Retail Central", code: "AC-STORE" },
+    });
+    await prisma.supplier.update({
+      where: { id: supplier.id },
+      data: { name: "Barcode Supplier" },
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { name: "Scanner Product", sku: "BAR-001" },
+    });
+
+    await prisma.productBarcode.create({
+      data: {
+        organizationId: org.id,
+        productId: product.id,
+        value: "BAR-001",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const result = await caller.search.global({ q: "BAR-001" });
+
+    expect(result.results[0]).toMatchObject({
+      id: product.id,
+      type: "product",
+      matchKind: "exact",
+    });
+    expect(result.results.some((item) => item.type === "supplier")).toBe(false);
   });
 
   it("requires at least 2 characters", async () => {

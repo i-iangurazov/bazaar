@@ -10,6 +10,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
+import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +79,14 @@ import {
 } from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { buildScopedStorageKey, useScopedLocalStorageState } from "@/lib/useScopedLocalStorageState";
+import {
+  createSavedTableView,
+  findMatchingSavedTableView,
+  overwriteSavedTableView,
+  parseSavedTableViews,
+  renameSavedTableView,
+} from "@/lib/saved-table-views";
 import {
   inlineEditRegistry,
   type InlineMutationOperation,
@@ -97,6 +107,62 @@ type ProductSortKey =
   | "stores";
 
 type ProductSortDirection = "asc" | "desc";
+
+const productTypeFilterSchema = z.enum(["all", "product", "bundle"]);
+const productViewModeSchema = z.enum(["table", "grid"]);
+const productSortKeySchema = z.enum([
+  "sku",
+  "name",
+  "category",
+  "unit",
+  "onHandQty",
+  "salePrice",
+  "avgCost",
+  "barcodes",
+  "stores",
+]);
+const productSortDirectionSchema = z.enum(["asc", "desc"]);
+const productVisibleColumnSchema = z.enum([
+  "sku",
+  "image",
+  "name",
+  "category",
+  "unit",
+  "onHandQty",
+  "salePrice",
+  "avgCost",
+  "barcodes",
+  "stores",
+]);
+const defaultProductVisibleColumns = [
+  "sku",
+  "image",
+  "name",
+  "category",
+  "unit",
+  "onHandQty",
+  "salePrice",
+  "avgCost",
+  "barcodes",
+  "stores",
+] as const;
+const productsTableStateSchema = z.object({
+  search: z.string(),
+  category: z.string(),
+  productType: productTypeFilterSchema,
+  storeId: z.string(),
+  showArchived: z.boolean(),
+  viewMode: productViewModeSchema,
+  pageSize: z.number().int().min(1).max(200),
+  sort: z.object({
+    key: productSortKeySchema,
+    direction: productSortDirectionSchema,
+  }),
+  visibleColumns: z
+    .array(productVisibleColumnSchema)
+    .optional()
+    .default([...defaultProductVisibleColumns]),
+});
 
 const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = {
   sku: "asc",
@@ -128,6 +194,9 @@ type BulkDescriptionProgressState = {
   errorMessage: string | null;
 };
 
+type ProductsTableState = z.infer<typeof productsTableStateSchema>;
+type ProductVisibleColumnKey = z.infer<typeof productVisibleColumnSchema>;
+
 const ProductsPage = () => {
   const t = useTranslations("products");
   const tInventory = useTranslations("inventory");
@@ -143,15 +212,7 @@ const ProductsPage = () => {
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
-
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [productType, setProductType] = useState<"all" | "product" | "bundle">("all");
-  const [storeId, setStoreId] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [productsPage, setProductsPage] = useState(1);
-  const [productsPageSize, setProductsPageSize] = useState(25);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [bulkOpen, setBulkOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
@@ -170,21 +231,187 @@ const ProductsPage = () => {
   const [bulkDescriptionElapsedSeconds, setBulkDescriptionElapsedSeconds] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
-  const [productSort, setProductSort] = useState<{
-    key: ProductSortKey;
-    direction: ProductSortDirection;
-  }>({ key: "name", direction: "asc" });
   const inlineEditingEnabled = true;
 
-  const storesQuery = trpc.stores.list.useQuery();
-  const categoriesQuery = trpc.productCategories.list.useQuery();
-  const productsListInput = useMemo(
+  const defaultProductsTableState = useMemo<ProductsTableState>(
+    () => ({
+      search: "",
+      category: "",
+      productType: "all",
+      storeId: "",
+      showArchived: false,
+      viewMode: "table",
+      pageSize: 25,
+      sort: {
+        key: "name",
+        direction: "asc",
+      },
+      visibleColumns: [...defaultProductVisibleColumns],
+    }),
+    [],
+  );
+  const productsTableStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "products-table-state",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
+  const parseProductsTableState = useCallback((raw: string) => {
+    try {
+      const parsed = productsTableStateSchema.safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }, []);
+  const {
+    value: productsTableState,
+    setValue: setProductsTableState,
+    isReady: productsTableStateReady,
+    hasStoredValue: hasStoredProductsTableState,
+  } = useScopedLocalStorageState({
+    storageKey: productsTableStorageKey,
+    defaultValue: defaultProductsTableState,
+    parse: parseProductsTableState,
+  });
+  const defaultProductsSavedViewsState = useMemo(
+    () => ({ views: [], defaultViewId: null }),
+    [],
+  );
+  const productsSavedViewsStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "products-saved-views",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
+  const parseProductsSavedViews = useCallback(
+    (raw: string) =>
+      parseSavedTableViews(raw, (value) => {
+        const parsed = productsTableStateSchema.safeParse(value);
+        return parsed.success ? parsed.data : null;
+      }),
+    [],
+  );
+  const {
+    value: productsSavedViewsState,
+    setValue: setProductsSavedViewsState,
+    isReady: productsSavedViewsReady,
+  } = useScopedLocalStorageState({
+    storageKey: productsSavedViewsStorageKey,
+    defaultValue: defaultProductsSavedViewsState,
+    parse: parseProductsSavedViews,
+  });
+  const search = productsTableState.search;
+  const category = productsTableState.category;
+  const productType = productsTableState.productType;
+  const rawStoreId = productsTableState.storeId;
+  const showArchived = productsTableState.showArchived;
+  const viewMode = productsTableState.viewMode;
+  const productsPageSize = productsTableState.pageSize;
+  const productSort = productsTableState.sort;
+  const visibleProductColumns = productsTableState.visibleColumns;
+  const setSearch = useCallback(
+    (nextValue: string) =>
+      setProductsTableState((current) => ({
+        ...current,
+        search: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const setCategory = useCallback(
+    (nextValue: string) =>
+      setProductsTableState((current) => ({
+        ...current,
+        category: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const setProductType = useCallback(
+    (nextValue: "all" | "product" | "bundle") =>
+      setProductsTableState((current) => ({
+        ...current,
+        productType: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const setStoreId = useCallback(
+    (nextValue: string) =>
+      setProductsTableState((current) => ({
+        ...current,
+        storeId: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const setShowArchived = useCallback(
+    (nextValue: boolean) =>
+      setProductsTableState((current) => ({
+        ...current,
+        showArchived: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const setViewMode = useCallback(
+    (nextValue: "table" | "grid") =>
+      setProductsTableState((current) => ({
+        ...current,
+        viewMode: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const setProductsPageSize = useCallback(
+    (nextValue: number) =>
+      setProductsTableState((current) => ({
+        ...current,
+        pageSize: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  const toggleVisibleProductColumn = useCallback(
+    (columnKey: ProductVisibleColumnKey) =>
+      setProductsTableState((current) => ({
+        ...current,
+        visibleColumns: current.visibleColumns.includes(columnKey)
+          ? current.visibleColumns.filter((value) => value !== columnKey)
+          : [...current.visibleColumns, columnKey],
+      })),
+    [setProductsTableState],
+  );
+  const matchingProductsSavedView = useMemo(
+    () => findMatchingSavedTableView(productsSavedViewsState.views, productsTableState),
+    [productsSavedViewsState.views, productsTableState],
+  );
+  const productColumnOptions = useMemo(
+    () => [
+      { key: "sku", label: t("sku") },
+      { key: "image", label: t("imageLabel") },
+      { key: "name", label: t("name"), required: true },
+      { key: "category", label: t("category") },
+      { key: "unit", label: t("unit") },
+      { key: "onHandQty", label: tInventory("onHand") },
+      { key: "salePrice", label: t("salePrice") },
+      { key: "avgCost", label: t("avgCost") },
+      { key: "barcodes", label: t("barcodes") },
+      { key: "stores", label: t("stores") },
+    ],
+    [t, tInventory],
+  );
+  const visibleProductColumnSet = useMemo(
+    () => new Set<ProductVisibleColumnKey>(visibleProductColumns),
+    [visibleProductColumns],
+  );
+  const productsBootstrapInput = useMemo(
     () => ({
       search: search || undefined,
       category: category || undefined,
       type: productType,
       includeArchived: isAdmin ? showArchived : undefined,
-      storeId: storeId || undefined,
+      storeId: rawStoreId || undefined,
       page: productsPage,
       pageSize: productsPageSize,
       sortKey: productSort.key,
@@ -200,16 +427,25 @@ const ProductsPage = () => {
       productsPageSize,
       search,
       showArchived,
-      storeId,
+      rawStoreId,
     ],
   );
-  const productsQuery = trpc.products.list.useQuery(productsListInput, { keepPreviousData: true });
-  const products = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
-  const productsTotal = productsQuery.data?.total ?? 0;
+  const productsBootstrapQuery = trpc.products.bootstrap.useQuery(productsBootstrapInput, {
+    enabled: productsTableStateReady,
+    keepPreviousData: true,
+  });
+  const storeId = rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
+  const stores = useMemo(() => productsBootstrapQuery.data?.stores ?? [], [productsBootstrapQuery.data?.stores]);
+  const defaultPrintStoreId = storeId || (stores.length === 1 ? stores[0]?.id ?? "" : "");
+  const products = useMemo(
+    () => productsBootstrapQuery.data?.list.items ?? [],
+    [productsBootstrapQuery.data?.list.items],
+  );
+  const productsTotal = productsBootstrapQuery.data?.list.total ?? 0;
   const exportQuery = trpc.products.exportCsv.useQuery(undefined, { enabled: false });
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: () => {
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({ variant: "success", description: t("archiveSuccess") });
     },
     onError: (error) => {
@@ -218,7 +454,7 @@ const ProductsPage = () => {
   });
   const restoreMutation = trpc.products.restore.useMutation({
     onSuccess: () => {
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({ variant: "success", description: t("restoreSuccess") });
     },
     onError: (error) => {
@@ -235,7 +471,7 @@ const ProductsPage = () => {
 
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: (result) => {
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({
         variant: "success",
         description: result.copiedBarcodes
@@ -251,7 +487,7 @@ const ProductsPage = () => {
 
   const bulkPriceMutation = trpc.storePrices.bulkUpdate.useMutation({
     onSuccess: (result) => {
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({
         variant: "success",
         description: t("bulkPriceSuccess", { count: result.updated }),
@@ -265,7 +501,7 @@ const ProductsPage = () => {
 
   const createCategoryMutation = trpc.productCategories.create.useMutation({
     onSuccess: () => {
-      categoriesQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({ variant: "success", description: t("categoryCreateSuccess") });
       setCategoryInputValue("");
     },
@@ -276,7 +512,7 @@ const ProductsPage = () => {
 
   const removeCategoryMutation = trpc.productCategories.remove.useMutation({
     onSuccess: (_result, input) => {
-      categoriesQuery.refetch();
+      productsBootstrapQuery.refetch();
       if (category === input.name) {
         setCategory("");
       }
@@ -292,7 +528,7 @@ const ProductsPage = () => {
 
   const bulkCategoryMutation = trpc.products.bulkUpdateCategory.useMutation({
     onSuccess: (result) => {
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({
         variant: "success",
         description: t("bulkCategorySuccess", { count: result.updated }),
@@ -312,7 +548,7 @@ const ProductsPage = () => {
   });
   const bulkGenerateBarcodesMutation = trpc.products.bulkGenerateBarcodes.useMutation({
     onSuccess: (result) => {
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       setSelectedIds(new Set());
       toast({
         variant: "success",
@@ -332,10 +568,24 @@ const ProductsPage = () => {
   const bulkGenerateDescriptionsMutation = trpc.products.bulkGenerateDescriptions.useMutation();
 
   useEffect(() => {
-    if (!storeId && storesQuery.data?.length === 1) {
-      setStoreId(storesQuery.data[0].id);
+    if (!productsTableStateReady || !productsSavedViewsReady || hasStoredProductsTableState) {
+      return;
     }
-  }, [storeId, storesQuery.data]);
+    const defaultView = productsSavedViewsState.views.find(
+      (view) => view.id === productsSavedViewsState.defaultViewId,
+    );
+    if (!defaultView) {
+      return;
+    }
+    setProductsTableState(defaultView.state);
+  }, [
+    hasStoredProductsTableState,
+    productsSavedViewsReady,
+    productsSavedViewsState.defaultViewId,
+    productsSavedViewsState.views,
+    productsTableStateReady,
+    setProductsTableState,
+  ]);
 
   useEffect(() => {
     if (!bulkCategoryOpen) {
@@ -397,7 +647,7 @@ const ProductsPage = () => {
 
   const categories = useMemo(() => {
     const set = new Set<string>();
-    (categoriesQuery.data ?? []).forEach((value) => {
+    (productsBootstrapQuery.data?.categories ?? []).forEach((value) => {
       if (value) {
         set.add(value);
       }
@@ -408,7 +658,7 @@ const ProductsPage = () => {
       }
     });
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
-  }, [categoriesQuery.data, getProductCategories, products]);
+  }, [getProductCategories, products, productsBootstrapQuery.data?.categories]);
 
   useEffect(() => {
     if (!categoryManagerOpen) {
@@ -432,28 +682,29 @@ const ProductsPage = () => {
   const applyProductListPatch = useCallback(
     (
       productId: string,
-      patch: (
-        item: NonNullable<typeof productsQuery.data>["items"][number],
-      ) => NonNullable<typeof productsQuery.data>["items"][number],
+      patch: (item: ProductRow) => ProductRow,
     ) => {
-      trpcUtils.products.list.setData(productsListInput, (current) => {
+      trpcUtils.products.bootstrap.setData(productsBootstrapInput, (current) => {
         if (!current) {
           return current;
         }
         return {
           ...current,
-          items: current.items.map((item) => (item.id === productId ? patch(item) : item)),
+          list: {
+            ...current.list,
+            items: current.list.items.map((item) => (item.id === productId ? patch(item) : item)),
+          },
         };
       });
     },
-    [productsListInput, productsQuery, trpcUtils.products.list],
+    [productsBootstrapInput, trpcUtils.products.bootstrap],
   );
 
   const executeInlineProductMutation = useCallback(
     async (operation: InlineMutationOperation) => {
-      const previous = trpcUtils.products.list.getData(productsListInput);
+      const previous = trpcUtils.products.bootstrap.getData(productsBootstrapInput);
       const rollback = () => {
-        trpcUtils.products.list.setData(productsListInput, previous);
+        trpcUtils.products.bootstrap.setData(productsBootstrapInput, previous);
       };
 
       if (operation.route === "products.inlineUpdate") {
@@ -477,7 +728,7 @@ const ProductsPage = () => {
           rollback();
           throw error;
         }
-        await trpcUtils.products.list.invalidate(productsListInput);
+        await trpcUtils.products.bootstrap.invalidate(productsBootstrapInput);
         return;
       }
 
@@ -509,7 +760,7 @@ const ProductsPage = () => {
           rollback();
           throw error;
         }
-        await trpcUtils.products.list.invalidate(productsListInput);
+        await trpcUtils.products.bootstrap.invalidate(productsBootstrapInput);
         return;
       }
 
@@ -525,7 +776,7 @@ const ProductsPage = () => {
           rollback();
           throw error;
         }
-        await trpcUtils.products.list.invalidate(productsListInput);
+        await trpcUtils.products.bootstrap.invalidate(productsBootstrapInput);
         return;
       }
 
@@ -541,7 +792,7 @@ const ProductsPage = () => {
           throw error;
         }
         await Promise.all([
-          trpcUtils.products.list.invalidate(productsListInput),
+          trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
           trpcUtils.inventory.list.invalidate(),
         ]);
         return;
@@ -556,9 +807,9 @@ const ProductsPage = () => {
       inlineInventoryAdjustMutation,
       inlineProductMutation,
       inlineStorePriceMutation,
-      productsListInput,
+      productsBootstrapInput,
       showEffectivePrice,
-      trpcUtils.products.list,
+      trpcUtils.products.bootstrap,
       trpcUtils.inventory.list,
     ],
   );
@@ -658,7 +909,7 @@ const ProductsPage = () => {
     resolver: zodResolver(printSchema),
     defaultValues: {
       template: ROLL_PRICE_TAG_TEMPLATE,
-      storeId: storeId || "",
+      storeId: defaultPrintStoreId,
       quantity: 1,
       widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
       heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
@@ -811,11 +1062,79 @@ const ProductsPage = () => {
     });
   };
 
+  const applyProductsSavedView = useCallback(
+    (viewId: string) => {
+      const view = productsSavedViewsState.views.find((item) => item.id === viewId);
+      if (!view) {
+        return;
+      }
+      setProductsTableState(view.state);
+      setProductsPage(1);
+      setSelectedIds(new Set());
+    },
+    [productsSavedViewsState.views, setProductsTableState],
+  );
+
+  const saveProductsView = useCallback(
+    (name: string) => {
+      setProductsSavedViewsState((current) => ({
+        ...current,
+        views: [...current.views, createSavedTableView({ name, state: productsTableState })],
+      }));
+    },
+    [productsTableState, setProductsSavedViewsState],
+  );
+
+  const renameProductsView = useCallback(
+    (viewId: string, nextName: string) => {
+      setProductsSavedViewsState((current) => ({
+        ...current,
+        views: current.views.map((view) =>
+          view.id === viewId ? renameSavedTableView(view, nextName) : view,
+        ),
+      }));
+    },
+    [setProductsSavedViewsState],
+  );
+
+  const overwriteProductsView = useCallback(
+    (viewId: string) => {
+      setProductsSavedViewsState((current) => ({
+        ...current,
+        views: current.views.map((view) =>
+          view.id === viewId ? overwriteSavedTableView(view, productsTableState) : view,
+        ),
+      }));
+    },
+    [productsTableState, setProductsSavedViewsState],
+  );
+
+  const deleteProductsView = useCallback(
+    (viewId: string) => {
+      setProductsSavedViewsState((current) => ({
+        views: current.views.filter((view) => view.id !== viewId),
+        defaultViewId: current.defaultViewId === viewId ? null : current.defaultViewId,
+      }));
+    },
+    [setProductsSavedViewsState],
+  );
+
+  const setDefaultProductsView = useCallback(
+    (viewId: string | null) => {
+      setProductsSavedViewsState((current) => ({
+        ...current,
+        defaultViewId:
+          viewId && current.views.some((view) => view.id === viewId) ? viewId : null,
+      }));
+    },
+    [setProductsSavedViewsState],
+  );
+
   useEffect(() => {
     if (printOpen) {
       printForm.reset({
         template: ROLL_PRICE_TAG_TEMPLATE,
-        storeId: storeId || "",
+        storeId: defaultPrintStoreId,
         quantity: 1,
         widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
         heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
@@ -825,7 +1144,7 @@ const ProductsPage = () => {
     } else {
       setPrintQueue([]);
     }
-  }, [printOpen, printForm, storeId, selectedList]);
+  }, [defaultPrintStoreId, printOpen, printForm, selectedList]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
@@ -862,10 +1181,10 @@ const ProductsPage = () => {
   }, [bulkStorePriceOpen, bulkStorePriceForm, storeId]);
 
   const storeNameById = useMemo(
-    () => new Map((storesQuery.data ?? []).map((store) => [store.id, store.name])),
-    [storesQuery.data],
+    () => new Map(stores.map((store) => [store.id, store.name])),
+    [stores],
   );
-  const totalStores = storesQuery.data?.length ?? 0;
+  const totalStores = stores.length;
   const getBarcodeSummary = (barcodes: { value: string }[]) => {
     const values = barcodes.map((barcode) => barcode.value).filter(Boolean);
     if (!values.length) {
@@ -1000,18 +1319,20 @@ const ProductsPage = () => {
     sortCollator,
   ]);
   const toggleProductSort = useCallback((key: ProductSortKey) => {
-    setProductSort((previous) =>
-      previous.key === key
-        ? {
-            key,
-            direction: previous.direction === "asc" ? "desc" : "asc",
-          }
-        : {
-            key,
-            direction: defaultSortDirectionByKey[key],
-          },
-    );
-  }, []);
+    setProductsTableState((current) => ({
+      ...current,
+      sort:
+        current.sort.key === key
+          ? {
+              key,
+              direction: current.sort.direction === "asc" ? "desc" : "asc",
+            }
+          : {
+              key,
+              direction: defaultSortDirectionByKey[key],
+            },
+    }));
+  }, [setProductsTableState]);
   const renderSortableHead = (key: ProductSortKey, label: string, className?: string) => (
     <TableHead
       className={className}
@@ -1170,6 +1491,10 @@ const ProductsPage = () => {
         toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
         return;
       }
+      if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
+        toast({ variant: "error", description: message });
+        return;
+      }
       toast({ variant: "error", description: t("priceTagsFailed") });
     }
   };
@@ -1186,7 +1511,7 @@ const ProductsPage = () => {
       await Promise.all(
         targets.map((product) => bulkArchiveMutation.mutateAsync({ productId: product.id })),
       );
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({
         variant: "success",
         description: t("bulkArchiveSuccess", { count: targets.length }),
@@ -1212,7 +1537,7 @@ const ProductsPage = () => {
       await Promise.all(
         targets.map((product) => bulkRestoreMutation.mutateAsync({ productId: product.id })),
       );
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({
         variant: "success",
         description: t("bulkRestoreSuccess", { count: targets.length }),
@@ -1279,7 +1604,7 @@ const ProductsPage = () => {
           }),
         ),
       );
-      productsQuery.refetch();
+      productsBootstrapQuery.refetch();
       toast({
         variant: "success",
         description: t("bulkStorePriceSuccess", { count: selectedList.length }),
@@ -1402,7 +1727,10 @@ const ProductsPage = () => {
                 }
               : current,
           );
-          await trpcUtils.products.list.invalidate();
+          await Promise.all([
+            trpcUtils.products.bootstrap.invalidate(),
+            trpcUtils.products.list.invalidate(),
+          ]);
           toast({
             variant: "info",
             description: t("bulkGenerateDescriptionsRateLimited", {
@@ -1444,7 +1772,10 @@ const ProductsPage = () => {
             }
           : current,
       );
-      await trpcUtils.products.list.invalidate();
+      await Promise.all([
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+      ]);
       if (summary.failedCount === 0) {
         setSelectedIds(new Set());
       }
@@ -1463,7 +1794,10 @@ const ProductsPage = () => {
               }),
       });
     } catch (error) {
-      await trpcUtils.products.list.invalidate();
+      await Promise.all([
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+      ]);
       const errorMessage = translateError(
         tErrors,
         error as Parameters<typeof translateError>[1],
@@ -1513,7 +1847,7 @@ const ProductsPage = () => {
                 variant="secondary"
                 className="w-full sm:w-auto"
                 onClick={() => setBulkOpen(true)}
-                disabled={!storesQuery.data?.length}
+                disabled={!stores.length}
               >
                 <EditIcon className="h-4 w-4" aria-hidden />
                 {t("bulkPriceUpdate")}
@@ -1582,7 +1916,7 @@ const ProductsPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("allStores")}</SelectItem>
-                  {storesQuery.data?.map((store) => (
+                  {stores.map((store) => (
                     <SelectItem key={store.id} value={store.id}>
                       {store.name}
                     </SelectItem>
@@ -1652,29 +1986,54 @@ const ProductsPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
-          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === "table" ? "secondary" : "ghost"}
-              className="flex-1 sm:flex-none"
-              onClick={() => setViewMode("table")}
-              aria-label={t("viewTable")}
-            >
-              <TableViewIcon className="h-4 w-4" aria-hidden />
-              {t("viewTable")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              className="flex-1 sm:flex-none"
-              onClick={() => setViewMode("grid")}
-              aria-label={t("viewGrid")}
-            >
-              <GridViewIcon className="h-4 w-4" aria-hidden />
-              {t("viewGrid")}
-            </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <SavedTableViews
+                views={productsSavedViewsState.views}
+                matchingViewId={matchingProductsSavedView?.id ?? null}
+                defaultViewId={productsSavedViewsState.defaultViewId}
+                disabled={!productsSavedViewsReady || !productsTableStateReady}
+                onApplyView={applyProductsSavedView}
+                onSaveView={saveProductsView}
+                onRenameView={renameProductsView}
+                onOverwriteView={overwriteProductsView}
+                onDeleteView={deleteProductsView}
+                onSetDefaultView={setDefaultProductsView}
+              />
+              {viewMode === "table" ? (
+                <ColumnVisibilityMenu
+                  columns={productColumnOptions}
+                  visibleColumns={visibleProductColumns}
+                  onToggleColumn={(columnKey) =>
+                    toggleVisibleProductColumn(columnKey as ProductVisibleColumnKey)
+                  }
+                />
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "table" ? "secondary" : "ghost"}
+                className="flex-1 sm:flex-none"
+                onClick={() => setViewMode("table")}
+                aria-label={t("viewTable")}
+              >
+                <TableViewIcon className="h-4 w-4" aria-hidden />
+                {t("viewTable")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                className="flex-1 sm:flex-none"
+                onClick={() => setViewMode("grid")}
+                aria-label={t("viewGrid")}
+              >
+                <GridViewIcon className="h-4 w-4" aria-hidden />
+                {t("viewGrid")}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1889,16 +2248,44 @@ const ProductsPage = () => {
                                 aria-label={t("selectAll")}
                               />
                             </TableHead>
-                            {renderSortableHead("sku", t("sku"))}
-                            <TableHead>{t("imageLabel")}</TableHead>
-                            {renderSortableHead("name", t("name"))}
-                            {renderSortableHead("category", t("category"), "hidden md:table-cell")}
-                            {renderSortableHead("unit", t("unit"), "hidden lg:table-cell")}
-                            {renderSortableHead("onHandQty", tInventory("onHand"), "text-nowrap")}
-                            {renderSortableHead("salePrice", t("salePrice"))}
-                            {renderSortableHead("avgCost", t("avgCost"))}
-                            {renderSortableHead("barcodes", t("barcodes"))}
-                            {renderSortableHead("stores", t("stores"))}
+                            {visibleProductColumnSet.has("sku")
+                              ? renderSortableHead("sku", t("sku"))
+                              : null}
+                            {visibleProductColumnSet.has("image") ? (
+                              <TableHead>{t("imageLabel")}</TableHead>
+                            ) : null}
+                            {visibleProductColumnSet.has("name")
+                              ? renderSortableHead("name", t("name"))
+                              : null}
+                            {visibleProductColumnSet.has("category")
+                              ? renderSortableHead(
+                                  "category",
+                                  t("category"),
+                                  "hidden md:table-cell",
+                                )
+                              : null}
+                            {visibleProductColumnSet.has("unit")
+                              ? renderSortableHead("unit", t("unit"), "hidden lg:table-cell")
+                              : null}
+                            {visibleProductColumnSet.has("onHandQty")
+                              ? renderSortableHead(
+                                  "onHandQty",
+                                  tInventory("onHand"),
+                                  "text-nowrap",
+                                )
+                              : null}
+                            {visibleProductColumnSet.has("salePrice")
+                              ? renderSortableHead("salePrice", t("salePrice"))
+                              : null}
+                            {visibleProductColumnSet.has("avgCost")
+                              ? renderSortableHead("avgCost", t("avgCost"))
+                              : null}
+                            {visibleProductColumnSet.has("barcodes")
+                              ? renderSortableHead("barcodes", t("barcodes"))
+                              : null}
+                            {visibleProductColumnSet.has("stores")
+                              ? renderSortableHead("stores", t("stores"))
+                              : null}
                             <TableHead>{tCommon("actions")}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1921,154 +2308,174 @@ const ProductsPage = () => {
                                     aria-label={t("selectProduct", { name: product.name })}
                                   />
                                 </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  {product.sku}
-                                </TableCell>
-                                <TableCell>
-                                  {previewImageUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={previewImageUrl}
-                                      alt={product.name}
-                                      className="h-10 w-10 rounded-md border border-border object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
-                                      <EmptyIcon
-                                        className="h-4 w-4 text-muted-foreground"
-                                        aria-hidden
+                                {visibleProductColumnSet.has("sku") ? (
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {product.sku}
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("image") ? (
+                                  <TableCell>
+                                    {previewImageUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={previewImageUrl}
+                                        alt={product.name}
+                                        className="h-10 w-10 rounded-md border border-border object-cover"
                                       />
+                                    ) : (
+                                      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                        <EmptyIcon
+                                          className="h-4 w-4 text-muted-foreground"
+                                          aria-hidden
+                                        />
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("name") ? (
+                                  <TableCell className="font-medium">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <InlineEditableCell
+                                        rowId={product.id}
+                                        row={product}
+                                        value={product.name}
+                                        definition={inlineEditRegistry.products.name}
+                                        context={inlineProductsContext}
+                                        role={role}
+                                        locale={locale}
+                                        columnLabel={t("name")}
+                                        tTable={t}
+                                        tCommon={tCommon}
+                                        enabled={inlineEditingEnabled}
+                                        executeMutation={executeInlineProductMutation}
+                                      />
+                                      <Badge variant="muted">
+                                        {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                                      </Badge>
+                                      {product.isDeleted ? (
+                                        <Badge variant="muted">{t("archived")}</Badge>
+                                      ) : null}
                                     </div>
-                                  )}
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  <div className="flex flex-wrap items-center gap-2">
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("category") ? (
+                                  <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <InlineEditableCell
+                                        rowId={product.id}
+                                        row={product}
+                                        value={product.category}
+                                        definition={inlineEditRegistry.products.category}
+                                        context={inlineProductsContext}
+                                        role={role}
+                                        locale={locale}
+                                        columnLabel={t("category")}
+                                        tTable={t}
+                                        tCommon={tCommon}
+                                        enabled={inlineEditingEnabled}
+                                        executeMutation={executeInlineProductMutation}
+                                      />
+                                      {productCategories
+                                        .filter((value) => value !== product.category)
+                                        .map((value) => (
+                                          <Badge key={value} variant="muted">
+                                            {value}
+                                          </Badge>
+                                        ))}
+                                    </div>
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("unit") ? (
+                                  <TableCell className="hidden lg:table-cell">
+                                    <span>{product.unit}</span>
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("onHandQty") ? (
+                                  <TableCell className="text-xs text-muted-foreground">
                                     <InlineEditableCell
                                       rowId={product.id}
                                       row={product}
-                                      value={product.name}
-                                      definition={inlineEditRegistry.products.name}
+                                      value={product.onHandQty}
+                                      definition={inlineEditRegistry.products.onHand}
                                       context={inlineProductsContext}
                                       role={role}
                                       locale={locale}
-                                      columnLabel={t("name")}
+                                      columnLabel={tInventory("onHand")}
                                       tTable={t}
                                       tCommon={tCommon}
                                       enabled={inlineEditingEnabled}
                                       executeMutation={executeInlineProductMutation}
                                     />
-                                    <Badge variant="muted">
-                                      {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                                    </Badge>
-                                    {product.isDeleted ? (
-                                      <Badge variant="muted">{t("archived")}</Badge>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                                  <div className="flex flex-wrap items-center gap-1">
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("salePrice") ? (
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <InlineEditableCell
+                                        rowId={product.id}
+                                        row={product}
+                                        value={
+                                          showEffectivePrice
+                                            ? product.effectivePriceKgs
+                                            : product.basePriceKgs
+                                        }
+                                        definition={inlineEditRegistry.products.salePrice}
+                                        context={inlineProductsContext}
+                                        role={role}
+                                        locale={locale}
+                                        columnLabel={t("salePrice")}
+                                        tTable={t}
+                                        tCommon={tCommon}
+                                        enabled={inlineEditingEnabled}
+                                        executeMutation={executeInlineProductMutation}
+                                      />
+                                      {showEffectivePrice && product.priceOverridden ? (
+                                        <Badge variant="muted">{t("priceOverridden")}</Badge>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("avgCost") ? (
+                                  <TableCell className="text-xs text-muted-foreground">
                                     <InlineEditableCell
                                       rowId={product.id}
                                       row={product}
-                                      value={product.category}
-                                      definition={inlineEditRegistry.products.category}
+                                      value={product.avgCostKgs}
+                                      definition={inlineEditRegistry.products.avgCost}
                                       context={inlineProductsContext}
                                       role={role}
                                       locale={locale}
-                                      columnLabel={t("category")}
+                                      columnLabel={t("avgCost")}
                                       tTable={t}
                                       tCommon={tCommon}
                                       enabled={inlineEditingEnabled}
                                       executeMutation={executeInlineProductMutation}
                                     />
-                                    {productCategories
-                                      .filter((value) => value !== product.category)
-                                      .map((value) => (
-                                        <Badge key={value} variant="muted">
-                                          {value}
-                                        </Badge>
-                                      ))}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden lg:table-cell">
-                                  <span>{product.unit}</span>
-                                </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  <InlineEditableCell
-                                    rowId={product.id}
-                                    row={product}
-                                    value={product.onHandQty}
-                                    definition={inlineEditRegistry.products.onHand}
-                                    context={inlineProductsContext}
-                                    role={role}
-                                    locale={locale}
-                                    columnLabel={tInventory("onHand")}
-                                    tTable={t}
-                                    tCommon={tCommon}
-                                    enabled={inlineEditingEnabled}
-                                    executeMutation={executeInlineProductMutation}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <InlineEditableCell
-                                      rowId={product.id}
-                                      row={product}
-                                      value={
-                                        showEffectivePrice
-                                          ? product.effectivePriceKgs
-                                          : product.basePriceKgs
-                                      }
-                                      definition={inlineEditRegistry.products.salePrice}
-                                      context={inlineProductsContext}
-                                      role={role}
-                                      locale={locale}
-                                      columnLabel={t("salePrice")}
-                                      tTable={t}
-                                      tCommon={tCommon}
-                                      enabled={inlineEditingEnabled}
-                                      executeMutation={executeInlineProductMutation}
-                                    />
-                                    {showEffectivePrice && product.priceOverridden ? (
-                                      <Badge variant="muted">{t("priceOverridden")}</Badge>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  <InlineEditableCell
-                                    rowId={product.id}
-                                    row={product}
-                                    value={product.avgCostKgs}
-                                    definition={inlineEditRegistry.products.avgCost}
-                                    context={inlineProductsContext}
-                                    role={role}
-                                    locale={locale}
-                                    columnLabel={t("avgCost")}
-                                    tTable={t}
-                                    tCommon={tCommon}
-                                    enabled={inlineEditingEnabled}
-                                    executeMutation={executeInlineProductMutation}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  {barcodeSummary.label}
-                                </TableCell>
-                                <TableCell className="text-xs text-muted-foreground">
-                                  {storeInfo.names.length ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="cursor-help text-foreground">
-                                          {storeInfo.summary}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>{storeInfo.names.join(", ")}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    storeInfo.summary
-                                  )}
-                                </TableCell>
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("barcodes") ? (
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {barcodeSummary.label}
+                                  </TableCell>
+                                ) : null}
+                                {visibleProductColumnSet.has("stores") ? (
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {storeInfo.names.length ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="cursor-help text-foreground">
+                                            {storeInfo.summary}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>{storeInfo.names.join(", ")}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      storeInfo.summary
+                                    )}
+                                  </TableCell>
+                                ) : null}
                                 <TableCell>
                                   <RowActions
                                     actions={getProductActions(product)}
@@ -2477,7 +2884,7 @@ const ProductsPage = () => {
               }}
             />
           </InlineEditTableProvider>
-          {productsQuery.isLoading ? (
+          {productsBootstrapQuery.isLoading ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
@@ -2490,14 +2897,14 @@ const ProductsPage = () => {
               </div>
             </div>
           ) : null}
-          {productsQuery.error ? (
+          {productsBootstrapQuery.error ? (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
-              <span>{translateError(tErrors, productsQuery.error)}</span>
+              <span>{translateError(tErrors, productsBootstrapQuery.error)}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => productsQuery.refetch()}
+                onClick={() => productsBootstrapQuery.refetch()}
               >
                 {tErrors("tryAgain")}
               </Button>
@@ -2665,7 +3072,7 @@ const ProductsPage = () => {
                         <SelectValue placeholder={tCommon("selectStore")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {storesQuery.data?.map((store) => (
+                        {stores.map((store) => (
                           <SelectItem key={store.id} value={store.id}>
                             {store.name}
                           </SelectItem>
@@ -2997,7 +3404,7 @@ const ProductsPage = () => {
                         <SelectValue placeholder={tCommon("selectStore")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {storesQuery.data?.map((store) => (
+                        {stores.map((store) => (
                           <SelectItem key={store.id} value={store.id}>
                             {store.name}
                           </SelectItem>
@@ -3090,6 +3497,7 @@ const ProductsPage = () => {
                           </SelectContent>
                         </Select>
                       </FormControl>
+                      <FormDescription>{t("printStoreHint")}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -3110,7 +3518,7 @@ const ProductsPage = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">{t("allStores")}</SelectItem>
-                            {storesQuery.data?.map((store) => (
+                            {stores.map((store) => (
                               <SelectItem key={store.id} value={store.id}>
                                 {store.name}
                               </SelectItem>

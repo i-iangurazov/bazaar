@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
@@ -299,6 +300,7 @@ export const ProductForm = ({
   units,
   readOnly = false,
   productId,
+  showBasePriceField = true,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -307,6 +309,7 @@ export const ProductForm = ({
   units?: UnitOption[];
   readOnly?: boolean;
   productId?: string;
+  showBasePriceField?: boolean;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -507,7 +510,11 @@ export const ProductForm = ({
   }, [form, unitOptions]);
 
   const watchedCategoryValues = useWatch({ control: form.control, name: "categories" });
+  const watchedSku = useWatch({ control: form.control, name: "sku" });
+  const watchedName = useWatch({ control: form.control, name: "name" });
+  const watchedBarcodesValue = useWatch({ control: form.control, name: "barcodes" });
   const categoryValues = useMemo(() => watchedCategoryValues ?? [], [watchedCategoryValues]);
+  const watchedBarcodes = useMemo(() => watchedBarcodesValue ?? [], [watchedBarcodesValue]);
   const primaryCategoryValue = categoryValues[0]?.trim() ?? "";
   const categoryOptionsQuery = trpc.productCategories.list.useQuery(undefined, {
     enabled: !readOnly,
@@ -680,6 +687,35 @@ export const ProductForm = ({
   const bundleSearchQuery = trpc.products.searchQuick.useQuery(
     { q: bundleSearch.trim() },
     { enabled: !readOnly && isBundle && bundleSearch.trim().length >= 1 },
+  );
+  const duplicateDiagnosticsInput = useMemo(
+    () => ({
+      productId,
+      sku: watchedSku?.trim() || undefined,
+      name: watchedName?.trim() || undefined,
+      barcodes: watchedBarcodes.map((value) => value.trim()).filter(Boolean),
+    }),
+    [productId, watchedBarcodes, watchedName, watchedSku],
+  );
+  const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
+  const duplicateDiagnosticsEnabled =
+    !readOnly &&
+    (Boolean(
+      deferredDuplicateDiagnosticsInput.sku &&
+        deferredDuplicateDiagnosticsInput.sku.length >= 2,
+    ) ||
+      Boolean(
+        deferredDuplicateDiagnosticsInput.name &&
+          deferredDuplicateDiagnosticsInput.name.length >= 4,
+      ) ||
+      deferredDuplicateDiagnosticsInput.barcodes.length > 0);
+  const duplicateDiagnosticsQuery = trpc.products.duplicateDiagnostics.useQuery(
+    deferredDuplicateDiagnosticsInput,
+    {
+      enabled: duplicateDiagnosticsEnabled,
+      staleTime: 15_000,
+      keepPreviousData: true,
+    },
   );
   const generateBarcodeMutation = trpc.products.generateBarcode.useMutation({
     onSuccess: (result) => {
@@ -2453,26 +2489,28 @@ export const ProductForm = ({
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="basePriceKgs"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("salePrice")}</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
-                              placeholder={t("pricePlaceholder")}
-                              disabled={readOnly}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {showBasePriceField ? (
+                      <FormField
+                        control={form.control}
+                        name="basePriceKgs"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("salePrice")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                placeholder={t("pricePlaceholder")}
+                                disabled={readOnly}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
                     <FormField
                       control={form.control}
                       name="avgCostKgs"
@@ -2495,6 +2533,111 @@ export const ProductForm = ({
                       )}
                     />
                   </FormGrid>
+                  {duplicateDiagnosticsEnabled ? (
+                    <div className="rounded-lg border border-warning/40 bg-warning/10 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">
+                          {t("duplicateDiagnosticsTitle")}
+                        </p>
+                        {duplicateDiagnosticsQuery.isFetching ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Spinner className="h-4 w-4" />
+                            {t("duplicateDiagnosticsLoading")}
+                          </div>
+                        ) : null}
+                      </div>
+                      {duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
+                        <div className="mt-3 rounded-md border border-danger/30 bg-background p-3">
+                          <p className="text-xs font-medium text-danger">
+                            {t("duplicateExactSkuTitle")}
+                          </p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {duplicateDiagnosticsQuery.data.exactSkuMatch.name}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <Badge variant="muted">
+                              {duplicateDiagnosticsQuery.data.exactSkuMatch.sku}
+                            </Badge>
+                            {duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? (
+                              <Badge variant="muted">{t("archived")}</Badge>
+                            ) : null}
+                            <Link
+                              href={`/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`}
+                              target="_blank"
+                              className="text-primary underline-offset-4 hover:underline"
+                            >
+                              {t("duplicateOpenProduct")}
+                            </Link>
+                          </div>
+                        </div>
+                      ) : null}
+                      {duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length ? (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium text-foreground">
+                            {t("duplicateExactBarcodesTitle")}
+                          </p>
+                          {duplicateDiagnosticsQuery.data.exactBarcodeMatches.map((match) => (
+                            <div
+                              key={`${match.barcode}-${match.id}`}
+                              className="rounded-md border border-danger/30 bg-background p-3"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="muted">{match.barcode}</Badge>
+                                <span className="text-sm text-foreground">{match.name}</span>
+                                <span className="text-xs text-muted-foreground">{match.sku}</span>
+                                {match.isDeleted ? (
+                                  <Badge variant="muted">{t("archived")}</Badge>
+                                ) : null}
+                              </div>
+                              <Link
+                                href={`/products/${match.id}`}
+                                target="_blank"
+                                className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
+                              >
+                                {t("duplicateOpenProduct")}
+                              </Link>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium text-foreground">
+                            {t("duplicateLikelyMatchesTitle")}
+                          </p>
+                          {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
+                            <div
+                              key={match.id}
+                              className="rounded-md border border-warning/30 bg-background p-3"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm text-foreground">{match.name}</span>
+                                <Badge variant="muted">{match.sku}</Badge>
+                                {match.isDeleted ? (
+                                  <Badge variant="muted">{t("archived")}</Badge>
+                                ) : null}
+                              </div>
+                              <Link
+                                href={`/products/${match.id}`}
+                                target="_blank"
+                                className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
+                              >
+                                {t("duplicateOpenProduct")}
+                              </Link>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {!duplicateDiagnosticsQuery.isFetching &&
+                      !duplicateDiagnosticsQuery.data?.exactSkuMatch &&
+                      !duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length &&
+                      !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          {t("duplicateDiagnosticsEmpty")}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <FormField
                     control={form.control}
                     name="description"

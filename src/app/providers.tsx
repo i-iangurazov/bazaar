@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState, type ComponentProps } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpLink, loggerLink } from "@trpc/client";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { httpBatchLink, loggerLink } from "@trpc/client";
 import superjson from "superjson";
 import { SessionProvider } from "next-auth/react";
 import { NextIntlClientProvider } from "next-intl";
 import { z } from "zod";
 
 import { trpc, getBaseUrl } from "@/lib/trpc";
+import { createAppQueryClient } from "@/lib/query-client";
 import { createMessageFallback } from "@/lib/i18nFallback";
 import { createLocalizedZodErrorMap } from "@/lib/zodErrorMap";
 import { ToastProvider } from "@/components/ui/toast";
@@ -28,21 +29,7 @@ export const Providers = ({
   messages: IntlMessages;
   timeZone: string;
 }) => {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            retry: 1,
-            refetchOnWindowFocus: false,
-            staleTime: 15_000,
-          },
-          mutations: {
-            retry: 0,
-          },
-        },
-      }),
-  );
+  const [queryClient] = useState(createAppQueryClient);
   const [trpcClient] = useState(() =>
     trpc.createClient({
       transformer: superjson,
@@ -52,8 +39,9 @@ export const Providers = ({
             process.env.NODE_ENV === "development" ||
             (opts.direction === "down" && opts.result instanceof Error),
         }),
-        httpLink({
+        httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
+          maxURLLength: 2_048,
           fetch(url, options) {
             return fetch(url, { ...options, credentials: "include" });
           },

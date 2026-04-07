@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -34,34 +34,48 @@ const DashboardPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const storesQuery = trpc.stores.list.useQuery();
-  const [storeId, setStoreId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!storeId && storesQuery.data?.[0]) {
-      setStoreId(storesQuery.data[0].id);
-    }
-  }, [storeId, storesQuery.data]);
-
-  const summaryQuery = trpc.dashboard.summary.useQuery(
+  const [requestedStoreId, setRequestedStoreId] = useState<string | null>(null);
+  const dashboardQuery = trpc.dashboard.bootstrap.useQuery(
+    requestedStoreId
+      ? {
+          storeId: requestedStoreId,
+          includeRecentActivity: false,
+          includeRecentMovements: false,
+        }
+      : {
+          includeRecentActivity: false,
+          includeRecentMovements: false,
+        },
+  );
+  const storeId = requestedStoreId ?? dashboardQuery.data?.selectedStoreId ?? null;
+  const activityQuery = trpc.dashboard.activity.useQuery(
     { storeId: storeId ?? "" },
     { enabled: Boolean(storeId) },
   );
 
   useSse({
-    "inventory.updated": () => summaryQuery.refetch(),
-    "purchaseOrder.updated": () => summaryQuery.refetch(),
-    "lowStock.triggered": () => summaryQuery.refetch(),
+    "inventory.updated": () => {
+      dashboardQuery.refetch();
+      activityQuery.refetch();
+    },
+    "purchaseOrder.updated": () => {
+      dashboardQuery.refetch();
+      activityQuery.refetch();
+    },
+    "lowStock.triggered": () => {
+      dashboardQuery.refetch();
+      activityQuery.refetch();
+    },
   });
 
   const selectedStore = useMemo(
-    () => storesQuery.data?.find((store) => store.id === storeId) ?? null,
-    [storesQuery.data, storeId],
+    () => dashboardQuery.data?.stores.find((store) => store.id === storeId) ?? null,
+    [dashboardQuery.data?.stores, storeId],
   );
 
-  const lowStockItems = summaryQuery.data?.lowStock ?? [];
-  const pendingOrders = summaryQuery.data?.pendingPurchaseOrders ?? [];
-  const activity = summaryQuery.data?.recentActivity ?? [];
+  const lowStockItems = dashboardQuery.data?.summary.lowStock ?? [];
+  const pendingOrders = dashboardQuery.data?.summary.pendingPurchaseOrders ?? [];
+  const activity = activityQuery.data?.recentActivity ?? [];
 
   const statusLabel = (status: string) => getPurchaseOrderStatusLabel(tOrders, status);
 
@@ -127,9 +141,9 @@ const DashboardPage = () => {
   return (
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      {summaryQuery.error ? (
+      {dashboardQuery.error ? (
         <p className="mb-6 text-sm text-danger">
-          {translateError(tErrors, summaryQuery.error)}
+          {translateError(tErrors, dashboardQuery.error)}
         </p>
       ) : null}
 
@@ -147,12 +161,12 @@ const DashboardPage = () => {
             </div>
 
             <div className="w-full sm:max-w-xs">
-              <Select value={storeId ?? ""} onValueChange={setStoreId}>
+              <Select value={storeId ?? ""} onValueChange={setRequestedStoreId}>
                 <SelectTrigger data-tour="dashboard-store-filter">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {storesQuery.data?.map((store) => (
+                  {dashboardQuery.data?.stores.map((store) => (
                     <SelectItem key={store.id} value={store.id}>
                       {store.name}
                     </SelectItem>
@@ -194,7 +208,7 @@ const DashboardPage = () => {
             <Badge variant="warning">{formatNumber(lowStockItems.length, locale)}</Badge>
           </CardHeader>
           <CardContent>
-            {summaryQuery.isLoading ? (
+            {dashboardQuery.isLoading ? (
               loadingState
             ) : lowStockItems.length ? (
               <div className="space-y-3">
@@ -237,7 +251,7 @@ const DashboardPage = () => {
             <Badge variant="muted">{formatNumber(pendingOrders.length, locale)}</Badge>
           </CardHeader>
           <CardContent>
-            {summaryQuery.isLoading ? (
+            {dashboardQuery.isLoading ? (
               loadingState
             ) : pendingOrders.length ? (
               <div className="space-y-3">
@@ -282,7 +296,7 @@ const DashboardPage = () => {
             <Badge variant="muted">{formatNumber(activity.length, locale)}</Badge>
           </CardHeader>
           <CardContent>
-            {summaryQuery.isLoading ? (
+            {activityQuery.isLoading ? (
               loadingState
             ) : activity.length ? (
               <div className="space-y-3">

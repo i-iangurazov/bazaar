@@ -74,6 +74,7 @@ const ProductDetailPage = () => {
   const router = useRouter();
   const locale = useLocale();
   const { data: session } = useSession();
+  const trpcUtils = trpc.useUtils();
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
@@ -88,6 +89,7 @@ const ProductDetailPage = () => {
   const [showBundle, setShowBundle] = useState(false);
   const [componentDialogOpen, setComponentDialogOpen] = useState(false);
   const [componentSearch, setComponentSearch] = useState("");
+  const [basePriceDraft, setBasePriceDraft] = useState("");
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [storeOnHandDrafts, setStoreOnHandDrafts] = useState<Record<string, string>>({});
   const [selectedComponent, setSelectedComponent] = useState<{
@@ -143,8 +145,14 @@ const ProductDetailPage = () => {
     { enabled: Boolean(pricingStoreId && showLots && lotsEnabled) },
   );
   const updateMutation = trpc.products.update.useMutation({
-    onSuccess: () => {
-      productQuery.refetch();
+    onSuccess: async () => {
+      await Promise.all([
+        productQuery.refetch(),
+        storePricingQuery.refetch(),
+        pricingQuery.refetch(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+      ]);
       toast({ variant: "success", description: t("saveSuccess") });
     },
     onError: (error) => {
@@ -163,11 +171,28 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const basePriceMutation = trpc.products.inlineUpdate.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        productQuery.refetch(),
+        storePricingQuery.refetch(),
+        pricingQuery.refetch(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+      ]);
+      toast({ variant: "success", description: t("priceSaved") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
   const storePriceMutation = trpc.storePrices.upsert.useMutation({
     onSuccess: async () => {
       await Promise.all([
         storePricingQuery.refetch(),
         pricingQuery.refetch(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
       ]);
       toast({ variant: "success", description: t("priceSaved") });
     },
@@ -255,6 +280,12 @@ const ProductDetailPage = () => {
     setStorePriceDrafts(priceDrafts);
     setStoreOnHandDrafts(onHandDrafts);
   }, [storePricingQuery.data]);
+
+  useEffect(() => {
+    const basePrice =
+      storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
+    setBasePriceDraft(basePrice !== null ? String(basePrice) : "");
+  }, [productQuery.data?.basePriceKgs, storePricingQuery.data?.basePriceKgs]);
 
   const movementTypeLabel = (type: string) => {
     switch (type) {
@@ -410,6 +441,35 @@ const ProductDetailPage = () => {
     effectivePrice && effectivePrice > 0 && avgCost !== null
       ? ((effectivePrice - avgCost) / effectivePrice) * 100
       : null;
+
+  const resolveDraftBasePrice = () => {
+    const raw = basePriceDraft.trim();
+    if (!raw.length) {
+      return undefined;
+    }
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : undefined;
+  };
+
+  const handleSaveBasePrice = async () => {
+    const raw = basePriceDraft.trim();
+    const nextValue = raw.length ? Number(raw) : null;
+    if (nextValue !== null && (!Number.isFinite(nextValue) || nextValue < 0)) {
+      toast({ variant: "error", description: t("priceNonNegative") });
+      return;
+    }
+    const currentValue =
+      storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
+    if (currentValue === nextValue) {
+      return;
+    }
+    await basePriceMutation.mutateAsync({
+      productId,
+      patch: {
+        basePriceKgs: nextValue,
+      },
+    });
+  };
 
   const handleSaveStorePrice = async (storeId: string) => {
     const raw = storePriceDrafts[storeId]?.trim() ?? "";
@@ -625,6 +685,7 @@ const ProductDetailPage = () => {
             updateMutation.mutate({
               productId,
               ...values,
+              basePriceKgs: resolveDraftBasePrice(),
             })
           }
           attributeDefinitions={attributesQuery.data ?? []}
@@ -632,6 +693,7 @@ const ProductDetailPage = () => {
           isSubmitting={updateMutation.isLoading}
           readOnly={!isAdmin}
           productId={productId}
+          showBasePriceField={false}
         />
       </div>
 
@@ -646,8 +708,51 @@ const ProductDetailPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-          ) : storePricingQuery.data?.stores.length ? (
+          ) : storePricingQuery.data ? (
             <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-card p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {t("basePrice")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("basePriceFallbackHint")}
+                    </p>
+                  </div>
+                  {isAdmin ? (
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        className="w-full sm:w-[160px]"
+                        value={basePriceDraft}
+                        onChange={(event) => setBasePriceDraft(event.target.value)}
+                        onBlur={() => void handleSaveBasePrice()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        placeholder={t("pricePlaceholder")}
+                        disabled={basePriceMutation.isLoading}
+                      />
+                      {basePriceMutation.isLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Spinner className="h-4 w-4" />
+                          {tCommon("saving")}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">
+                      {t("basePriceReadOnly")}
+                    </div>
+                  )}
+                </div>
+              </div>
               {storePricingQuery.data.stores.map((storeRow) => (
                 <div
                   key={storeRow.storeId}

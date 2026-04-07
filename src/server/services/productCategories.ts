@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -26,18 +26,21 @@ export const normalizeProductCategoryNames = (values?: Array<string | null | und
 
 export const resolvePrimaryProductCategory = (categories: string[]) => categories[0] ?? null;
 
-export const listProductCategories = async (organizationId: string) => {
+export const listProductCategoriesFromDb = async (
+  db: PrismaClient | Prisma.TransactionClient,
+  organizationId: string,
+) => {
   const [savedCategories, productCategories, templateCategories] = await Promise.all([
-    prisma.productCategory.findMany({
+    db.productCategory.findMany({
       where: { organizationId },
       select: { name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.product.findMany({
+    db.product.findMany({
       where: { organizationId },
       select: { category: true, categories: true },
     }),
-    prisma.categoryAttributeTemplate.findMany({
+    db.categoryAttributeTemplate.findMany({
       where: { organizationId },
       select: { category: true },
       distinct: ["category"],
@@ -69,6 +72,9 @@ export const listProductCategories = async (organizationId: string) => {
 
   return Array.from(categories).sort((a, b) => a.localeCompare(b));
 };
+
+export const listProductCategories = async (organizationId: string) =>
+  listProductCategoriesFromDb(prisma, organizationId);
 
 export const ensureProductCategory = async (
   tx: Prisma.TransactionClient,

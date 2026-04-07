@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
+import {
+  ImportDryRunPreview,
+  type ImportDryRunPreviewData,
+} from "@/components/import-dry-run-preview";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +41,7 @@ import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
 
 type ImportRow = {
+  sourceRowNumber: number;
   sku: string;
   name?: string;
   unit?: string;
@@ -154,7 +159,10 @@ const loadPapa = () => {
 const ImportPreviewTable = dynamic(() => import("@/components/import-preview-table"), {
   ssr: false,
   loading: () => (
-    <div className="h-32 animate-pulse rounded-lg border border-dashed border-border bg-muted/30" aria-hidden />
+    <div
+      className="h-32 animate-pulse rounded-lg border border-dashed border-border bg-muted/30"
+      aria-hidden
+    />
   ),
 });
 
@@ -221,8 +229,8 @@ const detectColumn = (
   }
   const containsMatch = headers.find((header) => {
     const normalized = normalizeHeader(header);
-    return normalizedCandidates.some((candidate) =>
-      normalized.includes(candidate) || candidate.includes(normalized),
+    return normalizedCandidates.some(
+      (candidate) => normalized.includes(candidate) || candidate.includes(normalized),
     );
   });
   return containsMatch ?? "";
@@ -250,9 +258,7 @@ const parseSpreadsheetRows = (sheet: XlsxWorkSheet, xlsx: XlsxModule) => {
     for (let col = range.s.c; col <= range.e.c; col += 1) {
       const header = headers[col - range.s.c];
       const cellAddress = xlsx.utils.encode_cell({ r: rowIndex, c: col });
-      const cell = sheet[cellAddress] as
-        | (XlsxCellObject & { l?: { Target?: string } })
-        | undefined;
+      const cell = sheet[cellAddress] as (XlsxCellObject & { l?: { Target?: string } }) | undefined;
       const hyperlink = cell?.l?.Target?.trim();
       const formula = typeof cell?.f === "string" ? cell.f.trim() : "";
       const rawValue = hyperlink || formula || cell?.v;
@@ -386,6 +392,10 @@ const ImportPage = () => {
   const [importStartedAt, setImportStartedAt] = useState<number | null>(null);
   const [importElapsedSeconds, setImportElapsedSeconds] = useState(0);
   const [lastImportSummary, setLastImportSummary] = useState<ImportRunSummary | null>(null);
+  const [dryRunPreview, setDryRunPreview] = useState<ImportDryRunPreviewData | null>(null);
+  const [dryRunPreviewError, setDryRunPreviewError] = useState<string | null>(null);
+  const [dryRunPreviewPending, setDryRunPreviewPending] = useState(false);
+  const dryRunRequestVersionRef = useRef(0);
 
   const batchesQuery = trpc.imports.list.useQuery(undefined, { enabled: isAdmin });
   const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: isAdmin });
@@ -434,6 +444,12 @@ const ImportPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const previewMutation = trpc.products.previewImportCsv.useMutation();
+  const previewImportRef = useRef(previewMutation.mutateAsync);
+
+  useEffect(() => {
+    previewImportRef.current = previewMutation.mutateAsync;
+  }, [previewMutation.mutateAsync]);
 
   const rollbackMutation = trpc.imports.rollback.useMutation({
     onSuccess: () => {
@@ -605,22 +621,23 @@ const ImportPage = () => {
         return;
       }
 
-      const barcodesValue = shouldApply("barcodes") && mapping.barcodes
-        ? normalizeValue(row[mapping.barcodes])
-        : "";
+      const barcodesValue =
+        shouldApply("barcodes") && mapping.barcodes ? normalizeValue(row[mapping.barcodes]) : "";
       const barcodes = barcodesValue ? parseBarcodes(barcodesValue) : [];
-      const basePriceCandidate = shouldApply("basePriceKgs") && mapping.basePriceKgs
-        ? normalizeValue(row[mapping.basePriceKgs])
-        : "";
-      const purchasePriceCandidate = shouldApply("purchasePriceKgs") && mapping.purchasePriceKgs
-        ? normalizeValue(row[mapping.purchasePriceKgs])
-        : "";
-      const avgCostCandidate = shouldApply("avgCostKgs") && mapping.avgCostKgs
-        ? normalizeValue(row[mapping.avgCostKgs])
-        : "";
-      const minStockCandidate = shouldApply("minStock") && mapping.minStock
-        ? normalizeValue(row[mapping.minStock])
-        : "";
+      const basePriceCandidate =
+        shouldApply("basePriceKgs") && mapping.basePriceKgs
+          ? normalizeValue(row[mapping.basePriceKgs])
+          : "";
+      const purchasePriceCandidate =
+        shouldApply("purchasePriceKgs") && mapping.purchasePriceKgs
+          ? normalizeValue(row[mapping.purchasePriceKgs])
+          : "";
+      const avgCostCandidate =
+        shouldApply("avgCostKgs") && mapping.avgCostKgs
+          ? normalizeValue(row[mapping.avgCostKgs])
+          : "";
+      const minStockCandidate =
+        shouldApply("minStock") && mapping.minStock ? normalizeValue(row[mapping.minStock]) : "";
       const basePriceResult = parseOptionalNumericValue(basePriceCandidate);
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
@@ -691,22 +708,26 @@ const ImportPage = () => {
       }
 
       rows.push({
+        sourceRowNumber: rowNumber,
         sku,
         name: shouldApply("name") ? name || undefined : undefined,
         unit: shouldApply("unit") ? unit || undefined : undefined,
-        category: shouldApply("category") && mapping.category
-          ? normalizeValue(row[mapping.category]) || undefined
-          : undefined,
-        description: shouldApply("description") && mapping.description
-          ? normalizeValue(row[mapping.description]) || undefined
-          : undefined,
+        category:
+          shouldApply("category") && mapping.category
+            ? normalizeValue(row[mapping.category]) || undefined
+            : undefined,
+        description:
+          shouldApply("description") && mapping.description
+            ? normalizeValue(row[mapping.description]) || undefined
+            : undefined,
         basePriceKgs: basePriceResult.value,
         purchasePriceKgs: purchasePriceResult.value,
         avgCostKgs: avgCostResult.value,
         minStock: minStockResult.value,
-        photoUrl: shouldApply("photoUrl") && mapping.photoUrl
-          ? normalizeValue(row[mapping.photoUrl]) || undefined
-          : undefined,
+        photoUrl:
+          shouldApply("photoUrl") && mapping.photoUrl
+            ? normalizeValue(row[mapping.photoUrl]) || undefined
+            : undefined,
         barcodes: shouldApply("barcodes") && barcodes.length ? barcodes : undefined,
       });
     });
@@ -723,6 +744,73 @@ const ImportPage = () => {
     t,
     targetStoreId,
   ]);
+
+  const previewInput = useMemo(
+    () =>
+      missingRequired.length > 0 ||
+      (isUpdateSelectedMode && selectedUpdateFields.length === 0) ||
+      validation.rows.length === 0
+        ? null
+        : {
+            rows: validation.rows,
+            source,
+            storeId: targetStoreId || undefined,
+            mode: importMode,
+            updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
+          },
+    [
+      importMode,
+      isUpdateSelectedMode,
+      missingRequired.length,
+      selectedUpdateFields,
+      source,
+      targetStoreId,
+      validation.rows,
+    ],
+  );
+  const previewInputKey = useMemo(
+    () => (previewInput ? JSON.stringify(previewInput) : ""),
+    [previewInput],
+  );
+
+  useEffect(() => {
+    if (!previewInput) {
+      dryRunRequestVersionRef.current += 1;
+      setDryRunPreview(null);
+      setDryRunPreviewError(null);
+      setDryRunPreviewPending(false);
+      return;
+    }
+
+    const requestVersion = dryRunRequestVersionRef.current + 1;
+    dryRunRequestVersionRef.current = requestVersion;
+    setDryRunPreviewPending(true);
+    setDryRunPreviewError(null);
+
+    const timer = window.setTimeout(() => {
+      void previewImportRef.current(previewInput).then(
+        (result) => {
+          if (dryRunRequestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setDryRunPreview(result);
+          setDryRunPreviewPending(false);
+        },
+        (error) => {
+          if (dryRunRequestVersionRef.current !== requestVersion) {
+            return;
+          }
+          setDryRunPreview(null);
+          setDryRunPreviewPending(false);
+          setDryRunPreviewError(translateError(tErrors, error));
+        },
+      );
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [previewInput, previewInputKey, tErrors]);
 
   const handleFile = async (file: File) => {
     setFileError(null);
@@ -931,9 +1019,7 @@ const ImportPage = () => {
 
   const handleToggleUpdateField = (field: ImportUpdateField) => {
     setSelectedUpdateFields((prev) =>
-      prev.includes(field)
-        ? prev.filter((value) => value !== field)
-        : [...prev, field],
+      prev.includes(field) ? prev.filter((value) => value !== field) : [...prev, field],
     );
   };
 
@@ -947,7 +1033,9 @@ const ImportPage = () => {
       return;
     }
     if (preset === "all") {
-      setSelectedUpdateFields(updateSelectableFields.map((field) => field.key as ImportUpdateField));
+      setSelectedUpdateFields(
+        updateSelectableFields.map((field) => field.key as ImportUpdateField),
+      );
       return;
     }
     setSelectedUpdateFields([]);
@@ -999,11 +1087,7 @@ const ImportPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <Button
-            variant="secondary"
-            className="w-full sm:w-auto"
-            onClick={handleDownloadTemplate}
-          >
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={handleDownloadTemplate}>
             <DownloadIcon className="h-4 w-4" aria-hidden />
             {t("templateDownload")}
           </Button>
@@ -1068,7 +1152,9 @@ const ImportPage = () => {
                 {isUpdateSelectedMode ? (
                   <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-xs font-medium text-foreground">{t("updateFieldsTitle")}</p>
+                      <p className="text-xs font-medium text-foreground">
+                        {t("updateFieldsTitle")}
+                      </p>
                       {selectedUpdateFields.length ? (
                         <Badge variant="muted" className="text-[10px]">
                           {selectedUpdateFields.length}
@@ -1077,22 +1163,44 @@ const ImportPage = () => {
                     </div>
                     <p className="text-xs text-muted-foreground">{t("updateFieldsHint")}</p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("prices")}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => applyUpdatePreset("prices")}
+                      >
                         {t("updatePresetPrices")}
                       </Button>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("minStock")}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => applyUpdatePreset("minStock")}
+                      >
                         {t("updatePresetMinStock")}
                       </Button>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("all")}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => applyUpdatePreset("all")}
+                      >
                         {t("updatePresetAll")}
                       </Button>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => applyUpdatePreset("none")}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => applyUpdatePreset("none")}
+                      >
                         {t("updatePresetNone")}
                       </Button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {updateSelectableFields.map((field) => {
-                        const selected = selectedUpdateFields.includes(field.key as ImportUpdateField);
+                        const selected = selectedUpdateFields.includes(
+                          field.key as ImportUpdateField,
+                        );
                         return (
                           <Button
                             key={`mask-${field.key}`}
@@ -1158,9 +1266,7 @@ const ImportPage = () => {
                 </div>
                 <Select
                   value={defaultUnitCode || "none"}
-                  onValueChange={(value) =>
-                    setDefaultUnitCode(value === "none" ? "" : value)
-                  }
+                  onValueChange={(value) => setDefaultUnitCode(value === "none" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t("defaultUnitPlaceholder")} />
@@ -1224,6 +1330,29 @@ const ImportPage = () => {
           ) : (
             <p className="text-sm text-muted-foreground">{t("previewEmpty")}</p>
           )}
+          <div className="rounded-md border border-border bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-foreground">{t("dryRunTitle")}</p>
+                <p className="text-xs text-muted-foreground">{t("dryRunSubtitle")}</p>
+              </div>
+              {dryRunPreviewPending ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Spinner className="h-4 w-4" />
+                  {t("dryRunLoading")}
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4">
+              {dryRunPreview ? (
+                <ImportDryRunPreview preview={dryRunPreview} />
+              ) : dryRunPreviewError ? (
+                <p className="text-sm text-danger">{dryRunPreviewError}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("dryRunEmpty")}</p>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1391,9 +1520,7 @@ const ImportPage = () => {
                         type="button"
                         variant="secondary"
                         size="sm"
-                        onClick={() =>
-                          handleClearDuplicateBarcode(error.row, error.value ?? "")
-                        }
+                        onClick={() => handleClearDuplicateBarcode(error.row, error.value ?? "")}
                       >
                         {t("duplicateRemove")}
                       </Button>
@@ -1436,10 +1563,13 @@ const ImportPage = () => {
               }}
               disabled={
                 importMutation.isLoading ||
+                dryRunPreviewPending ||
                 missingRequired.length > 0 ||
                 (isUpdateSelectedMode && selectedUpdateFields.length === 0) ||
                 validation.errors.length > 0 ||
-                validation.rows.length === 0
+                validation.rows.length === 0 ||
+                Boolean(dryRunPreviewError) ||
+                (dryRunPreview?.summary.blockingWarningCount ?? 0) > 0
               }
             >
               {importMutation.isLoading ? (
@@ -1464,15 +1594,13 @@ const ImportPage = () => {
             </div>
           ) : null}
           {importMutation.error ? (
-            <p className="text-sm text-danger">
-              {translateError(tErrors, importMutation.error)}
-            </p>
+            <p className="text-sm text-danger">{translateError(tErrors, importMutation.error)}</p>
           ) : null}
           {lastImportSummary ? (
             <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm text-foreground">
               <p className="font-medium">{t("importResultTitle")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("importSuccess", { count: (lastImportSummary.rows ?? 0) })}
+                {t("importSuccess", { count: lastImportSummary.rows ?? 0 })}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t(`mode.${lastImportSummary.mode ?? "full"}`)}
@@ -1485,21 +1613,15 @@ const ImportPage = () => {
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                 <div className="rounded border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.created")}</p>
-                  <p className="font-semibold text-foreground">
-                    {lastImportSummary.created ?? 0}
-                  </p>
+                  <p className="font-semibold text-foreground">{lastImportSummary.created ?? 0}</p>
                 </div>
                 <div className="rounded border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.updated")}</p>
-                  <p className="font-semibold text-foreground">
-                    {lastImportSummary.updated ?? 0}
-                  </p>
+                  <p className="font-semibold text-foreground">{lastImportSummary.updated ?? 0}</p>
                 </div>
                 <div className="rounded border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.skipped")}</p>
-                  <p className="font-semibold text-foreground">
-                    {lastImportSummary.skipped ?? 0}
-                  </p>
+                  <p className="font-semibold text-foreground">{lastImportSummary.skipped ?? 0}</p>
                 </div>
                 <div className="rounded border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageDownloaded")}</p>
@@ -1567,7 +1689,9 @@ const ImportPage = () => {
                           mode?: ImportMode;
                           targetStoreName?: string;
                         };
-                        const sourceLabel = summary.source ? t(`source.${summary.source}`) : t("source.csv");
+                        const sourceLabel = summary.source
+                          ? t(`source.${summary.source}`)
+                          : t("source.csv");
                         const actions = [
                           {
                             key: "rollback",
@@ -1597,10 +1721,18 @@ const ImportPage = () => {
                                 ) : null}
                               </div>
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{summary.rows ?? 0}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{summary.created ?? 0}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{summary.updated ?? 0}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{summary.skipped ?? 0}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {summary.rows ?? 0}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {summary.created ?? 0}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {summary.updated ?? 0}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {summary.skipped ?? 0}
+                            </TableCell>
                             <TableCell>
                               {batch.rolledBackAt ? (
                                 <Badge variant="muted">{t("historyRolledBack")}</Badge>
@@ -1610,7 +1742,9 @@ const ImportPage = () => {
                             </TableCell>
                             <TableCell className="text-right">
                               {batch.rolledBackAt ? (
-                                <span className="text-xs text-muted-foreground/80">{t("historyDone")}</span>
+                                <span className="text-xs text-muted-foreground/80">
+                                  {t("historyDone")}
+                                </span>
                               ) : (
                                 <RowActions
                                   actions={actions}
@@ -1637,7 +1771,9 @@ const ImportPage = () => {
                   mode?: ImportMode;
                   targetStoreName?: string;
                 };
-                const sourceLabel = summary.source ? t(`source.${summary.source}`) : t("source.csv");
+                const sourceLabel = summary.source
+                  ? t(`source.${summary.source}`)
+                  : t("source.csv");
                 const actions = [
                   {
                     key: "rollback",

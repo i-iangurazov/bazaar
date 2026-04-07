@@ -144,6 +144,6 @@ describe("product spec suggestions", () => {
       code: "TOO_MANY_REQUESTS",
       message: "rateLimited",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 });

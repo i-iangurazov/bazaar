@@ -10,6 +10,14 @@ import { ensureRequestId } from "@/server/middleware/requestContext";
 import { createRateLimiter, type RateLimitConfig } from "@/server/middleware/rateLimiter";
 import { Role } from "@prisma/client";
 import { assertTrialActive } from "@/server/services/planLimits";
+import {
+  isHotTrpcPath,
+  isPerfProfilingEnabled,
+  logRuntimeHotPathTiming,
+  recordTrpcTiming,
+  summarizeHotProcedureInput,
+  summarizeHotProcedureOutput,
+} from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import { getAuthTokenFromCookieHeader } from "@/server/auth/token";
 
@@ -120,14 +128,47 @@ const t = initTRPC.context<Context>().create({
   },
 });
 
-const withTiming = t.middleware(async ({ path, type, ctx, next }) => {
+const withTiming = t.middleware(async ({ path, type, ctx, input, next }) => {
   const startedAt = Date.now();
-  const result = await next();
-  const durationMs = Date.now() - startedAt;
-  if (durationMs >= 750) {
-    ctx.logger.warn({ path, type, durationMs }, "slow trpc procedure");
+  let outputSummary: Record<string, unknown> | null = null;
+  let status: "ok" | "error" = "ok";
+  const inputSummary = summarizeHotProcedureInput(path, input);
+
+  try {
+    const result = await next();
+    outputSummary = summarizeHotProcedureOutput(result.ok ? result.data : null);
+    return result;
+  } catch (error) {
+    status = "error";
+    throw error;
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    if (isHotTrpcPath(path)) {
+      recordTrpcTiming({
+        path,
+        type,
+        durationMs,
+        inputSummary,
+        outputSummary,
+        status,
+      });
+      logRuntimeHotPathTiming({
+        logger: ctx.logger,
+        path,
+        type,
+        durationMs,
+        status,
+        inputSummary,
+        outputSummary,
+      });
+      if (isPerfProfilingEnabled()) {
+        ctx.logger.info({ path, type, durationMs, status }, "profile trpc timing");
+      }
+    }
+    if (durationMs >= 750) {
+      ctx.logger.warn({ path, type, durationMs, status }, "slow trpc procedure");
+    }
   }
-  return result;
 });
 
 export const rateLimit = (config: RateLimitConfig) => {

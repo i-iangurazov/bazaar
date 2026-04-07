@@ -64,4 +64,38 @@ describe("redis requirements", () => {
 
     expect(() => assertBuildEnvConfigured()).not.toThrow();
   });
+
+  it("skips redis client initialization during production build phase", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    vi.stubEnv("REDIS_URL", "redis://redis.example.com:6379");
+
+    vi.resetModules();
+    const {
+      getRedisPublisher,
+      redisConfigured,
+      shouldSkipRedisInitialization,
+    } = await import("@/server/redis");
+
+    expect(shouldSkipRedisInitialization()).toBe(true);
+    expect(redisConfigured()).toBe(false);
+    expect(getRedisPublisher()).toBeNull();
+  });
+
+  it("uses an in-memory limiter silently during build phase", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    vi.stubEnv("REDIS_URL", "redis://redis.example.com:6379");
+
+    vi.resetModules();
+    const { createRateLimiter } = await import("@/server/middleware/rateLimiter");
+
+    const limiter = createRateLimiter({
+      windowMs: 1000,
+      max: 1,
+      prefix: "build-test",
+    });
+
+    expect(() => limiter.consume("key")).not.toThrow();
+  });
 });

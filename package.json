@@ -17,7 +17,7 @@
     "format": "prettier --write .",
     "test": "vitest",
     "i18n:check": "node --import tsx scripts/i18n-check.ts",
-    "test:ci": "pnpm prisma:generate && pnpm typecheck && pnpm lint && pnpm test && pnpm i18n:check",
+    "test:ci": "pnpm prisma:generate && pnpm typecheck && pnpm lint && pnpm exec vitest run && pnpm i18n:check",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:reset": "prisma migrate reset --force --skip-generate",
@@ -27,7 +27,8 @@
     "env:check:build": "node --import tsx scripts/ops-preflight.ts --env-only",
     "ops:preflight": "node --import tsx scripts/ops-preflight.ts",
     "ops:email-check": "node --import tsx scripts/ops-email-flow-check.ts",
-    "ops:images-backfill": "node --import tsx scripts/ops-product-images-backfill.ts"
+    "ops:images-backfill": "node --import tsx scripts/ops-product-images-backfill.ts",
+    "profile:hot-paths": "BAZAAR_PROFILE=1 node --import tsx scripts/profile-hot-paths.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.985.0",

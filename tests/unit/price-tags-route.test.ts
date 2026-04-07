@@ -177,6 +177,49 @@ describe("price tags pdf route", () => {
     expect(response.status).toBe(400);
     await expect(response.text()).resolves.toContain("штрихкод");
   });
+
+  it("requires selecting a store when products have store-specific prices", async () => {
+    prisma.storePrice.findMany.mockResolvedValueOnce([{ productId: "prod-1" }]);
+
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: JSON.stringify({
+        template: "3x8",
+        items: [{ productId: "prod-1", quantity: 1 }],
+      }),
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toContain("Выберите магазин");
+  });
+
+  it("rejects price tags when a selected product has no resolved price", async () => {
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: "prod-1",
+        name: "Без цены",
+        sku: "SKU-3",
+        basePriceKgs: null,
+        barcodes: [{ value: "1234567890" }],
+      },
+    ]);
+
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: JSON.stringify({
+        template: "3x8",
+        items: [{ productId: "prod-1", quantity: 1 }],
+        storeId: "store-1",
+      }),
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toContain("не задана цена");
+  });
 });
 
 describe("product image upload route", () => {
