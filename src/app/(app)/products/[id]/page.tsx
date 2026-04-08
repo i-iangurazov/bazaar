@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -51,6 +51,7 @@ import {
 } from "@/components/icons";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
+import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -100,6 +101,7 @@ const ProductDetailPage = () => {
   const [assembleOpen, setAssembleOpen] = useState(false);
   const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
   const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
+  const basePriceAutofillRef = useRef<string | null>(null);
 
   const productQuery = trpc.products.getById.useQuery(
     { productId },
@@ -431,6 +433,21 @@ const ProductDetailPage = () => {
 
   const effectivePrice = pricingQuery.data?.effectivePriceKgs ?? null;
   const avgCost = pricingQuery.data?.avgCostKgs ?? null;
+  const currentBasePrice =
+    storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
+  const basePriceFallbackCandidate = useMemo(
+    () =>
+      currentBasePrice === null
+        ? deriveBasePriceFallbackCandidate(storePricingQuery.data?.stores ?? [])
+        : null,
+    [currentBasePrice, storePricingQuery.data?.stores],
+  );
+  const basePriceFallbackSource =
+    basePriceFallbackCandidate?.matchingStoreCount === 1
+      ? basePriceFallbackCandidate.sourceStoreName
+      : basePriceFallbackCandidate
+        ? t("storesCount", { count: basePriceFallbackCandidate.matchingStoreCount })
+        : "";
   const previewImageUrl =
     productQuery.data?.images[0]?.url ?? productQuery.data?.photoUrl ?? null;
   const markupPct =
@@ -442,10 +459,33 @@ const ProductDetailPage = () => {
       ? ((effectivePrice - avgCost) / effectivePrice) * 100
       : null;
 
+  useEffect(() => {
+    if (!basePriceFallbackCandidate || currentBasePrice !== null) {
+      basePriceAutofillRef.current = null;
+      return;
+    }
+
+    const candidateKey = [
+      productId,
+      basePriceFallbackCandidate.sourceStoreId,
+      basePriceFallbackCandidate.priceKgs,
+      basePriceFallbackCandidate.matchingStoreCount,
+    ].join(":");
+
+    if (basePriceAutofillRef.current === candidateKey) {
+      return;
+    }
+
+    setBasePriceDraft((current) =>
+      current.trim().length > 0 ? current : String(basePriceFallbackCandidate.priceKgs),
+    );
+    basePriceAutofillRef.current = candidateKey;
+  }, [basePriceFallbackCandidate, currentBasePrice, productId]);
+
   const resolveDraftBasePrice = () => {
     const raw = basePriceDraft.trim();
     if (!raw.length) {
-      return undefined;
+      return currentBasePrice === null ? basePriceFallbackCandidate?.priceKgs : undefined;
     }
     const value = Number(raw);
     return Number.isFinite(value) && value >= 0 ? value : undefined;
@@ -453,20 +493,40 @@ const ProductDetailPage = () => {
 
   const handleSaveBasePrice = async () => {
     const raw = basePriceDraft.trim();
-    const nextValue = raw.length ? Number(raw) : null;
+    const nextValue = raw.length
+      ? Number(raw)
+      : currentBasePrice === null
+        ? (basePriceFallbackCandidate?.priceKgs ?? null)
+        : null;
     if (nextValue !== null && (!Number.isFinite(nextValue) || nextValue < 0)) {
       toast({ variant: "error", description: t("priceNonNegative") });
       return;
     }
-    const currentValue =
-      storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
-    if (currentValue === nextValue) {
+    if (currentBasePrice === nextValue) {
       return;
     }
     await basePriceMutation.mutateAsync({
       productId,
       patch: {
         basePriceKgs: nextValue,
+      },
+    });
+  };
+
+  const handleApplyBasePriceFallback = async () => {
+    if (!basePriceFallbackCandidate) {
+      return;
+    }
+
+    setBasePriceDraft(String(basePriceFallbackCandidate.priceKgs));
+    if (currentBasePrice === basePriceFallbackCandidate.priceKgs) {
+      return;
+    }
+
+    await basePriceMutation.mutateAsync({
+      productId,
+      patch: {
+        basePriceKgs: basePriceFallbackCandidate.priceKgs,
       },
     });
   };
@@ -719,6 +779,14 @@ const ProductDetailPage = () => {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t("basePriceFallbackHint")}
                     </p>
+                    {currentBasePrice === null && basePriceFallbackCandidate ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("basePriceDerivedHint", {
+                          price: formatCurrencyKGS(basePriceFallbackCandidate.priceKgs, locale),
+                          source: basePriceFallbackSource,
+                        })}
+                      </p>
+                    ) : null}
                   </div>
                   {isAdmin ? (
                     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -739,6 +807,16 @@ const ProductDetailPage = () => {
                         placeholder={t("pricePlaceholder")}
                         disabled={basePriceMutation.isLoading}
                       />
+                      {currentBasePrice === null && basePriceFallbackCandidate ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void handleApplyBasePriceFallback()}
+                          disabled={basePriceMutation.isLoading}
+                        >
+                          {t("basePriceApplyDerived")}
+                        </Button>
+                      ) : null}
                       {basePriceMutation.isLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Spinner className="h-4 w-4" />

@@ -448,6 +448,82 @@ describeDb("m-market integration", () => {
     expect(second.remainingSeconds).toBeGreaterThan(0);
   });
 
+  it("queues export for ready products even when other included products fail preflight", async () => {
+    const { org, adminUser, product, store, supplier, baseUnit } = await prepareReadyMMarketData();
+    const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+    delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const brokenProduct = await prisma.product.create({
+        data: {
+          organizationId: org.id,
+          supplierId: supplier.id,
+          sku: "BROKEN-READY-ONLY",
+          name: "Broken Product",
+          unit: baseUnit.code,
+          baseUnitId: baseUnit.id,
+          photoUrl: "https://cdn.example.com/images/broken-ready-only.jpg",
+        },
+      });
+
+      await prisma.inventorySnapshot.create({
+        data: {
+          storeId: store.id,
+          productId: brokenProduct.id,
+          variantKey: "BASE",
+          onHand: 3,
+          onOrder: 0,
+          allowNegativeStock: store.allowNegativeStock,
+        },
+      });
+
+      await updateMMarketProductSelection({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "ready-only-selection",
+        productIds: [brokenProduct.id],
+        included: true,
+      });
+
+      const preflight = await runMMarketPreflight(org.id);
+      expect(preflight.canExport).toBe(false);
+      expect(preflight.summary.productsReady).toBe(1);
+      expect(preflight.summary.productsFailed).toBe(1);
+
+      const requested = await requestMMarketExport({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "ready-only-export",
+        mode: "READY_ONLY",
+      });
+
+      const result = await runJob("mmarket-export", { jobId: requested.job.id });
+      const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as {
+        products?: Array<{ sku: string }>;
+      };
+
+      expect(requested.job.status).toBe(MMarketExportJobStatus.QUEUED);
+      expect(result.status).toBe("ok");
+      expect(payload.products?.map((row) => row.sku)).toEqual([product.sku]);
+      expect(payload.products?.some((row) => row.sku === brokenProduct.sku)).toBe(false);
+    } finally {
+      if (previousSpecsEndpoint === undefined) {
+        delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+      } else {
+        process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV = previousSpecsEndpoint;
+      }
+    }
+  });
+
   it("marks successfully exported products as exported in the products table", async () => {
     const { org, adminUser, product } = await prepareReadyMMarketData();
     const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;

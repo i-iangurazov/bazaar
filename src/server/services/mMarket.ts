@@ -51,6 +51,7 @@ const memoryCooldownStore = new Map<string, number>();
 export type MMarketOverviewStatus = "NOT_CONFIGURED" | "READY" | "ERROR";
 export type MMarketProductSelectionFilter = "all" | "included" | "excluded";
 export type MMarketProductExportStatus = "EXCLUDED" | "INCLUDED" | "EXPORTED";
+export type MMarketExportMode = "ALL_INCLUDED" | "READY_ONLY";
 
 export type MMarketPayloadProduct = {
   sku: string;
@@ -135,6 +136,7 @@ export type MMarketPreflightResult = {
 };
 
 type MMarketExportPlan = {
+  mode: MMarketExportMode;
   preflight: MMarketPreflightResult;
   payload: MMarketPayload;
   exportedProductIds: string[];
@@ -835,6 +837,9 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>;
 };
 
+const normalizeMMarketExportMode = (value: unknown): MMarketExportMode =>
+  value === "READY_ONLY" ? "READY_ONLY" : "ALL_INCLUDED";
+
 const toNullableString = (value: unknown) => {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -979,7 +984,9 @@ const buildMMarketExportPlan = async (input: {
   organizationId: string;
   environment: MMarketEnvironment;
   token: string | null;
+  mode?: MMarketExportMode;
 }): Promise<MMarketExportPlan> => {
+  const exportMode = normalizeMMarketExportMode(input.mode);
   const [stores, mappings, hasExplicitSelection, rawIncludedCount] = await Promise.all([
     prisma.store.findMany({
       where: { organizationId: input.organizationId },
@@ -1294,10 +1301,14 @@ const buildMMarketExportPlan = async (input: {
 
   const cooldownSeconds = await getCooldownSeconds(input.organizationId);
   const nextAllowedAt = cooldownSeconds ? new Date(Date.now() + cooldownSeconds * 1_000) : null;
+  const canExport =
+    exportMode === "READY_ONLY"
+      ? readyProducts.length > 0 && activeIncludedCount > 0
+      : failedProducts.length === 0 && activeIncludedCount > 0;
 
   const preflight: MMarketPreflightResult = {
     generatedAt: new Date(),
-    canExport: failedProducts.length === 0 && activeIncludedCount > 0,
+    canExport,
     summary: {
       mode: "IN_STOCK_ONLY",
       storesTotal: stores.length,
@@ -1327,6 +1338,7 @@ const buildMMarketExportPlan = async (input: {
 
   const payloadBytes = getPayloadBytes(payload);
   const payloadStats = {
+    exportMode,
     productCount: payload.products.length,
     selectedProducts: activeIncludedCount,
     storesTotal: stores.length,
@@ -1338,6 +1350,7 @@ const buildMMarketExportPlan = async (input: {
   };
 
   return {
+    mode: exportMode,
     preflight,
     payload,
     exportedProductIds,
@@ -2679,6 +2692,7 @@ export const requestMMarketExport = async (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
+  mode?: MMarketExportMode;
 }) => {
   const integration = await prisma.mMarketIntegration.findUnique({
     where: { orgId: input.organizationId },
@@ -2699,10 +2713,12 @@ export const requestMMarketExport = async (input: {
   }
 
   const token = decryptToken(integration.apiTokenEncrypted);
+  const exportMode = normalizeMMarketExportMode(input.mode);
   const plan = await buildMMarketExportPlan({
     organizationId: input.organizationId,
     environment: integration.environment,
     token,
+    mode: exportMode,
   });
 
   if (!plan.preflight.canExport) {
@@ -2772,6 +2788,7 @@ export const requestMMarketExport = async (input: {
       jobId: queuedJob.id,
       organizationId: input.organizationId,
       requestId: input.requestId,
+      mode: exportMode,
     }).catch(() => null);
   }
 
@@ -2836,10 +2853,12 @@ const runMMarketExportJob = async (
     }
 
     const token = decryptToken(integration.apiTokenEncrypted);
+    const exportMode = normalizeMMarketExportMode(asRecord(job.payloadStatsJson)?.exportMode);
     plan = await buildMMarketExportPlan({
       organizationId: job.orgId,
       environment: job.environment,
       token,
+      mode: exportMode,
     });
 
     if (!plan.preflight.canExport) {
@@ -2996,7 +3015,10 @@ export const __resetMMarketCooldownForTests = () => {
   memoryCooldownStore.clear();
 };
 
-export const __buildMMarketExportPlanForTests = async (organizationId: string) => {
+export const __buildMMarketExportPlanForTests = async (
+  organizationId: string,
+  mode: MMarketExportMode = "ALL_INCLUDED",
+) => {
   if (process.env.NODE_ENV !== "test") {
     throw new Error("testOnly");
   }
@@ -3012,6 +3034,7 @@ export const __buildMMarketExportPlanForTests = async (organizationId: string) =
     organizationId,
     environment: integration?.environment ?? MMarketEnvironment.DEV,
     token,
+    mode,
   });
 };
 

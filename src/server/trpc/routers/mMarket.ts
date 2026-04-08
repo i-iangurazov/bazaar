@@ -281,6 +281,21 @@ export const mMarketRouter = router({
       }
     }),
 
+  exportReadyNow: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-export-ready" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await requestMMarketExport({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          mode: "READY_ONLY",
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   jobs: protectedProcedure
     .input(
       z

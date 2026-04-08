@@ -242,6 +242,20 @@ const MMarketSettingsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const exportReadyMutation = trpc.mMarket.exportReadyNow.useMutation({
+    onSuccess: async (result) => {
+      if (result.job.status === "RATE_LIMITED") {
+        setCooldownRemainingSeconds(result.remainingSeconds);
+        toast({ variant: "info", description: t("export.rateLimited") });
+      } else {
+        toast({ variant: "success", description: t("export.readyStarted") });
+      }
+      await Promise.all([settingsQuery.refetch(), jobsQuery.refetch()]);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
   const bulkGenerateDescriptionsMutation = trpc.mMarket.bulkGenerateDescriptions.useMutation();
   const bulkAutofillSpecsMutation = trpc.mMarket.bulkAutofillSpecs.useMutation();
   const bulkCreateBaseTemplatesMutation = trpc.mMarket.bulkCreateBaseTemplates.useMutation({
@@ -929,6 +943,7 @@ const MMarketSettingsPage = () => {
 
   const preflightData = preflightQuery.data;
   const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
+  const readyProductsCount = preflightData?.summary.productsReady ?? 0;
   const missingCategoryCount = preflightData?.blockers.byCode.MISSING_CATEGORY ?? 0;
   const shortDescriptionTargetIds = useMemo(
     () =>
@@ -1024,6 +1039,14 @@ const MMarketSettingsPage = () => {
       ? t("export.disabledNeedPreflight")
       : !preflightData.canExport
         ? t("export.disabledFailed")
+        : effectiveCooldownSeconds > 0
+          ? t("export.disabledCooldown", { countdown: formatCountdown(effectiveCooldownSeconds) })
+          : "";
+  const exportReadyDisabledReason =
+    !preflightFresh || !preflightData
+      ? t("export.disabledNeedPreflight")
+      : readyProductsCount === 0
+        ? t("export.disabledNoReadyProducts")
         : effectiveCooldownSeconds > 0
           ? t("export.disabledCooldown", { countdown: formatCountdown(effectiveCooldownSeconds) })
           : "";
@@ -1752,6 +1775,7 @@ const MMarketSettingsPage = () => {
               disabled={
                 !canEdit ||
                 exportMutation.isLoading ||
+                exportReadyMutation.isLoading ||
                 !preflightCanExport ||
                 effectiveCooldownSeconds > 0
               }
@@ -1759,10 +1783,34 @@ const MMarketSettingsPage = () => {
             >
               {exportMutation.isLoading ? tCommon("loading") : t("export.run")}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => exportReadyMutation.mutate()}
+              disabled={
+                !canEdit ||
+                exportMutation.isLoading ||
+                exportReadyMutation.isLoading ||
+                !preflightFresh ||
+                readyProductsCount === 0 ||
+                effectiveCooldownSeconds > 0
+              }
+              title={exportReadyDisabledReason}
+            >
+              {exportReadyMutation.isLoading
+                ? tCommon("loading")
+                : t("export.runReady", { count: readyProductsCount })}
+            </Button>
           </FormActions>
 
           {!preflightCanExport ? (
             <p className="text-xs text-muted-foreground">{exportDisabledReason}</p>
+          ) : null}
+
+          {preflightFresh && !preflightCanExport && readyProductsCount > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t("export.readyAvailableHint", { count: readyProductsCount })}
+            </p>
           ) : null}
 
           <div>
