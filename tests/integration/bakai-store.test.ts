@@ -32,7 +32,7 @@ const prepareReadyBakaiData = async (options?: { allowNegativeStock?: boolean })
     allowNegativeStock: options?.allowNegativeStock ?? false,
   });
 
-  await prisma.product.update({
+  const updatedProduct = await prisma.product.update({
     where: { id: product.id },
     data: {
       sku: "BAKAI-1",
@@ -79,7 +79,14 @@ const prepareReadyBakaiData = async (options?: { allowNegativeStock?: boolean })
     included: true,
   });
 
-  return { org, store, product, adminUser, supplier, baseUnit };
+  return {
+    org,
+    store,
+    product: updatedProduct,
+    adminUser,
+    supplier,
+    baseUnit,
+  };
 };
 
 describeDb("bakai store integration", () => {
