@@ -641,7 +641,8 @@
     "counts": "Эсептөөлөр",
     "compliance": "Талаптар",
     "bazaarCatalog": "Базар-каталог",
-    "mMarket": "M-маркет"
+    "mMarket": "M-маркет",
+    "bakaiStore": "Bakai Store"
   },
   "integrations": {
     "title": "Интеграциялар",
@@ -667,6 +668,18 @@
       "openExport": "Экспортту ачуу",
       "status": {
         "notConfigured": "Жөндөлгөн эмес",
+        "ready": "Даяр",
+        "error": "Ката"
+      }
+    },
+    "bakaiStore": {
+      "title": "Bakai Store",
+      "description": "Bakai Store шаблонуна товарларды экспорттоо",
+      "openSettings": "Жөндөө",
+      "openExport": "Экспортту ачуу",
+      "status": {
+        "notConfigured": "Жөндөлгөн эмес",
+        "draft": "Каралама",
         "ready": "Даяр",
         "error": "Ката"
       }
@@ -950,6 +963,160 @@
         "DONE": "Даяр",
         "FAILED": "Ката",
         "RATE_LIMITED": "API чеги"
+      }
+    }
+  },
+  "bakaiStoreSettings": {
+    "title": "Bakai Store",
+    "subtitle": "Тышкы API жок, шаблонго негизделген XLSX экспорт.",
+    "readOnlyHint": "Кароо режими: өзгөртүү администраторго жана менеджерге гана жеткиликтүү.",
+    "status": {
+      "not_configured": "Жөндөлгөн эмес",
+      "draft": "Каралама",
+      "ready": "Даяр",
+      "error": "Ката"
+    },
+    "overview": {
+      "title": "Обзор",
+      "description": "Bakai Store шаблонун жүктөп, калдык колонкаларын байланыштырып, XLSX экспортту иштетиңиз.",
+      "metrics": {
+        "template": "Учурдагы шаблон",
+        "sheet": "Барак",
+        "stockColumns": "Калдык колонкалары",
+        "lastExport": "Акыркы экспорт"
+      },
+      "notUploaded": "Шаблон жүктөлгөн эмес",
+      "templateMeta": "Шаблон өлчөмү: {fileSize}. Маалыматтар {row}-саптан баштап жазылат.",
+      "uploadHint": "Бул версия жүктөлгөн XLSX шаблонун структуранын негизги булагы катары колдонот. Эгер чыныгы шаблондо маалымат заголовоктон кийин дароо башталбаса, аны v2 настройкасында тактоо керек."
+    },
+    "settings": {
+      "saved": "Колонка байланыштары сакталды.",
+      "templateUploadSuccess": "Bakai Store шаблону жүктөлдү.",
+      "uploadTemplate": "Шаблон жүктөө",
+      "downloadTemplate": "Шаблонду жүктөп алуу",
+      "mappingsTitle": "Дүкөндөрдү колонкаларга байланыштыруy",
+      "mappingsSubtitle": "Bazaar дүкөндөрүн Bakai'деги `pp1`, `pp2`, `pp3` жана башка колонкаларга байланыштырыңыз.",
+      "saveMappings": "Байланыштарды сактоо",
+      "unassigned": "Байланышкан эмес",
+      "columns": {
+        "column": "Bakai колонкасы",
+        "store": "Bazaar дүкөнү"
+      }
+    },
+    "productsSelection": {
+      "title": "Экспорт курамы",
+      "subtitle": "Bakai Store'га кайсы товарлар кирерин башкарыңыз.",
+      "note": "Демейкиде бардык активдүү товарлар чыгарылган. Керектүү позицияларды гана кошуңуз. Текшерүү да, экспорт да тандалган товарлар боюнча гана иштейт.",
+      "search": "SKU же аталышы боюнча издөө",
+      "selectedLabel": "Тандалган товарлар: {count}",
+      "clearSelection": "Тандоону тазалоо",
+      "includeSelected": "Тандалгандарды кошуу",
+      "excludeSelected": "Тандалгандарды чыгаруу",
+      "statusIncluded": "Экспортто",
+      "statusExcluded": "Чыгарылган",
+      "lastExportedAt": "Акыркы экспорт: {date}",
+      "rowInclude": "Кошуу",
+      "rowExclude": "Чыгаруу",
+      "selectAll": "Барактагы бардык товарларды тандоо",
+      "selectProduct": "{name} товарын тандоо",
+      "selectProductShort": "Тандоо",
+      "empty": "Товар табылган жок.",
+      "includedSuccess": "Экспортко кошулган товарлар: {count}.",
+      "excludedSuccess": "Экспорттон чыгарылган товарлар: {count}.",
+      "metrics": {
+        "total": "Активдүү товарлар",
+        "included": "Экспортко кошулган",
+        "excluded": "Чыгарылган"
+      },
+      "filters": {
+        "all": "Бардык товарлар",
+        "included": "Кошулгандар гана",
+        "excluded": "Чыгарылгандар гана"
+      },
+      "columns": {
+        "sku": "SKU",
+        "image": "Сүрөт",
+        "name": "Товар",
+        "category": "Категория",
+        "price": "Баасы",
+        "onHand": "Калдык",
+        "status": "Статус",
+        "actions": "Аракеттер"
+      }
+    },
+    "preflight": {
+      "title": "Товарларды текшерүү",
+      "subtitle": "«Экспортто» макамындагы товарлар гана текшерилет. Милдеттүү талаалар же шаблон өтмөйүнчө экспорт бөгөттөлөт.",
+      "run": "Даярдыгын текшерүү",
+      "blockersTitle": "Бөгөттөр",
+      "noBlockers": "Бөгөт жок. Товарлар экспортко даяр.",
+      "missingMappingsTitle": "Дүкөнгө байланышы жок колонкалар:",
+      "metrics": {
+        "considered": "Текшерилген товар",
+        "ready": "Даяр",
+        "failed": "Ката менен",
+        "warnings": "Эскертүүлөр"
+      },
+      "filters": {
+        "search": "SKU же аталышы боюнча издөө",
+        "issue": "Көйгөй боюнча чыпка",
+        "all": "Бардык көйгөйлөр"
+      },
+      "table": {
+        "sku": "SKU",
+        "name": "Товар",
+        "issues": "Оңдоло турганы",
+        "empty": "Көйгөйлүү товар табылган жок."
+      }
+    },
+    "issues": {
+      "NO_PRODUCTS_SELECTED": "Экспорт үчүн товарлар тандалган эмес",
+      "MISSING_SKU": "SKU жок",
+      "DUPLICATE_SKU": "SKU кайталанган",
+      "MISSING_NAME": "Аталышы жок",
+      "INVALID_NAME": "Аталышы туура эмес",
+      "MISSING_PRICE": "Баасы жок",
+      "INVALID_PRICE": "Баасы туура эмес",
+      "DISCOUNT_CONFLICT": "Эки discount тилкеси тең толтурулган",
+      "INVALID_DISCOUNT_PERCENT": "Discount пайызы туура эмес",
+      "INVALID_DISCOUNT_AMOUNT": "Discount суммасы туура эмес",
+      "MISSING_STOCK_MAPPING": "Stock колонкалары байланыштырылган эмес",
+      "INVALID_STOCK_VALUE": "Калдык мааниси туура эмес",
+      "TEMPLATE_RENDER_ERROR": "Шаблонду окуу же рендер кылуу мүмкүн болгон жок"
+    },
+    "export": {
+      "title": "Экспорт",
+      "ruleTemplate": "Файл жүктөлгөн Bakai Store шаблону боюнча түзүлөт. Китептин структурасы жана колонка тартиби ошол жактан алынат.",
+      "ruleReadyOnly": "Ready-only баскычы preflight катасы жок товарларды гана чыгарат, калган тандалган позициялар али даяр эмес болсо да.",
+      "run": "XLSX түзүү",
+      "runReady": "Даяр товарларды экспорттоо ({count})",
+      "started": "Экспорт кезекке коюлду.",
+      "readyStarted": "Даяр товарлардын экспорту кезекке коюлду.",
+      "activeJob": "Экспорт аткарылып жатат. Учурдагы тапшырма бүткүчө күтүңүз.",
+      "disabledNeedPreflight": "Адегенде даярдык текшерүүсүн жүргүзүңүз.",
+      "disabledFailed": "Экспорт бөгөттөлдү: текшерүү каталарын оңдоңуз.",
+      "disabledNoReadyProducts": "Экспортко даяр товарлар жок.",
+      "disabledActiveJob": "Азыр башка экспорт аткарылып жатат.",
+      "readyAvailableHint": "Даяр болгон {count} товар бар. Калгандар оңдолгончо күтпөстөн, аларды өзүнчө баскыч менен чыгара аласыз."
+    },
+    "history": {
+      "title": "Экспорт тарыхы",
+      "empty": "Экспорт тарыхы бош.",
+      "downloadWorkbook": "XLSX жүктөө",
+      "noWorkbook": "Файл даяр эмес",
+      "downloadError": "Ката отчетун жүктөө",
+      "summary": "Экспорттогу товарлар: {products}",
+      "columns": {
+        "createdAt": "Түзүлгөн",
+        "status": "Статус",
+        "summary": "Кыскача",
+        "actions": "Аракеттер"
+      },
+      "status": {
+        "QUEUED": "Кезекте",
+        "RUNNING": "Аткарылууда",
+        "DONE": "Даяр",
+        "FAILED": "Ката"
       }
     }
   },
@@ -2493,6 +2660,12 @@
     "mMarketTokenDecryptFailed": "M-маркет токенин чечмелөө мүмкүн болгон жок.",
     "mMarketRemoteRequestFailed": "M-маркет импортто ката кайтарды.",
     "mMarketExportFailed": "M-маркетке экспорт ката менен аяктады.",
+    "bakaiStoreNotConfigured": "Bakai Store интеграциясы жөндөлгөн эмес.",
+    "bakaiStorePreflightFailed": "Bakai Store экспорту бөгөттөлдү: текшерүү каталарын оңдоңуз.",
+    "bakaiStoreExportFailed": "Bakai Store экспорту ката менен аяктады.",
+    "bakaiStoreTemplateInvalid": "Bakai Store шаблонун окуу мүмкүн болгон жок. Баракты жана колонка аталыштарын текшериңиз.",
+    "bakaiStoreTemplateInvalidType": "Excel файлдары гана колдоого алынат (.xlsx, .xls, .xlsm).",
+    "bakaiStoreTemplateTooLarge": "Шаблон файлы өтө чоң.",
     "userNotFound": "Колдонуучу табылган жок.",
     "cannotDemoteSelf": "Өз ролуңузду төмөндөтө албайсыз.",
     "cannotDeactivateSelf": "Өз аккаунтуңузду өчүрө албайсыз.",

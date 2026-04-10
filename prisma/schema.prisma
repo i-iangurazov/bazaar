@@ -244,6 +244,20 @@ enum MMarketExportJobStatus {
   RATE_LIMITED
 }
 
+enum BakaiStoreIntegrationStatus {
+  DISABLED
+  DRAFT
+  READY
+  ERROR
+}
+
+enum BakaiStoreExportJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
 model Organization {
   id                  String                         @id @default(cuid())
   name                String
@@ -275,6 +289,10 @@ model Organization {
   mMarketBranchMappings    MMarketBranchMapping[]
   mMarketExportJobs        MMarketExportJob[]
   mMarketIncludedProducts  MMarketIncludedProduct[]
+  bakaiStoreIntegrations   BakaiStoreIntegration[]
+  bakaiStoreMappings       BakaiStoreStockMapping[]
+  bakaiStoreExportJobs     BakaiStoreExportJob[]
+  bakaiStoreIncludedProducts BakaiStoreIncludedProduct[]
   productCosts             ProductCost[]
   productBundleComponents  ProductBundleComponent[]
   stockLots                StockLot[]
@@ -350,6 +368,7 @@ model User {
   authTokens                    AuthToken[]
   complianceProfilesUpdated     StoreComplianceProfile[]  @relation("complianceUpdatedBy")
   exportJobsRequested           ExportJob[]               @relation("exportRequestedBy")
+  bakaiStoreExportJobsRequested BakaiStoreExportJob[]     @relation("bakaiStoreExportRequestedBy")
   periodClosesCreated           PeriodClose[]             @relation("periodClosedBy")
   diagnosticsReportsCreated     DiagnosticsReport[]       @relation("diagnosticsCreatedBy")
   planUpgradeRequestsCreated    PlanUpgradeRequest[]      @relation("planUpgradeRequestedBy")
@@ -423,6 +442,7 @@ model Store {
   storePrices              StorePrice[]
   bazaarCatalog            BazaarCatalog?
   mMarketBranchMappings    MMarketBranchMapping[]
+  bakaiStoreMappings       BakaiStoreStockMapping[]
   featureFlags             StoreFeatureFlag[]
   complianceProfile        StoreComplianceProfile?
   exportJobs               ExportJob[]
@@ -611,6 +631,85 @@ model MMarketIncludedProduct {
   @@index([productId])
 }
 
+model BakaiStoreIntegration {
+  id                  String                       @id @default(cuid())
+  orgId               String
+  status              BakaiStoreIntegrationStatus @default(DISABLED)
+  templateFileName    String?
+  templateMimeType    String?
+  templateFileSize    Int?
+  templateStoragePath String?
+  templateSchemaJson  Json?
+  lastSyncAt          DateTime?
+  lastErrorSummary    String?                     @db.Text
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId])
+  @@index([orgId, status, updatedAt])
+}
+
+model BakaiStoreStockMapping {
+  id        String   @id @default(cuid())
+  orgId     String
+  storeId   String
+  columnKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+
+  @@unique([orgId, storeId])
+  @@unique([orgId, columnKey])
+  @@index([orgId, storeId])
+  @@index([orgId, columnKey])
+}
+
+model BakaiStoreExportJob {
+  id                    String                    @id @default(cuid())
+  orgId                 String
+  status                BakaiStoreExportJobStatus @default(QUEUED)
+  requestedById         String
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  fileName              String?
+  mimeType              String?
+  fileSize              Int?
+  storagePath           String?
+  payloadStatsJson      Json?
+  errorReportJson       Json?
+  requestIdempotencyKey String
+  createdAt             DateTime                  @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  requestedBy  User         @relation("bakaiStoreExportRequestedBy", fields: [requestedById], references: [id])
+
+  @@unique([requestIdempotencyKey])
+  @@index([orgId, createdAt])
+  @@index([orgId, status, createdAt])
+}
+
+model BakaiStoreIncludedProduct {
+  id              String   @id @default(cuid())
+  orgId           String
+  productId       String
+  discountPercent Decimal? @db.Decimal(5, 2)
+  discountAmount  Decimal? @db.Decimal(12, 2)
+  createdAt       DateTime @default(now())
+  lastExportedAt  DateTime?
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([orgId, productId])
+  @@index([orgId, productId])
+  @@index([productId])
+}
+
 model PeriodClose {
   id             String   @id @default(cuid())
   organizationId String
@@ -751,6 +850,7 @@ model Product {
   images             ProductImage[]
   complianceFlags    ProductComplianceFlags?
   mMarketInclusions  MMarketIncludedProduct[]
+  bakaiStoreInclusions BakaiStoreIncludedProduct[]
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
   customerOrderLines CustomerOrderLine[]
   saleReturnLines    SaleReturnLine[]

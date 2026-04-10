@@ -32,6 +32,7 @@ const IntegrationsPage = () => {
 
   const storesQuery = trpc.bazaarCatalog.listStores.useQuery();
   const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
+  const bakaiStoreOverviewQuery = trpc.bakaiStore.overview.useQuery();
 
   const { summaryStatus, publishedEntry, defaultStoreId } = useMemo(() => {
     const stores = storesQuery.data ?? [];
@@ -80,7 +81,7 @@ const IntegrationsPage = () => {
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader className="space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -171,6 +172,55 @@ const IntegrationsPage = () => {
               ) : (
                 <Button variant="secondary" disabled>
                   {t("mMarket.openExport")}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
+                  {t("bakaiStore.title")}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">{t("bakaiStore.description")}</p>
+              </div>
+              <Badge
+                variant={
+                  bakaiStoreOverviewQuery.data?.status === "READY"
+                    ? "success"
+                    : bakaiStoreOverviewQuery.data?.status === "ERROR"
+                      ? "danger"
+                      : bakaiStoreOverviewQuery.data?.status === "DRAFT"
+                        ? "warning"
+                        : "muted"
+                }
+              >
+                {bakaiStoreOverviewQuery.data?.status === "READY"
+                  ? t("bakaiStore.status.ready")
+                  : bakaiStoreOverviewQuery.data?.status === "ERROR"
+                    ? t("bakaiStore.status.error")
+                    : bakaiStoreOverviewQuery.data?.status === "DRAFT"
+                      ? t("bakaiStore.status.draft")
+                      : t("bakaiStore.status.notConfigured")}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Link href="/operations/integrations/bakai-store">
+                <Button>{t("bakaiStore.openSettings")}</Button>
+              </Link>
+              {bakaiStoreOverviewQuery.data?.configured ? (
+                <Link href="/operations/integrations/bakai-store">
+                  <Button variant="secondary">{t("bakaiStore.openExport")}</Button>
+                </Link>
+              ) : (
+                <Button variant="secondary" disabled>
+                  {t("bakaiStore.openExport")}
                 </Button>
               )}
             </div>
