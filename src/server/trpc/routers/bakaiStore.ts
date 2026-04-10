@@ -1,14 +1,21 @@
+import { BakaiStoreConnectionMode } from "@prisma/client";
 import { z } from "zod";
 
 import {
-  getBakaiStoreExportJob,
+  getBakaiStoreJob,
   getBakaiStoreOverview,
+  getBakaiStoreSavedToken,
   getBakaiStoreSettings,
-  listBakaiStoreExportJobs,
+  listBakaiStoreJobs,
   listBakaiStoreProductIds,
   listBakaiStoreProducts,
+  requestBakaiStoreApiSync,
   requestBakaiStoreExport,
+  runBakaiStoreApiPreflight,
   runBakaiStorePreflight,
+  testBakaiStoreConnection,
+  updateBakaiStoreBranchMappings,
+  updateBakaiStoreSettings,
   updateBakaiStoreMappings,
   updateBakaiStoreProductSelection,
 } from "@/server/services/bakaiStore";
@@ -32,6 +39,52 @@ export const bakaiStoreRouter = router({
     }
   }),
 
+  revealToken: managerProcedure.query(async ({ ctx }) => {
+    try {
+      return await getBakaiStoreSavedToken(ctx.user.organizationId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+
+  saveSettings: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "bakai-store-save-settings" }))
+    .input(
+      z.object({
+        connectionMode: z.nativeEnum(BakaiStoreConnectionMode),
+        apiToken: z.string().max(4096).optional().nullable(),
+        clearToken: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateBakaiStoreSettings({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          connectionMode: input.connectionMode,
+          apiToken: input.apiToken,
+          clearToken: input.clearToken,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  testConnection: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "bakai-store-test-connection" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await testBakaiStoreConnection({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   saveMappings: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "bakai-store-save-mappings" }))
     .input(
@@ -47,6 +100,31 @@ export const bakaiStoreRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         return await updateBakaiStoreMappings({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          mappings: input.mappings,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  saveBranchMappings: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "bakai-store-save-branch-mappings" }))
+    .input(
+      z.object({
+        mappings: z.array(
+          z.object({
+            storeId: z.string().min(1),
+            branchId: z.string().max(200),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateBakaiStoreBranchMappings({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
@@ -133,6 +211,14 @@ export const bakaiStoreRouter = router({
     }
   }),
 
+  apiPreflight: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return await runBakaiStoreApiPreflight(ctx.user.organizationId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+
   exportNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-export-now" }))
     .mutation(async ({ ctx }) => {
@@ -162,6 +248,35 @@ export const bakaiStoreRouter = router({
       }
     }),
 
+  apiSyncNow: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-api-sync-now" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await requestBakaiStoreApiSync({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  apiSyncReadyNow: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-api-sync-ready-now" }))
+    .mutation(async ({ ctx }) => {
+      try {
+        return await requestBakaiStoreApiSync({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          mode: "READY_ONLY",
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   jobs: protectedProcedure
     .input(
       z
@@ -172,7 +287,7 @@ export const bakaiStoreRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await listBakaiStoreExportJobs(ctx.user.organizationId, input?.limit ?? 50);
+        return await listBakaiStoreJobs(ctx.user.organizationId, input?.limit ?? 50);
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -186,7 +301,7 @@ export const bakaiStoreRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await getBakaiStoreExportJob(ctx.user.organizationId, input.jobId);
+        return await getBakaiStoreJob(ctx.user.organizationId, input.jobId);
       } catch (error) {
         throw toTRPCError(error);
       }

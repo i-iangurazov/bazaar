@@ -251,10 +251,25 @@ enum BakaiStoreIntegrationStatus {
   ERROR
 }
 
+enum BakaiStoreConnectionMode {
+  TEMPLATE
+  API
+}
+
 enum BakaiStoreExportJobStatus {
   QUEUED
   RUNNING
   DONE
+  FAILED
+}
+
+enum BakaiStoreJobType {
+  TEMPLATE_EXPORT
+  API_SYNC
+}
+
+enum BakaiStoreLastSyncStatus {
+  SUCCESS
   FAILED
 }
 
@@ -291,8 +306,10 @@ model Organization {
   mMarketIncludedProducts  MMarketIncludedProduct[]
   bakaiStoreIntegrations   BakaiStoreIntegration[]
   bakaiStoreMappings       BakaiStoreStockMapping[]
+  bakaiStoreBranchMappings BakaiStoreBranchMapping[]
   bakaiStoreExportJobs     BakaiStoreExportJob[]
   bakaiStoreIncludedProducts BakaiStoreIncludedProduct[]
+  bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
   productCosts             ProductCost[]
   productBundleComponents  ProductBundleComponent[]
   stockLots                StockLot[]
@@ -443,6 +460,7 @@ model Store {
   bazaarCatalog            BazaarCatalog?
   mMarketBranchMappings    MMarketBranchMapping[]
   bakaiStoreMappings       BakaiStoreStockMapping[]
+  bakaiStoreBranchMappings BakaiStoreBranchMapping[]
   featureFlags             StoreFeatureFlag[]
   complianceProfile        StoreComplianceProfile?
   exportJobs               ExportJob[]
@@ -635,12 +653,17 @@ model BakaiStoreIntegration {
   id                  String                       @id @default(cuid())
   orgId               String
   status              BakaiStoreIntegrationStatus @default(DISABLED)
+  connectionMode      BakaiStoreConnectionMode    @default(TEMPLATE)
   templateFileName    String?
   templateMimeType    String?
   templateFileSize    Int?
   templateStoragePath String?
   templateSchemaJson  Json?
+  apiTokenEncrypted   String?
   lastSyncAt          DateTime?
+  lastSyncStatus      BakaiStoreLastSyncStatus?
+  lastConnectionCheckAt DateTime?
+  lastConnectionCheckSummary String?              @db.Text
   lastErrorSummary    String?                     @db.Text
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
@@ -668,9 +691,25 @@ model BakaiStoreStockMapping {
   @@index([orgId, columnKey])
 }
 
+model BakaiStoreBranchMapping {
+  id           String   @id @default(cuid())
+  orgId        String
+  storeId      String
+  bakaiBranchId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+
+  @@unique([orgId, storeId])
+  @@index([orgId, storeId])
+}
+
 model BakaiStoreExportJob {
   id                    String                    @id @default(cuid())
   orgId                 String
+  jobType               BakaiStoreJobType        @default(TEMPLATE_EXPORT)
   status                BakaiStoreExportJobStatus @default(QUEUED)
   requestedById         String
   startedAt             DateTime?
@@ -681,6 +720,11 @@ model BakaiStoreExportJob {
   storagePath           String?
   payloadStatsJson      Json?
   errorReportJson       Json?
+  responseJson          Json?
+  attemptedCount        Int?
+  succeededCount        Int?
+  failedCount           Int?
+  skippedCount          Int?
   requestIdempotencyKey String
   createdAt             DateTime                  @default(now())
 
@@ -701,6 +745,25 @@ model BakaiStoreIncludedProduct {
   createdAt       DateTime @default(now())
   lastExportedAt  DateTime?
   updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([orgId, productId])
+  @@index([orgId, productId])
+  @@index([productId])
+}
+
+model BakaiStoreProductSyncState {
+  id                  String                   @id @default(cuid())
+  orgId               String
+  productId           String
+  bakaiExternalRef    String?
+  lastSyncedAt        DateTime?
+  lastSyncStatus      BakaiStoreLastSyncStatus?
+  lastPayloadChecksum String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
   product      Product      @relation(fields: [productId], references: [id])
@@ -851,6 +914,7 @@ model Product {
   complianceFlags    ProductComplianceFlags?
   mMarketInclusions  MMarketIncludedProduct[]
   bakaiStoreInclusions BakaiStoreIncludedProduct[]
+  bakaiStoreSyncStates BakaiStoreProductSyncState[]
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
   customerOrderLines CustomerOrderLine[]
   saleReturnLines    SaleReturnLine[]

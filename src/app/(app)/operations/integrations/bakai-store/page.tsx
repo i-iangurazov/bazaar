@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { BakaiStoreExportJobStatus } from "@prisma/client";
+import {
+  BakaiStoreConnectionMode,
+  BakaiStoreExportJobStatus,
+  BakaiStoreJobType,
+} from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -13,7 +17,7 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormActions } from "@/components/form-layout";
+import { FormActions, FormGrid } from "@/components/form-layout";
 import { IntegrationsIcon } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,18 +43,40 @@ import { translateError } from "@/lib/translateError";
 
 const ISSUE_CODES = [
   "NO_PRODUCTS_SELECTED",
+  "MISSING_API_TOKEN",
+  "CONNECTION_TEST_FAILED",
+  "TOO_MANY_PRODUCTS_IN_SINGLE_BATCH",
   "MISSING_SKU",
   "DUPLICATE_SKU",
+  "INVALID_SKU",
   "MISSING_NAME",
   "INVALID_NAME",
+  "INVALID_NAME_LENGTH",
   "MISSING_PRICE",
   "INVALID_PRICE",
+  "MISSING_CATEGORY",
+  "MISSING_DESCRIPTION",
+  "DESCRIPTION_TOO_SHORT",
+  "MISSING_IMAGES",
+  "NOT_ENOUGH_IMAGES",
+  "INVALID_IMAGE_URL",
+  "MISSING_STOCK",
+  "MISSING_BRANCH_ID",
+  "MULTIPLE_BRANCH_MAPPINGS_UNSUPPORTED",
+  "INVALID_BRANCH_ID",
+  "INVALID_QUANTITY",
   "DISCOUNT_CONFLICT",
   "INVALID_DISCOUNT_PERCENT",
   "INVALID_DISCOUNT_AMOUNT",
+  "INVALID_SIMILAR_PRODUCTS",
+  "MISSING_SPECS",
+  "INVALID_SPECS",
   "MISSING_STOCK_MAPPING",
   "INVALID_STOCK_VALUE",
   "TEMPLATE_RENDER_ERROR",
+  "API_PAYLOAD_INVALID",
+  "API_REQUEST_FAILED",
+  "RATE_LIMITED",
 ] as const;
 
 type IssueCode = (typeof ISSUE_CODES)[number];
@@ -116,6 +142,9 @@ const jobBadgeVariant = (status: BakaiStoreExportJobStatus) => {
   return "muted" as const;
 };
 
+const jobTypeBadgeVariant = (jobType: BakaiStoreJobType) =>
+  jobType === BakaiStoreJobType.API_SYNC ? ("warning" as const) : ("muted" as const);
+
 const productStatusBadgeVariant = (status: "EXCLUDED" | "INCLUDED" | "EXPORTED") => {
   if (status === "EXPORTED") {
     return "success" as const;
@@ -162,6 +191,11 @@ const BakaiStorePage = () => {
   });
 
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
+  const [branchMappingDraft, setBranchMappingDraft] = useState<Record<string, string>>({});
+  const [connectionMode, setConnectionMode] = useState<BakaiStoreConnectionMode>(
+    BakaiStoreConnectionMode.TEMPLATE,
+  );
+  const [apiToken, setApiToken] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [productSelectionFilter, setProductSelectionFilter] = useState<
     "all" | "included" | "excluded"
@@ -207,6 +241,47 @@ const BakaiStorePage = () => {
     },
   });
 
+  const saveSettingsMutation = trpc.bakaiStore.saveSettings.useMutation({
+    onSuccess: async (_result, variables) => {
+      setPreflightFresh(false);
+      if (variables.clearToken) {
+        setApiToken("");
+      }
+      await settingsQuery.refetch();
+      toast({ variant: "success", description: t("settings.connectionSaved") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const saveBranchMappingsMutation = trpc.bakaiStore.saveBranchMappings.useMutation({
+    onSuccess: async () => {
+      setPreflightFresh(false);
+      await settingsQuery.refetch();
+      toast({ variant: "success", description: t("settings.branchMappingsSaved") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const testConnectionMutation = trpc.bakaiStore.testConnection.useMutation({
+    onSuccess: (result) => {
+      toast({
+        variant: result.ok ? "success" : "info",
+        description: result.ok
+          ? t("settings.connectionCheckSuccess", { status: result.status })
+          : t("settings.connectionCheckInfo", { status: result.status }),
+      });
+      void settingsQuery.refetch();
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+      void settingsQuery.refetch();
+    },
+  });
+
   const updateProductsMutation = trpc.bakaiStore.updateProducts.useMutation({
     onSuccess: async (result, variables) => {
       setPreflightFresh(false);
@@ -244,6 +319,26 @@ const BakaiStorePage = () => {
     },
   });
 
+  const apiSyncMutation = trpc.bakaiStore.apiSyncNow.useMutation({
+    onSuccess: async () => {
+      toast({ variant: "success", description: t("export.apiStarted") });
+      await Promise.all([jobsQuery.refetch(), settingsQuery.refetch()]);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const apiSyncReadyMutation = trpc.bakaiStore.apiSyncReadyNow.useMutation({
+    onSuccess: async () => {
+      toast({ variant: "success", description: t("export.apiReadyStarted") });
+      await Promise.all([jobsQuery.refetch(), settingsQuery.refetch()]);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   useEffect(() => {
     const mappings = settingsQuery.data?.mappings ?? [];
     const next: Record<string, string> = {};
@@ -252,6 +347,21 @@ const BakaiStorePage = () => {
     }
     setMappingDraft(next);
   }, [settingsQuery.data?.mappings]);
+
+  useEffect(() => {
+    const mappings = settingsQuery.data?.branchMappings ?? [];
+    const next: Record<string, string> = {};
+    for (const mapping of mappings) {
+      next[mapping.storeId] = mapping.branchId;
+    }
+    setBranchMappingDraft(next);
+  }, [settingsQuery.data?.branchMappings]);
+
+  useEffect(() => {
+    setConnectionMode(
+      settingsQuery.data?.integration.connectionMode ?? BakaiStoreConnectionMode.TEMPLATE,
+    );
+  }, [settingsQuery.data?.integration.connectionMode]);
 
   useEffect(() => {
     setProductsPage(1);
@@ -305,6 +415,38 @@ const BakaiStorePage = () => {
       mappings: settingsQuery.data.mappings.map((mapping) => ({
         columnKey: mapping.columnKey,
         storeId: mappingDraft[mapping.columnKey] ?? "",
+      })),
+    });
+  };
+
+  const handleSaveSettings = () => {
+    if (!canEdit) {
+      return;
+    }
+    saveSettingsMutation.mutate({
+      connectionMode,
+      apiToken: apiToken.trim() || undefined,
+    });
+  };
+
+  const handleClearSavedToken = () => {
+    if (!canEdit) {
+      return;
+    }
+    saveSettingsMutation.mutate({
+      connectionMode,
+      clearToken: true,
+    });
+  };
+
+  const handleSaveBranchMappings = () => {
+    if (!canEdit || !settingsQuery.data?.branchMappings) {
+      return;
+    }
+    saveBranchMappingsMutation.mutate({
+      mappings: settingsQuery.data.branchMappings.map((mapping) => ({
+        storeId: mapping.storeId,
+        branchId: branchMappingDraft[mapping.storeId] ?? "",
       })),
     });
   };
@@ -377,8 +519,16 @@ const BakaiStorePage = () => {
   };
 
   const preflightData = preflightQuery.data;
+  const activeMode =
+    settingsQuery.data?.integration.connectionMode ?? BakaiStoreConnectionMode.TEMPLATE;
+  const isApiMode = activeMode === BakaiStoreConnectionMode.API;
+  const hasConfiguredApiEndpoint = Boolean(settingsQuery.data?.integration.importEndpoint);
   const readyProductsCount = preflightData?.summary.productsReady ?? 0;
-  const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
+  const preflightCanExport =
+    preflightFresh &&
+    Boolean(
+      isApiMode ? preflightData?.actionability.canRunAll : preflightData?.actionability.canRunAll,
+    );
   const filteredFailedProducts = useMemo(() => {
     const failedProducts = preflightData?.failedProducts ?? [];
     const normalizedSkuFilter = filterSku.trim().toLowerCase();
@@ -410,7 +560,7 @@ const BakaiStorePage = () => {
   const exportDisabledReason =
     !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
-      : !preflightData.canExport
+      : !preflightData.actionability.canRunAll
         ? t("export.disabledFailed")
         : hasActiveExportJob
           ? t("export.disabledActiveJob")
@@ -423,6 +573,26 @@ const BakaiStorePage = () => {
         : hasActiveExportJob
           ? t("export.disabledActiveJob")
           : "";
+  const apiSyncDisabledReason =
+    !hasConfiguredApiEndpoint
+      ? t("export.apiEndpointMissing")
+      : !preflightFresh || !preflightData
+        ? t("export.disabledNeedPreflight")
+        : !preflightData.actionability.canRunAll
+          ? t("export.disabledFailed")
+          : hasActiveExportJob
+            ? t("export.disabledActiveJob")
+            : "";
+  const apiReadyDisabledReason =
+    !hasConfiguredApiEndpoint
+      ? t("export.apiEndpointMissing")
+      : !preflightFresh || !preflightData
+        ? t("export.disabledNeedPreflight")
+        : !preflightData.actionability.canRunReadyOnly
+          ? t("export.apiReadyUnsafe")
+          : hasActiveExportJob
+            ? t("export.disabledActiveJob")
+            : "";
 
   if (!canView) {
     return null;
@@ -456,6 +626,43 @@ const BakaiStorePage = () => {
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
             <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">{t("overview.metrics.mode")}</p>
+              <p className="text-sm font-semibold">
+                {t(
+                  `settings.modeOptions.${(
+                    settingsQuery.data?.integration.connectionMode ?? BakaiStoreConnectionMode.TEMPLATE
+                  ).toLowerCase()}`,
+                )}
+              </p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">{t("overview.metrics.token")}</p>
+              <p className="text-sm font-semibold">
+                {settingsQuery.data?.integration.hasApiToken
+                  ? t("overview.tokenSaved")
+                  : t("overview.tokenMissing")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">{t("overview.metrics.endpoint")}</p>
+              <p className="text-sm font-semibold">
+                {settingsQuery.data?.integration.importEndpoint
+                  ? t("overview.endpointConfigured")
+                  : t("overview.endpointMissing")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">{t("overview.metrics.lastSync")}</p>
+              <p className="text-sm font-semibold">
+                {settingsQuery.data?.integration.lastSyncAt
+                  ? formatDateTime(settingsQuery.data.integration.lastSyncAt, locale)
+                  : "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.template")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.fileName ?? t("overview.notUploaded")}
@@ -474,10 +681,12 @@ const BakaiStorePage = () => {
               </p>
             </div>
             <div className="rounded-md border border-border p-3">
-              <p className="text-xs text-muted-foreground">{t("overview.metrics.lastExport")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("overview.metrics.lastConnectionCheck")}
+              </p>
               <p className="text-sm font-semibold">
-                {settingsQuery.data?.integration.lastSyncAt
-                  ? formatDateTime(settingsQuery.data.integration.lastSyncAt, locale)
+                {settingsQuery.data?.integration.lastConnectionCheckAt
+                  ? formatDateTime(settingsQuery.data.integration.lastConnectionCheckAt, locale)
                   : "-"}
               </p>
             </div>
@@ -501,6 +710,12 @@ const BakaiStorePage = () => {
           {settingsQuery.data?.integration.lastErrorSummary ? (
             <div className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
               {settingsQuery.data.integration.lastErrorSummary}
+            </div>
+          ) : null}
+
+          {settingsQuery.data?.integration.lastConnectionCheckSummary ? (
+            <div className="rounded-md border border-border p-3 text-xs text-muted-foreground">
+              {settingsQuery.data.integration.lastConnectionCheckSummary}
             </div>
           ) : null}
 
@@ -532,6 +747,97 @@ const BakaiStorePage = () => {
               <Link href="/api/bakai-store/template">
                 <Button variant="secondary">{t("settings.downloadTemplate")}</Button>
               </Link>
+            ) : null}
+          </FormActions>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>{t("settings.connectionTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("settings.connectionSubtitle")}</p>
+          <FormGrid>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("settings.modeLabel")}</p>
+              <Select
+                value={connectionMode}
+                onValueChange={(value) => setConnectionMode(value as BakaiStoreConnectionMode)}
+                disabled={!canEdit}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BakaiStoreConnectionMode.TEMPLATE}>
+                    {t("settings.modeOptions.template")}
+                  </SelectItem>
+                  <SelectItem value={BakaiStoreConnectionMode.API}>
+                    {t("settings.modeOptions.api")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("settings.apiTokenLabel")}</p>
+              <Input
+                type="password"
+                value={apiToken}
+                onChange={(event) => setApiToken(event.target.value)}
+                placeholder={
+                  settingsQuery.data?.integration.hasApiToken
+                    ? t("settings.apiTokenSavedPlaceholder")
+                    : t("settings.apiTokenPlaceholder")
+                }
+                disabled={!canEdit}
+              />
+            </div>
+          </FormGrid>
+
+          <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+            <p>
+              {settingsQuery.data?.integration.importEndpoint
+                ? t("settings.endpointConfigured", {
+                    endpoint: settingsQuery.data.integration.importEndpoint,
+                  })
+                : t("settings.endpointPending")}
+            </p>
+            {isApiMode ? (
+              <p className="mt-2 text-xs">{t("settings.apiSubsetWarning")}</p>
+            ) : null}
+          </div>
+
+          <FormActions className="justify-start">
+            <Button
+              type="button"
+              onClick={handleSaveSettings}
+              disabled={!canEdit || saveSettingsMutation.isLoading}
+            >
+              {saveSettingsMutation.isLoading ? tCommon("loading") : t("settings.saveConnection")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => testConnectionMutation.mutate()}
+              disabled={
+                !canEdit ||
+                testConnectionMutation.isLoading ||
+                !settingsQuery.data?.integration.hasApiToken ||
+                !settingsQuery.data?.integration.importEndpoint
+              }
+            >
+              {testConnectionMutation.isLoading ? tCommon("loading") : t("settings.testConnection")}
+            </Button>
+            {settingsQuery.data?.integration.hasApiToken ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleClearSavedToken}
+                disabled={!canEdit || saveSettingsMutation.isLoading}
+              >
+                {t("settings.clearToken")}
+              </Button>
             ) : null}
           </FormActions>
         </CardContent>
@@ -600,11 +906,66 @@ const BakaiStorePage = () => {
 
       <Card className="mt-6">
         <CardHeader>
+          <CardTitle>{t("settings.branchMappingsTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("settings.branchMappingsSubtitle")}</p>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("settings.branchColumns.store")}</TableHead>
+                  <TableHead>{t("settings.branchColumns.branch")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(settingsQuery.data?.branchMappings ?? []).map((mapping) => (
+                  <TableRow key={mapping.storeId}>
+                    <TableCell>{mapping.storeName}</TableCell>
+                    <TableCell>
+                      <Input
+                        value={branchMappingDraft[mapping.storeId] ?? ""}
+                        onChange={(event) =>
+                          setBranchMappingDraft((prev) => ({
+                            ...prev,
+                            [mapping.storeId]: event.target.value,
+                          }))
+                        }
+                        placeholder={t("settings.branchPlaceholder")}
+                        disabled={!canEdit}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <FormActions className="justify-start">
+            <Button
+              type="button"
+              onClick={handleSaveBranchMappings}
+              disabled={!canEdit || saveBranchMappingsMutation.isLoading}
+            >
+              {saveBranchMappingsMutation.isLoading
+                ? tCommon("loading")
+                : t("settings.saveBranchMappings")}
+            </Button>
+          </FormActions>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
           <CardTitle>{t("productsSelection.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("productsSelection.subtitle")}</p>
           <p className="text-xs text-muted-foreground">{t("productsSelection.note")}</p>
+          {isApiMode ? (
+            <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
+              {t("productsSelection.apiWarning")}
+            </div>
+          ) : null}
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border border-border p-3">
@@ -890,7 +1251,9 @@ const BakaiStorePage = () => {
           <CardTitle>{t("preflight.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("preflight.subtitle")}</p>
+          <p className="text-sm text-muted-foreground">
+            {isApiMode ? t("preflight.subtitleApi") : t("preflight.subtitle")}
+          </p>
           <FormActions className="justify-start">
             <Button type="button" onClick={handleRunPreflight} disabled={preflightQuery.isFetching}>
               {preflightQuery.isFetching ? tCommon("loading") : t("preflight.run")}
@@ -951,11 +1314,24 @@ const BakaiStorePage = () => {
                   <div className="mt-3 text-sm text-danger">
                     <p>{t("preflight.missingMappingsTitle")}</p>
                     {preflightData.blockers.missingStoreMappings.map((mapping) => (
-                      <p key={mapping.columnKey}>{mapping.columnKey}</p>
+                      <p key={mapping.columnKey ?? mapping.storeId}>
+                        {mapping.columnKey ?? mapping.storeName ?? mapping.storeId}
+                      </p>
                     ))}
                   </div>
                 ) : null}
               </div>
+
+              {preflightData.warnings.total > 0 ? (
+                <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-foreground">
+                  <p className="font-medium">{t("preflight.warningsTitle")}</p>
+                  <div className="mt-2 space-y-1">
+                    {preflightData.warnings.global.map((warning) => (
+                      <p key={warning}>{t(`warnings.${warning}`)}</p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid gap-3 md:grid-cols-2">
                 <Input
@@ -1014,51 +1390,107 @@ const BakaiStorePage = () => {
           <CardTitle>{t("export.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("export.ruleTemplate")}</p>
-          <p className="text-sm text-muted-foreground">{t("export.ruleReadyOnly")}</p>
+          <p className="text-sm text-muted-foreground">
+            {isApiMode ? t("export.ruleApi") : t("export.ruleTemplate")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {isApiMode ? t("export.ruleApiReadyOnly") : t("export.ruleReadyOnly")}
+          </p>
 
           {hasActiveExportJob ? <Badge variant="warning">{t("export.activeJob")}</Badge> : null}
 
           <FormActions className="justify-start">
-            <Button
-              type="button"
-              onClick={() => exportMutation.mutate()}
-              disabled={
-                !canEdit ||
-                exportMutation.isLoading ||
-                exportReadyMutation.isLoading ||
-                !preflightCanExport ||
-                hasActiveExportJob
-              }
-              title={exportDisabledReason}
-            >
-              {exportMutation.isLoading ? tCommon("loading") : t("export.run")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => exportReadyMutation.mutate()}
-              disabled={
-                !canEdit ||
-                exportMutation.isLoading ||
-                exportReadyMutation.isLoading ||
-                !preflightFresh ||
-                readyProductsCount === 0 ||
-                hasActiveExportJob
-              }
-              title={exportReadyDisabledReason}
-            >
-              {exportReadyMutation.isLoading
-                ? tCommon("loading")
-                : t("export.runReady", { count: readyProductsCount })}
-            </Button>
+            {isApiMode ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => apiSyncMutation.mutate()}
+                  disabled={
+                    !canEdit ||
+                    apiSyncMutation.isLoading ||
+                    apiSyncReadyMutation.isLoading ||
+                    !preflightFresh ||
+                    !preflightData?.actionability.canRunAll ||
+                    !hasConfiguredApiEndpoint ||
+                    hasActiveExportJob
+                  }
+                  title={apiSyncDisabledReason}
+                >
+                  {apiSyncMutation.isLoading ? tCommon("loading") : t("export.runApi")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => apiSyncReadyMutation.mutate()}
+                  disabled={
+                    !canEdit ||
+                    apiSyncMutation.isLoading ||
+                    apiSyncReadyMutation.isLoading ||
+                    !preflightFresh ||
+                    !preflightData?.actionability.canRunReadyOnly ||
+                    !hasConfiguredApiEndpoint ||
+                    hasActiveExportJob
+                  }
+                  title={apiReadyDisabledReason}
+                >
+                  {apiSyncReadyMutation.isLoading
+                    ? tCommon("loading")
+                    : t("export.runApiReady", { count: readyProductsCount })}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => exportMutation.mutate()}
+                  disabled={!canEdit || exportMutation.isLoading || hasActiveExportJob}
+                >
+                  {exportMutation.isLoading ? tCommon("loading") : t("export.runFallback")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => exportMutation.mutate()}
+                  disabled={
+                    !canEdit ||
+                    exportMutation.isLoading ||
+                    exportReadyMutation.isLoading ||
+                    !preflightCanExport ||
+                    hasActiveExportJob
+                  }
+                  title={exportDisabledReason}
+                >
+                  {exportMutation.isLoading ? tCommon("loading") : t("export.run")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => exportReadyMutation.mutate()}
+                  disabled={
+                    !canEdit ||
+                    exportMutation.isLoading ||
+                    exportReadyMutation.isLoading ||
+                    !preflightFresh ||
+                    readyProductsCount === 0 ||
+                    hasActiveExportJob
+                  }
+                  title={exportReadyDisabledReason}
+                >
+                  {exportReadyMutation.isLoading
+                    ? tCommon("loading")
+                    : t("export.runReady", { count: readyProductsCount })}
+                </Button>
+              </>
+            )}
           </FormActions>
 
-          {!preflightCanExport ? (
+          {isApiMode && apiSyncDisabledReason ? (
+            <p className="text-xs text-muted-foreground">{apiSyncDisabledReason}</p>
+          ) : !preflightCanExport ? (
             <p className="text-xs text-muted-foreground">{exportDisabledReason}</p>
           ) : null}
 
-          {preflightFresh && !preflightCanExport && readyProductsCount > 0 ? (
+          {preflightFresh && !preflightCanExport && readyProductsCount > 0 && !isApiMode ? (
             <p className="text-xs text-muted-foreground">
               {t("export.readyAvailableHint", { count: readyProductsCount })}
             </p>
@@ -1084,7 +1516,9 @@ const BakaiStorePage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("history.columns.createdAt")}</TableHead>
+                    <TableHead>{t("history.columns.type")}</TableHead>
                     <TableHead>{t("history.columns.status")}</TableHead>
+                    <TableHead>{t("history.columns.startedBy")}</TableHead>
                     <TableHead>{t("history.columns.summary")}</TableHead>
                     <TableHead>{t("history.columns.actions")}</TableHead>
                   </TableRow>
@@ -1099,6 +1533,12 @@ const BakaiStorePage = () => {
                         : {};
                     const productCount =
                       typeof stats.productCount === "number" ? stats.productCount : 0;
+                    const attempted =
+                      typeof job.attemptedCount === "number" ? job.attemptedCount : productCount;
+                    const succeeded =
+                      typeof job.succeededCount === "number" ? job.succeededCount : 0;
+                    const failed = typeof job.failedCount === "number" ? job.failedCount : 0;
+                    const skipped = typeof job.skippedCount === "number" ? job.skippedCount : 0;
 
                     return (
                       <TableRow key={job.id}>
@@ -1106,12 +1546,27 @@ const BakaiStorePage = () => {
                           {formatDateTime(job.createdAt, locale)}
                         </TableCell>
                         <TableCell>
+                          <Badge variant={jobTypeBadgeVariant(job.jobType)}>
+                            {t(`history.types.${job.jobType}`)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
                           <Badge variant={jobBadgeVariant(job.status)}>
                             {t(`history.status.${job.status}`)}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {t("history.summary", { products: productCount })}
+                          {job.requestedBy?.name ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {job.jobType === BakaiStoreJobType.API_SYNC
+                            ? t("history.apiSummary", {
+                                attempted,
+                                succeeded,
+                                failed,
+                                skipped,
+                              })
+                            : t("history.summary", { products: productCount })}
                         </TableCell>
                         <TableCell className="space-x-3">
                           {job.storagePath ? (
