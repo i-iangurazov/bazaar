@@ -334,6 +334,10 @@ const ProductImageStudioPage = () => {
   };
 
   const selectedJob = selectedJobQuery.data;
+  const overview = overviewQuery.data;
+  const overviewLoading = overviewQuery.isLoading || overviewQuery.isFetching;
+  const overviewStatus = overview?.status ?? "NOT_CONFIGURED";
+  const providerMissing = overviewQuery.isSuccess && overview ? !overview.configured : false;
   const targetProductId = selectedProduct?.id ?? selectedJob?.product?.id ?? null;
   const isBusy =
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
@@ -363,12 +367,14 @@ const ProductImageStudioPage = () => {
                 <CardTitle className="text-xl">{t("overview.title")}</CardTitle>
                 <p className="text-sm text-muted-foreground">{t("overview.subtitle")}</p>
               </div>
-              <Badge variant={overviewBadgeVariant(overviewQuery.data?.status ?? "NOT_CONFIGURED")}>
-                {overviewQuery.data?.status === "READY"
-                  ? t("overview.status.ready")
-                  : overviewQuery.data?.status === "ERROR"
-                    ? t("overview.status.error")
-                    : t("overview.status.notConfigured")}
+              <Badge variant={overviewBadgeVariant(overviewStatus)}>
+                {overviewLoading
+                  ? tCommon("loading")
+                  : overviewStatus === "READY"
+                    ? t("overview.status.ready")
+                    : overviewStatus === "ERROR"
+                      ? t("overview.status.error")
+                      : t("overview.status.notConfigured")}
               </Badge>
             </div>
           </CardHeader>
@@ -379,7 +385,7 @@ const ProductImageStudioPage = () => {
                   {t("overview.metrics.totalJobs")}
                 </p>
                 <p className="mt-2 text-2xl font-semibold">
-                  {overviewQuery.data?.totalJobs ?? 0}
+                  {overview?.totalJobs ?? 0}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-4">
@@ -387,7 +393,7 @@ const ProductImageStudioPage = () => {
                   {t("overview.metrics.succeeded")}
                 </p>
                 <p className="mt-2 text-2xl font-semibold">
-                  {overviewQuery.data?.succeededJobs ?? 0}
+                  {overview?.succeededJobs ?? 0}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-4">
@@ -395,7 +401,7 @@ const ProductImageStudioPage = () => {
                   {t("overview.metrics.failed")}
                 </p>
                 <p className="mt-2 text-2xl font-semibold">
-                  {overviewQuery.data?.failedJobs ?? 0}
+                  {overview?.failedJobs ?? 0}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-4">
@@ -403,13 +409,13 @@ const ProductImageStudioPage = () => {
                   {t("overview.metrics.lastGenerated")}
                 </p>
                 <p className="mt-2 text-sm font-medium">
-                  {overviewQuery.data?.lastGeneratedAt
-                    ? formatDateTime(overviewQuery.data.lastGeneratedAt, locale)
+                  {overview?.lastGeneratedAt
+                    ? formatDateTime(overview.lastGeneratedAt, locale)
                     : t("overview.never")}
                 </p>
               </div>
             </div>
-            {!overviewQuery.data?.configured ? (
+            {providerMissing ? (
               <p className="mt-4 rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
                 {t("overview.providerMissing")}
               </p>
