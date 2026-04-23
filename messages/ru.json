@@ -1295,6 +1295,8 @@
     },
     "actions": {
       "generate": "Сгенерировать изображение",
+      "generateDisabledNoAccess": "Генерация доступна администраторам и менеджерам.",
+      "generateDisabledNoSource": "Загрузите исходное фото, чтобы начать генерацию.",
       "regenerate": "Сгенерировать заново",
       "saveToProduct": "Сохранить в товар",
       "preview": "Открыть"

@@ -1295,6 +1295,8 @@
     },
     "actions": {
       "generate": "Сүрөт түзүү",
+      "generateDisabledNoAccess": "Генерация администраторлорго жана менеджерлерге жеткиликтүү.",
+      "generateDisabledNoSource": "Генерацияны баштоо үчүн баштапкы сүрөттү жүктөңүз.",
       "regenerate": "Кайра түзүү",
       "saveToProduct": "Товарга сактоо",
       "preview": "Ачуу"

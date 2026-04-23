@@ -316,7 +316,7 @@ const ProductImageStudioPage = () => {
   };
 
   const handleGenerate = () => {
-    if (!canEdit || !sourceImage?.url) {
+    if (!canEdit || providerMissing || !sourceImage?.url) {
       return;
     }
 
@@ -335,9 +335,18 @@ const ProductImageStudioPage = () => {
 
   const selectedJob = selectedJobQuery.data;
   const overview = overviewQuery.data;
-  const overviewLoading = overviewQuery.isLoading || overviewQuery.isFetching;
+  const overviewLoading = overviewQuery.isLoading && !overview;
   const overviewStatus = overview?.status ?? "NOT_CONFIGURED";
-  const providerMissing = overviewQuery.isSuccess && overview ? !overview.configured : false;
+  const providerMissing = overview?.configured === false;
+  const generateDisabledReason = !canEdit
+    ? t("actions.generateDisabledNoAccess")
+    : !sourceImage?.url
+      ? t("actions.generateDisabledNoSource")
+      : providerMissing
+        ? t("overview.providerMissing")
+        : null;
+  const generateDisabled =
+    !canEdit || providerMissing || !sourceImage?.url || createJobMutation.isLoading;
   const targetProductId = selectedProduct?.id ?? selectedJob?.product?.id ?? null;
   const isBusy =
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
@@ -648,16 +657,14 @@ const ProductImageStudioPage = () => {
                 <Button
                   type="button"
                   onClick={handleGenerate}
-                  disabled={
-                    !canEdit ||
-                    !overviewQuery.data?.configured ||
-                    !sourceImage?.url ||
-                    createJobMutation.isLoading
-                  }
+                  disabled={generateDisabled}
                 >
                   {createJobMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                   {t("actions.generate")}
                 </Button>
+                {generateDisabledReason ? (
+                  <p className="text-xs text-muted-foreground">{generateDisabledReason}</p>
+                ) : null}
               </FormActions>
             </CardContent>
           </Card>
