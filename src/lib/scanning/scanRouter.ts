@@ -13,6 +13,12 @@ export type ScanLookupItem = {
   matchType: ScanMatchType;
   type: ScanProductType;
   primaryImage: string | null;
+  primaryBarcode?: string | null;
+  category?: string | null;
+  categories?: string[];
+  basePriceKgs?: number | null;
+  effectivePriceKgs?: number | null;
+  onHandQty?: number | null;
 };
 
 export type ScanLookupResult = {

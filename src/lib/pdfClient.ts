@@ -25,6 +25,12 @@ export const downloadPdfBlob = (blob: Blob, fileName: string) => {
   URL.revokeObjectURL(url);
 };
 
+export type PrintPdfBlobResult = {
+  opened: boolean;
+  autoPrintAttempted: boolean;
+  fallbackUsed: boolean;
+};
+
 export const printPdfBlob = async (blob: Blob) => {
   const url = URL.createObjectURL(blob);
   const revokeLater = () => {
@@ -47,7 +53,7 @@ export const printPdfBlob = async (blob: Blob) => {
     link.rel = "noopener noreferrer";
     link.click();
     revokeLater();
-    return;
+    return { opened: false, autoPrintAttempted: false, fallbackUsed: true };
   }
 
   let printed = false;
@@ -89,4 +95,5 @@ export const printPdfBlob = async (blob: Blob) => {
   // Avoid very early print calls: some browsers apply default paper before PDF page size is ready.
   window.setTimeout(tryFinalizeWhenReady, 2200);
   window.setTimeout(tryFinalizeWhenReady, 4200);
+  return { opened: true, autoPrintAttempted: true, fallbackUsed: false };
 };

@@ -291,9 +291,14 @@ const PosHistoryPage = () => {
     }
     setReceiptAction({ saleId, mode, kind });
     try {
-      const blob = await fetchPdfBlob({ url: `/api/pos/receipts/${saleId}/pdf?kind=${kind}` });
+      const blob = await fetchPdfBlob({
+        url: `/api/pos/receipts/${saleId}/pdf?kind=${kind}&action=${mode === "print" ? "reprint" : "download"}`,
+      });
       if (mode === "print") {
-        await printPdfBlob(blob);
+        const result = await printPdfBlob(blob);
+        if (!result.autoPrintAttempted) {
+          toast({ variant: "info", description: t("sell.receiptPrintFallback") });
+        }
       } else {
         downloadPdfBlob(blob, `pos-receipt-${saleId}-${kind}.pdf`);
       }

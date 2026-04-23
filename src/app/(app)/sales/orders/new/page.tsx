@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
+import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -332,26 +333,15 @@ const NewSalesOrderPage = () => {
                       <div className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</div>
                     ) : productSearchQuery.data?.length ? (
                       productSearchQuery.data.map((product) => (
-                        <button
+                        <ProductSearchResultItem
                           key={product.id}
-                          type="button"
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+                          product={product}
+                          rightSlot={<AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => {
                             void addDraftLine(product as ProductSearchResult);
                           }}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-foreground">{product.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {product.isBundle ? (
-                              <Badge variant="muted">{t("bundleProductLabel")}</Badge>
-                            ) : null}
-                            <AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                          </div>
-                        </button>
+                        />
                       ))
                     ) : (
                       <div className="px-3 py-2 text-sm text-muted-foreground">

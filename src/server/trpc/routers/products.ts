@@ -87,6 +87,7 @@ export const productsRouter = router({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
         query: input.q,
+        storeId: input.storeId,
       }),
     ),
 

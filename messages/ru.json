@@ -642,7 +642,8 @@
     "compliance": "Требования",
     "bazaarCatalog": "Базар-каталог",
     "mMarket": "M-маркет",
-    "bakaiStore": "Bakai Store"
+    "bakaiStore": "Bakai Store",
+    "productImageStudio": "Product Image Studio"
   },
   "integrations": {
     "title": "Интеграции",
@@ -680,6 +681,17 @@
       "status": {
         "notConfigured": "Не настроено",
         "draft": "Черновик",
+        "ready": "Готово",
+        "error": "Ошибка"
+      }
+    },
+    "productImageStudio": {
+      "title": "Product Image Studio",
+      "description": "Улучшение фото товара до каталожного студийного вида",
+      "openStudio": "Открыть студию",
+      "openHistory": "Открыть историю",
+      "status": {
+        "notConfigured": "Не настроено",
         "ready": "Готово",
         "error": "Ошибка"
       }
@@ -1200,6 +1212,112 @@
       }
     }
   },
+  "productImageStudioSettings": {
+    "title": "Product Image Studio",
+    "subtitle": "Загружайте слабые фото товара и получайте аккуратные каталожные изображения на светлом студийном фоне.",
+    "overview": {
+      "title": "Обзор",
+      "subtitle": "Исходное фото всегда сохраняется отдельно. Сгенерированный результат нужно проверить вручную перед сохранением в карточку товара.",
+      "status": {
+        "notConfigured": "Не настроено",
+        "ready": "Готово",
+        "error": "Ошибка"
+      },
+      "metrics": {
+        "totalJobs": "Всего задач",
+        "succeeded": "Успешно",
+        "failed": "С ошибкой",
+        "lastGenerated": "Последняя генерация"
+      },
+      "never": "Пока не было",
+      "providerMissing": "OpenAI API key не задан на сервере. Генерация будет недоступна, пока ключ не добавят."
+    },
+    "input": {
+      "title": "Исходное изображение",
+      "subtitle": "Загрузите один JPG, PNG, WEBP, HEIC или HEIF. Оригинал не перезаписывается и хранится отдельно от результата.",
+      "uploadLabel": "Загрузка",
+      "uploadCta": "Загрузить фото товара",
+      "uploadHint": "Поддерживаются JPG, PNG, WEBP, HEIC и HEIF. При необходимости файл будет автоматически оптимизирован перед загрузкой.",
+      "errors": {
+        "unsupportedFileType": "Поддерживаются только JPG, PNG, WEBP, HEIC и HEIF.",
+        "imageTooLarge": "Файл слишком большой (макс. {size} МБ).",
+        "imageTooLargeInput": "Файл слишком большой для обработки (макс. {size} МБ).",
+        "imageTooLargeAfterCompression": "После автоматической оптимизации файл все еще больше {size} МБ.",
+        "imageCompressionFailed": "Не удалось подготовить изображение к загрузке."
+      },
+      "removeSource": "Убрать",
+      "productLabel": "Товар для привязки",
+      "productPlaceholder": "Найдите товар по SKU или названию",
+      "clearProduct": "Очистить",
+      "reviewNote": "V1 не публикует результат автоматически. Сначала проверьте изображение, затем сохраните его в галерею товара.",
+      "sourceUploadSuccess": "Исходное изображение загружено."
+    },
+    "presets": {
+      "title": "Пресеты результата",
+      "subtitle": "Только контролируемые каталожные настройки. Произвольный prompt для пользователя в V1 не доступен.",
+      "backgroundLabel": "Фон",
+      "outputLabel": "Формат",
+      "background": {
+        "white": "Белый",
+        "lightGray": "Светло-серый"
+      },
+      "output": {
+        "square": "Квадрат для каталога"
+      },
+      "always": {
+        "centeredTitle": "Центрированная композиция",
+        "centeredDescription": "Товар размещается по центру с комфортными полями.",
+        "improveVisibilityTitle": "Повышение видимости и читаемости",
+        "improveVisibilityDescription": "Модель очищает фон и улучшает подачу, не меняя сам товар.",
+        "on": "Всегда включено"
+      },
+      "optional": {
+        "softShadowTitle": "Мягкая тень",
+        "softShadowDescription": "Легкая студийная тень без декоративных эффектов.",
+        "tighterCropTitle": "Более плотный кадр",
+        "tighterCropDescription": "Чуть плотнее кадр при сохранении всего товара в кадре.",
+        "brighterTitle": "Чуть светлее подача",
+        "brighterDescription": "Небольшое усиление светлоты без изменения цвета товара."
+      }
+    },
+    "preview": {
+      "title": "Превью",
+      "subtitle": "Сравните оригинал и сгенерированный вариант перед сохранением.",
+      "original": "Оригинал",
+      "generated": "Сгенерированное изображение",
+      "originalAlt": "Оригинальное изображение товара",
+      "generatedAlt": "Сгенерированное каталожное изображение товара",
+      "emptyOriginal": "Сначала загрузите исходное фото.",
+      "emptyGenerated": "Здесь появится результат после обработки задачи.",
+      "processing": "Изображение обрабатывается.",
+      "setAsPrimary": "Сделать основным изображением товара",
+      "productRequired": "Чтобы сохранить результат, выберите товар."
+    },
+    "actions": {
+      "generate": "Сгенерировать изображение",
+      "regenerate": "Сгенерировать заново",
+      "saveToProduct": "Сохранить в товар",
+      "preview": "Открыть"
+    },
+    "history": {
+      "title": "История задач",
+      "subtitle": "Проверяйте статус, ошибки и повторяйте генерацию при необходимости.",
+      "empty": "Задач пока нет.",
+      "unlinkedProduct": "Товар не выбран",
+      "columns": {
+        "status": "Статус",
+        "product": "Товар",
+        "createdBy": "Запустил",
+        "createdAt": "Создано",
+        "completedAt": "Завершено",
+        "actions": "Действия"
+      }
+    },
+    "jobQueuedSuccess": "Задача поставлена в очередь на обработку.",
+    "jobReused": "Похожая задача уже выполняется. Открыт существующий job.",
+    "jobRetrySuccess": "Повторная генерация поставлена в очередь.",
+    "saveSuccess": "Сгенерированное изображение сохранено в карточку товара."
+  },
   "catalogPublic": {
     "logoAlt": "Логотип магазина {store}",
     "searchPlaceholder": "Поиск товара",
@@ -1474,8 +1592,13 @@
       "shiftClosed": "Смена закрыта",
       "shiftOpenedAt": "Открыта",
       "openingCash": "Стартовая наличность",
+      "openingCashPlaceholder": "0.00",
+      "openingCashInvalid": "Введите корректную стартовую наличность.",
+      "openingNote": "Комментарий к открытию",
+      "openingNotePlaceholder": "Например, наличность пересчитана перед открытием смены",
       "openedBy": "Открыл",
       "openShift": "Открыть смену",
+      "openShiftTitle": "Открытие смены",
       "quickActionsTitle": "Быстрые действия",
       "sell": "Продажа",
       "history": "История",
@@ -1517,6 +1640,7 @@
       "searchProduct": "Поиск по названию, SKU или штрихкоду",
       "searchHint": "Введите минимум 1 символ, чтобы найти товар.",
       "noSearchResults": "По запросу ничего не найдено.",
+      "product": "Товар",
       "lines": "Позиции",
       "noLinesYet": "Позиции еще не добавлены.",
       "bundle": "Набор",
@@ -1547,6 +1671,12 @@
       "printFiscalReceipt": "Печать фискального чека",
       "downloadReceipt": "Скачать чек PDF",
       "printReceipt": "Печать чека",
+      "receiptAutoPrinting": "Чек подготовлен, открываем окно печати автоматически.",
+      "receiptAutoReady": "Печать отправлена в браузер. Если окно не появилось, используйте кнопку «Печать предчека».",
+      "receiptAutoBlocked": "Браузер заблокировал автоматическую печать. Нажмите «Печать предчека».",
+      "receiptAutoFailed": "Автоматическая печать не сработала. Нажмите «Печать предчека».",
+      "receiptManualFallback": "После завершения продажи чек можно напечатать повторно отсюда.",
+      "receiptPrintFallback": "Браузер открыл чек без автоматической печати. Напечатайте его из открывшейся вкладки.",
       "receiptPdfFailed": "Не удалось подготовить чек PDF."
     },
     "shifts": {
@@ -1557,6 +1687,10 @@
       "returnsTotal": "Возвраты",
       "expectedCash": "Ожидаемая наличность",
       "cashInOut": "Cash in/out",
+      "difference": "Разница",
+      "surplus": "Излишек",
+      "shortage": "Недостача",
+      "balanced": "Без расхождения",
       "cashMovementType": "Тип движения",
       "payIn": "Внесение",
       "payOut": "Изъятие",
@@ -1564,8 +1698,18 @@
       "reason": "Причина",
       "record": "Записать",
       "countedCash": "Пересчитанная наличность",
+      "closingNote": "Комментарий к закрытию",
+      "closingNotePlaceholder": "Причина расхождения или служебный комментарий",
+      "confirmClose": "Подтверждаю пересчет наличности и закрытие смены.",
+      "confirmCloseRequired": "Подтвердите закрытие смены.",
       "closeShift": "Закрыть смену",
       "historyTitle": "История смен",
+      "openedBy": "Открыл",
+      "closedBy": "Закрыл",
+      "opened": "Открыта",
+      "closed": "Закрыта",
+      "notes": "Комментарий",
+      "noHistory": "История смен пока пуста.",
       "closedSuccess": "Смена закрыта.",
       "cashMovementSuccess": "Движение наличных записано.",
       "invalidAmount": "Введите корректную сумму.",
@@ -1663,7 +1807,8 @@
         "total": "Итог",
         "payments": "Оплаты",
         "status": "Статус",
-        "fiscal": "Фискализация"
+        "fiscal": "Фискализация",
+        "actions": "Действия"
       }
     },
     "receiptPdf": {
@@ -1747,6 +1892,11 @@
     "selectAll": "Выбрать все",
     "selectInventoryItem": "Выбрать {name}",
     "printPriceTags": "Печать ценников",
+    "printLabels": "Печать этикеток",
+    "printSelected": "Печать выбранных",
+    "printMissingBarcode": "У товара нет штрихкода. Добавьте штрихкод перед печатью этикетки.",
+    "printNoPrintableProducts": "В выбранных товарах нет активных позиций для печати.",
+    "printFallback": "Браузер открыл PDF без автоматической печати. Напечатайте его из открывшейся вкладки.",
     "printSubtitle": "Выбрано: {count}",
     "template": "Шаблон",
     "template3x8": "3 x 8 (24 шт.)",
@@ -2129,7 +2279,16 @@
     "applyBulkPrice": "Применить",
     "bulkPriceSuccess": "Обновлено цен: {count}",
     "printPriceTags": "Печать ценников",
+    "printLabels": "Печать этикеток",
+    "printSelected": "Печать выбранных",
+    "printMissingBarcode": "У товара нет штрихкода. Добавьте штрихкод перед печатью этикетки.",
+    "printNoPrintableProducts": "В выбранных товарах нет активных позиций для печати.",
+    "printFallback": "Браузер открыл PDF без автоматической печати. Напечатайте его из открывшейся вкладки.",
     "printSubtitle": "Выбрано: {count}",
+    "imageUnavailable": "Изображение товара не добавлено",
+    "searchResultBarcode": "Штрихкод",
+    "searchResultPrice": "Цена",
+    "searchResultStock": "Остаток",
     "template": "Шаблон",
     "template3x8": "3 x 8 (24 шт.)",
     "template2x5": "2 x 5 (10 шт.)",
@@ -2754,6 +2913,20 @@
     "bakaiStoreTemplateInvalid": "Не удалось прочитать шаблон Bakai Store. Проверьте лист и заголовки колонок.",
     "bakaiStoreTemplateInvalidType": "Поддерживаются только файлы Excel (.xlsx, .xls, .xlsm).",
     "bakaiStoreTemplateTooLarge": "Файл шаблона слишком большой.",
+    "productImageStudioNotConfigured": "OpenAI для Product Image Studio не настроен на сервере.",
+    "productImageStudioJobNotFound": "Задача Product Image Studio не найдена.",
+    "productImageStudioSourceImageMissing": "Исходное изображение не найдено.",
+    "productImageStudioSourceImageAccessDenied": "Нет доступа к исходному изображению.",
+    "productImageStudioUnsupportedFileType": "Поддерживаются только JPG, PNG, WEBP, HEIC и HEIF.",
+    "productImageStudioImageTooSmall": "Изображение слишком маленькое для каталожной обработки.",
+    "productImageStudioImageUnreadable": "Не удалось прочитать изображение.",
+    "productImageStudioInvalidPreset": "Выбран некорректный набор пресетов.",
+    "productImageStudioProviderFailed": "OpenAI не смог обработать изображение.",
+    "productImageStudioProviderOutputMissing": "OpenAI не вернул готовое изображение.",
+    "productImageStudioOutputPersistFailed": "Не удалось сохранить сгенерированное изображение.",
+    "productImageStudioAttachFailed": "Не удалось прикрепить изображение к товару.",
+    "productImageStudioRetryUnavailable": "Эту задачу пока нельзя запустить повторно.",
+    "productImageStudioProductRequired": "Выберите товар для сохранения результата.",
     "userNotFound": "Пользователь не найден.",
     "cannotDemoteSelf": "Вы не можете понизить свою роль.",
     "cannotDeactivateSelf": "Вы не можете отключить собственный доступ.",

@@ -41,6 +41,7 @@ import { productCategoriesRouter } from "@/server/trpc/routers/productCategories
 import { bazaarCatalogRouter } from "@/server/trpc/routers/bazaarCatalog";
 import { mMarketRouter } from "@/server/trpc/routers/mMarket";
 import { bakaiStoreRouter } from "@/server/trpc/routers/bakaiStore";
+import { productImageStudioRouter } from "@/server/trpc/routers/productImageStudio";
 
 export const appRouter = router({
   inventory: inventoryRouter,
@@ -85,6 +86,7 @@ export const appRouter = router({
   bazaarCatalog: bazaarCatalogRouter,
   mMarket: mMarketRouter,
   bakaiStore: bakaiStoreRouter,
+  productImageStudio: productImageStudioRouter,
 });
 
 export type AppRouter = typeof appRouter;

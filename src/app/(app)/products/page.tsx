@@ -69,6 +69,11 @@ import {
   ViewIcon,
 } from "@/components/icons";
 import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
+import {
+  buildBarcodeLabelPrintItems,
+  hasPrintableBarcode,
+  type BarcodePrintProduct,
+} from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
@@ -179,6 +184,7 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
 const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";
+const priceTagQuickQuantities = [1, 2, 3, 5] as const;
 
 type BulkDescriptionProgressState = {
   status: "running" | "done" | "rateLimited" | "error";
@@ -231,6 +237,7 @@ const ProductsPage = () => {
   const [bulkDescriptionElapsedSeconds, setBulkDescriptionElapsedSeconds] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
+  const [printAdvancedOpen, setPrintAdvancedOpen] = useState(false);
   const inlineEditingEnabled = true;
 
   const defaultProductsTableState = useMemo<ProductsTableState>(
@@ -917,8 +924,11 @@ const ProductsPage = () => {
     },
   });
   const printTemplate = printForm.watch("template");
+  const printQuantity = printForm.watch("quantity");
+  const allowWithoutBarcode = printForm.watch("allowWithoutBarcode");
   const rollWidthMm = printForm.watch("widthMm");
   const rollHeightMm = printForm.watch("heightMm");
+  const resolvedPrintQuantity = Math.max(1, Number(printQuantity) || 1);
   const parsedRollWidthMm = Number(rollWidthMm);
   const parsedRollHeightMm = Number(rollHeightMm);
   const resolvedRollWidthMm = Number.isFinite(parsedRollWidthMm)
@@ -995,10 +1005,16 @@ const ProductsPage = () => {
     }
     return printQueue.reduce((count, productId) => {
       const product = productById.get(productId);
+      if (!product) {
+        return count;
+      }
       const hasBarcode = Boolean(product?.barcodes.some((entry) => entry.value.trim()));
       return hasBarcode ? count : count + 1;
     }, 0);
   }, [printQueue, productById, rollTemplateSelected]);
+  const printLabelCount = printQueue.length * resolvedPrintQuantity;
+  const printRequiresBarcodeConfirmation =
+    rollTemplateSelected && queueMissingBarcodeCount > 0 && !allowWithoutBarcode;
   const selectedProducts = useMemo(
     () => products.filter((product) => selectedIds.has(product.id)),
     [products, selectedIds],
@@ -1132,6 +1148,7 @@ const ProductsPage = () => {
 
   useEffect(() => {
     if (printOpen) {
+      setPrintAdvancedOpen(false);
       printForm.reset({
         template: ROLL_PRICE_TAG_TEMPLATE,
         storeId: defaultPrintStoreId,
@@ -1140,7 +1157,7 @@ const ProductsPage = () => {
         heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
         allowWithoutBarcode: false,
       });
-      setPrintQueue(selectedList);
+      setPrintQueue((current) => (current.length ? current : selectedList));
     } else {
       setPrintQueue([]);
     }
@@ -1362,7 +1379,37 @@ const ProductsPage = () => {
       </button>
     </TableHead>
   );
+  const openPrintForProducts = useCallback(
+    (ids: string[], quantity = 1) => {
+      const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+      const activeIds = uniqueIds.filter((id) => !productById.get(id)?.isDeleted);
+      if (!activeIds.length) {
+        toast({ variant: "error", description: t("printNoPrintableProducts") });
+        return;
+      }
+      printForm.setValue("quantity", quantity);
+      setPrintQueue(activeIds);
+      setPrintOpen(true);
+    },
+    [printForm, productById, t, toast],
+  );
   const getProductActions = (product: ProductRow) => [
+    ...(!product.isDeleted
+      ? [
+          {
+            key: "print-labels",
+            label: t("printLabels"),
+            icon: PrintIcon,
+            onSelect: () => {
+              if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
+                toast({ variant: "error", description: t("printMissingBarcode") });
+                return;
+              }
+              openPrintForProducts([product.id], 1);
+            },
+          },
+        ]
+      : []),
     ...(isAdmin
       ? product.isDeleted
         ? [
@@ -1469,10 +1516,10 @@ const ProductsPage = () => {
                   heightMm: values.heightMm,
                 }
               : undefined,
-            items: queue.map((productId) => ({
-              productId,
+            items: buildBarcodeLabelPrintItems({
+              productIds: queue,
               quantity: values.quantity,
-            })),
+            }),
           }),
         },
       });
@@ -1857,10 +1904,10 @@ const ProductsPage = () => {
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"
-                onClick={() => setPrintOpen(true)}
+                onClick={() => openPrintForProducts(selectedList, 1)}
                 data-tour="products-print-tags"
               >
-                <DownloadIcon className="h-4 w-4" aria-hidden />
+                <PrintIcon className="h-4 w-4" aria-hidden />
                 {t("printPriceTags")}
               </Button>
             ) : null}
@@ -2093,22 +2140,17 @@ const ProductsPage = () => {
                         : tCommon("selectAllResults", { count: productsTotal })}
                     </Button>
                   ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-tour="products-print-tags"
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shadow-none"
-                        aria-label={t("printPriceTags")}
-                        onClick={() => setPrintOpen(true)}
-                      >
-                        <DownloadIcon className="h-4 w-4" aria-hidden />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t("printPriceTags")}</TooltipContent>
-                  </Tooltip>
+                  <Button
+                    data-tour="products-print-tags"
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => openPrintForProducts(selectedList, 1)}
+                  >
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                    {t("printPriceTags")}
+                  </Button>
                   {hasActiveSelected && isAdmin ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -3477,109 +3519,239 @@ const ProductsPage = () => {
             className="space-y-4"
             onSubmit={printForm.handleSubmit((values) => handlePrintTags(values, "download"))}
           >
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                <FormField
-                  control={printForm.control}
-                  name="template"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("template")}</FormLabel>
-                      <FormControl>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t("template")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>
-                              {t("templateRollXp365b")}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormDescription>{t("printStoreHint")}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={printForm.control}
-                  name="storeId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{tCommon("store")}</FormLabel>
-                      <FormControl>
-                        <Select
-                          value={field.value || "all"}
-                          onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={tCommon("selectStore")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">{t("allStores")}</SelectItem>
-                            {stores.map((store) => (
-                              <SelectItem key={store.id} value={store.id}>
-                                {store.name}
-                              </SelectItem>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {tCommon("selectedCount", { count: printQueue.length })}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {printQueue.length}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {t("printQty")}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {printLabelCount}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {t("template")}
+                    </p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                      {t("templateRollXp365b")}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border/70 bg-card p-3">
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+                    <FormField
+                      control={printForm.control}
+                      name="storeId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{tCommon("store")}</FormLabel>
+                          <FormControl>
+                            <Select
+                              value={field.value || "all"}
+                              onValueChange={(value) =>
+                                field.onChange(value === "all" ? "" : value)
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={tCommon("selectStore")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">{t("allStores")}</SelectItem>
+                                {stores.map((store) => (
+                                  <SelectItem key={store.id} value={store.id}>
+                                    {store.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormDescription>{t("printStoreHint")}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={printForm.control}
+                      name="quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("printQty")}</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="number" inputMode="numeric" min={1} />
+                          </FormControl>
+                          <div className="flex gap-1.5 pt-1">
+                            {priceTagQuickQuantities.map((quantity) => (
+                              <Button
+                                key={quantity}
+                                type="button"
+                                variant={resolvedPrintQuantity === quantity ? "default" : "secondary"}
+                                size="sm"
+                                className="h-7 flex-1 px-2"
+                                onClick={() =>
+                                  printForm.setValue("quantity", quantity, {
+                                    shouldDirty: true,
+                                    shouldValidate: true,
+                                  })
+                                }
+                              >
+                                {quantity}
+                              </Button>
                             ))}
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {printRequiresBarcodeConfirmation ? (
+                  <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium">
+                        {t("rollMissingBarcodeCount", { count: queueMissingBarcodeCount })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("printWithoutBarcodeHint")}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() =>
+                        printForm.setValue("allowWithoutBarcode", true, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                    >
+                      {t("printWithoutBarcode")}
+                    </Button>
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-lg border border-border/70 bg-secondary/20 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/40"
+                  onClick={() => setPrintAdvancedOpen((current) => !current)}
+                >
+                  <span>{printAdvancedOpen ? t("hideAdvanced") : t("showAdvanced")}</span>
+                  {printAdvancedOpen ? (
+                    <ArrowUpIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  ) : (
+                    <ArrowDownIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                   )}
-                />
-                <FormField
-                  control={printForm.control}
-                  name="quantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("printQty")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" inputMode="numeric" min={1} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                </button>
+
+                {printAdvancedOpen ? (
+                  <div className="grid gap-3 rounded-lg border border-border/70 bg-card p-3 sm:grid-cols-2">
+                    <FormField
+                      control={printForm.control}
+                      name="widthMm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("rollWidthMm")}</FormLabel>
+                          <FormControl>
+                            <Input
+                              value={field.value ?? ""}
+                              onChange={(event) => field.onChange(event.target.value)}
+                              onBlur={(event) => {
+                                const raw = event.target.value.trim();
+                                if (raw === "") {
+                                  field.onChange(0);
+                                } else {
+                                  const parsed = Number(raw);
+                                  field.onChange(Number.isFinite(parsed) ? parsed : 0);
+                                }
+                                field.onBlur();
+                              }}
+                              type="number"
+                              min={PRICE_TAG_ROLL_LIMITS.widthMm.min}
+                              max={PRICE_TAG_ROLL_LIMITS.widthMm.max}
+                              step={PRICE_TAG_ROLL_LIMITS.widthMm.step}
+                            />
+                          </FormControl>
+                          <FormDescription>{t("rollSizeHint")}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={printForm.control}
+                      name="heightMm"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t("rollHeightMm")}</FormLabel>
+                          <FormControl>
+                            <Input
+                              value={field.value ?? ""}
+                              onChange={(event) => field.onChange(event.target.value)}
+                              onBlur={(event) => {
+                                const raw = event.target.value.trim();
+                                if (raw === "") {
+                                  field.onChange(0);
+                                } else {
+                                  const parsed = Number(raw);
+                                  field.onChange(Number.isFinite(parsed) ? parsed : 0);
+                                }
+                                field.onBlur();
+                              }}
+                              type="number"
+                              min={PRICE_TAG_ROLL_LIMITS.heightMm.min}
+                              max={PRICE_TAG_ROLL_LIMITS.heightMm.max}
+                              step={PRICE_TAG_ROLL_LIMITS.heightMm.step}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={printForm.control}
+                      name="allowWithoutBarcode"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-secondary/20 p-3">
+                            <div>
+                              <FormLabel>{t("printWithoutBarcode")}</FormLabel>
+                              <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={queueMissingBarcodeCount === 0}
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                ) : null}
               </div>
-              {rollTemplateSelected ? (
-                <div className="mt-3 rounded-md border border-border/70 bg-secondary/20 p-3 sm:mt-4">
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="space-y-2">
+
+              <div className="space-y-3">
+                {rollTemplateSelected ? (
+                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-xs font-medium text-foreground">
                         {t("rollTemplatePreviewTitle")}
                       </p>
-                      <div className="w-[210px] max-w-full rounded border border-border bg-card p-2">
-                        <div
-                          className="rounded border border-dashed border-border/70"
-                          style={{
-                            aspectRatio: `${Math.max(1, resolvedRollWidthMm)} / ${Math.max(1, resolvedRollHeightMm)}`,
-                          }}
-                        >
-                          <div
-                            className="flex h-full flex-col justify-between"
-                            style={{
-                              padding: `${rollPreviewPaddingY}% ${rollPreviewPaddingX}%`,
-                            }}
-                          >
-                            <p className="line-clamp-2 text-[10px] font-medium text-foreground">
-                              {rollPreviewProduct?.name ?? t("rollPreviewName")}
-                            </p>
-                            <p className="mt-1 text-[11px] font-semibold text-foreground">
-                              {t("rollPreviewPrice")}
-                            </p>
-                            <p className="mt-1 text-[8px] text-muted-foreground">
-                              {rollPreviewProduct?.sku || t("rollPreviewSku")}
-                            </p>
-                            <div className="mt-1 h-4 rounded bg-muted" />
-                            <p className="mt-1 text-center text-[7px] text-muted-foreground">
-                              {t("rollPreviewBarcode")}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
                       <p className="text-[11px] text-muted-foreground">
                         {t("rollPreviewSize", {
                           width: resolvedRollWidthMm,
@@ -3587,123 +3759,61 @@ const ProductsPage = () => {
                         })}
                       </p>
                     </div>
-                    <div className="space-y-3">
-                      <FormField
-                        control={printForm.control}
-                        name="widthMm"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t("rollWidthMm")}</FormLabel>
-                            <FormControl>
-                              <Input
-                                value={field.value ?? ""}
-                                onChange={(event) => field.onChange(event.target.value)}
-                                onBlur={(event) => {
-                                  const raw = event.target.value.trim();
-                                  if (raw === "") {
-                                    field.onChange(0);
-                                  } else {
-                                    const parsed = Number(raw);
-                                    field.onChange(Number.isFinite(parsed) ? parsed : 0);
-                                  }
-                                  field.onBlur();
-                                }}
-                                type="number"
-                                min={PRICE_TAG_ROLL_LIMITS.widthMm.min}
-                                max={PRICE_TAG_ROLL_LIMITS.widthMm.max}
-                                step={PRICE_TAG_ROLL_LIMITS.widthMm.step}
-                              />
-                            </FormControl>
-                            <FormDescription>{t("rollSizeHint")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={printForm.control}
-                        name="heightMm"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t("rollHeightMm")}</FormLabel>
-                            <FormControl>
-                              <Input
-                                value={field.value ?? ""}
-                                onChange={(event) => field.onChange(event.target.value)}
-                                onBlur={(event) => {
-                                  const raw = event.target.value.trim();
-                                  if (raw === "") {
-                                    field.onChange(0);
-                                  } else {
-                                    const parsed = Number(raw);
-                                    field.onChange(Number.isFinite(parsed) ? parsed : 0);
-                                  }
-                                  field.onBlur();
-                                }}
-                                type="number"
-                                min={PRICE_TAG_ROLL_LIMITS.heightMm.min}
-                                max={PRICE_TAG_ROLL_LIMITS.heightMm.max}
-                                step={PRICE_TAG_ROLL_LIMITS.heightMm.step}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={printForm.control}
-                        name="allowWithoutBarcode"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card p-2">
-                              <div>
-                                <FormLabel>{t("printWithoutBarcode")}</FormLabel>
-                                <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
-                              </div>
-                              <FormControl>
-                                <Switch
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  disabled={queueMissingBarcodeCount === 0}
-                                />
-                              </FormControl>
-                            </div>
-                            {queueMissingBarcodeCount > 0 ? (
-                              <p className="text-xs text-warning">
-                                {t("rollMissingBarcodeCount", { count: queueMissingBarcodeCount })}
-                              </p>
-                            ) : null}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <div className="mx-auto w-[210px] max-w-full rounded border border-border bg-card p-2">
+                      <div
+                        className="rounded border border-dashed border-border/70"
+                        style={{
+                          aspectRatio: `${Math.max(1, resolvedRollWidthMm)} / ${Math.max(1, resolvedRollHeightMm)}`,
+                        }}
+                      >
+                        <div
+                          className="flex h-full flex-col justify-between"
+                          style={{
+                            padding: `${rollPreviewPaddingY}% ${rollPreviewPaddingX}%`,
+                          }}
+                        >
+                          <p className="line-clamp-2 text-[10px] font-medium text-foreground">
+                            {rollPreviewProduct?.name ?? t("rollPreviewName")}
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold text-foreground">
+                            {t("rollPreviewPrice")}
+                          </p>
+                          <p className="mt-1 text-[8px] text-muted-foreground">
+                            {rollPreviewProduct?.sku || t("rollPreviewSku")}
+                          </p>
+                          <div className="mt-1 h-4 rounded bg-muted" />
+                          <p className="mt-1 text-center text-[7px] text-muted-foreground">
+                            {t("rollPreviewBarcode")}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
-              <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
-                <p className="text-xs font-medium text-foreground">
-                  {tCommon("selectedCount", { count: printQueue.length })}
-                </p>
-                {queueProductsQuery.isLoading && queueIdsForQuery.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">{tCommon("loading")}</p>
                 ) : null}
-                <div className="max-h-48 space-y-1 overflow-y-auto pr-1 text-xs">
-                  {printQueue.map((productId) => {
-                    const product = productById.get(productId);
-                    return (
-                      <div
-                        key={productId}
-                        className="flex items-center justify-between gap-3 rounded border border-border/60 bg-card/80 px-2 py-1"
-                      >
-                        <span className="truncate text-foreground">
-                          {product?.name ?? productId}
-                        </span>
-                        <span className="shrink-0 text-muted-foreground">
-                          {product?.sku ?? tCommon("notAvailable")}
-                        </span>
-                      </div>
-                    );
-                  })}
+
+                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+                  <p className="text-xs font-medium text-foreground">{t("printQueueTitle")}</p>
+                  {queueProductsQuery.isLoading && queueIdsForQuery.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">{tCommon("loading")}</p>
+                  ) : null}
+                  <div className="max-h-44 space-y-1 overflow-y-auto pr-1 text-xs">
+                    {printQueue.map((productId) => {
+                      const product = productById.get(productId);
+                      return (
+                        <div
+                          key={productId}
+                          className="flex items-center justify-between gap-3 rounded border border-border/60 bg-card/80 px-2 py-1.5"
+                        >
+                          <span className="truncate text-foreground">
+                            {product?.name ?? productId}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {product?.sku ?? tCommon("notAvailable")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3719,6 +3829,7 @@ const ProductsPage = () => {
               <Button
                 type="button"
                 className="w-full sm:w-auto"
+                disabled={printRequiresBarcodeConfirmation}
                 onClick={() => {
                   void printForm.handleSubmit((values) => handlePrintTags(values, "print"))();
                 }}
@@ -3726,7 +3837,12 @@ const ProductsPage = () => {
                 <PrintIcon className="h-4 w-4" aria-hidden />
                 {t("printAction")}
               </Button>
-              <Button type="submit" variant="secondary" className="w-full sm:w-auto">
+              <Button
+                type="submit"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                disabled={printRequiresBarcodeConfirmation}
+              >
                 <DownloadIcon className="h-4 w-4" aria-hidden />
                 {t("printDownload")}
               </Button>

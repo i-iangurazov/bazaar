@@ -8,6 +8,7 @@ import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Cropper, { type Area } from "react-easy-crop";
 
+import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -2714,10 +2715,9 @@ export const ProductForm = ({
                             </div>
                           ) : bundleSearchQuery.data?.length ? (
                             bundleSearchQuery.data.map((product) => (
-                              <button
+                              <ProductSearchResultItem
                                 key={product.id}
-                                type="button"
-                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+                                product={product}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() =>
                                   addBundleComponentFromSearch({
@@ -2726,19 +2726,7 @@ export const ProductForm = ({
                                     sku: product.sku,
                                   })
                                 }
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate font-medium text-foreground">
-                                    {product.name}
-                                  </p>
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {product.sku}
-                                  </p>
-                                </div>
-                                {product.isBundle ? (
-                                  <Badge variant="muted">{t("bundleProductLabel")}</Badge>
-                                ) : null}
-                              </button>
+                              />
                             ))
                           ) : (
                             <div className="px-3 py-2 text-sm text-muted-foreground">

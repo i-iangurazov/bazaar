@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { FormGrid } from "@/components/form-layout";
 import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
@@ -781,12 +782,15 @@ const SalesOrderDetailPage = () => {
                 />
                 {showResults && lineSearch.trim().length >= 1 && !selectedProduct ? (
                   <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background">
-                    {(productSearchQuery.data ?? []).length ? (
+                    {productSearchQuery.isLoading ? (
+                      <p className="px-3 py-3 text-sm text-muted-foreground">
+                        {tCommon("loading")}
+                      </p>
+                    ) : (productSearchQuery.data ?? []).length ? (
                       (productSearchQuery.data ?? []).map((product) => (
-                        <button
+                        <ProductSearchResultItem
                           key={product.id}
-                          type="button"
-                          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+                          product={product}
                           onClick={() => {
                             applySelectedProduct({
                               id: product.id,
@@ -795,15 +799,7 @@ const SalesOrderDetailPage = () => {
                               isBundle: product.isBundle,
                             });
                           }}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">{product.sku}</p>
-                          </div>
-                          {product.isBundle ? (
-                            <Badge variant="muted">{t("bundleProductLabel")}</Badge>
-                          ) : null}
-                        </button>
+                        />
                       ))
                     ) : (
                       <p className="px-3 py-2 text-xs text-muted-foreground">

@@ -9,6 +9,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -799,14 +800,18 @@ const NewPurchaseOrderPage = () => {
                           onResolved={handleLineScanResolved}
                         />
                       </FormControl>
-                      {showResults && productSearchQuery.data?.length ? (
+                      {showResults && lineSearch.trim().length >= 1 ? (
                         <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-card shadow-lg">
                           <div className="max-h-64 overflow-y-auto py-1">
-                            {productSearchQuery.data.map((product) => (
-                              <button
+                            {productSearchQuery.isLoading ? (
+                              <div className="px-3 py-3 text-sm text-muted-foreground">
+                                {tCommon("loading")}
+                              </div>
+                            ) : productSearchQuery.data?.length ? (
+                              productSearchQuery.data.map((product) => (
+                              <ProductSearchResultItem
                                 key={product.id}
-                                type="button"
-                                className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-accent/50"
+                                product={product}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onPointerDown={(event) => event.preventDefault()}
                                 onClick={() => {
@@ -816,11 +821,13 @@ const NewPurchaseOrderPage = () => {
                                     sku: product.sku,
                                   });
                                 }}
-                              >
-                                <span className="font-medium text-foreground">{product.name}</span>
-                                <span className="text-xs text-muted-foreground">{product.sku}</span>
-                              </button>
-                            ))}
+                              />
+                              ))
+                            ) : (
+                              <div className="px-3 py-3 text-sm text-muted-foreground">
+                                {tCommon("nothingFound")}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : null}

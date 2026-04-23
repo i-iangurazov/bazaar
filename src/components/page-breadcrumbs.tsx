@@ -79,6 +79,8 @@ const segmentLabel = (
       return tBreadcrumbs("mMarket");
     case "bakai-store":
       return tBreadcrumbs("bakaiStore");
+    case "product-image-studio":
+      return tBreadcrumbs("productImageStudio");
     case "suppliers":
       return tNav("suppliers");
     case "stores":

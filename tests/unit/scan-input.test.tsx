@@ -7,8 +7,9 @@ import React from "react";
 
 import { ScanInput } from "@/components/ScanInput";
 
-const { lookupFetchMock } = vi.hoisted(() => ({
+const { lookupFetchMock, searchQuickUseQueryMock } = vi.hoisted(() => ({
   lookupFetchMock: vi.fn(),
+  searchQuickUseQueryMock: vi.fn(),
 }));
 
 vi.mock("@/lib/trpc", () => ({
@@ -20,7 +21,26 @@ vi.mock("@/lib/trpc", () => ({
         },
       },
     }),
+    products: {
+      searchQuick: {
+        useQuery: searchQuickUseQueryMock,
+      },
+    },
   },
+}));
+
+vi.mock("next-intl", () => ({
+  useLocale: () => "ru",
+  useTranslations: () => (key: string) =>
+    ({
+      loading: "Loading",
+      nothingFound: "Nothing found",
+      imageUnavailable: "No image",
+      bundleProductLabel: "Bundle",
+      searchResultBarcode: "Barcode",
+      searchResultPrice: "Price",
+      searchResultStock: "Stock",
+    })[key] ?? key,
 }));
 
 const exactItem = {
@@ -35,6 +55,8 @@ const exactItem = {
 describe("ScanInput", () => {
   beforeEach(() => {
     lookupFetchMock.mockReset();
+    searchQuickUseQueryMock.mockReset();
+    searchQuickUseQueryMock.mockReturnValue({ data: [], isFetching: false });
   });
 
   it("submits on Enter", async () => {
@@ -137,6 +159,95 @@ describe("ScanInput", () => {
 
     expect(await screen.findByText("Milk")).toBeTruthy();
     expect(screen.getByText("Bread")).toBeTruthy();
+  });
+
+  it("supports keyboard navigation in multiple-match dropdown", async () => {
+    lookupFetchMock.mockResolvedValue({
+      exactMatch: false,
+      items: [
+        { ...exactItem, id: "prod-1", name: "Milk", sku: "SKU-1", matchType: "name" as const },
+        { ...exactItem, id: "prod-2", name: "Bread", sku: "SKU-2", matchType: "name" as const },
+      ],
+    });
+    const onResolved = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup();
+
+    render(
+      <ScanInput
+        context="global"
+        placeholder="scan"
+        ariaLabel="scan"
+        onResolved={onResolved}
+      />,
+    );
+
+    const input = screen.getByLabelText("scan");
+    await user.type(input, "br{Enter}");
+    expect(await screen.findByText("Milk")).toBeTruthy();
+
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    await waitFor(() => {
+      expect(onResolved).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          kind: "exact",
+          item: expect.objectContaining({ id: "prod-2" }),
+        }),
+      );
+    });
+  });
+
+  it("shows live product search results with image preview when enabled", async () => {
+    searchQuickUseQueryMock.mockReturnValue({
+      data: [
+        {
+          id: "prod-1",
+          name: "Milk",
+          sku: "SKU-1",
+          type: "product",
+          isBundle: false,
+          primaryImage: "/products/milk.jpg",
+          primaryBarcode: "4600001",
+          category: "Dairy",
+          categories: ["Dairy"],
+          basePriceKgs: 120,
+          effectivePriceKgs: 120,
+          onHandQty: 8,
+        },
+      ],
+      isFetching: false,
+    });
+    const onResolved = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup();
+
+    render(
+      <ScanInput
+        context="global"
+        placeholder="scan"
+        ariaLabel="scan"
+        onResolved={onResolved}
+        enableProductSearch
+      />,
+    );
+
+    const input = screen.getByLabelText("scan");
+    await user.type(input, "mi");
+
+    expect(await screen.findByText("Milk")).toBeTruthy();
+    expect((screen.getByAltText("Milk") as HTMLImageElement).getAttribute("src")).toBe(
+      "/products/milk.jpg",
+    );
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(onResolved).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "exact",
+          item: expect.objectContaining({ id: "prod-1" }),
+        }),
+      );
+    });
   });
 
   it("shows error state and keeps focus on not found", async () => {

@@ -33,6 +33,7 @@ const IntegrationsPage = () => {
   const storesQuery = trpc.bazaarCatalog.listStores.useQuery();
   const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
   const bakaiStoreOverviewQuery = trpc.bakaiStore.overview.useQuery();
+  const productImageStudioOverviewQuery = trpc.productImageStudio.overview.useQuery();
 
   const { summaryStatus, publishedEntry, defaultStoreId } = useMemo(() => {
     const stores = storesQuery.data ?? [];
@@ -223,6 +224,47 @@ const IntegrationsPage = () => {
                   {t("bakaiStore.openExport")}
                 </Button>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
+                  {t("productImageStudio.title")}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {t("productImageStudio.description")}
+                </p>
+              </div>
+              <Badge
+                variant={
+                  productImageStudioOverviewQuery.data?.status === "READY"
+                    ? "success"
+                    : productImageStudioOverviewQuery.data?.status === "ERROR"
+                      ? "danger"
+                      : "muted"
+                }
+              >
+                {productImageStudioOverviewQuery.data?.status === "READY"
+                  ? t("productImageStudio.status.ready")
+                  : productImageStudioOverviewQuery.data?.status === "ERROR"
+                    ? t("productImageStudio.status.error")
+                    : t("productImageStudio.status.notConfigured")}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Link href="/operations/integrations/product-image-studio">
+                <Button>{t("productImageStudio.openStudio")}</Button>
+              </Link>
+              <Link href="/operations/integrations/product-image-studio">
+                <Button variant="secondary">{t("productImageStudio.openHistory")}</Button>
+              </Link>
             </div>
           </CardContent>
         </Card>

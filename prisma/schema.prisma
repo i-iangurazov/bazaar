@@ -273,6 +273,22 @@ enum BakaiStoreLastSyncStatus {
   FAILED
 }
 
+enum ProductImageStudioJobStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum ProductImageStudioBackground {
+  WHITE
+  LIGHT_GRAY
+}
+
+enum ProductImageStudioOutputFormat {
+  SQUARE
+}
+
 model Organization {
   id                  String                         @id @default(cuid())
   name                String
@@ -310,6 +326,7 @@ model Organization {
   bakaiStoreExportJobs     BakaiStoreExportJob[]
   bakaiStoreIncludedProducts BakaiStoreIncludedProduct[]
   bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
+  productImageStudioJobs   ProductImageStudioJob[]
   productCosts             ProductCost[]
   productBundleComponents  ProductBundleComponent[]
   stockLots                StockLot[]
@@ -402,6 +419,7 @@ model User {
   refundRequestsReviewed        RefundRequest[]           @relation("refundRequestsReviewedBy")
   bazaarCatalogsUpdated         BazaarCatalog[]           @relation("bazaarCatalogUpdatedBy")
   mMarketExportJobsRequested    MMarketExportJob[]        @relation("mMarketExportRequestedBy")
+  productImageStudioJobsCreated ProductImageStudioJob[]   @relation("productImageStudioRequestedBy")
   markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
   ettnReferencesCreated         EttnReference[]           @relation("ettnReferenceCreatedBy")
   esfReferencesCreated          EsfReference[]            @relation("esfReferenceCreatedBy")
@@ -915,6 +933,7 @@ model Product {
   mMarketInclusions  MMarketIncludedProduct[]
   bakaiStoreInclusions BakaiStoreIncludedProduct[]
   bakaiStoreSyncStates BakaiStoreProductSyncState[]
+  productImageStudioJobs ProductImageStudioJob[]
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
   customerOrderLines CustomerOrderLine[]
   saleReturnLines    SaleReturnLine[]
@@ -931,6 +950,7 @@ model ProductImage {
   productId      String
   url            String
   position       Int      @default(0)
+  isAiGenerated  Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -939,6 +959,48 @@ model ProductImage {
 
   @@index([organizationId])
   @@index([productId, position])
+}
+
+model ProductImageStudioJob {
+  id                   String                          @id @default(cuid())
+  organizationId       String
+  productId            String?
+  createdById          String
+  status               ProductImageStudioJobStatus    @default(QUEUED)
+  sourceImageUrl       String
+  sourceImageMimeType  String
+  sourceImageBytes     Int?
+  outputImageUrl       String?
+  outputImageMimeType  String?
+  outputImageBytes     Int?
+  backgroundMode       ProductImageStudioBackground
+  outputFormat         ProductImageStudioOutputFormat @default(SQUARE)
+  centered             Boolean                        @default(true)
+  improveVisibility    Boolean                        @default(true)
+  softShadow           Boolean                        @default(false)
+  tighterCrop          Boolean                        @default(false)
+  brighterPresentation Boolean                        @default(false)
+  provider             String
+  providerJobId        String?
+  requestPrompt        String?                        @db.Text
+  providerRequestJson  Json?
+  providerResponseJson Json?
+  errorMessage         String?                        @db.Text
+  savedProductImageId  String?
+  savedAsPrimary       Boolean                        @default(false)
+  savedAt              DateTime?
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+  completedAt          DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  product      Product?     @relation(fields: [productId], references: [id])
+  createdBy    User         @relation("productImageStudioRequestedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([productId, createdAt])
+  @@index([createdById, createdAt])
 }
 
 model ProductBarcode {

@@ -32,10 +32,16 @@ import { resolveFiscalMetadataFromResult } from "@/server/services/fiscalReceipt
 import { applyStockMovement } from "@/server/services/inventory";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
+import {
+  calculateCashDiscrepancyKgs,
+  calculateExpectedCashKgs,
+  resolveCashDifferenceStatus,
+  roundCashAmount,
+} from "@/server/services/posCashAccounting";
 
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
   typeof value === "number" ? value : value ? Number(value) : 0;
-const roundMoney = (value: number) => Math.round(value * 100) / 100;
+const roundMoney = roundCashAmount;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 
 const sumPayments = (payments: Array<{ amountKgs: number }>) =>
@@ -420,9 +426,26 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
 
   const cashSalesKgs = paymentsByMethod.CASH.salesKgs;
   const cashRefundsKgs = paymentsByMethod.CASH.refundsKgs;
-  const expectedCashKgs = roundMoney(
-    toMoney(shift.openingCashKgs) + payInKgs - payOutKgs + cashSalesKgs - cashRefundsKgs,
-  );
+  const expectedCashKgs = calculateExpectedCashKgs({
+    openingCashKgs: toMoney(shift.openingCashKgs),
+    payInKgs,
+    payOutKgs,
+    cashSalesKgs,
+    cashRefundsKgs,
+  });
+  const persistedExpectedCashKgs = shift.expectedCashKgs
+    ? toMoney(shift.expectedCashKgs)
+    : expectedCashKgs;
+  const countedCashKgs = shift.closingCashCountedKgs
+    ? toMoney(shift.closingCashCountedKgs)
+    : null;
+  const discrepancyKgs =
+    countedCashKgs === null
+      ? null
+      : calculateCashDiscrepancyKgs({
+          countedCashKgs,
+          expectedCashKgs: persistedExpectedCashKgs,
+        });
 
   return {
     shift: {
@@ -431,8 +454,10 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
       openedAt: shift.openedAt,
       closedAt: shift.closedAt,
       openingCashKgs: toMoney(shift.openingCashKgs),
-      closingCashCountedKgs: shift.closingCashCountedKgs ? toMoney(shift.closingCashCountedKgs) : null,
-      expectedCashKgs: shift.expectedCashKgs ? toMoney(shift.expectedCashKgs) : expectedCashKgs,
+      closingCashCountedKgs: countedCashKgs,
+      expectedCashKgs: persistedExpectedCashKgs,
+      discrepancyKgs,
+      differenceStatus: discrepancyKgs === null ? null : resolveCashDifferenceStatus(discrepancyKgs),
       notes: shift.notes,
       register: shift.register,
       store: shift.store,
@@ -773,6 +798,22 @@ export const listRegisterShifts = async (input: {
       openingCashKgs: toMoney(item.openingCashKgs),
       closingCashCountedKgs: item.closingCashCountedKgs ? toMoney(item.closingCashCountedKgs) : null,
       expectedCashKgs: item.expectedCashKgs ? toMoney(item.expectedCashKgs) : null,
+      discrepancyKgs:
+        item.expectedCashKgs && item.closingCashCountedKgs
+          ? calculateCashDiscrepancyKgs({
+              countedCashKgs: toMoney(item.closingCashCountedKgs),
+              expectedCashKgs: toMoney(item.expectedCashKgs),
+            })
+          : null,
+      differenceStatus:
+        item.expectedCashKgs && item.closingCashCountedKgs
+          ? resolveCashDifferenceStatus(
+              calculateCashDiscrepancyKgs({
+                countedCashKgs: toMoney(item.closingCashCountedKgs),
+                expectedCashKgs: toMoney(item.expectedCashKgs),
+              }),
+            )
+          : null,
     })),
     total,
     page: input.page,
@@ -829,7 +870,10 @@ export const closeRegisterShift = async (input: {
               : null,
             discrepancyKgs:
               shift.expectedCashKgs && shift.closingCashCountedKgs
-                ? roundMoney(toMoney(shift.closingCashCountedKgs) - toMoney(shift.expectedCashKgs))
+                ? calculateCashDiscrepancyKgs({
+                    countedCashKgs: toMoney(shift.closingCashCountedKgs),
+                    expectedCashKgs: toMoney(shift.expectedCashKgs),
+                  })
                 : null,
           };
         }
@@ -841,7 +885,10 @@ export const closeRegisterShift = async (input: {
 
         const counted = roundMoney(input.closingCashCountedKgs);
         const expected = roundMoney(report.summary.expectedCashKgs);
-        const discrepancy = roundMoney(counted - expected);
+        const discrepancy = calculateCashDiscrepancyKgs({
+          countedCashKgs: counted,
+          expectedCashKgs: expected,
+        });
 
         const updated = await tx.registerShift.update({
           where: { id: shift.id },

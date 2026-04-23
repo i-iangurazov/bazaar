@@ -592,6 +592,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                     placeholder={tHeader("scanPlaceholder")}
                     ariaLabel={tHeader("scanLabel")}
                     supportsTabSubmit
+                    enableProductSearch
                     onResolved={handleScanResolved}
                   />
                 </div>

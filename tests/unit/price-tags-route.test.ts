@@ -307,3 +307,59 @@ describe("product image upload route", () => {
     );
   });
 });
+
+describe("product image studio upload route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "MANAGER" });
+    mockUploadProductImageBuffer.mockResolvedValue({
+      url: "/uploads/imported-products/org-1/studio-test.jpg",
+    });
+  });
+
+  it("normalizes HEIC sequence uploads to HEIC mime type", async () => {
+    const { POST } = await import("../../src/app/api/product-image-studio/upload/route");
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "camera-upload", { type: "image/heic-sequence" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/product-image-studio/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType: "image/heic",
+      }),
+    );
+  });
+
+  it("resolves HIF extension to HEIF mime type when browser omits image mime", async () => {
+    const { POST } = await import("../../src/app/api/product-image-studio/upload/route");
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "camera.HIF", { type: "application/octet-stream" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/product-image-studio/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType: "image/heif",
+      }),
+    );
+  });
+});

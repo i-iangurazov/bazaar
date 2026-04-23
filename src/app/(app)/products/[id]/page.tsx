@@ -41,17 +41,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProductForm } from "@/components/product-form";
+import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import {
   AddIcon,
   ArchiveIcon,
   CopyIcon,
   DeleteIcon,
+  DownloadIcon,
   EmptyIcon,
+  PrintIcon,
   ViewIcon,
 } from "@/components/icons";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
+import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import { PRICE_TAG_ROLL_DEFAULTS, ROLL_PRICE_TAG_TEMPLATE } from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -101,6 +107,8 @@ const ProductDetailPage = () => {
   const [assembleOpen, setAssembleOpen] = useState(false);
   const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
   const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
+  const [labelQty, setLabelQty] = useState("1");
+  const [labelAction, setLabelAction] = useState<"print" | "download" | null>(null);
   const basePriceAutofillRef = useRef<string | null>(null);
 
   const productQuery = trpc.products.getById.useQuery(
@@ -385,6 +393,7 @@ const ProductDetailPage = () => {
   type LotRow = NonNullable<typeof lotsQuery.data>[number];
   const bundleComponents: BundleComponent[] = bundleComponentsQuery.data ?? [];
   const lots: LotRow[] = lotsQuery.data ?? [];
+  const labelStoreId = pricingStoreId || (stores.length === 1 ? stores[0]?.id ?? "" : "");
 
   useEffect(() => {
     if (productQuery.data?.isBundle || bundleComponentsQuery.data?.length) {
@@ -579,6 +588,63 @@ const ProductDetailPage = () => {
     }
   };
 
+  const handleProductLabelPdf = async (mode: "print" | "download") => {
+    const product = productQuery.data;
+    if (!product || labelAction) {
+      return;
+    }
+    const quantity = Math.trunc(Number(labelQty));
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      toast({ variant: "error", description: t("printQtyMin") });
+      return;
+    }
+    if (!hasPrintableBarcode({ id: product.id, barcodes: product.barcodes })) {
+      toast({ variant: "error", description: t("printMissingBarcode") });
+      return;
+    }
+
+    setLabelAction(mode);
+    try {
+      const blob = await fetchPdfBlob({
+        url: "/api/price-tags/pdf",
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: ROLL_PRICE_TAG_TEMPLATE,
+            storeId: labelStoreId || undefined,
+            allowWithoutBarcode: false,
+            rollCalibration: {
+              widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
+              heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
+            },
+            items: buildBarcodeLabelPrintItems({
+              productIds: [product.id],
+              quantity,
+            }),
+          }),
+        },
+      });
+      if (mode === "print") {
+        const result = await printPdfBlob(blob);
+        if (!result.autoPrintAttempted) {
+          toast({ variant: "info", description: t("printFallback") });
+        }
+      } else {
+        downloadPdfBlob(blob, `price-tags-${product.sku}.pdf`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
+        toast({ variant: "error", description: message });
+        return;
+      }
+      toast({ variant: "error", description: t("priceTagsFailed") });
+    } finally {
+      setLabelAction(null);
+    }
+  };
+
   if (productQuery.isLoading || !formValues) {
     return (
       <div>
@@ -621,6 +687,41 @@ const ProductDetailPage = () => {
         subtitle={productQuery.data.name}
         action={
           <>
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => void handleProductLabelPdf("print")}
+              disabled={Boolean(labelAction)}
+            >
+              {labelAction === "print" ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <PrintIcon className="h-4 w-4" aria-hidden />
+              )}
+              {t("printLabels")}
+            </Button>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Input
+                value={labelQty}
+                onChange={(event) => setLabelQty(event.target.value)}
+                className="w-full sm:w-20"
+                inputMode="numeric"
+                aria-label={t("printQty")}
+              />
+              <Button
+                variant="secondary"
+                className="shrink-0"
+                onClick={() => void handleProductLabelPdf("download")}
+                disabled={Boolean(labelAction)}
+                aria-label={t("printDownload")}
+              >
+                {labelAction === "download" ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                )}
+              </Button>
+            </div>
             <Button
               variant="secondary"
               className="w-full sm:w-auto"
@@ -1280,14 +1381,18 @@ const ProductDetailPage = () => {
                   }}
                   placeholder={t("bundleSearchPlaceholder")}
                 />
-                {componentSearchQuery.data?.length ? (
+                {componentSearch.trim().length >= 2 ? (
                   <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-card shadow-lg">
                     <div className="max-h-56 overflow-y-auto py-1">
-                      {componentSearchQuery.data.map((product) => (
-                        <button
+                      {componentSearchQuery.isLoading ? (
+                        <div className="px-3 py-3 text-sm text-muted-foreground">
+                          {tCommon("loading")}
+                        </div>
+                      ) : componentSearchQuery.data?.length ? (
+                        componentSearchQuery.data.map((product) => (
+                        <ProductSearchResultItem
                           key={product.id}
-                          type="button"
-                          className="flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-muted/30"
+                          product={product}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => {
                             setSelectedComponent({
@@ -1297,11 +1402,13 @@ const ProductDetailPage = () => {
                             });
                             setComponentSearch(product.name);
                           }}
-                        >
-                          <span className="font-medium text-foreground">{product.name}</span>
-                          <span className="text-xs text-muted-foreground">{product.sku}</span>
-                        </button>
-                      ))}
+                        />
+                        ))
+                      ) : (
+                        <div className="px-3 py-3 text-sm text-muted-foreground">
+                          {tCommon("nothingFound")}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null}

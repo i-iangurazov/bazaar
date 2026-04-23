@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { getServerAuthToken } from "@/server/auth/token";
 import { defaultLocale, normalizeLocale, toIntlLocale } from "@/lib/locales";
@@ -11,6 +12,9 @@ import {
   buildReceiptPrintPayload,
 } from "@/server/services/receiptPrintPayload";
 import type { ReceiptPrintVariant } from "@/server/printing/types";
+import { prisma } from "@/server/db/prisma";
+import { writeAuditLog } from "@/server/services/audit";
+import { toJson } from "@/server/services/json";
 
 export const runtime = "nodejs";
 
@@ -58,6 +62,14 @@ const resolveVariant = (request: Request): ReceiptPrintVariant | null => {
   return null;
 };
 
+const resolveReceiptPdfAction = (request: Request) => {
+  const action = new URL(request.url).searchParams.get("action");
+  if (action === "auto_print" || action === "print" || action === "reprint") {
+    return action;
+  }
+  return "download";
+};
+
 export const GET = async (request: Request, { params }: { params: { id: string } }) => {
   const localeCookie = cookies().get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
@@ -81,6 +93,7 @@ export const GET = async (request: Request, { params }: { params: { id: string }
   if (!variant) {
     return new Response(tErrors("invalidInput"), { status: 400 });
   }
+  const receiptAction = resolveReceiptPdfAction(request);
 
   try {
     const job = await buildReceiptPrintPayload({
@@ -128,6 +141,33 @@ export const GET = async (request: Request, { params }: { params: { id: string }
         payments: tPos("receiptPdf.payments"),
       },
     });
+
+    try {
+      await writeAuditLog(prisma, {
+        organizationId: token.organizationId as string,
+        actorId: token.sub ?? null,
+        action:
+          receiptAction === "auto_print"
+            ? "POS_RECEIPT_AUTO_PRINT"
+            : receiptAction === "reprint"
+              ? "POS_RECEIPT_REPRINT"
+              : receiptAction === "print"
+                ? "POS_RECEIPT_PRINT"
+                : "POS_RECEIPT_DOWNLOAD",
+        entity: "CustomerOrder",
+        entityId: job.saleId,
+        before: null,
+        after: toJson({
+          saleNumber: job.number,
+          variant,
+          source: "pdf",
+          action: receiptAction,
+        }),
+        requestId: request.headers.get("x-request-id") ?? randomUUID(),
+      });
+    } catch {
+      // Receipt printing must not fail because audit logging is temporarily unavailable.
+    }
 
     const variantSuffix = variant === "FISCAL" ? "fiscal" : "precheck";
     return new Response(pdf, {

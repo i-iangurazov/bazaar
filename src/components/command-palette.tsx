@@ -16,6 +16,10 @@ import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
 import { ScanInput } from "@/components/ScanInput";
+import {
+  ProductSearchResultItem,
+  type ProductSearchResultProduct,
+} from "@/components/product-search-result-item";
 import { useToast } from "@/components/ui/toast";
 import {
   AdjustIcon,
@@ -58,6 +62,7 @@ type PaletteItem = {
   group: "actions" | "recent" | "results";
   category?: CommandPaletteCategory;
   resultType?: SearchResult["type"];
+  product?: ProductSearchResultProduct;
   keywords?: string[];
   queryValue?: string;
 };
@@ -369,6 +374,7 @@ export const CommandPalette = ({
             icon: ProductsIcon,
             group: "results",
             resultType: item.type,
+            product: item.product,
           };
       }
     });
@@ -565,6 +571,34 @@ export const CommandPalette = ({
                         const isActive =
                           hoveredIndex === index ||
                           (keyboardNavigation && activeItem ? itemKey(activeItem) === key : false);
+                        if (item.resultType === "product" && item.product) {
+                          return (
+                            <ProductSearchResultItem
+                              key={`${item.group}-${item.id}`}
+                              product={item.product}
+                              active={isActive}
+                              className={cn(
+                                "rounded-lg border",
+                                isActive
+                                  ? "border-primary/40 shadow-sm"
+                                  : "border-border/70 bg-card hover:border-primary/25",
+                              )}
+                              onMouseEnter={() => {
+                                setKeyboardNavigation(false);
+                                setActiveIndex(index);
+                                setHoveredIndex(index);
+                              }}
+                              onMouseLeave={() =>
+                                setHoveredIndex((current) => (current === index ? null : current))
+                              }
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setKeyboardNavigation(false);
+                              }}
+                              onClick={() => handleSelect(item)}
+                            />
+                          );
+                        }
                         return (
                           <button
                             key={`${item.group}-${item.id}`}

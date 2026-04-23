@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -18,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
@@ -34,6 +37,7 @@ const createIdempotencyKey = () => {
 
 const PosEntryPage = () => {
   const t = useTranslations("pos");
+  const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const searchParams = useSearchParams();
@@ -41,6 +45,9 @@ const PosEntryPage = () => {
   const { toast } = useToast();
 
   const [registerId, setRegisterId] = useState<string>(searchParams.get("registerId") ?? "");
+  const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
+  const [openingCash, setOpeningCash] = useState("");
+  const [openingNote, setOpeningNote] = useState("");
 
   const entryQuery = trpc.pos.entry.useQuery(
     { registerId: registerId || undefined },
@@ -49,6 +56,9 @@ const PosEntryPage = () => {
 
   const openShiftMutation = trpc.pos.shifts.open.useMutation({
     onSuccess: () => {
+      setOpenShiftDialogOpen(false);
+      setOpeningCash("");
+      setOpeningNote("");
       toast({ variant: "success", description: t("openShiftSuccess") });
       entryQuery.refetch();
     },
@@ -93,10 +103,15 @@ const PosEntryPage = () => {
     if (!selectedRegister) {
       return;
     }
+    const amount = Number(openingCash || "0");
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast({ variant: "error", description: t("entry.openingCashInvalid") });
+      return;
+    }
     await openShiftMutation.mutateAsync({
       registerId: selectedRegister.id,
-      openingCashKgs: 0,
-      notes: null,
+      openingCashKgs: amount,
+      notes: openingNote.trim() || null,
       idempotencyKey: createIdempotencyKey(),
     });
   };
@@ -179,10 +194,7 @@ const PosEntryPage = () => {
                 </div>
               ) : (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button onClick={handleOpenShift} disabled={openShiftMutation.isLoading}>
-                    {openShiftMutation.isLoading ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : null}
+                  <Button onClick={() => setOpenShiftDialogOpen(true)}>
                     {t("entry.openShift")}
                   </Button>
                 </div>
@@ -213,6 +225,64 @@ const PosEntryPage = () => {
           ) : null}
         </CardContent>
       </Card>
+
+      <Modal
+        open={openShiftDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !openShiftMutation.isLoading) {
+            setOpenShiftDialogOpen(false);
+          }
+        }}
+        title={t("entry.openShiftTitle")}
+        subtitle={selectedRegister ? `${selectedRegister.store.name} · ${selectedRegister.name}` : undefined}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleOpenShift();
+          }}
+        >
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              {t("entry.openingCash")}
+            </label>
+            <Input
+              value={openingCash}
+              onChange={(event) => setOpeningCash(event.target.value)}
+              placeholder={t("entry.openingCashPlaceholder")}
+              inputMode="decimal"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              {t("entry.openingNote")}
+            </label>
+            <Textarea
+              value={openingNote}
+              onChange={(event) => setOpeningNote(event.target.value)}
+              placeholder={t("entry.openingNotePlaceholder")}
+              rows={3}
+            />
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setOpenShiftDialogOpen(false)}
+              disabled={openShiftMutation.isLoading}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button type="submit" className="w-full sm:w-auto" disabled={openShiftMutation.isLoading}>
+              {openShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("entry.openShift")}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { decimalToNumber, sanitizeListImageUrl } from "@/server/services/products/serializers";
 
 export type ScanLookupMatch = "barcode" | "sku" | "name";
 
@@ -10,6 +11,12 @@ export type ScanLookupItem = {
   matchType: ScanLookupMatch;
   type: "product" | "bundle";
   primaryImage: string | null;
+  primaryBarcode?: string | null;
+  category?: string | null;
+  categories?: string[];
+  basePriceKgs?: number | null;
+  effectivePriceKgs?: number | null;
+  onHandQty?: number | null;
 };
 
 export type ScanLookupResult = {
@@ -29,6 +36,30 @@ type ScanLookupClient = {
   product: Pick<Prisma.ProductDelegate, "findFirst" | "findMany">;
 };
 
+const scanProductSelect = {
+  id: true,
+  sku: true,
+  name: true,
+  isBundle: true,
+  photoUrl: true,
+  category: true,
+  categories: true,
+  basePriceKgs: true,
+  barcodes: {
+    select: { value: true },
+    take: 3,
+  },
+  inventorySnapshots: {
+    select: { storeId: true, onHand: true },
+  },
+  images: {
+    select: { url: true },
+    where: { url: { not: { startsWith: "data:image/" } } },
+    orderBy: { position: "asc" },
+    take: 1,
+  },
+} satisfies Prisma.ProductSelect;
+
 export const lookupScanProducts = async (
   client: ScanLookupClient,
   organizationId: string,
@@ -46,7 +77,14 @@ export const lookupScanProducts = async (
     sku: string;
     name: string;
     isBundle: boolean;
+    photoUrl?: string | null;
+    category?: string | null;
+    categories?: string[];
+    basePriceKgs?: Prisma.Decimal | null;
+    barcodes?: Array<{ value: string }>;
+    inventorySnapshots?: Array<{ storeId: string; onHand: number }>;
     images?: Array<{ url: string }>;
+    primaryBarcode?: string | null;
     matchType: ScanLookupMatch;
   }): ScanLookupItem => ({
     id: item.id,
@@ -54,7 +92,16 @@ export const lookupScanProducts = async (
     name: item.name,
     matchType: item.matchType,
     type: item.isBundle ? "bundle" : "product",
-    primaryImage: item.images?.[0]?.url ?? null,
+    primaryImage:
+      sanitizeListImageUrl(item.images?.[0]?.url) ?? sanitizeListImageUrl(item.photoUrl) ?? null,
+    primaryBarcode:
+      item.primaryBarcode ?? item.barcodes?.find((barcode) => barcode.value.trim())?.value ?? null,
+    category: item.categories?.[0] ?? item.category ?? null,
+    categories: item.categories ?? [],
+    basePriceKgs: decimalToNumber(item.basePriceKgs),
+    effectivePriceKgs: decimalToNumber(item.basePriceKgs),
+    onHandQty:
+      item.inventorySnapshots?.reduce((sum, snapshot) => sum + snapshot.onHand, 0) ?? null,
   });
 
   const barcodeMatch = await client.productBarcode.findFirst({
@@ -64,19 +111,9 @@ export const lookupScanProducts = async (
       product: { isDeleted: false },
     },
     select: {
+      value: true,
       product: {
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          isBundle: true,
-          images: {
-            select: { url: true },
-            where: { url: { not: { startsWith: "data:image/" } } },
-            orderBy: { position: "asc" },
-            take: 1,
-          },
-        },
+        select: scanProductSelect,
       },
     },
   });
@@ -87,6 +124,7 @@ export const lookupScanProducts = async (
       items: [
         toItem({
           ...barcodeMatch.product,
+          primaryBarcode: barcodeMatch.value,
           matchType: "barcode",
         }),
       ],
@@ -101,18 +139,7 @@ export const lookupScanProducts = async (
     },
     select: {
       product: {
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          isBundle: true,
-          images: {
-            select: { url: true },
-            where: { url: { not: { startsWith: "data:image/" } } },
-            orderBy: { position: "asc" },
-            take: 1,
-          },
-        },
+        select: scanProductSelect,
       },
     },
   });
@@ -135,18 +162,7 @@ export const lookupScanProducts = async (
       isDeleted: false,
       sku: { equals: exactNeedle, mode: "insensitive" },
     },
-    select: {
-      id: true,
-      sku: true,
-      name: true,
-      isBundle: true,
-      images: {
-        select: { url: true },
-        where: { url: { not: { startsWith: "data:image/" } } },
-        orderBy: { position: "asc" },
-        take: 1,
-      },
-    },
+    select: scanProductSelect,
   });
 
   if (skuMatch) {
@@ -189,10 +205,7 @@ export const lookupScanProducts = async (
       ],
     },
     select: {
-      id: true,
-      sku: true,
-      name: true,
-      isBundle: true,
+      ...scanProductSelect,
       barcodes: {
         where: { value: { contains: barcodeNeedle, mode: "insensitive" } },
         select: { value: true },

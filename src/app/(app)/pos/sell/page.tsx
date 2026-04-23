@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { AddIcon, DeleteIcon, DownloadIcon, PrintIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,12 +90,16 @@ const PosSellPage = () => {
     mode: "download" | "print";
     kind: "precheck" | "fiscal";
   } | null>(null);
+  const [autoReceiptStatus, setAutoReceiptStatus] = useState<
+    "idle" | "printing" | "ready" | "blocked" | "failed"
+  >("idle");
   const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
   const paymentsSectionRef = useRef<HTMLDivElement | null>(null);
   const firstPaymentAmountRef = useRef<HTMLInputElement | null>(null);
   const keyboardScanBufferRef = useRef("");
   const keyboardScanResetTimerRef = useRef<number | null>(null);
   const keyboardScanSubmittingRef = useRef(false);
+  const autoPrintedSaleIdRef = useRef<string | null>(null);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
 
@@ -157,7 +162,7 @@ const PosSellPage = () => {
   const searchTerm = lineSearch.trim();
   const hasSearchTerm = searchTerm.length >= 1;
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: searchTerm },
+    { q: searchTerm, storeId: shiftQuery.data?.store.id },
     { enabled: hasSearchTerm },
   );
 
@@ -231,6 +236,7 @@ const PosSellPage = () => {
         number: result.number,
         kkmStatus: result.kkmStatus,
       });
+      setAutoReceiptStatus("printing");
       setSaleId(null);
       setPayments([defaultPayment()]);
       await Promise.all([
@@ -263,6 +269,8 @@ const PosSellPage = () => {
     setLineSearch("");
     setPayments([defaultPayment()]);
     setLastCompletedSale(null);
+    setAutoReceiptStatus("idle");
+    autoPrintedSaleIdRef.current = null;
   }, [registerId]);
 
   useEffect(() => {
@@ -617,10 +625,13 @@ const PosSellPage = () => {
     setReceiptAction({ mode, kind });
     try {
       const blob = await fetchPdfBlob({
-        url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}`,
+        url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}&action=${mode === "print" ? "reprint" : "download"}`,
       });
       if (mode === "print") {
-        await printPdfBlob(blob);
+        const result = await printPdfBlob(blob);
+        if (!result.autoPrintAttempted) {
+          toast({ variant: "info", description: t("sell.receiptPrintFallback") });
+        }
       } else {
         downloadPdfBlob(blob, `pos-receipt-${lastCompletedSale.number}-${kind}.pdf`);
       }
@@ -630,6 +641,37 @@ const PosSellPage = () => {
       setReceiptAction(null);
     }
   };
+
+  useEffect(() => {
+    if (!lastCompletedSale || autoPrintedSaleIdRef.current === lastCompletedSale.id) {
+      return;
+    }
+
+    let active = true;
+    autoPrintedSaleIdRef.current = lastCompletedSale.id;
+    setAutoReceiptStatus("printing");
+
+    void (async () => {
+      try {
+        const blob = await fetchPdfBlob({
+          url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=precheck&action=auto_print`,
+        });
+        const result = await printPdfBlob(blob);
+        if (!active) {
+          return;
+        }
+        setAutoReceiptStatus(result.autoPrintAttempted ? "ready" : "blocked");
+      } catch {
+        if (active) {
+          setAutoReceiptStatus("failed");
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [lastCompletedSale]);
 
   return (
     <div className="space-y-6">
@@ -676,7 +718,18 @@ const PosSellPage = () => {
               <CardHeader>
                 <CardTitle>{t("sell.lastReceiptTitle", { number: lastCompletedSale.number })}</CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <p className="w-full text-sm text-muted-foreground sm:basis-full">
+                  {autoReceiptStatus === "printing"
+                    ? t("sell.receiptAutoPrinting")
+                    : autoReceiptStatus === "ready"
+                      ? t("sell.receiptAutoReady")
+                      : autoReceiptStatus === "blocked"
+                        ? t("sell.receiptAutoBlocked")
+                        : autoReceiptStatus === "failed"
+                          ? t("sell.receiptAutoFailed")
+                          : t("sell.receiptManualFallback")}
+                </p>
                 <Button
                   variant="secondary"
                   className="w-full sm:w-auto"
@@ -833,18 +886,20 @@ const PosSellPage = () => {
                   <p className="text-xs text-muted-foreground">{t("sell.noSearchResults")}</p>
                 ) : null}
                 {(productSearchQuery.data ?? []).slice(0, 8).map((product) => (
-                  <button
+                  <ProductSearchResultItem
                     key={product.id}
-                    type="button"
+                    product={product}
+                    rightSlot={
+                      isLineBusy ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      )
+                    }
                     onClick={() => handleAddLine(product.id)}
                     disabled={isLineBusy || completeMutation.isLoading}
-                    className="flex w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-left text-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <span>
-                      {product.name} <span className="text-muted-foreground">({product.sku})</span>
-                    </span>
-                    {isLineBusy ? <Spinner className="h-4 w-4" /> : <AddIcon className="h-4 w-4" aria-hidden />}
-                  </button>
+                    className="rounded-md border border-border bg-card"
+                  />
                 ))}
               </div>
 

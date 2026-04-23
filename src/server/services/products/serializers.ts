@@ -8,6 +8,12 @@ type ProductPreviewRecord = {
   sku: string;
   name: string;
   isBundle: boolean;
+  photoUrl?: string | null;
+  category?: string | null;
+  categories?: string[];
+  basePriceKgs?: Prisma.Decimal | null;
+  barcodes?: Array<{ value: string }>;
+  inventorySnapshots?: Array<{ storeId: string; onHand: number }>;
   images: Array<{ url: string }>;
 };
 
@@ -94,13 +100,39 @@ export const sanitizeDetailImageUrl = (value: string | null | undefined) => {
   return value;
 };
 
-export const serializeProductPreview = (product: ProductPreviewRecord) => ({
-  id: product.id,
-  sku: product.sku,
-  name: product.name,
-  type: product.isBundle ? ("bundle" as const) : ("product" as const),
-  primaryImage: sanitizeListImageUrl(product.images[0]?.url) ?? null,
-});
+export const serializeProductPreview = (
+  product: ProductPreviewRecord,
+  options?: {
+    selectedStoreId?: string;
+    effectivePriceKgs?: number | null;
+    primaryBarcode?: string | null;
+  },
+) => {
+  const basePrice = decimalToNumber(product.basePriceKgs);
+  const onHandQty = product.inventorySnapshots?.reduce((sum, snapshot) => {
+    if (options?.selectedStoreId && snapshot.storeId !== options.selectedStoreId) {
+      return sum;
+    }
+    return sum + snapshot.onHand;
+  }, 0) ?? null;
+
+  return {
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    type: product.isBundle ? ("bundle" as const) : ("product" as const),
+    isBundle: product.isBundle,
+    category: product.categories?.[0] ?? product.category ?? null,
+    categories: product.categories ?? [],
+    basePriceKgs: basePrice,
+    effectivePriceKgs: options?.effectivePriceKgs ?? basePrice,
+    onHandQty,
+    primaryBarcode:
+      options?.primaryBarcode ?? product.barcodes?.find((barcode) => barcode.value.trim())?.value ?? null,
+    primaryImage:
+      sanitizeListImageUrl(product.images[0]?.url) ?? sanitizeListImageUrl(product.photoUrl) ?? null,
+  };
+};
 
 export const serializeProductListItem = ({
   product,

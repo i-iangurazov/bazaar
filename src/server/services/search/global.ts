@@ -1,8 +1,9 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type { Logger } from "pino";
 
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
+import { serializeProductPreview } from "@/server/services/products/serializers";
 
 export type SearchResult = {
   id: string;
@@ -11,9 +12,36 @@ export type SearchResult = {
   sublabel?: string | null;
   href: string;
   matchKind?: "exact" | "prefix" | "fuzzy";
+  product?: ReturnType<typeof serializeProductPreview>;
 };
 
 const exactLookupLikePattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
+
+const productSearchSelect = {
+  id: true,
+  sku: true,
+  name: true,
+  isBundle: true,
+  photoUrl: true,
+  category: true,
+  categories: true,
+  basePriceKgs: true,
+  barcodes: {
+    select: { value: true },
+    take: 3,
+  },
+  inventorySnapshots: {
+    select: { storeId: true, onHand: true },
+  },
+  images: {
+    select: { url: true },
+    where: { url: { not: { startsWith: "data:image/" } } },
+    orderBy: { position: "asc" },
+    take: 1,
+  },
+} satisfies Prisma.ProductSelect;
+
+type ProductSearchRecord = Prisma.ProductGetPayload<{ select: typeof productSearchSelect }>;
 
 const pushUnique = (
   items: SearchResult[],
@@ -37,6 +65,29 @@ const buildEmailSearchFilter = (query: string) =>
   query.length >= 3
     ? { contains: query, mode: "insensitive" as const }
     : { startsWith: query, mode: "insensitive" as const };
+
+const buildProductResult = ({
+  product,
+  matchKind,
+  primaryBarcode,
+}: {
+  product: ProductSearchRecord;
+  matchKind: NonNullable<SearchResult["matchKind"]>;
+  primaryBarcode?: string | null;
+}): SearchResult => {
+  const preview = serializeProductPreview(product, { primaryBarcode });
+  const sublabel = [preview.sku, preview.primaryBarcode].filter(Boolean).join(" • ");
+
+  return {
+    id: product.id,
+    type: "product",
+    label: product.name,
+    sublabel: sublabel || product.sku,
+    href: `/products/${product.id}`,
+    matchKind,
+    product: preview,
+  };
+};
 
 export const isExactLikeGlobalSearchQuery = ({
   query,
@@ -118,11 +169,7 @@ export const searchGlobal = async ({
           },
           select: {
             product: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-              },
+              select: productSearchSelect,
             },
           },
           take: 5,
@@ -134,11 +181,7 @@ export const searchGlobal = async ({
         isDeleted: false,
         sku: { equals: exactNeedle, mode: "insensitive" },
       },
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-      },
+      select: productSearchSelect,
       take: 5,
     }),
     prisma.store.findMany({
@@ -187,24 +230,16 @@ export const searchGlobal = async ({
       return;
     }
     pushUnique(results, seen, {
-      id: match.product.id,
-      type: "product",
-      label: match.product.name,
-      sublabel: match.product.sku,
-      href: `/products/${match.product.id}`,
-      matchKind: "exact",
+      ...buildProductResult({
+        product: match.product,
+        matchKind: "exact",
+        primaryBarcode: normalizedScanQuery,
+      }),
     });
   });
 
   exactSkuMatches.forEach((product) => {
-    pushUnique(results, seen, {
-      id: product.id,
-      type: "product",
-      label: product.name,
-      sublabel: product.sku,
-      href: `/products/${product.id}`,
-      matchKind: "exact",
-    });
+    pushUnique(results, seen, buildProductResult({ product, matchKind: "exact" }));
   });
 
   exactStoreCodeMatches.forEach((store) => {
@@ -235,9 +270,7 @@ export const searchGlobal = async ({
         OR: fuzzyProductFilters,
       },
       select: {
-        id: true,
-        name: true,
-        sku: true,
+        ...productSearchSelect,
       },
       orderBy: [{ sku: "asc" }, { name: "asc" }],
       take: plan.productOnlyFuzzy ? 8 : 6,
@@ -325,14 +358,14 @@ export const searchGlobal = async ({
     });
   }
   fuzzyProducts.forEach((product) => {
-    pushUnique(results, seen, {
-      id: product.id,
-      type: "product",
-      label: product.name,
-      sublabel: product.sku,
-      href: `/products/${product.id}`,
-      matchKind: product.sku.toLowerCase().startsWith(queryLower) ? "prefix" : "fuzzy",
-    });
+    pushUnique(
+      results,
+      seen,
+      buildProductResult({
+        product,
+        matchKind: product.sku.toLowerCase().startsWith(queryLower) ? "prefix" : "fuzzy",
+      }),
+    );
   });
 
   suppliers.forEach((supplier) => {

@@ -12,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DownloadIcon } from "@/components/icons";
+import { useToast } from "@/components/ui/toast";
+import { DownloadIcon, PrintIcon } from "@/components/icons";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -44,6 +46,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const tExports = useTranslations("exports");
   const locale = useLocale();
   const { data: session } = useSession();
+  const { toast } = useToast();
   const canView = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
@@ -53,6 +56,10 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const [fromDate, setFromDate] = useState(formatDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)));
   const [toDate, setToDate] = useState(formatDateInput(now));
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
+  const [receiptAction, setReceiptAction] = useState<{
+    saleId: string;
+    mode: "download" | "print";
+  } | null>(null);
 
   const receiptsQuery = trpc.pos.receipts.useQuery(
     {
@@ -134,6 +141,30 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
       ],
       rows: exportRows,
     });
+  };
+
+  const handleReceiptPdf = async (saleId: string, number: string, mode: "download" | "print") => {
+    if (receiptAction) {
+      return;
+    }
+    setReceiptAction({ saleId, mode });
+    try {
+      const blob = await fetchPdfBlob({
+        url: `/api/pos/receipts/${saleId}/pdf?kind=precheck&action=${mode === "print" ? "reprint" : "download"}`,
+      });
+      if (mode === "print") {
+        const result = await printPdfBlob(blob);
+        if (!result.autoPrintAttempted) {
+          toast({ variant: "info", description: tPos("sell.receiptPrintFallback") });
+        }
+      } else {
+        downloadPdfBlob(blob, `pos-receipt-${number}-precheck.pdf`);
+      }
+    } catch {
+      toast({ variant: "error", description: tPos("history.receiptPdfFailed") });
+    } finally {
+      setReceiptAction(null);
+    }
   };
 
   return (
@@ -241,6 +272,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                             <TableHead>{t("columns.payments")}</TableHead>
                             <TableHead>{t("columns.status")}</TableHead>
                             <TableHead>{t("columns.fiscal")}</TableHead>
+                            <TableHead>{t("columns.actions")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -271,6 +303,38 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                 {kkmStatusLabel(item.kkmStatus)}
                                 {item.fiscalReceipt?.lastError ? ` · ${item.fiscalReceipt.lastError}` : ""}
                               </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={tPos("history.printPrecheck")}
+                                    disabled={Boolean(receiptAction)}
+                                    onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
+                                  >
+                                    {receiptAction?.saleId === item.id && receiptAction.mode === "print" ? (
+                                      <Spinner className="h-4 w-4" />
+                                    ) : (
+                                      <PrintIcon className="h-4 w-4" aria-hidden />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={tPos("history.downloadPrecheck")}
+                                    disabled={Boolean(receiptAction)}
+                                    onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
+                                  >
+                                    {receiptAction?.saleId === item.id && receiptAction.mode === "download" ? (
+                                      <Spinner className="h-4 w-4" />
+                                    ) : (
+                                      <DownloadIcon className="h-4 w-4" aria-hidden />
+                                    )}
+                                  </Button>
+                                </div>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -291,6 +355,27 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                         {formatCurrencyKGS(item.totalKgs, locale)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">{kkmStatusLabel(item.kkmStatus)}</p>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
+                          disabled={Boolean(receiptAction)}
+                        >
+                          <PrintIcon className="h-4 w-4" aria-hidden />
+                          {tPos("history.printPrecheck")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
+                          disabled={Boolean(receiptAction)}
+                        >
+                          <DownloadIcon className="h-4 w-4" aria-hidden />
+                          {tPos("history.downloadPrecheck")}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 />

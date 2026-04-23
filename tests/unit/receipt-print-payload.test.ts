@@ -76,6 +76,26 @@ describe("receipt print payload", () => {
     expect(payload.inn).toBe("12345678901234");
     expect(payload.address).toBe("Bishkek, Chuy 1");
     expect(payload.variant).toBe("PRECHECK");
+    expect(payload.storeName).toBe("Airport Store");
+    expect(payload.cashierName).toBe("Cashier");
+    expect(payload.number).toBe("S-000001");
+    expect(payload.items).toEqual([
+      {
+        productId: "prod-1",
+        name: "Сүт",
+        sku: "SKU-1",
+        qty: 1,
+        unitPriceKgs: 240,
+        lineTotalKgs: 240,
+      },
+    ]);
+    expect(payload.totals.payments).toEqual([
+      {
+        method: "CASH",
+        methodLabel: "Наличные",
+        amountKgs: 240,
+      },
+    ]);
   });
 
   it("blocks fiscal print when sale is not fiscalized", async () => {

@@ -119,6 +119,17 @@ const productPreviewSelect = {
   sku: true,
   name: true,
   isBundle: true,
+  photoUrl: true,
+  category: true,
+  categories: true,
+  basePriceKgs: true,
+  barcodes: {
+    select: { value: true },
+    take: 3,
+  },
+  inventorySnapshots: {
+    select: { storeId: true, onHand: true },
+  },
   images: {
     select: { url: true },
     where: { url: { not: { startsWith: "data:image/" } } },
@@ -243,10 +254,12 @@ export const searchQuickProducts = async ({
   prisma,
   organizationId,
   query,
+  storeId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
   query: string;
+  storeId?: string;
 }) => {
   const trimmed = query.trim();
   const normalized = normalizeScanValue(query);
@@ -268,6 +281,7 @@ export const searchQuickProducts = async ({
         product: { isDeleted: false },
       },
       select: {
+        value: true,
         product: {
           select: productPreviewSelect,
         },
@@ -320,6 +334,7 @@ export const searchQuickProducts = async ({
     ProductPreviewRecord & {
       matchType: "barcode" | "sku" | "name";
       barcodes?: Array<{ value: string }>;
+      primaryBarcode?: string;
     }
   >();
 
@@ -327,7 +342,11 @@ export const searchQuickProducts = async ({
     if (!match.product || items.has(match.product.id)) {
       return;
     }
-    items.set(match.product.id, { ...match.product, matchType: "barcode" });
+    items.set(match.product.id, {
+      ...match.product,
+      primaryBarcode: match.value,
+      matchType: "barcode",
+    });
   });
 
   exactSkuMatches.forEach((product) => {
@@ -351,13 +370,32 @@ export const searchQuickProducts = async ({
     });
   });
 
-  return Array.from(items.values())
-    .slice(0, 10)
-    .map((product) => ({
-      ...serializeProductPreview(product),
-      isBundle: product.isBundle,
-      matchType: product.matchType,
-    }));
+  const orderedProducts = Array.from(items.values()).slice(0, 10);
+  const priceOverrides =
+    storeId && orderedProducts.length
+      ? await prisma.storePrice.findMany({
+          where: {
+            organizationId,
+            storeId,
+            productId: { in: orderedProducts.map((product) => product.id) },
+            variantKey: "BASE",
+          },
+          select: { productId: true, priceKgs: true },
+        })
+      : [];
+  const priceOverrideMap = new Map(
+    priceOverrides.map((price) => [price.productId, Number(price.priceKgs)]),
+  );
+
+  return orderedProducts.map((product) => ({
+    ...serializeProductPreview(product, {
+      selectedStoreId: storeId,
+      effectivePriceKgs: priceOverrideMap.get(product.id) ?? undefined,
+      primaryBarcode: product.primaryBarcode,
+    }),
+    isBundle: product.isBundle,
+    matchType: product.matchType,
+  }));
 };
 
 const sortProductListItems = ({

@@ -642,7 +642,8 @@
     "compliance": "Талаптар",
     "bazaarCatalog": "Базар-каталог",
     "mMarket": "M-маркет",
-    "bakaiStore": "Bakai Store"
+    "bakaiStore": "Bakai Store",
+    "productImageStudio": "Product Image Studio"
   },
   "integrations": {
     "title": "Интеграциялар",
@@ -680,6 +681,17 @@
       "status": {
         "notConfigured": "Жөндөлгөн эмес",
         "draft": "Каралама",
+        "ready": "Даяр",
+        "error": "Ката"
+      }
+    },
+    "productImageStudio": {
+      "title": "Product Image Studio",
+      "description": "Товар сүрөттөрүн каталогго ылайык студиялык форматка келтирүү",
+      "openStudio": "Студияны ачуу",
+      "openHistory": "Тарыхты ачуу",
+      "status": {
+        "notConfigured": "Жөндөлгөн эмес",
         "ready": "Даяр",
         "error": "Ката"
       }
@@ -1200,6 +1212,112 @@
       }
     }
   },
+  "productImageStudioSettings": {
+    "title": "Product Image Studio",
+    "subtitle": "Алсыз товар сүрөттөрүн ачык студиялык фон менен каталогго ылайык форматка келтириңиз.",
+    "overview": {
+      "title": "Обзор",
+      "subtitle": "Баштапкы сүрөт өзүнчө сакталат. Генерацияланган натыйжаны товарга сактоодон мурун кол менен текшерүү керек.",
+      "status": {
+        "notConfigured": "Жөндөлгөн эмес",
+        "ready": "Даяр",
+        "error": "Ката"
+      },
+      "metrics": {
+        "totalJobs": "Бардык тапшырмалар",
+        "succeeded": "Ийгиликтүү",
+        "failed": "Ката менен",
+        "lastGenerated": "Акыркы генерация"
+      },
+      "never": "Азырынча жок",
+      "providerMissing": "OpenAI API key серверде көрсөтүлгөн эмес. Ачкыч кошулмайынча генерация жеткиликсиз болот."
+    },
+    "input": {
+      "title": "Баштапкы сүрөт",
+      "subtitle": "Бир JPG, PNG, WEBP, HEIC же HEIF жүктөңүз. Оригинал өчүрүлбөйт жана натыйжадан өзүнчө сакталат.",
+      "uploadLabel": "Жүктөө",
+      "uploadCta": "Товар сүрөтүн жүктөө",
+      "uploadHint": "JPG, PNG, WEBP, HEIC жана HEIF колдоого алынат. Зарыл болсо, файл жүктөөнүн алдында автоматтык түрдө оптимизацияланат.",
+      "errors": {
+        "unsupportedFileType": "JPG, PNG, WEBP, HEIC жана HEIF гана колдоого алынат.",
+        "imageTooLarge": "Файл өтө чоң (макс. {size} МБ).",
+        "imageTooLargeInput": "Файл иштетүү үчүн өтө чоң (макс. {size} МБ).",
+        "imageTooLargeAfterCompression": "Автоматтык оптимизациядан кийин да файл {size} МБ дан чоң бойдон калды.",
+        "imageCompressionFailed": "Сүрөттү жүктөөгө даярдоо мүмкүн болбоду."
+      },
+      "removeSource": "Алып салуу",
+      "productLabel": "Байлануучу товар",
+      "productPlaceholder": "SKU же аталышы боюнча товар табыңыз",
+      "clearProduct": "Тазалоо",
+      "reviewNote": "V1 натыйжаны автоматтык жарыялабайт. Адегенде сүрөттү текшерип, анан товар галереясына сактаңыз.",
+      "sourceUploadSuccess": "Баштапкы сүрөт жүктөлдү."
+    },
+    "presets": {
+      "title": "Натыйжа пресеттери",
+      "subtitle": "Каталог үчүн гана башкарылуучу орнотуулар. V1'де колдонуучу үчүн эркин prompt берилбейт.",
+      "backgroundLabel": "Фон",
+      "outputLabel": "Формат",
+      "background": {
+        "white": "Ак",
+        "lightGray": "Ачык боз"
+      },
+      "output": {
+        "square": "Каталог үчүн квадрат"
+      },
+      "always": {
+        "centeredTitle": "Борборлоштурулган композиция",
+        "centeredDescription": "Товар кадрдын ортосуна жетиштүү боштук менен жайгашат.",
+        "improveVisibilityTitle": "Көрүнүшүн жана тактыгын жакшыртуу",
+        "improveVisibilityDescription": "Модель фонду тазалайт жана товарды өзгөртпөстөн көрсөтүүнү жакшыртат.",
+        "on": "Ар дайым күйгүзүлгөн"
+      },
+      "optional": {
+        "softShadowTitle": "Жумшак көлөкө",
+        "softShadowDescription": "Декоративдик эффектсиз жеңил студиялык көлөкө.",
+        "tighterCropTitle": "Тыгызыраак кадр",
+        "tighterCropDescription": "Бүт товар кадрда калып, кадр бир аз тыгызыраак болот.",
+        "brighterTitle": "Бир аз жарыгыраак берүү",
+        "brighterDescription": "Товардын түсүн өзгөртпөстөн бир аз жарыгыраак көрсөтүү."
+      }
+    },
+    "preview": {
+      "title": "Превью",
+      "subtitle": "Сактоодон мурун оригинал менен жаңы вариантты салыштырыңыз.",
+      "original": "Оригинал",
+      "generated": "Генерацияланган сүрөт",
+      "originalAlt": "Товардын оригинал сүрөтү",
+      "generatedAlt": "Товардын генерацияланган каталог сүрөтү",
+      "emptyOriginal": "Адегенде баштапкы сүрөттү жүктөңүз.",
+      "emptyGenerated": "Иштетүү бүткөндөн кийин натыйжа ушул жерде чыгат.",
+      "processing": "Сүрөт иштетилип жатат.",
+      "setAsPrimary": "Товардын негизги сүрөтү кылып коюу",
+      "productRequired": "Натыйжаны сактоо үчүн товарды тандаңыз."
+    },
+    "actions": {
+      "generate": "Сүрөт түзүү",
+      "regenerate": "Кайра түзүү",
+      "saveToProduct": "Товарга сактоо",
+      "preview": "Ачуу"
+    },
+    "history": {
+      "title": "Тапшырмалар тарыхы",
+      "subtitle": "Статусту, каталарды карап чыгып, керек болсо кайра генерациялаңыз.",
+      "empty": "Азырынча тапшырма жок.",
+      "unlinkedProduct": "Товар тандалган эмес",
+      "columns": {
+        "status": "Статус",
+        "product": "Товар",
+        "createdBy": "Жүргүзгөн",
+        "createdAt": "Түзүлгөн",
+        "completedAt": "Аяктаган",
+        "actions": "Аракеттер"
+      }
+    },
+    "jobQueuedSuccess": "Тапшырма кезекке коюлду.",
+    "jobReused": "Окшош тапшырма азыр иштеп жатат. Мурдагы job ачылды.",
+    "jobRetrySuccess": "Кайра генерация кезекке коюлду.",
+    "saveSuccess": "Генерацияланган сүрөт товар карточкасына сакталды."
+  },
   "catalogPublic": {
     "logoAlt": "{store} дүкөнүнүн логотиби",
     "searchPlaceholder": "Товар издөө",
@@ -1474,8 +1592,13 @@
       "shiftClosed": "Смена жабык",
       "shiftOpenedAt": "Ачылган убакыт",
       "openingCash": "Баштапкы накталай",
+      "openingCashPlaceholder": "0.00",
+      "openingCashInvalid": "Баштапкы накталай суммасын туура киргизиңиз.",
+      "openingNote": "Ачуу боюнча комментарий",
+      "openingNotePlaceholder": "Мисалы, смена ачылар алдында накталай саналды",
       "openedBy": "Ачкан кызматкер",
       "openShift": "Сменаны ачуу",
+      "openShiftTitle": "Сменаны ачуу",
       "quickActionsTitle": "Тез аракеттер",
       "sell": "Сатуу",
       "history": "Тарых",
@@ -1517,6 +1640,7 @@
       "searchProduct": "Аталыш, SKU же штрихкод боюнча издөө",
       "searchHint": "Товар издөө үчүн жок дегенде 1 белгини киргизиңиз.",
       "noSearchResults": "Бул суроо боюнча эч нерсе табылган жок.",
+      "product": "Товар",
       "lines": "Позициялар",
       "noLinesYet": "Азырынча позиция кошула элек.",
       "bundle": "Топтом",
@@ -1547,6 +1671,12 @@
       "printFiscalReceipt": "Фискалдык чекти басуу",
       "downloadReceipt": "Чекти PDF жүктөө",
       "printReceipt": "Чекти басып чыгаруу",
+      "receiptAutoPrinting": "Чек даярдалды, басып чыгаруу терезеси автоматтык ачылууда.",
+      "receiptAutoReady": "Басып чыгаруу браузерге жөнөтүлдү. Терезе чыкпаса, «Алдын ала чекти басуу» баскычын колдонуңуз.",
+      "receiptAutoBlocked": "Браузер автоматтык басууну бөгөттөдү. «Алдын ала чекти басуу» баскычын басыңыз.",
+      "receiptAutoFailed": "Автоматтык басуу иштеген жок. «Алдын ала чекти басуу» баскычын басыңыз.",
+      "receiptManualFallback": "Сатуу бүткөндөн кийин чекти ушул жерден кайра басса болот.",
+      "receiptPrintFallback": "Браузер чекти автоматтык басуусуз ачты. Ачылган өтмөктөн басып чыгарыңыз.",
       "receiptPdfFailed": "Чек PDF даярдоо мүмкүн болгон жок."
     },
     "shifts": {
@@ -1557,6 +1687,10 @@
       "returnsTotal": "Кайтаруулар",
       "expectedCash": "Күтүлгөн накталай",
       "cashInOut": "Cash in/out",
+      "difference": "Айырма",
+      "surplus": "Ашыкча",
+      "shortage": "Жетишпестик",
+      "balanced": "Айырма жок",
       "cashMovementType": "Кыймыл түрү",
       "payIn": "Киргизүү",
       "payOut": "Чыгаруу",
@@ -1564,8 +1698,18 @@
       "reason": "Себеп",
       "record": "Жазуу",
       "countedCash": "Саналып чыккан накталай",
+      "closingNote": "Жабуу боюнча комментарий",
+      "closingNotePlaceholder": "Айырманын себеби же кызматтык комментарий",
+      "confirmClose": "Накталай акча саналды жана сменаны жабууну ырастайм.",
+      "confirmCloseRequired": "Сменаны жабууну ырастаңыз.",
       "closeShift": "Сменаны жабуу",
       "historyTitle": "Сменалар тарыхы",
+      "openedBy": "Ачкан",
+      "closedBy": "Жапкан",
+      "opened": "Ачык",
+      "closed": "Жабык",
+      "notes": "Комментарий",
+      "noHistory": "Сменалар тарыхы азырынча бош.",
       "closedSuccess": "Смена жабылды.",
       "cashMovementSuccess": "Накталай кыймылы жазылды.",
       "invalidAmount": "Туура сумманы киргизиңиз.",
@@ -1663,7 +1807,8 @@
         "total": "Жыйынтык",
         "payments": "Төлөмдөр",
         "status": "Абалы",
-        "fiscal": "Фискалдаштыруу"
+        "fiscal": "Фискалдаштыруу",
+        "actions": "Аракеттер"
       }
     },
     "receiptPdf": {
@@ -2129,7 +2274,16 @@
     "applyBulkPrice": "Колдонуу",
     "bulkPriceSuccess": "Жаңыртылган баалар: {count}",
     "printPriceTags": "Баа белгилери",
+    "printLabels": "Этикеткаларды басуу",
+    "printSelected": "Тандалгандарды басуу",
+    "printMissingBarcode": "Товарда штрихкод жок. Этикетканы басуудан мурда штрихкод кошуңуз.",
+    "printNoPrintableProducts": "Тандалгандардын ичинде басууга жарактуу активдүү товар жок.",
+    "printFallback": "Браузер PDFти автоматтык басуусуз ачты. Ачылган өтмөктөн басып чыгарыңыз.",
     "printSubtitle": "Тандалды: {count}",
+    "imageUnavailable": "Товардын сүрөтү кошулган эмес",
+    "searchResultBarcode": "Штрихкод",
+    "searchResultPrice": "Баа",
+    "searchResultStock": "Калдык",
     "template": "Калып",
     "template3x8": "3 x 8 (24 даана)",
     "template2x5": "2 x 5 (10 даана)",
@@ -2754,6 +2908,20 @@
     "bakaiStoreTemplateInvalid": "Bakai Store шаблонун окуу мүмкүн болгон жок. Баракты жана колонка аталыштарын текшериңиз.",
     "bakaiStoreTemplateInvalidType": "Excel файлдары гана колдоого алынат (.xlsx, .xls, .xlsm).",
     "bakaiStoreTemplateTooLarge": "Шаблон файлы өтө чоң.",
+    "productImageStudioNotConfigured": "Product Image Studio үчүн OpenAI серверде жөндөлгөн эмес.",
+    "productImageStudioJobNotFound": "Product Image Studio тапшырмасы табылган жок.",
+    "productImageStudioSourceImageMissing": "Баштапкы сүрөт табылган жок.",
+    "productImageStudioSourceImageAccessDenied": "Баштапкы сүрөткө жетүү укугу жок.",
+    "productImageStudioUnsupportedFileType": "JPG, PNG, WEBP, HEIC жана HEIF гана колдоого алынат.",
+    "productImageStudioImageTooSmall": "Каталог иштетүүсү үчүн сүрөт өтө кичине.",
+    "productImageStudioImageUnreadable": "Сүрөттү окуу мүмкүн болгон жок.",
+    "productImageStudioInvalidPreset": "Тандалган пресеттер жараксыз.",
+    "productImageStudioProviderFailed": "OpenAI сүрөттү иштете алган жок.",
+    "productImageStudioProviderOutputMissing": "OpenAI даяр сүрөттү кайтарган жок.",
+    "productImageStudioOutputPersistFailed": "Генерацияланган сүрөттү сактоо мүмкүн болгон жок.",
+    "productImageStudioAttachFailed": "Сүрөттү товарга байлоо мүмкүн болгон жок.",
+    "productImageStudioRetryUnavailable": "Бул тапшырманы азырынча кайра иштетүү мүмкүн эмес.",
+    "productImageStudioProductRequired": "Натыйжаны сактоо үчүн товарды тандаңыз.",
     "userNotFound": "Колдонуучу табылган жок.",
     "cannotDemoteSelf": "Өз ролуңузду төмөндөтө албайсыз.",
     "cannotDeactivateSelf": "Өз аккаунтуңузду өчүрө албайсыз.",
