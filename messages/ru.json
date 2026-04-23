@@ -640,10 +640,10 @@
     "metrics": "Метрики",
     "counts": "Пересчеты",
     "compliance": "Требования",
-    "bazaarCatalog": "Базар-каталог",
-    "mMarket": "M-маркет",
-    "bakaiStore": "Bakai Store",
-    "productImageStudio": "Product Image Studio"
+    "bazaarCatalog": "bazaar-каталог",
+    "mMarket": "bazaar + MMarket",
+    "bakaiStore": "bazaar + Bakai Store",
+    "productImageStudio": "bazaar студия картинок"
   },
   "integrations": {
     "title": "Интеграции",
@@ -654,7 +654,7 @@
       "published": "Опубликовано"
     },
     "bazaarCatalog": {
-      "title": "Базар-каталог",
+      "title": "bazaar-каталог",
       "description": "Открытый каталог магазина",
       "openSettings": "Открыть настройки",
       "openCatalog": "Открыть каталог",
@@ -663,7 +663,7 @@
       "publishedStore": "Опубликовано для магазина: {store}"
     },
     "mMarket": {
-      "title": "M-маркет",
+      "title": "bazaar + MMarket",
       "description": "Экспорт каталога товаров в M-маркет",
       "openSettings": "Настроить",
       "openExport": "Открыть экспорт",
@@ -674,7 +674,7 @@
       }
     },
     "bakaiStore": {
-      "title": "Bakai Store",
+      "title": "bazaar + Bakai Store",
       "description": "Экспорт товаров в шаблон Bakai Store",
       "openSettings": "Настроить",
       "openExport": "Открыть экспорт",
@@ -686,7 +686,7 @@
       }
     },
     "productImageStudio": {
-      "title": "Product Image Studio",
+      "title": "bazaar студия картинок",
       "description": "Улучшение фото товара до каталожного студийного вида",
       "openStudio": "Открыть студию",
       "openHistory": "Открыть историю",
@@ -698,7 +698,7 @@
     }
   },
   "bazaarCatalogSettings": {
-    "title": "Базар-каталог",
+    "title": "bazaar-каталог",
     "subtitle": "Брендирование каталога магазина и управление публикацией.",
     "storeSelectorTitle": "Магазин",
     "storeSelector": "Выберите магазин",
@@ -788,7 +788,7 @@
     "readOnlyHint": "Режим просмотра: редактирование доступно только администратору или менеджеру."
   },
   "mMarketSettings": {
-    "title": "M-маркет",
+    "title": "bazaar + MMarket",
     "subtitle": "Подключение, выбор товаров и полная синхронизация в M-маркет.",
     "readOnlyHint": "Режим просмотра: изменение доступно только администратору или менеджеру.",
     "connection": {
@@ -979,7 +979,7 @@
     }
   },
   "bakaiStoreSettings": {
-    "title": "Bakai Store",
+    "title": "bazaar + Bakai Store",
     "subtitle": "Прямая синхронизация по API или шаблонный XLSX-экспорт как fallback.",
     "readOnlyHint": "Режим просмотра: изменение доступно только администратору или менеджеру.",
     "status": {
@@ -1213,7 +1213,7 @@
     }
   },
   "productImageStudioSettings": {
-    "title": "Product Image Studio",
+    "title": "bazaar студия картинок",
     "subtitle": "Загружайте слабые фото товара и получайте аккуратные каталожные изображения на светлом студийном фоне.",
     "overview": {
       "title": "Обзор",

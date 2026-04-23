@@ -640,10 +640,10 @@
     "metrics": "Метрикалар",
     "counts": "Эсептөөлөр",
     "compliance": "Талаптар",
-    "bazaarCatalog": "Базар-каталог",
-    "mMarket": "M-маркет",
-    "bakaiStore": "Bakai Store",
-    "productImageStudio": "Product Image Studio"
+    "bazaarCatalog": "bazaar-каталог",
+    "mMarket": "bazaar + MMarket",
+    "bakaiStore": "bazaar + Bakai Store",
+    "productImageStudio": "bazaar студия картинок"
   },
   "integrations": {
     "title": "Интеграциялар",
@@ -654,7 +654,7 @@
       "published": "Жарыяланды"
     },
     "bazaarCatalog": {
-      "title": "Базар-каталог",
+      "title": "bazaar-каталог",
       "description": "Дүкөндүн ачык каталогу",
       "openSettings": "Жөндөөлөрдү ачуу",
       "openCatalog": "Каталогду ачуу",
@@ -663,7 +663,7 @@
       "publishedStore": "Бул дүкөн үчүн жарыяланды: {store}"
     },
     "mMarket": {
-      "title": "M-маркет",
+      "title": "bazaar + MMarket",
       "description": "Товар каталогун M-маркетке экспорттоо",
       "openSettings": "Жөндөө",
       "openExport": "Экспортту ачуу",
@@ -674,7 +674,7 @@
       }
     },
     "bakaiStore": {
-      "title": "Bakai Store",
+      "title": "bazaar + Bakai Store",
       "description": "Bakai Store шаблонуна товарларды экспорттоо",
       "openSettings": "Жөндөө",
       "openExport": "Экспортту ачуу",
@@ -686,7 +686,7 @@
       }
     },
     "productImageStudio": {
-      "title": "Product Image Studio",
+      "title": "bazaar студия картинок",
       "description": "Товар сүрөттөрүн каталогго ылайык студиялык форматка келтирүү",
       "openStudio": "Студияны ачуу",
       "openHistory": "Тарыхты ачуу",
@@ -698,7 +698,7 @@
     }
   },
   "bazaarCatalogSettings": {
-    "title": "Базар-каталог",
+    "title": "bazaar-каталог",
     "subtitle": "Дүкөн каталогуна бренд берүү жана жарыялоону башкаруу.",
     "storeSelectorTitle": "Дүкөн",
     "storeSelector": "Дүкөндү тандаңыз",
@@ -788,7 +788,7 @@
     "readOnlyHint": "Кароо режими: өзгөртүү администратор жана менеджерге гана жеткиликтүү."
   },
   "mMarketSettings": {
-    "title": "M-маркет",
+    "title": "bazaar + MMarket",
     "subtitle": "Туташуу, товар тандоо жана M-маркет менен толук синхрондоштуруу.",
     "readOnlyHint": "Кароо режими: өзгөртүү администраторго жана менеджерге гана жеткиликтүү.",
     "connection": {
@@ -979,7 +979,7 @@
     }
   },
   "bakaiStoreSettings": {
-    "title": "Bakai Store",
+    "title": "bazaar + Bakai Store",
     "subtitle": "Түз API синхрондоштуруу же fallback катары шаблонго негизделген XLSX-экспорт.",
     "readOnlyHint": "Кароо режими: өзгөртүү администраторго жана менеджерге гана жеткиликтүү.",
     "status": {
@@ -1213,7 +1213,7 @@
     }
   },
   "productImageStudioSettings": {
-    "title": "Product Image Studio",
+    "title": "bazaar студия картинок",
     "subtitle": "Алсыз товар сүрөттөрүн ачык студиялык фон менен каталогго ылайык форматка келтириңиз.",
     "overview": {
       "title": "Обзор",
