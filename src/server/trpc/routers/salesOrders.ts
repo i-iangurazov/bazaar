@@ -19,6 +19,14 @@ import {
   updateCustomerOrderLine,
 } from "@/server/services/salesOrders";
 
+const optionalEmailSchema = z
+  .string()
+  .trim()
+  .email()
+  .max(254)
+  .optional()
+  .nullable();
+
 const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
     await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" });
@@ -110,6 +118,7 @@ export const salesOrdersRouter = router({
       z.object({
         storeId: z.string().min(1),
         customerName: z.string().max(160).optional().nullable(),
+        customerEmail: optionalEmailSchema,
         customerPhone: z.string().max(64).optional().nullable(),
         notes: z.string().max(2_000).optional().nullable(),
         lines: z
@@ -129,6 +138,7 @@ export const salesOrdersRouter = router({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
           customerName: input.customerName,
+          customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
           notes: input.notes,
           lines: input.lines,
@@ -145,6 +155,7 @@ export const salesOrdersRouter = router({
       z.object({
         customerOrderId: z.string(),
         customerName: z.string().max(160).optional().nullable(),
+        customerEmail: optionalEmailSchema,
         customerPhone: z.string().max(64).optional().nullable(),
         notes: z.string().max(2_000).optional().nullable(),
       }),
@@ -155,6 +166,7 @@ export const salesOrdersRouter = router({
           organizationId: ctx.user.organizationId,
           customerOrderId: input.customerOrderId,
           customerName: input.customerName,
+          customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
           notes: input.notes,
           actorId: ctx.user.id,

@@ -59,6 +59,7 @@ import {
   prepareProductImageFileForUpload,
   resolvePrimaryImageUrl,
 } from "@/lib/productImageUpload";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 export type ProductFormValues = {
   sku: string;
@@ -1880,8 +1881,9 @@ export const ProductForm = ({
       return;
     }
 
+    const descriptionLocale = normalizeLocale(locale) ?? defaultLocale;
     generateDescriptionMutation.mutate({
-      locale: locale === "kg" ? "kg" : "ru",
+      locale: descriptionLocale,
       imageUrls: descriptionSourceImageUrls,
     });
   };

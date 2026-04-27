@@ -36,6 +36,7 @@ import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -482,7 +483,7 @@ const MMarketSettingsPage = () => {
         );
 
         const result = await bulkGenerateDescriptionsMutation.mutateAsync({
-          locale: locale === "kg" ? "kg" : "ru",
+          locale: normalizeLocale(locale) ?? defaultLocale,
           productIds: batch,
         });
         const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;

@@ -1,3 +1,9 @@
+import { File } from "node:buffer";
+
+if (typeof globalThis.File === "undefined") {
+  globalThis.File = File as unknown as typeof globalThis.File;
+}
+
 const shouldRunDbTests =
   process.env.SKIP_DB_TESTS !== "1" &&
   (process.env.CI === "true" || process.env.CI === "1" || process.env.RUN_DB_TESTS === "1");

@@ -77,6 +77,7 @@ describeDb("bazaar catalog integration", () => {
     const order = await createCatalogCheckoutOrder({
       slug: saved.catalog.slug,
       customerName: "Catalog Customer",
+      customerEmail: "catalog.customer@example.com",
       customerPhone: "+996555100200",
       comment: "Доставка вечером",
       lines: [{ productId: product.id, qty: 3 }],
@@ -91,6 +92,7 @@ describeDb("bazaar catalog integration", () => {
     expect(dbOrder?.status).toBe(CustomerOrderStatus.CONFIRMED);
     expect(dbOrder?.source).toBe(CustomerOrderSource.CATALOG);
     expect(dbOrder?.storeId).toBe(store.id);
+    expect(dbOrder?.customerEmail).toBe("catalog.customer@example.com");
     expect(Number(dbOrder?.totalKgs ?? 0)).toBe(285);
     expect(dbOrder?.lines).toHaveLength(1);
     expect(Number(dbOrder?.lines[0]?.unitPriceKgs ?? 0)).toBe(95);
@@ -130,6 +132,7 @@ describeDb("bazaar catalog integration", () => {
     const order = await createCatalogCheckoutOrder({
       slug: saved.catalog.slug,
       customerName: "Variant Customer",
+      customerEmail: "variant.customer@example.com",
       customerPhone: "+996555888111",
       lines: [{ productId: product.id, variantId: variant.id, qty: 2 }],
     });
@@ -178,6 +181,7 @@ describeDb("bazaar catalog integration", () => {
       createCatalogCheckoutOrder({
         slug: saved.catalog.slug,
         customerName: "Hidden Product Customer",
+        customerEmail: "hidden.customer@example.com",
         customerPhone: "+996555000100",
         lines: [{ productId: product.id, qty: 1 }],
       }),

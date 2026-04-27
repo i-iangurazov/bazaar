@@ -25,6 +25,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { locales } from "@/lib/locales";
 import { getServerAuthToken } from "@/server/auth/token";
 
 export const generateMetadata = async (): Promise<Metadata> => {
@@ -173,7 +174,7 @@ const RootPage = async () => {
   const stats = [
     { value: features.length, label: t("stats.features") },
     { value: howSteps.length, label: t("stats.workflows") },
-    { value: 2, label: t("stats.languages") },
+    { value: locales.length, label: t("stats.languages") },
     { value: moduleCards.length, label: t("stats.valueBlocks") },
   ];
 

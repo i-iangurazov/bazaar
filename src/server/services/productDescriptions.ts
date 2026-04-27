@@ -8,6 +8,11 @@ import {
   normalizeProductImageUrl,
 } from "@/server/services/productImageStorage";
 import { AppError } from "@/server/services/errors";
+import {
+  defaultLocale,
+  normalizeLocale as normalizeAppLocale,
+  type Locale,
+} from "@/lib/locales";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
@@ -21,7 +26,7 @@ const OPENAI_MAX_ATTEMPTS = 3;
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
 
-type ProductDescriptionLocale = "ru" | "kg";
+type ProductDescriptionLocale = Locale;
 
 type GenerateProductDescriptionInput = {
   name?: string | null;
@@ -78,7 +83,7 @@ const imageMimeByExtension: Record<string, string> = {
 };
 
 const normalizeLocale = (value?: string | null): ProductDescriptionLocale =>
-  value === "kg" ? "kg" : "ru";
+  normalizeAppLocale(value) ?? defaultLocale;
 
 const resolveOpenAiModel = () =>
   process.env.PRODUCT_DESCRIPTION_AI_MODEL?.trim() ||
@@ -380,6 +385,20 @@ const callOpenAiResponses = async (input: {
 };
 
 const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
+  if (locale === "en") {
+    return [
+      "You write accurate, concise product descriptions for product cards.",
+      "Write only in English.",
+      "Describe only what is clearly visible in the images.",
+      "Describe the product for a shopper, not the photo, package, or image-review process.",
+      "If the packaging or visible text makes the product type or purpose clear, mention it naturally.",
+      "Do not invent composition, sizes, materials, flavor, volume, specifications, or certifications if they are not obvious.",
+      "Return plain text only, with no markdown or lists.",
+      "Write a natural marketplace description in 2-4 sentences.",
+      `The response must be at least ${MIN_DESCRIPTION_LENGTH} characters.`,
+    ].join(" ");
+  }
+
   if (locale === "kg") {
     return [
       "Сен товар карточкалары үчүн так жана кыска сүрөттөмө жазасың.",
@@ -409,12 +428,16 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
 
 const buildUserPrompt = (input: { locale: ProductDescriptionLocale }) => {
   const lines = [
-    input.locale === "kg"
-      ? "Сүрөттөргө гана таянып товар үчүн сүрөттөмө түз."
-      : "Сгенерируй описание товара, опираясь только на изображения.",
-    input.locale === "kg"
-      ? `Сүрөттөн түз көрүнгөн жазуу, бренд, түс, форма, таңгак же колдонуу мааниси бар болсо гана кош. Сырттан берилген аталыш, категория же башка метадайындарды колдонбо. Так бир сүрөттөмө кайтар жана аны ${MIN_DESCRIPTION_LENGTH} белгиден кыска кылба.`
-      : `Если на изображении видны надписи, бренд, цвет, форма, упаковка или назначение, укажи это. Не используй название, категорию или другие метаданные вне самой картинки. Верни одно описание длиной не меньше ${MIN_DESCRIPTION_LENGTH} символов.`,
+    input.locale === "en"
+      ? "Create a product description using only the images."
+      : input.locale === "kg"
+        ? "Сүрөттөргө гана таянып товар үчүн сүрөттөмө түз."
+        : "Сгенерируй описание товара, опираясь только на изображения.",
+    input.locale === "en"
+      ? `Include visible text, brand, color, shape, packaging, or purpose only when it is directly visible. Do not use the product name, category, or any other metadata outside the image. Return one description with at least ${MIN_DESCRIPTION_LENGTH} characters.`
+      : input.locale === "kg"
+        ? `Сүрөттөн түз көрүнгөн жазуу, бренд, түс, форма, таңгак же колдонуу мааниси бар болсо гана кош. Сырттан берилген аталыш, категория же башка метадайындарды колдонбо. Так бир сүрөттөмө кайтар жана аны ${MIN_DESCRIPTION_LENGTH} белгиден кыска кылба.`
+        : `Если на изображении видны надписи, бренд, цвет, форма, упаковка или назначение, укажи это. Не используй название, категорию или другие метаданные вне самой картинки. Верни одно описание длиной не меньше ${MIN_DESCRIPTION_LENGTH} символов.`,
   ].filter(Boolean);
 
   return lines.join("\n");
@@ -424,6 +447,20 @@ const buildRetryPrompt = (input: {
   locale: ProductDescriptionLocale;
   previousDescription: string;
 }) => {
+  if (input.locale === "en") {
+    return [
+      `The previous answer is not suitable: "${input.previousDescription}".`,
+      "Do not repeat it or describe the generation process.",
+      "Write a new natural product-card description in plain language.",
+      "Use only what is actually visible in the photo: shape, color, packaging, visible text, illustrations, appearance, and an obvious use case.",
+      "Describe the product itself, not the image or what is printed on a box as an object of observation.",
+      "Do not write phrases like \"visible in the image\", \"the product is shown\", \"this text\", \"the description is based on\", \"the box shows\", or \"the name says\".",
+      "Do not use the product name, category, or external metadata.",
+      "If the visible text and design make the product type and use clear, state that naturally and directly.",
+      `Make the final text ${MIN_DESCRIPTION_LENGTH}-${MIN_DESCRIPTION_LENGTH + 120} characters long.`,
+    ].join(" ");
+  }
+
   if (input.locale === "kg") {
     return [
       `Мурунку жооп жараксыз болду: "${input.previousDescription}".`,
@@ -452,6 +489,15 @@ const buildRetryPrompt = (input: {
 };
 
 const buildFactsPrompt = (locale: ProductDescriptionLocale) => {
+  if (locale === "en") {
+    return [
+      "Give 6-8 short visual facts about the product photo.",
+      "Return only facts, separated with ||.",
+      "Mention only directly visible traits such as color, shape, packaging, visible text, illustrations, and appearance.",
+      "Do not add generic phrases, meta explanations, or external information.",
+    ].join(" ");
+  }
+
   if (locale === "kg") {
     return [
       "Сүрөт боюнча 6-8 кыска визуалдык факт бер.",
@@ -474,6 +520,19 @@ const buildFinalFromFactsPrompt = (input: {
   facts: string[];
 }) => {
   const factsBlock = input.facts.join(" || ");
+
+  if (input.locale === "en") {
+    return [
+      `Use only these visual facts: ${factsBlock}.`,
+      "Based on them, write one connected, natural description for a product card.",
+      "Describe the product for a shopper instead of listing what is visible on the box or packaging.",
+      `Make the text ${MIN_DESCRIPTION_LENGTH}-${MIN_DESCRIPTION_LENGTH + 120} characters long.`,
+      "Do not turn the answer into a mechanical list or describe the image-analysis process.",
+      "If the facts clearly indicate the product type and use case, say it naturally and directly.",
+      "If any fact contains broken or unnatural packaging text, do not use it.",
+      "Do not add external data or meta phrases.",
+    ].join(" ");
+  }
 
   if (input.locale === "kg") {
     return [
@@ -550,6 +609,26 @@ const buildDescriptionFromFacts = (input: {
   const firstGroup = facts.slice(0, 3);
   const secondGroup = facts.slice(3, 6);
   const fallbackGroup = facts.slice(0, 2);
+
+  if (input.locale === "en") {
+    const firstSentence = firstGroup.length
+      ? `The product's appearance highlights ${joinFacts(firstGroup)}.`
+      : "The product has visible packaging, shape, and clean visual accents.";
+    const secondSentence = secondGroup.length
+      ? `Additional visible details include ${joinFacts(secondGroup)}, giving the item a clear and complete product-card presence.`
+      : "The visible details make the item easy to understand as a neatly presented catalogue product.";
+    const thirdSentence = fallbackGroup.length
+      ? `This combination helps shoppers recognize the item quickly in the catalogue: ${joinFacts(fallbackGroup)} support the overall visual impression.`
+      : "The combination of visible details makes the product clear enough for a concise catalogue description.";
+    const closingSentence =
+      "The description is based only on clearly distinguishable visual product traits and keeps a natural marketplace style.";
+
+    let description = [firstSentence, secondSentence, thirdSentence, closingSentence].join(" ");
+    if (description.length < MIN_DESCRIPTION_LENGTH) {
+      description = `${description} The result gives the product card useful text without adding unsupported assumptions.`;
+    }
+    return description;
+  }
 
   if (input.locale === "kg") {
     const firstSentence = firstGroup.length

@@ -11,8 +11,12 @@ describe("getLocaleFromAcceptLanguage", () => {
     expect(getLocaleFromAcceptLanguage("ky-KG,ru;q=0.5")).toBe("kg");
   });
 
+  it("returns en from English accept-language headers", () => {
+    expect(getLocaleFromAcceptLanguage("en-US,en;q=0.9")).toBe("en");
+  });
+
   it("returns undefined when no supported locale is present", () => {
-    expect(getLocaleFromAcceptLanguage("en-US,en;q=0.9")).toBeUndefined();
+    expect(getLocaleFromAcceptLanguage("fr-FR,de;q=0.9")).toBeUndefined();
   });
 });
 

@@ -48,6 +48,12 @@ type ImportRow = {
   category?: string;
   description?: string;
   photoUrl?: string;
+  images?: { url: string; position?: number }[];
+  variants?: {
+    name?: string;
+    sku?: string;
+    attributes?: Record<string, unknown>;
+  }[];
   barcodes?: string[];
   basePriceKgs?: number;
   purchasePriceKgs?: number;
@@ -64,6 +70,7 @@ type MappingKey =
   | "category"
   | "description"
   | "photoUrl"
+  | "variants"
   | "barcodes"
   | "basePriceKgs"
   | "purchasePriceKgs"
@@ -81,6 +88,7 @@ type ValidationError = {
     | "duplicateBarcode"
     | "minLength"
     | "invalidNumber"
+    | "invalidVariants"
     | "missingStoreForMinStock";
   value?: string;
 };
@@ -93,6 +101,7 @@ type ImportUpdateField =
   | "category"
   | "description"
   | "photoUrl"
+  | "variants"
   | "barcodes"
   | "basePriceKgs"
   | "purchasePriceKgs"
@@ -184,6 +193,95 @@ const parseBarcodes = (value: string) =>
         .filter(Boolean),
     ),
   );
+
+const parseImageLinks = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return [];
+  }
+  const urlMatches = normalized.match(/(?:https?:\/\/|\/uploads\/)[^\s,;|]+/gi);
+  const candidates =
+    urlMatches?.length
+      ? urlMatches
+      : normalized
+          .split(/[|,;\n\r]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+
+  return Array.from(new Set(candidates.map((item) => item.trim()).filter(Boolean)));
+};
+
+const normalizeVariantAttributeValue = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeVariantAttributeValue(item))
+      .filter((item) => item !== "");
+  }
+  return value;
+};
+
+const parseVariants = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return {
+      variants: [] as NonNullable<ImportRow["variants"]>,
+      invalid: false,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    return {
+      variants: [] as NonNullable<ImportRow["variants"]>,
+      invalid: true,
+    };
+  }
+
+  if (!Array.isArray(parsed)) {
+    return {
+      variants: [] as NonNullable<ImportRow["variants"]>,
+      invalid: true,
+    };
+  }
+
+  const variants: NonNullable<ImportRow["variants"]> = [];
+  const seenNames = new Set<string>();
+  for (const item of parsed) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return { variants: [], invalid: true };
+    }
+    const record = item as Record<string, unknown>;
+    const name = normalizeValue(record.name);
+    if (!name) {
+      return { variants: [], invalid: true };
+    }
+    const nameKey = name.toLocaleLowerCase();
+    if (seenNames.has(nameKey)) {
+      continue;
+    }
+    seenNames.add(nameKey);
+    const sku = normalizeValue(record.sku);
+    const attributes = Object.fromEntries(
+      Object.entries(record)
+        .filter(([key]) => !["id", "name", "sku"].includes(key.toLocaleLowerCase()))
+        .map(([key, attributeValue]) => [key.trim(), normalizeVariantAttributeValue(attributeValue)])
+        .filter(([key, attributeValue]) => key && attributeValue !== ""),
+    );
+
+    variants.push({
+      name,
+      sku: sku || undefined,
+      attributes: Object.keys(attributes).length ? attributes : undefined,
+    });
+  }
+
+  return { variants, invalid: false };
+};
 
 const parseOptionalNumericValue = (value: string) => {
   const normalized = value.trim();
@@ -347,6 +445,21 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
     ],
     { allowContains: true },
   ),
+  variants: detectColumn(
+    headers,
+    [
+      "variants",
+      "variant",
+      "variant json",
+      "variant_json",
+      "варианты",
+      "вариации",
+      "модификации",
+      "размеры",
+      "вариант",
+    ],
+    { allowContains: true },
+  ),
   barcodes: detectColumn(headers, ["barcode", "barcodes", "штрихкод", "штрихкоды"]),
 });
 
@@ -374,6 +487,7 @@ const ImportPage = () => {
     avgCostKgs: "",
     minStock: "",
     photoUrl: "",
+    variants: "",
     barcodes: "",
   });
   const [importMode, setImportMode] = useState<ImportMode>("full");
@@ -431,6 +545,7 @@ const ImportPage = () => {
         avgCostKgs: "",
         minStock: "",
         photoUrl: "",
+        variants: "",
         barcodes: "",
       });
       setFileName(null);
@@ -470,6 +585,8 @@ const ImportPage = () => {
         return t("rollbackEntities.product");
       case "ProductBarcode":
         return t("rollbackEntities.barcode");
+      case "ProductVariant":
+        return t("rollbackEntities.variant");
       case "AttributeDefinition":
         return t("rollbackEntities.attribute");
       case "PurchaseOrder":
@@ -493,6 +610,7 @@ const ImportPage = () => {
       { key: "avgCostKgs" as const, label: t("fieldAvgCost"), required: false },
       { key: "minStock" as const, label: t("fieldMinStock"), required: false },
       { key: "photoUrl" as const, label: t("fieldPhotoUrl"), required: false },
+      { key: "variants" as const, label: t("fieldVariants"), required: false },
       { key: "barcodes" as const, label: t("fieldBarcodes"), required: false },
     ],
     [t],
@@ -638,6 +756,14 @@ const ImportPage = () => {
           : "";
       const minStockCandidate =
         shouldApply("minStock") && mapping.minStock ? normalizeValue(row[mapping.minStock]) : "";
+      const imageValue =
+        shouldApply("photoUrl") && mapping.photoUrl ? normalizeValue(row[mapping.photoUrl]) : "";
+      const imageUrls = imageValue ? parseImageLinks(imageValue) : [];
+      const variantsValue =
+        shouldApply("variants") && mapping.variants ? normalizeValue(row[mapping.variants]) : "";
+      const parsedVariants = variantsValue
+        ? parseVariants(variantsValue)
+        : { variants: [] as NonNullable<ImportRow["variants"]>, invalid: false };
       const basePriceResult = parseOptionalNumericValue(basePriceCandidate);
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
@@ -676,6 +802,15 @@ const ImportPage = () => {
           message: t("rowInvalidInteger", { row: rowNumber, field: t("fieldMinStock") }),
           code: "invalidNumber",
           value: "minStock",
+        });
+        return;
+      }
+      if (parsedVariants.invalid) {
+        errors.push({
+          row: rowNumber,
+          message: t("rowInvalidVariants", { row: rowNumber }),
+          code: "invalidVariants",
+          value: "variants",
         });
         return;
       }
@@ -724,9 +859,13 @@ const ImportPage = () => {
         purchasePriceKgs: purchasePriceResult.value,
         avgCostKgs: avgCostResult.value,
         minStock: minStockResult.value,
-        photoUrl:
-          shouldApply("photoUrl") && mapping.photoUrl
-            ? normalizeValue(row[mapping.photoUrl]) || undefined
+        photoUrl: imageUrls[0],
+        images: imageUrls.length
+          ? imageUrls.map((url, position) => ({ url, position }))
+          : undefined,
+        variants:
+          shouldApply("variants") && parsedVariants.variants.length
+            ? parsedVariants.variants
             : undefined,
         barcodes: shouldApply("barcodes") && barcodes.length ? barcodes : undefined,
       });
@@ -829,6 +968,7 @@ const ImportPage = () => {
       minStock: "",
       photoUrl: "",
       barcodes: "",
+      variants: "",
     });
     setDefaultUnitCode("");
     setSkippedRows([]);

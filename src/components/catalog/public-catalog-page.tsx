@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { AddIcon, ChevronDownIcon, DeleteIcon, MinusIcon } from "@/components/icons";
+import { PhoneNumberInput } from "@/components/phone-number-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { Modal } from "@/components/ui/modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 import { cn } from "@/lib/utils";
 
 type CatalogPayload = {
@@ -161,6 +163,7 @@ const toCatalogImageUrl = (sourceUrl: string | null | undefined, width: number) 
     url: normalized,
     w: String(width),
     q: "78",
+    v: "2",
   });
   return `/api/public/catalog/image?${params.toString()}`;
 };
@@ -202,6 +205,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<"cart" | "form" | "success">("cart");
   const [checkoutName, setCheckoutName] = useState("");
+  const [checkoutEmail, setCheckoutEmail] = useState("");
   const [checkoutPhone, setCheckoutPhone] = useState("");
   const [checkoutComment, setCheckoutComment] = useState("");
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
@@ -447,8 +451,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     if (!catalog || !cartItems.length || submitting) {
       return;
     }
-    if (!checkoutName.trim() || !checkoutPhone.trim()) {
+    if (!checkoutName.trim() || !checkoutEmail.trim() || !checkoutPhone.trim()) {
       setSubmitError(t("checkoutRequired"));
+      return;
+    }
+    if (!isCompleteInternationalPhone(checkoutPhone)) {
+      setSubmitError(t("checkoutPhoneInvalid"));
       return;
     }
 
@@ -464,6 +472,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           },
           body: JSON.stringify({
             customerName: checkoutName.trim(),
+            customerEmail: checkoutEmail.trim(),
             customerPhone: checkoutPhone.trim(),
             comment: checkoutComment.trim() || null,
             lines: cartItems.map((item) => ({
@@ -485,6 +494,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       setCart({});
       setQtyInputs({});
       setCheckoutName("");
+      setCheckoutEmail("");
       setCheckoutPhone("");
       setCheckoutComment("");
     } catch (error) {
@@ -531,7 +541,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 loading={prioritizeImage ? "eager" : "lazy"}
                 fetchPriority={prioritizeImage ? "high" : "auto"}
                 decoding="async"
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain p-3 sm:p-4"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
@@ -938,14 +948,27 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               />
             </div>
             <div className="space-y-2">
+              <label className="text-sm font-semibold" htmlFor="checkout-email">
+                {t("checkoutEmail")}
+              </label>
+              <Input
+                id="checkout-email"
+                type="email"
+                value={checkoutEmail}
+                onChange={(event) => setCheckoutEmail(event.target.value)}
+                placeholder={t("checkoutEmailPlaceholder")}
+              />
+            </div>
+            <div className="space-y-2">
               <label className="text-sm font-semibold" htmlFor="checkout-phone">
                 {t("checkoutPhone")}
               </label>
-              <Input
-                id="checkout-phone"
+              <PhoneNumberInput
+                inputId="checkout-phone"
                 value={checkoutPhone}
-                onChange={(event) => setCheckoutPhone(event.target.value)}
+                onChange={setCheckoutPhone}
                 placeholder={t("checkoutPhonePlaceholder")}
+                countrySelectLabel={t("checkoutPhoneCountry")}
               />
             </div>
             <div className="space-y-2">

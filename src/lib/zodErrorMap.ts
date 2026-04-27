@@ -54,6 +54,23 @@ const localeMessages: Record<Locale, ZodLocaleMessages> = {
     invalidEmail: "Туура email киргизиңиз.",
     invalidUrl: "Туура шилтеме киргизиңиз.",
   },
+  en: {
+    invalidInput: "Invalid data.",
+    required: "This field is required.",
+    invalidNumber: "Enter a number.",
+    invalidString: "Enter text.",
+    invalidBoolean: "Select a value.",
+    invalidDate: "Enter a valid date.",
+    invalidOption: "Select a value from the list.",
+    minNumber: (value) => `Value must be at least ${value}.`,
+    maxNumber: (value) => `Value must be at most ${value}.`,
+    minString: (value) => `Minimum ${value} characters.`,
+    maxString: (value) => `Maximum ${value} characters.`,
+    minItems: (value) => `Select at least ${value}.`,
+    maxItems: (value) => `No more than ${value} allowed.`,
+    invalidEmail: "Enter a valid email.",
+    invalidUrl: "Enter a valid URL.",
+  },
 };
 
 const formatValue = (value: number | bigint) =>

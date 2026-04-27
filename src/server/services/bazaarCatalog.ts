@@ -838,6 +838,7 @@ export const getPublicBazaarCatalog = async (
 export const createCatalogCheckoutOrder = async (input: {
   slug: string;
   customerName: string;
+  customerEmail: string;
   customerPhone: string;
   comment?: string | null;
   lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
@@ -877,8 +878,9 @@ export const createCatalogCheckoutOrder = async (input: {
   }
 
   const customerName = input.customerName.trim();
+  const customerEmail = input.customerEmail.trim();
   const customerPhone = input.customerPhone.trim();
-  if (!customerName || !customerPhone) {
+  if (!customerName || !customerEmail || !customerPhone) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
 
@@ -1024,6 +1026,7 @@ export const createCatalogCheckoutOrder = async (input: {
         source: CustomerOrderSource.CATALOG,
         confirmedAt: new Date(),
         customerName,
+        customerEmail,
         customerPhone,
         notes: normalizeOptionalText(input.comment),
         subtotalKgs: subtotal,

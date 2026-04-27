@@ -109,7 +109,11 @@ const PosShiftsPage = () => {
       setCloseNote("");
       setCloseConfirmed(false);
       toast({ variant: "success", description: t("shifts.closedSuccess") });
-      await Promise.all([currentShiftQuery.refetch(), historyQuery.refetch(), reportQuery.refetch()]);
+      await Promise.all([
+        currentShiftQuery.refetch(),
+        historyQuery.refetch(),
+        reportQuery.refetch(),
+      ]);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -144,6 +148,17 @@ const PosShiftsPage = () => {
         : cashDifference < -0.009
           ? "shortage"
           : "balanced";
+  const paymentBreakdown = report
+    ? [
+        { method: "CASH" as const, label: t("payments.cash") },
+        { method: "CARD" as const, label: t("payments.card") },
+        { method: "TRANSFER" as const, label: t("payments.transfer") },
+        { method: "OTHER" as const, label: t("payments.other") },
+      ].map((entry) => ({
+        ...entry,
+        ...report.paymentsByMethod[entry.method],
+      }))
+    : [];
 
   useEffect(() => {
     if (!report) {
@@ -228,7 +243,9 @@ const PosShiftsPage = () => {
         <CardContent className="space-y-4">
           {!canLoadRegisterScopedData ? (
             <p className="text-sm text-muted-foreground">
-              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+              {(registersQuery.data ?? []).length
+                ? t("entry.selectRegisterFirst")
+                : t("entry.noRegisters")}
             </p>
           ) : null}
 
@@ -258,51 +275,87 @@ const PosShiftsPage = () => {
               </div>
 
               {report ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <Card className="shadow-none">
-                    <CardContent className="pt-4">
-                      <p className="text-xs text-muted-foreground">{t("shifts.salesTotal")}</p>
-                      <p className="text-sm font-semibold text-foreground">
-                        {formatCurrencyKGS(report.summary.salesTotalKgs, locale)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="shadow-none">
-                    <CardContent className="pt-4">
-                      <p className="text-xs text-muted-foreground">{t("shifts.returnsTotal")}</p>
-                      <p className="text-sm font-semibold text-foreground">
-                        {formatCurrencyKGS(report.summary.returnsTotalKgs, locale)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="shadow-none">
-                    <CardContent className="pt-4">
-                      <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
-                      <p className="text-sm font-semibold text-foreground">
-                        {formatCurrencyKGS(report.summary.expectedCashKgs, locale)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="shadow-none">
-                    <CardContent className="pt-4">
-                      <p className="text-xs text-muted-foreground">{t("shifts.cashInOut")}</p>
-                      <p className="text-sm font-semibold text-foreground">
-                        +{formatCurrencyKGS(report.summary.payInKgs, locale)} / -
-                        {formatCurrencyKGS(report.summary.payOutKgs, locale)}
-                      </p>
-                    </CardContent>
-                  </Card>
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Card className="shadow-none">
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">{t("shifts.salesTotal")}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCurrencyKGS(report.summary.salesTotalKgs, locale)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="shadow-none">
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">{t("shifts.returnsTotal")}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCurrencyKGS(report.summary.returnsTotalKgs, locale)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="shadow-none">
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCurrencyKGS(report.summary.expectedCashKgs, locale)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="shadow-none">
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">{t("shifts.cashInOut")}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          +{formatCurrencyKGS(report.summary.payInKgs, locale)} / -
+                          {formatCurrencyKGS(report.summary.payOutKgs, locale)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">
+                      {t("shifts.paymentBreakdown")}
+                    </p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      {paymentBreakdown.map((entry) => (
+                        <div
+                          key={entry.method}
+                          className="rounded-md border border-border/70 bg-background px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-foreground">{entry.label}</p>
+                            <p className="text-sm font-semibold text-foreground">
+                              {formatCurrencyKGS(entry.netKgs, locale)}
+                            </p>
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {t("shifts.salesNetBreakdown", {
+                              sales: formatCurrencyKGS(entry.salesKgs, locale),
+                              refunds: formatCurrencyKGS(entry.refundsKgs, locale),
+                            })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
               <div className="grid gap-3 rounded-md border border-border bg-card p-3 md:grid-cols-[180px_1fr_auto]">
-                <Select value={cashType} onValueChange={(value) => setCashType(value as CashDrawerMovementType)}>
-                  <SelectTrigger aria-label={t("shifts.cashMovementType")}> 
+                <Select
+                  value={cashType}
+                  onValueChange={(value) => setCashType(value as CashDrawerMovementType)}
+                >
+                  <SelectTrigger aria-label={t("shifts.cashMovementType")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={CashDrawerMovementType.PAY_IN}>{t("shifts.payIn")}</SelectItem>
-                    <SelectItem value={CashDrawerMovementType.PAY_OUT}>{t("shifts.payOut")}</SelectItem>
+                    <SelectItem value={CashDrawerMovementType.PAY_IN}>
+                      {t("shifts.payIn")}
+                    </SelectItem>
+                    <SelectItem value={CashDrawerMovementType.PAY_OUT}>
+                      {t("shifts.payOut")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -416,7 +469,9 @@ const PosShiftsPage = () => {
         <CardContent className="space-y-3">
           {!canLoadRegisterScopedData ? (
             <p className="text-sm text-muted-foreground">
-              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+              {(registersQuery.data ?? []).length
+                ? t("entry.selectRegisterFirst")
+                : t("entry.noRegisters")}
             </p>
           ) : null}
 
@@ -434,61 +489,64 @@ const PosShiftsPage = () => {
                     ? "shortage"
                     : "balanced";
             return (
-            <div
-              key={shift.id}
-              className="rounded-md border border-border bg-card p-3"
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-foreground">
-                      {shift.register.name} ({shift.register.code})
-                    </p>
-                    <Badge variant={shift.status === "OPEN" ? "success" : "muted"}>
-                      {shift.status === "OPEN" ? t("shifts.opened") : t("shifts.closed")}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t("shifts.openedBy")}: {shift.openedBy.name} · {formatDateTime(shift.openedAt, locale)}
-                  </p>
-                  {shift.closedAt ? (
+              <div key={shift.id} className="rounded-md border border-border bg-card p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-foreground">
+                        {shift.register.name} ({shift.register.code})
+                      </p>
+                      <Badge variant={shift.status === "OPEN" ? "success" : "muted"}>
+                        {shift.status === "OPEN" ? t("shifts.opened") : t("shifts.closed")}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      {t("shifts.closedBy")}: {shift.closedBy?.name ?? tCommon("notAvailable")} · {formatDateTime(shift.closedAt, locale)}
+                      {t("shifts.openedBy")}: {shift.openedBy.name} ·{" "}
+                      {formatDateTime(shift.openedAt, locale)}
                     </p>
-                  ) : null}
+                    {shift.closedAt ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t("shifts.closedBy")}: {shift.closedBy?.name ?? tCommon("notAvailable")} ·{" "}
+                        {formatDateTime(shift.closedAt, locale)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 sm:text-right">
+                    <p>
+                      {t("entry.openingCash")}: {formatCurrencyKGS(shift.openingCashKgs, locale)}
+                    </p>
+                    <p>
+                      {t("shifts.expectedCash")}:{" "}
+                      {formatCurrencyKGS(shift.expectedCashKgs ?? 0, locale)}
+                    </p>
+                    <p>
+                      {t("shifts.countedCash")}:{" "}
+                      {shift.closingCashCountedKgs === null
+                        ? tCommon("notAvailable")
+                        : formatCurrencyKGS(shift.closingCashCountedKgs, locale)}
+                    </p>
+                    <p
+                      className={
+                        differenceStatus === "surplus"
+                          ? "text-success"
+                          : differenceStatus === "shortage"
+                            ? "text-danger"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {t("shifts.difference")}:{" "}
+                      {difference === null
+                        ? tCommon("notAvailable")
+                        : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatCurrencyKGS(Math.abs(difference), locale)}`}
+                    </p>
+                  </div>
                 </div>
-                <div className="grid gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 sm:text-right">
-                  <p>
-                    {t("entry.openingCash")}: {formatCurrencyKGS(shift.openingCashKgs, locale)}
+                {shift.notes ? (
+                  <p className="mt-2 rounded-md bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+                    {t("shifts.notes")}: {shift.notes}
                   </p>
-                  <p>
-                    {t("shifts.expectedCash")}: {formatCurrencyKGS(shift.expectedCashKgs ?? 0, locale)}
-                  </p>
-                  <p>
-                    {t("shifts.countedCash")}: {shift.closingCashCountedKgs === null ? tCommon("notAvailable") : formatCurrencyKGS(shift.closingCashCountedKgs, locale)}
-                  </p>
-                  <p
-                    className={
-                      differenceStatus === "surplus"
-                        ? "text-success"
-                        : differenceStatus === "shortage"
-                          ? "text-danger"
-                          : "text-muted-foreground"
-                    }
-                  >
-                    {t("shifts.difference")}:{" "}
-                    {difference === null
-                      ? tCommon("notAvailable")
-                      : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatCurrencyKGS(Math.abs(difference), locale)}`}
-                  </p>
-                </div>
+                ) : null}
               </div>
-              {shift.notes ? (
-                <p className="mt-2 rounded-md bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-                  {t("shifts.notes")}: {shift.notes}
-                </p>
-              ) : null}
-            </div>
             );
           })}
 

@@ -1816,6 +1816,11 @@ export type ImportProductRow = {
   unit?: string;
   description?: string | null;
   photoUrl?: string | null;
+  images?: {
+    url: string;
+    position?: number;
+  }[];
+  variants?: CreateProductInput["variants"];
   barcodes?: string[];
   basePriceKgs?: number;
   purchasePriceKgs?: number;
@@ -1829,6 +1834,7 @@ export type ImportUpdateField =
   | "category"
   | "description"
   | "photoUrl"
+  | "variants"
   | "barcodes"
   | "basePriceKgs"
   | "purchasePriceKgs"
@@ -1839,6 +1845,81 @@ export type ImportPhotoResolutionSummary = {
   downloaded: number;
   fallback: number;
   missing: number;
+};
+
+const normalizeImportImages = (row: Pick<ImportProductRow, "photoUrl" | "images">) => {
+  const sourceImages =
+    row.images?.length || !row.photoUrl
+      ? row.images
+      : [{ url: row.photoUrl, position: 0 }];
+  const seen = new Set<string>();
+  const normalized = normalizeImages(sourceImages)
+    .map((image) => ({
+      ...image,
+      url: normalizeImportPhotoUrl(image.url) ?? "",
+    }))
+    .filter((image) => {
+      if (!image.url || seen.has(image.url)) {
+        return false;
+      }
+      seen.add(image.url);
+      return true;
+    })
+    .map((image, index) => ({ ...image, position: index }));
+
+  return normalized;
+};
+
+const withResolvedImportImages = (row: ImportProductRow, images: NormalizedImage[]) => ({
+  ...row,
+  photoUrl: images[0]?.url,
+  images: images.length ? images.map(({ url, position }) => ({ url, position })) : undefined,
+});
+
+const normalizeImportVariantAttributeValue = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeImportVariantAttributeValue(item))
+      .filter((item) => item !== "");
+  }
+  return value;
+};
+
+const normalizeImportVariants = (variants?: CreateProductInput["variants"]) => {
+  if (!variants?.length) {
+    return [];
+  }
+
+  const seenNames = new Set<string>();
+  const normalized: NonNullable<CreateProductInput["variants"]> = [];
+  for (const variant of variants) {
+    const name = variant.name?.trim().replace(/\s+/g, " ") ?? "";
+    if (!name) {
+      continue;
+    }
+    const nameKey = name.toLocaleLowerCase();
+    if (seenNames.has(nameKey)) {
+      continue;
+    }
+    seenNames.add(nameKey);
+    const sku = variant.sku?.trim() || null;
+    const attributes = Object.fromEntries(
+      Object.entries(variant.attributes ?? {})
+        .map(([key, value]) => [key.trim(), normalizeImportVariantAttributeValue(value)])
+        .filter(([key, value]) => key && value !== ""),
+    );
+
+    normalized.push({
+      name,
+      sku,
+      attributes: Object.keys(attributes).length ? attributes : {},
+    });
+  }
+
+  return normalized;
 };
 
 const resolveImportImageWorkerCount = (rowsCount: number) => {
@@ -1873,19 +1954,23 @@ export const resolveImportRowsPhotoUrls = async (rows: ImportProductRow[]) => {
       }
 
       const row = rows[index];
-      const normalized = normalizeImportPhotoUrl(row.photoUrl);
-      if (!normalized) {
-        resolvedRows[index] = { ...row, photoUrl: undefined };
+      const normalizedImages = normalizeImportImages(row);
+      if (!normalizedImages.length) {
+        resolvedRows[index] = withResolvedImportImages(row, []);
         continue;
       }
 
       if (Date.now() > deadline) {
-        resolvedRows[index] = { ...row, photoUrl: normalized };
+        resolvedRows[index] = withResolvedImportImages(row, normalizedImages);
         continue;
       }
 
-      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(normalized, undefined, cache);
-      resolvedRows[index] = { ...row, photoUrl: resolvedPhotoUrl };
+      const resolvedImages: NormalizedImage[] = [];
+      for (const image of normalizedImages) {
+        const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(image.url, undefined, cache);
+        resolvedImages.push({ ...image, url: resolvedPhotoUrl });
+      }
+      resolvedRows[index] = withResolvedImportImages(row, resolvedImages);
     }
   };
 
@@ -1917,26 +2002,39 @@ export const resolveImportRowsPhotoUrlsForOrganization = async (
       }
 
       const row = rows[index];
-      const normalized = normalizeImportPhotoUrl(row.photoUrl);
-      if (!normalized) {
+      const normalizedImages = normalizeImportImages(row);
+      if (!normalizedImages.length) {
         summary.missing += 1;
-        resolvedRows[index] = { ...row, photoUrl: undefined };
+        resolvedRows[index] = withResolvedImportImages(row, []);
         continue;
       }
 
       if (Date.now() > deadline) {
-        summary.fallback += 1;
-        resolvedRows[index] = { ...row, photoUrl: normalized };
+        summary.fallback += normalizedImages.length;
+        resolvedRows[index] = withResolvedImportImages(row, normalizedImages);
         continue;
       }
 
-      const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(normalized, organizationId, cache);
-      if (isManagedProductImageUrl(resolvedPhotoUrl)) {
-        summary.downloaded += 1;
-      } else {
-        summary.fallback += 1;
+      const resolvedImages: NormalizedImage[] = [];
+      for (const image of normalizedImages) {
+        if (Date.now() > deadline) {
+          summary.fallback += 1;
+          resolvedImages.push(image);
+          continue;
+        }
+        const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(
+          image.url,
+          organizationId,
+          cache,
+        );
+        if (isManagedProductImageUrl(resolvedPhotoUrl)) {
+          summary.downloaded += 1;
+        } else {
+          summary.fallback += 1;
+        }
+        resolvedImages.push({ ...image, url: resolvedPhotoUrl });
       }
-      resolvedRows[index] = { ...row, photoUrl: resolvedPhotoUrl };
+      resolvedRows[index] = withResolvedImportImages(row, resolvedImages);
     }
   };
 
@@ -2104,6 +2202,91 @@ export const importProductsTx = async (
     }
   };
 
+  let attributeDefinitionsCache: AttributeDefinitionRow[] | null = null;
+  const resolveAttributeDefinitions = async () => {
+    if (!attributeDefinitionsCache) {
+      attributeDefinitionsCache = await loadAttributeDefinitions(tx, input.organizationId);
+    }
+    return attributeDefinitionsCache;
+  };
+
+  const upsertImportVariants = async (
+    productId: string,
+    variants: NonNullable<CreateProductInput["variants"]>,
+  ) => {
+    if (!variants.length) {
+      return;
+    }
+
+    const attributeDefinitions = await resolveAttributeDefinitions();
+    ensureRequiredAttributes(variants, attributeDefinitions);
+    const definitionMap = new Map<string, AttributeDefinitionRow>(
+      attributeDefinitions.map((definition: AttributeDefinitionRow) => [
+        definition.key,
+        definition,
+      ]),
+    );
+    const existingVariants = await tx.productVariant.findMany({
+      where: { productId, isActive: true },
+      select: { id: true, name: true },
+    });
+    const existingByName = new Map(
+      existingVariants
+        .map((variant) => [variant.name?.trim().toLocaleLowerCase() ?? "", variant] as const)
+        .filter(([name]) => name.length > 0),
+    );
+
+    for (const variant of variants) {
+      const name = variant.name?.trim() ?? "";
+      const existingVariant = existingByName.get(name.toLocaleLowerCase());
+      if (existingVariant) {
+        await tx.productVariant.update({
+          where: { id: existingVariant.id },
+          data: {
+            name,
+            sku: variant.sku ?? null,
+            attributes: toJson(variant.attributes ?? {}),
+            isActive: true,
+          },
+        });
+        await tx.variantAttributeValue.deleteMany({
+          where: { variantId: existingVariant.id },
+        });
+        await syncVariantAttributeValues(
+          tx,
+          {
+            organizationId: input.organizationId,
+            productId,
+            variantId: existingVariant.id,
+            attributes: variant.attributes ?? {},
+          },
+          definitionMap,
+        );
+        continue;
+      }
+
+      const createdVariant = await tx.productVariant.create({
+        data: {
+          productId,
+          name,
+          sku: variant.sku ?? null,
+          attributes: toJson(variant.attributes ?? {}),
+        },
+      });
+      await recordImportedEntity("ProductVariant", createdVariant.id);
+      await syncVariantAttributeValues(
+        tx,
+        {
+          organizationId: input.organizationId,
+          productId,
+          variantId: createdVariant.id,
+          attributes: variant.attributes ?? {},
+        },
+        definitionMap,
+      );
+    }
+  };
+
   for (const row of input.rows) {
     const sku = row.sku.trim();
     if (!sku) {
@@ -2111,7 +2294,9 @@ export const importProductsTx = async (
     }
 
     const barcodes = shouldApplyField("barcodes") ? normalizeBarcodes(row.barcodes) : [];
-    const photoUrl = shouldApplyField("photoUrl") ? normalizeImportPhotoUrl(row.photoUrl) : null;
+    const images = shouldApplyField("photoUrl") ? normalizeImportImages(row) : [];
+    const photoUrl = images[0]?.url ?? null;
+    const variants = shouldApplyField("variants") ? normalizeImportVariants(row.variants) : [];
     const basePriceKgs = shouldApplyField("basePriceKgs")
       ? resolveOptionalPrice(row.basePriceKgs)
       : undefined;
@@ -2206,10 +2391,12 @@ export const importProductsTx = async (
         });
       }
 
-      if (shouldApplyField("photoUrl") && photoUrl) {
-        await syncProductImages(tx, input.organizationId, existing.id, [
-          { url: photoUrl, position: 0 },
-        ]);
+      if (shouldApplyField("photoUrl") && images.length) {
+        await syncProductImages(tx, input.organizationId, existing.id, images);
+      }
+
+      if (shouldApplyField("variants") && variants.length) {
+        await upsertImportVariants(existing.id, variants);
       }
 
       if (shouldApplyField("barcodes")) {
@@ -2299,14 +2486,14 @@ export const importProductsTx = async (
 
       await recordImportedEntity("Product", product.id);
 
-      if (photoUrl) {
-        await tx.productImage.create({
-          data: {
+      if (images.length) {
+        await tx.productImage.createMany({
+          data: images.map((image) => ({
             organizationId: input.organizationId,
             productId: product.id,
-            url: photoUrl,
-            position: 0,
-          },
+            url: image.url,
+            position: image.position,
+          })),
         });
       }
 
@@ -2330,6 +2517,9 @@ export const importProductsTx = async (
       }
       if (shouldApplyField("minStock")) {
         await upsertMinStock(product.id, minStock);
+      }
+      if (shouldApplyField("variants") && variants.length) {
+        await upsertImportVariants(product.id, variants);
       }
 
       await writeAuditLog(tx, {

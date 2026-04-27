@@ -1,4 +1,5 @@
 import { formatCurrencyKGS, formatDate, formatNumber } from "@/lib/i18nFormat";
+import { locales, normalizeLocale, type Locale } from "@/lib/locales";
 
 export type SessionRole = "ADMIN" | "MANAGER" | "STAFF" | "CASHIER" | string | null | undefined;
 
@@ -89,7 +90,7 @@ export type InlineMutationInputByRoute = {
     email: string;
     name: string;
     role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
-    preferredLocale: "ru" | "kg";
+    preferredLocale: Locale;
   };
   "users.setActive": {
     userId: string;
@@ -274,16 +275,15 @@ const parseRoleSelect = (
   return { ok: false, errorKey: "validationError" };
 };
 
-const parseLocaleSelect = (raw: string): InlineParseResult<"ru" | "kg"> => {
-  if (raw === "ru" || raw === "kg") {
-    return { ok: true, value: raw };
+const parseLocaleSelect = (raw: string): InlineParseResult<Locale> => {
+  const locale = normalizeLocale(raw);
+  if (locale) {
+    return { ok: true, value: locale };
   }
   return { ok: false, errorKey: "validationError" };
 };
 
-const normalizePreferredLocale = (value: string): "ru" | "kg" => {
-  return value === "kg" ? "kg" : "ru";
-};
+const normalizePreferredLocale = (value: string): Locale => normalizeLocale(value) ?? "ru";
 
 const parseLegalTypeSelect = (
   raw: string,
@@ -759,10 +759,11 @@ export const inlineEditRegistry: InlineEditRegistry = {
         },
       }),
       permissionCheck: (role) => isAdmin(role),
-      selectOptions: (_row, _context, display) => [
-        { value: "ru", label: display.tCommon("locales.ru") },
-        { value: "kg", label: display.tCommon("locales.kg") },
-      ],
+      selectOptions: (_row, _context, display) =>
+        locales.map((locale) => ({
+          value: locale,
+          label: display.tCommon(`locales.${locale}`),
+        })),
     },
     isActive: {
       tableKey: "users",

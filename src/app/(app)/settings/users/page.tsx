@@ -62,7 +62,7 @@ import {
   StatusSuccessIcon,
 } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
-import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -104,7 +104,7 @@ const UsersPage = () => {
         name: z.string().min(2, t("nameRequired")),
         email: z.string().email(t("emailInvalid")),
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
-        preferredLocale: z.enum(["ru", "kg"]),
+        preferredLocale: z.enum(locales),
         isActive: z.boolean(),
         password: isEditing
           ? z.string().optional()
@@ -972,8 +972,11 @@ const UsersPage = () => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                        <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                        {locales.map((availableLocale) => (
+                          <SelectItem key={availableLocale} value={availableLocale}>
+                            {tCommon(`locales.${availableLocale}`)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormDescription>{t("localeHint")}</FormDescription>

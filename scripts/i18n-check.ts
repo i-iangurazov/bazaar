@@ -4,7 +4,7 @@ import path from "node:path";
 const PROJECT_ROOT = process.cwd();
 const SRC_ROOT = path.join(PROJECT_ROOT, "src");
 const UI_ROOTS = [path.join(SRC_ROOT, "app"), path.join(SRC_ROOT, "components")];
-const LOCALES = ["ru", "kg"] as const;
+const LOCALES = ["ru", "kg", "en"] as const;
 const EXTRA_KEYS = [
   "purchaseOrders.status.draft",
   "purchaseOrders.status.submitted",
@@ -153,13 +153,12 @@ const isUiFile = (file: string) =>
   file.endsWith(".tsx") && UI_ROOTS.some((root) => file.startsWith(root));
 
 const main = async () => {
-  const [ruMessages, kgMessages] = await Promise.all(
+  const localeMessages = await Promise.all(
     LOCALES.map((locale) => readJson(path.join(PROJECT_ROOT, "messages", `${locale}.json`))),
   );
-  const messageMaps = {
-    ru: new Set(flattenKeys(ruMessages)),
-    kg: new Set(flattenKeys(kgMessages)),
-  };
+  const messageMaps = Object.fromEntries(
+    LOCALES.map((locale, index) => [locale, new Set(flattenKeys(localeMessages[index]))]),
+  ) as Record<(typeof LOCALES)[number], Set<string>>;
 
   const files = await collectFiles(SRC_ROOT);
   const usedKeys = new Set<string>();

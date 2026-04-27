@@ -1,5 +1,4 @@
-import sharp from "sharp";
-
+import { transformCatalogImageToWebp } from "@/server/services/catalogImageTransform";
 import { isManagedProductImageUrl } from "@/server/services/productImageStorage";
 
 export const runtime = "nodejs";
@@ -104,17 +103,12 @@ export const GET = async (request: Request) => {
       });
     }
 
-    const outputBuffer = await sharp(sourceBuffer)
-      .rotate()
-      .resize({
-        width,
-        withoutEnlargement: true,
-      })
-      .webp({
-        quality,
-        effort: 4,
-      })
-      .toBuffer();
+    const outputBuffer = await transformCatalogImageToWebp({
+      sourceBuffer,
+      width,
+      quality,
+      sourceMimeType,
+    });
 
     return new Response(new Uint8Array(outputBuffer), {
       status: 200,

@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import type { Logger } from "pino";
 
+import type { Locale } from "@/lib/locales";
 import {
   archiveProduct,
   bulkGenerateProductBarcodes,
@@ -221,7 +222,7 @@ export const generateProductDescriptionMutation = async ({
     name?: string;
     category?: string;
     isBundle?: boolean;
-    locale?: "ru" | "kg";
+    locale?: Locale;
     imageUrls: string[];
   };
   logger: Logger;

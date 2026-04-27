@@ -1,5 +1,6 @@
 import { getLogger } from "@/server/logging";
 import { isProductionRuntime } from "@/server/config/runtime";
+import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 
 type EmailPayload = {
   to: string;
@@ -8,7 +9,7 @@ type EmailPayload = {
   html: string;
 };
 
-type EmailLocale = "ru" | "kg";
+type EmailLocale = Locale;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -123,28 +124,49 @@ export const sendVerificationEmail = async (input: {
   expiresInMinutes?: number;
 }) => {
   const logoUrl = getEmailLogoUrl();
-  const locale: EmailLocale = input.locale === "kg" ? "kg" : "ru";
+  const locale: EmailLocale = normalizeLocale(input.locale) ?? defaultLocale;
   const expiresInHours = Math.max(1, Math.round((input.expiresInMinutes ?? 60) / 60));
-  const copy =
-    locale === "kg"
-      ? {
-          subject: "BAZAAR аккаунтуңуздун email дарегин ырастаңыз",
-          greeting: "Саламатсызбы!",
-          intro: "BAZAAR системасына катталганыңыз үчүн рахмат.",
-          cta: "Email дарегин ырастоо",
-          expires: `Шилтеме болжол менен ${expiresInHours} саатка жарактуу.`,
-          fallback: "Эгер баскыч иштебесе, төмөнкү шилтемени браузерге көчүрүңүз:",
-          ignore: "Эгер бул аракетти сиз жасабасаңыз, бул катты жөн гана четке кагыңыз.",
-        }
-      : {
-          subject: "Подтвердите email для аккаунта BAZAAR",
-          greeting: "Здравствуйте!",
-          intro: "Спасибо за регистрацию в системе BAZAAR.",
-          cta: "Подтвердить email",
-          expires: `Ссылка действительна примерно ${expiresInHours} ч.`,
-          fallback: "Если кнопка не работает, скопируйте ссылку в браузер:",
-          ignore: "Если вы не запрашивали регистрацию, просто проигнорируйте это письмо.",
-        };
+  const copies: Record<
+    EmailLocale,
+    {
+      subject: string;
+      greeting: string;
+      intro: string;
+      cta: string;
+      expires: string;
+      fallback: string;
+      ignore: string;
+    }
+  > = {
+    ru: {
+      subject: "Подтвердите email для аккаунта BAZAAR",
+      greeting: "Здравствуйте!",
+      intro: "Спасибо за регистрацию в системе BAZAAR.",
+      cta: "Подтвердить email",
+      expires: `Ссылка действительна примерно ${expiresInHours} ч.`,
+      fallback: "Если кнопка не работает, скопируйте ссылку в браузер:",
+      ignore: "Если вы не запрашивали регистрацию, просто проигнорируйте это письмо.",
+    },
+    kg: {
+      subject: "BAZAAR аккаунтуңуздун email дарегин ырастаңыз",
+      greeting: "Саламатсызбы!",
+      intro: "BAZAAR системасына катталганыңыз үчүн рахмат.",
+      cta: "Email дарегин ырастоо",
+      expires: `Шилтеме болжол менен ${expiresInHours} саатка жарактуу.`,
+      fallback: "Эгер баскыч иштебесе, төмөнкү шилтемени браузерге көчүрүңүз:",
+      ignore: "Эгер бул аракетти сиз жасабасаңыз, бул катты жөн гана четке кагыңыз.",
+    },
+    en: {
+      subject: "Confirm your email for BAZAAR",
+      greeting: "Hello!",
+      intro: "Thanks for registering for BAZAAR.",
+      cta: "Confirm email",
+      expires: `This link is valid for about ${expiresInHours} hour(s).`,
+      fallback: "If the button does not work, copy this link into your browser:",
+      ignore: "If you did not request this registration, you can ignore this email.",
+    },
+  };
+  const copy = copies[locale];
 
   await sendEmail({
     to: input.email,

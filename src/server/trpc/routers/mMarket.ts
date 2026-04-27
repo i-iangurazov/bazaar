@@ -1,6 +1,7 @@
 import { MMarketEnvironment } from "@prisma/client";
 import { z } from "zod";
 
+import { locales } from "@/lib/locales";
 import {
   assignDefaultCategoryToMMarketProducts,
   bulkAutofillMMarketSpecs,
@@ -194,7 +195,7 @@ export const mMarketRouter = router({
     .input(
       z
         .object({
-          locale: z.enum(["ru", "kg"]).optional(),
+          locale: z.enum(locales).optional(),
           productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
         })
         .optional(),

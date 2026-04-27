@@ -3,7 +3,8 @@
     "language": "Тил",
     "locales": {
       "ru": "RU",
-      "kg": "KG"
+      "kg": "KG",
+      "en": "EN"
     },
     "switchLocale": "Тилди {locale} кылуу",
     "openMenu": "Менюну ачуу",
@@ -280,7 +281,7 @@
       "subtitle": "Баштоого чейин эң маанилүү кыска жооптор.",
       "q1": {
         "question": "Кайсы тилдер жеткиликтүү?",
-        "answer": "Учурда интерфейс RU жана KG тилдеринде гана."
+        "answer": "Учурда интерфейс RU, KG жана EN тилдеринде."
       },
       "q2": {
         "question": "Платформа кимдер үчүн ылайыктуу?",
@@ -1346,11 +1347,15 @@
     "checkoutOpen": "Заказ берүү",
     "checkoutName": "Аты",
     "checkoutNamePlaceholder": "Атыңызды киргизиңиз",
+    "checkoutEmail": "Email",
+    "checkoutEmailPlaceholder": "Email киргизиңиз",
     "checkoutPhone": "Телефон",
     "checkoutPhonePlaceholder": "+996 XXX XXX XXX",
+    "checkoutPhoneCountry": "Телефондун өлкө коду",
     "checkoutComment": "Комментарий",
     "checkoutCommentPlaceholder": "Заказ боюнча комментарий",
-    "checkoutRequired": "Аты-жөнү жана телефонду толтуруңуз.",
+    "checkoutRequired": "Аты-жөнү, email жана телефонду толтуруңуз.",
+    "checkoutPhoneInvalid": "Тандалган өлкө үчүн толук телефон номерин киргизиңиз.",
     "checkoutBack": "Артка",
     "checkoutSubmit": "Заказ жөнөтүү",
     "successTitle": "Рахмат! Заказ жөнөтүлдү",
@@ -1689,6 +1694,8 @@
       "returnsTotal": "Кайтаруулар",
       "expectedCash": "Күтүлгөн накталай",
       "cashInOut": "Cash in/out",
+      "paymentBreakdown": "Төлөм ыкмалары боюнча",
+      "salesNetBreakdown": "Сатуулар {sales} · кайтаруулар {refunds}",
       "difference": "Айырма",
       "surplus": "Ашыкча",
       "shortage": "Жетишпестик",
@@ -2228,7 +2235,7 @@
     "hideImport": "Импортту жашыруу",
     "exportCsv": "CSV экспорт",
     "exportXlsx": "XLSX экспорт",
-    "importHint": "Төмөнкү тилкелер менен CSV жүктөңүз: sku,name,category,unit,description,photoUrl,barcodes",
+    "importHint": "Төмөнкү тилкелер менен CSV жүктөңүз: sku,name,category,unit,description,photoUrl,variants,barcodes",
     "importPreview": "Даяр саптар: {count}",
     "confirmImport": "Импортту тастыктоо",
     "importParseError": "CSV файлын окуй албай койду.",
@@ -2588,8 +2595,11 @@
     "customer": "Кардар",
     "customerName": "Кардардын аты",
     "customerNamePlaceholder": "Кардардын аты",
+    "customerEmail": "Кардардын email дареги",
+    "customerEmailPlaceholder": "client@example.com",
     "customerPhone": "Кардардын телефону",
     "customerPhonePlaceholder": "+996 XXX XXX XXX",
+    "customerPhoneCountry": "Телефондун өлкө коду",
     "notes": "Комментарий",
     "notesPlaceholder": "Заказ боюнча комментарий",
     "store": "Дүкөн",
@@ -2819,7 +2829,7 @@
       "storePolicyUpdate": "Саясат {storeName}: терс калдык {allowNegativeStock, select, true {уруксат} false {уруксат жок} other {—}}",
       "reorderPolicyUpdate": "Минималдуу калдык жаңыртылды",
       "userCreate": "Колдонуучу түзүлдү: {userEmail}",
-      "userLocaleUpdate": "Колдонуучунун тили: {userEmail} → {locale, select, ru {RU} kg {KG} other {—}}",
+      "userLocaleUpdate": "Колдонуучунун тили: {userEmail} → {locale, select, ru {RU} kg {KG} en {EN} other {—}}",
       "seed": "Баштапкы дайындар жүктөлдү"
     },
     "actions": {
@@ -3335,8 +3345,8 @@
       "csv": "CSV"
     },
     "templateDownload": "1C шаблонун жүктөө",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,barcodes",
-    "templateExample": "SKU-001,Буюм,шт,Категория,Сыпаттама,150,120,120,15,1234567890",
+    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Буюм,шт,Категория,Сыпаттама,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "mappingTitle": "Тилкелерди дал келтирүү",
     "mappingPlaceholder": "Тилкени тандаңыз",
     "mappingEmpty": "Дал келтирүү үчүн тилкелер жок.",
@@ -3352,7 +3362,8 @@
     "fieldPurchasePrice": "Сатып алуу баасы",
     "fieldAvgCost": "Өздүк наркы",
     "fieldMinStock": "Минималдуу калдык",
-    "fieldPhotoUrl": "Фото (URL)",
+    "fieldPhotoUrl": "Фото / сүрөт шилтемелери",
+    "fieldVariants": "Варианттар",
     "fieldBarcodes": "Штрихкоддор",
     "importModeTitle": "Импорт режими",
     "importModePlaceholder": "Режимди тандаңыз",
@@ -3441,6 +3452,7 @@
     "rowMinLength": "Сап {row}: {field} талаасы кеминде {min} символ болушу керек.",
     "rowInvalidNumber": "Сап {row}: {field} талаасы 0 же андан чоң сан болушу керек.",
     "rowInvalidInteger": "Сап {row}: {field} талаасы 0 же андан чоң бүтүн сан болушу керек.",
+    "rowInvalidVariants": "Сап {row}: варианттар name талаасы бар объекттердин JSON массиви болушу керек.",
     "rowStoreRequiredForMinStock": "Сап {row}: минималдуу калдыкты импорттоо үчүн дүкөндү тандаңыз.",
     "duplicateSku": "Сап {row}: SKU дубликаты {value}.",
     "duplicateBarcode": "Сап {row}: штрихкод дубликаты {value}.",
@@ -3471,6 +3483,7 @@
     "rollbackEntities": {
       "product": "Товарлар",
       "barcode": "Штрихкоддор",
+      "variant": "Варианттар",
       "attribute": "Атрибуттар",
       "purchaseOrder": "Жеткирүү буйруктары",
       "reorderPolicy": "Минималдуу калдык саясаттары"

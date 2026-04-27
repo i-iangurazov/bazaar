@@ -1,7 +1,7 @@
 import { ThemePreference } from "@prisma/client";
 import { z } from "zod";
 
-import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
 import {
   getMyProfile,
   updateMyPreferences,
@@ -49,7 +49,7 @@ export const userSettingsRouter = router({
   updateMyPreferences: protectedProcedure
     .input(
       z.object({
-        preferredLocale: z.enum(["ru", "kg"]).optional(),
+        preferredLocale: z.enum(locales).optional(),
         themePreference: z.preprocess(
           (value) => (value === "" ? undefined : value),
           z.nativeEnum(ThemePreference).optional(),

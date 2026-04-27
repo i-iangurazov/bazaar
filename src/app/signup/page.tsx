@@ -15,6 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
+import { locales, type Locale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -27,7 +28,7 @@ type SignupValues = {
   email: string;
   password: string;
   name: string;
-  preferredLocale: "ru" | "kg";
+  preferredLocale: Locale;
 };
 
 const SignupPage = () => {
@@ -67,7 +68,7 @@ const SignupPage = () => {
         email: z.string().email(t("emailInvalid")),
         password: z.string().min(8, t("passwordMin")),
         name: z.string().min(2, t("nameRequired")),
-        preferredLocale: z.enum(["ru", "kg"]),
+        preferredLocale: z.enum(locales),
       }),
     [t],
   );
@@ -333,7 +334,7 @@ const SignupPage = () => {
                   <Select
                     value={signupValues.preferredLocale}
                     onValueChange={(value) => {
-                      setSignupValues((prev) => ({ ...prev, preferredLocale: value as "ru" | "kg" }));
+                      setSignupValues((prev) => ({ ...prev, preferredLocale: value as Locale }));
                       if (signupFieldErrors.preferredLocale) {
                         setSignupFieldErrors((prev) => ({ ...prev, preferredLocale: undefined }));
                       }
@@ -343,8 +344,11 @@ const SignupPage = () => {
                       <SelectValue placeholder={t("selectLocale")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                      <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                      {locales.map((availableLocale) => (
+                        <SelectItem key={availableLocale} value={availableLocale}>
+                          {tCommon(`locales.${availableLocale}`)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   {signupFieldErrors.preferredLocale ? (

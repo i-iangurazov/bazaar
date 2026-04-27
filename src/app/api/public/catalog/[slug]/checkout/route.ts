@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 import { createCatalogCheckoutOrder } from "@/server/services/bazaarCatalog";
 
 export const runtime = "nodejs";
@@ -7,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().min(1).max(160),
-  customerPhone: z.string().trim().min(1).max(64),
+  customerEmail: z.string().trim().email().max(254),
+  customerPhone: z.string().trim().min(1).max(64).refine(isCompleteInternationalPhone),
   comment: z.string().trim().max(2_000).optional().nullable(),
   lines: z
     .array(
@@ -33,6 +35,7 @@ export const POST = async (request: Request, context: { params: { slug: string }
     const order = await createCatalogCheckoutOrder({
       slug: context.params.slug,
       customerName: parsed.data.customerName,
+      customerEmail: parsed.data.customerEmail,
       customerPhone: parsed.data.customerPhone,
       comment: parsed.data.comment ?? null,
       lines: parsed.data.lines,

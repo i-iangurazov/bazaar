@@ -3,7 +3,8 @@
     "language": "Язык",
     "locales": {
       "ru": "RU",
-      "kg": "KG"
+      "kg": "KG",
+      "en": "EN"
     },
     "switchLocale": "Переключить язык на {locale}",
     "openMenu": "Открыть меню",
@@ -280,7 +281,7 @@
       "subtitle": "Короткие ответы перед началом работы.",
       "q1": {
         "question": "Какие языки интерфейса доступны?",
-        "answer": "Сейчас доступны только RU и KG."
+        "answer": "Сейчас доступны RU, KG и EN."
       },
       "q2": {
         "question": "Для кого подходит платформа?",
@@ -1346,11 +1347,15 @@
     "checkoutOpen": "Оформить заказ",
     "checkoutName": "Имя",
     "checkoutNamePlaceholder": "Введите имя",
+    "checkoutEmail": "Email",
+    "checkoutEmailPlaceholder": "Введите email",
     "checkoutPhone": "Телефон",
     "checkoutPhonePlaceholder": "+996 XXX XXX XXX",
+    "checkoutPhoneCountry": "Код страны телефона",
     "checkoutComment": "Комментарий",
     "checkoutCommentPlaceholder": "Комментарий к заказу",
-    "checkoutRequired": "Заполните имя и телефон.",
+    "checkoutRequired": "Заполните имя, email и телефон.",
+    "checkoutPhoneInvalid": "Введите полный номер телефона для выбранной страны.",
     "checkoutBack": "Назад",
     "checkoutSubmit": "Отправить заказ",
     "successTitle": "Спасибо! Заказ отправлен",
@@ -1689,6 +1694,8 @@
       "returnsTotal": "Возвраты",
       "expectedCash": "Ожидаемая наличность",
       "cashInOut": "Cash in/out",
+      "paymentBreakdown": "Оплаты по методам",
+      "salesNetBreakdown": "Продажи {sales} · возвраты {refunds}",
       "difference": "Разница",
       "surplus": "Излишек",
       "shortage": "Недостача",
@@ -2233,7 +2240,7 @@
     "hideImport": "Скрыть импорт",
     "exportCsv": "Экспорт CSV",
     "exportXlsx": "Экспорт XLSX",
-    "importHint": "Загрузите CSV с колонками: sku,name,category,unit,description,photoUrl,barcodes",
+    "importHint": "Загрузите CSV с колонками: sku,name,category,unit,description,photoUrl,variants,barcodes",
     "importPreview": "Подготовлено строк: {count}",
     "confirmImport": "Подтвердить импорт",
     "importParseError": "Не удалось прочитать CSV файл.",
@@ -2593,8 +2600,11 @@
     "customer": "Клиент",
     "customerName": "Имя клиента",
     "customerNamePlaceholder": "Имя клиента",
+    "customerEmail": "Email клиента",
+    "customerEmailPlaceholder": "client@example.com",
     "customerPhone": "Телефон клиента",
     "customerPhonePlaceholder": "+996 XXX XXX XXX",
+    "customerPhoneCountry": "Код страны телефона",
     "notes": "Комментарий",
     "notesPlaceholder": "Комментарий к заказу",
     "store": "Магазин",
@@ -2824,7 +2834,7 @@
       "storePolicyUpdate": "Политика {storeName}: отрицательный остаток {allowNegativeStock, select, true {разрешен} false {запрещен} other {—}}",
       "reorderPolicyUpdate": "Минимальный остаток обновлен",
       "userCreate": "Пользователь создан: {userEmail}",
-      "userLocaleUpdate": "Язык пользователя: {userEmail} → {locale, select, ru {RU} kg {KG} other {—}}",
+      "userLocaleUpdate": "Язык пользователя: {userEmail} → {locale, select, ru {RU} kg {KG} en {EN} other {—}}",
       "seed": "Начальная загрузка данных"
     },
     "actions": {
@@ -3340,8 +3350,8 @@
       "csv": "CSV"
     },
     "templateDownload": "Скачать шаблон 1С",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,barcodes",
-    "templateExample": "SKU-001,Товар,шт,Категория,Описание,150,120,120,15,1234567890",
+    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Товар,шт,Категория,Описание,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "mappingTitle": "Сопоставление колонок",
     "mappingPlaceholder": "Выберите колонку",
     "mappingEmpty": "Нет колонок для сопоставления.",
@@ -3357,7 +3367,8 @@
     "fieldPurchasePrice": "Цена закупки",
     "fieldAvgCost": "Себестоимость",
     "fieldMinStock": "Минимальный остаток",
-    "fieldPhotoUrl": "Фото (URL)",
+    "fieldPhotoUrl": "Фото / ссылки на изображения",
+    "fieldVariants": "Варианты",
     "fieldBarcodes": "Штрихкоды",
     "importModeTitle": "Режим импорта",
     "importModePlaceholder": "Выберите режим",
@@ -3446,6 +3457,7 @@
     "rowMinLength": "Строка {row}: поле {field} должно содержать минимум {min} символа(ов).",
     "rowInvalidNumber": "Строка {row}: поле {field} должно быть числом не меньше 0.",
     "rowInvalidInteger": "Строка {row}: поле {field} должно быть целым числом не меньше 0.",
+    "rowInvalidVariants": "Строка {row}: варианты должны быть JSON-массивом объектов с полем name.",
     "rowStoreRequiredForMinStock": "Строка {row}: для импорта минимального остатка выберите магазин.",
     "duplicateSku": "Строка {row}: дубликат SKU {value}.",
     "duplicateBarcode": "Строка {row}: дубликат штрихкода {value}.",
@@ -3476,6 +3488,7 @@
     "rollbackEntities": {
       "product": "Товары",
       "barcode": "Штрихкоды",
+      "variant": "Варианты",
       "attribute": "Атрибуты",
       "purchaseOrder": "Заказы поставки",
       "reorderPolicy": "Политики минимального остатка"

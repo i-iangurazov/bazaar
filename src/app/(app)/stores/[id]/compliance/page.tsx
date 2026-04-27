@@ -26,6 +26,7 @@ import {
 import { FormActions, FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { ChevronDownIcon } from "@/components/icons";
+import { locales } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -351,8 +352,11 @@ const CompliancePage = () => {
                                   <SelectValue placeholder={tCommon("selectLocale")} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                                  <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                                  {locales.map((availableLocale) => (
+                                    <SelectItem key={availableLocale} value={availableLocale}>
+                                      {tCommon(`locales.${availableLocale}`)}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </FormControl>

@@ -25,8 +25,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatCurrencyKGS } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import {
+  createDefaultPosPaymentDraft,
+  type PosPaymentAutoFillState,
+  type PosPaymentDraft,
+  reconcilePosPaymentDraftsForSaleTotal,
+} from "@/lib/posPaymentDrafts";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
-import { resolveScanResult, shouldSubmitFromKey, type ScanResolvedResult } from "@/lib/scanning/scanRouter";
+import {
+  resolveScanResult,
+  shouldSubmitFromKey,
+  type ScanResolvedResult,
+} from "@/lib/scanning/scanRouter";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -55,18 +65,6 @@ const createIdempotencyKey = () => {
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-type PaymentDraft = {
-  method: PosPaymentMethod;
-  amount: string;
-  providerRef: string;
-};
-
-const defaultPayment = (amount = ""): PaymentDraft => ({
-  method: PosPaymentMethod.CASH,
-  amount,
-  providerRef: "",
-});
-
 const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
@@ -80,7 +78,7 @@ const PosSellPage = () => {
   const [saleId, setSaleId] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
   const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
-  const [payments, setPayments] = useState<PaymentDraft[]>([defaultPayment()]);
+  const [payments, setPayments] = useState<PosPaymentDraft[]>([createDefaultPosPaymentDraft()]);
   const [lastCompletedSale, setLastCompletedSale] = useState<{
     id: string;
     number: string;
@@ -100,6 +98,10 @@ const PosSellPage = () => {
   const keyboardScanResetTimerRef = useRef<number | null>(null);
   const keyboardScanSubmittingRef = useRef(false);
   const autoPrintedSaleIdRef = useRef<string | null>(null);
+  const paymentAutoFillRef = useRef<PosPaymentAutoFillState>({
+    saleId: null,
+    totalKgs: null,
+  });
 
   const registersQuery = trpc.pos.registers.list.useQuery();
 
@@ -169,7 +171,7 @@ const PosSellPage = () => {
   const createDraftMutation = trpc.pos.sales.createDraft.useMutation({
     onSuccess: (sale) => {
       setSaleId(sale.id);
-      setPayments([defaultPayment()]);
+      setPayments([createDefaultPosPaymentDraft()]);
       toast({ variant: "success", description: t("sell.saleCreated") });
     },
     onError: (error) => {
@@ -220,7 +222,8 @@ const PosSellPage = () => {
       toast({ variant: "success", description: t("sell.saleDiscarded") });
       setSaleId(null);
       setLineSearch("");
-      setPayments([defaultPayment()]);
+      setPayments([createDefaultPosPaymentDraft()]);
+      paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
     },
     onError: (error) => {
@@ -230,7 +233,10 @@ const PosSellPage = () => {
 
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: async (result) => {
-      toast({ variant: "success", description: t("sell.completeSuccess", { number: result.number }) });
+      toast({
+        variant: "success",
+        description: t("sell.completeSuccess", { number: result.number }),
+      });
       setLastCompletedSale({
         id: result.id,
         number: result.number,
@@ -238,7 +244,8 @@ const PosSellPage = () => {
       });
       setAutoReceiptStatus("printing");
       setSaleId(null);
-      setPayments([defaultPayment()]);
+      setPayments([createDefaultPosPaymentDraft()]);
+      paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([
         shiftQuery.refetch(),
         activeDraftQuery.refetch(),
@@ -261,13 +268,27 @@ const PosSellPage = () => {
     if (!saleIdForPaymentInit || saleTotalForPaymentInit === undefined) {
       return;
     }
-    setPayments([defaultPayment(String(saleTotalForPaymentInit))]);
+    const previousAutoFill = paymentAutoFillRef.current;
+    setPayments((currentPayments) => {
+      const next = reconcilePosPaymentDraftsForSaleTotal({
+        currentPayments,
+        saleId: saleIdForPaymentInit,
+        totalKgs: saleTotalForPaymentInit,
+        previousAutoFill,
+      });
+      return next.payments;
+    });
+    paymentAutoFillRef.current = {
+      saleId: saleIdForPaymentInit,
+      totalKgs: saleTotalForPaymentInit,
+    };
   }, [saleIdForPaymentInit, saleTotalForPaymentInit]);
 
   useEffect(() => {
     setSaleId(null);
     setLineSearch("");
-    setPayments([defaultPayment()]);
+    setPayments([createDefaultPosPaymentDraft()]);
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
     autoPrintedSaleIdRef.current = null;
@@ -284,7 +305,8 @@ const PosSellPage = () => {
       return;
     }
     setSaleId(null);
-    setPayments([defaultPayment()]);
+    setPayments([createDefaultPosPaymentDraft()]);
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setMarkingInput({});
   }, [saleId, saleQuery.data, saleQuery.isFetched, saleQuery.isFetching, saleQuery.isLoading]);
 
@@ -294,9 +316,7 @@ const PosSellPage = () => {
       return;
     }
     setMarkingInput(
-      Object.fromEntries(
-        sale.lines.map((line) => [line.id, (line.markingCodes ?? []).join(", ")]),
-      ),
+      Object.fromEntries(sale.lines.map((line) => [line.id, (line.markingCodes ?? []).join(", ")])),
     );
   }, [sale?.id, sale?.lines]);
 
@@ -582,11 +602,13 @@ const PosSellPage = () => {
   };
 
   const addPaymentRow = () => {
-    setPayments((current) => [...current, defaultPayment()]);
+    setPayments((current) => [...current, createDefaultPosPaymentDraft()]);
   };
 
   const removePaymentRow = (index: number) => {
-    setPayments((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
+    setPayments((current) =>
+      current.length <= 1 ? current : current.filter((_, i) => i !== index),
+    );
   };
 
   const handleDiscardSale = async () => {
@@ -716,7 +738,9 @@ const PosSellPage = () => {
           {lastCompletedSale ? (
             <Card>
               <CardHeader>
-                <CardTitle>{t("sell.lastReceiptTitle", { number: lastCompletedSale.number })}</CardTitle>
+                <CardTitle>
+                  {t("sell.lastReceiptTitle", { number: lastCompletedSale.number })}
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <p className="w-full text-sm text-muted-foreground sm:basis-full">
@@ -821,7 +845,9 @@ const PosSellPage = () => {
                 <>
                   {activeDraft ? (
                     <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-                      <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
+                      <p className="font-semibold text-foreground">
+                        {t("sell.draftDetectedTitle")}
+                      </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {t("sell.draftDetectedHint", { number: activeDraft.number })}
                       </p>
@@ -973,7 +999,7 @@ const PosSellPage = () => {
                             inputMode="numeric"
                             disabled={isLineBusy || completeMutation.isLoading}
                           />
-                          <p className="sm:min-w-[100px] sm:text-right text-sm font-medium text-foreground">
+                          <p className="text-sm font-medium text-foreground sm:min-w-[100px] sm:text-right">
                             {formatCurrencyKGS(line.lineTotalKgs, locale)}
                           </p>
                           <Button
@@ -1004,80 +1030,93 @@ const PosSellPage = () => {
           {saleId && sale ? (
             <div ref={paymentsSectionRef}>
               <Card>
-              <CardHeader>
-                <CardTitle>{t("sell.paymentsTitle")}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {payments.map((payment, index) => (
-                  <div key={`${index}-${payment.method}`} className="grid gap-2 sm:grid-cols-[180px_1fr_auto]">
-                    <Select
-                      value={payment.method}
-                      onValueChange={(value) =>
-                        setPayments((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, method: value as PosPaymentMethod } : item,
-                          ),
-                        )
-                      }
+                <CardHeader>
+                  <CardTitle>{t("sell.paymentsTitle")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {payments.map((payment, index) => (
+                    <div
+                      key={`${index}-${payment.method}`}
+                      className="grid gap-2 sm:grid-cols-[180px_1fr_auto]"
                     >
-                      <SelectTrigger aria-label={t("sell.paymentMethod")}> 
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={PosPaymentMethod.CASH}>{t("payments.cash")}</SelectItem>
-                        <SelectItem value={PosPaymentMethod.CARD}>{t("payments.card")}</SelectItem>
-                        <SelectItem value={PosPaymentMethod.TRANSFER}>{t("payments.transfer")}</SelectItem>
-                        <SelectItem value={PosPaymentMethod.OTHER}>{t("payments.other")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      ref={index === 0 ? firstPaymentAmountRef : undefined}
-                      value={payment.amount}
-                      onChange={(event) =>
-                        setPayments((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, amount: event.target.value } : item,
-                          ),
-                        )
-                      }
-                      placeholder={t("sell.paymentAmount")}
-                      inputMode="decimal"
-                    />
+                      <Select
+                        value={payment.method}
+                        onValueChange={(value) =>
+                          setPayments((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, method: value as PosPaymentMethod }
+                                : item,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger aria-label={t("sell.paymentMethod")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={PosPaymentMethod.CASH}>
+                            {t("payments.cash")}
+                          </SelectItem>
+                          <SelectItem value={PosPaymentMethod.CARD}>
+                            {t("payments.card")}
+                          </SelectItem>
+                          <SelectItem value={PosPaymentMethod.TRANSFER}>
+                            {t("payments.transfer")}
+                          </SelectItem>
+                          <SelectItem value={PosPaymentMethod.OTHER}>
+                            {t("payments.other")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        ref={index === 0 ? firstPaymentAmountRef : undefined}
+                        value={payment.amount}
+                        onChange={(event) =>
+                          setPayments((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, amount: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        placeholder={t("sell.paymentAmount")}
+                        inputMode="decimal"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        onClick={() => removePaymentRow(index)}
+                        disabled={payments.length <= 1 || isLineBusy || completeMutation.isLoading}
+                      >
+                        {tCommon("delete")}
+                      </Button>
+                    </div>
+                  ))}
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                     <Button
-                      type="button"
                       variant="secondary"
                       className="w-full sm:w-auto"
-                      onClick={() => removePaymentRow(index)}
-                      disabled={payments.length <= 1 || isLineBusy || completeMutation.isLoading}
+                      onClick={addPaymentRow}
+                      disabled={isLineBusy || completeMutation.isLoading}
                     >
-                      {tCommon("delete")}
+                      {t("sell.addPayment")}
+                    </Button>
+                    <Button
+                      className="w-full sm:w-auto"
+                      onClick={handleComplete}
+                      disabled={completeMutation.isLoading || isLineBusy || !sale.lines.length}
+                    >
+                      {completeMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                      {t("sell.completeSale")}
                     </Button>
                   </div>
-                ))}
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  <Button
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    onClick={addPaymentRow}
-                    disabled={isLineBusy || completeMutation.isLoading}
-                  >
-                    {t("sell.addPayment")}
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    onClick={handleComplete}
-                    disabled={completeMutation.isLoading || isLineBusy || !sale.lines.length}
-                  >
-                    {completeMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                    {t("sell.completeSale")}
-                  </Button>
-                </div>
-
-                <p className="text-sm text-muted-foreground">
-                  {t("sell.paymentTotal")}: {formatCurrencyKGS(totalPayment, locale)}
-                </p>
-              </CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    {t("sell.paymentTotal")}: {formatCurrencyKGS(totalPayment, locale)}
+                  </p>
+                </CardContent>
               </Card>
             </div>
           ) : null}

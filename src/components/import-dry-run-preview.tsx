@@ -34,6 +34,7 @@ type ImportPreviewRow = {
       | "category"
       | "description"
       | "photoUrl"
+      | "variants"
       | "barcodes"
       | "basePriceKgs"
       | "purchasePriceKgs"
@@ -139,6 +140,8 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
         return t("fieldDescription");
       case "photoUrl":
         return t("fieldPhotoUrl");
+      case "variants":
+        return t("fieldVariants");
       case "barcodes":
         return t("fieldBarcodes");
       case "basePriceKgs":

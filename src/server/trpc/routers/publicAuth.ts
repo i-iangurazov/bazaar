@@ -18,6 +18,7 @@ import bcrypt from "bcryptjs";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { isEmailVerificationRequired } from "@/server/config/auth";
+import { locales } from "@/lib/locales";
 
 const emailSchema = z.string().email();
 const sanitizeUserAudit = <T extends { passwordHash?: string }>(user: T | null) => {
@@ -52,7 +53,7 @@ export const publicAuthRouter = router({
         email: emailSchema,
         password: z.string().min(8),
         name: z.string().min(2),
-        preferredLocale: z.enum(["ru", "kg"]),
+        preferredLocale: z.enum(locales),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -268,7 +269,7 @@ export const publicAuthRouter = router({
         token: z.string().min(10),
         name: z.string().min(2),
         password: z.string().min(8),
-        preferredLocale: z.enum(["ru", "kg"]),
+        preferredLocale: z.enum(locales),
       }),
     )
     .mutation(async ({ ctx, input }) => {

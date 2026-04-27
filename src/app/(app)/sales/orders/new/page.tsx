@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
+import { PhoneNumberInput } from "@/components/phone-number-input";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +64,7 @@ const NewSalesOrderPage = () => {
   const storesQuery = trpc.stores.list.useQuery();
   const [storeId, setStoreId] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [lineSearch, setLineSearch] = useState("");
@@ -218,6 +220,7 @@ const NewSalesOrderPage = () => {
     await createMutation.mutateAsync({
       storeId,
       customerName: customerName.trim() || null,
+      customerEmail: customerEmail.trim() || null,
       customerPhone: customerPhone.trim() || null,
       notes: notes.trim() || null,
       lines: draftLines.map((line) => ({
@@ -280,13 +283,26 @@ const NewSalesOrderPage = () => {
 
             <div className="space-y-1.5">
               <p className="text-sm font-medium">
-                {t("customerPhone")} ({tCommon("optional")})
+                {t("customerEmail")} ({tCommon("optional")})
               </p>
               <Input
+                type="email"
+                value={customerEmail}
+                onChange={(event) => setCustomerEmail(event.target.value)}
+                placeholder={t("customerEmailPlaceholder")}
+                maxLength={254}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">
+                {t("customerPhone")} ({tCommon("optional")})
+              </p>
+              <PhoneNumberInput
                 value={customerPhone}
-                onChange={(event) => setCustomerPhone(event.target.value)}
+                onChange={setCustomerPhone}
                 placeholder={t("customerPhonePlaceholder")}
-                maxLength={64}
+                countrySelectLabel={t("customerPhoneCountry")}
               />
             </div>
 

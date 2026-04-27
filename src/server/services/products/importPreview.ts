@@ -84,6 +84,131 @@ const normalizeCategories = (value?: string | null) =>
 const areStringArraysEqual = (left: string[], right: string[]) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
 
+const normalizePreviewImages = (row: Pick<ImportCsvRowInput, "photoUrl" | "images">) => {
+  const images =
+    row.images?.length || !row.photoUrl
+      ? row.images ?? []
+      : [{ url: row.photoUrl, position: 0 }];
+  const seen = new Set<string>();
+  return images
+    .map((image, index) => ({
+      url: image.url.trim(),
+      position:
+        typeof image.position === "number" && Number.isFinite(image.position)
+          ? Math.trunc(image.position)
+          : index,
+    }))
+    .filter((image) => {
+      if (!image.url || seen.has(image.url)) {
+        return false;
+      }
+      seen.add(image.url);
+      return true;
+    })
+    .sort((left, right) => left.position - right.position)
+    .map((image) => image.url);
+};
+
+const formatPreviewAttributeValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return value.map((item) => formatPreviewAttributeValue(item)).join("/");
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
+const formatPreviewVariantLabel = (variant: {
+  name?: string | null;
+  sku?: string | null;
+  attributes?: Prisma.JsonValue | Record<string, unknown> | null;
+}) => {
+  const name = variant.name?.trim() || variant.sku?.trim() || "Variant";
+  const attributes =
+    variant.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes)
+      ? Object.entries(variant.attributes)
+          .map(([key, value]) => [key, formatPreviewAttributeValue(value)] as const)
+          .filter(([, value]) => value.length > 0)
+          .map(([key, value]) => `${key}: ${value}`)
+      : [];
+  return attributes.length ? `${name} (${attributes.join(", ")})` : name;
+};
+
+const normalizePreviewVariants = (variants?: ImportCsvRowInput["variants"]) => {
+  if (!variants?.length) {
+    return [];
+  }
+  const seenNames = new Set<string>();
+  return variants
+    .map((variant) => ({
+      ...variant,
+      name: variant.name?.trim() ?? "",
+      sku: variant.sku?.trim() ?? "",
+    }))
+    .filter((variant) => {
+      if (!variant.name) {
+        return false;
+      }
+      const key = variant.name.toLocaleLowerCase();
+      if (seenNames.has(key)) {
+        return false;
+      }
+      seenNames.add(key);
+      return true;
+    })
+    .map((variant) => formatPreviewVariantLabel(variant));
+};
+
+const mergePreviewVariants = (
+  existingVariants: {
+    name: string | null;
+    sku: string | null;
+    attributes: Prisma.JsonValue;
+  }[],
+  incomingVariants?: ImportCsvRowInput["variants"],
+) => {
+  const byName = new Map(
+    existingVariants
+      .map((variant) => [variant.name?.trim().toLocaleLowerCase() ?? "", variant] as const)
+      .filter(([name]) => name.length > 0),
+  );
+  const output = existingVariants.map((variant) => formatPreviewVariantLabel(variant));
+  const outputIndexByName = new Map(
+    existingVariants
+      .map((variant, index) => [variant.name?.trim().toLocaleLowerCase() ?? "", index] as const)
+      .filter(([name]) => name.length > 0),
+  );
+
+  (incomingVariants ?? []).forEach((variant) => {
+    const name = variant.name?.trim() ?? "";
+    if (!name) {
+      return;
+    }
+    const key = name.toLocaleLowerCase();
+    const label = formatPreviewVariantLabel({ ...variant, name });
+    if (byName.has(key)) {
+      const index = outputIndexByName.get(key);
+      if (index !== undefined) {
+        output[index] = label;
+      }
+      return;
+    }
+    byName.set(key, {
+      name,
+      sku: variant.sku ?? null,
+      attributes: (variant.attributes ?? {}) as Prisma.JsonValue,
+    });
+    outputIndexByName.set(key, output.length);
+    output.push(label);
+  });
+
+  return output;
+};
+
 const shouldApplyImportField = (
   mode: ImportMode | undefined,
   updateMask: Set<ImportUpdateField>,
@@ -163,6 +288,15 @@ export const previewProductImport = async ({
           description: true,
           photoUrl: true,
           basePriceKgs: true,
+          images: {
+            select: { url: true, position: true },
+            orderBy: { position: "asc" },
+          },
+          variants: {
+            where: { isActive: true },
+            select: { name: true, sku: true, attributes: true },
+            orderBy: { createdAt: "asc" },
+          },
         },
       })
     : [];
@@ -389,8 +523,30 @@ export const previewProductImport = async ({
       }
 
       if (shouldApplyImportField(mode, updateMask, "photoUrl")) {
-        const nextPhotoUrl = row.photoUrl?.trim() || existing.photoUrl;
-        addChange(changes, "photoUrl", existing.photoUrl, nextPhotoUrl ?? null);
+        const existingImages = existing.images.length
+          ? existing.images.map((image) => image.url)
+          : existing.photoUrl
+            ? [existing.photoUrl]
+            : [];
+        const nextImages = normalizePreviewImages(row);
+        addChange(
+          changes,
+          "photoUrl",
+          existingImages,
+          nextImages.length ? nextImages : existingImages,
+        );
+      }
+
+      if (shouldApplyImportField(mode, updateMask, "variants")) {
+        const nextVariants = normalizePreviewVariants(row.variants);
+        if (nextVariants.length) {
+          addChange(
+            changes,
+            "variants",
+            existing.variants.map((variant) => formatPreviewVariantLabel(variant)),
+            mergePreviewVariants(existing.variants, row.variants),
+          );
+        }
       }
 
       if (shouldApplyImportField(mode, updateMask, "barcodes")) {
@@ -446,8 +602,13 @@ export const previewProductImport = async ({
       if (row.description) {
         changes.push({ field: "description", before: null, after: row.description });
       }
-      if (row.photoUrl?.trim()) {
-        changes.push({ field: "photoUrl", before: null, after: row.photoUrl.trim() });
+      const nextImages = normalizePreviewImages(row);
+      if (nextImages.length) {
+        changes.push({ field: "photoUrl", before: null, after: nextImages });
+      }
+      const nextVariants = normalizePreviewVariants(row.variants);
+      if (nextVariants.length) {
+        changes.push({ field: "variants", before: null, after: nextVariants });
       }
       if (normalizedRowBarcodes.length) {
         changes.push({ field: "barcodes", before: null, after: normalizedRowBarcodes });

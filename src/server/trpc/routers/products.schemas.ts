@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { locales } from "@/lib/locales";
+
 export const productTypeFilterEnum = z.enum(["all", "product", "bundle"]);
 export const productSortKeyEnum = z.enum([
   "sku",
@@ -14,7 +16,7 @@ export const productSortKeyEnum = z.enum([
 ]);
 export const productSortDirectionEnum = z.enum(["asc", "desc"]);
 export const barcodeGenerationModeEnum = z.enum(["EAN13", "CODE128"]);
-export const productLocaleEnum = z.enum(["ru", "kg"]);
+export const productLocaleEnum = z.enum(locales);
 export const importSourceEnum = z.enum(["cloudshop", "onec", "csv"]);
 export const importModeEnum = z.enum(["full", "update_selected"]);
 export const bulkCategoryModeEnum = z.enum(["add", "setPrimary", "replace"]);
@@ -25,6 +27,7 @@ export const importUpdateFieldEnum = z.enum([
   "category",
   "description",
   "photoUrl",
+  "variants",
   "barcodes",
   "basePriceKgs",
   "purchasePriceKgs",
@@ -235,6 +238,8 @@ export const importCsvRowSchema = z.object({
   unit: z.string().min(1).optional(),
   description: z.string().optional(),
   photoUrl: z.string().optional(),
+  images: z.array(productImageInputSchema).optional(),
+  variants: z.array(productVariantInputSchema).optional(),
   barcodes: z.array(z.string()).optional(),
   basePriceKgs: z.number().min(0).optional(),
   purchasePriceKgs: z.number().min(0).optional(),

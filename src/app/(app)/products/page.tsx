@@ -84,6 +84,7 @@ import {
 } from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { buildScopedStorageKey, useScopedLocalStorageState } from "@/lib/useScopedLocalStorageState";
 import {
   createSavedTableView,
@@ -1394,22 +1395,6 @@ const ProductsPage = () => {
     [printForm, productById, t, toast],
   );
   const getProductActions = (product: ProductRow) => [
-    ...(!product.isDeleted
-      ? [
-          {
-            key: "print-labels",
-            label: t("printLabels"),
-            icon: PrintIcon,
-            onSelect: () => {
-              if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
-                toast({ variant: "error", description: t("printMissingBarcode") });
-                return;
-              }
-              openPrintForProducts([product.id], 1);
-            },
-          },
-        ]
-      : []),
     ...(isAdmin
       ? product.isDeleted
         ? [
@@ -1434,6 +1419,18 @@ const ProductsPage = () => {
               icon: EditIcon,
               href: `/products/${product.id}`,
               openInNewTab: true,
+            },
+            {
+              key: "print-labels",
+              label: t("printLabels"),
+              icon: PrintIcon,
+              onSelect: () => {
+                if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
+                  toast({ variant: "error", description: t("printMissingBarcode") });
+                  return;
+                }
+                openPrintForProducts([product.id], 1);
+              },
             },
             {
               key: "duplicate",
@@ -1745,7 +1742,7 @@ const ProductsPage = () => {
 
         const result = await bulkGenerateDescriptionsMutation.mutateAsync({
           productIds: batch,
-          locale: locale === "kg" ? "kg" : "ru",
+          locale: normalizeLocale(locale) ?? defaultLocale,
         });
         const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
         const remainingAfterBatch = Math.max(

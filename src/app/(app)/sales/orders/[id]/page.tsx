@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { FormGrid } from "@/components/form-layout";
 import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { PhoneNumberInput } from "@/components/phone-number-input";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
@@ -97,6 +98,7 @@ const SalesOrderDetailPage = () => {
   );
 
   const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -130,6 +132,7 @@ const SalesOrderDetailPage = () => {
       return;
     }
     setCustomerName(order.customerName ?? "");
+    setCustomerEmail(order.customerEmail ?? "");
     setCustomerPhone(order.customerPhone ?? "");
     setNotes(order.notes ?? "");
   }, [order]);
@@ -265,6 +268,7 @@ const SalesOrderDetailPage = () => {
     await setCustomerMutation.mutateAsync({
       customerOrderId: order.id,
       customerName: customerName.trim() || null,
+      customerEmail: customerEmail.trim() || null,
       customerPhone: customerPhone.trim() || null,
       notes: notes.trim() || null,
     });
@@ -539,12 +543,23 @@ const SalesOrderDetailPage = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <p className="text-sm font-medium">{t("customerPhone")}</p>
+                  <p className="text-sm font-medium">{t("customerEmail")}</p>
                   <Input
+                    type="email"
+                    value={customerEmail}
+                    onChange={(event) => setCustomerEmail(event.target.value)}
+                    placeholder={t("customerEmailPlaceholder")}
+                    maxLength={254}
+                    disabled={!isEditable || setCustomerMutation.isLoading}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">{t("customerPhone")}</p>
+                  <PhoneNumberInput
                     value={customerPhone}
-                    onChange={(event) => setCustomerPhone(event.target.value)}
+                    onChange={setCustomerPhone}
                     placeholder={t("customerPhonePlaceholder")}
-                    maxLength={64}
+                    countrySelectLabel={t("customerPhoneCountry")}
                     disabled={!isEditable || setCustomerMutation.isLoading}
                   />
                 </div>

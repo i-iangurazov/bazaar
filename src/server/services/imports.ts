@@ -365,6 +365,7 @@ export const rollbackImportBatch = async (input: {
 
     const productIds = byType.get("Product") ?? [];
     const barcodeIds = byType.get("ProductBarcode") ?? [];
+    const variantIds = byType.get("ProductVariant") ?? [];
     const attributeIds = byType.get("AttributeDefinition") ?? [];
     const reorderPolicyIds = byType.get("ReorderPolicy") ?? [];
 
@@ -378,6 +379,26 @@ export const rollbackImportBatch = async (input: {
     const removedBarcodes = barcodeIds.length
       ? await tx.productBarcode.deleteMany({
           where: { id: { in: barcodeIds }, organizationId: input.organizationId },
+        })
+      : { count: 0 };
+
+    const removedVariantAttributeValues = variantIds.length
+      ? await tx.variantAttributeValue.deleteMany({
+          where: {
+            variantId: { in: variantIds },
+            organizationId: input.organizationId,
+          },
+        })
+      : { count: 0 };
+
+    const deactivatedVariants = variantIds.length
+      ? await tx.productVariant.updateMany({
+          where: {
+            id: { in: variantIds },
+            product: { organizationId: input.organizationId },
+            isActive: true,
+          },
+          data: { isActive: false },
         })
       : { count: 0 };
 
@@ -415,6 +436,8 @@ export const rollbackImportBatch = async (input: {
     const summary = {
       archivedProducts: archivedProducts.count,
       removedBarcodes: removedBarcodes.count,
+      deactivatedVariants: deactivatedVariants.count,
+      removedVariantAttributeValues: removedVariantAttributeValues.count,
       removedTemplates: removedTemplates.count,
       deactivatedAttributes: deactivatedAttributes.count,
       removedReorderPolicies: removedReorderPolicies.count,

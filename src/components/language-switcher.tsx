@@ -38,6 +38,7 @@ export const LanguageSwitcher = ({
   const localeLabels: Record<Locale, string> = {
     ru: t("locales.ru"),
     kg: t("locales.kg"),
+    en: t("locales.en"),
   };
 
   const handleSwitch = async (nextLocale: Locale) => {

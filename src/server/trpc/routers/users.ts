@@ -2,7 +2,9 @@ import { z } from "zod";
 import { adminProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { createUser, resetUserPassword, setUserActive, updatePreferredLocale, updateUser } from "@/server/services/users";
-import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
+
+const localeSchema = z.enum(locales);
 
 export const usersRouter = router({
   list: adminProcedure.query(async ({ ctx }) => {
@@ -28,7 +30,7 @@ export const usersRouter = router({
         name: z.string().min(2),
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         password: z.string().min(8),
-        preferredLocale: z.enum(["ru", "kg"]).optional(),
+        preferredLocale: localeSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -55,7 +57,7 @@ export const usersRouter = router({
         email: z.string().email(),
         name: z.string().min(2),
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
-        preferredLocale: z.enum(["ru", "kg"]),
+        preferredLocale: localeSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -108,7 +110,7 @@ export const usersRouter = router({
     }),
 
   updateLocale: protectedProcedure
-    .input(z.object({ locale: z.enum(["ru", "kg"]) }))
+    .input(z.object({ locale: localeSchema }))
     .mutation(async ({ ctx, input }) => {
       try {
         const resolvedLocale = normalizeLocale(input.locale) ?? defaultLocale;

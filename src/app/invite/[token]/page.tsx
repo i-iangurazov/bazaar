@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
+import { locales, type Locale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -25,7 +26,7 @@ const InvitePage = () => {
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
   const [accepted, setAccepted] = useState(false);
-  const [values, setValues] = useState<{ name: string; password: string; preferredLocale: "ru" | "kg" }>({
+  const [values, setValues] = useState<{ name: string; password: string; preferredLocale: Locale }>({
     name: "",
     password: "",
     preferredLocale: "ru",
@@ -37,7 +38,7 @@ const InvitePage = () => {
   const schema = z.object({
     name: z.string().min(2, t("nameRequired")),
     password: z.string().min(8, t("passwordMin")),
-    preferredLocale: z.enum(["ru", "kg"]),
+    preferredLocale: z.enum(locales),
   });
 
   const acceptMutation = trpc.publicAuth.acceptInvite.useMutation({
@@ -162,7 +163,7 @@ const InvitePage = () => {
                     <Select
                       value={values.preferredLocale}
                       onValueChange={(value) => {
-                        setValues((prev) => ({ ...prev, preferredLocale: value as "ru" | "kg" }));
+                        setValues((prev) => ({ ...prev, preferredLocale: value as Locale }));
                         if (fieldErrors.preferredLocale) {
                           setFieldErrors((prev) => ({ ...prev, preferredLocale: undefined }));
                         }
@@ -172,8 +173,11 @@ const InvitePage = () => {
                         <SelectValue placeholder={t("selectLocale")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                        <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                        {locales.map((availableLocale) => (
+                          <SelectItem key={availableLocale} value={availableLocale}>
+                            {tCommon(`locales.${availableLocale}`)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     {fieldErrors.preferredLocale ? (

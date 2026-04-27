@@ -247,6 +247,7 @@ export const listCustomerOrders = async (input: {
           OR: [
             { number: { contains: input.search, mode: "insensitive" } },
             { customerName: { contains: input.search, mode: "insensitive" } },
+            { customerEmail: { contains: input.search, mode: "insensitive" } },
             { customerPhone: { contains: input.search, mode: "insensitive" } },
           ],
         }
@@ -475,6 +476,7 @@ export const createCustomerOrderDraft = async (input: {
   organizationId: string;
   storeId: string;
   customerName?: string | null;
+  customerEmail?: string | null;
   customerPhone?: string | null;
   notes?: string | null;
   lines?: Array<{
@@ -503,6 +505,7 @@ export const createCustomerOrderDraft = async (input: {
         number,
         source: CustomerOrderSource.MANUAL,
         customerName: input.customerName ?? null,
+        customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
         notes: input.notes ?? null,
         createdById: input.actorId,
@@ -574,6 +577,7 @@ export const setCustomerOrderCustomer = async (input: {
   organizationId: string;
   customerOrderId: string;
   customerName?: string | null;
+  customerEmail?: string | null;
   customerPhone?: string | null;
   notes?: string | null;
   actorId: string;
@@ -594,6 +598,7 @@ export const setCustomerOrderCustomer = async (input: {
       where: { id: order.id },
       data: {
         customerName: input.customerName ?? null,
+        customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
         notes: input.notes ?? null,
         updatedById: input.actorId,

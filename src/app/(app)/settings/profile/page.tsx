@@ -33,7 +33,7 @@ import { FormActions, FormGrid } from "@/components/form-layout";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { applyThemePreference, persistThemeCookie } from "@/lib/theme";
-import { normalizeLocale } from "@/lib/locales";
+import { locales, normalizeLocale } from "@/lib/locales";
 
 type ThemePreferenceValue = "LIGHT" | "DARK";
 
@@ -63,7 +63,7 @@ const ProfilePage = () => {
   const preferencesSchema = useMemo(
     () =>
       z.object({
-        preferredLocale: z.enum(["ru", "kg"]),
+        preferredLocale: z.enum(locales),
         themePreference: z.enum(["LIGHT", "DARK"]),
       }),
     [],
@@ -359,8 +359,11 @@ const ProfilePage = () => {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="ru">{tCommon("locales.ru")}</SelectItem>
-                            <SelectItem value="kg">{tCommon("locales.kg")}</SelectItem>
+                            {locales.map((availableLocale) => (
+                              <SelectItem key={availableLocale} value={availableLocale}>
+                                {tCommon(`locales.${availableLocale}`)}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </FormControl>

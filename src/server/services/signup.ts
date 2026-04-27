@@ -10,6 +10,7 @@ import { sendVerificationEmail } from "@/server/services/email";
 import { consumeAuthToken } from "@/server/services/authTokens";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import { isEmailVerificationRequired } from "@/server/config/auth";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 const DEFAULT_TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? "14");
 
@@ -263,7 +264,7 @@ export const sendEmailVerificationToken = async (input: {
   await sendVerificationEmail({
     email: input.email,
     verifyLink,
-    locale: input.preferredLocale === "kg" ? "kg" : "ru",
+    locale: normalizeLocale(input.preferredLocale) ?? defaultLocale,
     expiresInMinutes,
   });
   return verifyLink;

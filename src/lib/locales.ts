@@ -1,4 +1,4 @@
-export const locales = ["ru", "kg"] as const;
+export const locales = ["ru", "kg", "en"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "ru";
 
@@ -25,6 +25,9 @@ export const toIntlLocale = (value?: string | null) => {
   const normalized = normalizeLocale(value);
   if (normalized === "kg") {
     return "ky-KG";
+  }
+  if (normalized === "en") {
+    return "en-US";
   }
   return normalized ?? value ?? defaultLocale;
 };

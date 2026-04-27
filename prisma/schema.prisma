@@ -1170,6 +1170,7 @@ model CustomerOrder {
   source           CustomerOrderSource @default(MANUAL)
   isPosSale        Boolean             @default(false)
   customerName     String?
+  customerEmail    String?
   customerPhone    String?
   subtotalKgs      Decimal             @default(0) @db.Decimal(12, 2)
   totalKgs         Decimal             @default(0) @db.Decimal(12, 2)

@@ -36,7 +36,7 @@ export const createMessageFallback =
   ({ namespace, key }: { namespace?: string; key: string }) => {
     const fullKey = namespace ? `${namespace}.${key}` : key;
     logMissingKey(locale, fullKey);
-    if (locale === "kg") {
+    if (locale === "kg" || locale === "en") {
       const fallback = getMessageValue(ruMessages as unknown as AbstractIntlMessages, fullKey);
       if (typeof fallback === "string") {
         return fallback;

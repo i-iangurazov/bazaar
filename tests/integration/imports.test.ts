@@ -97,6 +97,98 @@ describeDb("import batches", () => {
     expect(baseCost?.avgCostKgs ? Number(baseCost.avgCostKgs) : null).toBe(118);
   });
 
+  it("imports multiple product images and custom variants", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+
+    await runProductImport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-images-variants-1",
+      source: "csv",
+      rows: [
+        {
+          sku: "IMP-IV-1",
+          name: "Imported Images Variants",
+          unit: baseUnit.code,
+          images: [
+            { url: "/uploads/imported-products/test-org/primary.jpg", position: 0 },
+            { url: "/uploads/imported-products/test-org/detail.jpg", position: 1 },
+          ],
+          variants: [
+            {
+              name: "footstool",
+              attributes: { dimensions: "footstool 84*62*36cm" },
+            },
+            {
+              name: "single",
+              attributes: { dimensions: "single seat 90*101*75cm" },
+            },
+          ],
+        },
+      ],
+    });
+
+    const product = await prisma.product.findUnique({
+      where: { organizationId_sku: { organizationId: org.id, sku: "IMP-IV-1" } },
+      include: {
+        images: { orderBy: { position: "asc" } },
+        variants: { orderBy: { createdAt: "asc" } },
+      },
+    });
+
+    expect(product?.photoUrl).toBe("/uploads/imported-products/test-org/primary.jpg");
+    expect(product?.images.map((image) => image.url)).toEqual([
+      "/uploads/imported-products/test-org/primary.jpg",
+      "/uploads/imported-products/test-org/detail.jpg",
+    ]);
+    expect(product?.variants.map((variant) => variant.name)).toEqual(["footstool", "single"]);
+    expect(product?.variants.find((variant) => variant.name === "single")?.attributes).toMatchObject(
+      {
+        dimensions: "single seat 90*101*75cm",
+      },
+    );
+
+    await runProductImport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-images-variants-2",
+      source: "csv",
+      mode: "update_selected",
+      updateMask: ["variants"],
+      rows: [
+        {
+          sku: "IMP-IV-1",
+          variants: [
+            {
+              name: "single",
+              attributes: { dimensions: "single seat 91*101*75cm" },
+            },
+            {
+              name: "double",
+              attributes: { dimensions: "double seat 160*101*75cm" },
+            },
+          ],
+        },
+      ],
+    });
+
+    const updatedVariants = await prisma.productVariant.findMany({
+      where: { productId: product!.id, isActive: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    expect(updatedVariants.map((variant) => variant.name)).toEqual([
+      "footstool",
+      "single",
+      "double",
+    ]);
+    expect(
+      updatedVariants.find((variant) => variant.name === "single")?.attributes,
+    ).toMatchObject({
+      dimensions: "single seat 91*101*75cm",
+    });
+  });
+
   it("rolls back imported products by archiving and removing barcodes", async () => {
     const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
 
