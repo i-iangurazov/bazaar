@@ -31,6 +31,9 @@ const progressEveryProducts = toPositiveInt(
 const slowResolveMs = toPositiveInt(process.env.SLOW_IMAGE_LOG_MS, 3_000);
 const verboseImages = parseBool(process.env.VERBOSE_IMAGES);
 const resolveDryRunImages = parseBool(process.env.DRY_RUN_RESOLVE_IMAGES);
+const requestedFastRemoteCopy = parseBool(
+  process.env.FAST_REMOTE_IMAGE_COPY ?? process.env.PRODUCT_IMAGE_FAST_STREAM,
+);
 const prismaRetryCount = toPositiveInt(process.env.PRISMA_RETRIES, 3);
 const transactionMaxWaitMs = toPositiveInt(process.env.PRISMA_TRANSACTION_MAX_WAIT_MS, 30_000);
 const transactionTimeoutMs = toPositiveInt(process.env.PRISMA_TRANSACTION_TIMEOUT_MS, 60_000);
@@ -177,7 +180,10 @@ const runPrismaWithRetry = async <T>(label: string, task: () => Promise<T>) => {
         warn(
           `PostgreSQL connection closed during ${label}; reconnecting and retrying (${attempt}/${prismaRetryCount})`,
         );
+        await prisma.$disconnect().catch(() => undefined);
+        await sleep(delayMs);
         await prisma.$connect();
+        continue;
       } else if (isPrismaPoolTimeout(error)) {
         warn(
           `Prisma connection pool was busy during ${label}; retrying in ${delayMs}ms (${attempt}/${prismaRetryCount})`,
@@ -306,6 +312,11 @@ const main = async () => {
   if (storageProvider !== "r2") {
     warn(
       "IMAGE_STORAGE_PROVIDER is not r2; resolved images will be written to local /uploads paths",
+    );
+  }
+  if (requestedFastRemoteCopy) {
+    warn(
+      "FAST_REMOTE_IMAGE_COPY=1 is disabled for backfill stability; using buffered uploads. Set FAST_REMOTE_IMAGE_COPY=force only for experiments.",
     );
   }
   if (!r2BaseUrl) {

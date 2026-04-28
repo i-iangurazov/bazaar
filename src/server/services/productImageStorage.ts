@@ -12,9 +12,9 @@ import { isProductionRuntime } from "@/server/config/runtime";
 
 const localImageRootDir = join(process.cwd(), "public", "uploads", "imported-products");
 
-const parseBooleanEnv = (value: string | undefined) => {
+const parseForcedEnv = (value: string | undefined) => {
   const normalized = value?.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes";
+  return normalized === "force";
 };
 
 const extractHyperlinkTarget = (value: string) => {
@@ -74,7 +74,7 @@ const resolveRemoteImageFetchTimeoutMs = () => {
 };
 
 const remoteImageFetchTimeoutMs = resolveRemoteImageFetchTimeoutMs();
-const fastRemoteImageCopyEnabled = parseBooleanEnv(
+const fastRemoteImageCopyEnabled = parseForcedEnv(
   process.env.FAST_REMOTE_IMAGE_COPY ?? process.env.PRODUCT_IMAGE_FAST_STREAM,
 );
 const remoteHostAllowCache = new Map<string, boolean>();
