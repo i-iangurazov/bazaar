@@ -37,17 +37,17 @@ export type PlanDefinition = {
 const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
   STARTER: {
     maxStores: 1,
-    maxProducts: 100,
+    maxProducts: 1000,
     maxActiveUsers: 5,
   },
   BUSINESS: {
     maxStores: 3,
-    maxProducts: 500,
+    maxProducts: 5000,
     maxActiveUsers: 10,
   },
   ENTERPRISE: {
     maxStores: 10,
-    maxProducts: 1000,
+    maxProducts: 20000,
     maxActiveUsers: 20,
   },
 };
@@ -192,4 +192,5 @@ export const getPlanCatalogEntry = (plan: PlanCode): PlanDefinition => ({
   features: PLAN_FEATURES[plan],
 });
 
-export const getPlanCatalogEntries = () => PLAN_CODES.map((planCode) => getPlanCatalogEntry(planCode));
+export const getPlanCatalogEntries = () =>
+  PLAN_CODES.map((planCode) => getPlanCatalogEntry(planCode));

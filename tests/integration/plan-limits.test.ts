@@ -31,7 +31,7 @@ describeDb("plan limits", () => {
     ).rejects.toMatchObject({ code: "CONFLICT", message: "planLimitStores" });
   });
 
-  it("starter cannot exceed 100 products", async () => {
+  it("starter cannot exceed 1000 products", async () => {
     const { org, adminUser, baseUnit, supplier } = await seedBase({ plan: "STARTER" });
 
     const caller = createTestCaller({
@@ -42,7 +42,7 @@ describeDb("plan limits", () => {
     });
 
     await prisma.product.createMany({
-      data: Array.from({ length: 99 }).map((_, index) => ({
+      data: Array.from({ length: 999 }).map((_, index) => ({
         organizationId: org.id,
         supplierId: supplier.id,
         sku: `SKU-LIMIT-${index}`,
