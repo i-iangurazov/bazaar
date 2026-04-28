@@ -21,6 +21,12 @@ const toPositiveInt = (value: string | undefined, fallback: number) => {
 
 const applyChanges = parseBool(process.env.APPLY);
 const batchSize = toPositiveInt(process.env.BATCH_SIZE, 100);
+const progressEveryProducts = toPositiveInt(
+  process.env.PROGRESS_EVERY_PRODUCTS ?? process.env.PROGRESS_EVERY,
+  10,
+);
+const slowResolveMs = toPositiveInt(process.env.SLOW_IMAGE_LOG_MS, 3_000);
+const verboseImages = parseBool(process.env.VERBOSE_IMAGES);
 const organizationIdFilter = process.env.ORG_ID?.trim() || null;
 const baseUrl = trimTrailingSlash((process.env.NEXTAUTH_URL ?? "").trim());
 const r2BaseUrl = trimTrailingSlash((process.env.R2_PUBLIC_BASE_URL ?? "").trim());
@@ -34,6 +40,8 @@ const log = (message: string) => {
 const warn = (message: string) => {
   console.warn(`[images-backfill] WARN: ${message}`);
 };
+
+const formatElapsed = (startedAt: number) => `${Math.round((Date.now() - startedAt) / 1000)}s`;
 
 const isCloudflareManagedUrl = (value: string) => Boolean(r2BaseUrl) && value.startsWith(r2BaseUrl);
 
@@ -126,7 +134,11 @@ const main = async () => {
   if (organizationIdFilter) {
     log(`Filtering by organization: ${organizationIdFilter}`);
   }
+  log(
+    `Progress logs every ${progressEveryProducts} products (set PROGRESS_EVERY=1 for every product)`,
+  );
 
+  const startedAt = Date.now();
   let processedProducts = 0;
   let scannedPhotoUrls = 0;
   let scannedImageUrls = 0;
@@ -138,6 +150,13 @@ const main = async () => {
   let changedProducts = 0;
 
   let cursor: string | null = null;
+  let batchNumber = 0;
+
+  const logProgress = (reason: string) => {
+    log(
+      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, migrated=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, elapsed=${formatElapsed(startedAt)}`,
+    );
+  };
 
   while (true) {
     const products: ProductBatchRow[] = await prisma.product.findMany({
@@ -163,6 +182,9 @@ const main = async () => {
     if (!products.length) {
       break;
     }
+
+    batchNumber += 1;
+    log(`Fetched batch ${batchNumber}: ${products.length} products`);
 
     for (const product of products) {
       processedProducts += 1;
@@ -200,6 +222,10 @@ const main = async () => {
           skippedMissingBaseUrl += 1;
           return null;
         }
+        if (verboseImages) {
+          log(`Resolving ${kind} image for product ${product.id}: ${candidate}`);
+        }
+        const resolveStartedAt = Date.now();
         const resolved = await resolveProductImageUrl({
           value: candidate,
           organizationId: product.organizationId,
@@ -207,6 +233,12 @@ const main = async () => {
           cache,
           fallbackToSource: false,
         });
+        const resolveElapsedMs = Date.now() - resolveStartedAt;
+        if (resolveElapsedMs >= slowResolveMs) {
+          warn(
+            `Slow ${kind} image resolution (${resolveElapsedMs}ms) for product ${product.id}: ${candidate}`,
+          );
+        }
         if (resolved.url && resolved.url !== current) {
           if (kind === "photo") {
             migratedPhotoUrls += 1;
@@ -293,10 +325,14 @@ const main = async () => {
           });
         }
       });
+
+      if (processedProducts % progressEveryProducts === 0) {
+        logProgress("Progress");
+      }
     }
 
     cursor = products[products.length - 1]?.id ?? null;
-    log(`Processed ${processedProducts} products...`);
+    logProgress(`Finished batch ${batchNumber}`);
   }
 
   log(`Done (${mode})`);
