@@ -583,7 +583,7 @@ const uploadRemoteImageStreamToR2 = async (input: {
       },
     };
   } catch {
-    return { attempted: true, result: null };
+    return { attempted: false, result: null };
   } finally {
     clearTimeout(timeout);
   }
