@@ -310,6 +310,8 @@ const main = async () => {
   }
   if (!r2BaseUrl) {
     warn("R2_PUBLIC_BASE_URL is not set; cannot detect already-migrated Cloudflare URLs reliably");
+  } else {
+    log("Skipping products whose stored image URLs already point at the configured R2 base URL");
   }
   if (!baseUrl) {
     warn("NEXTAUTH_URL is not set; relative /uploads/* URLs cannot be re-downloaded");
@@ -525,15 +527,35 @@ const main = async () => {
     return result;
   };
 
+  const productWhere = {
+    ...(organizationIdFilter ? { organizationId: organizationIdFilter } : {}),
+    ...(r2BaseUrl
+      ? {
+          OR: [
+            {
+              AND: [
+                { photoUrl: { not: null } },
+                { NOT: { photoUrl: { startsWith: r2BaseUrl } } },
+              ],
+            },
+            {
+              images: {
+                some: {
+                  NOT: { url: { startsWith: r2BaseUrl } },
+                },
+              },
+            },
+          ],
+        }
+      : { OR: [{ photoUrl: { not: null } }, { images: { some: {} } }] }),
+  };
+
   while (true) {
     const products: ProductBatchRow[] = await runPrismaWithRetry(
       `fetch product batch ${batchNumber + 1}`,
       () =>
         prisma.product.findMany({
-          where: {
-            ...(organizationIdFilter ? { organizationId: organizationIdFilter } : {}),
-            OR: [{ photoUrl: { not: null } }, { images: { some: {} } }],
-          },
+          where: productWhere,
           select: {
             id: true,
             organizationId: true,

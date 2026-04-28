@@ -532,6 +532,7 @@ const uploadRemoteImageStreamToR2 = async (input: {
 
   try {
     const response = await fetch(input.sourceUrl, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!response.ok) {
       return { attempted: true, result: null };
     }
