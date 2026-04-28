@@ -3,12 +3,19 @@ import { lookup } from "node:dns/promises";
 import { mkdir, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { extname, join } from "node:path";
+import { Readable } from "node:stream";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { isProductionRuntime } from "@/server/config/runtime";
 
 const localImageRootDir = join(process.cwd(), "public", "uploads", "imported-products");
+
+const parseBooleanEnv = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+};
 
 const extractHyperlinkTarget = (value: string) => {
   const trimmed = value.trim();
@@ -67,6 +74,9 @@ const resolveRemoteImageFetchTimeoutMs = () => {
 };
 
 const remoteImageFetchTimeoutMs = resolveRemoteImageFetchTimeoutMs();
+const fastRemoteImageCopyEnabled = parseBooleanEnv(
+  process.env.FAST_REMOTE_IMAGE_COPY ?? process.env.PRODUCT_IMAGE_FAST_STREAM,
+);
 const remoteHostAllowCache = new Map<string, boolean>();
 
 type ImageStorageProvider = "local" | "r2";
@@ -491,6 +501,93 @@ const uploadBufferToStorage = async (input: {
   };
 };
 
+const uploadRemoteImageStreamToR2 = async (input: {
+  organizationId: string;
+  productId?: string | null;
+  sourceUrl: string;
+}): Promise<{ attempted: boolean; result: ResolveProductImageUrlResult | null }> => {
+  if (!fastRemoteImageCopyEnabled) {
+    return { attempted: false, result: null };
+  }
+
+  const storage = resolveStorageProvider();
+  if (storage.provider !== "r2" || !storage.config) {
+    return { attempted: false, result: null };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(input.sourceUrl);
+  } catch {
+    return { attempted: true, result: null };
+  }
+
+  const hostAllowed = await isRemoteHostAllowed(parsed.hostname);
+  if (!hostAllowed) {
+    return { attempted: true, result: null };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
+
+  try {
+    const response = await fetch(input.sourceUrl, { signal: controller.signal });
+    if (!response.ok) {
+      return { attempted: true, result: null };
+    }
+
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    const normalizedType = normalizeImageMimeType(contentType);
+    if (!normalizedType.startsWith("image/")) {
+      return { attempted: true, result: null };
+    }
+    if (isAppleHeifMimeType(normalizedType)) {
+      return { attempted: false, result: null };
+    }
+
+    const contentLength = Number(response.headers.get("content-length"));
+    if (!Number.isFinite(contentLength) || contentLength < 1) {
+      return { attempted: false, result: null };
+    }
+    if (contentLength > maxImageBytes) {
+      return { attempted: true, result: null };
+    }
+    if (!response.body) {
+      return { attempted: false, result: null };
+    }
+
+    const extension = detectImageExtension(normalizedType, input.sourceUrl);
+    const hash = createHash("sha1")
+      .update(`${input.organizationId}:${normalizeProductPath(input.productId)}:${input.sourceUrl}`)
+      .digest("hex");
+    const fileName = `${hash}.${extension}`;
+    const objectKey = getObjectKey(input.organizationId, fileName, input.productId);
+    const client = getR2Client(storage.config);
+    await client.send(
+      new PutObjectCommand({
+        Bucket: storage.config.bucketName,
+        Key: objectKey,
+        Body: Readable.fromWeb(response.body as unknown as NodeReadableStream<Uint8Array>),
+        ContentLength: contentLength,
+        ContentType: normalizedType,
+        CacheControl: "public, max-age=31536000, immutable",
+      }),
+    );
+
+    return {
+      attempted: true,
+      result: {
+        url: toManagedR2Url(storage.config, objectKey),
+        managed: true,
+      },
+    };
+  } catch {
+    return { attempted: true, result: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const parseDataImage = (value: string) => {
   const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) {
@@ -752,6 +849,22 @@ export const resolveProductImageUrl = async (input: {
       input.cache?.set(normalized, result);
       return result;
     }
+  }
+
+  const streamed = await uploadRemoteImageStreamToR2({
+    organizationId: input.organizationId,
+    productId: input.productId,
+    sourceUrl: normalized,
+  });
+  if (streamed.attempted) {
+    const result =
+      streamed.result ??
+      ({
+        url: input.fallbackToSource === false ? null : normalized,
+        managed: false,
+      } as ResolveProductImageUrlResult);
+    input.cache?.set(normalized, result);
+    return result;
   }
 
   const downloaded = await downloadRemoteImage(normalized);
