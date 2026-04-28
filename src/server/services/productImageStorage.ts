@@ -27,6 +27,21 @@ const extractHyperlinkTarget = (value: string) => {
   return trimmed;
 };
 
+const stripUrlBoundaryNoise = (value: string) =>
+  value
+    .trim()
+    .replace(/^[\s"'`[\]{}()]+/g, "")
+    .replace(/[\s"'`[\]{}()]+$/g, "");
+
+const extractUrlCandidate = (value: string) => {
+  const normalized = stripUrlBoundaryNoise(value);
+  if (normalized.startsWith("data:image/")) {
+    return normalized;
+  }
+  const match = normalized.match(/(?:https?:\/\/|\/\/|www\.|\/uploads\/)[^\s"'`<>\[\]{}(),;|]+/i);
+  return stripUrlBoundaryNoise(match?.[0] ?? normalized);
+};
+
 const normalizeOrgPath = (organizationId: string) =>
   organizationId.replace(/[^a-zA-Z0-9_-]/g, "").trim() || "default";
 
@@ -659,7 +674,7 @@ export const normalizeProductImageUrl = (value?: string | null) => {
     return null;
   }
 
-  let candidate = extractHyperlinkTarget(normalized);
+  let candidate = extractUrlCandidate(extractHyperlinkTarget(normalized));
   if (candidate.startsWith("//")) {
     candidate = `https:${candidate}`;
   } else if (/^www\./i.test(candidate)) {
@@ -694,6 +709,7 @@ export const resolveProductImageUrl = async (input: {
   organizationId: string;
   productId?: string | null;
   cache?: Map<string, ResolveProductImageUrlResult>;
+  fallbackToSource?: boolean;
 }) => {
   const normalized = normalizeProductImageUrl(input.value);
   if (!normalized) {
@@ -740,7 +756,10 @@ export const resolveProductImageUrl = async (input: {
 
   const downloaded = await downloadRemoteImage(normalized);
   if (!downloaded) {
-    const result = { url: normalized, managed: false } as ResolveProductImageUrlResult;
+    const result = {
+      url: input.fallbackToSource === false ? null : normalized,
+      managed: false,
+    } as ResolveProductImageUrlResult;
     input.cache?.set(normalized, result);
     return result;
   }
@@ -757,7 +776,10 @@ export const resolveProductImageUrl = async (input: {
     return uploaded;
   } catch (error) {
     warnUploadFailure(error);
-    const result = { url: normalized, managed: false } as ResolveProductImageUrlResult;
+    const result = {
+      url: input.fallbackToSource === false ? null : normalized,
+      managed: false,
+    } as ResolveProductImageUrlResult;
     input.cache?.set(normalized, result);
     return result;
   }

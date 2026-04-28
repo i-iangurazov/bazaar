@@ -11,6 +11,7 @@ import {
 } from "@/server/metrics/metrics";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const handler = async (request: Request) => {
   const startedAt = Date.now();

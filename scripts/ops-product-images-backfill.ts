@@ -35,11 +35,16 @@ const warn = (message: string) => {
   console.warn(`[images-backfill] WARN: ${message}`);
 };
 
-const isCloudflareManagedUrl = (value: string) =>
-  Boolean(r2BaseUrl) && value.startsWith(r2BaseUrl);
+const isCloudflareManagedUrl = (value: string) => Boolean(r2BaseUrl) && value.startsWith(r2BaseUrl);
+
+const cleanUrlCandidate = (value: string) =>
+  value
+    .trim()
+    .replace(/^[\s"'`[\]{}()]+/g, "")
+    .replace(/[\s"'`[\]{}()]+$/g, "");
 
 const splitUrlCandidates = (value: string) => {
-  const trimmed = value.trim();
+  const trimmed = cleanUrlCandidate(value);
   if (!trimmed) {
     return [];
   }
@@ -52,7 +57,7 @@ const splitUrlCandidates = (value: string) => {
 
   const parts = trimmed
     .split(/[\n,;]+/)
-    .map((part) => part.trim())
+    .map((part) => cleanUrlCandidate(part))
     .filter(Boolean);
   if (parts.length < 2) {
     return [trimmed];
@@ -200,6 +205,7 @@ const main = async () => {
           organizationId: product.organizationId,
           productId: product.id,
           cache,
+          fallbackToSource: false,
         });
         if (resolved.url && resolved.url !== current) {
           if (kind === "photo") {
@@ -207,10 +213,10 @@ const main = async () => {
           } else {
             migratedImageUrls += 1;
           }
-        } else if (!resolved.url) {
+        } else if (!resolved.url || !resolved.managed) {
           failedResolutions += 1;
         }
-        return resolved.url ?? null;
+        return resolved.managed ? (resolved.url ?? null) : null;
       };
 
       if (product.photoUrl) {

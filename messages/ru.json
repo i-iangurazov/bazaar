@@ -3443,7 +3443,7 @@
     "importInProgressStage": "Этап: {stage}. Не закрывайте страницу.",
     "importResultTitle": "Результат последнего импорта",
     "imageDownloaded": "Загружено в систему",
-    "imageFallback": "Оставлено по ссылке",
+    "imageFallback": "Не загружено",
     "imageMissing": "Без изображения",
     "progressStage": {
       "validating": "проверка данных",

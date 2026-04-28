@@ -3438,7 +3438,7 @@
     "importInProgressStage": "Баскыч: {stage}. Баракты жаппаңыз.",
     "importResultTitle": "Акыркы импорттун жыйынтыгы",
     "imageDownloaded": "Система ичине жүктөлдү",
-    "imageFallback": "Шилтеме бойдон калды",
+    "imageFallback": "Жүктөлгөн жок",
     "imageMissing": "Сүрөт жок",
     "progressStage": {
       "validating": "маалыматты текшерүү",

@@ -5,19 +5,14 @@ const heifContainerBytes = Buffer.from([
   0x68, 0x65, 0x69, 0x63, 0x00, 0x00, 0x00, 0x00,
 ]);
 
-const {
-  mockMkdir,
-  mockWriteFile,
-  mockSharpFactory,
-  mockSharpToBuffer,
-  mockHeicConvert,
-} = vi.hoisted(() => ({
-  mockMkdir: vi.fn(),
-  mockWriteFile: vi.fn(),
-  mockSharpFactory: vi.fn(),
-  mockSharpToBuffer: vi.fn(),
-  mockHeicConvert: vi.fn(),
-}));
+const { mockMkdir, mockWriteFile, mockSharpFactory, mockSharpToBuffer, mockHeicConvert } =
+  vi.hoisted(() => ({
+    mockMkdir: vi.fn(),
+    mockWriteFile: vi.fn(),
+    mockSharpFactory: vi.fn(),
+    mockSharpToBuffer: vi.fn(),
+    mockHeicConvert: vi.fn(),
+  }));
 
 vi.mock("node:fs/promises", () => ({
   mkdir: (...args: unknown[]) => mockMkdir(...args),
@@ -60,9 +55,8 @@ describe("product image storage", () => {
       return pipeline;
     });
 
-    const { uploadProductImageBuffer } = await import(
-      "../../src/server/services/productImageStorage"
-    );
+    const { uploadProductImageBuffer } =
+      await import("../../src/server/services/productImageStorage");
     const result = await uploadProductImageBuffer({
       organizationId: "org-1",
       productId: "prod-1",
@@ -82,9 +76,8 @@ describe("product image storage", () => {
   it("stores PNG uploads as-is without HEIC transcoding", async () => {
     const inputBytes = Buffer.from([7, 8, 9, 10]);
 
-    const { uploadProductImageBuffer } = await import(
-      "../../src/server/services/productImageStorage"
-    );
+    const { uploadProductImageBuffer } =
+      await import("../../src/server/services/productImageStorage");
     const result = await uploadProductImageBuffer({
       organizationId: "org-1",
       productId: "prod-1",
@@ -101,9 +94,51 @@ describe("product image storage", () => {
     expect(result.url).toMatch(/\.png$/);
   });
 
+  it("normalizes image URLs copied from JSON-like spreadsheet cells", async () => {
+    const { normalizeProductImageUrl } =
+      await import("../../src/server/services/productImageStorage");
+
+    expect(
+      normalizeProductImageUrl(
+        '["https://cdn.shopify.com/s/files/1/test/files/photo.jpg?v=1760877521"]',
+      ),
+    ).toBe("https://cdn.shopify.com/s/files/1/test/files/photo.jpg?v=1760877521");
+    expect(normalizeProductImageUrl('"https://cdn.shopify.com/photo.jpg?v=1"')).toBe(
+      "https://cdn.shopify.com/photo.jpg?v=1",
+    );
+  });
+
+  it("can disable source-url fallback when a remote image cannot be copied", async () => {
+    const { resolveProductImageUrl } =
+      await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      resolveProductImageUrl({
+        value: "https://localhost/private.jpg",
+        organizationId: "org-1",
+      }),
+    ).resolves.toMatchObject({
+      url: "https://localhost/private.jpg",
+      managed: false,
+    });
+
+    await expect(
+      resolveProductImageUrl({
+        value: "https://localhost/private.jpg",
+        organizationId: "org-1",
+        fallbackToSource: false,
+      }),
+    ).resolves.toMatchObject({
+      url: null,
+      managed: false,
+    });
+  });
+
   it("falls back to heic-convert when sharp cannot decode HEIF", async () => {
     const convertedBytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9, 0x00, 0x11]);
-    mockSharpToBuffer.mockRejectedValue(new Error("Input buffer contains unsupported image format"));
+    mockSharpToBuffer.mockRejectedValue(
+      new Error("Input buffer contains unsupported image format"),
+    );
     mockHeicConvert.mockResolvedValue(convertedBytes);
     mockSharpFactory.mockImplementation(() => {
       const pipeline = {
@@ -114,9 +149,8 @@ describe("product image storage", () => {
       return pipeline;
     });
 
-    const { uploadProductImageBuffer } = await import(
-      "../../src/server/services/productImageStorage"
-    );
+    const { uploadProductImageBuffer } =
+      await import("../../src/server/services/productImageStorage");
     const result = await uploadProductImageBuffer({
       organizationId: "org-1",
       productId: "prod-1",
@@ -135,7 +169,9 @@ describe("product image storage", () => {
   });
 
   it("rejects HEIF upload when all converters fail", async () => {
-    mockSharpToBuffer.mockRejectedValue(new Error("Input buffer contains unsupported image format"));
+    mockSharpToBuffer.mockRejectedValue(
+      new Error("Input buffer contains unsupported image format"),
+    );
     mockHeicConvert.mockRejectedValue(new Error("format not supported"));
     mockSharpFactory.mockImplementation(() => {
       const pipeline = {
@@ -146,9 +182,8 @@ describe("product image storage", () => {
       return pipeline;
     });
 
-    const { uploadProductImageBuffer } = await import(
-      "../../src/server/services/productImageStorage"
-    );
+    const { uploadProductImageBuffer } =
+      await import("../../src/server/services/productImageStorage");
 
     await expect(
       uploadProductImageBuffer({

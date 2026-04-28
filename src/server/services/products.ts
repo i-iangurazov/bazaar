@@ -305,9 +305,10 @@ const resolveRemoteImportPhotoUrl = async (
     value,
     organizationId,
     cache,
+    fallbackToSource: false,
   });
 
-  if (!resolved.url) {
+  if (!resolved.url || !resolved.managed) {
     return value;
   }
 
@@ -1849,9 +1850,7 @@ export type ImportPhotoResolutionSummary = {
 
 const normalizeImportImages = (row: Pick<ImportProductRow, "photoUrl" | "images">) => {
   const sourceImages =
-    row.images?.length || !row.photoUrl
-      ? row.images
-      : [{ url: row.photoUrl, position: 0 }];
+    row.images?.length || !row.photoUrl ? row.images : [{ url: row.photoUrl, position: 0 }];
   const seen = new Set<string>();
   const normalized = normalizeImages(sourceImages)
     .map((image) => ({
@@ -1935,7 +1934,7 @@ const resolveImportImageBudgetMs = () => {
   if (Number.isFinite(parsed) && parsed >= 5_000) {
     return parsed;
   }
-  return 30_000;
+  return 120_000;
 };
 
 export const resolveImportRowsPhotoUrls = async (rows: ImportProductRow[]) => {
@@ -2011,7 +2010,7 @@ export const resolveImportRowsPhotoUrlsForOrganization = async (
 
       if (Date.now() > deadline) {
         summary.fallback += normalizedImages.length;
-        resolvedRows[index] = withResolvedImportImages(row, normalizedImages);
+        resolvedRows[index] = withResolvedImportImages(row, []);
         continue;
       }
 
@@ -2019,20 +2018,20 @@ export const resolveImportRowsPhotoUrlsForOrganization = async (
       for (const image of normalizedImages) {
         if (Date.now() > deadline) {
           summary.fallback += 1;
-          resolvedImages.push(image);
           continue;
         }
-        const resolvedPhotoUrl = await resolveRemoteImportPhotoUrl(
-          image.url,
+        const resolved = await resolveProductImageUrl({
+          value: image.url,
           organizationId,
           cache,
-        );
-        if (isManagedProductImageUrl(resolvedPhotoUrl)) {
+          fallbackToSource: false,
+        });
+        if (resolved.url && resolved.managed && isManagedProductImageUrl(resolved.url)) {
           summary.downloaded += 1;
+          resolvedImages.push({ ...image, url: resolved.url });
         } else {
           summary.fallback += 1;
         }
-        resolvedImages.push({ ...image, url: resolvedPhotoUrl });
       }
       resolvedRows[index] = withResolvedImportImages(row, resolvedImages);
     }

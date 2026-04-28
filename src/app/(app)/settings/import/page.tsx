@@ -199,7 +199,9 @@ const parseImageLinks = (value: string) => {
   if (!normalized) {
     return [];
   }
-  const urlMatches = normalized.match(/(?:https?:\/\/|\/uploads\/)[^\s,;|]+/gi);
+  const urlMatches = normalized.match(
+    /(?:https?:\/\/|\/\/|www\.|\/uploads\/)[^\s"'`<>\[\]{}(),;|]+/gi,
+  );
   const candidates = urlMatches?.length
     ? urlMatches
     : normalized
@@ -207,7 +209,13 @@ const parseImageLinks = (value: string) => {
         .map((item) => item.trim())
         .filter(Boolean);
 
-  return Array.from(new Set(candidates.map((item) => item.trim()).filter(Boolean)));
+  return Array.from(
+    new Set(
+      candidates
+        .map((item) => item.trim().replace(/^[\s"'`[\]{}()]+|[\s"'`[\]{}()]+$/g, ""))
+        .filter(Boolean),
+    ),
+  );
 };
 
 const normalizeVariantAttributeValue = (value: unknown): unknown => {
@@ -465,6 +473,7 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
 
 const DRY_RUN_PREVIEW_ROW_LIMIT = 100;
 const MAX_IMPORT_TRANSPORT_ROWS = 500;
+const MAX_IMPORT_TRANSPORT_IMAGES = 200;
 const MAX_IMPORT_TRANSPORT_BYTES = 1_500_000;
 
 type ImportTransportBase = {
@@ -481,6 +490,13 @@ type ImportTransportPayload = ImportTransportBase & {
 
 const jsonByteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 
+const countImportRowImages = (row: ImportRow) => {
+  if (row.images?.length) {
+    return row.images.length;
+  }
+  return row.photoUrl ? 1 : 0;
+};
+
 const splitRowsForTransport = (
   rows: ImportRow[],
   base: ImportTransportBase,
@@ -489,6 +505,7 @@ const splitRowsForTransport = (
   const baseBytes = jsonByteLength({ ...base, rows: [] });
   let chunkRows: ImportRow[] = [];
   let chunkBytes = baseBytes;
+  let chunkImages = 0;
 
   const flushChunk = () => {
     if (!chunkRows.length) {
@@ -497,18 +514,23 @@ const splitRowsForTransport = (
     chunks.push({ ...base, rows: chunkRows });
     chunkRows = [];
     chunkBytes = baseBytes;
+    chunkImages = 0;
   };
 
   rows.forEach((row) => {
     const rowBytes = jsonByteLength(row) + 2;
+    const rowImages = countImportRowImages(row);
     const wouldExceedRows = chunkRows.length >= MAX_IMPORT_TRANSPORT_ROWS;
+    const wouldExceedImages =
+      chunkRows.length > 0 && chunkImages + rowImages > MAX_IMPORT_TRANSPORT_IMAGES;
     const wouldExceedBytes =
       chunkRows.length > 0 && chunkBytes + rowBytes > MAX_IMPORT_TRANSPORT_BYTES;
-    if (wouldExceedRows || wouldExceedBytes) {
+    if (wouldExceedRows || wouldExceedImages || wouldExceedBytes) {
       flushChunk();
     }
     chunkRows.push(row);
     chunkBytes += rowBytes;
+    chunkImages += rowImages;
   });
 
   flushChunk();

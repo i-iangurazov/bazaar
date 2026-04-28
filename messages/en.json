@@ -3445,7 +3445,7 @@
     "importInProgressStage": "Import in progress stage {stage}",
     "importResultTitle": "Import result",
     "imageDownloaded": "Image downloaded",
-    "imageFallback": "Image fallback",
+    "imageFallback": "Image not copied",
     "imageMissing": "Image missing",
     "progressStage": {
       "validating": "Validating",
