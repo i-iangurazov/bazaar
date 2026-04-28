@@ -23,6 +23,7 @@ const applyChanges = parseBool(process.env.APPLY);
 const batchSize = toPositiveInt(process.env.BATCH_SIZE, 100);
 const productConcurrency = toPositiveInt(process.env.PRODUCT_CONCURRENCY, 4);
 const imageConcurrency = toPositiveInt(process.env.IMAGE_CONCURRENCY, 8);
+const writeConcurrency = toPositiveInt(process.env.WRITE_CONCURRENCY, 4);
 const progressEveryProducts = toPositiveInt(
   process.env.PROGRESS_EVERY_PRODUCTS ?? process.env.PROGRESS_EVERY,
   10,
@@ -30,6 +31,9 @@ const progressEveryProducts = toPositiveInt(
 const slowResolveMs = toPositiveInt(process.env.SLOW_IMAGE_LOG_MS, 3_000);
 const verboseImages = parseBool(process.env.VERBOSE_IMAGES);
 const resolveDryRunImages = parseBool(process.env.DRY_RUN_RESOLVE_IMAGES);
+const prismaRetryCount = toPositiveInt(process.env.PRISMA_RETRIES, 3);
+const transactionMaxWaitMs = toPositiveInt(process.env.PRISMA_TRANSACTION_MAX_WAIT_MS, 30_000);
+const transactionTimeoutMs = toPositiveInt(process.env.PRISMA_TRANSACTION_TIMEOUT_MS, 60_000);
 const organizationIdFilter = process.env.ORG_ID?.trim() || null;
 const baseUrl = trimTrailingSlash((process.env.NEXTAUTH_URL ?? "").trim());
 const r2BaseUrl = trimTrailingSlash((process.env.R2_PUBLIC_BASE_URL ?? "").trim());
@@ -43,6 +47,8 @@ const log = (message: string) => {
 const warn = (message: string) => {
   console.warn(`[images-backfill] WARN: ${message}`);
 };
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const formatElapsed = (startedAt: number) => `${Math.round((Date.now() - startedAt) / 1000)}s`;
 
@@ -143,17 +149,59 @@ const isDatabaseConnectionError = (error: unknown) => {
   );
 };
 
-const runPrismaWithReconnect = async <T>(label: string, task: () => Promise<T>) => {
-  try {
-    return await task();
-  } catch (error) {
-    if (!isDatabaseConnectionError(error)) {
-      throw error;
+const isTransactionStartTimeout = (error: unknown) =>
+  getErrorCode(error) === "P2028" &&
+  getErrorText(error).includes("Unable to start a transaction");
+
+const runPrismaWithRetry = async <T>(label: string, task: () => Promise<T>) => {
+  for (let attempt = 1; attempt <= prismaRetryCount + 1; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      if (!isDatabaseConnectionError(error) && !isTransactionStartTimeout(error)) {
+        throw error;
+      }
+      if (attempt > prismaRetryCount) {
+        throw error;
+      }
+
+      const delayMs = Math.min(1_000 * 2 ** (attempt - 1), 5_000);
+      if (isDatabaseConnectionError(error)) {
+        warn(
+          `PostgreSQL connection closed during ${label}; reconnecting and retrying (${attempt}/${prismaRetryCount})`,
+        );
+        await prisma.$connect();
+      } else {
+        warn(
+          `PostgreSQL transaction queue was busy during ${label}; retrying in ${delayMs}ms (${attempt}/${prismaRetryCount})`,
+        );
+      }
+      await sleep(delayMs);
     }
-    warn(`PostgreSQL connection closed during ${label}; reconnecting and retrying once`);
-    await prisma.$connect();
-    return task();
   }
+
+  throw new Error(`Prisma retry loop exhausted during ${label}`);
+};
+
+const runWriteWithLimiter = async <T>(
+  limiter: ReturnType<typeof createConcurrencyLimiter>,
+  label: string,
+  task: () => Promise<T>,
+) => {
+  return limiter.run(() =>
+    runPrismaWithRetry(label, async () => {
+      try {
+        return await task();
+      } catch (error) {
+        if (isTransactionStartTimeout(error)) {
+          warn(
+            `${label} could not start a transaction within ${transactionMaxWaitMs}ms; consider lowering WRITE_CONCURRENCY`,
+          );
+        }
+        throw error;
+      }
+    }),
+  );
 };
 
 const cleanUrlCandidate = (value: string) =>
@@ -259,7 +307,7 @@ const main = async () => {
     log(`Filtering by organization: ${organizationIdFilter}`);
   }
   log(
-    `Batch size ${batchSize}; product concurrency ${productConcurrency}; image concurrency ${imageConcurrency}`,
+    `Batch size ${batchSize}; product concurrency ${productConcurrency}; image concurrency ${imageConcurrency}; write concurrency ${writeConcurrency}`,
   );
   if (!applyChanges && !resolveDryRunImages) {
     log(
@@ -272,6 +320,7 @@ const main = async () => {
 
   const startedAt = Date.now();
   const imageLimiter = createConcurrencyLimiter(imageConcurrency);
+  const writeLimiter = createConcurrencyLimiter(writeConcurrency);
   let processedProducts = 0;
   let scannedPhotoUrls = 0;
   let scannedImageUrls = 0;
@@ -287,10 +336,11 @@ const main = async () => {
 
   const logProgress = (reason: string) => {
     const imageWorkers = imageLimiter.stats();
+    const writeWorkers = writeLimiter.stats();
     const migratedProgressLabel =
       !applyChanges && !resolveDryRunImages ? "wouldMigrate" : "migrated";
     log(
-      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, ${migratedProgressLabel}=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
+      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, ${migratedProgressLabel}=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, writeWorkers=${writeWorkers.active}/${writeConcurrency}, writeQueued=${writeWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
     );
   };
 
@@ -429,33 +479,39 @@ const main = async () => {
       return result;
     }
 
-    await runPrismaWithReconnect(`update product ${product.id}`, () =>
-      prisma.$transaction(async (tx) => {
-        if (hasPhotoChange) {
-          await tx.product.update({
-            where: { id: product.id },
-            data: { photoUrl: nextPhotoUrl ?? null },
-          });
-        }
-        if (hasImageChange) {
-          await tx.productImage.deleteMany({ where: { productId: product.id } });
-          await tx.productImage.createMany({
-            data: nextImageUrls.map((url, position) => ({
-              organizationId: product.organizationId,
-              productId: product.id,
-              url,
-              position,
-            })),
-          });
-        }
-      }),
+    await runWriteWithLimiter(writeLimiter, `update product ${product.id}`, () =>
+      prisma.$transaction(
+        async (tx) => {
+          if (hasPhotoChange) {
+            await tx.product.update({
+              where: { id: product.id },
+              data: { photoUrl: nextPhotoUrl ?? null },
+            });
+          }
+          if (hasImageChange) {
+            await tx.productImage.deleteMany({ where: { productId: product.id } });
+            await tx.productImage.createMany({
+              data: nextImageUrls.map((url, position) => ({
+                organizationId: product.organizationId,
+                productId: product.id,
+                url,
+                position,
+              })),
+            });
+          }
+        },
+        {
+          maxWait: transactionMaxWaitMs,
+          timeout: transactionTimeoutMs,
+        },
+      ),
     );
 
     return result;
   };
 
   while (true) {
-    const products: ProductBatchRow[] = await runPrismaWithReconnect(
+    const products: ProductBatchRow[] = await runPrismaWithRetry(
       `fetch product batch ${batchNumber + 1}`,
       () =>
         prisma.product.findMany({
