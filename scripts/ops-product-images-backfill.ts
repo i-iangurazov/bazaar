@@ -183,7 +183,16 @@ const runPrismaWithRetry = async <T>(label: string, task: () => Promise<T>) => {
         );
         await prisma.$disconnect().catch(() => undefined);
         await sleep(delayMs);
-        await prisma.$connect();
+        try {
+          await prisma.$connect();
+        } catch (connectError) {
+          warn(
+            `PostgreSQL reconnect failed during ${label}; retrying (${attempt}/${prismaRetryCount})`,
+          );
+          if (attempt >= prismaRetryCount) {
+            throw connectError;
+          }
+        }
         continue;
       } else if (isPrismaPoolTimeout(error)) {
         warn(
