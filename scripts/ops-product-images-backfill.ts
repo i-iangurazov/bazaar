@@ -29,6 +29,7 @@ const progressEveryProducts = toPositiveInt(
 );
 const slowResolveMs = toPositiveInt(process.env.SLOW_IMAGE_LOG_MS, 3_000);
 const verboseImages = parseBool(process.env.VERBOSE_IMAGES);
+const resolveDryRunImages = parseBool(process.env.DRY_RUN_RESOLVE_IMAGES);
 const organizationIdFilter = process.env.ORG_ID?.trim() || null;
 const baseUrl = trimTrailingSlash((process.env.NEXTAUTH_URL ?? "").trim());
 const r2BaseUrl = trimTrailingSlash((process.env.R2_PUBLIC_BASE_URL ?? "").trim());
@@ -49,22 +50,38 @@ const isCloudflareManagedUrl = (value: string) => Boolean(r2BaseUrl) && value.st
 
 const createConcurrencyLimiter = (concurrency: number) => {
   let active = 0;
-  const queue: Array<() => void> = [];
+  const queue: Array<{
+    task: () => Promise<unknown>;
+    resolve: (value: unknown) => void;
+    reject: (error: unknown) => void;
+  }> = [];
+
+  const schedule = () => {
+    while (active < concurrency && queue.length > 0) {
+      const next = queue.shift();
+      if (!next) {
+        return;
+      }
+      active += 1;
+      void next
+        .task()
+        .then(next.resolve, next.reject)
+        .finally(() => {
+          active -= 1;
+          schedule();
+        });
+    }
+  };
 
   const run = async <T>(task: () => Promise<T>) => {
-    if (active >= concurrency) {
-      await new Promise<void>((resolve) => {
-        queue.push(resolve);
+    return new Promise<T>((resolve, reject) => {
+      queue.push({
+        task,
+        resolve: (value) => resolve(value as T),
+        reject,
       });
-    }
-
-    active += 1;
-    try {
-      return await task();
-    } finally {
-      active -= 1;
-      queue.shift()?.();
-    }
+      schedule();
+    });
   };
 
   return {
@@ -199,6 +216,8 @@ const normalizeForMigration = (value: string) => {
   return trimmed;
 };
 
+const toDryRunManagedUrl = (value: string) => `dry-run-managed:${value}`;
+
 type ProductBatchRow = {
   id: string;
   organizationId: string;
@@ -242,6 +261,11 @@ const main = async () => {
   log(
     `Batch size ${batchSize}; product concurrency ${productConcurrency}; image concurrency ${imageConcurrency}`,
   );
+  if (!applyChanges && !resolveDryRunImages) {
+    log(
+      "Dry-run fast scan enabled; set DRY_RUN_RESOLVE_IMAGES=1 to test actual downloads/uploads",
+    );
+  }
   log(
     `Progress logs every ${progressEveryProducts} products (set PROGRESS_EVERY=1 for every product)`,
   );
@@ -263,8 +287,10 @@ const main = async () => {
 
   const logProgress = (reason: string) => {
     const imageWorkers = imageLimiter.stats();
+    const migratedProgressLabel =
+      !applyChanges && !resolveDryRunImages ? "wouldMigrate" : "migrated";
     log(
-      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, migrated=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
+      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, ${migratedProgressLabel}=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
     );
   };
 
@@ -312,6 +338,14 @@ const main = async () => {
       if (!candidate) {
         result.skippedMissingBaseUrl += 1;
         return null;
+      }
+      if (!applyChanges && !resolveDryRunImages) {
+        if (kind === "photo") {
+          result.migratedPhotoUrls += 1;
+        } else {
+          result.migratedImageUrls += 1;
+        }
+        return toDryRunManagedUrl(candidate);
       }
 
       return imageLimiter.run(async () => {
@@ -481,8 +515,9 @@ const main = async () => {
   log(`Products with changes: ${changedProducts}`);
   log(`Photo URLs scanned: ${scannedPhotoUrls}`);
   log(`ProductImage URLs scanned: ${scannedImageUrls}`);
-  log(`Photo URLs migrated: ${migratedPhotoUrls}`);
-  log(`ProductImage URLs migrated: ${migratedImageUrls}`);
+  const migratedLabel = !applyChanges && !resolveDryRunImages ? "would migrate" : "migrated";
+  log(`Photo URLs ${migratedLabel}: ${migratedPhotoUrls}`);
+  log(`ProductImage URLs ${migratedLabel}: ${migratedImageUrls}`);
   log(`Skipped already on Cloudflare: ${skippedAlreadyCloudflare}`);
   log(`Skipped (relative URL but NEXTAUTH_URL missing): ${skippedMissingBaseUrl}`);
   log(`Failed resolutions (kept original URL): ${failedResolutions}`);
