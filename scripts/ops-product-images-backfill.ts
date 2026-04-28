@@ -21,6 +21,8 @@ const toPositiveInt = (value: string | undefined, fallback: number) => {
 
 const applyChanges = parseBool(process.env.APPLY);
 const batchSize = toPositiveInt(process.env.BATCH_SIZE, 100);
+const productConcurrency = toPositiveInt(process.env.PRODUCT_CONCURRENCY, 4);
+const imageConcurrency = toPositiveInt(process.env.IMAGE_CONCURRENCY, 8);
 const progressEveryProducts = toPositiveInt(
   process.env.PROGRESS_EVERY_PRODUCTS ?? process.env.PROGRESS_EVERY,
   10,
@@ -44,6 +46,98 @@ const warn = (message: string) => {
 const formatElapsed = (startedAt: number) => `${Math.round((Date.now() - startedAt) / 1000)}s`;
 
 const isCloudflareManagedUrl = (value: string) => Boolean(r2BaseUrl) && value.startsWith(r2BaseUrl);
+
+const createConcurrencyLimiter = (concurrency: number) => {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  const run = async <T>(task: () => Promise<T>) => {
+    if (active >= concurrency) {
+      await new Promise<void>((resolve) => {
+        queue.push(resolve);
+      });
+    }
+
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      active -= 1;
+      queue.shift()?.();
+    }
+  };
+
+  return {
+    run,
+    stats: () => ({ active, queued: queue.length }),
+  };
+};
+
+const runWithConcurrency = async <T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>,
+) => {
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= items.length) {
+          return;
+        }
+        await worker(items[index], index);
+      }
+    }),
+  );
+};
+
+const getErrorText = (error: unknown) => {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}\n${error.stack ?? ""}`;
+  }
+  return String(error);
+};
+
+const getErrorCode = (error: unknown) => {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return null;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
+};
+
+const isDatabaseConnectionError = (error: unknown) => {
+  const code = getErrorCode(error);
+  if (code === "P1001" || code === "P1017") {
+    return true;
+  }
+
+  const message = getErrorText(error);
+  return (
+    message.includes("kind: Closed") ||
+    /connection.*closed/i.test(message) ||
+    /server has closed the connection/i.test(message) ||
+    message.includes("ECONNRESET") ||
+    message.includes("EPIPE")
+  );
+};
+
+const runPrismaWithReconnect = async <T>(label: string, task: () => Promise<T>) => {
+  try {
+    return await task();
+  } catch (error) {
+    if (!isDatabaseConnectionError(error)) {
+      throw error;
+    }
+    warn(`PostgreSQL connection closed during ${label}; reconnecting and retrying once`);
+    await prisma.$connect();
+    return task();
+  }
+};
 
 const cleanUrlCandidate = (value: string) =>
   value
@@ -112,6 +206,17 @@ type ProductBatchRow = {
   images: { id: string; url: string }[];
 };
 
+type ProductBackfillResult = {
+  changed: boolean;
+  scannedPhotoUrls: number;
+  scannedImageUrls: number;
+  migratedPhotoUrls: number;
+  migratedImageUrls: number;
+  skippedAlreadyCloudflare: number;
+  skippedMissingBaseUrl: number;
+  failedResolutions: number;
+};
+
 const main = async () => {
   const mode = applyChanges ? "apply" : "dry-run";
   log(`Starting product image backfill (${mode})`);
@@ -135,10 +240,14 @@ const main = async () => {
     log(`Filtering by organization: ${organizationIdFilter}`);
   }
   log(
+    `Batch size ${batchSize}; product concurrency ${productConcurrency}; image concurrency ${imageConcurrency}`,
+  );
+  log(
     `Progress logs every ${progressEveryProducts} products (set PROGRESS_EVERY=1 for every product)`,
   );
 
   const startedAt = Date.now();
+  const imageLimiter = createConcurrencyLimiter(imageConcurrency);
   let processedProducts = 0;
   let scannedPhotoUrls = 0;
   let scannedImageUrls = 0;
@@ -153,75 +262,59 @@ const main = async () => {
   let batchNumber = 0;
 
   const logProgress = (reason: string) => {
+    const imageWorkers = imageLimiter.stats();
     log(
-      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, migrated=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, elapsed=${formatElapsed(startedAt)}`,
+      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, migrated=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
     );
   };
 
-  while (true) {
-    const products: ProductBatchRow[] = await prisma.product.findMany({
-      where: {
-        ...(organizationIdFilter ? { organizationId: organizationIdFilter } : {}),
-      },
-      select: {
-        id: true,
-        organizationId: true,
-        photoUrl: true,
-        images: {
-          select: {
-            id: true,
-            url: true,
-          },
-        },
-      },
-      orderBy: { id: "asc" },
-      take: batchSize,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    });
+  const processProduct = async (product: ProductBatchRow): Promise<ProductBackfillResult> => {
+    const result: ProductBackfillResult = {
+      changed: false,
+      scannedPhotoUrls: 0,
+      scannedImageUrls: 0,
+      migratedPhotoUrls: 0,
+      migratedImageUrls: 0,
+      skippedAlreadyCloudflare: 0,
+      skippedMissingBaseUrl: 0,
+      failedResolutions: 0,
+    };
+    const cache = new Map<string, Awaited<ReturnType<typeof resolveProductImageUrl>>>();
+    const nextImageUrls: string[] = [];
+    const nextImageUrlSet = new Set<string>();
+    let nextPhotoUrl: string | null | undefined;
+    let hadMultiPhotoInput = false;
 
-    if (!products.length) {
-      break;
-    }
+    const pushImageUrl = (value: string | null) => {
+      if (!value) {
+        return;
+      }
+      if (nextImageUrlSet.has(value)) {
+        return;
+      }
+      nextImageUrlSet.add(value);
+      nextImageUrls.push(value);
+    };
 
-    batchNumber += 1;
-    log(`Fetched batch ${batchNumber}: ${products.length} products`);
+    const resolveCandidate = async (
+      rawValue: string,
+      kind: "photo" | "image",
+    ): Promise<string | null> => {
+      const current = rawValue.trim();
+      if (!current) {
+        return null;
+      }
+      if (isCloudflareManagedUrl(current)) {
+        result.skippedAlreadyCloudflare += 1;
+        return current;
+      }
+      const candidate = normalizeForMigration(current);
+      if (!candidate) {
+        result.skippedMissingBaseUrl += 1;
+        return null;
+      }
 
-    for (const product of products) {
-      processedProducts += 1;
-      const cache = new Map<string, Awaited<ReturnType<typeof resolveProductImageUrl>>>();
-      const nextImageUrls: string[] = [];
-      const nextImageUrlSet = new Set<string>();
-      let nextPhotoUrl: string | null | undefined;
-      let hadMultiPhotoInput = false;
-
-      const pushImageUrl = (value: string | null) => {
-        if (!value) {
-          return;
-        }
-        if (nextImageUrlSet.has(value)) {
-          return;
-        }
-        nextImageUrlSet.add(value);
-        nextImageUrls.push(value);
-      };
-
-      const resolveCandidate = async (
-        rawValue: string,
-        kind: "photo" | "image",
-      ): Promise<string | null> => {
-        const current = rawValue.trim();
-        if (!current) {
-          return null;
-        }
-        if (isCloudflareManagedUrl(current)) {
-          skippedAlreadyCloudflare += 1;
-          return current;
-        }
-        const candidate = normalizeForMigration(current);
-        if (!candidate) {
-          skippedMissingBaseUrl += 1;
-          return null;
-        }
+      return imageLimiter.run(async () => {
         if (verboseImages) {
           log(`Resolving ${kind} image for product ${product.id}: ${candidate}`);
         }
@@ -241,72 +334,69 @@ const main = async () => {
         }
         if (resolved.url && resolved.url !== current) {
           if (kind === "photo") {
-            migratedPhotoUrls += 1;
+            result.migratedPhotoUrls += 1;
           } else {
-            migratedImageUrls += 1;
+            result.migratedImageUrls += 1;
           }
         } else if (!resolved.url || !resolved.managed) {
-          failedResolutions += 1;
+          result.failedResolutions += 1;
         }
         return resolved.managed ? (resolved.url ?? null) : null;
-      };
+      });
+    };
 
-      if (product.photoUrl) {
-        const photoCandidates = splitUrlCandidates(product.photoUrl);
-        if (photoCandidates.length > 1) {
-          hadMultiPhotoInput = true;
+    if (product.photoUrl) {
+      const photoCandidates = splitUrlCandidates(product.photoUrl);
+      if (photoCandidates.length > 1) {
+        hadMultiPhotoInput = true;
+      }
+      result.scannedPhotoUrls += photoCandidates.length;
+      const resolvedPhotoUrls = (
+        await Promise.all(photoCandidates.map((candidate) => resolveCandidate(candidate, "photo")))
+      ).filter((url): url is string => Boolean(url));
+      if (resolvedPhotoUrls.length) {
+        const firstResolved = resolvedPhotoUrls[0];
+        if (firstResolved !== product.photoUrl) {
+          nextPhotoUrl = firstResolved;
         }
-        scannedPhotoUrls += photoCandidates.length;
-        const resolvedPhotoUrls: string[] = [];
-        for (const candidate of photoCandidates) {
-          const resolved = await resolveCandidate(candidate, "photo");
-          if (resolved) {
-            resolvedPhotoUrls.push(resolved);
-          }
-        }
-        if (resolvedPhotoUrls.length) {
-          const firstResolved = resolvedPhotoUrls[0];
-          if (firstResolved !== product.photoUrl) {
-            nextPhotoUrl = firstResolved;
-          }
-          if (hadMultiPhotoInput) {
-            resolvedPhotoUrls.forEach((url) => pushImageUrl(url));
-          }
+        if (hadMultiPhotoInput) {
+          resolvedPhotoUrls.forEach((url) => pushImageUrl(url));
         }
       }
+    }
 
-      for (const image of product.images) {
-        const imageCandidates = splitUrlCandidates(image.url);
-        scannedImageUrls += imageCandidates.length;
-        for (const candidate of imageCandidates) {
-          const resolved = await resolveCandidate(candidate, "image");
-          pushImageUrl(resolved);
-        }
-      }
+    const imageResolutionTasks = product.images.flatMap((image) => {
+      const imageCandidates = splitUrlCandidates(image.url);
+      result.scannedImageUrls += imageCandidates.length;
+      return imageCandidates.map((candidate) => resolveCandidate(candidate, "image"));
+    });
+    const resolvedImageUrls = await Promise.all(imageResolutionTasks);
+    resolvedImageUrls.forEach((url) => pushImageUrl(url));
 
-      if (!nextImageUrls.length && nextPhotoUrl) {
-        pushImageUrl(nextPhotoUrl);
-      }
+    if (!nextImageUrls.length && nextPhotoUrl) {
+      pushImageUrl(nextPhotoUrl);
+    }
 
-      const currentImageUrls = product.images
-        .flatMap((image) => splitUrlCandidates(image.url))
-        .map((value) => value.trim())
-        .filter(Boolean);
-      const hasImageChange =
-        nextImageUrls.length > 0 &&
-        (currentImageUrls.length !== nextImageUrls.length ||
-          currentImageUrls.some((value, index) => value !== nextImageUrls[index]));
-      const hasPhotoChange = nextPhotoUrl !== undefined && nextPhotoUrl !== product.photoUrl;
-      if (!hasPhotoChange && !hasImageChange) {
-        continue;
-      }
+    const currentImageUrls = product.images
+      .flatMap((image) => splitUrlCandidates(image.url))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const hasImageChange =
+      nextImageUrls.length > 0 &&
+      (currentImageUrls.length !== nextImageUrls.length ||
+        currentImageUrls.some((value, index) => value !== nextImageUrls[index]));
+    const hasPhotoChange = nextPhotoUrl !== undefined && nextPhotoUrl !== product.photoUrl;
+    if (!hasPhotoChange && !hasImageChange) {
+      return result;
+    }
 
-      changedProducts += 1;
-      if (!applyChanges) {
-        continue;
-      }
+    result.changed = true;
+    if (!applyChanges) {
+      return result;
+    }
 
-      await prisma.$transaction(async (tx) => {
+    await runPrismaWithReconnect(`update product ${product.id}`, () =>
+      prisma.$transaction(async (tx) => {
         if (hasPhotoChange) {
           await tx.product.update({
             where: { id: product.id },
@@ -324,12 +414,63 @@ const main = async () => {
             })),
           });
         }
-      });
+      }),
+    );
+
+    return result;
+  };
+
+  while (true) {
+    const products: ProductBatchRow[] = await runPrismaWithReconnect(
+      `fetch product batch ${batchNumber + 1}`,
+      () =>
+        prisma.product.findMany({
+          where: {
+            ...(organizationIdFilter ? { organizationId: organizationIdFilter } : {}),
+            OR: [{ photoUrl: { not: null } }, { images: { some: {} } }],
+          },
+          select: {
+            id: true,
+            organizationId: true,
+            photoUrl: true,
+            images: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+          },
+          orderBy: { id: "asc" },
+          take: batchSize,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        }),
+    );
+
+    if (!products.length) {
+      break;
+    }
+
+    batchNumber += 1;
+    log(`Fetched batch ${batchNumber}: ${products.length} products`);
+
+    await runWithConcurrency(products, productConcurrency, async (product) => {
+      const result = await processProduct(product);
+      processedProducts += 1;
+      scannedPhotoUrls += result.scannedPhotoUrls;
+      scannedImageUrls += result.scannedImageUrls;
+      migratedPhotoUrls += result.migratedPhotoUrls;
+      migratedImageUrls += result.migratedImageUrls;
+      skippedAlreadyCloudflare += result.skippedAlreadyCloudflare;
+      skippedMissingBaseUrl += result.skippedMissingBaseUrl;
+      failedResolutions += result.failedResolutions;
+      if (result.changed) {
+        changedProducts += 1;
+      }
 
       if (processedProducts % progressEveryProducts === 0) {
         logProgress("Progress");
       }
-    }
+    });
 
     cursor = products[products.length - 1]?.id ?? null;
     logProgress(`Finished batch ${batchNumber}`);
