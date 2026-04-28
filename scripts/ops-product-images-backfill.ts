@@ -153,12 +153,19 @@ const isTransactionStartTimeout = (error: unknown) =>
   getErrorCode(error) === "P2028" &&
   getErrorText(error).includes("Unable to start a transaction");
 
+const isPrismaPoolTimeout = (error: unknown) =>
+  getErrorCode(error) === "P2024" ||
+  getErrorText(error).includes("Timed out fetching a new connection from the connection pool");
+
+const isRetriablePrismaError = (error: unknown) =>
+  isDatabaseConnectionError(error) || isTransactionStartTimeout(error) || isPrismaPoolTimeout(error);
+
 const runPrismaWithRetry = async <T>(label: string, task: () => Promise<T>) => {
   for (let attempt = 1; attempt <= prismaRetryCount + 1; attempt += 1) {
     try {
       return await task();
     } catch (error) {
-      if (!isDatabaseConnectionError(error) && !isTransactionStartTimeout(error)) {
+      if (!isRetriablePrismaError(error)) {
         throw error;
       }
       if (attempt > prismaRetryCount) {
@@ -171,6 +178,10 @@ const runPrismaWithRetry = async <T>(label: string, task: () => Promise<T>) => {
           `PostgreSQL connection closed during ${label}; reconnecting and retrying (${attempt}/${prismaRetryCount})`,
         );
         await prisma.$connect();
+      } else if (isPrismaPoolTimeout(error)) {
+        warn(
+          `Prisma connection pool was busy during ${label}; retrying in ${delayMs}ms (${attempt}/${prismaRetryCount})`,
+        );
       } else {
         warn(
           `PostgreSQL transaction queue was busy during ${label}; retrying in ${delayMs}ms (${attempt}/${prismaRetryCount})`,
@@ -339,8 +350,12 @@ const main = async () => {
     const writeWorkers = writeLimiter.stats();
     const migratedProgressLabel =
       !applyChanges && !resolveDryRunImages ? "wouldMigrate" : "migrated";
+    const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 1);
+    const productsPerMinute = Math.round((processedProducts / elapsedSeconds) * 60);
+    const attemptedImages = migratedPhotoUrls + migratedImageUrls + failedResolutions;
+    const imagesPerMinute = Math.round((attemptedImages / elapsedSeconds) * 60);
     log(
-      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, ${migratedProgressLabel}=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, writeWorkers=${writeWorkers.active}/${writeConcurrency}, writeQueued=${writeWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
+      `${reason}: products=${processedProducts}, changed=${changedProducts}, photos=${scannedPhotoUrls}, images=${scannedImageUrls}, ${migratedProgressLabel}=${migratedPhotoUrls + migratedImageUrls}, failed=${failedResolutions}, productsPerMin=${productsPerMinute}, imagesPerMin=${imagesPerMinute}, imageWorkers=${imageWorkers.active}/${imageConcurrency}, imageQueued=${imageWorkers.queued}, writeWorkers=${writeWorkers.active}/${writeConcurrency}, writeQueued=${writeWorkers.queued}, elapsed=${formatElapsed(startedAt)}`,
     );
   };
 
