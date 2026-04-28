@@ -415,7 +415,7 @@ const main = async () => {
       const candidate = normalizeForMigration(current);
       if (!candidate) {
         result.skippedMissingBaseUrl += 1;
-        return null;
+        return current;
       }
       if (!applyChanges && !resolveDryRunImages) {
         if (kind === "photo") {
@@ -452,6 +452,7 @@ const main = async () => {
           }
         } else if (!resolved.url || !resolved.managed) {
           result.failedResolutions += 1;
+          return current;
         }
         return resolved.managed ? (resolved.url ?? null) : null;
       });

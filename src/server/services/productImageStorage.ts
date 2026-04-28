@@ -17,6 +17,16 @@ const parseForcedEnv = (value: string | undefined) => {
   return normalized === "force";
 };
 
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const extractHyperlinkTarget = (value: string) => {
   const trimmed = value.trim();
   const patterns = [
@@ -74,6 +84,7 @@ const resolveRemoteImageFetchTimeoutMs = () => {
 };
 
 const remoteImageFetchTimeoutMs = resolveRemoteImageFetchTimeoutMs();
+const remoteImageRetryCount = parsePositiveIntEnv(process.env.PRODUCT_IMAGE_RETRIES, 2);
 const fastRemoteImageCopyEnabled = parseForcedEnv(
   process.env.FAST_REMOTE_IMAGE_COPY ?? process.env.PRODUCT_IMAGE_FAST_STREAM,
 );
@@ -172,6 +183,42 @@ const warnUploadFailure = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   // eslint-disable-next-line no-console
   console.warn(`[image-storage] upload failed; using source URL fallback (${message})`);
+};
+
+const isPermanentImageError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message === "imageTooLarge" || message === "imageInvalidType";
+};
+
+const retryNullableImageOperation = async <T>(task: () => Promise<T | null>) => {
+  for (let attempt = 0; attempt <= remoteImageRetryCount; attempt += 1) {
+    const result = await task();
+    if (result) {
+      return result;
+    }
+    if (attempt < remoteImageRetryCount) {
+      await sleep(Math.min(500 * 2 ** attempt, 2_000));
+    }
+  }
+  return null;
+};
+
+const retryImageUpload = async <T>(task: () => Promise<T>) => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= remoteImageRetryCount; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      if (isPermanentImageError(error)) {
+        throw error;
+      }
+      lastError = error;
+      if (attempt < remoteImageRetryCount) {
+        await sleep(Math.min(500 * 2 ** attempt, 2_000));
+      }
+    }
+  }
+  throw lastError;
 };
 
 let r2Client: S3Client | null = null;
@@ -836,12 +883,14 @@ export const resolveProductImageUrl = async (input: {
       return result;
     }
     try {
-      const uploaded = await uploadBufferToStorage({
-        organizationId: input.organizationId,
-        productId: input.productId,
-        buffer: parsed.buffer,
-        contentType: parsed.contentType,
-      });
+      const uploaded = await retryImageUpload(() =>
+        uploadBufferToStorage({
+          organizationId: input.organizationId,
+          productId: input.productId,
+          buffer: parsed.buffer,
+          contentType: parsed.contentType,
+        }),
+      );
       input.cache?.set(normalized, uploaded);
       return uploaded;
     } catch (error) {
@@ -868,7 +917,7 @@ export const resolveProductImageUrl = async (input: {
     return result;
   }
 
-  const downloaded = await downloadRemoteImage(normalized);
+  const downloaded = await retryNullableImageOperation(() => downloadRemoteImage(normalized));
   if (!downloaded) {
     const result = {
       url: input.fallbackToSource === false ? null : normalized,
@@ -879,13 +928,15 @@ export const resolveProductImageUrl = async (input: {
   }
 
   try {
-    const uploaded = await uploadBufferToStorage({
-      organizationId: input.organizationId,
-      productId: input.productId,
-      buffer: downloaded.buffer,
-      contentType: downloaded.contentType,
-      sourceUrl: normalized,
-    });
+    const uploaded = await retryImageUpload(() =>
+      uploadBufferToStorage({
+        organizationId: input.organizationId,
+        productId: input.productId,
+        buffer: downloaded.buffer,
+        contentType: downloaded.contentType,
+        sourceUrl: normalized,
+      }),
+    );
     input.cache?.set(normalized, uploaded);
     return uploaded;
   } catch (error) {
