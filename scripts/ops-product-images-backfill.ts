@@ -145,6 +145,7 @@ const isDatabaseConnectionError = (error: unknown) => {
   const message = getErrorText(error);
   return (
     message.includes("kind: Closed") ||
+    message.includes("Can't reach database server") ||
     /connection.*closed/i.test(message) ||
     /server has closed the connection/i.test(message) ||
     message.includes("ECONNRESET") ||
