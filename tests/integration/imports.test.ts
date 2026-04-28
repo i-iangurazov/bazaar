@@ -142,11 +142,11 @@ describeDb("import batches", () => {
       "/uploads/imported-products/test-org/detail.jpg",
     ]);
     expect(product?.variants.map((variant) => variant.name)).toEqual(["footstool", "single"]);
-    expect(product?.variants.find((variant) => variant.name === "single")?.attributes).toMatchObject(
-      {
-        dimensions: "single seat 90*101*75cm",
-      },
-    );
+    expect(
+      product?.variants.find((variant) => variant.name === "single")?.attributes,
+    ).toMatchObject({
+      dimensions: "single seat 90*101*75cm",
+    });
 
     await runProductImport({
       organizationId: org.id,
@@ -182,9 +182,7 @@ describeDb("import batches", () => {
       "single",
       "double",
     ]);
-    expect(
-      updatedVariants.find((variant) => variant.name === "single")?.attributes,
-    ).toMatchObject({
+    expect(updatedVariants.find((variant) => variant.name === "single")?.attributes).toMatchObject({
       dimensions: "single seat 91*101*75cm",
     });
   });
@@ -433,6 +431,9 @@ describeDb("import batches", () => {
       skipped: 0,
       warningCount: 0,
       blockingWarningCount: 0,
+      totalRows: 2,
+      returnedRows: 2,
+      truncated: false,
     });
     expect(fullPreview.rows.find((row) => row.sku === "PREVIEW-UPD-1")).toMatchObject({
       action: "update",
@@ -473,6 +474,9 @@ describeDb("import batches", () => {
       skipped: 1,
       warningCount: 1,
       blockingWarningCount: 0,
+      totalRows: 2,
+      returnedRows: 2,
+      truncated: false,
     });
     expect(selectivePreview.rows.find((row) => row.sku === "PREVIEW-MISSING-1")).toMatchObject({
       action: "skipped",
@@ -531,5 +535,35 @@ describeDb("import batches", () => {
     expect(likelyDuplicateRow?.warnings).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "likelyDuplicateName" })]),
     );
+  });
+
+  it("keeps import preview responses bounded while reporting full totals", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const preview = await caller.products.previewImportCsv({
+      source: "csv",
+      mode: "full",
+      previewLimit: 3,
+      rows: Array.from({ length: 8 }, (_, index) => ({
+        sku: `PREVIEW-LIMIT-${index + 1}`,
+        name: `Preview Limit ${index + 1}`,
+        unit: baseUnit.code,
+        sourceRowNumber: index + 1,
+      })),
+    });
+
+    expect(preview.rows).toHaveLength(3);
+    expect(preview.summary).toMatchObject({
+      creates: 8,
+      totalRows: 8,
+      returnedRows: 3,
+      truncated: true,
+    });
   });
 });

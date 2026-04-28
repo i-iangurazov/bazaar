@@ -200,13 +200,12 @@ const parseImageLinks = (value: string) => {
     return [];
   }
   const urlMatches = normalized.match(/(?:https?:\/\/|\/uploads\/)[^\s,;|]+/gi);
-  const candidates =
-    urlMatches?.length
-      ? urlMatches
-      : normalized
-          .split(/[|,;\n\r]+/)
-          .map((item) => item.trim())
-          .filter(Boolean);
+  const candidates = urlMatches?.length
+    ? urlMatches
+    : normalized
+        .split(/[|,;\n\r]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
 
   return Array.from(new Set(candidates.map((item) => item.trim()).filter(Boolean)));
 };
@@ -216,9 +215,7 @@ const normalizeVariantAttributeValue = (value: unknown): unknown => {
     return value.trim();
   }
   if (Array.isArray(value)) {
-    return value
-      .map((item) => normalizeVariantAttributeValue(item))
-      .filter((item) => item !== "");
+    return value.map((item) => normalizeVariantAttributeValue(item)).filter((item) => item !== "");
   }
   return value;
 };
@@ -269,7 +266,10 @@ const parseVariants = (value: string) => {
     const attributes = Object.fromEntries(
       Object.entries(record)
         .filter(([key]) => !["id", "name", "sku"].includes(key.toLocaleLowerCase()))
-        .map(([key, attributeValue]) => [key.trim(), normalizeVariantAttributeValue(attributeValue)])
+        .map(([key, attributeValue]) => [
+          key.trim(),
+          normalizeVariantAttributeValue(attributeValue),
+        ])
         .filter(([key, attributeValue]) => key && attributeValue !== ""),
     );
 
@@ -463,6 +463,149 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
   barcodes: detectColumn(headers, ["barcode", "barcodes", "штрихкод", "штрихкоды"]),
 });
 
+const DRY_RUN_PREVIEW_ROW_LIMIT = 100;
+const MAX_IMPORT_TRANSPORT_ROWS = 500;
+const MAX_IMPORT_TRANSPORT_BYTES = 1_500_000;
+
+type ImportTransportBase = {
+  source: ImportSource;
+  storeId?: string;
+  mode: ImportMode;
+  updateMask?: ImportUpdateField[];
+  previewLimit?: number;
+};
+
+type ImportTransportPayload = ImportTransportBase & {
+  rows: ImportRow[];
+};
+
+const jsonByteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
+
+const splitRowsForTransport = (
+  rows: ImportRow[],
+  base: ImportTransportBase,
+): ImportTransportPayload[] => {
+  const chunks: ImportTransportPayload[] = [];
+  const baseBytes = jsonByteLength({ ...base, rows: [] });
+  let chunkRows: ImportRow[] = [];
+  let chunkBytes = baseBytes;
+
+  const flushChunk = () => {
+    if (!chunkRows.length) {
+      return;
+    }
+    chunks.push({ ...base, rows: chunkRows });
+    chunkRows = [];
+    chunkBytes = baseBytes;
+  };
+
+  rows.forEach((row) => {
+    const rowBytes = jsonByteLength(row) + 2;
+    const wouldExceedRows = chunkRows.length >= MAX_IMPORT_TRANSPORT_ROWS;
+    const wouldExceedBytes =
+      chunkRows.length > 0 && chunkBytes + rowBytes > MAX_IMPORT_TRANSPORT_BYTES;
+    if (wouldExceedRows || wouldExceedBytes) {
+      flushChunk();
+    }
+    chunkRows.push(row);
+    chunkBytes += rowBytes;
+  });
+
+  flushChunk();
+  return chunks;
+};
+
+type DryRunPreviewRow = ImportDryRunPreviewData["rows"][number];
+type DryRunPreviewSummary = ImportDryRunPreviewData["summary"];
+
+const createEmptyDryRunSummary = (): DryRunPreviewSummary => ({
+  creates: 0,
+  updates: 0,
+  skipped: 0,
+  warningCount: 0,
+  blockingWarningCount: 0,
+  totalRows: 0,
+  returnedRows: 0,
+  truncated: false,
+});
+
+const dryRunRowKey = (row: DryRunPreviewRow) => `${row.sourceRowNumber}:${row.sku}`;
+
+const selectDryRunRows = (rows: DryRunPreviewRow[], limit: number) => {
+  if (rows.length <= limit) {
+    return rows;
+  }
+  const selected = new Map<string, DryRunPreviewRow>();
+  const addRows = (candidates: DryRunPreviewRow[]) => {
+    for (const row of candidates) {
+      if (selected.size >= limit) {
+        return;
+      }
+      selected.set(dryRunRowKey(row), row);
+    }
+  };
+
+  addRows(rows.filter((row) => row.hasBlockingWarnings));
+  addRows(rows.filter((row) => row.warnings.length > 0));
+  addRows(rows);
+
+  return Array.from(selected.values()).sort(
+    (left, right) => left.sourceRowNumber - right.sourceRowNumber,
+  );
+};
+
+const mergeDryRunPreview = (
+  current: ImportDryRunPreviewData,
+  next: ImportDryRunPreviewData,
+): ImportDryRunPreviewData => {
+  const totalRows = current.summary.totalRows + next.summary.totalRows;
+  const rows = selectDryRunRows([...current.rows, ...next.rows], DRY_RUN_PREVIEW_ROW_LIMIT);
+
+  return {
+    rows,
+    summary: {
+      creates: current.summary.creates + next.summary.creates,
+      updates: current.summary.updates + next.summary.updates,
+      skipped: current.summary.skipped + next.summary.skipped,
+      warningCount: current.summary.warningCount + next.summary.warningCount,
+      blockingWarningCount:
+        current.summary.blockingWarningCount + next.summary.blockingWarningCount,
+      totalRows,
+      returnedRows: rows.length,
+      truncated: rows.length < totalRows,
+    },
+  };
+};
+
+const resetImportFormState = (setters: {
+  setRawRows: (rows: RawRow[]) => void;
+  setHeaders: (headers: string[]) => void;
+  setMapping: (mapping: MappingState) => void;
+  setFileName: (fileName: string | null) => void;
+  setDefaultUnitCode: (unitCode: string) => void;
+  setSkippedRows: (rows: number[]) => void;
+}) => {
+  setters.setRawRows([]);
+  setters.setHeaders([]);
+  setters.setMapping({
+    sku: "",
+    name: "",
+    unit: "",
+    category: "",
+    description: "",
+    basePriceKgs: "",
+    purchasePriceKgs: "",
+    avgCostKgs: "",
+    minStock: "",
+    photoUrl: "",
+    variants: "",
+    barcodes: "",
+  });
+  setters.setFileName(null);
+  setters.setDefaultUnitCode("");
+  setters.setSkippedRows([]);
+};
+
 const ImportPage = () => {
   const t = useTranslations("imports");
   const tCommon = useTranslations("common");
@@ -519,52 +662,18 @@ const ImportPage = () => {
     { enabled: Boolean(rollbackBatchId) },
   );
 
-  const importMutation = trpc.products.importCsv.useMutation({
-    onMutate: () => {
-      const now = Date.now();
-      setImportStartedAt(now);
-      setImportElapsedSeconds(0);
-    },
-    onSuccess: (payload) => {
-      setLastImportSummary(payload.summary as ImportRunSummary);
-      toast({
-        variant: "success",
-        description: t("importSuccess", { count: payload.results.length }),
-      });
-      batchesQuery.refetch();
-      setRawRows([]);
-      setHeaders([]);
-      setMapping({
-        sku: "",
-        name: "",
-        unit: "",
-        category: "",
-        description: "",
-        basePriceKgs: "",
-        purchasePriceKgs: "",
-        avgCostKgs: "",
-        minStock: "",
-        photoUrl: "",
-        variants: "",
-        barcodes: "",
-      });
-      setFileName(null);
-      setDefaultUnitCode("");
-      setSkippedRows([]);
-    },
-    onSettled: () => {
-      setImportStartedAt(null);
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
+  const importMutation = trpc.products.importCsv.useMutation();
+  const importCsvRef = useRef(importMutation.mutateAsync);
   const previewMutation = trpc.products.previewImportCsv.useMutation();
   const previewImportRef = useRef(previewMutation.mutateAsync);
 
   useEffect(() => {
     previewImportRef.current = previewMutation.mutateAsync;
   }, [previewMutation.mutateAsync]);
+
+  useEffect(() => {
+    importCsvRef.current = importMutation.mutateAsync;
+  }, [importMutation.mutateAsync]);
 
   const rollbackMutation = trpc.imports.rollback.useMutation({
     onSuccess: () => {
@@ -907,11 +1016,6 @@ const ImportPage = () => {
       validation.rows,
     ],
   );
-  const previewInputKey = useMemo(
-    () => (previewInput ? JSON.stringify(previewInput) : ""),
-    [previewInput],
-  );
-
   useEffect(() => {
     if (!previewInput) {
       dryRunRequestVersionRef.current += 1;
@@ -925,31 +1029,54 @@ const ImportPage = () => {
     dryRunRequestVersionRef.current = requestVersion;
     setDryRunPreviewPending(true);
     setDryRunPreviewError(null);
+    let cancelled = false;
 
     const timer = window.setTimeout(() => {
-      void previewImportRef.current(previewInput).then(
-        (result) => {
-          if (dryRunRequestVersionRef.current !== requestVersion) {
+      const chunks = splitRowsForTransport(previewInput.rows, {
+        source: previewInput.source,
+        storeId: previewInput.storeId,
+        mode: previewInput.mode,
+        updateMask: previewInput.updateMask,
+        previewLimit: DRY_RUN_PREVIEW_ROW_LIMIT,
+      });
+
+      void (async () => {
+        let merged: ImportDryRunPreviewData = {
+          rows: [],
+          summary: createEmptyDryRunSummary(),
+        };
+
+        try {
+          for (const chunk of chunks) {
+            const result = await previewImportRef.current(chunk);
+            if (cancelled || dryRunRequestVersionRef.current !== requestVersion) {
+              return;
+            }
+            merged = mergeDryRunPreview(merged, result);
+            setDryRunPreview(merged);
+          }
+          if (cancelled || dryRunRequestVersionRef.current !== requestVersion) {
             return;
           }
-          setDryRunPreview(result);
           setDryRunPreviewPending(false);
-        },
-        (error) => {
-          if (dryRunRequestVersionRef.current !== requestVersion) {
+        } catch (error) {
+          if (cancelled || dryRunRequestVersionRef.current !== requestVersion) {
             return;
           }
           setDryRunPreview(null);
           setDryRunPreviewPending(false);
-          setDryRunPreviewError(translateError(tErrors, error));
-        },
-      );
+          setDryRunPreviewError(
+            translateError(tErrors, error as Parameters<typeof translateError>[1]),
+          );
+        }
+      })();
     }, 350);
 
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [previewInput, previewInputKey, tErrors]);
+  }, [previewInput, tErrors]);
 
   const handleFile = async (file: File) => {
     setFileError(null);
@@ -1181,6 +1308,101 @@ const ImportPage = () => {
     setSelectedUpdateFields([]);
   };
 
+  const handleApplyImport = async () => {
+    if (!validation.rows.length) {
+      toast({ variant: "error", description: t("importEmpty") });
+      return;
+    }
+    if (validation.errors.length) {
+      toast({
+        variant: "error",
+        description: t("importHasErrors", { count: validation.errors.length }),
+      });
+      return;
+    }
+    if (missingRequired.length > 0 || (isUpdateSelectedMode && selectedUpdateFields.length === 0)) {
+      toast({ variant: "error", description: tErrors("invalidInput") });
+      return;
+    }
+    if (dryRunPreviewPending || dryRunPreviewError) {
+      toast({ variant: "error", description: dryRunPreviewError ?? t("dryRunLoading") });
+      return;
+    }
+    if ((dryRunPreview?.summary.blockingWarningCount ?? 0) > 0) {
+      toast({ variant: "error", description: t("dryRunBlockingWarnings") });
+      return;
+    }
+
+    const chunks = splitRowsForTransport(validation.rows, {
+      source,
+      storeId: targetStoreId || undefined,
+      mode: importMode,
+      updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
+    });
+    const aggregateSummary: ImportRunSummary = {
+      source,
+      mode: importMode,
+      updateMask: isUpdateSelectedMode ? selectedUpdateFields : null,
+      targetStoreId: targetStoreId || undefined,
+      rows: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      images: {
+        downloaded: 0,
+        fallback: 0,
+        missing: 0,
+      },
+    };
+    let importedRows = 0;
+
+    setImportStartedAt(Date.now());
+    setImportElapsedSeconds(0);
+
+    try {
+      for (const chunk of chunks) {
+        const payload = await importCsvRef.current(chunk);
+        const summary = payload.summary as ImportRunSummary;
+        importedRows += payload.results.length;
+        aggregateSummary.rows =
+          (aggregateSummary.rows ?? 0) + (summary.rows ?? payload.results.length);
+        aggregateSummary.created = (aggregateSummary.created ?? 0) + (summary.created ?? 0);
+        aggregateSummary.updated = (aggregateSummary.updated ?? 0) + (summary.updated ?? 0);
+        aggregateSummary.skipped = (aggregateSummary.skipped ?? 0) + (summary.skipped ?? 0);
+        aggregateSummary.targetStoreName =
+          aggregateSummary.targetStoreName ?? summary.targetStoreName;
+        aggregateSummary.images = {
+          downloaded:
+            (aggregateSummary.images?.downloaded ?? 0) + (summary.images?.downloaded ?? 0),
+          fallback: (aggregateSummary.images?.fallback ?? 0) + (summary.images?.fallback ?? 0),
+          missing: (aggregateSummary.images?.missing ?? 0) + (summary.images?.missing ?? 0),
+        };
+      }
+
+      setLastImportSummary(aggregateSummary);
+      toast({
+        variant: "success",
+        description: t("importSuccess", { count: aggregateSummary.rows ?? importedRows }),
+      });
+      await batchesQuery.refetch();
+      resetImportFormState({
+        setRawRows,
+        setHeaders,
+        setMapping,
+        setFileName,
+        setDefaultUnitCode,
+        setSkippedRows,
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setImportStartedAt(null);
+    }
+  };
+
   const duplicateBarcodeErrors = validation.errors.filter(
     (error) => error.code === "duplicateBarcode" && Boolean(error.value),
   );
@@ -1192,7 +1414,7 @@ const ImportPage = () => {
   );
 
   useEffect(() => {
-    if (!importMutation.isLoading || !importStartedAt) {
+    if (!importStartedAt) {
       setImportElapsedSeconds(0);
       return;
     }
@@ -1200,7 +1422,7 @@ const ImportPage = () => {
       setImportElapsedSeconds(Math.floor((Date.now() - importStartedAt) / 1000));
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [importMutation.isLoading, importStartedAt]);
+  }, [importStartedAt]);
 
   const importProgressStage = useMemo(() => {
     if (importElapsedSeconds < 5) {
@@ -1211,6 +1433,7 @@ const ImportPage = () => {
     }
     return t("progressStage.writingDatabase");
   }, [importElapsedSeconds, t]);
+  const isImporting = importStartedAt !== null || importMutation.isLoading;
 
   if (isForbidden) {
     return (
@@ -1681,28 +1904,9 @@ const ImportPage = () => {
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               type="button"
-              onClick={() => {
-                if (!validation.rows.length) {
-                  toast({ variant: "error", description: t("importEmpty") });
-                  return;
-                }
-                if (validation.errors.length) {
-                  toast({
-                    variant: "error",
-                    description: t("importHasErrors", { count: validation.errors.length }),
-                  });
-                  return;
-                }
-                importMutation.mutate({
-                  rows: validation.rows,
-                  source,
-                  storeId: targetStoreId || undefined,
-                  mode: importMode,
-                  updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
-                });
-              }}
+              onClick={() => void handleApplyImport()}
               disabled={
-                importMutation.isLoading ||
+                isImporting ||
                 dryRunPreviewPending ||
                 missingRequired.length > 0 ||
                 (isUpdateSelectedMode && selectedUpdateFields.length === 0) ||
@@ -1712,15 +1916,15 @@ const ImportPage = () => {
                 (dryRunPreview?.summary.blockingWarningCount ?? 0) > 0
               }
             >
-              {importMutation.isLoading ? (
+              {isImporting ? (
                 <Spinner className="h-4 w-4" />
               ) : (
                 <UploadIcon className="h-4 w-4" aria-hidden />
               )}
-              {importMutation.isLoading ? tCommon("loading") : t("applyImport")}
+              {isImporting ? tCommon("loading") : t("applyImport")}
             </Button>
           </div>
-          {importMutation.isLoading ? (
+          {isImporting ? (
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">
                 {t("importInProgress", {

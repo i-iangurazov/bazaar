@@ -25,6 +25,7 @@ import type {
   BulkUpdateProductCategoryInput,
   CreateProductInput,
   ImportProductsCsvInput,
+  PreviewProductsImportCsvInput,
   InlineUpdatePatchInput,
   UpdateProductInput,
 } from "@/server/trpc/routers/products.schemas";
@@ -356,7 +357,7 @@ export const previewProductsCsvImportMutation = async ({
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
-  input: ImportProductsCsvInput;
+  input: PreviewProductsImportCsvInput;
   logger?: Logger;
 }) => {
   try {
@@ -384,6 +385,7 @@ export const previewProductsCsvImportMutation = async ({
       storeId: input.storeId,
       mode,
       updateMask: input.updateMask as ImportUpdateField[] | undefined,
+      previewLimit: input.previewLimit,
       logger,
     });
   } catch (error) {

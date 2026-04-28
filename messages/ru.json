@@ -3415,6 +3415,7 @@
     "dryRunCreateNew": "Будет создан новый товар",
     "dryRunNoChanges": "Изменений нет",
     "dryRunWarningsEmpty": "Предупреждений нет",
+    "dryRunShowingRows": "Показано {shown} из {total} проверенных строк.",
     "dryRunRowLabel": "Строка {row}",
     "dryRunWarningBarcodeConflict": "Штрихкод {barcode} уже используется товаром {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "Похоже на существующий товар {product} ({sku}).",

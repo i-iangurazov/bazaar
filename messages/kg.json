@@ -3410,6 +3410,7 @@
     "dryRunCreateNew": "Жаңы товар түзүлөт",
     "dryRunNoChanges": "Өзгөрүү жок",
     "dryRunWarningsEmpty": "Эскертүү жок",
+    "dryRunShowingRows": "{total} текшерилген саптын {shown} көрсөтүлдү.",
     "dryRunRowLabel": "Сап {row}",
     "dryRunWarningBarcodeConflict": "Штрихкод {barcode} буга чейин {product} ({sku}) товарында колдонулуп жатат.",
     "dryRunWarningLikelyDuplicate": "{product} ({sku}) товарına окшош болушу мүмкүн.",

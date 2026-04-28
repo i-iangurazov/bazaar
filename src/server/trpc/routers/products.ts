@@ -278,7 +278,7 @@ export const productsRouter = router({
     ),
 
   importCsv: adminProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 5, prefix: "products-import" }))
+    .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import" }))
     .input(importProductsCsvInputSchema)
     .mutation(({ ctx, input }) =>
       importProductsCsvMutation({
@@ -290,7 +290,7 @@ export const productsRouter = router({
     ),
 
   previewImportCsv: adminProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "products-import-preview" }))
+    .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import-preview" }))
     .input(previewProductsImportCsvInputSchema)
     .mutation(({ ctx, input }) =>
       previewProductsCsvImportMutation({

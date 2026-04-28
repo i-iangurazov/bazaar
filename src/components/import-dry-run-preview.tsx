@@ -84,6 +84,9 @@ export type ImportDryRunPreviewData = {
     skipped: number;
     warningCount: number;
     blockingWarningCount: number;
+    totalRows: number;
+    returnedRows: number;
+    truncated: boolean;
   };
 };
 
@@ -105,7 +108,10 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
   const t = useTranslations("imports");
   const tCommon = useTranslations("common");
 
-  const resolveActionVariant = (action: ImportPreviewRow["action"], hasBlockingWarnings: boolean) => {
+  const resolveActionVariant = (
+    action: ImportPreviewRow["action"],
+    hasBlockingWarnings: boolean,
+  ) => {
     if (hasBlockingWarnings) {
       return "danger" as const;
     }
@@ -161,7 +167,10 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
         {row.warnings.map((warning, index) => {
           if (warning.code === "barcodeConflict") {
             return (
-              <p key={`${warning.code}-${warning.barcode}-${warning.productId}-${index}`} className="text-xs text-danger">
+              <p
+                key={`${warning.code}-${warning.barcode}-${warning.productId}-${index}`}
+                className="text-xs text-danger"
+              >
                 {t("dryRunWarningBarcodeConflict", {
                   barcode: warning.barcode,
                   product: warning.productName,
@@ -172,7 +181,10 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
           }
           if (warning.code === "likelyDuplicateName") {
             return (
-              <p key={`${warning.code}-${warning.productId}-${index}`} className="text-xs text-warning-foreground">
+              <p
+                key={`${warning.code}-${warning.productId}-${index}`}
+                className="text-xs text-warning-foreground"
+              >
                 {t("dryRunWarningLikelyDuplicate", {
                   product: warning.productName,
                   sku: warning.productSku,
@@ -182,7 +194,10 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
           }
           if (warning.code === "archivedProductWillBeRestored") {
             return (
-              <p key={`${warning.code}-${warning.productId}-${index}`} className="text-xs text-warning-foreground">
+              <p
+                key={`${warning.code}-${warning.productId}-${index}`}
+                className="text-xs text-warning-foreground"
+              >
                 {t("dryRunWarningArchivedRestore", {
                   product: warning.productName,
                   sku: warning.productSku,
@@ -227,6 +242,14 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
           </p>
         </div>
       </div>
+      {preview.summary.truncated ? (
+        <p className="text-xs text-muted-foreground">
+          {t("dryRunShowingRows", {
+            shown: preview.summary.returnedRows,
+            total: preview.summary.totalRows,
+          })}
+        </p>
+      ) : null}
 
       <ResponsiveDataList
         items={preview.rows}

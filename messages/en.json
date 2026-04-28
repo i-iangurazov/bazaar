@@ -3417,6 +3417,7 @@
     "dryRunCreateNew": "Dry run create new",
     "dryRunNoChanges": "Dry run no changes",
     "dryRunWarningsEmpty": "No dry run warnings.",
+    "dryRunShowingRows": "Showing {shown} of {total} checked rows.",
     "dryRunRowLabel": "Dry run row label {row}",
     "dryRunWarningBarcodeConflict": "Dry run warning barcode conflict {barcode} {product} {sku}",
     "dryRunWarningLikelyDuplicate": "Dry run warning likely duplicate {product} {sku}",

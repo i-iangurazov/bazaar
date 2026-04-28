@@ -65,13 +65,11 @@ type ImportPreviewRow = {
   hasBlockingWarnings: boolean;
 };
 
+const DEFAULT_IMPORT_PREVIEW_ROW_LIMIT = 200;
+
 const normalizeBarcodes = (barcodes?: string[]) =>
   Array.from(
-    new Set(
-      (barcodes ?? [])
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
-    ),
+    new Set((barcodes ?? []).map((value) => value.trim()).filter((value) => value.length > 0)),
   ).sort((left, right) => left.localeCompare(right));
 
 const normalizeCategories = (value?: string | null) =>
@@ -86,9 +84,7 @@ const areStringArraysEqual = (left: string[], right: string[]) =>
 
 const normalizePreviewImages = (row: Pick<ImportCsvRowInput, "photoUrl" | "images">) => {
   const images =
-    row.images?.length || !row.photoUrl
-      ? row.images ?? []
-      : [{ url: row.photoUrl, position: 0 }];
+    row.images?.length || !row.photoUrl ? (row.images ?? []) : [{ url: row.photoUrl, position: 0 }];
   const seen = new Set<string>();
   return images
     .map((image, index) => ({
@@ -129,7 +125,9 @@ const formatPreviewVariantLabel = (variant: {
 }) => {
   const name = variant.name?.trim() || variant.sku?.trim() || "Variant";
   const attributes =
-    variant.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes)
+    variant.attributes &&
+    typeof variant.attributes === "object" &&
+    !Array.isArray(variant.attributes)
       ? Object.entries(variant.attributes)
           .map(([key, value]) => [key, formatPreviewAttributeValue(value)] as const)
           .filter(([, value]) => value.length > 0)
@@ -230,6 +228,35 @@ const addChange = (
   changes.push({ field, before, after });
 };
 
+const previewRowKey = (row: ImportPreviewRow) => `${row.sourceRowNumber}:${row.sku}`;
+
+const selectPreviewRows = (rows: ImportPreviewRow[], limit: number) => {
+  if (limit >= rows.length) {
+    return rows;
+  }
+  if (limit <= 0) {
+    return [];
+  }
+
+  const selected = new Map<string, ImportPreviewRow>();
+  const addRows = (candidates: ImportPreviewRow[]) => {
+    for (const row of candidates) {
+      if (selected.size >= limit) {
+        return;
+      }
+      selected.set(previewRowKey(row), row);
+    }
+  };
+
+  addRows(rows.filter((row) => row.hasBlockingWarnings));
+  addRows(rows.filter((row) => row.warnings.length > 0));
+  addRows(rows);
+
+  return Array.from(selected.values()).sort(
+    (left, right) => left.sourceRowNumber - right.sourceRowNumber,
+  );
+};
+
 export const previewProductImport = async ({
   prisma,
   organizationId,
@@ -237,6 +264,7 @@ export const previewProductImport = async ({
   storeId,
   mode,
   updateMask: updateMaskInput,
+  previewLimit: previewLimitInput,
   logger,
 }: {
   prisma: PrismaDbClient;
@@ -245,15 +273,12 @@ export const previewProductImport = async ({
   storeId?: string;
   mode?: ImportMode;
   updateMask?: ImportUpdateField[];
+  previewLimit?: number;
   logger?: Logger;
 }) => {
   const updateMask = new Set<ImportUpdateField>(updateMaskInput ?? []);
   const uniqueSkus = Array.from(
-    new Set(
-      rows
-        .map((row) => row.sku.trim())
-        .filter((value) => value.length > 0),
-    ),
+    new Set(rows.map((row) => row.sku.trim()).filter((value) => value.length > 0)),
   );
   const incomingBarcodes = Array.from(
     new Set(
@@ -317,73 +342,78 @@ export const previewProductImport = async ({
   const existingProductIds = existingProducts.map((product) => product.id);
 
   const auxiliaryReadsStartedAt = Date.now();
-  const [existingBarcodeRows, existingCostRows, existingMinStockRows, conflictingBarcodeRows, likelyNameRows] =
-    await Promise.all([
-      existingProductIds.length
-        ? prisma.productBarcode.findMany({
-            where: {
-              organizationId,
-              productId: { in: existingProductIds },
-            },
-            select: {
-              productId: true,
-              value: true,
-            },
-          })
-        : Promise.resolve([]),
-      existingProductIds.length
-        ? prisma.productCost.findMany({
-            where: {
-              organizationId,
-              productId: { in: existingProductIds },
-              variantKey: "BASE",
-            },
-            select: {
-              productId: true,
-              avgCostKgs: true,
-            },
-          })
-        : Promise.resolve([]),
-      storeId && existingProductIds.length
-        ? prisma.reorderPolicy.findMany({
-            where: {
-              storeId,
-              productId: { in: existingProductIds },
-            },
-            select: {
-              productId: true,
-              minStock: true,
-            },
-          })
-        : Promise.resolve([]),
-      incomingBarcodes.length
-        ? prisma.productBarcode.findMany({
-            where: {
-              organizationId,
-              value: { in: incomingBarcodes },
-            },
-            select: {
-              value: true,
-              product: {
-                select: {
-                  id: true,
-                  sku: true,
-                  name: true,
-                  isDeleted: true,
-                },
+  const [
+    existingBarcodeRows,
+    existingCostRows,
+    existingMinStockRows,
+    conflictingBarcodeRows,
+    likelyNameRows,
+  ] = await Promise.all([
+    existingProductIds.length
+      ? prisma.productBarcode.findMany({
+          where: {
+            organizationId,
+            productId: { in: existingProductIds },
+          },
+          select: {
+            productId: true,
+            value: true,
+          },
+        })
+      : Promise.resolve([]),
+    existingProductIds.length
+      ? prisma.productCost.findMany({
+          where: {
+            organizationId,
+            productId: { in: existingProductIds },
+            variantKey: "BASE",
+          },
+          select: {
+            productId: true,
+            avgCostKgs: true,
+          },
+        })
+      : Promise.resolve([]),
+    storeId && existingProductIds.length
+      ? prisma.reorderPolicy.findMany({
+          where: {
+            storeId,
+            productId: { in: existingProductIds },
+          },
+          select: {
+            productId: true,
+            minStock: true,
+          },
+        })
+      : Promise.resolve([]),
+    incomingBarcodes.length
+      ? prisma.productBarcode.findMany({
+          where: {
+            organizationId,
+            value: { in: incomingBarcodes },
+          },
+          select: {
+            value: true,
+            product: {
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                isDeleted: true,
               },
             },
-            orderBy: [{ value: "asc" }, { product: { name: "asc" } }],
-          })
-        : Promise.resolve([]),
-      normalizedNames.length
-        ? listProductsByNormalizedNames({
-            prisma,
-            organizationId,
-            normalizedNames,
-          })
-        : Promise.resolve([]),
-    ]);
+          },
+          orderBy: [{ value: "asc" }, { product: { name: "asc" } }],
+        })
+      : Promise.resolve([]),
+    normalizedNames.length
+      ? listProductsByNormalizedNames({
+          prisma,
+          organizationId,
+          normalizedNames,
+        })
+      : Promise.resolve([]),
+  ]);
   if (logger) {
     logProfileSection({
       logger,
@@ -513,7 +543,11 @@ export const previewProductImport = async ({
         addChange(
           changes,
           "category",
-          existing.categories.length ? existing.categories : existing.category ? [existing.category] : [],
+          existing.categories.length
+            ? existing.categories
+            : existing.category
+              ? [existing.category]
+              : [],
           normalizedRowCategories,
         );
       }
@@ -558,7 +592,10 @@ export const previewProductImport = async ({
         );
       }
 
-      if (shouldApplyImportField(mode, updateMask, "basePriceKgs") && row.basePriceKgs !== undefined) {
+      if (
+        shouldApplyImportField(mode, updateMask, "basePriceKgs") &&
+        row.basePriceKgs !== undefined
+      ) {
         addChange(
           changes,
           "basePriceKgs",
@@ -647,7 +684,7 @@ export const previewProductImport = async ({
     };
   });
 
-  const summary = previewRows.reduce(
+  const summaryCounts = previewRows.reduce(
     (acc, row) => {
       if (row.action === "create") {
         acc.creates += 1;
@@ -670,6 +707,17 @@ export const previewProductImport = async ({
       blockingWarningCount: 0,
     },
   );
+  const previewLimit = Math.max(
+    0,
+    Math.trunc(previewLimitInput ?? DEFAULT_IMPORT_PREVIEW_ROW_LIMIT),
+  );
+  const responseRows = selectPreviewRows(previewRows, previewLimit);
+  const summary = {
+    ...summaryCounts,
+    totalRows: previewRows.length,
+    returnedRows: responseRows.length,
+    truncated: responseRows.length < previewRows.length,
+  };
   if (logger) {
     logProfileSection({
       logger,
@@ -678,6 +726,7 @@ export const previewProductImport = async ({
       startedAt: buildPreviewRowsStartedAt,
       details: {
         rows: previewRows.length,
+        returnedRows: responseRows.length,
         creates: summary.creates,
         updates: summary.updates,
         skipped: summary.skipped,
@@ -689,7 +738,7 @@ export const previewProductImport = async ({
   }
 
   return {
-    rows: previewRows,
+    rows: responseRows,
     summary,
   };
 };

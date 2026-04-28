@@ -256,7 +256,9 @@ export const importProductsCsvInputSchema = z.object({
   updateMask: z.array(importUpdateFieldEnum).optional(),
 });
 
-export const previewProductsImportCsvInputSchema = importProductsCsvInputSchema;
+export const previewProductsImportCsvInputSchema = importProductsCsvInputSchema.extend({
+  previewLimit: z.number().int().min(0).max(500).optional(),
+});
 
 export const productDuplicateDiagnosticsInputSchema = z.object({
   productId: z.string().optional(),
@@ -278,14 +280,15 @@ export type CreateProductInput = z.infer<typeof createProductInputSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductInputSchema>;
 export type InlineUpdatePatchInput = z.infer<typeof inlineUpdatePatchSchema>;
 export type InlineUpdateProductInput = z.infer<typeof inlineUpdateProductInputSchema>;
-export type BulkGenerateProductBarcodesInput = z.infer<typeof bulkGenerateProductBarcodesInputSchema>;
+export type BulkGenerateProductBarcodesInput = z.infer<
+  typeof bulkGenerateProductBarcodesInputSchema
+>;
 export type BulkGenerateProductDescriptionsInput = z.infer<
   typeof bulkGenerateProductDescriptionsInputSchema
 >;
-export type BulkUpdateProductCategoryInput = z.infer<
-  typeof bulkUpdateProductCategoryInputSchema
->;
+export type BulkUpdateProductCategoryInput = z.infer<typeof bulkUpdateProductCategoryInputSchema>;
 export type ImportProductsCsvInput = z.infer<typeof importProductsCsvInputSchema>;
+export type PreviewProductsImportCsvInput = z.infer<typeof previewProductsImportCsvInputSchema>;
 export type ImportCsvRowInput = z.infer<typeof importCsvRowSchema>;
 export type ImportMode = z.infer<typeof importModeEnum>;
 export type ImportUpdateField = z.infer<typeof importUpdateFieldEnum>;
