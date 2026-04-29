@@ -55,6 +55,12 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { buildVariantMatrix, type VariantGeneratorAttribute } from "@/lib/variantGenerator";
 import {
+  convertFromKgs,
+  convertToKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+} from "@/lib/currency";
+import {
   normalizeImageMimeType,
   prepareProductImageFileForUpload,
   resolvePrimaryImageUrl,
@@ -303,6 +309,8 @@ export const ProductForm = ({
   readOnly = false,
   productId,
   showBasePriceField = true,
+  currencyCode,
+  currencyRateKgsPerUnit,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -312,12 +320,27 @@ export const ProductForm = ({
   readOnly?: boolean;
   productId?: string;
   showBasePriceField?: boolean;
+  currencyCode?: string | null;
+  currencyRateKgsPerUnit?: number | string | null;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { toast } = useToast();
+  const moneyCurrencyCode = normalizeCurrencyCode(currencyCode);
+  const moneyCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
+    currencyRateKgsPerUnit,
+    moneyCurrencyCode,
+  );
+  const displayMoneyFromKgs = (value?: number | null) =>
+    value === null || value === undefined
+      ? undefined
+      : convertFromKgs(value, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode);
+  const submitMoneyToKgs = (value?: number | null) =>
+    Number.isFinite(value ?? NaN)
+      ? convertToKgs(value as number, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode)
+      : undefined;
   const definitions = useMemo(() => attributeDefinitions ?? [], [attributeDefinitions]);
   const definitionMap = useMemo(
     () => new Map(definitions.map((definition) => [definition.key, definition])),
@@ -468,9 +491,9 @@ export const ProductForm = ({
         initialValues.categories ??
         (initialValues.category?.trim() ? [initialValues.category.trim()] : []),
       baseUnitId: initialValues.baseUnitId,
-      basePriceKgs: initialValues.basePriceKgs ?? undefined,
-      purchasePriceKgs: initialValues.purchasePriceKgs ?? undefined,
-      avgCostKgs: initialValues.avgCostKgs ?? undefined,
+      basePriceKgs: displayMoneyFromKgs(initialValues.basePriceKgs),
+      purchasePriceKgs: displayMoneyFromKgs(initialValues.purchasePriceKgs),
+      avgCostKgs: displayMoneyFromKgs(initialValues.avgCostKgs),
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
       images: initialValues.images ?? [],
@@ -703,12 +726,11 @@ export const ProductForm = ({
   const duplicateDiagnosticsEnabled =
     !readOnly &&
     (Boolean(
-      deferredDuplicateDiagnosticsInput.sku &&
-        deferredDuplicateDiagnosticsInput.sku.length >= 2,
+      deferredDuplicateDiagnosticsInput.sku && deferredDuplicateDiagnosticsInput.sku.length >= 2,
     ) ||
       Boolean(
         deferredDuplicateDiagnosticsInput.name &&
-          deferredDuplicateDiagnosticsInput.name.length >= 4,
+        deferredDuplicateDiagnosticsInput.name.length >= 4,
       ) ||
       deferredDuplicateDiagnosticsInput.barcodes.length > 0);
   const duplicateDiagnosticsQuery = trpc.products.duplicateDiagnostics.useQuery(
@@ -2018,11 +2040,9 @@ export const ProductForm = ({
       category: categoryValues[0],
       categories: categoryValues,
       baseUnitId: values.baseUnitId,
-      basePriceKgs: Number.isFinite(values.basePriceKgs ?? NaN) ? values.basePriceKgs : undefined,
-      purchasePriceKgs: Number.isFinite(values.purchasePriceKgs ?? NaN)
-        ? values.purchasePriceKgs
-        : undefined,
-      avgCostKgs: Number.isFinite(values.avgCostKgs ?? NaN) ? values.avgCostKgs : undefined,
+      basePriceKgs: submitMoneyToKgs(values.basePriceKgs),
+      purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
+      avgCostKgs: submitMoneyToKgs(values.avgCostKgs),
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,

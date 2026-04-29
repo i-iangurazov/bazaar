@@ -111,7 +111,7 @@ export const resolveProductsBootstrapStoreId = ({
     return preferredStoreId;
   }
 
-  return storeIds.length === 1 ? storeIds[0] ?? null : null;
+  return storeIds.length === 1 ? (storeIds[0] ?? null) : null;
 };
 
 const productPreviewSelect = {
@@ -464,7 +464,10 @@ const sortProductListItems = ({
           (right.avgCostKgs ?? Number.NEGATIVE_INFINITY);
         break;
       case "barcodes":
-        result = sortCollator.compare(resolveBarcodeSortValue(left), resolveBarcodeSortValue(right));
+        result = sortCollator.compare(
+          resolveBarcodeSortValue(left),
+          resolveBarcodeSortValue(right),
+        );
         break;
       case "stores":
         result = sortCollator.compare(resolveStoreSortValue(left), resolveStoreSortValue(right));
@@ -647,7 +650,9 @@ export const listProducts = async ({
       avgCostKgs: avgCostByProductId.get(product.id) ?? null,
       purchasePriceKgs:
         purchasePriceByProductId.get(product.id) ?? avgCostByProductId.get(product.id) ?? null,
-      overridePriceKgs: input?.storeId ? (storePriceByProductId.get(product.id) ?? null) : undefined,
+      overridePriceKgs: input?.storeId
+        ? (storePriceByProductId.get(product.id) ?? null)
+        : undefined,
     }),
   );
 
@@ -700,6 +705,8 @@ export const getProductsBootstrap = async ({
       select: {
         id: true,
         name: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -734,7 +741,10 @@ export const getProductsBootstrap = async ({
   });
 
   return {
-    stores,
+    stores: stores.map((store) => ({
+      ...store,
+      currencyRateKgsPerUnit: Number(store.currencyRateKgsPerUnit),
+    })),
     categories,
     selectedStoreId,
     list,
@@ -997,7 +1007,12 @@ export const getProductStorePricing = async ({
   const [stores, overrides, cost, snapshots] = await Promise.all([
     prisma.store.findMany({
       where: { organizationId },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+      },
       orderBy: { name: "asc" },
     }),
     prisma.storePrice.findMany({
@@ -1040,9 +1055,7 @@ export const getProductStorePricing = async ({
   const overrideByStore = new Map(
     overrides.map((override) => [override.storeId, Number(override.priceKgs)]),
   );
-  const onHandByStore = new Map(
-    snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]),
-  );
+  const onHandByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]));
 
   return {
     basePriceKgs: basePrice,
@@ -1053,6 +1066,8 @@ export const getProductStorePricing = async ({
       return {
         storeId: store.id,
         storeName: store.name,
+        currencyCode: store.currencyCode,
+        currencyRateKgsPerUnit: Number(store.currencyRateKgsPerUnit),
         effectivePriceKgs: effective,
         overridePriceKgs: override ?? null,
         priceOverridden: override !== undefined,

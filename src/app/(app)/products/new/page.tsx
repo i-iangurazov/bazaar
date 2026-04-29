@@ -26,6 +26,9 @@ const NewProductPage = () => {
   const { toast } = useToast();
   const attributesQuery = trpc.attributes.list.useQuery();
   const unitsQuery = trpc.units.list.useQuery();
+  const storesQuery = trpc.stores.list.useQuery(undefined, {
+    enabled: status === "authenticated" && isAdmin,
+  });
   const suggestedSkuQuery = trpc.products.suggestSku.useQuery(undefined, {
     enabled: status === "authenticated" && isAdmin,
   });
@@ -68,11 +71,14 @@ const NewProductPage = () => {
   }
 
   const suggestedSku = suggestedSkuQuery.data ?? "";
+  const defaultCurrencyStore = storesQuery.data?.[0] ?? null;
+  const defaultCurrencyRate = Number(defaultCurrencyStore?.currencyRateKgsPerUnit ?? 1);
 
   return (
     <div>
       <PageHeader title={pageTitle} subtitle={pageSubtitle} />
       <ProductForm
+        key={`new:${defaultCurrencyStore?.currencyCode ?? "KGS"}:${defaultCurrencyRate}`}
         initialValues={{
           sku: suggestedSku,
           name: "",
@@ -100,11 +106,11 @@ const NewProductPage = () => {
           })
         }
         isSubmitting={createMutation.isLoading}
+        currencyCode={defaultCurrencyStore?.currencyCode ?? null}
+        currencyRateKgsPerUnit={defaultCurrencyRate}
       />
       {createMutation.error ? (
-        <p className="mt-3 text-sm text-danger">
-          {translateError(tErrors, createMutation.error)}
-        </p>
+        <p className="mt-3 text-sm text-danger">{translateError(tErrors, createMutation.error)}</p>
       ) : null}
     </div>
   );

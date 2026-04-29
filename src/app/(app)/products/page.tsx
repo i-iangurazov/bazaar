@@ -85,7 +85,10 @@ import {
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
-import { buildScopedStorageKey, useScopedLocalStorageState } from "@/lib/useScopedLocalStorageState";
+import {
+  buildScopedStorageKey,
+  useScopedLocalStorageState,
+} from "@/lib/useScopedLocalStorageState";
 import {
   createSavedTableView,
   findMatchingSavedTableView,
@@ -285,10 +288,7 @@ const ProductsPage = () => {
     defaultValue: defaultProductsTableState,
     parse: parseProductsTableState,
   });
-  const defaultProductsSavedViewsState = useMemo(
-    () => ({ views: [], defaultViewId: null }),
-    [],
-  );
+  const defaultProductsSavedViewsState = useMemo(() => ({ views: [], defaultViewId: null }), []);
   const productsSavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -443,8 +443,15 @@ const ProductsPage = () => {
     keepPreviousData: true,
   });
   const storeId = rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
-  const stores = useMemo(() => productsBootstrapQuery.data?.stores ?? [], [productsBootstrapQuery.data?.stores]);
-  const defaultPrintStoreId = storeId || (stores.length === 1 ? stores[0]?.id ?? "" : "");
+  const stores = useMemo(
+    () => productsBootstrapQuery.data?.stores ?? [],
+    [productsBootstrapQuery.data?.stores],
+  );
+  const selectedStore = useMemo(
+    () => stores.find((store) => store.id === storeId) ?? null,
+    [storeId, stores],
+  );
+  const defaultPrintStoreId = storeId || (stores.length === 1 ? (stores[0]?.id ?? "") : "");
   const products = useMemo(
     () => productsBootstrapQuery.data?.list.items ?? [],
     [productsBootstrapQuery.data?.list.items],
@@ -687,17 +694,22 @@ const ProductsPage = () => {
   const inlineProductsContext = useMemo<InlineProductsContext>(
     () => ({
       storeId: storeId || null,
+      currencyCode: selectedStore?.currencyCode ?? null,
+      currencyRateKgsPerUnit: selectedStore?.currencyRateKgsPerUnit ?? null,
       categories,
       stockAdjustReason: tInventory("stockAdjustment"),
     }),
-    [categories, storeId, tInventory],
+    [
+      categories,
+      selectedStore?.currencyCode,
+      selectedStore?.currencyRateKgsPerUnit,
+      storeId,
+      tInventory,
+    ],
   );
 
   const applyProductListPatch = useCallback(
-    (
-      productId: string,
-      patch: (item: ProductRow) => ProductRow,
-    ) => {
+    (productId: string, patch: (item: ProductRow) => ProductRow) => {
       trpcUtils.products.bootstrap.setData(productsBootstrapInput, (current) => {
         if (!current) {
           return current;
@@ -749,19 +761,18 @@ const ProductsPage = () => {
       if (operation.route === "products.bulkUpdateCategory") {
         applyProductListPatch(operation.input.productIds[0], (item) => {
           const currentCategories = getProductCategories(item);
-          const nextCategories =
-            !operation.input.category
-              ? []
-              : operation.input.mode === "setPrimary"
-                ? [
-                    operation.input.category,
-                    ...currentCategories.filter((value) => value !== operation.input.category),
-                  ]
-                : operation.input.mode === "replace"
-                  ? [operation.input.category]
-                  : currentCategories.includes(operation.input.category)
-                    ? currentCategories
-                    : [...currentCategories, operation.input.category];
+          const nextCategories = !operation.input.category
+            ? []
+            : operation.input.mode === "setPrimary"
+              ? [
+                  operation.input.category,
+                  ...currentCategories.filter((value) => value !== operation.input.category),
+                ]
+              : operation.input.mode === "replace"
+                ? [operation.input.category]
+                : currentCategories.includes(operation.input.category)
+                  ? currentCategories
+                  : [...currentCategories, operation.input.category];
           return {
             ...item,
             category: nextCategories[0] ?? null,
@@ -970,7 +981,10 @@ const ProductsPage = () => {
     Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
   const allResultsSelected = productsTotal > 0 && selectedIds.size === productsTotal;
   const bulkDescriptionProgressPercent = bulkDescriptionProgress
-    ? Math.round((bulkDescriptionProgress.processedCount / Math.max(1, bulkDescriptionProgress.totalCount)) * 100)
+    ? Math.round(
+        (bulkDescriptionProgress.processedCount / Math.max(1, bulkDescriptionProgress.totalCount)) *
+          100,
+      )
     : 0;
   const bulkDescriptionRunning = bulkDescriptionProgress?.status === "running";
 
@@ -1146,8 +1160,7 @@ const ProductsPage = () => {
     (viewId: string | null) => {
       setProductsSavedViewsState((current) => ({
         ...current,
-        defaultViewId:
-          viewId && current.views.some((view) => view.id === viewId) ? viewId : null,
+        defaultViewId: viewId && current.views.some((view) => view.id === viewId) ? viewId : null,
       }));
     },
     [setProductsSavedViewsState],
@@ -1342,21 +1355,24 @@ const ProductsPage = () => {
     resolveStoreSortValue,
     sortCollator,
   ]);
-  const toggleProductSort = useCallback((key: ProductSortKey) => {
-    setProductsTableState((current) => ({
-      ...current,
-      sort:
-        current.sort.key === key
-          ? {
-              key,
-              direction: current.sort.direction === "asc" ? "desc" : "asc",
-            }
-          : {
-              key,
-              direction: defaultSortDirectionByKey[key],
-            },
-    }));
-  }, [setProductsTableState]);
+  const toggleProductSort = useCallback(
+    (key: ProductSortKey) => {
+      setProductsTableState((current) => ({
+        ...current,
+        sort:
+          current.sort.key === key
+            ? {
+                key,
+                direction: current.sort.direction === "asc" ? "desc" : "asc",
+              }
+            : {
+                key,
+                direction: defaultSortDirectionByKey[key],
+              },
+      }));
+    },
+    [setProductsTableState],
+  );
   const renderSortableHead = (key: ProductSortKey, label: string, className?: string) => (
     <TableHead
       className={className}
@@ -1887,10 +1903,7 @@ const ProductsPage = () => {
         trpcUtils.products.bootstrap.invalidate(),
         trpcUtils.products.list.invalidate(),
       ]);
-      const errorMessage = translateError(
-        tErrors,
-        error as Parameters<typeof translateError>[1],
-      );
+      const errorMessage = translateError(tErrors, error as Parameters<typeof translateError>[1]);
       setBulkDescriptionProgress((current) =>
         current
           ? {
@@ -2311,9 +2324,7 @@ const ProductsPage = () => {
                       ) : (
                         <SparklesIcon className="h-4 w-4" aria-hidden />
                       )}
-                      {bulkDescriptionRunning
-                        ? tCommon("loading")
-                        : t("bulkGenerateDescriptions")}
+                      {bulkDescriptionRunning ? tCommon("loading") : t("bulkGenerateDescriptions")}
                     </Button>
                   ) : null}
                   {isAdmin ? (
@@ -2323,10 +2334,7 @@ const ProductsPage = () => {
                       size="sm"
                       className="w-full sm:w-auto"
                       onClick={() => void handleBulkGenerateBarcodes()}
-                      disabled={
-                        bulkGenerateBarcodesMutation.isLoading ||
-                        bulkDescriptionRunning
-                      }
+                      disabled={bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning}
                     >
                       {bulkGenerateBarcodesMutation.isLoading ? (
                         <Spinner className="h-4 w-4" />
@@ -2388,11 +2396,7 @@ const ProductsPage = () => {
                               ? renderSortableHead("unit", t("unit"), "hidden lg:table-cell")
                               : null}
                             {visibleProductColumnSet.has("onHandQty")
-                              ? renderSortableHead(
-                                  "onHandQty",
-                                  tInventory("onHand"),
-                                  "text-nowrap",
-                                )
+                              ? renderSortableHead("onHandQty", tInventory("onHand"), "text-nowrap")
                               : null}
                             {visibleProductColumnSet.has("salePrice")
                               ? renderSortableHead("salePrice", t("salePrice"))
@@ -3612,9 +3616,7 @@ const ProductsPage = () => {
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       {t("printQty")}
                     </p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">
-                      {printLabelCount}
-                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">{printLabelCount}</p>
                   </div>
                   <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -3673,7 +3675,9 @@ const ProductsPage = () => {
                               <Button
                                 key={quantity}
                                 type="button"
-                                variant={resolvedPrintQuantity === quantity ? "default" : "secondary"}
+                                variant={
+                                  resolvedPrintQuantity === quantity ? "default" : "secondary"
+                                }
                                 size="sm"
                                 className="h-7 flex-1 px-2"
                                 onClick={() =>

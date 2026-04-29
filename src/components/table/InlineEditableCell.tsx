@@ -49,7 +49,9 @@ const InlineEditTableContext = createContext<InlineEditTableState | null>(null);
 export const InlineEditTableProvider = ({ children }: { children: ReactNode }) => {
   const [activeCellId, setActiveCellId] = useState<string | null>(null);
   const value = useMemo(() => ({ activeCellId, setActiveCellId }), [activeCellId]);
-  return <InlineEditTableContext.Provider value={value}>{children}</InlineEditTableContext.Provider>;
+  return (
+    <InlineEditTableContext.Provider value={value}>{children}</InlineEditTableContext.Provider>
+  );
 };
 
 const useTouchDevice = () => {
@@ -192,14 +194,31 @@ export const InlineEditableCell = <
       if (isEditing) {
         return;
       }
-      setDraftValue(toEditorValue(localValue));
+      setDraftValue(
+        definition.editorValue
+          ? definition.editorValue(localValue, row, context, displayContext)
+          : toEditorValue(localValue),
+      );
       if (tableState) {
         tableState.setActiveCellId(cellId);
         return;
       }
       setStandaloneEditing(true);
     },
-    [activeCellId, canEdit, cellId, isEditing, isSaving, isTouch, localValue, tableState],
+    [
+      activeCellId,
+      canEdit,
+      cellId,
+      context,
+      definition,
+      displayContext,
+      isEditing,
+      isSaving,
+      isTouch,
+      localValue,
+      row,
+      tableState,
+    ],
   );
 
   const resolveParserError = useCallback(
@@ -379,7 +398,11 @@ export const InlineEditableCell = <
           autoFocus
           value={draftValue}
           type={editorType}
-          inputMode={definition.inputType === "number" || definition.inputType === "money" ? "decimal" : undefined}
+          inputMode={
+            definition.inputType === "number" || definition.inputType === "money"
+              ? "decimal"
+              : undefined
+          }
           onChange={(event) => setDraftValue(event.target.value)}
           onKeyDown={onInputKeyDown}
           onBlur={() => {

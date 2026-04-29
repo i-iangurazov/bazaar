@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -52,7 +52,13 @@ import {
   PrintIcon,
   ViewIcon,
 } from "@/components/icons";
-import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { formatCurrency, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import {
+  convertFromKgs,
+  convertToKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+} from "@/lib/currency";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
@@ -131,9 +137,7 @@ const ProductDetailPage = () => {
   const unitsQuery = trpc.units.list.useQuery();
   const storesQuery = trpc.stores.list.useQuery();
   const movementsQuery = trpc.inventory.movements.useQuery(
-    movementStoreId
-      ? { storeId: movementStoreId, productId }
-      : { storeId: "", productId: "" },
+    movementStoreId ? { storeId: movementStoreId, productId } : { storeId: "", productId: "" },
     { enabled: movementsOpen && Boolean(movementStoreId) && Boolean(productId) },
   );
   const componentSearchQuery = trpc.products.searchQuick.useQuery(
@@ -147,11 +151,88 @@ const ProductDetailPage = () => {
   type StoreRow = NonNullable<typeof storesQuery.data>[number] & { trackExpiryLots?: boolean };
   const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
   const selectedPricingStore = stores.find((store) => store.id === pricingStoreId);
+  const selectedPricingCurrencyCode = normalizeCurrencyCode(selectedPricingStore?.currencyCode);
+  const selectedPricingCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
+    Number(selectedPricingStore?.currencyRateKgsPerUnit ?? 1),
+    selectedPricingCurrencyCode,
+  );
+  const formatDraftMoneyAmount = useCallback(
+    (value: number) => (Number.isFinite(value) ? Number(value.toFixed(6)).toString() : ""),
+    [],
+  );
+  const parseDraftMoney = useCallback((raw: string) => {
+    const normalized = raw.replace(/\s+/g, "").replace(",", ".");
+    if (!normalized.length) {
+      return null;
+    }
+    const value = Number(normalized);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }, []);
+  const convertSelectedMoneyFromKgs = useCallback(
+    (valueKgs: number) =>
+      convertFromKgs(valueKgs, selectedPricingCurrencyRateKgsPerUnit, selectedPricingCurrencyCode),
+    [selectedPricingCurrencyCode, selectedPricingCurrencyRateKgsPerUnit],
+  );
+  const convertSelectedMoneyToKgs = useCallback(
+    (value: number) =>
+      convertToKgs(value, selectedPricingCurrencyRateKgsPerUnit, selectedPricingCurrencyCode),
+    [selectedPricingCurrencyCode, selectedPricingCurrencyRateKgsPerUnit],
+  );
+  const formatSelectedMoney = useCallback(
+    (valueKgs: number) =>
+      formatCurrency(convertSelectedMoneyFromKgs(valueKgs), locale, selectedPricingCurrencyCode),
+    [convertSelectedMoneyFromKgs, locale, selectedPricingCurrencyCode],
+  );
+  const resolveStoreCurrency = useCallback(
+    (store: { currencyCode?: string | null; currencyRateKgsPerUnit?: number | string | null }) => {
+      const currencyCode = normalizeCurrencyCode(store.currencyCode);
+      return {
+        currencyCode,
+        currencyRateKgsPerUnit: normalizeCurrencyRateKgsPerUnit(
+          store.currencyRateKgsPerUnit,
+          currencyCode,
+        ),
+      };
+    },
+    [],
+  );
+  const convertStoreMoneyFromKgs = useCallback(
+    (
+      valueKgs: number,
+      store: { currencyCode?: string | null; currencyRateKgsPerUnit?: number | string | null },
+    ) => {
+      const { currencyCode, currencyRateKgsPerUnit } = resolveStoreCurrency(store);
+      return convertFromKgs(valueKgs, currencyRateKgsPerUnit, currencyCode);
+    },
+    [resolveStoreCurrency],
+  );
+  const convertStoreMoneyToKgs = useCallback(
+    (
+      value: number,
+      store: { currencyCode?: string | null; currencyRateKgsPerUnit?: number | string | null },
+    ) => {
+      const { currencyCode, currencyRateKgsPerUnit } = resolveStoreCurrency(store);
+      return convertToKgs(value, currencyRateKgsPerUnit, currencyCode);
+    },
+    [resolveStoreCurrency],
+  );
+  const formatStoreMoney = useCallback(
+    (
+      valueKgs: number,
+      store: { currencyCode?: string | null; currencyRateKgsPerUnit?: number | string | null },
+    ) => {
+      const { currencyCode, currencyRateKgsPerUnit } = resolveStoreCurrency(store);
+      return formatCurrency(
+        convertFromKgs(valueKgs, currencyRateKgsPerUnit, currencyCode),
+        locale,
+        currencyCode,
+      );
+    },
+    [locale, resolveStoreCurrency],
+  );
   const lotsEnabled = Boolean(selectedPricingStore?.trackExpiryLots);
   const lotsQuery = trpc.stockLots.byProduct.useQuery(
-    pricingStoreId
-      ? { storeId: pricingStoreId, productId }
-      : { storeId: "", productId: "" },
+    pricingStoreId ? { storeId: pricingStoreId, productId } : { storeId: "", productId: "" },
     { enabled: Boolean(pricingStoreId && showLots && lotsEnabled) },
   );
   const updateMutation = trpc.products.update.useMutation({
@@ -173,7 +254,9 @@ const ProductDetailPage = () => {
     onSuccess: (result) => {
       toast({
         variant: "success",
-        description: result.copiedBarcodes ? t("duplicateSuccess") : t("duplicateSuccessNoBarcodes"),
+        description: result.copiedBarcodes
+          ? t("duplicateSuccess")
+          : t("duplicateSuccessNoBarcodes"),
       });
       router.push(`/products/${result.productId}`);
     },
@@ -278,24 +361,30 @@ const ProductDetailPage = () => {
     const priceDrafts = Object.fromEntries(
       storePricingQuery.data.stores.map((storeRow) => [
         storeRow.storeId,
-        storeRow.effectivePriceKgs !== null ? String(storeRow.effectivePriceKgs) : "",
+        storeRow.effectivePriceKgs !== null
+          ? formatDraftMoneyAmount(convertStoreMoneyFromKgs(storeRow.effectivePriceKgs, storeRow))
+          : "",
       ]),
     );
     const onHandDrafts = Object.fromEntries(
-      storePricingQuery.data.stores.map((storeRow) => [
-        storeRow.storeId,
-        String(storeRow.onHand),
-      ]),
+      storePricingQuery.data.stores.map((storeRow) => [storeRow.storeId, String(storeRow.onHand)]),
     );
     setStorePriceDrafts(priceDrafts);
     setStoreOnHandDrafts(onHandDrafts);
-  }, [storePricingQuery.data]);
+  }, [convertStoreMoneyFromKgs, formatDraftMoneyAmount, storePricingQuery.data]);
 
   useEffect(() => {
     const basePrice =
       storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
-    setBasePriceDraft(basePrice !== null ? String(basePrice) : "");
-  }, [productQuery.data?.basePriceKgs, storePricingQuery.data?.basePriceKgs]);
+    setBasePriceDraft(
+      basePrice !== null ? formatDraftMoneyAmount(convertSelectedMoneyFromKgs(basePrice)) : "",
+    );
+  }, [
+    convertSelectedMoneyFromKgs,
+    formatDraftMoneyAmount,
+    productQuery.data?.basePriceKgs,
+    storePricingQuery.data?.basePriceKgs,
+  ]);
 
   const movementTypeLabel = (type: string) => {
     switch (type) {
@@ -341,12 +430,11 @@ const ProductDetailPage = () => {
       name: productQuery.data.name,
       isBundle: productQuery.data.isBundle,
       category: productQuery.data.category ?? "",
-      categories:
-        productQuery.data.categories?.length
-          ? productQuery.data.categories
-          : productQuery.data.category
-            ? [productQuery.data.category]
-            : [],
+      categories: productQuery.data.categories?.length
+        ? productQuery.data.categories
+        : productQuery.data.category
+          ? [productQuery.data.category]
+          : [],
       baseUnitId: productQuery.data.baseUnitId,
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
       purchasePriceKgs: productQuery.data.purchasePriceKgs ?? undefined,
@@ -393,7 +481,7 @@ const ProductDetailPage = () => {
   type LotRow = NonNullable<typeof lotsQuery.data>[number];
   const bundleComponents: BundleComponent[] = bundleComponentsQuery.data ?? [];
   const lots: LotRow[] = lotsQuery.data ?? [];
-  const labelStoreId = pricingStoreId || (stores.length === 1 ? stores[0]?.id ?? "" : "");
+  const labelStoreId = pricingStoreId || (stores.length === 1 ? (stores[0]?.id ?? "") : "");
 
   useEffect(() => {
     if (productQuery.data?.isBundle || bundleComponentsQuery.data?.length) {
@@ -457,8 +545,7 @@ const ProductDetailPage = () => {
       : basePriceFallbackCandidate
         ? t("storesCount", { count: basePriceFallbackCandidate.matchingStoreCount })
         : "";
-  const previewImageUrl =
-    productQuery.data?.images[0]?.url ?? productQuery.data?.photoUrl ?? null;
+  const previewImageUrl = productQuery.data?.images[0]?.url ?? productQuery.data?.photoUrl ?? null;
   const markupPct =
     avgCost && avgCost > 0 && effectivePrice !== null
       ? ((effectivePrice - avgCost) / avgCost) * 100
@@ -486,24 +573,35 @@ const ProductDetailPage = () => {
     }
 
     setBasePriceDraft((current) =>
-      current.trim().length > 0 ? current : String(basePriceFallbackCandidate.priceKgs),
+      current.trim().length > 0
+        ? current
+        : formatDraftMoneyAmount(convertSelectedMoneyFromKgs(basePriceFallbackCandidate.priceKgs)),
     );
     basePriceAutofillRef.current = candidateKey;
-  }, [basePriceFallbackCandidate, currentBasePrice, productId]);
+  }, [
+    basePriceFallbackCandidate,
+    convertSelectedMoneyFromKgs,
+    currentBasePrice,
+    formatDraftMoneyAmount,
+    productId,
+  ]);
 
   const resolveDraftBasePrice = () => {
     const raw = basePriceDraft.trim();
     if (!raw.length) {
       return currentBasePrice === null ? basePriceFallbackCandidate?.priceKgs : undefined;
     }
-    const value = Number(raw);
-    return Number.isFinite(value) && value >= 0 ? value : undefined;
+    const value = parseDraftMoney(raw);
+    return value !== null ? convertSelectedMoneyToKgs(value) : undefined;
   };
 
   const handleSaveBasePrice = async () => {
     const raw = basePriceDraft.trim();
+    const parsedValue = raw.length ? parseDraftMoney(raw) : null;
     const nextValue = raw.length
-      ? Number(raw)
+      ? parsedValue === null
+        ? Number.NaN
+        : convertSelectedMoneyToKgs(parsedValue)
       : currentBasePrice === null
         ? (basePriceFallbackCandidate?.priceKgs ?? null)
         : null;
@@ -511,7 +609,11 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: t("priceNonNegative") });
       return;
     }
-    if (currentBasePrice === nextValue) {
+    if (
+      currentBasePrice !== null &&
+      nextValue !== null &&
+      Math.abs(currentBasePrice - nextValue) < 0.01
+    ) {
       return;
     }
     await basePriceMutation.mutateAsync({
@@ -527,7 +629,9 @@ const ProductDetailPage = () => {
       return;
     }
 
-    setBasePriceDraft(String(basePriceFallbackCandidate.priceKgs));
+    setBasePriceDraft(
+      formatDraftMoneyAmount(convertSelectedMoneyFromKgs(basePriceFallbackCandidate.priceKgs)),
+    );
     if (currentBasePrice === basePriceFallbackCandidate.priceKgs) {
       return;
     }
@@ -542,14 +646,15 @@ const ProductDetailPage = () => {
 
   const handleSaveStorePrice = async (storeId: string) => {
     const raw = storePriceDrafts[storeId]?.trim() ?? "";
-    const value = Number(raw);
-    if (!raw.length || !Number.isFinite(value) || value < 0) {
+    const parsedValue = parseDraftMoney(raw);
+    if (!raw.length || parsedValue === null) {
       toast({ variant: "error", description: t("priceNonNegative") });
       return;
     }
-    const currentValue =
-      storePricingQuery.data?.stores.find((store) => store.storeId === storeId)?.effectivePriceKgs ?? null;
-    if (currentValue !== null && value === currentValue) {
+    const storeRow = storePricingQuery.data?.stores.find((store) => store.storeId === storeId);
+    const value = storeRow ? convertStoreMoneyToKgs(parsedValue, storeRow) : parsedValue;
+    const currentValue = storeRow?.effectivePriceKgs ?? null;
+    if (currentValue !== null && Math.abs(value - currentValue) < 0.01) {
       return;
     }
     setSavingStorePriceId(storeId);
@@ -659,12 +764,7 @@ const ProductDetailPage = () => {
         <PageHeader title={t("editTitle")} subtitle={tErrors("genericTitle")} />
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-danger">
           <span>{translateError(tErrors, productQuery.error)}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => productQuery.refetch()}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={() => productQuery.refetch()}>
             {tErrors("tryAgain")}
           </Button>
         </div>
@@ -750,7 +850,9 @@ const ProductDetailPage = () => {
                 variant="secondary"
                 className="w-full sm:w-auto"
                 onClick={async () => {
-                  if (!(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))) {
+                  if (
+                    !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
+                  ) {
                     return;
                   }
                   archiveMutation.mutate({ productId });
@@ -815,21 +917,22 @@ const ProductDetailPage = () => {
                 <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {effectivePrice !== null
-                    ? formatCurrencyKGS(effectivePrice, locale)
+                    ? formatSelectedMoney(effectivePrice)
                     : tCommon("notAvailable")}
                 </p>
               </div>
               <div className="rounded-lg border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
                 <p className="text-base font-semibold text-foreground">
-                  {avgCost !== null ? formatCurrencyKGS(avgCost, locale) : tCommon("notAvailable")}
+                  {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
                 </p>
               </div>
               <div className="rounded-lg border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{tInventory("onHand")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {formatNumber(
-                    storePricingQuery.data?.stores.reduce((sum, store) => sum + store.onHand, 0) ?? 0,
+                    storePricingQuery.data?.stores.reduce((sum, store) => sum + store.onHand, 0) ??
+                      0,
                     locale,
                   )}
                 </p>
@@ -841,6 +944,7 @@ const ProductDetailPage = () => {
 
       <div className="mb-6">
         <ProductForm
+          key={`${productId}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}`}
           initialValues={formValues}
           onSubmit={(values) =>
             updateMutation.mutate({
@@ -855,6 +959,8 @@ const ProductDetailPage = () => {
           readOnly={!isAdmin}
           productId={productId}
           showBasePriceField={false}
+          currencyCode={selectedPricingCurrencyCode}
+          currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
         />
       </div>
 
@@ -874,16 +980,14 @@ const ProductDetailPage = () => {
               <div className="rounded-lg border border-border bg-card p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {t("basePrice")}
-                    </p>
+                    <p className="truncate text-sm font-medium text-foreground">{t("basePrice")}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t("basePriceFallbackHint")}
                     </p>
                     {currentBasePrice === null && basePriceFallbackCandidate ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         {t("basePriceDerivedHint", {
-                          price: formatCurrencyKGS(basePriceFallbackCandidate.priceKgs, locale),
+                          price: formatSelectedMoney(basePriceFallbackCandidate.priceKgs),
                           source: basePriceFallbackSource,
                         })}
                       </p>
@@ -926,17 +1030,12 @@ const ProductDetailPage = () => {
                       ) : null}
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground">
-                      {t("basePriceReadOnly")}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{t("basePriceReadOnly")}</div>
                   )}
                 </div>
               </div>
               {storePricingQuery.data.stores.map((storeRow) => (
-                <div
-                  key={storeRow.storeId}
-                  className="rounded-lg border border-border bg-card p-3"
-                >
+                <div key={storeRow.storeId} className="rounded-lg border border-border bg-card p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -944,13 +1043,11 @@ const ProductDetailPage = () => {
                       </p>
                       <div className="mt-1 flex items-center gap-2">
                         <Badge variant="muted">
-                          {storeRow.priceOverridden
-                            ? t("priceOverridden")
-                            : t("priceInherited")}
+                          {storeRow.priceOverridden ? t("priceOverridden") : t("priceInherited")}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           {storeRow.effectivePriceKgs !== null
-                            ? formatCurrencyKGS(storeRow.effectivePriceKgs, locale)
+                            ? formatStoreMoney(storeRow.effectivePriceKgs, storeRow)
                             : tCommon("notAvailable")}
                         </span>
                         <span className="text-xs text-muted-foreground">
@@ -1072,14 +1169,14 @@ const ProductDetailPage = () => {
             </div>
             <p className="text-sm font-semibold">
               {effectivePrice !== null
-                ? formatCurrencyKGS(effectivePrice, locale)
+                ? formatSelectedMoney(effectivePrice)
                 : tCommon("notAvailable")}
             </p>
           </div>
           <div className="rounded-lg border border-border/70 bg-card p-3">
             <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
             <p className="text-sm font-semibold">
-              {avgCost !== null ? formatCurrencyKGS(avgCost, locale) : tCommon("notAvailable")}
+              {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
             </p>
           </div>
           <div className="rounded-lg border border-border/70 bg-card p-3">
@@ -1114,11 +1211,7 @@ const ProductDetailPage = () => {
                 {t("bundleAssemble")}
               </Button>
             ) : null}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowBundle((prev) => !prev)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setShowBundle((prev) => !prev)}>
               {showBundle ? t("hideBundle") : t("showBundle")}
             </Button>
           </div>
@@ -1127,9 +1220,9 @@ const ProductDetailPage = () => {
           {showBundle ? (
             bundleComponentsQuery.isLoading ? (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
-            </div>
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
             ) : bundleComponents.length ? (
               <ResponsiveDataList
                 items={bundleComponents}
@@ -1154,7 +1247,12 @@ const ProductDetailPage = () => {
                               icon: DeleteIcon,
                               variant: "danger" as const,
                               onSelect: async () => {
-                                if (!(await confirm({ description: t("bundleRemoveConfirm"), confirmVariant: "danger" }))) {
+                                if (
+                                  !(await confirm({
+                                    description: t("bundleRemoveConfirm"),
+                                    confirmVariant: "danger",
+                                  }))
+                                ) {
                                   return;
                                 }
                                 removeComponentMutation.mutate({ componentId: component.id });
@@ -1198,7 +1296,12 @@ const ProductDetailPage = () => {
                       icon: DeleteIcon,
                       variant: "danger" as const,
                       onSelect: async () => {
-                        if (!(await confirm({ description: t("bundleRemoveConfirm"), confirmVariant: "danger" }))) {
+                        if (
+                          !(await confirm({
+                            description: t("bundleRemoveConfirm"),
+                            confirmVariant: "danger",
+                          }))
+                        ) {
                           return;
                         }
                         removeComponentMutation.mutate({ componentId: component.id });
@@ -1269,9 +1372,9 @@ const ProductDetailPage = () => {
           ) : showLots ? (
             lotsQuery.isLoading ? (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
-            </div>
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
             ) : lots.length ? (
               <ResponsiveDataList
                 items={lots}
@@ -1306,9 +1409,7 @@ const ProductDetailPage = () => {
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">{t("expiryDate")}</p>
                         <p className="text-sm font-medium text-foreground">
-                          {lot.expiryDate
-                            ? formatDateTime(lot.expiryDate, locale)
-                            : t("noExpiry")}
+                          {lot.expiryDate ? formatDateTime(lot.expiryDate, locale) : t("noExpiry")}
                         </p>
                       </div>
                       <div className="text-right">
@@ -1333,9 +1434,7 @@ const ProductDetailPage = () => {
         </CardContent>
       </Card>
       {updateMutation.error ? (
-        <p className="mt-3 text-sm text-danger">
-          {translateError(tErrors, updateMutation.error)}
-        </p>
+        <p className="mt-3 text-sm text-danger">{translateError(tErrors, updateMutation.error)}</p>
       ) : null}
 
       <Modal
@@ -1390,19 +1489,19 @@ const ProductDetailPage = () => {
                         </div>
                       ) : componentSearchQuery.data?.length ? (
                         componentSearchQuery.data.map((product) => (
-                        <ProductSearchResultItem
-                          key={product.id}
-                          product={product}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            setSelectedComponent({
-                              id: product.id,
-                              name: product.name,
-                              sku: product.sku,
-                            });
-                            setComponentSearch(product.name);
-                          }}
-                        />
+                          <ProductSearchResultItem
+                            key={product.id}
+                            product={product}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setSelectedComponent({
+                                id: product.id,
+                                name: product.name,
+                                sku: product.sku,
+                              });
+                              setComponentSearch(product.name);
+                            }}
+                          />
                         ))
                       ) : (
                         <div className="px-3 py-3 text-sm text-muted-foreground">
@@ -1433,7 +1532,7 @@ const ProductDetailPage = () => {
                       disabled={!selectedComponent}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={t("variant")}/>
+                        <SelectValue placeholder={t("variant")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="BASE">{t("variantBase")}</SelectItem>
@@ -1473,8 +1572,16 @@ const ProductDetailPage = () => {
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" className="w-full sm:w-auto" disabled={addComponentMutation.isLoading}>
-                {addComponentMutation.isLoading ? <Spinner className="h-4 w-4" /> : <AddIcon className="h-4 w-4" aria-hidden />}
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={addComponentMutation.isLoading}
+              >
+                {addComponentMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <AddIcon className="h-4 w-4" aria-hidden />
+                )}
                 {addComponentMutation.isLoading ? tCommon("loading") : t("bundleAddComponent")}
               </Button>
             </FormActions>
@@ -1531,8 +1638,16 @@ const ProductDetailPage = () => {
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" className="w-full sm:w-auto" disabled={assembleMutation.isLoading}>
-                {assembleMutation.isLoading ? <Spinner className="h-4 w-4" /> : <AddIcon className="h-4 w-4" aria-hidden />}
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={assembleMutation.isLoading}
+              >
+                {assembleMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <AddIcon className="h-4 w-4" aria-hidden />
+                )}
                 {assembleMutation.isLoading ? tCommon("loading") : t("bundleAssembleConfirm")}
               </Button>
             </FormActions>
@@ -1549,10 +1664,7 @@ const ProductDetailPage = () => {
       >
         <div className="space-y-4">
           <div className="w-full sm:max-w-xs">
-            <Select
-              value={movementStoreId}
-              onValueChange={(value) => setMovementStoreId(value)}
-            >
+            <Select value={movementStoreId} onValueChange={(value) => setMovementStoreId(value)}>
               <SelectTrigger>
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
@@ -1617,13 +1729,14 @@ const ProductDetailPage = () => {
                             {movement.qtyDelta > 0 ? "+" : ""}
                             {formatNumber(movement.qtyDelta, locale)}
                           </TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                             {movement.createdBy?.name ??
                               movement.createdBy?.email ??
                               tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                            {formatMovementNote(tInventory, movement.note) || tCommon("notAvailable")}
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                            {formatMovementNote(tInventory, movement.note) ||
+                              tCommon("notAvailable")}
                           </TableCell>
                         </TableRow>
                       ))}

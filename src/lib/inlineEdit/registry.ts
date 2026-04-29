@@ -1,4 +1,10 @@
-import { formatCurrencyKGS, formatDate, formatNumber } from "@/lib/i18nFormat";
+import {
+  convertFromKgs,
+  convertToKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+} from "@/lib/currency";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/i18nFormat";
 import { locales, normalizeLocale, type Locale } from "@/lib/locales";
 
 export type SessionRole = "ADMIN" | "MANAGER" | "STAFF" | "CASHIER" | string | null | undefined;
@@ -132,10 +138,20 @@ export type InlineEditColumnDefinition<TRow, TValue, TContext> = {
   columnKey: string;
   inputType: InlineEditInputType;
   formatter: (value: TValue, row: TRow, context: TContext, display: InlineDisplayContext) => string;
+  editorValue?: (
+    value: TValue,
+    row: TRow,
+    context: TContext,
+    display: InlineDisplayContext,
+  ) => string;
   parser: (raw: string, row: TRow, context: TContext) => InlineParseResult<TValue>;
   mutation: (row: TRow, value: TValue, context: TContext) => InlineMutationOperation;
   permissionCheck: (role: SessionRole, row: TRow, context: TContext) => boolean;
-  selectOptions?: (row: TRow, context: TContext, display: InlineDisplayContext) => InlineSelectOption[];
+  selectOptions?: (
+    row: TRow,
+    context: TContext,
+    display: InlineDisplayContext,
+  ) => InlineSelectOption[];
   equals?: (left: TValue, right: TValue) => boolean;
 };
 
@@ -153,6 +169,8 @@ export type InlineProductsRow = {
 
 export type InlineProductsContext = {
   storeId?: string | null;
+  currencyCode?: string | null;
+  currencyRateKgsPerUnit?: number | string | null;
   categories: string[];
   stockAdjustReason: string;
 };
@@ -300,8 +318,73 @@ const parseLegalTypeSelect = (
 const formatText = (value: string | null | undefined, notAvailableLabel: string) =>
   value && value.trim().length ? value : notAvailableLabel;
 
-const formatMoney = (value: number | null | undefined, locale: string, notAvailableLabel: string) =>
-  value === null || value === undefined ? notAvailableLabel : formatCurrencyKGS(value, locale);
+const resolveProductsCurrency = (context: InlineProductsContext) => {
+  const currencyCode = normalizeCurrencyCode(context.currencyCode);
+  return {
+    currencyCode,
+    currencyRateKgsPerUnit: normalizeCurrencyRateKgsPerUnit(
+      context.currencyRateKgsPerUnit,
+      currencyCode,
+    ),
+  };
+};
+
+const formatEditorMoneyAmount = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+  return Number(value.toFixed(6)).toString();
+};
+
+const parseNonNegativeMoneyKgs = (
+  raw: string,
+  context: InlineProductsContext,
+): InlineParseResult<number> => {
+  const parsed = parseNonNegativeMoney(raw);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const { currencyCode, currencyRateKgsPerUnit } = resolveProductsCurrency(context);
+  return {
+    ok: true,
+    value: convertToKgs(parsed.value, currencyRateKgsPerUnit, currencyCode),
+  };
+};
+
+const formatMoney = (
+  value: number | null | undefined,
+  context: InlineProductsContext,
+  locale: string,
+  notAvailableLabel: string,
+) => {
+  if (value === null || value === undefined) {
+    return notAvailableLabel;
+  }
+  const { currencyCode, currencyRateKgsPerUnit } = resolveProductsCurrency(context);
+  return formatCurrency(
+    convertFromKgs(value, currencyRateKgsPerUnit, currencyCode),
+    locale,
+    currencyCode,
+  );
+};
+
+const formatMoneyEditorValue = (
+  value: number | null | undefined,
+  context: InlineProductsContext,
+) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const { currencyCode, currencyRateKgsPerUnit } = resolveProductsCurrency(context);
+  return formatEditorMoneyAmount(convertFromKgs(value, currencyRateKgsPerUnit, currencyCode));
+};
+
+const moneyEquals = (left: number | null | undefined, right: number | null | undefined) => {
+  if (left === null || left === undefined || right === null || right === undefined) {
+    return left === right;
+  }
+  return Math.abs(left - right) < 0.01;
+};
 
 const formatInt = (value: number | null | undefined, locale: string, notAvailableLabel: string) =>
   value === null || value === undefined ? notAvailableLabel : formatNumber(value, locale);
@@ -389,9 +472,10 @@ export const inlineEditRegistry: InlineEditRegistry = {
       tableKey: "products",
       columnKey: "salePrice",
       inputType: "money",
-      formatter: (value, _row, _context, display) =>
-        formatMoney(value, display.locale, display.notAvailableLabel),
-      parser: (raw) => parseNonNegativeMoney(raw),
+      formatter: (value, _row, context, display) =>
+        formatMoney(value, context, display.locale, display.notAvailableLabel),
+      editorValue: (value, _row, context) => formatMoneyEditorValue(value, context),
+      parser: (raw, _row, context) => parseNonNegativeMoneyKgs(raw, context),
       mutation: (row, value, context) => {
         const nextPrice = value ?? 0;
         if (context.storeId) {
@@ -412,19 +496,22 @@ export const inlineEditRegistry: InlineEditRegistry = {
       },
       permissionCheck: (role, _row, context) =>
         context.storeId ? isManagerOrAdmin(role) : isAdmin(role),
+      equals: moneyEquals,
     },
     avgCost: {
       tableKey: "products",
       columnKey: "avgCost",
       inputType: "money",
-      formatter: (value, _row, _context, display) =>
-        formatMoney(value, display.locale, display.notAvailableLabel),
-      parser: (raw) => parseNonNegativeMoney(raw),
+      formatter: (value, _row, context, display) =>
+        formatMoney(value, context, display.locale, display.notAvailableLabel),
+      editorValue: (value, _row, context) => formatMoneyEditorValue(value, context),
+      parser: (raw, _row, context) => parseNonNegativeMoneyKgs(raw, context),
       mutation: (row, value) => ({
         route: "products.inlineUpdate",
         input: { productId: row.id, patch: { avgCostKgs: value } },
       }),
       permissionCheck: (role) => isAdmin(role),
+      equals: moneyEquals,
     },
     onHand: {
       tableKey: "products",
@@ -721,7 +808,8 @@ export const inlineEditRegistry: InlineEditRegistry = {
       tableKey: "users",
       columnKey: "role",
       inputType: "select",
-      formatter: (value, _row, _context, display) => display.tCommon(`roles.${value.toLowerCase()}`),
+      formatter: (value, _row, _context, display) =>
+        display.tCommon(`roles.${value.toLowerCase()}`),
       parser: (raw) => parseRoleSelect(raw),
       mutation: (row, value) => ({
         route: "users.update",
@@ -779,8 +867,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
           isActive: value,
         },
       }),
-      permissionCheck: (role, row, context) =>
-        isAdmin(role) && row.id !== context.currentUserId,
+      permissionCheck: (role, row, context) => isAdmin(role) && row.id !== context.currentUserId,
       selectOptions: (_row, _context, display) => [
         { value: "true", label: display.tTable("active") },
         { value: "false", label: display.tTable("inactive") },
