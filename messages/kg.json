@@ -2235,6 +2235,7 @@
     "aiArrangeCategoriesSuccess": "Категориялар иреттелди. Жаңыртылды: {updated}. Өткөрүлдү: {skipped}.",
     "aiArrangeCategoriesEmpty": "Иреттөөгө товар жок.",
     "bulkSetStorePrice": "Дүкөн баасы",
+    "bulkAiActions": "ИИ",
     "bulkGenerateDescriptions": "ИИ менен сүрөттөмө түзүү",
     "bulkGenerateBarcodes": "Штрихкод түзүү",
     "confirmBulkGenerateDescriptions": "Тандалган товарлар үчүн ИИ менен сүрөттөмө түзөлүбү ({count})? Учурдагы сүрөттөмөлөр алмаштырылат.",

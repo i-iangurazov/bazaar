@@ -37,6 +37,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -60,6 +67,7 @@ import {
   EditIcon,
   EmptyIcon,
   GridViewIcon,
+  MoreIcon,
   PriceIcon,
   PrintIcon,
   RestoreIcon,
@@ -212,7 +220,6 @@ const ProductsPage = () => {
   const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const tExports = useTranslations("exports");
   const locale = useLocale();
   const router = useRouter();
   const { data: session } = useSession();
@@ -223,7 +230,6 @@ const ProductsPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
   const [productsPage, setProductsPage] = useState(1);
-  const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [bulkOpen, setBulkOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [categoryInputValue, setCategoryInputValue] = useState("");
@@ -1489,7 +1495,7 @@ const ProductsPage = () => {
         ]),
   ];
 
-  const handleExport = async () => {
+  const handleExport = async (format: DownloadFormat) => {
     const { data, error } = await exportQuery.refetch();
     if (error) {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1504,7 +1510,7 @@ const ProductsPage = () => {
       return;
     }
     downloadTableFile({
-      format: exportFormat,
+      format,
       fileNameBase: `products-${locale}`,
       header,
       rows: body,
@@ -1927,94 +1933,98 @@ const ProductsPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <>
-            {isAdmin ? (
-              <>
-                <Link href="/products/new" className="w-full sm:w-auto">
-                  <Button className="w-full sm:w-auto" data-tour="products-create">
-                    <AddIcon className="h-4 w-4" aria-hidden />
-                    {t("newProduct")}
+          <TooltipProvider>
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              {isAdmin ? (
+                <>
+                  <Link href="/products/new" className="w-full sm:w-auto">
+                    <Button className="w-full sm:w-auto" data-tour="products-create">
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {t("newProduct")}
+                    </Button>
+                  </Link>
+                  <Link href="/products/new?type=bundle" className="w-full sm:w-auto">
+                    <Button variant="secondary" className="w-full sm:w-auto">
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {t("newBundle")}
+                    </Button>
+                  </Link>
+                </>
+              ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                    aria-label={tCommon("moreActions")}
+                  >
+                    <MoreIcon className="h-4 w-4" aria-hidden />
+                    {tCommon("actions")}
                   </Button>
-                </Link>
-                <Link href="/products/new?type=bundle" className="w-full sm:w-auto">
-                  <Button variant="secondary" className="w-full sm:w-auto">
-                    <AddIcon className="h-4 w-4" aria-hidden />
-                    {t("newBundle")}
-                  </Button>
-                </Link>
-              </>
-            ) : null}
-            {canManagePrices ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setBulkOpen(true)}
-                disabled={!stores.length}
-              >
-                <EditIcon className="h-4 w-4" aria-hidden />
-                {t("bulkPriceUpdate")}
-              </Button>
-            ) : null}
-            {isAdmin ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => void handleArrangeCategoriesWithAi()}
-                disabled={!products.length || arrangeCategoriesMutation.isLoading}
-              >
-                {arrangeCategoriesMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <SparklesIcon className="h-4 w-4" aria-hidden />
-                )}
-                {arrangeCategoriesMutation.isLoading
-                  ? tCommon("loading")
-                  : t("aiArrangeCategories")}
-              </Button>
-            ) : null}
-            {selectedList.length ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => openPrintForProducts(selectedList, 1)}
-                data-tour="products-print-tags"
-              >
-                <PrintIcon className="h-4 w-4" aria-hidden />
-                {t("printPriceTags")}
-              </Button>
-            ) : null}
-            <Button
-              variant="secondary"
-              className="w-full sm:w-auto"
-              onClick={handleExport}
-              disabled={exportQuery.isFetching}
-            >
-              {exportQuery.isFetching ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-              )}
-              {exportQuery.isFetching
-                ? tCommon("loading")
-                : exportFormat === "csv"
-                  ? t("exportCsv")
-                  : t("exportXlsx")}
-            </Button>
-            <div className="w-full sm:w-[100px]">
-              <Select
-                value={exportFormat}
-                onValueChange={(value) => setExportFormat(value as DownloadFormat)}
-              >
-                <SelectTrigger aria-label={tExports("formatLabel")}>
-                  <SelectValue placeholder={tExports("formatLabel")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="csv">{tExports("formats.csv")}</SelectItem>
-                  <SelectItem value="xlsx">{tExports("formats.xlsx")}</SelectItem>
-                </SelectContent>
-              </Select>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[240px]">
+                  {canManagePrices ? (
+                    <DropdownMenuItem disabled={!stores.length} onSelect={() => setBulkOpen(true)}>
+                      <EditIcon className="h-4 w-4" aria-hidden />
+                      {t("bulkPriceUpdate")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {isAdmin ? (
+                    <DropdownMenuItem
+                      disabled={!products.length || arrangeCategoriesMutation.isLoading}
+                      onSelect={() => void handleArrangeCategoriesWithAi()}
+                    >
+                      {arrangeCategoriesMutation.isLoading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <SparklesIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {arrangeCategoriesMutation.isLoading
+                        ? tCommon("loading")
+                        : t("aiArrangeCategories")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {selectedList.length ? (
+                    <DropdownMenuItem
+                      data-tour="products-print-tags"
+                      onSelect={() => openPrintForProducts(selectedList, 1)}
+                    >
+                      <PrintIcon className="h-4 w-4" aria-hidden />
+                      {t("printPriceTags")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={exportQuery.isFetching}
+                    onSelect={() => {
+                      void handleExport("csv");
+                    }}
+                  >
+                    {exportQuery.isFetching ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {t("exportCsv")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={exportQuery.isFetching}
+                    onSelect={() => {
+                      void handleExport("xlsx");
+                    }}
+                  >
+                    {exportQuery.isFetching ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {t("exportXlsx")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-          </>
+          </TooltipProvider>
         }
         filters={
           <>
@@ -2212,17 +2222,21 @@ const ProductsPage = () => {
                         : tCommon("selectAllResults", { count: productsTotal })}
                     </Button>
                   ) : null}
-                  <Button
-                    data-tour="products-print-tags"
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => openPrintForProducts(selectedList, 1)}
-                  >
-                    <PrintIcon className="h-4 w-4" aria-hidden />
-                    {t("printPriceTags")}
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        data-tour="products-print-tags"
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        aria-label={t("printPriceTags")}
+                        onClick={() => openPrintForProducts(selectedList, 1)}
+                      >
+                        <PrintIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("printPriceTags")}</TooltipContent>
+                  </Tooltip>
                   {hasActiveSelected && isAdmin ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2292,59 +2306,63 @@ const ProductsPage = () => {
                     </Tooltip>
                   ) : null}
                   {isAdmin ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => void handleArrangeCategoriesWithAi()}
-                      disabled={arrangeCategoriesMutation.isLoading}
-                    >
-                      {arrangeCategoriesMutation.isLoading ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <SparklesIcon className="h-4 w-4" aria-hidden />
-                      )}
-                      {arrangeCategoriesMutation.isLoading
-                        ? tCommon("loading")
-                        : t("aiArrangeCategories")}
-                    </Button>
-                  ) : null}
-                  {isAdmin ? (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => void handleBulkGenerateDescriptions()}
-                      disabled={bulkDescriptionRunning}
-                    >
-                      {bulkDescriptionRunning ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <SparklesIcon className="h-4 w-4" aria-hidden />
-                      )}
-                      {bulkDescriptionRunning ? tCommon("loading") : t("bulkGenerateDescriptions")}
-                    </Button>
-                  ) : null}
-                  {isAdmin ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => void handleBulkGenerateBarcodes()}
-                      disabled={bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning}
-                    >
-                      {bulkGenerateBarcodesMutation.isLoading ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <AddIcon className="h-4 w-4" aria-hidden />
-                      )}
-                      {bulkGenerateBarcodesMutation.isLoading
-                        ? tCommon("loading")
-                        : t("bulkGenerateBarcodes")}
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          className="w-full sm:w-auto"
+                          aria-label={t("bulkAiActions")}
+                        >
+                          <SparklesIcon className="h-4 w-4" aria-hidden />
+                          {t("bulkAiActions")}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[260px]">
+                        <DropdownMenuItem
+                          disabled={arrangeCategoriesMutation.isLoading}
+                          onSelect={() => void handleArrangeCategoriesWithAi()}
+                        >
+                          {arrangeCategoriesMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {arrangeCategoriesMutation.isLoading
+                            ? tCommon("loading")
+                            : t("aiArrangeCategories")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={bulkDescriptionRunning}
+                          onSelect={() => void handleBulkGenerateDescriptions()}
+                        >
+                          {bulkDescriptionRunning ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {bulkDescriptionRunning
+                            ? tCommon("loading")
+                            : t("bulkGenerateDescriptions")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={
+                            bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
+                          }
+                          onSelect={() => void handleBulkGenerateBarcodes()}
+                        >
+                          {bulkGenerateBarcodesMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <AddIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {bulkGenerateBarcodesMutation.isLoading
+                            ? tCommon("loading")
+                            : t("bulkGenerateBarcodes")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : null}
                 </SelectionToolbar>
               </TooltipProvider>

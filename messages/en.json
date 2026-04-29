@@ -2240,6 +2240,7 @@
     "aiArrangeCategoriesSuccess": "Categories arranged. Updated: {updated}. Skipped: {skipped}.",
     "aiArrangeCategoriesEmpty": "No products to arrange.",
     "bulkSetStorePrice": "Bulk set store price",
+    "bulkAiActions": "AI",
     "bulkGenerateDescriptions": "Bulk generate descriptions",
     "bulkGenerateBarcodes": "Bulk generate barcodes",
     "confirmBulkGenerateDescriptions": "Confirm bulk generate descriptions {count}",

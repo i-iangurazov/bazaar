@@ -2240,6 +2240,7 @@
     "aiArrangeCategoriesSuccess": "Категории упорядочены. Обновлено: {updated}. Пропущено: {skipped}.",
     "aiArrangeCategoriesEmpty": "Нет товаров для упорядочивания.",
     "bulkSetStorePrice": "Цена для магазина",
+    "bulkAiActions": "ИИ",
     "bulkGenerateDescriptions": "Сгенерировать описания с ИИ",
     "bulkGenerateBarcodes": "Сгенерировать штрихкоды",
     "confirmBulkGenerateDescriptions": "Сгенерировать описания с ИИ для выбранных товаров ({count})? Текущие описания будут заменены.",
