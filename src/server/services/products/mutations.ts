@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 import type { Locale } from "@/lib/locales";
 import {
   archiveProduct,
+  arrangeClothingCategoriesWithAi,
   bulkGenerateProductBarcodes,
   bulkGenerateProductDescriptions,
   bulkUpdateProductCategory,
@@ -23,6 +24,7 @@ import type {
   BulkGenerateProductBarcodesInput,
   BulkGenerateProductDescriptionsInput,
   BulkUpdateProductCategoryInput,
+  ArrangeClothingCategoriesInput,
   CreateProductInput,
   ImportProductsCsvInput,
   PreviewProductsImportCsvInput,
@@ -98,6 +100,22 @@ export const updateProductMutation = async ({
       bundleComponents: input.bundleComponents,
       packs: input.packs,
       variants: input.variants,
+    });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+};
+
+export const arrangeClothingCategoriesMutation = async ({
+  input,
+  ...ctx
+}: ProductMutationContext & { input: ArrangeClothingCategoriesInput }) => {
+  try {
+    return await arrangeClothingCategoriesWithAi({
+      organizationId: ctx.organizationId,
+      actorId: ctx.actorId,
+      requestId: ctx.requestId,
+      productIds: input.productIds,
     });
   } catch (error) {
     throw toTRPCError(error);

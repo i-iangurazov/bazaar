@@ -7,6 +7,7 @@ import {
 } from "@/server/services/orgSettings";
 import { toTRPCError } from "@/server/trpc/errors";
 import { adminOrOrgOwnerProcedure, router } from "@/server/trpc/trpc";
+import { supportedCurrencyCodes } from "@/lib/currency";
 
 export const orgSettingsRouter = router({
   getBusinessProfile: adminOrOrgOwnerProcedure
@@ -34,6 +35,8 @@ export const orgSettingsRouter = router({
         inn: z.string().max(32).nullable().optional(),
         address: z.string().max(512).nullable().optional(),
         phone: z.string().max(40).nullable().optional(),
+        currencyCode: z.enum(supportedCurrencyCodes).optional(),
+        currencyRateKgsPerUnit: z.number().positive().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -49,6 +52,8 @@ export const orgSettingsRouter = router({
           inn: input.inn ?? null,
           address: input.address ?? null,
           phone: input.phone ?? null,
+          currencyCode: input.currencyCode,
+          currencyRateKgsPerUnit: input.currencyRateKgsPerUnit ?? null,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -55,6 +55,7 @@ enum CustomerOrderStatus {
 enum CustomerOrderSource {
   MANUAL
   CATALOG
+  API
 }
 
 enum RegisterShiftStatus {
@@ -316,6 +317,7 @@ model Organization {
   storePrices              StorePrice[]
   bazaarCatalogs           BazaarCatalog[]
   bazaarCatalogImages      BazaarCatalogImage[]
+  bazaarApiKeys            BazaarApiKey[]
   mMarketIntegrations      MMarketIntegration[]
   mMarketBranchMappings    MMarketBranchMapping[]
   mMarketExportJobs        MMarketExportJob[]
@@ -418,6 +420,7 @@ model User {
   refundRequestsCreated         RefundRequest[]           @relation("refundRequestsCreatedBy")
   refundRequestsReviewed        RefundRequest[]           @relation("refundRequestsReviewedBy")
   bazaarCatalogsUpdated         BazaarCatalog[]           @relation("bazaarCatalogUpdatedBy")
+  bazaarApiKeysCreated          BazaarApiKey[]            @relation("bazaarApiKeyCreatedBy")
   mMarketExportJobsRequested    MMarketExportJob[]        @relation("mMarketExportRequestedBy")
   productImageStudioJobsCreated ProductImageStudioJob[]   @relation("productImageStudioRequestedBy")
   markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
@@ -461,6 +464,8 @@ model Store {
   inn                String?
   address            String?
   phone              String?
+  currencyCode       String           @default("KGS")
+  currencyRateKgsPerUnit Decimal      @default(1.00) @db.Decimal(18, 6)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
@@ -476,6 +481,7 @@ model Store {
   stockLots                StockLot[]
   storePrices              StorePrice[]
   bazaarCatalog            BazaarCatalog?
+  bazaarApiKeys            BazaarApiKey[]
   mMarketBranchMappings    MMarketBranchMapping[]
   bakaiStoreMappings       BakaiStoreStockMapping[]
   bakaiStoreBranchMappings BakaiStoreBranchMapping[]
@@ -1755,6 +1761,27 @@ model BazaarCatalogHiddenProduct {
   @@unique([storeId, productId])
   @@index([organizationId, storeId, productId])
   @@index([productId, storeId])
+}
+
+model BazaarApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  storeId        String
+  name           String
+  tokenPrefix    String
+  tokenHash      String    @unique
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+  createdBy    User?       @relation("bazaarApiKeyCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, storeId, revokedAt])
+  @@index([tokenPrefix])
 }
 
 model ProductCost {

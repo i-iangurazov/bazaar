@@ -72,6 +72,30 @@ const GENERATED_SKU_PREFIX = "SKU-";
 const GENERATED_SKU_PAD_LENGTH = 6;
 const GENERATED_SKU_MAX_PROBES = 10_000;
 const GENERATED_SKU_MAX_RETRIES = 5;
+const CATEGORY_ARRANGEMENT_OPENAI_URL = "https://api.openai.com/v1/responses";
+const CATEGORY_ARRANGEMENT_MODEL =
+  process.env.PRODUCT_CATEGORY_AI_MODEL?.trim() ||
+  process.env.OPENAI_MODEL?.trim() ||
+  "gpt-5-mini";
+const CATEGORY_ARRANGEMENT_BATCH_SIZE = 80;
+const MEN_CATEGORY_NAME = "Мужчины";
+const WOMEN_CATEGORY_NAME = "Женщины";
+
+type CategoryArrangementGender = "MEN" | "WOMEN";
+
+type CategoryArrangementProduct = {
+  id: string;
+  name: string;
+  category: string | null;
+  categories: string[];
+  description: string | null;
+};
+
+type CategoryArrangementDecision = {
+  gender: CategoryArrangementGender;
+  confidence: number;
+  reason: string;
+};
 
 const resolveNormalizedProductCategories = (input: {
   category?: string | null;
@@ -88,6 +112,249 @@ const resolveNormalizedProductCategories = (input: {
 
 const areProductCategoryListsEqual = (left: string[], right: string[]) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
+
+const normalizeSearchText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const includesAnyPattern = (text: string, patterns: RegExp[]) =>
+  patterns.some((pattern) => pattern.test(text));
+
+const menCategoryPatterns = [
+  /\bmen\b/i,
+  /\bman\b/i,
+  /\bmale\b/i,
+  /муж/i,
+  /мальчик/i,
+  /парн/i,
+  /эркек/i,
+  /ул бала/i,
+];
+
+const womenCategoryPatterns = [
+  /\bwomen\b/i,
+  /\bwoman\b/i,
+  /\bfemale\b/i,
+  /жен/i,
+  /девоч/i,
+  /девуш/i,
+  /дам/i,
+  /аял/i,
+  /кыз/i,
+];
+
+const womenClothingPatterns = [
+  /плать/i,
+  /юбк/i,
+  /сарафан/i,
+  /блуз/i,
+  /топ\b/i,
+  /боди\b/i,
+  /бра\b/i,
+  /лиф/i,
+  /корсет/i,
+  /туника/i,
+  /колгот/i,
+];
+
+const genderCategoryNameSet = new Set(
+  [
+    MEN_CATEGORY_NAME,
+    WOMEN_CATEGORY_NAME,
+    "men",
+    "women",
+    "мужской",
+    "мужская",
+    "мужские",
+    "женский",
+    "женская",
+    "женские",
+  ].map((value) => normalizeSearchText(value)),
+);
+
+const categoryNameForGender = (gender: CategoryArrangementGender) =>
+  gender === "MEN" ? MEN_CATEGORY_NAME : WOMEN_CATEGORY_NAME;
+
+const classifyProductGenderLocally = (
+  product: CategoryArrangementProduct,
+): CategoryArrangementDecision | null => {
+  const text = normalizeSearchText(
+    [product.name, product.category, ...product.categories, product.description]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const menMatched = includesAnyPattern(text, menCategoryPatterns);
+  const womenMatched = includesAnyPattern(text, womenCategoryPatterns);
+
+  if (menMatched && !womenMatched) {
+    return { gender: "MEN", confidence: 0.9, reason: "gender_keyword" };
+  }
+  if (womenMatched && !menMatched) {
+    return { gender: "WOMEN", confidence: 0.9, reason: "gender_keyword" };
+  }
+  if (!menMatched && !womenMatched && includesAnyPattern(text, womenClothingPatterns)) {
+    return { gender: "WOMEN", confidence: 0.82, reason: "women_clothing_keyword" };
+  }
+  return null;
+};
+
+const extractOpenAiText = (body: unknown) => {
+  if (!body || typeof body !== "object") {
+    return "";
+  }
+  const record = body as {
+    output_text?: unknown;
+    output?: Array<{
+      content?: Array<{
+        text?: unknown;
+      }>;
+    }>;
+  };
+  if (typeof record.output_text === "string") {
+    return record.output_text;
+  }
+  return (
+    record.output
+      ?.flatMap((item) => item.content ?? [])
+      .map((content) => {
+        if (typeof content.text === "string") {
+          return content.text;
+        }
+        if (
+          content.text &&
+          typeof content.text === "object" &&
+          "value" in content.text &&
+          typeof content.text.value === "string"
+        ) {
+          return content.text.value;
+        }
+        return "";
+      })
+      .join("\n") ?? ""
+  );
+};
+
+const parseAiCategoryArrangementJson = (text: string) => {
+  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const record = item as {
+      id?: unknown;
+      gender?: unknown;
+      confidence?: unknown;
+      reason?: unknown;
+    };
+    const gender = record.gender === "MEN" || record.gender === "WOMEN" ? record.gender : null;
+    const confidence =
+      typeof record.confidence === "number" && Number.isFinite(record.confidence)
+        ? record.confidence
+        : 0;
+    if (typeof record.id !== "string" || !gender || confidence < 0.78) {
+      return [];
+    }
+    return [
+      [
+        record.id,
+        {
+          gender,
+          confidence,
+          reason: typeof record.reason === "string" ? record.reason : "ai",
+        },
+      ] as const,
+    ];
+  });
+};
+
+const callCategoryArrangementAi = async (products: CategoryArrangementProduct[]) => {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey || !products.length) {
+    return new Map<string, CategoryArrangementDecision>();
+  }
+
+  const response = await fetch(CATEGORY_ARRANGEMENT_OPENAI_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: CATEGORY_ARRANGEMENT_MODEL,
+      reasoning: { effort: "minimal" },
+      max_output_tokens: 4000,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text:
+                "Classify clothing products into MEN or WOMEN only when the product name, description, or existing categories clearly indicate the target customer. Return SKIP for unisex, kids, ambiguous, cosmetics, accessories without clear gender, or anything uncertain. Never invent subcategories. Return only a JSON array.",
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: JSON.stringify(
+                products.map((product) => ({
+                  id: product.id,
+                  name: product.name,
+                  categories: normalizeProductCategoryNames([
+                    product.category,
+                    ...product.categories,
+                  ]),
+                  description: product.description?.slice(0, 240) ?? null,
+                })),
+              ),
+            },
+            {
+              type: "input_text",
+              text:
+                'JSON shape: [{"id":"product id","gender":"MEN|WOMEN|SKIP","confidence":0.0-1.0,"reason":"short reason"}].',
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    return new Map<string, CategoryArrangementDecision>();
+  }
+  const body = await response.json().catch(() => null);
+  const text = extractOpenAiText(body);
+  if (!text) {
+    return new Map<string, CategoryArrangementDecision>();
+  }
+
+  try {
+    return new Map(parseAiCategoryArrangementJson(text));
+  } catch {
+    return new Map<string, CategoryArrangementDecision>();
+  }
+};
+
+const resolveNextArrangedCategories = (
+  currentCategories: string[],
+  gender: CategoryArrangementGender,
+) =>
+  normalizeProductCategoryNames([
+    categoryNameForGender(gender),
+    ...currentCategories.filter(
+      (category) => !genderCategoryNameSet.has(normalizeSearchText(category)),
+    ),
+  ]);
 
 const formatGeneratedSku = (sequence: number) =>
   `${GENERATED_SKU_PREFIX}${String(sequence).padStart(GENERATED_SKU_PAD_LENGTH, "0")}`;
@@ -1809,6 +2076,130 @@ export const bulkUpdateProductCategory = async (input: {
 
     return { updated };
   });
+
+export const arrangeClothingCategoriesWithAi = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productIds: string[];
+}) => {
+  const uniqueProductIds = Array.from(new Set(input.productIds.map((id) => id.trim()).filter(Boolean)));
+  if (!uniqueProductIds.length) {
+    return { scanned: 0, eligible: 0, proposed: 0, updated: 0, skipped: 0, aiUsed: false };
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId: input.organizationId,
+      id: { in: uniqueProductIds },
+      isDeleted: false,
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      categories: true,
+      description: true,
+    },
+  });
+
+  const eligibleProducts = products.filter(
+    (product) =>
+      normalizeProductCategoryNames([product.category, ...product.categories]).length > 0,
+  );
+  const decisions = new Map<string, CategoryArrangementDecision>();
+  const uncertainProducts: CategoryArrangementProduct[] = [];
+
+  for (const product of eligibleProducts) {
+    const localDecision = classifyProductGenderLocally(product);
+    if (localDecision) {
+      decisions.set(product.id, localDecision);
+    } else {
+      uncertainProducts.push(product);
+    }
+  }
+
+  let aiUsed = false;
+  for (let index = 0; index < uncertainProducts.length; index += CATEGORY_ARRANGEMENT_BATCH_SIZE) {
+    const batch = uncertainProducts.slice(index, index + CATEGORY_ARRANGEMENT_BATCH_SIZE);
+    const aiDecisions = await callCategoryArrangementAi(batch);
+    if (aiDecisions.size > 0) {
+      aiUsed = true;
+    }
+    for (const [productId, decision] of aiDecisions) {
+      decisions.set(productId, decision);
+    }
+  }
+
+  let proposed = 0;
+  let updated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    await ensureProductCategory(tx, { organizationId: input.organizationId, name: MEN_CATEGORY_NAME });
+    await ensureProductCategory(tx, { organizationId: input.organizationId, name: WOMEN_CATEGORY_NAME });
+
+    for (const product of eligibleProducts) {
+      const decision = decisions.get(product.id);
+      if (!decision) {
+        continue;
+      }
+
+      const currentCategories = normalizeProductCategoryNames([
+        product.category,
+        ...product.categories,
+      ]);
+      const nextCategories = resolveNextArrangedCategories(currentCategories, decision.gender);
+      const nextPrimaryCategory = resolvePrimaryProductCategory(nextCategories);
+      if (
+        product.category === nextPrimaryCategory &&
+        areProductCategoryListsEqual(product.categories, nextCategories)
+      ) {
+        proposed += 1;
+        continue;
+      }
+
+      await tx.product.update({
+        where: { id: product.id },
+        data: {
+          category: nextPrimaryCategory,
+          categories: nextCategories,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_CATEGORY_AI_ARRANGE",
+        entity: "Product",
+        entityId: product.id,
+        before: toJson({
+          id: product.id,
+          category: product.category,
+          categories: product.categories,
+        }),
+        after: toJson({
+          id: product.id,
+          category: nextPrimaryCategory,
+          categories: nextCategories,
+          decision,
+        }),
+        requestId: input.requestId,
+      });
+
+      proposed += 1;
+      updated += 1;
+    }
+  });
+
+  return {
+    scanned: products.length,
+    eligible: eligibleProducts.length,
+    proposed,
+    updated,
+    skipped: Math.max(0, eligibleProducts.length - proposed),
+    aiUsed,
+  };
+};
 
 export type ImportProductRow = {
   sku: string;

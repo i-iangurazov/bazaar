@@ -24,6 +24,8 @@ export const storesRouter = router({
         inn: true,
         address: true,
         phone: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
         complianceProfile: {
           select: {
             enableKkm: true,
@@ -74,6 +76,11 @@ export const storesRouter = router({
         inn: z.string().nullable().optional(),
         address: z.string().nullable().optional(),
         phone: z.string().nullable().optional(),
+        cloneFromStoreId: z.string().nullable().optional(),
+        copyInventory: z.boolean().optional(),
+        stockQuantityDelta: z.number().int().min(-1_000_000).max(1_000_000).optional(),
+        priceAdjustmentMode: z.enum(["none", "percentage", "amount"]).optional(),
+        priceAdjustmentValue: z.number().min(-1_000_000).max(1_000_000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -91,6 +98,11 @@ export const storesRouter = router({
           inn: input.inn ?? null,
           address: input.address ?? null,
           phone: input.phone ?? null,
+          cloneFromStoreId: input.cloneFromStoreId ?? null,
+          copyInventory: input.copyInventory,
+          stockQuantityDelta: input.stockQuantityDelta,
+          priceAdjustmentMode: input.priceAdjustmentMode,
+          priceAdjustmentValue: input.priceAdjustmentValue,
         });
       } catch (error) {
         throw toTRPCError(error);

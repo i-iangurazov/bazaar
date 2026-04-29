@@ -1,13 +1,16 @@
 import { toIntlLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
+import { formatCurrencyAmount, type SupportedCurrencyCode } from "@/lib/currency";
 
 export const formatCurrencyKGS = (amount: number, locale: string) =>
-  new Intl.NumberFormat(toIntlLocale(locale), {
-    style: "currency",
-    currency: "KGS",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  formatCurrencyAmount(amount, locale, "KGS");
+
+export const formatCurrency = (
+  amount: number,
+  locale: string,
+  currencyCode: SupportedCurrencyCode,
+  options?: Intl.NumberFormatOptions,
+) => formatCurrencyAmount(amount, locale, currencyCode, options);
 
 export const formatNumber = (
   value: number,

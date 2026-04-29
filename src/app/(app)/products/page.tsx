@@ -549,6 +549,12 @@ const ProductsPage = () => {
     },
   });
 
+  const arrangeCategoriesMutation = trpc.products.arrangeClothingCategories.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   const bulkStorePriceMutation = trpc.storePrices.upsert.useMutation({
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1618,6 +1624,45 @@ const ProductsPage = () => {
     });
   };
 
+  const handleArrangeCategoriesWithAi = async () => {
+    if (!isAdmin || arrangeCategoriesMutation.isLoading) {
+      return;
+    }
+    const targetIds = selectedList.length ? selectedList : products.map((product) => product.id);
+    if (!targetIds.length) {
+      toast({ variant: "info", description: t("aiArrangeCategoriesEmpty") });
+      return;
+    }
+    if (
+      !(await confirm({
+        description: t("aiArrangeCategoriesConfirm", { count: targetIds.length }),
+        confirmVariant: "primary",
+      }))
+    ) {
+      return;
+    }
+
+    const chunks: string[][] = [];
+    for (let index = 0; index < targetIds.length; index += 500) {
+      chunks.push(targetIds.slice(index, index + 500));
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    for (const chunk of chunks) {
+      const result = await arrangeCategoriesMutation.mutateAsync({ productIds: chunk });
+      updated += result.updated;
+      skipped += result.skipped;
+    }
+
+    await productsBootstrapQuery.refetch();
+    setSelectedIds(new Set());
+    toast({
+      variant: "success",
+      description: t("aiArrangeCategoriesSuccess", { updated, skipped }),
+    });
+  };
+
   const handleCategoryCreate = () => {
     const trimmed = categoryInputValue.trim();
     if (!trimmed) {
@@ -1895,6 +1940,23 @@ const ProductsPage = () => {
               >
                 <EditIcon className="h-4 w-4" aria-hidden />
                 {t("bulkPriceUpdate")}
+              </Button>
+            ) : null}
+            {isAdmin ? (
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => void handleArrangeCategoriesWithAi()}
+                disabled={!products.length || arrangeCategoriesMutation.isLoading}
+              >
+                {arrangeCategoriesMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {arrangeCategoriesMutation.isLoading
+                  ? tCommon("loading")
+                  : t("aiArrangeCategories")}
               </Button>
             ) : null}
             {selectedList.length ? (
@@ -2215,6 +2277,25 @@ const ProductsPage = () => {
                       </TooltipTrigger>
                       <TooltipContent>{t("bulkSetStorePrice")}</TooltipContent>
                     </Tooltip>
+                  ) : null}
+                  {isAdmin ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleArrangeCategoriesWithAi()}
+                      disabled={arrangeCategoriesMutation.isLoading}
+                    >
+                      {arrangeCategoriesMutation.isLoading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <SparklesIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {arrangeCategoriesMutation.isLoading
+                        ? tCommon("loading")
+                        : t("aiArrangeCategories")}
+                    </Button>
                   ) : null}
                   {isAdmin ? (
                     <Button

@@ -15,6 +15,13 @@ import { toJson } from "@/server/services/json";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
+import {
+  convertFromKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+  roundUpToCurrencyTens,
+  type SupportedCurrencyCode,
+} from "@/lib/currency";
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
@@ -78,7 +85,13 @@ const buildPublicPath = (slug: string) => `/c/${slug}`;
 const ensureStoreAccess = async (organizationId: string, storeId: string) => {
   const store = await prisma.store.findUnique({
     where: { id: storeId },
-    select: { id: true, name: true, organizationId: true },
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
+    },
   });
   if (!store || store.organizationId !== organizationId) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -100,7 +113,7 @@ const generateUniqueSlug = async (tx: Prisma.TransactionClient) => {
   throw new AppError("genericMessage", "INTERNAL_SERVER_ERROR", 500);
 };
 
-const cacheKeyBySlug = (slug: string) => `bazaar-catalog:public:v2:${slug}`;
+const cacheKeyBySlug = (slug: string) => `bazaar-catalog:public:v3:${slug}`;
 
 const cacheGet = async <T>(key: string): Promise<T | null> => {
   const redis = getRedisPublisher();
@@ -135,6 +148,11 @@ const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
+const roundCatalogPrice = (
+  valueKgs: number,
+  currencyCode: SupportedCurrencyCode,
+  currencyRateKgsPerUnit: number,
+) => roundUpToCurrencyTens(convertFromKgs(valueKgs, currencyRateKgsPerUnit, currencyCode));
 
 export type BazaarCatalogProductVisibilityFilter = "all" | "visible" | "hidden";
 
@@ -225,7 +243,10 @@ const ensureProductAccess = async (organizationId: string, productIds: string[])
   return uniqueIds;
 };
 
-const invalidateCatalogCacheForStore = async (organizationId: string, storeId: string) => {
+export const invalidateBazaarCatalogCacheForStore = async (
+  organizationId: string,
+  storeId: string,
+) => {
   const catalog = await prisma.bazaarCatalog.findUnique({
     where: {
       organizationId_storeId: {
@@ -306,7 +327,12 @@ export const listBazaarCatalogProducts = async (input: {
   page?: number;
   pageSize?: number;
 }) => {
-  await ensureStoreAccess(input.organizationId, input.storeId);
+  const store = await ensureStoreAccess(input.organizationId, input.storeId);
+  const currencyCode = normalizeCurrencyCode(store.currencyCode);
+  const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
+    Number(store.currencyRateKgsPerUnit),
+    currencyCode,
+  );
 
   const page = Math.max(1, Math.trunc(input.page ?? 1));
   const pageSize = Math.min(10, Math.max(1, Math.trunc(input.pageSize ?? 10)));
@@ -438,8 +464,10 @@ export const listBazaarCatalogProducts = async (input: {
       sku: product.sku,
       name: product.name,
       category: normalizeOptionalText(product.category),
-      priceKgs: roundMoney(
+      priceKgs: roundCatalogPrice(
         storePriceByProductId.get(product.id) ?? toMoney(product.basePriceKgs),
+        currencyCode,
+        currencyRateKgsPerUnit,
       ),
       imageUrl: resolveProductListImageUrl(product),
       onHandQty: onHandByProductId.get(product.id) ?? 0,
@@ -448,6 +476,7 @@ export const listBazaarCatalogProducts = async (input: {
     total,
     page,
     pageSize,
+    currencyCode,
     summary: {
       totalProducts,
       hiddenProducts,
@@ -505,7 +534,7 @@ export const updateBazaarCatalogProductVisibility = async (input: {
     });
   });
 
-  await invalidateCatalogCacheForStore(input.organizationId, input.storeId);
+  await invalidateBazaarCatalogCacheForStore(input.organizationId, input.storeId);
 
   return {
     updatedCount: productIds.length,
@@ -649,6 +678,7 @@ type PublicCatalogPayload = {
   storeId: string;
   title: string;
   storeName: string;
+  currencyCode: SupportedCurrencyCode;
   accentColor: string;
   fontFamily: BazaarCatalogFontFamily;
   headerStyle: BazaarCatalogHeaderStyle;
@@ -697,6 +727,8 @@ export const getPublicBazaarCatalog = async (
       store: {
         select: {
           name: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
         },
       },
       logoImage: {
@@ -777,6 +809,12 @@ export const getPublicBazaarCatalog = async (
     }
   }
 
+  const currencyCode = normalizeCurrencyCode(catalog.store.currencyCode);
+  const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
+    Number(catalog.store.currencyRateKgsPerUnit),
+    currencyCode,
+  );
+
   const categoryMap = new Map<string, { key: string; name: string | null; count: number }>();
   const payloadProducts = products.map((product) => {
     const categoryName = product.category?.trim() || null;
@@ -801,7 +839,7 @@ export const getPublicBazaarCatalog = async (
       return {
         id: variant.id,
         name: normalizeOptionalText(variant.name) ?? variant.id.slice(0, 8),
-        priceKgs: roundMoney(variantPrice),
+        priceKgs: roundCatalogPrice(variantPrice, currencyCode, currencyRateKgsPerUnit),
       };
     });
 
@@ -809,7 +847,7 @@ export const getPublicBazaarCatalog = async (
       id: product.id,
       name: product.name,
       category: categoryName,
-      priceKgs: roundMoney(effectivePrice),
+      priceKgs: roundCatalogPrice(effectivePrice, currencyCode, currencyRateKgsPerUnit),
       imageUrl,
       isBundle: product.isBundle,
       variants,
@@ -821,6 +859,7 @@ export const getPublicBazaarCatalog = async (
     storeId: catalog.storeId,
     title: catalog.title?.trim() || catalog.store.name,
     storeName: catalog.store.name,
+    currencyCode,
     accentColor: normalizeAccentColor(catalog.accentColor),
     fontFamily: catalog.fontFamily,
     headerStyle: catalog.headerStyle,

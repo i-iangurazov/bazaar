@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -34,6 +35,11 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { applyThemePreference, persistThemeCookie } from "@/lib/theme";
 import { locales, normalizeLocale } from "@/lib/locales";
+import {
+  defaultCurrencyRateKgsPerUnit,
+  supportedCurrencyCodes,
+  type SupportedCurrencyCode,
+} from "@/lib/currency";
 
 type ThemePreferenceValue = "LIGHT" | "DARK";
 
@@ -74,6 +80,10 @@ const ProfilePage = () => {
       z.object({
         organizationName: z.string().min(2, t("business.validation.organizationNameRequired")),
         storeId: z.string().min(1, t("business.validation.storeRequired")),
+        currencyCode: z.enum(supportedCurrencyCodes),
+        currencyRateKgsPerUnit: z.coerce
+          .number()
+          .positive(t("business.validation.currencyRateRequired")),
         legalEntityType: z.enum(["IP", "OSOO", "AO", "OTHER", "NONE"]),
         legalName: z.string().max(240, t("business.validation.legalNameMax", { max: 240 })).optional(),
         inn: z.string().max(32, t("business.validation.innMax", { max: 32 })).optional(),
@@ -116,6 +126,8 @@ const ProfilePage = () => {
     defaultValues: {
       organizationName: "",
       storeId: "",
+      currencyCode: "KGS",
+      currencyRateKgsPerUnit: defaultCurrencyRateKgsPerUnit,
       legalEntityType: "NONE",
       legalName: "",
       inn: "",
@@ -149,6 +161,9 @@ const ProfilePage = () => {
     businessForm.reset({
       organizationName: businessData.organization.name,
       storeId: businessData.selectedStore.id,
+      currencyCode: businessData.selectedStore.currencyCode ?? "KGS",
+      currencyRateKgsPerUnit:
+        businessData.selectedStore.currencyRateKgsPerUnit ?? defaultCurrencyRateKgsPerUnit,
       legalEntityType: businessData.selectedStore.legalEntityType ?? "NONE",
       legalName: businessData.selectedStore.legalName ?? "",
       inn: businessData.selectedStore.inn ?? "",
@@ -204,6 +219,9 @@ const ProfilePage = () => {
       businessForm.reset({
         organizationName: result.organization.name,
         storeId: result.selectedStore.id,
+        currencyCode: result.selectedStore.currencyCode ?? "KGS",
+        currencyRateKgsPerUnit:
+          result.selectedStore.currencyRateKgsPerUnit ?? defaultCurrencyRateKgsPerUnit,
         legalEntityType: result.selectedStore.legalEntityType ?? "NONE",
         legalName: result.selectedStore.legalName ?? "",
         inn: result.selectedStore.inn ?? "",
@@ -231,6 +249,8 @@ const ProfilePage = () => {
     setSelectedStoreId(storeId);
     businessForm.setValue("storeId", storeId, { shouldDirty: true });
   };
+
+  const selectedCurrency = businessForm.watch("currencyCode") as SupportedCurrencyCode;
 
   if (status === "loading" || profileQuery.isLoading) {
     return (
@@ -426,6 +446,11 @@ const ProfilePage = () => {
                   updateBusinessMutation.mutate({
                     organizationName: values.organizationName,
                     storeId: values.storeId,
+                    currencyCode: values.currencyCode,
+                    currencyRateKgsPerUnit:
+                      values.currencyCode === "KGS"
+                        ? defaultCurrencyRateKgsPerUnit
+                        : values.currencyRateKgsPerUnit,
                     legalEntityType: values.legalEntityType === "NONE" ? null : values.legalEntityType,
                     legalName: values.legalName ?? null,
                     inn: values.inn ?? null,
@@ -474,6 +499,68 @@ const ProfilePage = () => {
                             </SelectContent>
                           </Select>
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={businessForm.control}
+                    name="currencyCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("business.currency")}</FormLabel>
+                        <FormControl>
+                          <Select
+                            value={field.value}
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              if (value === "KGS") {
+                                businessForm.setValue(
+                                  "currencyRateKgsPerUnit",
+                                  defaultCurrencyRateKgsPerUnit,
+                                  { shouldDirty: true },
+                                );
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {supportedCurrencyCodes.map((currencyCode) => (
+                                <SelectItem key={currencyCode} value={currencyCode}>
+                                  {t(`business.currencies.${currencyCode}`)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormDescription>{t("business.currencyHint")}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={businessForm.control}
+                    name="currencyRateKgsPerUnit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("business.currencyRateKgsPerUnit")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            inputMode="decimal"
+                            min="0.000001"
+                            step="0.000001"
+                            disabled={selectedCurrency === "KGS"}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {selectedCurrency === "KGS"
+                            ? t("business.currencyRateKgsHintKgs")
+                            : t("business.currencyRateKgsHint", { currency: selectedCurrency })}
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

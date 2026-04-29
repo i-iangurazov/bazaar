@@ -147,6 +147,11 @@ const StoresPage = () => {
           }),
         address: z.string().optional(),
         phone: z.string().optional(),
+        cloneFromStoreId: z.string().optional(),
+        copyInventory: z.boolean(),
+        stockQuantityDelta: z.coerce.number().int().min(-1_000_000).max(1_000_000),
+        priceAdjustmentMode: z.enum(["none", "percentage", "amount"]),
+        priceAdjustmentValue: z.coerce.number().min(-1_000_000).max(1_000_000),
       }),
     [t],
   );
@@ -163,6 +168,11 @@ const StoresPage = () => {
       inn: "",
       address: "",
       phone: "",
+      cloneFromStoreId: "",
+      copyInventory: true,
+      stockQuantityDelta: 0,
+      priceAdjustmentMode: "none",
+      priceAdjustmentValue: 0,
     },
   });
 
@@ -177,9 +187,17 @@ const StoresPage = () => {
   );
 
   const createMutation = trpc.stores.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       storesQuery.refetch();
-      toast({ variant: "success", description: t("createSuccess") });
+      toast({
+        variant: "success",
+        description: result.cloneSummary
+          ? t("createSuccessWithCopy", {
+              products: result.cloneSummary.inventorySnapshots,
+              prices: result.cloneSummary.storePrices,
+            })
+          : t("createSuccess"),
+      });
       storeForm.reset();
       setStoreDialogOpen(false);
     },
@@ -319,6 +337,11 @@ const StoresPage = () => {
       inn: "",
       address: "",
       phone: "",
+      cloneFromStoreId: "",
+      copyInventory: true,
+      stockQuantityDelta: 0,
+      priceAdjustmentMode: "none",
+      priceAdjustmentValue: 0,
     });
     setStoreDialogOpen(true);
   }, [storeForm]);
@@ -350,6 +373,11 @@ const StoresPage = () => {
       inn: store.inn ?? "",
       address: store.address ?? "",
       phone: store.phone ?? "",
+      cloneFromStoreId: "",
+      copyInventory: true,
+      stockQuantityDelta: 0,
+      priceAdjustmentMode: "none",
+      priceAdjustmentValue: 0,
     });
     setStoreDialogOpen(true);
   };
@@ -360,6 +388,10 @@ const StoresPage = () => {
     updateMutation.isLoading ||
     updatePolicyMutation.isLoading ||
     updateLegalMutation.isLoading;
+  const selectedCloneFromStoreId = storeForm.watch("cloneFromStoreId");
+  const copyInventoryEnabled = storeForm.watch("copyInventory");
+  const selectedPriceAdjustmentMode = storeForm.watch("priceAdjustmentMode");
+  const cloneSourceSelected = Boolean(selectedCloneFromStoreId);
 
   return (
     <div>
@@ -765,6 +797,11 @@ const StoresPage = () => {
                 inn: values.inn?.trim() || null,
                 address: values.address?.trim() || null,
                 phone: values.phone?.trim() || null,
+                cloneFromStoreId: values.cloneFromStoreId?.trim() || null,
+                copyInventory: values.copyInventory,
+                stockQuantityDelta: values.stockQuantityDelta,
+                priceAdjustmentMode: values.priceAdjustmentMode,
+                priceAdjustmentValue: values.priceAdjustmentValue,
               };
 
               if (editingStore) {
@@ -840,6 +877,11 @@ const StoresPage = () => {
                 inn: normalized.inn,
                 address: normalized.address,
                 phone: normalized.phone,
+                cloneFromStoreId: normalized.cloneFromStoreId,
+                copyInventory: normalized.copyInventory,
+                stockQuantityDelta: normalized.stockQuantityDelta,
+                priceAdjustmentMode: normalized.priceAdjustmentMode,
+                priceAdjustmentValue: normalized.priceAdjustmentValue,
               });
             })}
           >
@@ -924,6 +966,134 @@ const StoresPage = () => {
                 )}
               />
             </FormSection>
+
+            {!editingStore ? (
+              <FormSection title={t("sectionCopy")} description={t("copyHint")}>
+                <FormGrid>
+                  <FormField
+                    control={storeForm.control}
+                    name="cloneFromStoreId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("copyFromStore")}</FormLabel>
+                        <Select
+                          value={field.value || "none"}
+                          onValueChange={(value) =>
+                            field.onChange(value === "none" ? "" : value)
+                          }
+                          disabled={storesQuery.isLoading || !storesQuery.data?.length}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t("copyFromStorePlaceholder")} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">{t("copyFromStoreNone")}</SelectItem>
+                            {(storesQuery.data ?? []).map((store) => (
+                              <SelectItem key={store.id} value={store.id}>
+                                {store.name} ({store.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={storeForm.control}
+                    name="copyInventory"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="space-y-1">
+                            <FormLabel>{t("copyInventory")}</FormLabel>
+                            <FormDescription>{t("copyInventoryHint")}</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={!cloneSourceSelected}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={storeForm.control}
+                    name="stockQuantityDelta"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("stockQuantityDelta")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            step="1"
+                            disabled={!cloneSourceSelected || !copyInventoryEnabled}
+                          />
+                        </FormControl>
+                        <FormDescription>{t("stockQuantityDeltaHint")}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={storeForm.control}
+                    name="priceAdjustmentMode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("priceAdjustmentMode")}</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={!cloneSourceSelected}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">{t("priceAdjustmentNone")}</SelectItem>
+                            <SelectItem value="percentage">
+                              {t("priceAdjustmentPercentage")}
+                            </SelectItem>
+                            <SelectItem value="amount">{t("priceAdjustmentAmount")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={storeForm.control}
+                    name="priceAdjustmentValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("priceAdjustmentValue")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            step="0.01"
+                            disabled={
+                              !cloneSourceSelected || selectedPriceAdjustmentMode === "none"
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>{t("priceAdjustmentValueHint")}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </FormGrid>
+              </FormSection>
+            ) : null}
 
             <FormSection
               title={t("sectionLegal")}

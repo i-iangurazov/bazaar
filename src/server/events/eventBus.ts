@@ -56,7 +56,7 @@ export type EventPayload =
     }
   | {
       type: "customerOrder.created";
-      payload: { customerOrderId: string; storeId: string; source: "MANUAL" | "CATALOG" };
+      payload: { customerOrderId: string; storeId: string; source: "MANUAL" | "CATALOG" | "API" };
     };
 
 type Listener = (event: EventPayload) => void;

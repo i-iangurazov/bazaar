@@ -72,8 +72,8 @@ const statusVariant = (
   }
 };
 
-const sourceVariant = (source?: string | null): "warning" | "muted" =>
-  source === "CATALOG" ? "warning" : "muted";
+const sourceVariant = (source?: string | null): "warning" | "success" | "muted" =>
+  source === "API" ? "success" : source === "CATALOG" ? "warning" : "muted";
 
 const SalesOrderDetailPage = () => {
   const params = useParams();
@@ -88,7 +88,11 @@ const SalesOrderDetailPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const utils = trpc.useUtils();
   const sourceLabel = (source?: string | null) =>
-    source === "CATALOG" ? t("source.catalog") : t("source.manual");
+    source === "API"
+      ? t("source.api")
+      : source === "CATALOG"
+        ? t("source.catalog")
+        : t("source.manual");
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 

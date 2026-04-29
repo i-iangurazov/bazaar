@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { formatCurrency } from "@/lib/i18nFormat";
+import { defaultCurrencyCode, type SupportedCurrencyCode } from "@/lib/currency";
 import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ type CatalogPayload = {
   storeId: string;
   title: string;
   storeName: string;
+  currencyCode: SupportedCurrencyCode;
   accentColor: string;
   fontFamily:
     | "NotoSans"
@@ -69,6 +71,12 @@ const uncategorizedKey = "__uncategorized";
 const numericPattern = /^\d*$/;
 const baseVariantKey = "BASE";
 const catalogImageWidths = [320, 480, 720] as const;
+
+const formatCatalogCurrency = (amount: number, locale: string, currencyCode: SupportedCurrencyCode) =>
+  formatCurrency(amount, locale, currencyCode, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 
 const catalogTypographyStyle = (fontFamily: CatalogPayload["fontFamily"]) => {
   if (fontFamily === "System") {
@@ -248,6 +256,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   }, [slug, tErrors]);
 
   const accentColor = sanitizeAccent(catalog?.accentColor);
+  const catalogCurrencyCode = catalog?.currencyCode ?? defaultCurrencyCode;
 
   const visibleProducts = useMemo(() => {
     if (!catalog) {
@@ -551,7 +560,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           </div>
           <div className="space-y-1">
             <p className="line-clamp-2 text-sm font-semibold text-foreground">{product.name}</p>
-            <p className="text-sm text-muted-foreground">{formatCurrencyKGS(displayPrice, locale)}</p>
+            <p className="text-sm text-muted-foreground">
+              {formatCatalogCurrency(displayPrice, locale, catalogCurrencyCode)}
+            </p>
           </div>
           {product.variants.length ? (
             <div className="space-y-2">
@@ -875,7 +886,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               style={{ borderLeft: `4px solid ${accentColor}` }}
             >
               <span className="inline-flex items-center gap-2">
-                <span className="text-base font-semibold">{formatCurrencyKGS(cartTotal, locale)}</span>
+                <span className="text-base font-semibold">
+                  {formatCatalogCurrency(cartTotal, locale, catalogCurrencyCode)}
+                </span>
               </span>
               <span
                 className="inline-flex items-center rounded-xl px-3.5 py-2 text-sm font-semibold text-white shadow-sm"
@@ -896,7 +909,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 {t("cartButton", { count: cartItemsCount })}
               </span>
               <span className="text-sm font-semibold text-muted-foreground">
-                {formatCurrencyKGS(cartTotal, locale)}
+                {formatCatalogCurrency(cartTotal, locale, catalogCurrencyCode)}
               </span>
             </button>
           </div>
@@ -1041,7 +1054,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                           </Button>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {formatCurrencyKGS(item.unitPriceKgs, locale)}
+                          {formatCatalogCurrency(item.unitPriceKgs, locale, catalogCurrencyCode)}
                         </p>
                         <div className="mt-3 flex items-center gap-2">
                           <Button
@@ -1077,7 +1090,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                             <AddIcon className="h-4 w-4" aria-hidden />
                           </Button>
                           <p className="ml-auto text-sm font-semibold">
-                            {formatCurrencyKGS(item.lineTotal, locale)}
+                            {formatCatalogCurrency(item.lineTotal, locale, catalogCurrencyCode)}
                           </p>
                         </div>
                       </div>
@@ -1088,7 +1101,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{t("cartTotal")}</span>
                     <span className="text-base font-semibold">
-                      {formatCurrencyKGS(cartTotal, locale)}
+                      {formatCatalogCurrency(cartTotal, locale, catalogCurrencyCode)}
                     </span>
                   </div>
                   <Button

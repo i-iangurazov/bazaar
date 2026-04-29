@@ -108,7 +108,11 @@ const SalesOrdersPage = () => {
     status === CustomerOrderStatus.READY;
 
   const sourceLabel = (source?: string | null) =>
-    source === "CATALOG" ? t("source.catalog") : t("source.manual");
+    source === "API"
+      ? t("source.api")
+      : source === "CATALOG"
+        ? t("source.catalog")
+        : t("source.manual");
 
   return (
     <div>
@@ -240,7 +244,15 @@ const SalesOrdersPage = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={order.source === "CATALOG" ? "warning" : "muted"}>
+                          <Badge
+                            variant={
+                              order.source === "API"
+                                ? "success"
+                                : order.source === "CATALOG"
+                                  ? "warning"
+                                  : "muted"
+                            }
+                          >
                             {sourceLabel(order.source)}
                           </Badge>
                         </TableCell>

@@ -231,6 +231,10 @@ export const bulkUpdateProductCategoryInputSchema = z.object({
   mode: bulkCategoryModeEnum.optional(),
 });
 
+export const arrangeClothingCategoriesInputSchema = z.object({
+  productIds: z.array(z.string().min(1)).min(1).max(500),
+});
+
 export const importCsvRowSchema = z.object({
   sku: z.string().min(2),
   name: z.string().min(2).optional(),
@@ -287,6 +291,9 @@ export type BulkGenerateProductDescriptionsInput = z.infer<
   typeof bulkGenerateProductDescriptionsInputSchema
 >;
 export type BulkUpdateProductCategoryInput = z.infer<typeof bulkUpdateProductCategoryInputSchema>;
+export type ArrangeClothingCategoriesInput = z.infer<
+  typeof arrangeClothingCategoriesInputSchema
+>;
 export type ImportProductsCsvInput = z.infer<typeof importProductsCsvInputSchema>;
 export type PreviewProductsImportCsvInput = z.infer<typeof previewProductsImportCsvInputSchema>;
 export type ImportCsvRowInput = z.infer<typeof importCsvRowSchema>;

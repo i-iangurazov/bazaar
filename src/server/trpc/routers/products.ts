@@ -1,6 +1,7 @@
 import { adminProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import {
   archiveProductMutation,
+  arrangeClothingCategoriesMutation,
   bulkGenerateProductBarcodesMutation,
   bulkGenerateProductDescriptionsMutation,
   bulkUpdateProductCategoryMutation,
@@ -31,6 +32,7 @@ import {
 } from "@/server/services/products/read";
 import {
   archiveProductInputSchema,
+  arrangeClothingCategoriesInputSchema,
   bulkGenerateProductBarcodesInputSchema,
   bulkGenerateProductDescriptionsInputSchema,
   bulkUpdateProductCategoryInputSchema,
@@ -270,6 +272,18 @@ export const productsRouter = router({
     .input(bulkUpdateProductCategoryInputSchema)
     .mutation(({ ctx, input }) =>
       bulkUpdateProductCategoryMutation({
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        requestId: ctx.requestId,
+        input,
+      }),
+    ),
+
+  arrangeClothingCategories: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "products-category-arrange" }))
+    .input(arrangeClothingCategoriesInputSchema)
+    .mutation(({ ctx, input }) =>
+      arrangeClothingCategoriesMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
