@@ -652,7 +652,8 @@
     "status": {
       "notConfigured": "Жөндөлгөн эмес",
       "draft": "Черновик",
-      "published": "Жарыяланды"
+      "published": "Жарыяланды",
+      "ready": "Даяр"
     },
     "bazaarCatalog": {
       "title": "bazaar-каталог",
@@ -662,6 +663,16 @@
       "copySuccess": "Каталог шилтемеси көчүрүлдү.",
       "copyFailed": "Каталог шилтемесин көчүрүү мүмкүн эмес.",
       "publishedStore": "Бул дүкөн үчүн жарыяланды: {store}"
+    },
+    "bazaarApi": {
+      "title": "Bazaar API",
+      "description": "Тышкы сайттар үчүн дүкөнгө байланган API ачкычтар: товарларды алуу жана заказ түзүү.",
+      "productsEndpoint": "GET товарлар",
+      "productsEndpointValue": "GET /api/bazaar/v1/products",
+      "ordersEndpoint": "POST заказдар",
+      "ordersEndpointValue": "POST /api/bazaar/v1/orders",
+      "manageKeys": "Ачкычтарды башкаруу",
+      "activeKeys": "Активдүү ачкычтар: {count}"
     },
     "mMarket": {
       "title": "bazaar + MMarket",

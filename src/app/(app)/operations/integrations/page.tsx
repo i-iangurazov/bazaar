@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,9 @@ const IntegrationsPage = () => {
   const t = useTranslations("integrations");
   const tCommon = useTranslations("common");
   const { toast } = useToast();
+  const { data: session } = useSession();
+  const role = session?.user?.role;
+  const canManageApiKeys = role === "ADMIN" || role === "MANAGER";
 
   const storesQuery = trpc.bazaarCatalog.listStores.useQuery();
   const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
@@ -55,6 +59,12 @@ const IntegrationsPage = () => {
   const settingsHref = defaultStoreId
     ? `/operations/integrations/bazaar-catalog?storeId=${encodeURIComponent(defaultStoreId)}`
     : "/operations/integrations/bazaar-catalog";
+  const apiSettingsHref = `${settingsHref}#bazaar-api`;
+  const apiKeysQuery = trpc.bazaarCatalog.apiKeys.useQuery(
+    { storeId: defaultStoreId },
+    { enabled: canManageApiKeys && Boolean(defaultStoreId) },
+  );
+  const activeApiKeyCount = (apiKeysQuery.data ?? []).filter((apiKey) => !apiKey.revokedAt).length;
 
   const catalogUrl = publishedEntry?.publicUrlPath
     ? resolveAbsoluteCatalogUrl(publishedEntry.publicUrlPath)
@@ -130,6 +140,50 @@ const IntegrationsPage = () => {
                   </Button>
                 </>
               ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
+                  {t("bazaarApi.title")}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">{t("bazaarApi.description")}</p>
+              </div>
+              <Badge variant={activeApiKeyCount > 0 ? "success" : "muted"}>
+                {activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {activeApiKeyCount > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t("bazaarApi.activeKeys", { count: activeApiKeyCount })}
+              </p>
+            ) : null}
+            <div className="grid gap-2 rounded-md border border-border p-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">{t("bazaarApi.productsEndpoint")}</p>
+                <p className="break-all font-mono text-xs">
+                  {t("bazaarApi.productsEndpointValue")}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{t("bazaarApi.ordersEndpoint")}</p>
+                <p className="break-all font-mono text-xs">{t("bazaarApi.ordersEndpointValue")}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href={apiSettingsHref}>
+                <Button>{t("bazaarApi.manageKeys")}</Button>
+              </Link>
+              <Link href={settingsHref}>
+                <Button variant="secondary">{t("bazaarCatalog.openSettings")}</Button>
+              </Link>
             </div>
           </CardContent>
         </Card>

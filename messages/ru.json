@@ -652,7 +652,8 @@
     "status": {
       "notConfigured": "Не настроено",
       "draft": "Черновик",
-      "published": "Опубликовано"
+      "published": "Опубликовано",
+      "ready": "Готово"
     },
     "bazaarCatalog": {
       "title": "bazaar-каталог",
@@ -662,6 +663,16 @@
       "copySuccess": "Ссылка каталога скопирована.",
       "copyFailed": "Не удалось скопировать ссылку каталога.",
       "publishedStore": "Опубликовано для магазина: {store}"
+    },
+    "bazaarApi": {
+      "title": "Bazaar API",
+      "description": "Store-scoped API ключи для внешних сайтов: получение товаров и создание заказов.",
+      "productsEndpoint": "GET товары",
+      "productsEndpointValue": "GET /api/bazaar/v1/products",
+      "ordersEndpoint": "POST заказы",
+      "ordersEndpointValue": "POST /api/bazaar/v1/orders",
+      "manageKeys": "Управлять ключами",
+      "activeKeys": "Активных ключей: {count}"
     },
     "mMarket": {
       "title": "bazaar + MMarket",

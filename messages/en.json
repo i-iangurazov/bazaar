@@ -652,7 +652,8 @@
     "status": {
       "notConfigured": "Not configured",
       "draft": "Draft",
-      "published": "Published"
+      "published": "Published",
+      "ready": "Ready"
     },
     "bazaarCatalog": {
       "title": "bazaar catalogue",
@@ -662,6 +663,16 @@
       "copySuccess": "Catalogue link copied.",
       "copyFailed": "Could not copy catalogue link.",
       "publishedStore": "Published for store: {store}"
+    },
+    "bazaarApi": {
+      "title": "Bazaar API",
+      "description": "Store-scoped API keys for external websites to read products and create orders.",
+      "productsEndpoint": "GET products",
+      "productsEndpointValue": "GET /api/bazaar/v1/products",
+      "ordersEndpoint": "POST orders",
+      "ordersEndpointValue": "POST /api/bazaar/v1/orders",
+      "manageKeys": "Manage keys",
+      "activeKeys": "Active keys: {count}"
     },
     "mMarket": {
       "title": "bazaar + MMarket",

@@ -1175,7 +1175,7 @@ const BazaarCatalogSettingsPage = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="bazaar-api" className="scroll-mt-24">
             <CardHeader>
               <CardTitle>{t("api.title")}</CardTitle>
               <p className="text-sm text-muted-foreground">{t("api.description")}</p>
