@@ -367,6 +367,7 @@ const main = async () => {
 
   let cursor: string | null = null;
   let batchNumber = 0;
+  let passNumber = 0;
 
   const logProgress = (reason: string) => {
     const imageWorkers = imageLimiter.stats();
@@ -575,57 +576,83 @@ const main = async () => {
       : { OR: [{ photoUrl: { not: null } }, { images: { some: {} } }] }),
   };
 
-  while (true) {
-    const products: ProductBatchRow[] = await runPrismaWithRetry(
-      `fetch product batch ${batchNumber + 1}`,
-      () =>
-        prisma.product.findMany({
-          where: productWhere,
-          select: {
-            id: true,
-            organizationId: true,
-            photoUrl: true,
-            images: {
-              select: {
-                id: true,
-                url: true,
-              },
-            },
-          },
-          orderBy: { id: "asc" },
-          take: batchSize,
-          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        }),
-    );
+  const repeatMutableFilterPass = applyChanges && Boolean(r2BaseUrl);
 
-    if (!products.length) {
-      break;
+  while (true) {
+    passNumber += 1;
+    cursor = null;
+    let passProducts = 0;
+    let passChangedProducts = 0;
+
+    if (repeatMutableFilterPass && passNumber > 1) {
+      log(`Starting cleanup pass ${passNumber} to catch rows skipped by the mutating R2 filter`);
     }
 
-    batchNumber += 1;
-    log(`Fetched batch ${batchNumber}: ${products.length} products`);
+    while (true) {
+      const products: ProductBatchRow[] = await runPrismaWithRetry(
+        `fetch product batch ${batchNumber + 1}`,
+        () =>
+          prisma.product.findMany({
+            where: productWhere,
+            select: {
+              id: true,
+              organizationId: true,
+              photoUrl: true,
+              images: {
+                select: {
+                  id: true,
+                  url: true,
+                },
+              },
+            },
+            orderBy: { id: "asc" },
+            take: batchSize,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          }),
+      );
 
-    await runWithConcurrency(products, productConcurrency, async (product) => {
-      const result = await processProduct(product);
-      processedProducts += 1;
-      scannedPhotoUrls += result.scannedPhotoUrls;
-      scannedImageUrls += result.scannedImageUrls;
-      migratedPhotoUrls += result.migratedPhotoUrls;
-      migratedImageUrls += result.migratedImageUrls;
-      skippedAlreadyCloudflare += result.skippedAlreadyCloudflare;
-      skippedMissingBaseUrl += result.skippedMissingBaseUrl;
-      failedResolutions += result.failedResolutions;
-      if (result.changed) {
-        changedProducts += 1;
+      if (!products.length) {
+        break;
       }
 
-      if (processedProducts % progressEveryProducts === 0) {
-        logProgress("Progress");
-      }
-    });
+      batchNumber += 1;
+      passProducts += products.length;
+      log(`Fetched batch ${batchNumber}: ${products.length} products`);
 
-    cursor = products[products.length - 1]?.id ?? null;
-    logProgress(`Finished batch ${batchNumber}`);
+      await runWithConcurrency(products, productConcurrency, async (product) => {
+        const result = await processProduct(product);
+        processedProducts += 1;
+        scannedPhotoUrls += result.scannedPhotoUrls;
+        scannedImageUrls += result.scannedImageUrls;
+        migratedPhotoUrls += result.migratedPhotoUrls;
+        migratedImageUrls += result.migratedImageUrls;
+        skippedAlreadyCloudflare += result.skippedAlreadyCloudflare;
+        skippedMissingBaseUrl += result.skippedMissingBaseUrl;
+        failedResolutions += result.failedResolutions;
+        if (result.changed) {
+          changedProducts += 1;
+          passChangedProducts += 1;
+        }
+
+        if (processedProducts % progressEveryProducts === 0) {
+          logProgress("Progress");
+        }
+      });
+
+      cursor = products[products.length - 1]?.id ?? null;
+      logProgress(`Finished batch ${batchNumber}`);
+    }
+
+    if (!repeatMutableFilterPass || passProducts === 0) {
+      break;
+    }
+    if (passChangedProducts === 0) {
+      warn(
+        `Cleanup pass ${passNumber} scanned ${passProducts} products but made no changes; stopping to avoid a retry loop`,
+      );
+      break;
+    }
+    log(`Cleanup pass ${passNumber} changed ${passChangedProducts} products; checking again`);
   }
 
   log(`Done (${mode})`);
