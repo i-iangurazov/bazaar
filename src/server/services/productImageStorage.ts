@@ -17,9 +17,17 @@ const parseForcedEnv = (value: string | undefined) => {
   return normalized === "force";
 };
 
-const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+const parseNonNegativeIntEnv = (value: string | undefined, fallback: number) => {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
     return fallback;
   }
   return parsed;
@@ -84,7 +92,11 @@ const resolveRemoteImageFetchTimeoutMs = () => {
 };
 
 const remoteImageFetchTimeoutMs = resolveRemoteImageFetchTimeoutMs();
-const remoteImageRetryCount = parsePositiveIntEnv(process.env.PRODUCT_IMAGE_RETRIES, 2);
+const remoteImageUploadTimeoutMs = parsePositiveIntEnv(
+  process.env.PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
+  45_000,
+);
+const remoteImageRetryCount = parseNonNegativeIntEnv(process.env.PRODUCT_IMAGE_RETRIES, 2);
 const fastRemoteImageCopyEnabled = parseForcedEnv(
   process.env.FAST_REMOTE_IMAGE_COPY ?? process.env.PRODUCT_IMAGE_FAST_STREAM,
 );
@@ -239,6 +251,16 @@ const getR2Client = (config: R2Config) => {
   });
 
   return r2Client;
+};
+
+const sendR2PutObject = async (client: S3Client, command: PutObjectCommand) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), remoteImageUploadTimeoutMs);
+  try {
+    await client.send(command, { abortSignal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const normalizeImageMimeType = (value: string | null | undefined) => {
@@ -519,7 +541,8 @@ const uploadBufferToStorage = async (input: {
   if (storage.provider === "r2" && storage.config) {
     const objectKey = getObjectKey(input.organizationId, fileName, input.productId);
     const client = getR2Client(storage.config);
-    await client.send(
+    await sendR2PutObject(
+      client,
       new PutObjectCommand({
         Bucket: storage.config.bucketName,
         Key: objectKey,
@@ -611,7 +634,8 @@ const uploadRemoteImageStreamToR2 = async (input: {
     const fileName = `${hash}.${extension}`;
     const objectKey = getObjectKey(input.organizationId, fileName, input.productId);
     const client = getR2Client(storage.config);
-    await client.send(
+    await sendR2PutObject(
+      client,
       new PutObjectCommand({
         Bucket: storage.config.bucketName,
         Key: objectKey,
