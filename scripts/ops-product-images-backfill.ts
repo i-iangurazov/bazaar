@@ -462,6 +462,9 @@ const main = async () => {
           }
         } else if (!resolved.url || !resolved.managed) {
           result.failedResolutions += 1;
+          warn(
+            `Failed to migrate ${kind} image for product ${product.id}; keeping original URL for retry: ${candidate}`,
+          );
           return current;
         }
         return resolved.managed ? (resolved.url ?? null) : null;
