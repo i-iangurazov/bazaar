@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { ROLL_PRICE_TAG_TEMPLATE } from "@/lib/priceTags";
 import { mmToPoints } from "@/server/services/priceTagsLayout";
-import { buildPriceTagsPdf } from "../../src/server/services/priceTagsPdf";
+import {
+  buildPriceTagsPdf,
+  formatPriceTagCurrency,
+} from "../../src/server/services/priceTagsPdf";
 
 const readMediaBox = (pdf: Buffer) => {
   const raw = pdf.toString("latin1");
@@ -17,6 +20,13 @@ const readMediaBox = (pdf: Buffer) => {
 };
 
 describe("price tags pdf", () => {
+  it("formats label prices with non-KGS store currency", () => {
+    const formatted = formatPriceTagCurrency(895, "en-US", "USD", "89.5");
+
+    expect(formatted).toContain("$10.00");
+    expect(formatted).not.toContain("KGS");
+  });
+
   it("renders Cyrillic labels without throwing", async () => {
     const labelText = "Молоко 3.2%";
     const pdf = await buildPriceTagsPdf({

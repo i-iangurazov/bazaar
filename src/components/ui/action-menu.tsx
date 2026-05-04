@@ -20,7 +20,8 @@ export const ActionMenu = ({ children, align = "right" }: { children: React.Reac
         <Button
           type="button"
           variant="ghost"
-          className="h-8 w-8 px-0"
+          size="icon"
+          className="h-8 w-8"
           aria-label={tCommon("actions")}
         >
           <MoreIcon className="h-4 w-4" aria-hidden />

@@ -543,14 +543,14 @@ export const CommandPalette = ({
             onSubmitValue={handleScanSubmit}
             supportsTabSubmit
             placeholder={t("placeholder")}
-            inputClassName="h-11 rounded-lg border-border/80 bg-background pl-9 text-sm"
+            inputClassName="h-11 rounded-none border-border/80 bg-background pl-9 text-sm"
             ariaLabel={t("searchLabel")}
             showDropdown={false}
           />
         </div>
 
         {normalizedQuery.length >= 2 ? (
-          <section className="rounded-xl border border-border/80 bg-card/80 p-3 sm:p-4">
+          <section className="rounded-none border border-border/80 bg-card/80 p-3 sm:p-4">
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("resultsTitle")}
             </div>
@@ -578,7 +578,7 @@ export const CommandPalette = ({
                               product={item.product}
                               active={isActive}
                               className={cn(
-                                "rounded-lg border",
+                                "rounded-none border",
                                 isActive
                                   ? "border-primary/40 shadow-sm"
                                   : "border-border/70 bg-card hover:border-primary/25",
@@ -604,7 +604,7 @@ export const CommandPalette = ({
                             key={`${item.group}-${item.id}`}
                             type="button"
                             className={cn(
-                              "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition",
+                              "flex w-full items-center gap-3 rounded-none border px-3 py-2.5 text-left transition",
                               isActive
                                 ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
                                 : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
@@ -625,7 +625,7 @@ export const CommandPalette = ({
                           >
                             <span
                               className={cn(
-                                "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                                "inline-flex h-8 w-8 items-center justify-center rounded-none border",
                                 isActive
                                   ? "border-primary/40 bg-primary/15 text-primary"
                                   : "border-border bg-secondary/70 text-muted-foreground",
@@ -657,7 +657,7 @@ export const CommandPalette = ({
         ) : (
           <div className="space-y-3">
             {recentItems.length ? (
-              <section className="rounded-xl border border-border/70 bg-secondary/20 p-3 sm:p-4">
+              <section className="rounded-none border border-border/70 bg-secondary/20 p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {t("recentSearchesTitle")}
@@ -683,7 +683,7 @@ export const CommandPalette = ({
                         key={`${item.group}-${item.id}`}
                         type="button"
                         className={cn(
-                          "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition",
+                          "flex w-full items-center gap-3 rounded-none border px-3 py-2.5 text-left text-sm transition",
                           isActive
                             ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
                             : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
@@ -704,7 +704,7 @@ export const CommandPalette = ({
                       >
                         <span
                           className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                            "inline-flex h-8 w-8 items-center justify-center rounded-none border",
                             isActive
                               ? "border-primary/40 bg-primary/15 text-primary"
                               : "border-border bg-secondary/70 text-muted-foreground",
@@ -719,7 +719,7 @@ export const CommandPalette = ({
                 </div>
               </section>
             ) : null}
-            <div className="rounded-xl border border-border/70 bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
+            <div className="rounded-none border border-border/70 bg-secondary/20 px-3 py-2 text-sm text-muted-foreground">
               {t("typeMoreToSearch")}
             </div>
           </div>
@@ -733,7 +733,7 @@ export const CommandPalette = ({
             return (
               <section
                 key={group.category}
-                className="rounded-xl border border-border/70 bg-secondary/20 p-3 sm:p-4"
+                className="rounded-none border border-border/70 bg-secondary/20 p-3 sm:p-4"
               >
                 <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {t(`sections.${group.category}`)}
@@ -751,7 +751,7 @@ export const CommandPalette = ({
                         key={item.id}
                         type="button"
                         className={cn(
-                          "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition",
+                          "flex w-full items-center gap-3 rounded-none border px-3 py-2.5 text-left text-sm transition",
                           isActive
                             ? "border-primary/40 bg-primary/10 text-foreground shadow-sm"
                             : "border-border/70 bg-card text-foreground hover:border-primary/25 hover:bg-accent/30",
@@ -772,7 +772,7 @@ export const CommandPalette = ({
                       >
                         <span
                           className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-md border",
+                            "inline-flex h-8 w-8 items-center justify-center rounded-none border",
                             isActive
                               ? "border-primary/40 bg-primary/15 text-primary"
                               : "border-border bg-secondary/70 text-muted-foreground",

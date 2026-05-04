@@ -14,6 +14,18 @@ export const Table = React.forwardRef<
 ));
 Table.displayName = "Table";
 
+export const TableContainer = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("w-full overflow-x-auto rounded-none border border-border bg-card", className)}
+    {...props}
+  />
+));
+TableContainer.displayName = "TableContainer";
+
 export const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>

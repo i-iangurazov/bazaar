@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -610,7 +610,7 @@ const SalesOrderDetailPage = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               {!lines.length ? (
-                <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-none border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                   <EmptyIcon className="mx-auto mb-2 h-5 w-5" aria-hidden />
                   {t("noLines")}
                 </div>
@@ -884,7 +884,7 @@ const SalesOrderDetailPage = () => {
             />
           </div>
 
-          <div className="flex justify-end gap-2">
+          <ModalFooter>
             <Button variant="secondary" onClick={closeLineDialog}>
               {tCommon("cancel")}
             </Button>
@@ -899,7 +899,7 @@ const SalesOrderDetailPage = () => {
               {lineActionsDisabled ? <Spinner className="h-4 w-4" /> : null}
               {t("saveLine")}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
     </div>

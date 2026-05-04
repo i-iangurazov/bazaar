@@ -127,6 +127,10 @@ export const inventoryRouter = router({
                   orderBy: { position: "asc" },
                   take: 1,
                 },
+                barcodes: {
+                  select: { value: true },
+                  take: 5,
+                },
               },
             },
             variant: {

@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
   Table,
   TableBody,
@@ -169,7 +169,7 @@ const ImportPreviewTable = dynamic(() => import("@/components/import-preview-tab
   ssr: false,
   loading: () => (
     <div
-      className="h-32 animate-pulse rounded-lg border border-dashed border-border bg-muted/30"
+      className="h-32 animate-pulse rounded-none border border-dashed border-border bg-muted/30"
       aria-hidden
     />
   ),
@@ -1977,31 +1977,31 @@ const ImportPage = () => {
                 </p>
               ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
-                <div className="rounded border border-success/40 bg-card p-2">
+                <div className="rounded-none border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.created")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.created ?? 0}</p>
                 </div>
-                <div className="rounded border border-success/40 bg-card p-2">
+                <div className="rounded-none border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.updated")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.updated ?? 0}</p>
                 </div>
-                <div className="rounded border border-success/40 bg-card p-2">
+                <div className="rounded-none border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.skipped")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.skipped ?? 0}</p>
                 </div>
-                <div className="rounded border border-success/40 bg-card p-2">
+                <div className="rounded-none border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageDownloaded")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.downloaded ?? 0}
                   </p>
                 </div>
-                <div className="rounded border border-success/40 bg-card p-2">
+                <div className="rounded-none border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageFallback")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.fallback ?? 0}
                   </p>
                 </div>
-                <div className="rounded border border-success/40 bg-card p-2">
+                <div className="rounded-none border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageMissing")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.missing ?? 0}
@@ -2263,7 +2263,7 @@ const ImportPage = () => {
             ) : (
               <p className="text-sm text-muted-foreground">{t("rollbackNothing")}</p>
             )}
-            <div className="flex flex-wrap justify-end gap-2">
+            <ModalFooter>
               <Button type="button" variant="secondary" onClick={() => setRollbackBatchId(null)}>
                 {tCommon("cancel")}
               </Button>
@@ -2280,7 +2280,7 @@ const ImportPage = () => {
               >
                 {rollbackMutation.isLoading ? tCommon("loading") : t("rollbackConfirm")}
               </Button>
-            </div>
+            </ModalFooter>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">{t("rollbackMissing")}</p>

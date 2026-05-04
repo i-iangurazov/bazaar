@@ -50,11 +50,11 @@ export const PageTipsButton = () => {
         title={t("tipsPanelTitle")}
         subtitle={t("tipsPanelSubtitle")}
         usePortal
-        className="max-w-lg rounded-md"
+        className="max-w-lg rounded-none"
         headerClassName="px-4 py-4 sm:px-6 sm:py-5"
         bodyClassName="space-y-4 px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4"
       >
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-none border border-border bg-card p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">{t("disableToursLabel")}</p>
@@ -110,7 +110,7 @@ export const PageTipsButton = () => {
 
         <div className="space-y-3">
           {pageTips.map((tip) => (
-            <div key={tip.id} className="rounded-md border border-border bg-card p-3">
+            <div key={tip.id} className="rounded-none border border-border bg-card p-3">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-foreground">{t(tip.titleKey)}</p>
                 <p className="text-xs text-muted-foreground">{t(tip.bodyKey)}</p>

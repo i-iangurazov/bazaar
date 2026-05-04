@@ -17,8 +17,20 @@ import {
 } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyIcon, MetricsIcon, PriceIcon, ProductsIcon, StatusWarningIcon } from "@/components/icons";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  EmptyIcon,
+  MetricsIcon,
+  PriceIcon,
+  ProductsIcon,
+  StatusWarningIcon,
+} from "@/components/icons";
 import { formatCurrencyKGS, formatDate, formatNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import type { AppRouter } from "@/server/trpc/routers/_app";
@@ -309,19 +321,19 @@ export const AnalyticsCharts = ({
                 {formatCurrencyKGS(inventoryValue.valueKgs, locale)}
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="rounded-none border border-border bg-muted/20 p-3">
                   <p className="text-xs text-muted-foreground">{t("deadStock30")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatNumber(inventoryValue.deadStock30, locale)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="rounded-none border border-border bg-muted/20 p-3">
                   <p className="text-xs text-muted-foreground">{t("deadStock60")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatNumber(inventoryValue.deadStock60, locale)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="rounded-none border border-border bg-muted/20 p-3">
                   <p className="text-xs text-muted-foreground">{t("deadStock90")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatNumber(inventoryValue.deadStock90, locale)}

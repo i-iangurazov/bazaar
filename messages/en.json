@@ -609,6 +609,7 @@
     "products": "Products",
     "stores": "Stores",
     "users": "Users",
+    "printing": "Print settings",
     "attributes": "Attributes",
     "units": "Units",
     "imports": "Import",
@@ -625,6 +626,14 @@
     "diagnostics": "Diagnostics",
     "posKkm": "KKM queue",
     "posReceipts": "Receipt register"
+  },
+  "printingSettings": {
+    "title": "Print settings",
+    "subtitle": "Configure each store once so product label printing can run immediately from product pages.",
+    "storesTitle": "Stores",
+    "storeHint": "Label template, copies, paper size, fields, and printer mode.",
+    "openStoreSettings": "Open print settings",
+    "empty": "Create a store before setting up label printing."
   },
   "breadcrumbs": {
     "ariaLabel": "Breadcrumbs",
@@ -1622,6 +1631,7 @@
   "pos": {
     "title": "POS",
     "subtitle": "POS overview",
+    "cashierSubtitle": "Open a shift and get to the sale screen fast.",
     "loading": "Loading",
     "openShiftSuccess": "Open shift completed.",
     "entry": {
@@ -1641,6 +1651,7 @@
       "openedBy": "Opened by",
       "openShift": "Open shift",
       "openShiftTitle": "Open shift",
+      "redirectingToSale": "Opening sale screen",
       "quickActionsTitle": "Quick actions",
       "sell": "Sell",
       "history": "History",
@@ -1892,6 +1903,33 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Low stock, pending orders, and recent events.",
+    "businessSubtitle": "Sales, cash shifts, stock risks, and actions for today.",
+    "businessOverview": "Business overview",
+    "businessOverviewHint": "Focused on today and the selected store.",
+    "todaySales": "Today sales",
+    "todaySalesHint": "Completed sales today",
+    "receiptsCount": "Receipts",
+    "receiptsHint": "Orders and POS receipts",
+    "averageReceipt": "Average receipt",
+    "averageReceiptHint": "Today average",
+    "grossProfit": "Gross profit",
+    "grossProfitHint": "Available after cost data",
+    "grossMargin": "Margin {value}%",
+    "openShifts": "Open shifts",
+    "openShiftsHint": "Active registers",
+    "lowStockHint": "Below minimum stock",
+    "needsAttention": "Needs attention",
+    "missingBarcode": "Products missing barcode",
+    "missingPrice": "Products missing price",
+    "negativeStock": "Negative stock",
+    "failedReceipts": "Failed receipts",
+    "quickActions": "Quick actions",
+    "startSale": "Start sale",
+    "addProduct": "Add product",
+    "receiveStock": "Receive stock",
+    "printLabels": "Print labels",
+    "createPurchaseOrder": "Create purchase order",
+    "viewReports": "View reports",
     "lowStock": "Low stock",
     "pendingPurchaseOrders": "Pending orders",
     "recentMovements": "Recent movements",
@@ -1930,17 +1968,31 @@
     "minStockApplyAllLabel": "Min stock apply all label",
     "minStockApplyAllHint": "Min stock apply all hint",
     "inventoryOverview": "Inventory overview",
+    "summaryTotalSkus": "Total SKUs",
+    "summaryNegativeStock": "Negative stock",
+    "summaryLowStock": "Low stock",
+    "summaryPendingReceive": "On order",
+    "negativeStockBadge": "Negative",
     "viewTable": "View table",
     "viewGrid": "View grid",
     "imageLabel": "Image label",
     "selectAll": "Select all",
     "selectInventoryItem": "Select inventory item {name}",
     "printPriceTags": "Print price tags",
+    "changePrintSettings": "Change print settings",
     "printLabels": "Print labels",
     "printSelected": "Print selected",
-    "printMissingBarcode": "Print missing barcode",
-    "printNoPrintableProducts": "Print no printable products",
-    "printFallback": "Print fallback",
+    "printMissingBarcode": "One of the selected products has no barcode. Add a barcode before printing labels.",
+    "printNoPrintableProducts": "No active selected products can be printed.",
+    "printFallback": "The browser opened the PDF without automatic printing. Print it from the opened tab.",
+    "printQueued": "Print started for {count} labels.",
+    "printDownloadSuccess": "Label PDF downloaded.",
+    "printProfileLoading": "Loading saved print settings...",
+    "printSetupRequiredTitle": "Set up label printing once",
+    "printSetupRequiredSubtitle": "Quick print uses the saved profile after setup.",
+    "printSetupSelected": "Selected products: {count}",
+    "printSetupBody": "Choose the store, template, copies, label size, and visible fields. After that, Print labels runs immediately with those defaults.",
+    "openPrintSettings": "Open print settings",
     "printSubtitle": "Print subtitle {count}",
     "template": "Template",
     "template3x8": "Template3x8",
@@ -1949,6 +2001,7 @@
     "rollTemplatePreviewTitle": "Roll template preview",
     "rollPreviewName": "Roll preview name",
     "rollPreviewPrice": "0.00",
+    "rollPreviewPriceUnavailable": "Price preview",
     "rollPreviewSku": "SKU",
     "rollPreviewBarcode": "Roll preview barcode",
     "rollGapStoredHint": "Roll gap stored hint",
@@ -2074,6 +2127,9 @@
     "hideAdvanced": "Hide advanced",
     "basicInfoTitle": "Basic info",
     "basicInfoBundleTitle": "Basic info bundle",
+    "quickCreateTitle": "Quick product setup",
+    "quickCreateCoreTitle": "Sale basics",
+    "quickCreatePhotoTitle": "Product photo",
     "descriptionTitle": "Description",
     "newProduct": "New product",
     "newBundle": "New bundle",
@@ -2346,6 +2402,14 @@
     "printMissingBarcode": "Print missing barcode",
     "printNoPrintableProducts": "Print no printable products",
     "printFallback": "Print fallback",
+    "printQueued": "Print started for {count}.",
+    "printDownloadSuccess": "Label PDF downloaded.",
+    "printProfileLoading": "Loading saved print settings...",
+    "printSetupRequiredTitle": "Set up label printing once",
+    "printSetupRequiredSubtitle": "Quick print uses the saved profile after setup.",
+    "printSetupSelected": "Selected products: {count}",
+    "printSetupBody": "Choose the store, template, copies, label size, and visible fields. After that, Print labels runs immediately with those defaults.",
+    "openPrintSettings": "Open print settings",
     "printSubtitle": "Print subtitle {count}",
     "imageUnavailable": "Image unavailable",
     "searchResultBarcode": "Search result barcode",
@@ -2358,6 +2422,7 @@
     "rollTemplatePreviewTitle": "Roll template preview",
     "rollPreviewName": "Roll preview name",
     "rollPreviewPrice": "0.00",
+    "rollPreviewPriceUnavailable": "Price preview",
     "rollPreviewSku": "SKU",
     "rollPreviewBarcode": "Roll preview barcode",
     "rollGapStoredHint": "Roll gap stored hint",
@@ -2392,6 +2457,16 @@
     "printQueueMoveUp": "Print queue move up",
     "printQueueMoveDown": "Print queue move down",
     "priceTagsFailed": "Price tags failed.",
+    "readinessFilter": "Readiness",
+    "readinessAll": "All readiness",
+    "missingBarcode": "Missing barcode",
+    "missingPrice": "Missing price",
+    "negativeStock": "Negative stock",
+    "missingStock": "Missing stock",
+    "readyForSale": "Ready",
+    "readinessColumn": "Readiness",
+    "lowStock": "Low stock",
+    "importProducts": "Import products",
     "selectAll": "Select all",
     "selectProduct": "Select product {name}",
     "profitabilityTitle": "Profitability",
@@ -3726,65 +3801,37 @@
       "gettingStarted": {
         "title": "Getting started",
         "summary": "Summary",
-        "body": [
-          "Getting started body",
-          "Getting started body",
-          "Getting started body"
-        ]
+        "body": ["Getting started body", "Getting started body", "Getting started body"]
       },
       "importProducts": {
         "title": "Import products",
         "summary": "Summary",
-        "body": [
-          "Import products body",
-          "Import products body",
-          "Import products body"
-        ]
+        "body": ["Import products body", "Import products body", "Import products body"]
       },
       "barcodeWorkflow": {
         "title": "Barcode workflow",
         "summary": "Summary",
-        "body": [
-          "Barcode workflow body",
-          "Barcode workflow body",
-          "Barcode workflow body"
-        ]
+        "body": ["Barcode workflow body", "Barcode workflow body", "Barcode workflow body"]
       },
       "inventoryFlows": {
         "title": "Inventory flows",
         "summary": "Summary",
-        "body": [
-          "Inventory flows body",
-          "Inventory flows body",
-          "Inventory flows body"
-        ]
+        "body": ["Inventory flows body", "Inventory flows body", "Inventory flows body"]
       },
       "stockCounts": {
         "title": "Stock counts",
         "summary": "Summary",
-        "body": [
-          "Stock counts body",
-          "Stock counts body",
-          "Stock counts body"
-        ]
+        "body": ["Stock counts body", "Stock counts body", "Stock counts body"]
       },
       "purchaseOrders": {
         "title": "Purchase orders",
         "summary": "Summary",
-        "body": [
-          "Purchase orders body",
-          "Purchase orders body",
-          "Purchase orders body"
-        ]
+        "body": ["Purchase orders body", "Purchase orders body", "Purchase orders body"]
       },
       "storePrices": {
         "title": "Store prices",
         "summary": "Summary",
-        "body": [
-          "Store prices body",
-          "Store prices body",
-          "Store prices body"
-        ]
+        "body": ["Store prices body", "Store prices body", "Store prices body"]
       },
       "mMarketIntegration": {
         "title": "M market integration",
@@ -3813,29 +3860,17 @@
       "priceTags": {
         "title": "Price tags",
         "summary": "Summary",
-        "body": [
-          "Price tags body",
-          "Price tags body",
-          "Price tags body"
-        ]
+        "body": ["Price tags body", "Price tags body", "Price tags body"]
       },
       "reorder": {
         "title": "Reorder",
         "summary": "Summary",
-        "body": [
-          "Reorder body",
-          "Reorder body",
-          "Reorder body"
-        ]
+        "body": ["Reorder body", "Reorder body", "Reorder body"]
       },
       "troubleshooting": {
         "title": "Troubleshooting",
         "summary": "Summary",
-        "body": [
-          "Troubleshooting body",
-          "Troubleshooting body",
-          "Troubleshooting body"
-        ]
+        "body": ["Troubleshooting body", "Troubleshooting body", "Troubleshooting body"]
       }
     }
   },
@@ -3845,27 +3880,15 @@
     "sections": {
       "v14": {
         "title": "V14",
-        "items": [
-          "Items",
-          "Items",
-          "Items"
-        ]
+        "items": ["Items", "Items", "Items"]
       },
       "v15": {
         "title": "V15",
-        "items": [
-          "Items",
-          "Items",
-          "Items"
-        ]
+        "items": ["Items", "Items", "Items"]
       },
       "v16": {
         "title": "V16",
-        "items": [
-          "Items",
-          "Items",
-          "Items"
-        ]
+        "items": ["Items", "Items", "Items"]
       }
     }
   },
@@ -3995,35 +4018,22 @@
       "kkmModes": {
         "title": "KKM modes",
         "summary": "Summary",
-        "body": [
-          "KKM modes body",
-          "KKM modes body",
-          "KKM modes body"
-        ]
+        "body": ["KKM modes body", "KKM modes body", "KKM modes body"]
       },
       "exports": {
         "title": "Exports",
         "summary": "Summary",
-        "body": [
-          "Exports body",
-          "Exports body"
-        ]
+        "body": ["Exports body", "Exports body"]
       },
       "ettnMarking": {
         "title": "ETTN marking",
         "summary": "Summary",
-        "body": [
-          "ETTN marking body",
-          "ETTN marking body"
-        ]
+        "body": ["ETTN marking body", "ETTN marking body"]
       },
       "periodClose": {
         "title": "Period close",
         "summary": "Summary",
-        "body": [
-          "Period close body",
-          "Period close body"
-        ]
+        "body": ["Period close body", "Period close body"]
       }
     }
   },

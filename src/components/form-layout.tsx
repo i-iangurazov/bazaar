@@ -81,7 +81,12 @@ export const FormActions = ({
   className?: string;
   children: ReactNode;
 }) => (
-  <div className={cn("flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4", className)}>
+  <div
+    className={cn(
+      "flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end [&>*]:w-full sm:[&>*]:w-auto",
+      className,
+    )}
+  >
     {children}
   </div>
 );

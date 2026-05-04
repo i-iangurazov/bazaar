@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
@@ -41,9 +41,7 @@ type BillingModalState = {
   currentPeriodDays: number;
 };
 
-const normalizePlanForEditor = (
-  plan: string,
-): BillingModalState["plan"] => {
+const normalizePlanForEditor = (plan: string): BillingModalState["plan"] => {
   if (plan === "BUSINESS" || plan === "ENTERPRISE" || plan === "STARTER") {
     return plan;
   }
@@ -123,7 +121,9 @@ const PlatformPage = () => {
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <Card>
-          <CardContent className="py-8 text-sm text-muted-foreground">{tCommon("notAvailable")}</CardContent>
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            {tCommon("notAvailable")}
+          </CardContent>
         </Card>
       </div>
     );
@@ -137,7 +137,9 @@ const PlatformPage = () => {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">{t("summary.totalOrganizations")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {t("summary.totalOrganizations")}
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-foreground">
               {summaryQuery.data.organizationsTotal}
@@ -145,7 +147,9 @@ const PlatformPage = () => {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">{t("summary.activeSubscriptions")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {t("summary.activeSubscriptions")}
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-foreground">
               {summaryQuery.data.organizationsPaid}
@@ -188,7 +192,9 @@ const PlatformPage = () => {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">{t("summary.pendingUpgradeRequests")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {t("summary.pendingUpgradeRequests")}
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-foreground">
               {summaryQuery.data.pendingUpgradeRequests}
@@ -226,12 +232,24 @@ const PlatformPage = () => {
                   {pendingUpgradeRequests.map((request) => (
                     <TableRow key={request.id}>
                       <TableCell className="font-medium">{request.organization.name}</TableCell>
-                      <TableCell>{t(`plans.${normalizePlanForEditor(request.currentPlan).toLowerCase()}.name`)}</TableCell>
-                      <TableCell>{t(`plans.${normalizePlanForEditor(request.requestedPlan).toLowerCase()}.name`)}</TableCell>
+                      <TableCell>
+                        {t(
+                          `plans.${normalizePlanForEditor(request.currentPlan).toLowerCase()}.name`,
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {t(
+                          `plans.${normalizePlanForEditor(request.requestedPlan).toLowerCase()}.name`,
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <p className="font-medium text-foreground">{request.requestedBy.name || tCommon("notAvailable")}</p>
-                          <p className="text-xs text-muted-foreground">{request.requestedBy.email}</p>
+                          <p className="font-medium text-foreground">
+                            {request.requestedBy.name || tCommon("notAvailable")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {request.requestedBy.email}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell>{formatDateTime(request.createdAt, locale)}</TableCell>
@@ -313,7 +331,9 @@ const PlatformPage = () => {
                       <TableCell>
                         <Badge
                           variant={
-                            normalizePlanForEditor(org.plan) === "ENTERPRISE" ? "success" : "warning"
+                            normalizePlanForEditor(org.plan) === "ENTERPRISE"
+                              ? "success"
+                              : "warning"
                           }
                         >
                           {t(`plans.${normalizePlanForEditor(org.plan).toLowerCase()}.name`)}
@@ -328,7 +348,9 @@ const PlatformPage = () => {
                       <TableCell>{org._count.users}</TableCell>
                       <TableCell>{org._count.products}</TableCell>
                       <TableCell>
-                        {org.trialEndsAt ? formatDateTime(org.trialEndsAt, locale) : tCommon("notAvailable")}
+                        {org.trialEndsAt
+                          ? formatDateTime(org.trialEndsAt, locale)
+                          : tCommon("notAvailable")}
                       </TableCell>
                       <TableCell>
                         {org.currentPeriodEndsAt
@@ -393,7 +415,9 @@ const PlatformPage = () => {
             }}
           >
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("organization")}</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t("organization")}
+              </p>
               <p className="font-medium text-foreground">{billingModal.organizationName}</p>
             </div>
 
@@ -458,9 +482,7 @@ const PlatformPage = () => {
                   }}
                   onBlur={(event) => {
                     const next = resolveNumberInputOnBlur(event.target.value, 0);
-                    setBillingModal((prev) =>
-                      prev ? { ...prev, trialDays: next } : prev,
-                    );
+                    setBillingModal((prev) => (prev ? { ...prev, trialDays: next } : prev));
                     setBillingNumberDraft((prev) => ({ ...prev, trialDays: String(next) }));
                   }}
                 />
@@ -479,9 +501,7 @@ const PlatformPage = () => {
                   }}
                   onBlur={(event) => {
                     const next = resolveNumberInputOnBlur(event.target.value, 30);
-                    setBillingModal((prev) =>
-                      prev ? { ...prev, currentPeriodDays: next } : prev,
-                    );
+                    setBillingModal((prev) => (prev ? { ...prev, currentPeriodDays: next } : prev));
                     setBillingNumberDraft((prev) => ({
                       ...prev,
                       currentPeriodDays: String(next),
@@ -491,14 +511,14 @@ const PlatformPage = () => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <ModalFooter>
               <Button type="button" variant="secondary" onClick={() => setBillingModal(null)}>
                 {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={updateBillingMutation.isLoading}>
                 {updateBillingMutation.isLoading ? tCommon("loading") : tCommon("save")}
               </Button>
-            </div>
+            </ModalFooter>
           </form>
         ) : null}
       </Modal>

@@ -2,17 +2,27 @@
 
 ## Current State
 
-- Product list printing opens a large modal with selected count, store, copies, advanced roll dimensions, barcode confirmation, preview, queue, print, and download.
-- Product detail quick print hardcodes the roll template and default dimensions.
-- Store hardware settings already persist printer mode, printer models, connector device, and roll calibration offsets/gap in `StorePrinterSettings`.
+- Product list, product detail, and inventory selected-label primary print actions now use the saved store print profile and start printing immediately.
+- The full print settings/editing experience lives under store hardware settings, with an additional settings entry at `/settings/printing`.
+- The legacy advanced Products print modal is isolated behind a dev-only seed hook, `window.__seedLegacyProductsPrintModalQueue`, and is not opened by normal Products or Inventory UI actions.
+- The legacy Inventory print modal is behind a dev-only guard and has no user-facing opener; normal inventory print uses saved-profile quick print.
+- Store hardware settings persist printer mode, printer models, connector device, template, default copies, label dimensions, display toggles, margins, and roll calibration in `StorePrinterSettings`.
 - The PDF route persists roll calibration only when printing the roll template with a selected store.
 
-## Problems
+## Problems Fixed In The UX Slice
 
-- Fast printing is mixed with setup, so users must repeatedly review settings.
-- The product detail flow bypasses saved print defaults.
-- The print settings schema does not cover label template, label type, show/hide fields, paper mode, default copies, or last printed timestamp.
-- Warnings exist for missing barcode/price but are coupled to the print modal instead of a preflight-like fast flow.
+- Fast product-list printing is no longer mixed with setup.
+- Product detail primary printing no longer bypasses saved print defaults.
+- Product list/detail quick print no longer opens the full settings modal when a saved profile exists.
+- Inventory quick print no longer opens the full settings modal when a saved profile exists.
+- If a store has no saved print profile row, Products and Inventory show a first-time setup prompt instead of the full print settings form.
+- Non-KGS store currency is used in label preview/PDF formatting; the preview no longer falls back to a KGS-looking sample when no store currency is available.
+
+## Remaining Problems
+
+- The legacy product print modal still exists for a dev-only stress/fallback hook and contains advanced settings UI; it should eventually be removed or converted into a true settings-only surface.
+- The legacy inventory print modal still exists behind a dev-only guard for short-term rollback safety but has no user-facing opener.
+- Existing stores with an older `StorePrinterSettings` row receive migrated label defaults and therefore count as having a saved profile. This is safe for fast printing, but it may not force a first-time setup prompt for stores that previously configured only receipt printing.
 
 ## Target Flow
 
@@ -33,14 +43,20 @@
    - offers a secondary "Change print settings" action.
 3. Preview/test print lives in settings, not in the fast path.
 
-## Implementation Approach
+## Implemented Flow
 
-- Extend `StorePrinterSettings` only if needed for durable profile fields.
-- Reuse existing `/api/price-tags/pdf` generation and `StorePrinterSettings` architecture.
-- Keep connector/PDF behavior stable.
-- Keep missing barcode and missing price protection on the server.
-- Add tests around saved profile behavior and fast print request payloads.
+- Product list bulk action `Print labels` calls the quick-print path.
+- Product list row action `Print labels` calls the same quick-print path.
+- Product detail primary `Print labels` calls the quick-print path.
+- Inventory selected bulk action `Print selected` calls the same saved-profile quick-print decision path.
+- Explicit settings actions route to `/stores/[id]/hardware` when a store is known, otherwise to `/settings/printing`.
+- Missing saved profile opens a first-time setup prompt with a single primary action to configure printing.
+- Saved default copies, template, dimensions, roll calibration, and display toggles are used when generating the PDF.
+- Missing barcode remains blocked by the PDF route unless the legacy advanced form explicitly allows printing without barcodes.
+- Quick print shows success/error toasts and includes a secondary "Change print settings" action after success.
 
-## First Pass
+## Validation Coverage
 
-The first implementation pass should add profile fields to `StorePrinterSettings`, expose them through the stores hardware tRPC router, use them in product list/detail print flows, and keep the existing advanced modal accessible as "Change print settings."
+- `tests/unit/label-print-flow.test.ts` covers saved profile quick print, missing profile setup, explicit settings, loading state, saved copies, and safe fallback defaults.
+- `tests/unit/print-flow-source.test.ts` verifies inventory and product primary print actions do not expose the legacy settings modal.
+- `tests/unit/price-tags-pdf.test.ts` covers non-KGS currency formatting for label PDFs.

@@ -41,7 +41,7 @@ type PriceTagsPdfInput = {
 };
 type BwipModule = { toBuffer: (options: Record<string, unknown>) => Promise<Buffer> };
 
-const formatCurrency = (
+export const formatPriceTagCurrency = (
   amountKgs: number,
   locale: string,
   currencyCodeInput?: string | null,
@@ -206,7 +206,7 @@ export const buildPriceTagsPdf = async ({
     if (showPrice) {
       const priceText =
         label.price !== null
-          ? formatCurrency(label.price, locale, currencyCode, currencyRateKgsPerUnit)
+          ? formatPriceTagCurrency(label.price, locale, currencyCode, currencyRateKgsPerUnit)
           : noPriceLabel;
       const priceFont =
         label.price !== null ? layout.config.priceFont : Math.max(layout.config.priceFont - 2, 9);

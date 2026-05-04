@@ -342,7 +342,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                     </div>
                   )}
                   renderMobile={(item) => (
-                    <div className="rounded-md border border-border bg-card p-3">
+                    <div className="rounded-none border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-semibold text-foreground">{item.number}</p>
                         <span className="text-xs text-muted-foreground">{statusLabel(item.status)}</span>

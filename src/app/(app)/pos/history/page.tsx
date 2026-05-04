@@ -11,7 +11,7 @@ import { DownloadIcon, PrintIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -168,12 +168,12 @@ const PosHistoryPage = () => {
 
   const kkmStatusClassName = (status: "NOT_SENT" | "SENT" | "FAILED") => {
     if (status === "SENT") {
-      return "bg-success text-success-foreground";
+      return "border border-success/20 bg-success/10 text-success";
     }
     if (status === "FAILED") {
-      return "bg-danger text-danger-foreground";
+      return "border border-danger/20 bg-danger/10 text-danger";
     }
-    return "bg-warning text-warning-foreground";
+    return "border border-warning/25 bg-warning/10 text-warning";
   };
 
   const alreadyReturnedByLine = useMemo(() => {
@@ -345,7 +345,9 @@ const PosHistoryPage = () => {
         <CardContent className="space-y-3">
           {!canLoadRegisterScopedData ? (
             <p className="text-sm text-muted-foreground">
-              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+              {(registersQuery.data ?? []).length
+                ? t("entry.selectRegisterFirst")
+                : t("entry.noRegisters")}
             </p>
           ) : null}
 
@@ -377,7 +379,7 @@ const PosHistoryPage = () => {
                 {sale.kkmStatus !== "NOT_SENT" ? (
                   <div className="mt-1">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
+                      className={`inline-flex items-center rounded-none px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
                         sale.kkmStatus,
                       )}`}
                     >
@@ -395,7 +397,8 @@ const PosHistoryPage = () => {
                   onClick={() => setReturnSaleId(sale.id)}
                   disabled={
                     sale.status !== "COMPLETED" ||
-                    ((sale.returnedTotalKgs ?? 0) > 0 && sale.returnedTotalKgs >= sale.totalKgs - 0.009)
+                    ((sale.returnedTotalKgs ?? 0) > 0 &&
+                      sale.returnedTotalKgs >= sale.totalKgs - 0.009)
                   }
                 >
                   {t("history.return")}
@@ -480,7 +483,9 @@ const PosHistoryPage = () => {
             </div>
           ))}
 
-          {canLoadRegisterScopedData && !salesQuery.isLoading && !(salesQuery.data?.items ?? []).length ? (
+          {canLoadRegisterScopedData &&
+          !salesQuery.isLoading &&
+          !(salesQuery.data?.items ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
           ) : null}
         </CardContent>
@@ -493,7 +498,9 @@ const PosHistoryPage = () => {
         <CardContent className="space-y-3">
           {!canLoadRegisterScopedData ? (
             <p className="text-sm text-muted-foreground">
-              {(registersQuery.data ?? []).length ? t("entry.selectRegisterFirst") : t("entry.noRegisters")}
+              {(registersQuery.data ?? []).length
+                ? t("entry.selectRegisterFirst")
+                : t("entry.noRegisters")}
             </p>
           ) : null}
 
@@ -512,12 +519,12 @@ const PosHistoryPage = () => {
                   </p>
                 </div>
                 <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  className={`inline-flex items-center rounded-none px-2.5 py-1 text-xs font-semibold ${
                     item.status === "COMPLETED"
-                      ? "bg-success text-success-foreground"
+                      ? "border border-success/20 bg-success/10 text-success"
                       : item.status === "CANCELED"
-                        ? "bg-danger text-danger-foreground"
-                        : "bg-warning text-warning-foreground"
+                        ? "border border-danger/20 bg-danger/10 text-danger"
+                        : "border border-warning/25 bg-warning/10 text-warning"
                   }`}
                 >
                   {item.status === "COMPLETED"
@@ -546,7 +553,9 @@ const PosHistoryPage = () => {
           }
         }}
         title={t("history.returnDialogTitle")}
-        subtitle={selectedSale ? t("history.returnDialogDescription", { number: selectedSale.number }) : ""}
+        subtitle={
+          selectedSale ? t("history.returnDialogDescription", { number: selectedSale.number }) : ""
+        }
       >
         <div className="space-y-4">
           {(selectedSale?.lines ?? []).map((line) => (
@@ -556,7 +565,8 @@ const PosHistoryPage = () => {
                 {line.qty} × {formatCurrencyKGS(line.unitPriceKgs, locale)}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t("history.availableQty")}: {Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}
+                {t("history.availableQty")}:{" "}
+                {Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}
               </p>
               <Input
                 value={returnQtyByLine[line.id] ?? "0"}
@@ -577,7 +587,10 @@ const PosHistoryPage = () => {
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">{t("history.refundMethod")}</p>
-            <Select value={refundMethod} onValueChange={(value) => setRefundMethod(value as PosPaymentMethod)}>
+            <Select
+              value={refundMethod}
+              onValueChange={(value) => setRefundMethod(value as PosPaymentMethod)}
+            >
               <SelectTrigger aria-label={t("history.refundMethod")}>
                 <SelectValue />
               </SelectTrigger>
@@ -594,7 +607,7 @@ const PosHistoryPage = () => {
             {t("history.returnTotal")}: {formatCurrencyKGS(returnTotal, locale)}
           </p>
 
-          <div className="flex flex-wrap gap-2">
+          <ModalFooter>
             <Button
               variant="secondary"
               onClick={() => setReturnSaleId(null)}
@@ -602,14 +615,11 @@ const PosHistoryPage = () => {
             >
               {tCommon("cancel")}
             </Button>
-            <Button
-              onClick={handleStartReturn}
-              disabled={isReturnMutationBusy}
-            >
+            <Button onClick={handleStartReturn} disabled={isReturnMutationBusy}>
               {isReturnMutationBusy ? <Spinner className="h-4 w-4" /> : null}
               {t("history.completeReturn")}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
     </div>

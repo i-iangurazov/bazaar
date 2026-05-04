@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -94,7 +94,9 @@ const BillingPage = () => {
   const [requestedPlan, setRequestedPlan] = useState<PlanTier | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
 
-  const billingQuery = trpc.billing.get.useQuery(undefined, { enabled: status === "authenticated" });
+  const billingQuery = trpc.billing.get.useQuery(undefined, {
+    enabled: status === "authenticated",
+  });
   const requestUpgradeMutation = trpc.billing.requestUpgrade.useMutation({
     onSuccess: () => {
       setRequestedPlan(null);
@@ -157,9 +159,15 @@ const BillingPage = () => {
               <CardContent className="space-y-2 text-sm text-foreground">
                 <p>{t("limitExceededDescription")}</p>
                 <ul className="space-y-1 text-xs text-muted-foreground">
-                  {billingQuery.data.limitExceeded.stores ? <li>• {t("limitExceededItems.stores")}</li> : null}
-                  {billingQuery.data.limitExceeded.products ? <li>• {t("limitExceededItems.products")}</li> : null}
-                  {billingQuery.data.limitExceeded.users ? <li>• {t("limitExceededItems.users")}</li> : null}
+                  {billingQuery.data.limitExceeded.stores ? (
+                    <li>• {t("limitExceededItems.stores")}</li>
+                  ) : null}
+                  {billingQuery.data.limitExceeded.products ? (
+                    <li>• {t("limitExceededItems.products")}</li>
+                  ) : null}
+                  {billingQuery.data.limitExceeded.users ? (
+                    <li>• {t("limitExceededItems.users")}</li>
+                  ) : null}
                 </ul>
               </CardContent>
             </Card>
@@ -174,7 +182,9 @@ const BillingPage = () => {
                 <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
                   {t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
                 </Badge>
-                <Badge variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}>
+                <Badge
+                  variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}
+                >
                   {t(`subscriptionStatuses.${statusKeyMap[billingQuery.data.subscriptionStatus]}`)}
                 </Badge>
                 {billingQuery.data.trialEndsAt ? (
@@ -315,7 +325,9 @@ const BillingPage = () => {
                                 ) : (
                                   <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                                 )}
-                                <span className={enabled ? "text-foreground" : "text-muted-foreground"}>
+                                <span
+                                  className={enabled ? "text-foreground" : "text-muted-foreground"}
+                                >
                                   {t(`features.${feature}`)}
                                 </span>
                               </li>
@@ -364,29 +376,49 @@ const BillingPage = () => {
                   <TableRow>
                     <TableCell>{t("comparison.rows.stores")}</TableCell>
                     {planOrder.map((plan) => {
-                      const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
-                      return <TableCell key={plan}>{planItem ? planItem.limits.maxStores : "-"}</TableCell>;
+                      const planItem = billingQuery.data?.planCatalog.find(
+                        (item) => item.planTier === plan,
+                      );
+                      return (
+                        <TableCell key={plan}>
+                          {planItem ? planItem.limits.maxStores : "-"}
+                        </TableCell>
+                      );
                     })}
                   </TableRow>
                   <TableRow>
                     <TableCell>{t("comparison.rows.products")}</TableCell>
                     {planOrder.map((plan) => {
-                      const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
-                      return <TableCell key={plan}>{planItem ? planItem.limits.maxProducts : "-"}</TableCell>;
+                      const planItem = billingQuery.data?.planCatalog.find(
+                        (item) => item.planTier === plan,
+                      );
+                      return (
+                        <TableCell key={plan}>
+                          {planItem ? planItem.limits.maxProducts : "-"}
+                        </TableCell>
+                      );
                     })}
                   </TableRow>
                   <TableRow>
                     <TableCell>{t("comparison.rows.users")}</TableCell>
                     {planOrder.map((plan) => {
-                      const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
-                      return <TableCell key={plan}>{planItem ? planItem.limits.maxUsers : "-"}</TableCell>;
+                      const planItem = billingQuery.data?.planCatalog.find(
+                        (item) => item.planTier === plan,
+                      );
+                      return (
+                        <TableCell key={plan}>
+                          {planItem ? planItem.limits.maxUsers : "-"}
+                        </TableCell>
+                      );
                     })}
                   </TableRow>
                   {comparisonFeatures.map((feature) => (
                     <TableRow key={feature}>
                       <TableCell>{t(`features.${feature}`)}</TableCell>
                       {planOrder.map((plan) => {
-                        const planItem = billingQuery.data?.planCatalog.find((item) => item.planTier === plan);
+                        const planItem = billingQuery.data?.planCatalog.find(
+                          (item) => item.planTier === plan,
+                        );
                         const enabled = planItem ? Boolean(planItem.featureFlags[feature]) : false;
                         return (
                           <TableCell key={`${feature}-${plan}`}>
@@ -418,11 +450,7 @@ const BillingPage = () => {
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>{t("ctaHint")}</p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  asChild
-                  type="button"
-                  variant="secondary"
-                >
+                <Button asChild type="button" variant="secondary">
                   <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
                     {t("ctaWhatsapp")}
                   </a>
@@ -474,7 +502,7 @@ const BillingPage = () => {
                 maxLength={500}
               />
             </div>
-            <div className="flex justify-end gap-2">
+            <ModalFooter>
               <Button
                 type="button"
                 variant="secondary"
@@ -488,7 +516,7 @@ const BillingPage = () => {
               <Button type="submit" disabled={requestUpgradeMutation.isLoading}>
                 {requestUpgradeMutation.isLoading ? tCommon("loading") : t("requestSubmit")}
               </Button>
-            </div>
+            </ModalFooter>
           </form>
         ) : null}
       </Modal>

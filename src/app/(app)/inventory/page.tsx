@@ -23,6 +23,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -55,22 +62,22 @@ import {
   ReceiveIcon,
   PrintIcon,
   TransferIcon,
-  StatusWarningIcon,
   StatusSuccessIcon,
   EmptyIcon,
   GridViewIcon,
+  MoreIcon,
   TableViewIcon,
   ViewIcon,
 } from "@/components/icons";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { parseNumberInput, resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
+import {
+  buildBarcodeLabelPrintItems,
+  hasPrintableBarcode,
+  type BarcodePrintProduct,
+} from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
@@ -79,9 +86,13 @@ import {
   ROLL_PRICE_TAG_TEMPLATE,
   isRollPriceTagTemplate,
 } from "@/lib/priceTags";
+import { buildSavedLabelPrintValues, resolveLabelPrintFlowAction } from "@/lib/labelPrintFlow";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import { buildScopedStorageKey, useScopedLocalStorageState } from "@/lib/useScopedLocalStorageState";
+import {
+  buildScopedStorageKey,
+  useScopedLocalStorageState,
+} from "@/lib/useScopedLocalStorageState";
 import {
   createSavedTableView,
   findMatchingSavedTableView,
@@ -128,6 +139,8 @@ const inventoryTableStateSchema = z.object({
     .optional()
     .default([...defaultInventoryVisibleColumns]),
 });
+
+const legacyInventoryPrintModalEnabled = process.env.NODE_ENV !== "production";
 
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
@@ -177,7 +190,11 @@ const InventoryPage = () => {
   const [poDraftQtyInputByKey, setPoDraftQtyInputByKey] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
-  const [printOpen, setPrintOpen] = useState(false);
+  const [printSetupOpen, setPrintSetupOpen] = useState(false);
+  const [inventoryQuickPrintLoading, setInventoryQuickPrintLoading] = useState(false);
+  // Dev-only fallback for the old inventory print modal. Normal inventory actions use
+  // saved-profile quick print and must not open this settings form.
+  const [legacyInventoryPrintModalOpen, setLegacyInventoryPrintModalOpen] = useState(false);
   const [calibrationLoadedStoreKey, setCalibrationLoadedStoreKey] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
   const suppliersQuery = trpc.suppliers.list.useQuery(undefined, {
@@ -221,10 +238,7 @@ const InventoryPage = () => {
     defaultValue: defaultInventoryTableState,
     parse: parseInventoryTableState,
   });
-  const defaultInventorySavedViewsState = useMemo(
-    () => ({ views: [], defaultViewId: null }),
-    [],
-  );
+  const defaultInventorySavedViewsState = useMemo(() => ({ views: [], defaultViewId: null }), []);
   const inventorySavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -520,12 +534,23 @@ const InventoryPage = () => {
     },
   });
   const printTemplate = printForm.watch("template");
-  const printStoreId = printForm.watch("storeId")?.trim() ?? "";
+  const legacyPrintStoreId = printForm.watch("storeId")?.trim() ?? "";
   const rollTemplateSelected = isRollPriceTagTemplate(printTemplate);
-  const printHardwareQuery = trpc.stores.hardware.useQuery(
-    { storeId: printStoreId },
+  const printProfileQuery = trpc.stores.hardware.useQuery(
+    { storeId: storeId || "" },
     {
-      enabled: printOpen && rollTemplateSelected && Boolean(printStoreId),
+      enabled: Boolean(storeId),
+    },
+  );
+  const printProfileSettings = printProfileQuery.data?.settings;
+  const legacyPrintHardwareQuery = trpc.stores.hardware.useQuery(
+    { storeId: legacyPrintStoreId },
+    {
+      enabled:
+        legacyInventoryPrintModalEnabled &&
+        legacyInventoryPrintModalOpen &&
+        rollTemplateSelected &&
+        Boolean(legacyPrintStoreId),
     },
   );
 
@@ -547,6 +572,15 @@ const InventoryPage = () => {
     [inventoryQuery.data?.items],
   );
   const inventoryTotal = inventoryQuery.data?.total ?? 0;
+  const inventorySummary = useMemo(
+    () => ({
+      totalSkus: inventoryTotal,
+      negativeStockCount: inventoryItems.filter((item) => item.snapshot.onHand < 0).length,
+      lowStockCount: inventoryItems.filter((item) => item.lowStock).length,
+      pendingReceiveCount: inventoryItems.filter((item) => item.snapshot.onOrder > 0).length,
+    }),
+    [inventoryItems, inventoryTotal],
+  );
   const reorderCandidates = useMemo(() => {
     return inventoryItems
       .filter((item) => (item.reorder?.suggestedOrderQty ?? 0) > 0)
@@ -648,10 +682,12 @@ const InventoryPage = () => {
   };
 
   const resolveBasePreview = (
-    product: {
-      baseUnit: { labelRu: string; labelKg: string };
-      packs: { id: string; multiplierToBase: number }[];
-    } | undefined,
+    product:
+      | {
+          baseUnit: { labelRu: string; labelKg: string };
+          packs: { id: string; multiplierToBase: number }[];
+        }
+      | undefined,
     unitSelection: string,
     qty: number,
   ) => {
@@ -667,10 +703,7 @@ const InventoryPage = () => {
   };
 
   type ExpiringLot = NonNullable<typeof expiringQuery.data>[number];
-  const expiringLots: ExpiringLot[] = useMemo(
-    () => expiringQuery.data ?? [],
-    [expiringQuery.data],
-  );
+  const expiringLots: ExpiringLot[] = useMemo(() => expiringQuery.data ?? [], [expiringQuery.data]);
 
   const expiringSet = useMemo(() => {
     const set = new Set<string>();
@@ -813,8 +846,7 @@ const InventoryPage = () => {
     (viewId: string | null) => {
       setInventorySavedViewsState((current) => ({
         ...current,
-        defaultViewId:
-          viewId && current.views.some((view) => view.id === viewId) ? viewId : null,
+        defaultViewId: viewId && current.views.some((view) => view.id === viewId) ? viewId : null,
       }));
     },
     [setInventorySavedViewsState],
@@ -870,7 +902,7 @@ const InventoryPage = () => {
   }, [storeId, search]);
 
   useEffect(() => {
-    if (!printOpen) {
+    if (!legacyInventoryPrintModalOpen) {
       setCalibrationLoadedStoreKey("");
       return;
     }
@@ -884,13 +916,13 @@ const InventoryPage = () => {
       allowWithoutBarcode: false,
     });
     setCalibrationLoadedStoreKey("");
-  }, [printOpen, printForm, storeId]);
+  }, [legacyInventoryPrintModalOpen, printForm, storeId]);
 
   useEffect(() => {
-    if (!printOpen || !rollTemplateSelected) {
+    if (!legacyInventoryPrintModalOpen || !rollTemplateSelected) {
       return;
     }
-    if (!printStoreId) {
+    if (!legacyPrintStoreId) {
       if (calibrationLoadedStoreKey !== "default") {
         printForm.setValue("gapMm", PRICE_TAG_ROLL_DEFAULTS.gapMm);
         printForm.setValue("xOffsetMm", PRICE_TAG_ROLL_DEFAULTS.xOffsetMm);
@@ -900,24 +932,24 @@ const InventoryPage = () => {
       }
       return;
     }
-    if (!printHardwareQuery.data) {
+    if (!legacyPrintHardwareQuery.data) {
       return;
     }
-    const nextStoreKey = `store:${printStoreId}`;
+    const nextStoreKey = `store:${legacyPrintStoreId}`;
     if (calibrationLoadedStoreKey === nextStoreKey) {
       return;
     }
-    printForm.setValue("gapMm", printHardwareQuery.data.settings.labelRollGapMm);
-    printForm.setValue("xOffsetMm", printHardwareQuery.data.settings.labelRollXOffsetMm);
-    printForm.setValue("yOffsetMm", printHardwareQuery.data.settings.labelRollYOffsetMm);
+    printForm.setValue("gapMm", legacyPrintHardwareQuery.data.settings.labelRollGapMm);
+    printForm.setValue("xOffsetMm", legacyPrintHardwareQuery.data.settings.labelRollXOffsetMm);
+    printForm.setValue("yOffsetMm", legacyPrintHardwareQuery.data.settings.labelRollYOffsetMm);
     printForm.setValue("allowWithoutBarcode", false);
     setCalibrationLoadedStoreKey(nextStoreKey);
   }, [
     calibrationLoadedStoreKey,
     printForm,
-    printHardwareQuery.data,
-    printOpen,
-    printStoreId,
+    legacyPrintHardwareQuery.data,
+    legacyInventoryPrintModalOpen,
+    legacyPrintStoreId,
     rollTemplateSelected,
   ]);
 
@@ -1008,7 +1040,119 @@ const InventoryPage = () => {
     }
   }, [minStockProductId, inventoryItems, minStockForm]);
 
-  const handlePrintTags = async (
+  const openPrintSettings = useCallback(() => {
+    if (storeId) {
+      router.push(`/stores/${storeId}/hardware`);
+      return;
+    }
+    router.push("/settings/printing");
+  }, [router, storeId]);
+
+  const handleInventoryQuickPrint = async () => {
+    if (!selectedSnapshotIds.length || inventoryQuickPrintLoading) {
+      return;
+    }
+
+    const action = resolveLabelPrintFlowAction({
+      settings: printProfileSettings,
+      storeId,
+      isLoading: printProfileQuery.isLoading,
+    });
+
+    if (action === "setupRequired") {
+      setPrintSetupOpen(true);
+      return;
+    }
+    if (action === "loading") {
+      toast({ variant: "info", description: t("printProfileLoading") });
+      return;
+    }
+
+    const loadedMissingBarcode = selectedPrintItems.filter(
+      (item) => !hasPrintableBarcode(item.product as BarcodePrintProduct),
+    );
+    if (loadedMissingBarcode.length > 0) {
+      toast({ variant: "error", description: t("printMissingBarcode") });
+      return;
+    }
+
+    setInventoryQuickPrintLoading(true);
+    try {
+      const snapshotProductIds = await trpcUtils.inventory.productIdsBySnapshotIds.fetch({
+        snapshotIds: selectedSnapshotIds,
+      });
+      if (!snapshotProductIds.length) {
+        toast({ variant: "error", description: t("printNoPrintableProducts") });
+        return;
+      }
+
+      const printValues = buildSavedLabelPrintValues({
+        settings: printProfileSettings,
+        storeId,
+      });
+      const blob = await fetchPdfBlob({
+        url: "/api/price-tags/pdf",
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: printValues.template,
+            storeId: printValues.storeId || undefined,
+            allowWithoutBarcode: false,
+            rollCalibration: isRollPriceTagTemplate(printValues.template)
+              ? {
+                  widthMm: printValues.widthMm,
+                  heightMm: printValues.heightMm,
+                  gapMm: printProfileSettings?.labelRollGapMm,
+                  xOffsetMm: printProfileSettings?.labelRollXOffsetMm,
+                  yOffsetMm: printProfileSettings?.labelRollYOffsetMm,
+                }
+              : undefined,
+            display: printProfileSettings
+              ? {
+                  showProductName: printProfileSettings.labelShowProductName,
+                  showPrice: printProfileSettings.labelShowPrice,
+                  showSku: printProfileSettings.labelShowSku,
+                  showStoreName: printProfileSettings.labelShowStoreName,
+                }
+              : undefined,
+            items: buildBarcodeLabelPrintItems({
+              productIds: snapshotProductIds,
+              quantity: printValues.quantity,
+            }),
+          }),
+        },
+      });
+      const result = await printPdfBlob(blob);
+      if (!result.autoPrintAttempted) {
+        toast({ variant: "info", description: t("printFallback") });
+      }
+      toast({
+        variant: "success",
+        description: t("printQueued", {
+          count: snapshotProductIds.length * printValues.quantity,
+        }),
+        actionLabel: t("changePrintSettings"),
+        actionHref: storeId ? `/stores/${storeId}/hardware` : "/settings/printing",
+      });
+      setSelectedIds(new Set());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
+        toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+        return;
+      }
+      if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
+        toast({ variant: "error", description: message });
+        return;
+      }
+      toast({ variant: "error", description: t("priceTagsFailed") });
+    } finally {
+      setInventoryQuickPrintLoading(false);
+    }
+  };
+
+  const handleLegacyInventoryPrintTags = async (
     values: z.infer<typeof printSchema>,
     mode: "download" | "print",
   ) => {
@@ -1050,7 +1194,7 @@ const InventoryPage = () => {
       } else {
         downloadPdfBlob(blob, `price-tags-${values.template}.pdf`);
       }
-      setPrintOpen(false);
+      setLegacyInventoryPrintModalOpen(false);
       setSelectedIds(new Set());
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -1241,9 +1385,9 @@ const InventoryPage = () => {
   const applyInventoryListPatch = useCallback(
     (
       productId: string,
-      patch: (item: NonNullable<typeof inventoryQuery.data>["items"][number]) => NonNullable<
-        typeof inventoryQuery.data
-      >["items"][number],
+      patch: (
+        item: NonNullable<typeof inventoryQuery.data>["items"][number],
+      ) => NonNullable<typeof inventoryQuery.data>["items"][number],
     ) => {
       trpcUtils.inventory.list.setData(inventoryListInput, (current) => {
         if (!current) {
@@ -1399,66 +1543,67 @@ const InventoryPage = () => {
         subtitle={t("subtitle")}
         action={
           <>
-            <Button variant="secondary" className="w-full sm:w-auto" asChild>
-              <Link href="/inventory/counts">
-                <ViewIcon className="h-4 w-4" aria-hidden />
-                {t("stockCounts")}
-              </Link>
-            </Button>
             {canManage ? (
               <>
-              <Button
-                className="w-full sm:w-auto"
-                onClick={() => openActionDialog("receive")}
-                disabled={!storeId}
-                data-tour="inventory-receive"
-              >
-                <ReceiveIcon className="h-4 w-4" aria-hidden />
-                {t("receiveStock")}
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => openActionDialog("adjust")}
-                disabled={!storeId}
-                data-tour="inventory-adjust"
-              >
-                <AdjustIcon className="h-4 w-4" aria-hidden />
-                {t("stockAdjustment")}
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => openActionDialog("transfer")}
-                disabled={!storeId}
-                data-tour="inventory-transfer"
-              >
-                <TransferIcon className="h-4 w-4" aria-hidden />
-                {t("transferStock")}
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => openActionDialog("minStock")}
-                disabled={!storeId}
-              >
-                <StatusSuccessIcon className="h-4 w-4" aria-hidden />
-                {t("minStockTitle")}
-              </Button>
-              {showPlanning ? (
-                <>
-                  <Button
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    onClick={() => setPoDraftOpen(true)}
-                    disabled={!storeId || reorderCandidates.length === 0}
-                  >
-                    <AddIcon className="h-4 w-4" aria-hidden />
-                    {t("createPoDrafts")}
-                  </Button>
-                  <HelpLink articleId="reorder" />
-                </>
-              ) : null}
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => openActionDialog("receive")}
+                  disabled={!storeId}
+                  data-tour="inventory-receive"
+                >
+                  <ReceiveIcon className="h-4 w-4" aria-hidden />
+                  {t("receiveStock")}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="secondary" className="w-full sm:w-auto">
+                      <MoreIcon className="h-4 w-4" aria-hidden />
+                      {tCommon("actions")}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[240px]">
+                    <DropdownMenuItem asChild>
+                      <Link href="/inventory/counts">
+                        <ViewIcon className="h-4 w-4" aria-hidden />
+                        {t("stockCounts")}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={!storeId}
+                      onSelect={() => openActionDialog("adjust")}
+                      data-tour="inventory-adjust"
+                    >
+                      <AdjustIcon className="h-4 w-4" aria-hidden />
+                      {t("stockAdjustment")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!storeId}
+                      onSelect={() => openActionDialog("transfer")}
+                      data-tour="inventory-transfer"
+                    >
+                      <TransferIcon className="h-4 w-4" aria-hidden />
+                      {t("transferStock")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!storeId}
+                      onSelect={() => openActionDialog("minStock")}
+                    >
+                      <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                      {t("minStockTitle")}
+                    </DropdownMenuItem>
+                    {showPlanning ? (
+                      <DropdownMenuItem
+                        disabled={!storeId || reorderCandidates.length === 0}
+                        onSelect={() => setPoDraftOpen(true)}
+                      >
+                        <AddIcon className="h-4 w-4" aria-hidden />
+                        {t("createPoDrafts")}
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {showPlanning ? <HelpLink articleId="reorder" /> : null}
               </>
             ) : null}
           </>
@@ -1485,7 +1630,7 @@ const InventoryPage = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+            <div className="flex items-center gap-2 rounded-none border border-border px-3 py-2">
               <Switch
                 checked={showPlanning}
                 onCheckedChange={setShowPlanning}
@@ -1496,6 +1641,45 @@ const InventoryPage = () => {
           </>
         }
       />
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="border border-border bg-card p-3">
+          <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            {formatNumber(inventorySummary.totalSkus, locale)}
+          </p>
+        </div>
+        <div className="border border-border bg-card p-3">
+          <p className="text-xs text-muted-foreground">{t("summaryNegativeStock")}</p>
+          <p
+            className={
+              inventorySummary.negativeStockCount > 0
+                ? "mt-1 text-xl font-semibold text-danger"
+                : "mt-1 text-xl font-semibold text-foreground"
+            }
+          >
+            {formatNumber(inventorySummary.negativeStockCount, locale)}
+          </p>
+        </div>
+        <div className="border border-border bg-card p-3">
+          <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
+          <p
+            className={
+              inventorySummary.lowStockCount > 0
+                ? "mt-1 text-xl font-semibold text-warning"
+                : "mt-1 text-xl font-semibold text-foreground"
+            }
+          >
+            {formatNumber(inventorySummary.lowStockCount, locale)}
+          </p>
+        </div>
+        <div className="border border-border bg-card p-3">
+          <p className="text-xs text-muted-foreground">{t("summaryPendingReceive")}</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">
+            {formatNumber(inventorySummary.pendingReceiveCount, locale)}
+          </p>
+        </div>
+      </div>
 
       {trackExpiryLots ? (
         <Card className="mb-6">
@@ -1525,9 +1709,9 @@ const InventoryPage = () => {
           <CardContent>
             {expiringQuery.isLoading ? (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
-            </div>
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
             ) : expiringLots.length ? (
               <div className="space-y-2 text-sm">
                 {expiringLots.map((lot) => (
@@ -1537,7 +1721,9 @@ const InventoryPage = () => {
                       {lot.variant?.name ? ` • ${lot.variant.name}` : ""}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {lot.expiryDate ? formatDateTime(lot.expiryDate, locale) : tCommon("notAvailable")}
+                      {lot.expiryDate
+                        ? formatDateTime(lot.expiryDate, locale)
+                        : tCommon("notAvailable")}
                     </span>
                   </div>
                 ))}
@@ -1579,7 +1765,7 @@ const InventoryPage = () => {
                 />
               ) : null}
             </div>
-            <div className="inline-flex w-full items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
+            <div className="inline-flex w-full items-center gap-1 rounded-none border border-border p-1 sm:w-auto">
               <Button
                 type="button"
                 size="sm"
@@ -1662,22 +1848,30 @@ const InventoryPage = () => {
                         : tCommon("selectAllResults", { count: inventoryTotal })}
                     </Button>
                   ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-tour="inventory-print-tags"
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shadow-none"
-                        aria-label={t("printPriceTags")}
-                        onClick={() => setPrintOpen(true)}
-                      >
-                        <DownloadIcon className="h-4 w-4" aria-hidden />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t("printPriceTags")}</TooltipContent>
-                  </Tooltip>
+                  <Button
+                    data-tour="inventory-print-tags"
+                    type="button"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleInventoryQuickPrint()}
+                    disabled={inventoryQuickPrintLoading}
+                  >
+                    {inventoryQuickPrintLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <PrintIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {inventoryQuickPrintLoading ? tCommon("loading") : t("printSelected")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={openPrintSettings}
+                  >
+                    {t("changePrintSettings")}
+                  </Button>
                 </SelectionToolbar>
               </TooltipProvider>
             </div>
@@ -1696,231 +1890,245 @@ const InventoryPage = () => {
                   <TooltipProvider>
                     <InlineEditTableProvider>
                       <Table className="min-w-[640px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-10">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                              checked={allSelected}
-                              onChange={toggleSelectAll}
-                              aria-label={t("selectAll")}
-                            />
-                          </TableHead>
-                          {visibleInventoryColumnSet.has("sku") ? (
-                            <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
-                          ) : null}
-                          {visibleInventoryColumnSet.has("image") ? (
-                            <TableHead>{t("imageLabel")}</TableHead>
-                          ) : null}
-                          {visibleInventoryColumnSet.has("product") ? (
-                            <TableHead>{tCommon("product")}</TableHead>
-                          ) : null}
-                          {visibleInventoryColumnSet.has("onHand") ? (
-                            <TableHead>{t("onHand")}</TableHead>
-                          ) : null}
-                          {visibleInventoryColumnSet.has("minStock") ? (
-                            <TableHead className="hidden sm:table-cell">{t("minStock")}</TableHead>
-                          ) : null}
-                          {visibleInventoryColumnSet.has("lowStock") ? (
-                            <TableHead>{t("lowStock")}</TableHead>
-                          ) : null}
-                          {visibleInventoryColumnSet.has("onOrder") ? (
-                            <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
-                          ) : null}
-                          {showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? (
-                            <TableHead>{t("suggestedOrder")}</TableHead>
-                          ) : null}
-                          <TableHead>{tCommon("actions")}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visibleItems.map((item) => {
-                          const isExpanded = expandedReorderId === item.snapshot.id;
-                          const reorder = item.reorder;
-                          const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
-                          const previewImageUrl = getInventoryPreviewUrl(item);
-                          const actions = getInventoryActions(item);
-                          return (
-                            <Fragment key={item.snapshot.id}>
-                              <TableRow>
-                                <TableCell>
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                    checked={selectedIds.has(item.snapshot.id)}
-                                    onChange={() => toggleSelect(item.snapshot.id)}
-                                    aria-label={t("selectInventoryItem", {
-                                      name: item.variant?.name
-                                        ? `${item.product.name} • ${item.variant.name}`
-                                        : item.product.name,
-                                    })}
-                                  />
-                                </TableCell>
-                                {visibleInventoryColumnSet.has("sku") ? (
-                                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
-                                    {item.product.sku}
-                                  </TableCell>
-                                ) : null}
-                                {visibleInventoryColumnSet.has("image") ? (
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                checked={allSelected}
+                                onChange={toggleSelectAll}
+                                aria-label={t("selectAll")}
+                              />
+                            </TableHead>
+                            {visibleInventoryColumnSet.has("sku") ? (
+                              <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
+                            ) : null}
+                            {visibleInventoryColumnSet.has("image") ? (
+                              <TableHead>{t("imageLabel")}</TableHead>
+                            ) : null}
+                            {visibleInventoryColumnSet.has("product") ? (
+                              <TableHead>{tCommon("product")}</TableHead>
+                            ) : null}
+                            {visibleInventoryColumnSet.has("onHand") ? (
+                              <TableHead>{t("onHand")}</TableHead>
+                            ) : null}
+                            {visibleInventoryColumnSet.has("minStock") ? (
+                              <TableHead className="hidden sm:table-cell">
+                                {t("minStock")}
+                              </TableHead>
+                            ) : null}
+                            {visibleInventoryColumnSet.has("lowStock") ? (
+                              <TableHead>{t("lowStock")}</TableHead>
+                            ) : null}
+                            {visibleInventoryColumnSet.has("onOrder") ? (
+                              <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
+                            ) : null}
+                            {showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? (
+                              <TableHead>{t("suggestedOrder")}</TableHead>
+                            ) : null}
+                            <TableHead>{tCommon("actions")}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visibleItems.map((item) => {
+                            const isExpanded = expandedReorderId === item.snapshot.id;
+                            const reorder = item.reorder;
+                            const expiryKey = `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`;
+                            const previewImageUrl = getInventoryPreviewUrl(item);
+                            const actions = getInventoryActions(item);
+                            return (
+                              <Fragment key={item.snapshot.id}>
+                                <TableRow>
                                   <TableCell>
-                                    {previewImageUrl ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={previewImageUrl}
-                                        alt={item.product.name}
-                                        className="h-10 w-10 rounded-md border border-border object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
-                                        <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                                      </div>
-                                    )}
-                                  </TableCell>
-                                ) : null}
-                                {visibleInventoryColumnSet.has("product") ? (
-                                  <TableCell className="font-medium">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <span>
-                                        {item.product.name}
-                                        {item.variant?.name ? ` • ${item.variant.name}` : ""}
-                                      </span>
-                                      {trackExpiryLots && expiringSet.has(expiryKey) ? (
-                                        <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
-                                      ) : null}
-                                    </div>
-                                  </TableCell>
-                                ) : null}
-                                {visibleInventoryColumnSet.has("onHand") ? (
-                                  <TableCell>{formatNumber(item.snapshot.onHand, locale)}</TableCell>
-                                ) : null}
-                                {visibleInventoryColumnSet.has("minStock") ? (
-                                  <TableCell className="hidden sm:table-cell">
-                                    <InlineEditableCell
-                                      rowId={item.snapshot.id}
-                                      row={item}
-                                      value={item.minStock}
-                                      definition={inlineEditRegistry.inventory.minStock}
-                                      context={{}}
-                                      role={role}
-                                      locale={locale}
-                                      columnLabel={t("minStock")}
-                                      tTable={t}
-                                      tCommon={tCommon}
-                                      enabled={inlineEditingEnabled}
-                                      executeMutation={executeInlineInventoryMutation}
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      checked={selectedIds.has(item.snapshot.id)}
+                                      onChange={() => toggleSelect(item.snapshot.id)}
+                                      aria-label={t("selectInventoryItem", {
+                                        name: item.variant?.name
+                                          ? `${item.product.name} • ${item.variant.name}`
+                                          : item.product.name,
+                                      })}
                                     />
                                   </TableCell>
-                                ) : null}
-                                {visibleInventoryColumnSet.has("lowStock") ? (
-                                  <TableCell>
-                                    {item.lowStock ? (
-                                      <Badge variant="danger">
-                                        <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                        {t("lowStockBadge")}
-                                      </Badge>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground/80">
-                                        {tCommon("notAvailable")}
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                ) : null}
-                                {visibleInventoryColumnSet.has("onOrder") ? (
-                                  <TableCell className="hidden md:table-cell">
-                                    {formatNumber(item.snapshot.onOrder, locale)}
-                                  </TableCell>
-                                ) : null}
-                                {showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? (
-                                  <TableCell>
-                                    {reorder ? (
-                                      <div className="space-y-1">
-                                        <div className="font-medium">
-                                          {formatNumber(reorder.suggestedOrderQty, locale)}
+                                  {visibleInventoryColumnSet.has("sku") ? (
+                                    <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
+                                      {item.product.sku}
+                                    </TableCell>
+                                  ) : null}
+                                  {visibleInventoryColumnSet.has("image") ? (
+                                    <TableCell>
+                                      {previewImageUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={previewImageUrl}
+                                          alt={item.product.name}
+                                          className="h-10 w-10 rounded-md border border-border object-cover"
+                                        />
+                                      ) : (
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                          <EmptyIcon
+                                            className="h-4 w-4 text-muted-foreground"
+                                            aria-hidden
+                                          />
                                         </div>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          className="h-8 px-2 text-xs"
-                                          onClick={() =>
-                                            setExpandedReorderId(
-                                              isExpanded ? null : item.snapshot.id,
-                                            )
-                                          }
-                                        >
-                                          {isExpanded ? t("hideWhy") : t("why")}
-                                        </Button>
+                                      )}
+                                    </TableCell>
+                                  ) : null}
+                                  {visibleInventoryColumnSet.has("product") ? (
+                                    <TableCell className="font-medium">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span>
+                                          {item.product.name}
+                                          {item.variant?.name ? ` • ${item.variant.name}` : ""}
+                                        </span>
+                                        {trackExpiryLots && expiringSet.has(expiryKey) ? (
+                                          <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
+                                        ) : null}
+                                        {item.snapshot.onHand < 0 ? (
+                                          <Badge variant="danger">{t("negativeStockBadge")}</Badge>
+                                        ) : null}
                                       </div>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground/80">
-                                        {t("planningUnavailable")}
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                ) : null}
-                                <TableCell>
-                                  <RowActions
-                                    actions={actions}
-                                    maxInline={2}
-                                    moreLabel={tCommon("tooltips.moreActions")}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                              {showPlanning && isExpanded && reorder ? (
-                                <TableRow>
-                                  <TableCell colSpan={tableColumnCount}>
-                                    <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm">
-                                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                        <div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {t("demandDuringLeadTime")}
-                                          </p>
-                                          <p className="font-semibold">
-                                            {formatNumber(reorder.demandDuringLeadTime, locale)}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {t("safetyStock")}
-                                          </p>
-                                          <p className="font-semibold">
-                                            {formatNumber(reorder.safetyStock, locale)}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {t("reorderPoint")}
-                                          </p>
-                                          <p className="font-semibold">
-                                            {formatNumber(reorder.reorderPoint, locale)}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {t("targetLevel")}
-                                          </p>
-                                          <p className="font-semibold">
-                                            {formatNumber(reorder.targetLevel, locale)}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {t("suggestedOrder")}
-                                          </p>
-                                          <p className="font-semibold">
+                                    </TableCell>
+                                  ) : null}
+                                  {visibleInventoryColumnSet.has("onHand") ? (
+                                    <TableCell
+                                      className={
+                                        item.snapshot.onHand < 0
+                                          ? "font-semibold text-danger"
+                                          : undefined
+                                      }
+                                    >
+                                      {formatNumber(item.snapshot.onHand, locale)}
+                                    </TableCell>
+                                  ) : null}
+                                  {visibleInventoryColumnSet.has("minStock") ? (
+                                    <TableCell className="hidden sm:table-cell">
+                                      <InlineEditableCell
+                                        rowId={item.snapshot.id}
+                                        row={item}
+                                        value={item.minStock}
+                                        definition={inlineEditRegistry.inventory.minStock}
+                                        context={{}}
+                                        role={role}
+                                        locale={locale}
+                                        columnLabel={t("minStock")}
+                                        tTable={t}
+                                        tCommon={tCommon}
+                                        enabled={inlineEditingEnabled}
+                                        executeMutation={executeInlineInventoryMutation}
+                                      />
+                                    </TableCell>
+                                  ) : null}
+                                  {visibleInventoryColumnSet.has("lowStock") ? (
+                                    <TableCell>
+                                      {item.lowStock && item.snapshot.onHand >= 0 ? (
+                                        <Badge variant="warning">{t("lowStockBadge")}</Badge>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground/80">
+                                          {tCommon("notAvailable")}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                  ) : null}
+                                  {visibleInventoryColumnSet.has("onOrder") ? (
+                                    <TableCell className="hidden md:table-cell">
+                                      {formatNumber(item.snapshot.onOrder, locale)}
+                                    </TableCell>
+                                  ) : null}
+                                  {showPlanning &&
+                                  visibleInventoryColumnSet.has("suggestedOrder") ? (
+                                    <TableCell>
+                                      {reorder ? (
+                                        <div className="space-y-1">
+                                          <div className="font-medium">
                                             {formatNumber(reorder.suggestedOrderQty, locale)}
-                                          </p>
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            className="h-8 px-2 text-xs"
+                                            onClick={() =>
+                                              setExpandedReorderId(
+                                                isExpanded ? null : item.snapshot.id,
+                                              )
+                                            }
+                                          >
+                                            {isExpanded ? t("hideWhy") : t("why")}
+                                          </Button>
                                         </div>
-                                      </div>
-                                    </div>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground/80">
+                                          {t("planningUnavailable")}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                  ) : null}
+                                  <TableCell>
+                                    <RowActions
+                                      actions={actions}
+                                      maxInline={2}
+                                      moreLabel={tCommon("tooltips.moreActions")}
+                                    />
                                   </TableCell>
                                 </TableRow>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                                {showPlanning && isExpanded && reorder ? (
+                                  <TableRow>
+                                    <TableCell colSpan={tableColumnCount}>
+                                      <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm">
+                                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                          <div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {t("demandDuringLeadTime")}
+                                            </p>
+                                            <p className="font-semibold">
+                                              {formatNumber(reorder.demandDuringLeadTime, locale)}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {t("safetyStock")}
+                                            </p>
+                                            <p className="font-semibold">
+                                              {formatNumber(reorder.safetyStock, locale)}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {t("reorderPoint")}
+                                            </p>
+                                            <p className="font-semibold">
+                                              {formatNumber(reorder.reorderPoint, locale)}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {t("targetLevel")}
+                                            </p>
+                                            <p className="font-semibold">
+                                              {formatNumber(reorder.targetLevel, locale)}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {t("suggestedOrder")}
+                                            </p>
+                                            <p className="font-semibold">
+                                              {formatNumber(reorder.suggestedOrderQty, locale)}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
                     </InlineEditTableProvider>
                   </TooltipProvider>
                 </div>
@@ -1937,7 +2145,7 @@ const InventoryPage = () => {
                     return (
                       <div
                         key={item.snapshot.id}
-                        className="overflow-hidden rounded-lg border border-border bg-card"
+                        className="overflow-hidden rounded-none border border-border bg-card"
                       >
                         <div className="relative aspect-[4/3] bg-muted/30">
                           {previewImageUrl ? (
@@ -1955,7 +2163,7 @@ const InventoryPage = () => {
                           <label className="absolute right-2 top-2">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                               checked={selectedIds.has(item.snapshot.id)}
                               onChange={() => toggleSelect(item.snapshot.id)}
                               aria-label={t("selectInventoryItem", { name: label })}
@@ -1965,7 +2173,9 @@ const InventoryPage = () => {
                         <div className="space-y-3 p-3">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-foreground">{label}</p>
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {label}
+                              </p>
                               <p className="text-xs text-muted-foreground">{item.product.sku}</p>
                             </div>
                             <RowActions
@@ -1979,17 +2189,23 @@ const InventoryPage = () => {
                             {trackExpiryLots && expiringSet.has(expiryKey) ? (
                               <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
                             ) : null}
-                            {item.lowStock ? (
-                              <Badge variant="danger">
-                                <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                                {t("lowStockBadge")}
-                              </Badge>
+                            {item.lowStock && item.snapshot.onHand >= 0 ? (
+                              <Badge variant="warning">{t("lowStockBadge")}</Badge>
+                            ) : null}
+                            {item.snapshot.onHand < 0 ? (
+                              <Badge variant="danger">{t("negativeStockBadge")}</Badge>
                             ) : null}
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                             <div>
                               <p>{t("onHand")}</p>
-                              <p className="text-sm font-semibold text-foreground">
+                              <p
+                                className={
+                                  item.snapshot.onHand < 0
+                                    ? "text-sm font-semibold text-danger"
+                                    : "text-sm font-semibold text-foreground"
+                                }
+                              >
                                 {formatNumber(item.snapshot.onHand, locale)}
                               </p>
                             </div>
@@ -2037,7 +2253,7 @@ const InventoryPage = () => {
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="mt-1 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       checked={selectedIds.has(item.snapshot.id)}
                       onChange={() => toggleSelect(item.snapshot.id)}
                       aria-label={t("selectInventoryItem", { name: label })}
@@ -2060,12 +2276,21 @@ const InventoryPage = () => {
                         {trackExpiryLots && expiringSet.has(expiryKey) ? (
                           <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
                         ) : null}
+                        {item.snapshot.onHand < 0 ? (
+                          <Badge variant="danger">{t("negativeStockBadge")}</Badge>
+                        ) : null}
                       </div>
                       <p className="text-xs text-muted-foreground">{item.product.sku}</p>
                       <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                         <div>
                           <p>{t("onHand")}</p>
-                          <p className="text-sm font-semibold text-foreground">
+                          <p
+                            className={
+                              item.snapshot.onHand < 0
+                                ? "text-sm font-semibold text-danger"
+                                : "text-sm font-semibold text-foreground"
+                            }
+                          >
                             {formatNumber(item.snapshot.onHand, locale)}
                           </p>
                         </div>
@@ -2093,11 +2318,8 @@ const InventoryPage = () => {
                         ) : null}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        {item.lowStock ? (
-                          <Badge variant="danger">
-                            <StatusWarningIcon className="h-3 w-3" aria-hidden />
-                            {t("lowStockBadge")}
-                          </Badge>
+                        {item.lowStock && item.snapshot.onHand >= 0 ? (
+                          <Badge variant="warning">{t("lowStockBadge")}</Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground/80">
                             {tCommon("notAvailable")}
@@ -2226,7 +2448,7 @@ const InventoryPage = () => {
                   <p className="text-xs font-semibold text-muted-foreground">
                     {supplierId === "unassigned"
                       ? t("supplierUnassigned")
-                      : supplierMap.get(supplierId) ?? t("supplierUnassigned")}
+                      : (supplierMap.get(supplierId) ?? t("supplierUnassigned"))}
                   </p>
                   {items.map((item) => (
                     <div
@@ -2235,7 +2457,9 @@ const InventoryPage = () => {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm font-semibold text-foreground">{item.productName}</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {item.productName}
+                          </p>
                           <p className="text-xs text-muted-foreground">{item.variantName}</p>
                         </div>
                         <Switch
@@ -2328,7 +2552,11 @@ const InventoryPage = () => {
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" className="w-full sm:w-auto" disabled={createPoDraftMutation.isLoading}>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={createPoDraftMutation.isLoading}
+              >
                 {createPoDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                 {createPoDraftMutation.isLoading ? tCommon("loading") : t("createPoDraftsSubmit")}
               </Button>
@@ -2343,305 +2571,357 @@ const InventoryPage = () => {
       </Modal>
 
       <Modal
-        open={printOpen}
+        open={printSetupOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setPrintOpen(false);
+            setPrintSetupOpen(false);
           }
         }}
-        title={t("printPriceTags")}
-        subtitle={t("printSubtitle", { count: selectedCount })}
+        title={t("printSetupRequiredTitle")}
+        subtitle={t("printSetupRequiredSubtitle")}
       >
-        <Form {...printForm}>
-          <form
-            className="space-y-4"
-            onSubmit={printForm.handleSubmit((values) => handlePrintTags(values, "download"))}
-          >
-            <FormField
-              control={printForm.control}
-              name="template"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("template")}</FormLabel>
-                  <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("template")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>{t("templateRollXp365b")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={printForm.control}
-              name="storeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{tCommon("store")}</FormLabel>
-                  <FormControl>
-                    <Select
-                      value={field.value || "all"}
-                      onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={tCommon("selectStore")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{t("allStores")}</SelectItem>
-                        {storesQuery.data?.map((store) => (
-                          <SelectItem key={store.id} value={store.id}>
-                            {store.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={printForm.control}
-              name="quantity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("printQty")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="number" inputMode="numeric" min={1} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {rollTemplateSelected ? (
-              <div className="space-y-3 rounded-md border border-border/70 bg-secondary/20 p-3">
-                <p className="text-xs font-medium text-foreground">{t("rollTemplatePreviewTitle")}</p>
-                <div className="w-[210px] max-w-full rounded border border-border bg-card p-2">
-                  <div className="aspect-[58/40] rounded border border-dashed border-border/70 p-2">
-                    <p className="line-clamp-2 text-[10px] font-medium text-foreground">
-                      {rollPreviewItem?.product.name ?? t("rollPreviewName")}
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold text-foreground">{t("rollPreviewPrice")}</p>
-                    <p className="mt-1 text-[8px] text-muted-foreground">
-                      {rollPreviewItem?.product.sku || t("rollPreviewSku")}
-                    </p>
-                    <div className="mt-1 h-4 rounded bg-muted" />
-                    <p className="mt-1 text-center text-[7px] text-muted-foreground">
-                      {t("rollPreviewBarcode")}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground">{t("rollGapStoredHint")}</p>
-
-                <FormField
-                  control={printForm.control}
-                  name="gapMm"
-                  render={({ field }) => (
-                    <FormItem>
-                      {(() => {
-                        const resolvedGapMm = resolveNumberInputOnBlur(
-                          field.value === undefined ? "" : String(field.value),
-                          PRICE_TAG_ROLL_DEFAULTS.gapMm,
-                        );
-                        return (
-                          <>
-                            <FormLabel>{t("rollGapMm")}</FormLabel>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="range"
-                                  min={PRICE_TAG_ROLL_LIMITS.gapMm.min}
-                                  max={PRICE_TAG_ROLL_LIMITS.gapMm.max}
-                                  step={PRICE_TAG_ROLL_LIMITS.gapMm.step}
-                                  value={resolvedGapMm}
-                                  onChange={(event) => {
-                                    const nextValue = event.currentTarget.valueAsNumber;
-                                    if (Number.isFinite(nextValue)) {
-                                      field.onChange(nextValue);
-                                    }
-                                  }}
-                                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
-                                  aria-label={t("rollGapMm")}
-                                />
-                                <Input
-                                  value={toNumberInputValue(field.value)}
-                                  onChange={(event) => field.onChange(event.target.value)}
-                                  onBlur={(event) => {
-                                    field.onChange(resolveNumberInputOnBlur(event.target.value, 0));
-                                    field.onBlur();
-                                  }}
-                                  type="number"
-                                  className="w-20"
-                                  min={PRICE_TAG_ROLL_LIMITS.gapMm.min}
-                                  max={PRICE_TAG_ROLL_LIMITS.gapMm.max}
-                                  step={PRICE_TAG_ROLL_LIMITS.gapMm.step}
-                                />
-                              </div>
-                            </FormControl>
-                            <FormDescription>{t("rollGapHint")}</FormDescription>
-                            <FormMessage />
-                          </>
-                        );
-                      })()}
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={printForm.control}
-                  name="xOffsetMm"
-                  render={({ field }) => (
-                    <FormItem>
-                      {(() => {
-                        const resolvedXOffset = resolveNumberInputOnBlur(
-                          field.value === undefined ? "" : String(field.value),
-                          PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
-                        );
-                        return (
-                          <>
-                            <FormLabel>{t("rollXOffsetMm")}</FormLabel>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="range"
-                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
-                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
-                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
-                                  value={resolvedXOffset}
-                                  onChange={(event) => {
-                                    const nextValue = event.currentTarget.valueAsNumber;
-                                    if (Number.isFinite(nextValue)) {
-                                      field.onChange(nextValue);
-                                    }
-                                  }}
-                                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
-                                  aria-label={t("rollXOffsetMm")}
-                                />
-                                <Input
-                                  value={toNumberInputValue(field.value)}
-                                  onChange={(event) => field.onChange(event.target.value)}
-                                  onBlur={(event) => {
-                                    field.onChange(resolveNumberInputOnBlur(event.target.value, 0));
-                                    field.onBlur();
-                                  }}
-                                  type="number"
-                                  className="w-20"
-                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
-                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
-                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
-                                />
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </>
-                        );
-                      })()}
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={printForm.control}
-                  name="yOffsetMm"
-                  render={({ field }) => (
-                    <FormItem>
-                      {(() => {
-                        const resolvedYOffset = resolveNumberInputOnBlur(
-                          field.value === undefined ? "" : String(field.value),
-                          PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
-                        );
-                        return (
-                          <>
-                            <FormLabel>{t("rollYOffsetMm")}</FormLabel>
-                            <FormControl>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="range"
-                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
-                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
-                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
-                                  value={resolvedYOffset}
-                                  onChange={(event) => {
-                                    const nextValue = event.currentTarget.valueAsNumber;
-                                    if (Number.isFinite(nextValue)) {
-                                      field.onChange(nextValue);
-                                    }
-                                  }}
-                                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
-                                  aria-label={t("rollYOffsetMm")}
-                                />
-                                <Input
-                                  value={toNumberInputValue(field.value)}
-                                  onChange={(event) => field.onChange(event.target.value)}
-                                  onBlur={(event) => {
-                                    field.onChange(resolveNumberInputOnBlur(event.target.value, 0));
-                                    field.onBlur();
-                                  }}
-                                  type="number"
-                                  className="w-20"
-                                  min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
-                                  max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
-                                  step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
-                                />
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </>
-                        );
-                      })()}
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={printForm.control}
-                  name="allowWithoutBarcode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card p-2">
-                        <div>
-                          <FormLabel>{t("printWithoutBarcode")}</FormLabel>
-                          <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            ) : null}
-            <FormActions>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setPrintOpen(false)}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  void printForm.handleSubmit((values) => handlePrintTags(values, "print"))();
-                }}
-              >
-                <PrintIcon className="h-4 w-4" aria-hidden />
-                {t("printAction")}
-              </Button>
-              <Button type="submit" variant="secondary" className="w-full sm:w-auto">
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-                {t("printDownload")}
-              </Button>
-            </FormActions>
-          </form>
-        </Form>
+        <div className="space-y-4">
+          <div className="border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">
+              {t("printSetupSelected", { count: selectedCount })}
+            </p>
+            <p className="mt-1">{t("printSetupBody")}</p>
+          </div>
+          <FormActions>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setPrintSetupOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button type="button" className="w-full sm:w-auto" onClick={openPrintSettings}>
+              <PrintIcon className="h-4 w-4" aria-hidden />
+              {t("openPrintSettings")}
+            </Button>
+          </FormActions>
+        </div>
       </Modal>
+
+      {legacyInventoryPrintModalEnabled ? (
+        <Modal
+          open={legacyInventoryPrintModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLegacyInventoryPrintModalOpen(false);
+            }
+          }}
+          title={t("printPriceTags")}
+          subtitle={t("printSubtitle", { count: selectedCount })}
+        >
+          <Form {...printForm}>
+            <form
+              className="space-y-4"
+              onSubmit={printForm.handleSubmit((values) =>
+                handleLegacyInventoryPrintTags(values, "download"),
+              )}
+            >
+              <FormField
+                control={printForm.control}
+                name="template"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("template")}</FormLabel>
+                    <FormControl>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("template")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ROLL_PRICE_TAG_TEMPLATE}>
+                            {t("templateRollXp365b")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={printForm.control}
+                name="storeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tCommon("store")}</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value || "all"}
+                        onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={tCommon("selectStore")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">{t("allStores")}</SelectItem>
+                          {storesQuery.data?.map((store) => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={printForm.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("printQty")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" inputMode="numeric" min={1} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {rollTemplateSelected ? (
+                <div className="space-y-3 rounded-md border border-border/70 bg-secondary/20 p-3">
+                  <p className="text-xs font-medium text-foreground">
+                    {t("rollTemplatePreviewTitle")}
+                  </p>
+                  <div className="w-[210px] max-w-full rounded-none border border-border bg-card p-2">
+                    <div className="aspect-[58/40] rounded-none border border-dashed border-border/70 p-2">
+                      <p className="line-clamp-2 text-[10px] font-medium text-foreground">
+                        {rollPreviewItem?.product.name ?? t("rollPreviewName")}
+                      </p>
+                      <p className="mt-1 text-[11px] font-semibold text-foreground">
+                        {t("rollPreviewPrice")}
+                      </p>
+                      <p className="mt-1 text-[8px] text-muted-foreground">
+                        {rollPreviewItem?.product.sku || t("rollPreviewSku")}
+                      </p>
+                      <div className="mt-1 h-4 rounded-none bg-muted" />
+                      <p className="mt-1 text-center text-[7px] text-muted-foreground">
+                        {t("rollPreviewBarcode")}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{t("rollGapStoredHint")}</p>
+
+                  <FormField
+                    control={printForm.control}
+                    name="gapMm"
+                    render={({ field }) => (
+                      <FormItem>
+                        {(() => {
+                          const resolvedGapMm = resolveNumberInputOnBlur(
+                            field.value === undefined ? "" : String(field.value),
+                            PRICE_TAG_ROLL_DEFAULTS.gapMm,
+                          );
+                          return (
+                            <>
+                              <FormLabel>{t("rollGapMm")}</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="range"
+                                    min={PRICE_TAG_ROLL_LIMITS.gapMm.min}
+                                    max={PRICE_TAG_ROLL_LIMITS.gapMm.max}
+                                    step={PRICE_TAG_ROLL_LIMITS.gapMm.step}
+                                    value={resolvedGapMm}
+                                    onChange={(event) => {
+                                      const nextValue = event.currentTarget.valueAsNumber;
+                                      if (Number.isFinite(nextValue)) {
+                                        field.onChange(nextValue);
+                                      }
+                                    }}
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                    aria-label={t("rollGapMm")}
+                                  />
+                                  <Input
+                                    value={toNumberInputValue(field.value)}
+                                    onChange={(event) => field.onChange(event.target.value)}
+                                    onBlur={(event) => {
+                                      field.onChange(
+                                        resolveNumberInputOnBlur(event.target.value, 0),
+                                      );
+                                      field.onBlur();
+                                    }}
+                                    type="number"
+                                    className="w-20"
+                                    min={PRICE_TAG_ROLL_LIMITS.gapMm.min}
+                                    max={PRICE_TAG_ROLL_LIMITS.gapMm.max}
+                                    step={PRICE_TAG_ROLL_LIMITS.gapMm.step}
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormDescription>{t("rollGapHint")}</FormDescription>
+                              <FormMessage />
+                            </>
+                          );
+                        })()}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={printForm.control}
+                    name="xOffsetMm"
+                    render={({ field }) => (
+                      <FormItem>
+                        {(() => {
+                          const resolvedXOffset = resolveNumberInputOnBlur(
+                            field.value === undefined ? "" : String(field.value),
+                            PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
+                          );
+                          return (
+                            <>
+                              <FormLabel>{t("rollXOffsetMm")}</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="range"
+                                    min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                    max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                    step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                    value={resolvedXOffset}
+                                    onChange={(event) => {
+                                      const nextValue = event.currentTarget.valueAsNumber;
+                                      if (Number.isFinite(nextValue)) {
+                                        field.onChange(nextValue);
+                                      }
+                                    }}
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                    aria-label={t("rollXOffsetMm")}
+                                  />
+                                  <Input
+                                    value={toNumberInputValue(field.value)}
+                                    onChange={(event) => field.onChange(event.target.value)}
+                                    onBlur={(event) => {
+                                      field.onChange(
+                                        resolveNumberInputOnBlur(event.target.value, 0),
+                                      );
+                                      field.onBlur();
+                                    }}
+                                    type="number"
+                                    className="w-20"
+                                    min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                    max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                    step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </>
+                          );
+                        })()}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={printForm.control}
+                    name="yOffsetMm"
+                    render={({ field }) => (
+                      <FormItem>
+                        {(() => {
+                          const resolvedYOffset = resolveNumberInputOnBlur(
+                            field.value === undefined ? "" : String(field.value),
+                            PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
+                          );
+                          return (
+                            <>
+                              <FormLabel>{t("rollYOffsetMm")}</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="range"
+                                    min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                    max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                    step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                    value={resolvedYOffset}
+                                    onChange={(event) => {
+                                      const nextValue = event.currentTarget.valueAsNumber;
+                                      if (Number.isFinite(nextValue)) {
+                                        field.onChange(nextValue);
+                                      }
+                                    }}
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                    aria-label={t("rollYOffsetMm")}
+                                  />
+                                  <Input
+                                    value={toNumberInputValue(field.value)}
+                                    onChange={(event) => field.onChange(event.target.value)}
+                                    onBlur={(event) => {
+                                      field.onChange(
+                                        resolveNumberInputOnBlur(event.target.value, 0),
+                                      );
+                                      field.onBlur();
+                                    }}
+                                    type="number"
+                                    className="w-20"
+                                    min={PRICE_TAG_ROLL_LIMITS.offsetMm.min}
+                                    max={PRICE_TAG_ROLL_LIMITS.offsetMm.max}
+                                    step={PRICE_TAG_ROLL_LIMITS.offsetMm.step}
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </>
+                          );
+                        })()}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={printForm.control}
+                    name="allowWithoutBarcode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card p-2">
+                          <div>
+                            <FormLabel>{t("printWithoutBarcode")}</FormLabel>
+                            <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ) : null}
+              <FormActions>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => setLegacyInventoryPrintModalOpen(false)}
+                >
+                  {tCommon("cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    void printForm.handleSubmit((values) =>
+                      handleLegacyInventoryPrintTags(values, "print"),
+                    )();
+                  }}
+                >
+                  <PrintIcon className="h-4 w-4" aria-hidden />
+                  {t("printAction")}
+                </Button>
+                <Button type="submit" variant="secondary" className="w-full sm:w-auto">
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                  {t("printDownload")}
+                </Button>
+              </FormActions>
+            </form>
+          </Form>
+        </Modal>
+      ) : null}
 
       <Modal
         open={activeDialog === "receive"}
@@ -2664,10 +2944,7 @@ const InventoryPage = () => {
                 productId: values.productId,
                 variantId: values.variantId ?? undefined,
                 qtyReceived: values.qtyReceived,
-                unitId:
-                  values.unitSelection === "BASE"
-                    ? receiveProduct?.baseUnitId
-                    : undefined,
+                unitId: values.unitSelection === "BASE" ? receiveProduct?.baseUnitId : undefined,
                 packId: values.unitSelection !== "BASE" ? values.unitSelection : undefined,
                 unitCost: values.unitCost ?? undefined,
                 expiryDate: values.expiryDate || undefined,
@@ -2691,7 +2968,9 @@ const InventoryPage = () => {
                           return;
                         }
                         field.onChange(option.productId);
-                        receiveForm.setValue("variantId", option.variantId, { shouldValidate: true });
+                        receiveForm.setValue("variantId", option.variantId, {
+                          shouldValidate: true,
+                        });
                         receiveForm.setValue("unitSelection", "BASE", { shouldValidate: true });
                       }}
                       disabled={!productOptions.length}
@@ -2876,10 +3155,7 @@ const InventoryPage = () => {
                 productId: values.productId,
                 variantId: values.variantId ?? undefined,
                 qtyDelta: values.qtyDelta,
-                unitId:
-                  values.unitSelection === "BASE"
-                    ? adjustProduct?.baseUnitId
-                    : undefined,
+                unitId: values.unitSelection === "BASE" ? adjustProduct?.baseUnitId : undefined,
                 packId: values.unitSelection !== "BASE" ? values.unitSelection : undefined,
                 reason: values.reason,
                 expiryDate: values.expiryDate || undefined,
@@ -2902,7 +3178,9 @@ const InventoryPage = () => {
                           return;
                         }
                         field.onChange(option.productId);
-                        adjustForm.setValue("variantId", option.variantId, { shouldValidate: true });
+                        adjustForm.setValue("variantId", option.variantId, {
+                          shouldValidate: true,
+                        });
                         adjustForm.setValue("unitSelection", "BASE", { shouldValidate: true });
                       }}
                       disabled={!productOptions.length}
@@ -3067,10 +3345,7 @@ const InventoryPage = () => {
                 productId: values.productId,
                 variantId: values.variantId ?? undefined,
                 qty: values.qty,
-                unitId:
-                  values.unitSelection === "BASE"
-                    ? selectedProduct?.baseUnitId
-                    : undefined,
+                unitId: values.unitSelection === "BASE" ? selectedProduct?.baseUnitId : undefined,
                 packId: values.unitSelection !== "BASE" ? values.unitSelection : undefined,
                 note: values.note?.trim() || undefined,
                 expiryDate: values.expiryDate || undefined,
@@ -3484,12 +3759,12 @@ const InventoryPage = () => {
                           {movement.qtyDelta > 0 ? "+" : ""}
                           {formatNumber(movement.qtyDelta, locale)}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                        <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                           {movement.createdBy?.name ??
                             movement.createdBy?.email ??
                             tCommon("notAvailable")}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                        <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                           {formatMovementNote(t, movement.note) || tCommon("notAvailable")}
                         </TableCell>
                       </TableRow>

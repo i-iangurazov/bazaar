@@ -204,20 +204,20 @@ export const PageBreadcrumbs = () => {
 
   return (
     <nav aria-label={tBreadcrumbs("ariaLabel")} className="mb-2 overflow-x-auto">
-      <ol className="inline-flex min-w-max items-center gap-1 rounded-lg border border-border/70 bg-card/70 px-2 py-1 text-xs text-muted-foreground">
+      <ol className="inline-flex min-w-max items-center gap-1 rounded-none border border-border/70 bg-card/70 px-2 py-1 text-xs text-muted-foreground">
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1;
           return (
             <li key={`${crumb.label}-${index}`} className="inline-flex items-center gap-1">
               {index > 0 ? <span className="text-muted-foreground/60">/</span> : null}
               {isLast || !crumb.href ? (
-                <span className="rounded-sm px-1.5 py-0.5 font-medium text-foreground">
+                <span className="rounded-none px-1.5 py-0.5 font-medium text-foreground">
                   {crumb.label}
                 </span>
               ) : (
                 <Link
                   href={crumb.href}
-                  className="rounded-sm px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-none px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {crumb.label}
                 </Link>

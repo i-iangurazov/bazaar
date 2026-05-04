@@ -63,8 +63,8 @@ export const LanguageSwitcher = ({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-input bg-secondary p-1 text-secondary-foreground shadow-sm",
-        compact && "gap-0.5 rounded-lg",
+        "inline-flex items-center gap-1 rounded-none border border-input bg-secondary p-1 text-secondary-foreground shadow-sm",
+        compact && "gap-0.5 rounded-none",
         className,
       )}
       role="group"

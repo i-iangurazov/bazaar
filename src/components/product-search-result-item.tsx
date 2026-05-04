@@ -93,11 +93,11 @@ export const ProductSearchResultItem = ({
         <img
           src={product.primaryImage}
           alt={product.name}
-          className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
+          className="h-12 w-12 shrink-0 rounded-none border border-border object-cover"
         />
       ) : (
         <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/40"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-muted/40"
           title={t("imageUnavailable")}
           aria-label={t("imageUnavailable")}
         >

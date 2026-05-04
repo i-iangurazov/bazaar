@@ -60,7 +60,7 @@ export const HelpTourLauncher = () => {
         <CardTitle>{t("tourLauncherTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="rounded-md border border-border p-3">
+        <div className="rounded-none border border-border p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">{t("disableToursLabel")}</p>
@@ -80,7 +80,7 @@ export const HelpTourLauncher = () => {
           return (
             <div
               key={tour.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-none border border-border p-3"
             >
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-foreground">{tour.label}</p>

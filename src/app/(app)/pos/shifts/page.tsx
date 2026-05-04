@@ -437,7 +437,7 @@ const PosShiftsPage = () => {
                 <label className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="mt-0.5 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     checked={closeConfirmed}
                     onChange={(event) => setCloseConfirmed(event.target.checked)}
                   />

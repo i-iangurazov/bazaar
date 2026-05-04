@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 
 type ConfirmVariant = "primary" | "secondary" | "danger" | "destructive";
 
@@ -71,7 +71,7 @@ export const useConfirmDialog = () => {
       title={state.title || tCommon("confirm")}
       subtitle={state.description}
     >
-      <div className="flex justify-end gap-2">
+      <ModalFooter>
         <Button variant="secondary" onClick={() => close(false)}>
           {state.cancelLabel || tCommon("cancel")}
         </Button>
@@ -81,10 +81,9 @@ export const useConfirmDialog = () => {
         >
           {state.confirmLabel || tCommon("confirm")}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 
   return { confirm, confirmDialog: dialog };
 };
-

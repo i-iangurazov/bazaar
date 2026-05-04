@@ -3,6 +3,12 @@ import { z } from "zod";
 import { locales } from "@/lib/locales";
 
 export const productTypeFilterEnum = z.enum(["all", "product", "bundle"]);
+export const productReadinessFilterEnum = z.enum([
+  "missingBarcode",
+  "missingPrice",
+  "lowStock",
+  "negativeStock",
+]);
 export const productSortKeyEnum = z.enum([
   "sku",
   "name",
@@ -68,6 +74,7 @@ export const productListInputSchema = z
     search: z.string().optional(),
     category: z.string().optional(),
     type: productTypeFilterEnum.optional(),
+    readiness: productReadinessFilterEnum.optional(),
     includeArchived: z.boolean().optional(),
     storeId: z.string().optional(),
     page: z.number().int().min(1).optional(),
@@ -84,6 +91,7 @@ export const productListIdsInputSchema = z
     search: z.string().optional(),
     category: z.string().optional(),
     type: productTypeFilterEnum.optional(),
+    readiness: productReadinessFilterEnum.optional(),
     includeArchived: z.boolean().optional(),
     storeId: z.string().optional(),
   })

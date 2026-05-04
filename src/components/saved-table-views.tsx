@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -103,7 +103,13 @@ export const SavedTableViews = <TState,>({
             </SelectContent>
           </Select>
         </div>
-        <Button type="button" variant="secondary" size="sm" onClick={openSaveDialog} disabled={disabled}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={openSaveDialog}
+          disabled={disabled}
+        >
           <ViewIcon className="h-4 w-4" aria-hidden />
           {tCommon("savedViews.save")}
         </Button>
@@ -114,7 +120,13 @@ export const SavedTableViews = <TState,>({
             ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="secondary" size="icon" disabled={disabled} aria-label={tCommon("savedViews.actions")}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  disabled={disabled}
+                  aria-label={tCommon("savedViews.actions")}
+                >
                   <MoreIcon className="h-4 w-4" aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
@@ -129,9 +141,7 @@ export const SavedTableViews = <TState,>({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={() =>
-                    onSetDefaultView(
-                      matchingView.id === defaultViewId ? null : matchingView.id,
-                    )
+                    onSetDefaultView(matchingView.id === defaultViewId ? null : matchingView.id)
                   }
                 >
                   {matchingView.id === defaultViewId
@@ -164,7 +174,7 @@ export const SavedTableViews = <TState,>({
             placeholder={tCommon("savedViews.namePlaceholder")}
             autoFocus
           />
-          <div className="flex justify-end gap-2">
+          <ModalFooter>
             <Button type="button" variant="secondary" onClick={() => setSaveDialogOpen(false)}>
               {tCommon("cancel")}
             </Button>
@@ -182,7 +192,7 @@ export const SavedTableViews = <TState,>({
               <CheckIcon className="h-4 w-4" aria-hidden />
               {tCommon("savedViews.saveConfirm")}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
 
@@ -199,7 +209,7 @@ export const SavedTableViews = <TState,>({
             placeholder={tCommon("savedViews.namePlaceholder")}
             autoFocus
           />
-          <div className="flex justify-end gap-2">
+          <ModalFooter>
             <Button type="button" variant="secondary" onClick={() => setRenameDialogOpen(false)}>
               {tCommon("cancel")}
             </Button>
@@ -217,7 +227,7 @@ export const SavedTableViews = <TState,>({
               <CheckIcon className="h-4 w-4" aria-hidden />
               {tCommon("savedViews.renameConfirm")}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
     </>

@@ -740,7 +740,7 @@ const UsersPage = () => {
               <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">{t("inviteLinkReady")}</span>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <code className="break-all rounded bg-card px-2 py-1">{inviteLink}</code>
+                  <code className="break-all rounded-none bg-card px-2 py-1">{inviteLink}</code>
                   <Button type="button" variant="secondary" onClick={handleCopyInvite}>
                     {t("inviteCopy")}
                   </Button>

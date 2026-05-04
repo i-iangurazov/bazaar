@@ -1,5 +1,151 @@
 # Final Improvement Summary
 
+## Restrained Color And Product UX Slice - 2026-05-04
+
+### Changed
+
+- Added `docs/ui-color-semantics.md` with strict rules for neutral surfaces, brand blue, critical red, warning orange, success green, and info blue.
+- Changed shared `Badge` styling from solid color blocks to compact, subtle, bordered status treatments.
+- Toned down Dashboard: removed decorative KPI icons, kept KPI cards neutral, muted zero-count attention badges, and reserved warning/danger color for non-zero attention counts.
+- Toned down Products table: added one `Readiness` column and removed duplicate missing-price/missing-barcode badges from the product name, price, and barcode cells.
+- Updated product readiness states to summarize as Ready, Missing price, Missing barcode, Missing stock, or Negative stock.
+- Simplified the new Product form through a quick-create mode: photo, SKU, name, category, sale price, and barcode stay up front; cost, description, gallery/order, packs, and variants sit behind Advanced.
+- Toned down Inventory warnings: summary cards are neutral, low stock is warning/subtle, and only negative stock remains critical.
+- Replaced POS history solid status pills with subtle semantic status badges.
+- Added a regression expectation to `tests/unit/ui-sharp-primitives.test.tsx` so badges stay square and subtle.
+
+### Files Touched In This Slice
+
+- Docs: `docs/ui-color-semantics.md`, `docs/final-improvement-summary.md`, `docs/ui-rounded-cleanup-audit.md`.
+- Shared UI: `src/components/ui/badge.tsx`.
+- High-traffic UI: `src/app/(app)/dashboard/page.tsx`, `src/app/(app)/products/page.tsx`, `src/app/(app)/products/new/page.tsx`, `src/app/(app)/inventory/page.tsx`, `src/app/(app)/pos/history/page.tsx`, `src/components/product-form.tsx`.
+- Localization: `messages/en.json`, `messages/ru.json`, `messages/kg.json`.
+- Tests: `tests/unit/ui-sharp-primitives.test.tsx`.
+
+### Verified
+
+- Dashboard is mostly neutral: no colorful KPI icon row, no green success decoration, and only Start sale remains the main primary dashboard CTA.
+- Product rows no longer show "Missing price" or "Missing barcode" multiple times; readiness is the single status summary.
+- Missing price remains visible through the readiness badge while the price cell stays calm.
+- Inventory low stock uses warning treatment; negative stock remains critical without also showing low stock for the same row.
+- New Product uses a faster quick-create layout while preserving advanced product fields behind the Advanced section.
+- New strings exist in `en`, `ru`, and `kg`.
+- No currency behavior or barcode/route/seed/support logic was intentionally changed in this slice.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed: 90 files passed; 399 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next build, type/lint checks, static generation, and route trace collection.
+
+### Remaining Risks
+
+- Some lower-traffic pages still use bright warning/success panels where the state may be legitimate but should be visually reviewed later: imports, billing, integrations, and onboarding.
+- The new product quick-create flow is code-validated but still needs visual/browser review to fine-tune field density and sticky save placement.
+- Existing email templates still have rounded visual styling outside the app shell; this was not part of the merchant-admin UI slice.
+
+## Merchant UX Workflow Slice - 2026-05-04
+
+### Changed
+
+- Fixed the product label workflow so Product list, selected-products bulk print, row print, and Product detail primary print all use the saved store print profile immediately instead of opening the full settings modal.
+- Fixed Inventory selected-label printing so it uses the same saved-profile quick print path and no longer opens print settings during normal printing.
+- Added a first-time print setup prompt when no saved store print profile exists, plus a dedicated `/settings/printing` entry that points users to per-store hardware/label setup.
+- Kept print settings explicit: Products and Product detail now expose "Print settings" / "Change print settings" as secondary actions that route to store hardware settings.
+- Isolated the legacy Products print modal behind a dev-only `window.__seedLegacyProductsPrintModalQueue` hook and removed normal user-facing references to it.
+- Isolated the legacy Inventory print modal behind a dev-only guard with no user-facing opener.
+- Removed the KGS-looking label preview fallback from Products; preview/PDF currency now uses the selected store currency or a neutral unavailable-state string.
+- Redesigned Products hierarchy: one dominant "New product" action, secondary actions in a menu, compact readiness filters, clearer bulk action bar, leaner default columns, and visible missing barcode/missing price/negative stock signals.
+- Added server-side product readiness filters for missing barcode, missing price, low stock, and negative stock.
+- Redesigned Dashboard around business KPIs, needs-attention items, and merchant quick actions, with recent activity pushed lower.
+- Redesigned POS entry around cashier flow: auto-select single register, redirect open shifts to sell screen, and make opening a shift the dominant closed-shift action.
+- Redesigned Inventory action hierarchy: primary Receive stock, secondary stock actions grouped in a menu, compact stock summary, and stronger low/negative stock highlighting.
+- Updated `docs/barcode-printing-redesign.md` and `docs/ui-rounded-cleanup-audit.md` to reflect the real workflow changes and remaining legacy print/radius risks.
+
+### Files Touched
+
+- Printing workflow: `src/lib/labelPrintFlow.ts`, `src/app/(app)/products/page.tsx`, `src/app/(app)/products/[id]/page.tsx`, `src/app/(app)/inventory/page.tsx`, `src/app/(app)/settings/printing/page.tsx`, `src/server/services/priceTagsPdf.ts`.
+- Products/inventory readiness data: `src/server/trpc/routers/products.schemas.ts`, `src/server/services/products/read.ts`, `src/server/trpc/routers/inventory.ts`.
+- Merchant pages: `src/app/(app)/dashboard/page.tsx`, `src/app/(app)/pos/page.tsx`, `src/app/(app)/inventory/page.tsx`.
+- Navigation/locales/docs: `src/components/app-shell.tsx`, `messages/en.json`, `messages/ru.json`, `messages/kg.json`, `docs/barcode-printing-redesign.md`, `docs/ui-rounded-cleanup-audit.md`, `docs/final-improvement-summary.md`.
+- Tests: `tests/unit/label-print-flow.test.ts`, `tests/unit/print-flow-source.test.ts`, `tests/unit/price-tags-pdf.test.ts`.
+
+### Verified
+
+- Selecting products and clicking the main bulk `Print labels` path no longer opens print settings when a saved profile exists; it calls the PDF quick-print path with saved defaults.
+- Product detail primary `Print labels` uses saved defaults and no longer shows the full settings modal.
+- Inventory selected-label `Print selected` uses saved defaults and no longer shows the full settings modal.
+- Missing saved profile opens a setup prompt, not the full print settings form.
+- Explicit settings/change-settings actions route to store hardware settings or `/settings/printing`.
+- Saved default copies are respected by shared label print flow tests.
+- Source-level regression tests verify normal Products and Inventory print controls do not call the legacy modal openers.
+- Non-KGS label currency formatting is covered by a PDF unit test and does not emit `KGS`.
+- New UI strings exist in `en`, `ru`, and `kg`.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 90 files passed; 399 tests passed.
+- `rm -rf .next && pnpm build` passed after Prisma generation, environment preflight, Next build, type/lint checks, static generation, and route trace collection.
+
+### Remaining Risks
+
+- The legacy product print modal still exists for a dev-only seed/fallback path; normal Product list/detail and Inventory print no longer opens it, but the code should eventually be retired or moved fully into settings.
+- The legacy inventory print modal is still present behind a dev-only guard for short-term rollback safety, but no user-facing action opens it.
+- Stores that already had an older `StorePrinterSettings` row receive migrated label defaults and count as having a saved profile. This is safe for quick printing, but it may not force a setup prompt for stores that previously configured only receipt printing.
+- Inventory summary problem counts are currently based on loaded rows for some cards; exact global counts should move server-side if the page needs strict totals.
+- Dashboard "today" metrics use server-day boundaries rather than explicit store timezone rules.
+- Some remaining rounded classes exist in legacy/lower-traffic UI, especially legacy print modals and public surfaces; the high-traffic workflow cleanup reduced visible clutter but did not attempt a blind global class removal.
+
+## UI Cleanup Slice - 2026-05-04
+
+### Changed
+
+- Added `docs/ui-rounded-cleanup-audit.md` with the rounded-class classification requested for shared components, high-traffic app pages, intentional exceptions, and remaining public-site work.
+- Made shared UI primitives explicitly sharp with `rounded-none`: Button, Input, Select, Textarea, Dialog/Modal, Dropdown, Tooltip, Card, Badge, Switch, Toast, ActionMenu, and TableContainer.
+- Added sharp shared primitives for future cleanup work: `src/components/ui/popover.tsx` and `src/components/ui/tabs.tsx`.
+- Standardized modal footers through `ModalFooter` in saved table views, product variant/image modals, billing/platform modals, POS open-shift/return modals, sales order line modal, and import rollback modal.
+- Cleaned visible radius from high-traffic private surfaces: Dashboard, Products list/detail, Inventory/counts, POS entry/history/shifts, Sales order detail, Settings attributes/import/users, and Reports analytics chart panels.
+- Kept intentional `rounded-full` only for progress bars and range sliders in the touched high-traffic surfaces.
+- Added `tests/unit/ui-sharp-primitives.test.tsx` to lock square corners and modal footer layout for shared primitives.
+- Fixed an existing Vitest JSX-runtime fragility in `Card` and `Modal` by adding runtime `React` imports.
+
+### Files Touched
+
+- Docs: `docs/ui-rounded-cleanup-audit.md`, `docs/final-improvement-summary.md`.
+- Shared UI/components: `src/components/ui/*` touched in this slice, `src/components/app-shell.tsx`, `src/components/form-layout.tsx`, guidance controls, command palette, import previews, product form/search, selection toolbar, page skeleton/loading, and analytics charts.
+- High-traffic pages: dashboard, products, inventory/counts, POS, sales order detail, settings attributes/import/users, billing, and platform modal consistency.
+- Tests: `tests/unit/ui-sharp-primitives.test.tsx`.
+
+### Verified
+
+- No barcode printing, route protection, seed guard, or support bundle logic was changed in this slice.
+- New UI text was not introduced, so existing `en`, `ru`, and `kg` locale coverage remains unchanged and `i18n:check` passed.
+- No currency formatting logic was changed and no new currency hardcoding was introduced.
+- High-traffic private app scan now only shows visible radius in public catalog/landing components outside this slice, plus intentional progress/range exceptions.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 88 files passed; 387 tests passed.
+- `pnpm build` initially failed after compilation with stale `.next` page metadata for `/api/health` and `/api/bakai-store/jobs/[id]/workbook`; after clearing `.next`, `pnpm build` passed.
+
+### Remaining Risks
+
+- Public catalog and landing components still contain visible rounded classes and need a separate storefront/public-site visual pass.
+- Some lower-traffic private areas outside this slice, especially integrations, stores compliance/support, and purchase-order/supplier checkboxes, still contain page-specific rounded utilities.
+- `rounded-sm`, `rounded-md`, and `rounded-lg` still appear in older page code, but the configured tokens resolve those classes to `0px`; future work should keep replacing visible or confusing usages with explicit `rounded-none`.
+
 ## Changed
 
 - Added a Shopify-inspired UI investigation and project improvement/audit docs.
@@ -38,7 +184,7 @@
 - Shared controls now resolve border radius through zero-radius tokens for sharper UI.
 - Buttons, cards, badges, modals, switches, toasts, and shell controls were moved toward a consistent sharp system.
 - Icon buttons include fixed dimensions and `shrink-0`, preventing squeezed tips/help controls.
-- Modal action rows use a consistent bordered footer pattern through `FormActions`.
+- Modal action rows use a consistent bordered footer pattern through `FormActions` and `ModalFooter`.
 
 ## Barcode Printing Flow
 
@@ -93,17 +239,22 @@
 - `pnpm typecheck` passed.
 - `pnpm lint` passed with no warnings/errors.
 - `pnpm i18n:check` passed.
-- `CI=1 pnpm test` passed with local PostgreSQL enabled: 87 files passed; 384 tests passed.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 90 files passed; 399 tests passed.
 - `pnpm build` passed, including Prisma generation, environment preflight, Next.js type/lint checks, static generation, and route trace collection.
-- `pnpm prisma migrate status` passed after applying pending migrations to the local development database.
-- `pnpm prisma migrate deploy` applied four pending local migrations non-destructively: `20260428120000_customer_order_email`, `20260429120000_store_currency`, `20260429123000_bazaar_api_keys`, and `20260504161000_store_printer_label_profile`.
-- `pnpm prisma migrate dev` was checked and intentionally declined because Prisma detected an older applied migration checksum mismatch for `20260317010000_product_integration_visibility` and requested a destructive schema reset.
+- `rm -rf .next` was run before the final production build.
+- `pnpm prisma migrate status` passed: 53 migrations found and the database schema is up to date.
+- `pnpm prisma migrate dev` passed after the local migration generated by Prisma was renamed from `20260504175914_new` to `20260504175914_align_prisma_constraints`: no schema changes or pending migrations remained, and Prisma Client generated successfully.
 - `pnpm prisma generate` passed.
-- `pnpm prisma studio` started successfully on `http://localhost:5555` and was stopped after verification.
+- `pnpm prisma studio` started successfully on `http://localhost:5555`; `curl -I http://localhost:5555` returned `HTTP/1.1 200 OK`, and Studio was stopped after verification.
+
+## Database Migration Note
+
+- `prisma/migrations/20260504175914_align_prisma_constraints/migration.sql` was generated by Prisma from the current schema and applied locally.
+- The migration aligns existing constraint/index names and relation actions with the Prisma schema, and removes stale database-level defaults from several `updatedAt` columns that Prisma manages in application writes.
+- It does not drop application tables or data, and the full test/build validation passed after applying it.
 
 ## Remaining Risks
 
 - Many existing POS, reports, purchase-order, sales-order, and admin-metrics screens still use `formatCurrencyKGS`; they need a deeper store/org currency context pass.
-- The local `inventory` database has an old checksum mismatch for migration `20260317010000_product_integration_visibility`; `migrate dev` wants a destructive reset, so validation used `migrate deploy` plus full DB tests instead.
-- The no-rounded direction was applied to shared components and tokens, but older page-specific `rounded-*` classes still need a broader visual cleanup.
+- The no-rounded direction was applied to shared components and high-traffic private app surfaces, but public storefront/landing and lower-traffic private pages still need follow-up cleanup.
 - POS/dashboard/onboarding/report redesign was audited and planned, but this pass prioritized route security, shared UI direction, and the barcode printing workflow.

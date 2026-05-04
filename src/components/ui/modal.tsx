@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 
@@ -107,9 +107,9 @@ export const Modal = ({
         className={cn(
           "relative z-10 flex w-full flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-2xl",
           mobileSheet
-            ? "max-h-[90dvh] rounded-md border-b-0 sm:max-h-[85dvh] sm:border-b"
-            : "max-h-[85dvh] max-w-lg rounded-md",
-          animated && "transition-all duration-250 ease-out will-change-transform",
+            ? "max-h-[90dvh] rounded-none border-b-0 sm:max-h-[85dvh] sm:border-b"
+            : "max-h-[85dvh] max-w-lg rounded-none",
+          animated && "duration-250 transition-all ease-out will-change-transform",
           animated &&
             (mobileSheet
               ? entered
@@ -159,3 +159,20 @@ export const Modal = ({
 
   return content;
 };
+
+export const ModalFooter = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) => (
+  <div
+    className={cn(
+      "flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end [&>*]:w-full sm:[&>*]:w-auto",
+      className,
+    )}
+  >
+    {children}
+  </div>
+);

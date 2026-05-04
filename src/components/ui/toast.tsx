@@ -79,7 +79,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                 key={toast.id}
                 role={toast.variant === "error" ? "alert" : "status"}
                 className={cn(
-                  "rounded-md border bg-card p-4 shadow-lg",
+                  "rounded-none border bg-card p-4 shadow-lg",
                   toast.variant === "error"
                     ? "border-danger/40"
                     : toast.variant === "success"
@@ -91,7 +91,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                   {Icon ? (
                     <span
                       className={cn(
-                        "mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md",
+                        "mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-none",
                         toast.variant === "error"
                           ? "bg-danger/15 text-danger"
                           : "bg-success/15 text-success",

@@ -41,6 +41,7 @@ const buildProductCategoryWhere = (category?: string) =>
 const buildProductListWhere = (
   organizationId: string,
   input: ProductListIdsInput,
+  readinessProductIds?: string[],
 ): Prisma.ProductWhereInput => {
   const filters: Prisma.ProductWhereInput[] = [];
   if (input?.search) {
@@ -59,12 +60,84 @@ const buildProductListWhere = (
   } else if (input?.type === "bundle") {
     filters.push({ isBundle: true });
   }
+  if (input?.readiness === "missingBarcode") {
+    filters.push({ barcodes: { none: {} } });
+  }
+  if (input?.readiness === "missingPrice") {
+    filters.push({ basePriceKgs: null });
+  }
+  if (readinessProductIds) {
+    filters.push({ id: { in: readinessProductIds.length ? readinessProductIds : ["__none__"] } });
+  }
 
   return {
     ...(input?.includeArchived ? {} : { isDeleted: false }),
     organizationId,
     ...(filters.length ? { AND: filters } : {}),
   };
+};
+
+const resolveReadinessProductIds = async ({
+  prisma,
+  organizationId,
+  input,
+}: {
+  prisma: PrismaDbClient;
+  organizationId: string;
+  input: ProductListIdsInput;
+}) => {
+  if (input?.readiness === "negativeStock") {
+    const rows = await prisma.inventorySnapshot.findMany({
+      where: {
+        ...(input.storeId ? { storeId: input.storeId } : {}),
+        onHand: { lt: 0 },
+        product: {
+          organizationId,
+          ...(input.includeArchived ? {} : { isDeleted: false }),
+        },
+      },
+      select: { productId: true },
+      distinct: ["productId"],
+    });
+    return rows.map((row) => row.productId);
+  }
+
+  if (input?.readiness === "lowStock") {
+    const rows = input.storeId
+      ? await prisma.$queryRaw<{ productId: string }[]>`
+          SELECT DISTINCT s."productId" AS "productId"
+          FROM "InventorySnapshot" s
+          INNER JOIN "ReorderPolicy" p
+            ON p."storeId" = s."storeId"
+           AND p."productId" = s."productId"
+          INNER JOIN "Product" pr
+            ON pr.id = s."productId"
+          WHERE s."storeId" = ${input.storeId}
+            AND pr."organizationId" = ${organizationId}
+            AND pr."isDeleted" = false
+            AND p."minStock" > 0
+            AND s."onHand" <= p."minStock"
+        `
+      : await prisma.$queryRaw<{ productId: string }[]>`
+          SELECT DISTINCT s."productId" AS "productId"
+          FROM "InventorySnapshot" s
+          INNER JOIN "ReorderPolicy" p
+            ON p."storeId" = s."storeId"
+           AND p."productId" = s."productId"
+          INNER JOIN "Store" st
+            ON st.id = s."storeId"
+          INNER JOIN "Product" pr
+            ON pr.id = s."productId"
+          WHERE st."organizationId" = ${organizationId}
+            AND pr."organizationId" = ${organizationId}
+            AND pr."isDeleted" = false
+            AND p."minStock" > 0
+            AND s."onHand" <= p."minStock"
+        `;
+    return rows.map((row) => row.productId);
+  }
+
+  return undefined;
 };
 
 const getDbProductOrderBy = (
@@ -523,7 +596,12 @@ export const listProducts = async ({
   const pageSize = input?.pageSize ?? 25;
   const sortKey = input?.sortKey ?? "name";
   const sortDirection = input?.sortDirection ?? "asc";
-  const where = buildProductListWhere(organizationId, input);
+  const readinessProductIds = await resolveReadinessProductIds({
+    prisma,
+    organizationId,
+    input,
+  });
+  const where = buildProductListWhere(organizationId, input, readinessProductIds);
   const paginatedOrderBy = getDbProductOrderBy(sortKey, sortDirection);
 
   const baseReadStartedAt = Date.now();
@@ -769,7 +847,11 @@ export const listProductIds = async ({
   }
 
   const rows = await prisma.product.findMany({
-    where: buildProductListWhere(organizationId, input),
+    where: buildProductListWhere(
+      organizationId,
+      input,
+      await resolveReadinessProductIds({ prisma, organizationId, input }),
+    ),
     select: { id: true },
     orderBy: { name: "asc" },
   });

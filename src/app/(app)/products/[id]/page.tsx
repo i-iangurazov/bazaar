@@ -17,6 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -50,6 +57,7 @@ import {
   DeleteIcon,
   DownloadIcon,
   EmptyIcon,
+  MoreIcon,
   PrintIcon,
   ViewIcon,
 } from "@/components/icons";
@@ -65,11 +73,11 @@ import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
-  PRICE_TAG_ROLL_DEFAULTS,
-  PRICE_TAG_TEMPLATES,
-  ROLL_PRICE_TAG_TEMPLATE,
-  type PriceTagsTemplate,
-} from "@/lib/priceTags";
+  buildSavedLabelPrintValues,
+  resolveLabelPrintFlowAction,
+  resolveSavedLabelCopies,
+  resolveSavedLabelTemplate,
+} from "@/lib/labelPrintFlow";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -119,7 +127,7 @@ const ProductDetailPage = () => {
   const [assembleOpen, setAssembleOpen] = useState(false);
   const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
   const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
-  const [labelQty, setLabelQty] = useState("1");
+  const [labelSetupOpen, setLabelSetupOpen] = useState(false);
   const [labelAction, setLabelAction] = useState<"print" | "download" | null>(null);
   const basePriceAutofillRef = useRef<string | null>(null);
 
@@ -494,14 +502,6 @@ const ProductDetailPage = () => {
   );
 
   useEffect(() => {
-    const copies = labelPrintProfileQuery.data?.settings.labelDefaultCopies;
-    if (!copies) {
-      return;
-    }
-    setLabelQty((current) => (current === "1" ? String(copies) : current));
-  }, [labelPrintProfileQuery.data?.settings.labelDefaultCopies]);
-
-  useEffect(() => {
     if (productQuery.data?.isBundle || bundleComponentsQuery.data?.length) {
       setShowBundle(true);
     }
@@ -716,9 +716,18 @@ const ProductDetailPage = () => {
     if (!product || labelAction) {
       return;
     }
-    const quantity = Math.trunc(Number(labelQty));
-    if (!Number.isFinite(quantity) || quantity < 1) {
-      toast({ variant: "error", description: t("printQtyMin") });
+    const settings = labelPrintProfileQuery.data?.settings;
+    const action = resolveLabelPrintFlowAction({
+      settings,
+      storeId: labelStoreId,
+      isLoading: labelPrintProfileQuery.isLoading,
+    });
+    if (action === "setupRequired") {
+      setLabelSetupOpen(true);
+      return;
+    }
+    if (action === "loading") {
+      toast({ variant: "info", description: t("printProfileLoading") });
       return;
     }
     if (!hasPrintableBarcode({ id: product.id, barcodes: product.barcodes })) {
@@ -728,10 +737,12 @@ const ProductDetailPage = () => {
 
     setLabelAction(mode);
     try {
-      const settings = labelPrintProfileQuery.data?.settings;
-      const template = PRICE_TAG_TEMPLATES.includes(settings?.labelTemplate as PriceTagsTemplate)
-        ? (settings?.labelTemplate as PriceTagsTemplate)
-        : ROLL_PRICE_TAG_TEMPLATE;
+      const printValues = buildSavedLabelPrintValues({
+        settings,
+        storeId: labelStoreId,
+      });
+      const template = resolveSavedLabelTemplate(settings?.labelTemplate);
+      const quantity = resolveSavedLabelCopies(settings?.labelDefaultCopies);
       const blob = await fetchPdfBlob({
         url: "/api/price-tags/pdf",
         init: {
@@ -739,11 +750,11 @@ const ProductDetailPage = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             template,
-            storeId: labelStoreId || undefined,
+            storeId: printValues.storeId || undefined,
             allowWithoutBarcode: false,
             rollCalibration: {
-              widthMm: settings?.labelWidthMm ?? PRICE_TAG_ROLL_DEFAULTS.widthMm,
-              heightMm: settings?.labelHeightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
+              widthMm: printValues.widthMm,
+              heightMm: printValues.heightMm,
               gapMm: settings?.labelRollGapMm,
               xOffsetMm: settings?.labelRollXOffsetMm,
               yOffsetMm: settings?.labelRollYOffsetMm,
@@ -768,8 +779,10 @@ const ProductDetailPage = () => {
         if (!result.autoPrintAttempted) {
           toast({ variant: "info", description: t("printFallback") });
         }
+        toast({ variant: "success", description: t("printQueued", { count: quantity }) });
       } else {
         downloadPdfBlob(blob, `price-tags-${product.sku}.pdf`);
+        toast({ variant: "success", description: t("printDownloadSuccess") });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -821,7 +834,6 @@ const ProductDetailPage = () => {
         action={
           <>
             <Button
-              variant="secondary"
               className="w-full sm:w-auto"
               onClick={() => void handleProductLabelPdf("print")}
               disabled={Boolean(labelAction)}
@@ -833,85 +845,82 @@ const ProductDetailPage = () => {
               )}
               {t("printLabels")}
             </Button>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <Input
-                value={labelQty}
-                onChange={(event) => setLabelQty(event.target.value)}
-                className="w-full sm:w-20"
-                inputMode="numeric"
-                aria-label={t("printQty")}
-              />
-              <Button
-                variant="secondary"
-                className="shrink-0"
-                onClick={() => void handleProductLabelPdf("download")}
-                disabled={Boolean(labelAction)}
-                aria-label={t("printDownload")}
-              >
-                {labelAction === "download" ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <DownloadIcon className="h-4 w-4" aria-hidden />
-                )}
-              </Button>
-            </div>
-            {labelStoreId ? (
-              <Button asChild variant="secondary" className="w-full sm:w-auto">
-                <Link href={`/stores/${labelStoreId}/hardware`}>{t("changePrintSettings")}</Link>
-              </Button>
-            ) : null}
-            <Button
-              variant="secondary"
-              className="w-full sm:w-auto"
-              onClick={() => setMovementsOpen(true)}
-            >
-              <ViewIcon className="h-4 w-4" aria-hidden />
-              {tInventory("viewMovements")}
-            </Button>
-            {isAdmin ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => duplicateMutation.mutate({ productId })}
-                disabled={duplicateMutation.isLoading}
-              >
-                {duplicateMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <CopyIcon className="h-4 w-4" aria-hidden />
-                )}
-                {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
-              </Button>
-            ) : null}
-            {isAdmin ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={async () => {
-                  if (
-                    !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
-                  ) {
-                    return;
-                  }
-                  archiveMutation.mutate({ productId });
-                }}
-                disabled={archiveMutation.isLoading}
-              >
-                {archiveMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <ArchiveIcon className="h-4 w-4" aria-hidden />
-                )}
-                {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
-              </Button>
-            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="secondary" className="w-full sm:w-auto">
+                  <MoreIcon className="h-4 w-4" aria-hidden />
+                  {tCommon("actions")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[240px]">
+                <DropdownMenuItem
+                  disabled={Boolean(labelAction)}
+                  onSelect={() => void handleProductLabelPdf("download")}
+                >
+                  {labelAction === "download" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <DownloadIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("printDownload")}
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"}>
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                    {t("changePrintSettings")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setMovementsOpen(true)}>
+                  <ViewIcon className="h-4 w-4" aria-hidden />
+                  {tInventory("viewMovements")}
+                </DropdownMenuItem>
+                {isAdmin ? (
+                  <DropdownMenuItem
+                    disabled={duplicateMutation.isLoading}
+                    onSelect={() => duplicateMutation.mutate({ productId })}
+                  >
+                    {duplicateMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <CopyIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
+                  </DropdownMenuItem>
+                ) : null}
+                {isAdmin ? (
+                  <DropdownMenuItem
+                    className="text-danger focus:text-danger"
+                    disabled={archiveMutation.isLoading}
+                    onSelect={async () => {
+                      if (
+                        !(await confirm({
+                          description: t("confirmArchive"),
+                          confirmVariant: "danger",
+                        }))
+                      ) {
+                        return;
+                      }
+                      archiveMutation.mutate({ productId });
+                    }}
+                  >
+                    {archiveMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <ArchiveIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
 
       <Card className="mb-6 overflow-hidden">
         <CardContent className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
+          <div className="overflow-hidden rounded-none border border-border bg-muted/20">
             {previewImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -951,7 +960,7 @@ const ProductDetailPage = () => {
               <Badge variant="muted">{productQuery.data.baseUnit.code}</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-border/70 bg-card p-3">
+              <div className="rounded-none border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {effectivePrice !== null
@@ -959,13 +968,13 @@ const ProductDetailPage = () => {
                     : tCommon("notAvailable")}
                 </p>
               </div>
-              <div className="rounded-lg border border-border/70 bg-card p-3">
+              <div className="rounded-none border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
                 </p>
               </div>
-              <div className="rounded-lg border border-border/70 bg-card p-3">
+              <div className="rounded-none border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{tInventory("onHand")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {formatNumber(
@@ -1015,7 +1024,7 @@ const ProductDetailPage = () => {
             </div>
           ) : storePricingQuery.data ? (
             <div className="space-y-3">
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{t("basePrice")}</p>
@@ -1073,7 +1082,7 @@ const ProductDetailPage = () => {
                 </div>
               </div>
               {storePricingQuery.data.stores.map((storeRow) => (
-                <div key={storeRow.storeId} className="rounded-lg border border-border bg-card p-3">
+                <div key={storeRow.storeId} className="rounded-none border border-border bg-card p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -1198,7 +1207,7 @@ const ProductDetailPage = () => {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-lg border border-border/70 bg-card p-3">
+          <div className="rounded-none border border-border/70 bg-card p-3">
             <div className="flex items-center gap-2">
               <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
               {pricingQuery.data?.priceOverridden ? (
@@ -1211,13 +1220,13 @@ const ProductDetailPage = () => {
                 : tCommon("notAvailable")}
             </p>
           </div>
-          <div className="rounded-lg border border-border/70 bg-card p-3">
+          <div className="rounded-none border border-border/70 bg-card p-3">
             <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
             <p className="text-sm font-semibold">
               {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
             </p>
           </div>
-          <div className="rounded-lg border border-border/70 bg-card p-3">
+          <div className="rounded-none border border-border/70 bg-card p-3">
             <p className="text-xs text-muted-foreground">{t("markupMargin")}</p>
             <p className="text-sm font-semibold">
               {markupPct !== null ? `${formatNumber(markupPct, locale)}%` : tCommon("notAvailable")}
@@ -1829,6 +1838,41 @@ const ProductDetailPage = () => {
               {tInventory("noMovements")}
             </div>
           )}
+        </div>
+      </Modal>
+      <Modal
+        open={labelSetupOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLabelSetupOpen(false);
+          }
+        }}
+        title={t("printSetupRequiredTitle")}
+        subtitle={t("printSetupRequiredSubtitle")}
+      >
+        <div className="space-y-4">
+          <div className="border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">
+              {t("printSetupSelected", { count: 1 })}
+            </p>
+            <p className="mt-1">{t("printSetupBody")}</p>
+          </div>
+          <FormActions>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setLabelSetupOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button asChild className="w-full sm:w-auto">
+              <Link href={labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"}>
+                <PrintIcon className="h-4 w-4" aria-hidden />
+                {t("openPrintSettings")}
+              </Link>
+            </Button>
+          </FormActions>
         </div>
       </Modal>
       {confirmDialog}

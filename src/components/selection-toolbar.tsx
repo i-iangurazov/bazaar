@@ -16,7 +16,7 @@ export const SelectionToolbar = ({
   clearLabel?: string;
   children?: ReactNode;
 }) => (
-  <div className="flex flex-col items-start gap-3 rounded-md border border-border bg-secondary/50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+  <div className="flex flex-col items-start gap-3 rounded-none border border-border bg-secondary/50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
     <div className="flex items-center gap-2 text-muted-foreground">
       <Badge variant="muted">{count}</Badge>
       <span>{label}</span>

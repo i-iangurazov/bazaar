@@ -82,7 +82,7 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
         </div>
       )}
       renderMobile={(row) => (
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-none border border-border bg-card p-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">{row.name ?? tCommon("notAvailable")}</p>
             <p className="text-xs text-muted-foreground">{row.sku}</p>

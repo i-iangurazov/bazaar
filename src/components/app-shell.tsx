@@ -36,6 +36,7 @@ import {
   JobsIcon,
   BillingIcon,
   WhatsNewIcon,
+  PrintIcon,
   AdjustIcon,
   UploadIcon,
   IntegrationsIcon,
@@ -180,6 +181,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         adminOnly: true,
         items: [
           { key: "users", href: "/settings/users", icon: UsersIcon, adminOnly: true },
+          { key: "printing", href: "/settings/printing", icon: PrintIcon, adminOnly: true },
           { key: "attributes", href: "/settings/attributes", icon: AdjustIcon, adminOnly: true },
           { key: "units", href: "/settings/units", icon: UnitsIcon, adminOnly: true },
           { key: "adminJobs", href: "/admin/jobs", icon: JobsIcon, adminOnly: true },
@@ -396,7 +398,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
-              className="flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent/50 hover:text-foreground"
+              className="flex w-full items-center justify-between rounded-none px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent/50 hover:text-foreground"
               aria-expanded={isOpen}
               aria-label={tNav("groupToggle", { group: groupLabel })}
             >
@@ -417,7 +419,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       <div key={item.key} className="space-y-1">
                         <div
                           className={cn(
-                            "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold",
+                            "relative flex h-9 items-center gap-2 rounded-none border-l-2 border-transparent px-3 text-sm font-semibold",
                             isActive
                               ? "border-l-4 border-primary bg-accent text-accent-foreground"
                               : "text-muted-foreground",
@@ -436,7 +438,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                 onClick={onNavigate}
                                 data-tour={`nav-${child.key}`}
                                 className={cn(
-                                  "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
+                                  "relative flex h-9 items-center gap-2 rounded-none border-l-2 border-transparent px-3 text-sm font-semibold transition",
                                   isChildActive
                                     ? "border-l-4 border-primary bg-accent text-accent-foreground"
                                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -461,7 +463,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       onClick={onNavigate}
                       data-tour={`nav-${item.key}`}
                       className={cn(
-                        "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
+                        "relative flex h-9 items-center gap-2 rounded-none border-l-2 border-transparent px-3 text-sm font-semibold transition",
                         isActive
                           ? "border-l-4 border-primary bg-accent text-accent-foreground"
                           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -483,10 +485,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href="/settings/profile"
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex w-full items-center justify-between rounded-md border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group flex w-full items-center justify-between rounded-none border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
         <span className="min-w-0">
@@ -562,7 +564,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   type="button"
                   onClick={() => setCommandPaletteOpen(true)}
                   size="default"
-                  className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                  className="h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                   aria-label={tCommand("openButton")}
                 >
                   <CirclePlusIcon className="h-5 w-5" aria-hidden />
@@ -657,7 +659,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 setMobileOpen(false);
               }}
               size="default"
-              className="mt-3 h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+              className="mt-3 h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
               aria-label={tCommand("openButton")}
             >
               <CirclePlusIcon className="h-5 w-5" aria-hidden />

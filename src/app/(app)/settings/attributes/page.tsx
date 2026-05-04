@@ -492,7 +492,7 @@ const AttributesPage = () => {
           />
         </div>
       ) : (
-        <div className="mt-6 rounded-lg border border-dashed border-border p-6 text-center">
+        <div className="mt-6 rounded-none border border-dashed border-border p-6 text-center">
           <EmptyIcon className="mx-auto h-6 w-6 text-muted-foreground/80" aria-hidden />
           <p className="mt-2 text-sm font-semibold text-foreground">{t("emptyTitle")}</p>
           <p className="mt-1 text-xs text-muted-foreground">{t("emptySubtitle")}</p>
@@ -538,7 +538,7 @@ const AttributesPage = () => {
               {templateGroups.map((group) => (
                 <div
                   key={group.category}
-                  className="rounded-lg border border-border/70 bg-card p-4"
+                  className="rounded-none border border-border/70 bg-card p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>

@@ -325,7 +325,7 @@ const TourOverlay = ({
       <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px]" onClick={onSkip} />
       {rect ? (
         <div
-          className="pointer-events-none fixed rounded-md border border-white/90 shadow-[0_0_0_9999px_rgba(17,24,39,0.45)]"
+          className="pointer-events-none fixed rounded-none border border-white/90 shadow-[0_0_0_9999px_rgba(17,24,39,0.45)]"
           style={{
             left: Math.max(rect.left - 6, 0),
             top: Math.max(rect.top - 6, 0),

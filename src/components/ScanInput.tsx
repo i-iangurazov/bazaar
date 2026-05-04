@@ -410,7 +410,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           <div
             id={listboxId}
             role="listbox"
-            className="absolute z-20 mt-2 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg"
+            className="absolute z-20 mt-2 w-full overflow-hidden rounded-none border border-border bg-popover shadow-lg"
           >
             <div className="max-h-64 overflow-y-auto py-1">
               {dropdownItems.map((item, index) => (
@@ -431,7 +431,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
               ))}
               {showLiveLoading ? (
                 <div className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted/40">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-border bg-muted/40">
                     <Spinner className="h-4 w-4" />
                   </span>
                   <span>{tCommon("loading")}</span>
@@ -439,7 +439,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
               ) : null}
               {(showEmptyResult || showLiveEmpty) && dropdownItems.length === 0 ? (
                 <div className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/40">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-muted/40">
                     <EmptyIcon className="h-4 w-4" aria-hidden />
                   </span>
                   <span>{tCommon("nothingFound")}</span>

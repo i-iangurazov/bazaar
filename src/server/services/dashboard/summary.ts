@@ -49,6 +49,20 @@ type RecentMovement = {
 };
 
 export type DashboardSummaryResult = {
+  business: {
+    todaySalesKgs: number;
+    receiptsCount: number;
+    averageReceiptKgs: number;
+    grossProfitKgs: number | null;
+    grossMarginPercent: number | null;
+    openShiftsCount: number;
+    lowStockCount: number;
+    negativeStockCount: number;
+    missingBarcodeCount: number;
+    missingPriceCount: number;
+    pendingPurchaseOrdersCount: number;
+    failedReceiptsCount: number;
+  };
   lowStock: Array<{
     snapshot: LowStockSnapshot;
     product: ProductSummary;
@@ -72,6 +86,20 @@ type DashboardSummaryOptions = {
 };
 
 export const emptyDashboardSummary = (): DashboardSummaryResult => ({
+  business: {
+    todaySalesKgs: 0,
+    receiptsCount: 0,
+    averageReceiptKgs: 0,
+    grossProfitKgs: null,
+    grossMarginPercent: null,
+    openShiftsCount: 0,
+    lowStockCount: 0,
+    negativeStockCount: 0,
+    missingBarcodeCount: 0,
+    missingPriceCount: 0,
+    pendingPurchaseOrdersCount: 0,
+    failedReceiptsCount: 0,
+  },
   lowStock: [],
   pendingPurchaseOrders: [],
   recentActivity: [],
@@ -266,6 +294,10 @@ export const getDashboardSummary = async ({
     storeId,
     scope: "dashboard.summary",
   });
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(todayStart.getDate() + 1);
 
   const lowStockCandidatesStartedAt = Date.now();
   const lowStockCandidates = await prisma.$queryRaw<
@@ -309,6 +341,14 @@ export const getDashboardSummary = async ({
     forecasts,
     recentMovements,
     pendingPurchaseOrders,
+    todayOrders,
+    openShiftsCount,
+    negativeStockCount,
+    missingBarcodeCount,
+    missingPriceCount,
+    pendingPurchaseOrdersCount,
+    failedReceiptsCount,
+    lowStockCountRows,
   ] = await Promise.all([
     lowStockSnapshotIds.length
       ? prisma.inventorySnapshot.findMany({
@@ -403,6 +443,81 @@ export const getDashboardSummary = async ({
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
+    prisma.customerOrder.findMany({
+      where: {
+        organizationId,
+        storeId,
+        status: "COMPLETED",
+        completedAt: {
+          gte: todayStart,
+          lt: tomorrowStart,
+        },
+      },
+      select: {
+        id: true,
+        totalKgs: true,
+        lines: {
+          select: {
+            lineCostTotalKgs: true,
+          },
+        },
+      },
+    }),
+    prisma.registerShift.count({
+      where: {
+        organizationId,
+        storeId,
+        status: "OPEN",
+      },
+    }),
+    prisma.inventorySnapshot.count({
+      where: {
+        storeId,
+        onHand: { lt: 0 },
+        product: { organizationId, isDeleted: false },
+      },
+    }),
+    prisma.product.count({
+      where: {
+        organizationId,
+        isDeleted: false,
+        barcodes: { none: {} },
+      },
+    }),
+    prisma.product.count({
+      where: {
+        organizationId,
+        isDeleted: false,
+        basePriceKgs: null,
+      },
+    }),
+    prisma.purchaseOrder.count({
+      where: {
+        organizationId,
+        storeId,
+        status: { in: ["SUBMITTED", "APPROVED"] },
+      },
+    }),
+    prisma.fiscalReceipt.count({
+      where: {
+        organizationId,
+        storeId,
+        status: "FAILED",
+      },
+    }),
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(DISTINCT s.id) AS "count"
+      FROM "InventorySnapshot" s
+      INNER JOIN "ReorderPolicy" p
+        ON p."storeId" = s."storeId"
+       AND p."productId" = s."productId"
+      INNER JOIN "Product" pr
+        ON pr.id = s."productId"
+      WHERE s."storeId" = ${storeId}
+        AND pr."isDeleted" = false
+        AND p."minStock" > 0
+        AND s."onHand" <= p."minStock"
+    `,
   ]);
   logProfileSection({
     logger,
@@ -416,6 +531,7 @@ export const getDashboardSummary = async ({
       forecasts: forecasts.length,
       recentMovements: recentMovements.length,
       pendingPurchaseOrders: pendingPurchaseOrders.length,
+      receiptsCount: todayOrders.length,
       includeRecentActivity: options.includeRecentActivity,
       includeRecentMovements: options.includeRecentMovements,
     },
@@ -458,6 +574,48 @@ export const getDashboardSummary = async ({
     : [];
 
   return {
+    business: {
+      todaySalesKgs: todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0),
+      receiptsCount: todayOrders.length,
+      averageReceiptKgs:
+        todayOrders.length > 0
+          ? todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0) /
+            todayOrders.length
+          : 0,
+      grossProfitKgs: (() => {
+        const revenue = todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0);
+        const cost = todayOrders.reduce(
+          (sum, order) =>
+            sum +
+            order.lines.reduce(
+              (lineSum, line) => lineSum + Number(line.lineCostTotalKgs ?? 0),
+              0,
+            ),
+          0,
+        );
+        return revenue > 0 || cost > 0 ? revenue - cost : null;
+      })(),
+      grossMarginPercent: (() => {
+        const revenue = todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0);
+        const cost = todayOrders.reduce(
+          (sum, order) =>
+            sum +
+            order.lines.reduce(
+              (lineSum, line) => lineSum + Number(line.lineCostTotalKgs ?? 0),
+              0,
+            ),
+          0,
+        );
+        return revenue > 0 ? ((revenue - cost) / revenue) * 100 : null;
+      })(),
+      openShiftsCount,
+      lowStockCount: Number(lowStockCountRows[0]?.count ?? 0),
+      negativeStockCount,
+      missingBarcodeCount,
+      missingPriceCount,
+      pendingPurchaseOrdersCount,
+      failedReceiptsCount,
+    },
     lowStock,
     pendingPurchaseOrders,
     recentActivity,
@@ -516,6 +674,8 @@ export const getDashboardBootstrap = async ({
     select: {
       id: true,
       name: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
     },
     orderBy: { name: "asc" },
   });
@@ -547,7 +707,10 @@ export const getDashboardBootstrap = async ({
     : emptyDashboardSummary();
 
   return {
-    stores,
+    stores: stores.map((store) => ({
+      ...store,
+      currencyRateKgsPerUnit: Number(store.currencyRateKgsPerUnit),
+    })),
     selectedStoreId,
     summary,
   };

@@ -329,6 +329,8 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
           id: true,
           name: true,
           code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
           complianceProfile: {
             select: {
               enableMarking: true,
@@ -492,6 +494,8 @@ export const listPosRegisters = async (input: {
           id: true,
           name: true,
           code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
           complianceProfile: {
             select: {
               enableMarking: true,

@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -15,13 +17,18 @@ import {
 } from "@/components/ui/select";
 import {
   EmptyIcon,
-  StatusPendingIcon,
-  StatusWarningIcon,
-  StatusSuccessIcon,
-  StatusDangerIcon,
-  MetricsIcon,
+  AddIcon,
+  PrintIcon,
+  ReceiveIcon,
+  PosIcon,
+  PurchaseOrdersIcon,
 } from "@/components/icons";
-import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { formatCurrency, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import {
+  convertFromKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+} from "@/lib/currency";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -75,32 +82,28 @@ const DashboardPage = () => {
 
   const lowStockItems = dashboardQuery.data?.summary.lowStock ?? [];
   const pendingOrders = dashboardQuery.data?.summary.pendingPurchaseOrders ?? [];
+  const business = dashboardQuery.data?.summary.business;
   const activity = activityQuery.data?.recentActivity ?? [];
+  const currencyCode = normalizeCurrencyCode(selectedStore?.currencyCode);
+  const currencyRate = normalizeCurrencyRateKgsPerUnit(
+    selectedStore?.currencyRateKgsPerUnit,
+    currencyCode,
+  );
+  const formatStoreMoney = (amountKgs: number) =>
+    formatCurrency(convertFromKgs(amountKgs, currencyRate, currencyCode), locale, currencyCode);
 
   const statusLabel = (status: string) => getPurchaseOrderStatusLabel(tOrders, status);
 
-  const statusIcon = (status: string) => {
+  const statusVariant = (status: string) => {
     switch (status) {
-      case "RECEIVED":
-        return StatusSuccessIcon;
       case "CANCELLED":
-        return StatusDangerIcon;
+        return "danger";
       case "APPROVED":
       case "SUBMITTED":
       case "DRAFT":
-      default:
-        return StatusPendingIcon;
-    }
-  };
-
-  const statusVariant = (status: string) => {
-    switch (status) {
-      case "RECEIVED":
-        return "success";
-      case "CANCELLED":
-        return "danger";
-      default:
         return "warning";
+      default:
+        return "muted";
     }
   };
 
@@ -113,51 +116,122 @@ const DashboardPage = () => {
 
   const kpis = [
     {
+      key: "todaySales",
+      label: t("todaySales"),
+      value: formatStoreMoney(business?.todaySalesKgs ?? 0),
+      hint: t("todaySalesHint"),
+      valueClassName: "text-foreground",
+    },
+    {
+      key: "receiptsCount",
+      label: t("receiptsCount"),
+      value: formatNumber(business?.receiptsCount ?? 0, locale),
+      hint: t("receiptsHint"),
+      valueClassName: "text-foreground",
+    },
+    {
+      key: "averageReceipt",
+      label: t("averageReceipt"),
+      value: formatStoreMoney(business?.averageReceiptKgs ?? 0),
+      hint: t("averageReceiptHint"),
+      valueClassName: "text-foreground",
+    },
+    {
+      key: "grossProfit",
+      label: t("grossProfit"),
+      value:
+        business?.grossProfitKgs === null || business?.grossProfitKgs === undefined
+          ? tCommon("notAvailable")
+          : formatStoreMoney(business.grossProfitKgs),
+      hint:
+        business?.grossMarginPercent === null || business?.grossMarginPercent === undefined
+          ? t("grossProfitHint")
+          : t("grossMargin", {
+              value: formatNumber(business.grossMarginPercent, locale, {
+                maximumFractionDigits: 1,
+              }),
+            }),
+      valueClassName: "text-foreground",
+    },
+    {
+      key: "openShifts",
+      label: t("openShifts"),
+      value: formatNumber(business?.openShiftsCount ?? 0, locale),
+      hint: t("openShiftsHint"),
+      valueClassName: "text-foreground",
+    },
+    {
+      key: "lowStockCount",
+      label: t("lowStock"),
+      value: formatNumber(business?.lowStockCount ?? lowStockItems.length, locale),
+      hint: t("lowStockHint"),
+      valueClassName:
+        (business?.lowStockCount ?? lowStockItems.length) > 0 ? "text-warning" : "text-foreground",
+    },
+  ];
+  const attentionItems = [
+    {
+      key: "missingBarcode",
+      label: t("missingBarcode"),
+      value: business?.missingBarcodeCount ?? 0,
+      href: "/products?readiness=missingBarcode",
+      variant: "warning" as const,
+    },
+    {
+      key: "missingPrice",
+      label: t("missingPrice"),
+      value: business?.missingPriceCount ?? 0,
+      href: "/products?readiness=missingPrice",
+      variant: "danger" as const,
+    },
+    {
       key: "lowStock",
       label: t("lowStock"),
-      value: lowStockItems.length,
-      icon: StatusWarningIcon,
-      valueClassName: "text-warning",
-      iconClassName: "text-warning",
+      value: business?.lowStockCount ?? 0,
+      href: "/inventory",
+      variant: "warning" as const,
     },
     {
-      key: "pending",
+      key: "negativeStock",
+      label: t("negativeStock"),
+      value: business?.negativeStockCount ?? 0,
+      href: "/inventory",
+      variant: "danger" as const,
+    },
+    {
+      key: "pendingPurchaseOrders",
       label: t("pendingPurchaseOrders"),
-      value: pendingOrders.length,
-      icon: StatusPendingIcon,
-      valueClassName: "text-primary",
-      iconClassName: "text-primary",
+      value: business?.pendingPurchaseOrdersCount ?? pendingOrders.length,
+      href: "/purchase-orders",
+      variant: "muted" as const,
     },
     {
-      key: "activity",
-      label: t("recentActivity"),
-      value: activity.length,
-      icon: MetricsIcon,
-      valueClassName: "text-success",
-      iconClassName: "text-success",
+      key: "failedReceipts",
+      label: t("failedReceipts"),
+      value: business?.failedReceiptsCount ?? 0,
+      href: "/pos/receipts",
+      variant: "danger" as const,
     },
   ];
 
   return (
     <div>
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader title={t("title")} subtitle={t("businessSubtitle")} />
       {dashboardQuery.error ? (
-        <p className="mb-6 text-sm text-danger">
-          {translateError(tErrors, dashboardQuery.error)}
-        </p>
+        <p className="mb-6 text-sm text-danger">{translateError(tErrors, dashboardQuery.error)}</p>
       ) : null}
 
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card">
+      <Card>
         <CardContent className="space-y-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-primary/80">
-                {t("title")}
+                {t("businessOverview")}
               </p>
               <h3 className="text-xl font-semibold text-foreground">
                 {selectedStore?.name ?? tCommon("selectStore")}
               </h3>
-              <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+              <p className="text-sm text-muted-foreground">{t("businessOverviewHint")}</p>
             </div>
 
             <div className="w-full sm:max-w-xs">
@@ -176,36 +250,88 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {kpis.map((kpi) => {
-              const Icon = kpi.icon;
-              return (
-                <div
-                  key={kpi.key}
-                  className="rounded-lg border border-border/80 bg-card/90 p-3 shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
-                    <Icon className={`h-4 w-4 ${kpi.iconClassName}`} aria-hidden />
-                  </div>
-                  <p className={`mt-2 text-2xl font-semibold leading-none ${kpi.valueClassName}`}>
-                    {formatNumber(kpi.value, locale)}
-                  </p>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            {kpis.map((kpi) => (
+              <div key={kpi.key} className="border border-border/80 bg-card p-3">
+                <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
+                <p className={`mt-2 text-xl font-semibold leading-none ${kpi.valueClassName}`}>
+                  {kpi.value}
+                </p>
+                <p className="mt-2 text-[11px] text-muted-foreground">{kpi.hint}</p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
 
       <div className="mt-6 grid gap-6 md:grid-cols-6 xl:grid-cols-12">
-        <Card className="h-full md:col-span-6 xl:col-span-7">
+        <Card className="h-full md:col-span-3 xl:col-span-4">
+          <CardHeader>
+            <CardTitle>{t("quickActions")}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Button asChild>
+              <Link href="/pos">
+                <PosIcon className="h-4 w-4" aria-hidden />
+                {t("startSale")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/products/new">
+                <AddIcon className="h-4 w-4" aria-hidden />
+                {t("addProduct")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/inventory">
+                <ReceiveIcon className="h-4 w-4" aria-hidden />
+                {t("receiveStock")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/products">
+                <PrintIcon className="h-4 w-4" aria-hidden />
+                {t("printLabels")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/purchase-orders/new">
+                <PurchaseOrdersIcon className="h-4 w-4" aria-hidden />
+                {t("createPurchaseOrder")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/reports">{t("viewReports")}</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="h-full md:col-span-3 xl:col-span-4">
+          <CardHeader>
+            <CardTitle>{t("needsAttention")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {attentionItems.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="flex items-center justify-between gap-3 border border-border/80 bg-secondary/20 px-3 py-2 text-sm transition hover:bg-secondary/40"
+              >
+                <span className="text-foreground">{item.label}</span>
+                <Badge variant={item.value > 0 ? item.variant : "muted"}>
+                  {formatNumber(item.value, locale)}
+                </Badge>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="h-full md:col-span-6 xl:col-span-4">
           <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <CardTitle className="flex items-center gap-2">
-              <StatusWarningIcon className="h-4 w-4 text-warning" aria-hidden />
-              {t("lowStock")}
-            </CardTitle>
-            <Badge variant="warning">{formatNumber(lowStockItems.length, locale)}</Badge>
+            <CardTitle>{t("lowStock")}</CardTitle>
+            <Badge variant={lowStockItems.length > 0 ? "warning" : "muted"}>
+              {formatNumber(lowStockItems.length, locale)}
+            </Badge>
           </CardHeader>
           <CardContent>
             {dashboardQuery.isLoading ? (
@@ -215,7 +341,7 @@ const DashboardPage = () => {
                 {lowStockItems.map((item) => (
                   <div
                     key={item.snapshot.id}
-                    className="rounded-lg border border-border/80 bg-secondary/30 p-3"
+                    className="rounded-none border border-border/80 bg-secondary/30 p-3"
                   >
                     <p className="text-sm font-semibold text-foreground">
                       {item.product.name}
@@ -227,7 +353,8 @@ const DashboardPage = () => {
                     </p>
                     {item.reorder && item.reorder.suggestedOrderQty > 0 ? (
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {t("suggestedOrder")}: {formatNumber(item.reorder.suggestedOrderQty, locale)}
+                        {t("suggestedOrder")}:{" "}
+                        {formatNumber(item.reorder.suggestedOrderQty, locale)}
                       </p>
                     ) : null}
                   </div>
@@ -244,10 +371,7 @@ const DashboardPage = () => {
 
         <Card className="h-full md:col-span-3 xl:col-span-5">
           <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <CardTitle className="flex items-center gap-2">
-              <StatusPendingIcon className="h-4 w-4 text-primary" aria-hidden />
-              {t("pendingPurchaseOrders")}
-            </CardTitle>
+            <CardTitle>{t("pendingPurchaseOrders")}</CardTitle>
             <Badge variant="muted">{formatNumber(pendingOrders.length, locale)}</Badge>
           </CardHeader>
           <CardContent>
@@ -268,13 +392,7 @@ const DashboardPage = () => {
                         {formatDateTime(po.createdAt, locale)}
                       </p>
                     </div>
-                    <Badge variant={statusVariant(po.status)}>
-                      {(() => {
-                        const Icon = statusIcon(po.status);
-                        return <Icon className="h-3 w-3" aria-hidden />;
-                      })()}
-                      {statusLabel(po.status)}
-                    </Badge>
+                    <Badge variant={statusVariant(po.status)}>{statusLabel(po.status)}</Badge>
                   </div>
                 ))}
               </div>
@@ -287,12 +405,9 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
 
-        <Card className="h-full md:col-span-6 xl:col-span-12">
+        <Card className="h-full md:col-span-6 xl:col-span-7">
           <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <CardTitle className="flex items-center gap-2">
-              <MetricsIcon className="h-4 w-4 text-success" aria-hidden />
-              {t("recentActivity")}
-            </CardTitle>
+            <CardTitle>{t("recentActivity")}</CardTitle>
             <Badge variant="muted">{formatNumber(activity.length, locale)}</Badge>
           </CardHeader>
           <CardContent>
@@ -301,7 +416,10 @@ const DashboardPage = () => {
             ) : activity.length ? (
               <div className="space-y-3">
                 {activity.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-border/80 bg-secondary/30 p-3">
+                  <div
+                    key={item.id}
+                    className="rounded-none border border-border/80 bg-secondary/30 p-3"
+                  >
                     <p className="text-sm font-semibold text-foreground">
                       {item.summaryKey
                         ? tAudit(item.summaryKey, item.summaryValues ?? {})

@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -311,6 +311,7 @@ export const ProductForm = ({
   showBasePriceField = true,
   currencyCode,
   currencyRateKgsPerUnit,
+  quickCreateMode = false,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -322,12 +323,14 @@ export const ProductForm = ({
   showBasePriceField?: boolean;
   currencyCode?: string | null;
   currencyRateKgsPerUnit?: number | string | null;
+  quickCreateMode?: boolean;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { toast } = useToast();
+  const compactCreate = quickCreateMode && !productId && !readOnly;
   const moneyCurrencyCode = normalizeCurrencyCode(currencyCode);
   const moneyCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
     currencyRateKgsPerUnit,
@@ -670,14 +673,16 @@ export const ProductForm = ({
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const quickFileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [categoryDraft, setCategoryDraft] = useState("");
   const [barcodeGenerateMode, setBarcodeGenerateMode] = useState<"EAN13" | "CODE128">("EAN13");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(() =>
-    Boolean(initialValues.barcodes?.length || initialValues.variants?.length),
+  const [showAdvanced, setShowAdvanced] = useState(
+    () =>
+      !compactCreate && Boolean(initialValues.barcodes?.length || initialValues.variants?.length),
   );
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
   const [generatorOpen, setGeneratorOpen] = useState(false);
@@ -725,6 +730,7 @@ export const ProductForm = ({
   const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
   const duplicateDiagnosticsEnabled =
     !readOnly &&
+    !compactCreate &&
     (Boolean(
       deferredDuplicateDiagnosticsInput.sku && deferredDuplicateDiagnosticsInput.sku.length >= 2,
     ) ||
@@ -2121,7 +2127,7 @@ export const ProductForm = ({
         <span className="text-xs text-muted-foreground">{t("imagesReorderHint")}</span>
       </div>
       <div
-        className={`rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
+        className={`rounded-none border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
           isDragActive ? "border-ink bg-muted/30" : "border-border"
         }`}
         onDragOver={handleImageDragOver}
@@ -2139,7 +2145,7 @@ export const ProductForm = ({
             return (
               <div
                 key={image.id}
-                className={`flex items-start gap-3 rounded-md border border-border bg-card p-3 ${
+                className={`flex items-start gap-3 rounded-none border border-border bg-card p-3 ${
                   draggedImageIndex === index ? "opacity-60" : ""
                 }`}
                 draggable={!readOnly}
@@ -2165,7 +2171,7 @@ export const ProductForm = ({
                   setDraggedImageIndex(null);
                 }}
               >
-                <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-md bg-muted/30">
+                <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-none bg-muted/30">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={withPreviewVersion(imageUrl, image.id)}
@@ -2175,7 +2181,7 @@ export const ProductForm = ({
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    {index === 0 ? <Badge variant="success">{t("imagePrimary")}</Badge> : null}
+                    {index === 0 ? <Badge variant="muted">{t("imagePrimary")}</Badge> : null}
                     <span className="text-xs text-muted-foreground">
                       {t("imagePosition", {
                         index: index + 1,
@@ -2262,51 +2268,116 @@ export const ProductForm = ({
       ) : (
         <p className="text-xs text-muted-foreground/80">{t("imagesEmpty")}</p>
       )}
-      <FormField
-        control={form.control}
-        name="photoUrl"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("photoUrl")}</FormLabel>
-            {orderedImageUrls.length ? (
-              <div className="space-y-2">
-                {orderedImageUrls.map((image, index) => (
-                  <a
-                    key={image.id}
-                    href={image.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block space-y-1 rounded-md border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {index === 0 ? (
-                          <Badge variant="success">{t("imagePrimary")}</Badge>
-                        ) : (
-                          <Badge variant="muted">{`#${index + 1}`}</Badge>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          {t("imagePosition", {
-                            index: index + 1,
-                            total: orderedImageUrls.length,
-                          })}
-                        </span>
+      {!compactCreate ? (
+        <FormField
+          control={form.control}
+          name="photoUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("photoUrl")}</FormLabel>
+              {orderedImageUrls.length ? (
+                <div className="space-y-2">
+                  {orderedImageUrls.map((image, index) => (
+                    <a
+                      key={image.id}
+                      href={image.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block space-y-1 rounded-none border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {index === 0 ? (
+                            <Badge variant="muted">{t("imagePrimary")}</Badge>
+                          ) : (
+                            <Badge variant="muted">{`#${index + 1}`}</Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {t("imagePosition", {
+                              index: index + 1,
+                              total: orderedImageUrls.length,
+                            })}
+                          </span>
+                        </div>
+                        <ViewIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                       </div>
-                      <ViewIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                    </div>
-                    <p className="break-all text-xs text-muted-foreground">{image.url}</p>
-                  </a>
-                ))}
-              </div>
+                      <p className="break-all text-xs text-muted-foreground">{image.url}</p>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <FormControl>
+                  <Input {...field} disabled={readOnly} />
+                </FormControl>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      ) : null}
+    </FormSection>
+  );
+
+  const quickImageUrl = orderedImageUrls[0]?.url ?? watchedPhotoUrl?.trim() ?? "";
+  const quickImageSection = (
+    <FormSection title={t("quickCreatePhotoTitle")}>
+      <div className="grid gap-4 md:grid-cols-[160px_1fr]">
+        <div className="flex h-40 w-full items-center justify-center overflow-hidden border border-dashed border-border bg-muted/30 md:w-40">
+          {quickImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={quickImageUrl}
+              alt={t("imageAlt", { index: 1 })}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <ImagePlusIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
+          )}
+        </div>
+        <div className="space-y-3">
+          <input
+            ref={quickFileInputRef}
+            type="file"
+            accept="image/*,.heic,.heics,.heif,.heifs,.hif,image/heic,image/heif,image/heic-sequence,image/heif-sequence"
+            className="hidden"
+            disabled={readOnly || isUploadingImages}
+            onChange={(event) => {
+              const files = event.target.files;
+              if (files && files.length) {
+                void handleImageFiles(files);
+              }
+              event.target.value = "";
+            }}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={() => quickFileInputRef.current?.click()}
+            disabled={readOnly || isUploadingImages}
+          >
+            {isUploadingImages ? (
+              <Spinner className="h-4 w-4" />
             ) : (
-              <FormControl>
-                <Input {...field} disabled={readOnly} />
-              </FormControl>
+              <ImagePlusIcon className="h-4 w-4" aria-hidden />
             )}
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+            {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+          </Button>
+          <FormField
+            control={form.control}
+            name="photoUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("photoUrl")}</FormLabel>
+                <FormControl>
+                  <Input {...field} disabled={readOnly} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      </div>
     </FormSection>
   );
 
@@ -2316,12 +2387,26 @@ export const ProductForm = ({
         <TooltipProvider>
           <Card>
             <CardHeader>
-              <CardTitle>{isBundle ? t("detailsBundleTitle") : t("detailsTitle")}</CardTitle>
+              <CardTitle>
+                {compactCreate
+                  ? t("quickCreateTitle")
+                  : isBundle
+                    ? t("detailsBundleTitle")
+                    : t("detailsTitle")}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {imageManagementSection}
+              {compactCreate ? quickImageSection : imageManagementSection}
 
-              <FormSection title={isBundle ? t("basicInfoBundleTitle") : t("basicInfoTitle")}>
+              <FormSection
+                title={
+                  compactCreate
+                    ? t("quickCreateCoreTitle")
+                    : isBundle
+                      ? t("basicInfoBundleTitle")
+                      : t("basicInfoTitle")
+                }
+              >
                 <div className="space-y-6">
                   <FormGrid className="items-start">
                     <FormField
@@ -2333,7 +2418,7 @@ export const ProductForm = ({
                           <FormControl>
                             <Input {...field} disabled={readOnly} />
                           </FormControl>
-                          {!productId ? (
+                          {!productId && !compactCreate ? (
                             <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
                           ) : null}
                           <FormMessage />
@@ -2353,31 +2438,33 @@ export const ProductForm = ({
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="isBundle"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("typeLabel")}</FormLabel>
-                          <Select
-                            value={field.value ? "bundle" : "product"}
-                            onValueChange={(value) => field.onChange(value === "bundle")}
-                            disabled={readOnly}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="product">{t("typeProduct")}</SelectItem>
-                              <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {!compactCreate ? (
+                      <FormField
+                        control={form.control}
+                        name="isBundle"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("typeLabel")}</FormLabel>
+                            <Select
+                              value={field.value ? "bundle" : "product"}
+                              onValueChange={(value) => field.onChange(value === "bundle")}
+                              disabled={readOnly}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="product">{t("typeProduct")}</SelectItem>
+                                <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
                     <FormField
                       control={form.control}
                       name="categories"
@@ -2385,23 +2472,23 @@ export const ProductForm = ({
                         <FormItem>
                           <FormLabel>{t("category")}</FormLabel>
                           <div className="space-y-3">
-                            <div className="flex min-h-10 flex-wrap gap-2 rounded-md border border-border bg-muted/20 p-2">
+                            <div className="flex min-h-10 flex-wrap gap-2 rounded-none border border-border bg-muted/20 p-2">
                               {categoryValues.length ? (
                                 categoryValues.map((value, index) => (
                                   <div
                                     key={value}
-                                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground"
+                                    className="inline-flex items-center gap-1 rounded-none border border-border bg-background px-2 py-1 text-xs text-foreground"
                                   >
                                     <span>{value}</span>
                                     {index === 0 ? (
-                                      <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                      <span className="rounded-none bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                                         {t("categoryPrimaryBadge")}
                                       </span>
                                     ) : null}
                                     {!readOnly && index > 0 ? (
                                       <button
                                         type="button"
-                                        className="rounded p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                        className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                                         onClick={() => promoteProductCategory(value)}
                                         aria-label={t("categoryPromote")}
                                       >
@@ -2411,7 +2498,7 @@ export const ProductForm = ({
                                     {!readOnly ? (
                                       <button
                                         type="button"
-                                        className="rounded p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                        className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                                         onClick={() => removeProductCategory(value)}
                                         aria-label={tCommon("delete")}
                                       >
@@ -2464,7 +2551,7 @@ export const ProductForm = ({
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        className="h-auto rounded-full border border-dashed border-border px-3 py-1.5 text-xs"
+                                        className="h-auto rounded-none border border-dashed border-border px-3 py-1.5 text-xs"
                                         onClick={() => addProductCategory(value)}
                                       >
                                         <AddIcon className="h-3 w-3" aria-hidden />
@@ -2476,42 +2563,46 @@ export const ProductForm = ({
                               </>
                             ) : null}
                           </div>
-                          <FormDescription>{t("categoryHint")}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="baseUnitId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("unit")}</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            disabled={readOnly || !unitOptions.length}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t("unitPlaceholder")} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {unitOptions.map((unit) => (
-                                <SelectItem key={unit.id} value={unit.id}>
-                                  {resolveUnitLabel(unit)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {!unitOptions.length ? (
-                            <FormDescription>{t("unitMissingHint")}</FormDescription>
+                          {!compactCreate ? (
+                            <FormDescription>{t("categoryHint")}</FormDescription>
                           ) : null}
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+                    {!compactCreate || !unitOptions.length ? (
+                      <FormField
+                        control={form.control}
+                        name="baseUnitId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("unit")}</FormLabel>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              disabled={readOnly || !unitOptions.length}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t("unitPlaceholder")} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {unitOptions.map((unit) => (
+                                  <SelectItem key={unit.id} value={unit.id}>
+                                    {resolveUnitLabel(unit)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {!unitOptions.length ? (
+                              <FormDescription>{t("unitMissingHint")}</FormDescription>
+                            ) : null}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
                     {showBasePriceField ? (
                       <FormField
                         control={form.control}
@@ -2534,30 +2625,122 @@ export const ProductForm = ({
                         )}
                       />
                     ) : null}
-                    <FormField
-                      control={form.control}
-                      name="avgCostKgs"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("avgCost")}</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
-                              placeholder={t("pricePlaceholder")}
-                              disabled={readOnly}
-                            />
-                          </FormControl>
-                          <FormDescription>{t("avgCostHint")}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {compactCreate ? (
+                      <FormField
+                        control={form.control}
+                        name="barcodes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("barcodes")}</FormLabel>
+                            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                              <FormControl>
+                                <Input
+                                  value={barcodeInput}
+                                  onChange={(event) => setBarcodeInput(event.target.value)}
+                                  placeholder={t("barcodePlaceholder")}
+                                  className="flex-1"
+                                  disabled={readOnly}
+                                />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full sm:w-auto"
+                                onClick={() => {
+                                  if (readOnly) {
+                                    return;
+                                  }
+                                  const value = barcodeInput.trim();
+                                  if (!value) {
+                                    return;
+                                  }
+                                  const current = field.value ?? [];
+                                  if (current.includes(value)) {
+                                    form.setError("barcodes", { message: t("barcodeDuplicate") });
+                                    return;
+                                  }
+                                  form.clearErrors("barcodes");
+                                  form.setValue("barcodes", [...current, value], {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                  });
+                                  setBarcodeInput("");
+                                }}
+                                disabled={readOnly}
+                              >
+                                <AddIcon className="h-4 w-4" aria-hidden />
+                                {t("addBarcode")}
+                              </Button>
+                            </FormRow>
+                            <div className="flex min-h-8 flex-wrap gap-2">
+                              {field.value?.length ? (
+                                field.value.map((barcode, index) => (
+                                  <Badge
+                                    key={`${barcode}-${index}`}
+                                    variant="muted"
+                                    className="gap-1 pr-1"
+                                  >
+                                    <span>{barcode}</span>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6 shadow-none"
+                                      aria-label={t("removeBarcode")}
+                                      onClick={() => {
+                                        if (readOnly) {
+                                          return;
+                                        }
+                                        const next = (field.value ?? []).filter(
+                                          (_, i) => i !== index,
+                                        );
+                                        form.clearErrors("barcodes");
+                                        form.setValue("barcodes", next, {
+                                          shouldValidate: false,
+                                          shouldDirty: true,
+                                        });
+                                      }}
+                                      disabled={readOnly}
+                                    >
+                                      <CloseIcon className="h-3 w-3" aria-hidden />
+                                    </Button>
+                                  </Badge>
+                                ))
+                              ) : (
+                                <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
+                              )}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
+                    {!compactCreate ? (
+                      <FormField
+                        control={form.control}
+                        name="avgCostKgs"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("avgCost")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                placeholder={t("pricePlaceholder")}
+                                disabled={readOnly}
+                              />
+                            </FormControl>
+                            <FormDescription>{t("avgCostHint")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
                   </FormGrid>
                   {duplicateDiagnosticsEnabled ? (
-                    <div className="rounded-lg border border-warning/40 bg-warning/10 p-3">
+                    <div className="rounded-none border border-warning/40 bg-warning/10 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-medium text-foreground">
                           {t("duplicateDiagnosticsTitle")}
@@ -2570,7 +2753,7 @@ export const ProductForm = ({
                         ) : null}
                       </div>
                       {duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
-                        <div className="mt-3 rounded-md border border-danger/30 bg-background p-3">
+                        <div className="mt-3 rounded-none border border-danger/30 bg-background p-3">
                           <p className="text-xs font-medium text-danger">
                             {t("duplicateExactSkuTitle")}
                           </p>
@@ -2602,7 +2785,7 @@ export const ProductForm = ({
                           {duplicateDiagnosticsQuery.data.exactBarcodeMatches.map((match) => (
                             <div
                               key={`${match.barcode}-${match.id}`}
-                              className="rounded-md border border-danger/30 bg-background p-3"
+                              className="rounded-none border border-danger/30 bg-background p-3"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="muted">{match.barcode}</Badge>
@@ -2631,7 +2814,7 @@ export const ProductForm = ({
                           {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
                             <div
                               key={match.id}
-                              className="rounded-md border border-warning/30 bg-background p-3"
+                              className="rounded-none border border-warning/30 bg-background p-3"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm text-foreground">{match.name}</span>
@@ -2661,51 +2844,52 @@ export const ProductForm = ({
                       ) : null}
                     </div>
                   ) : null}
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <FormLabel>{t("description")}</FormLabel>
+                  {!compactCreate ? (
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <FormLabel>{t("description")}</FormLabel>
+                            {!readOnly ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleGenerateDescription}
+                                disabled={
+                                  isUploadingImages ||
+                                  generateDescriptionMutation.isLoading ||
+                                  !descriptionSourceImageUrls.length
+                                }
+                              >
+                                {generateDescriptionMutation.isLoading ? (
+                                  <Spinner className="h-4 w-4" />
+                                ) : (
+                                  <SparklesIcon className="h-4 w-4" />
+                                )}
+                                {generateDescriptionMutation.isLoading
+                                  ? t("aiDescriptionGenerating")
+                                  : t("aiDescriptionGenerate")}
+                              </Button>
+                            ) : null}
+                          </div>
+                          <FormControl>
+                            <Textarea {...field} rows={4} disabled={readOnly} />
+                          </FormControl>
                           {!readOnly ? (
-                            <Button
-                              type="button"
-                              variant="primary"
-                              size="sm"
-                              className="bg-primary text-primary-foreground hover:bg-primary/90"
-                              onClick={handleGenerateDescription}
-                              disabled={
-                                isUploadingImages ||
-                                generateDescriptionMutation.isLoading ||
-                                !descriptionSourceImageUrls.length
-                              }
-                            >
-                              {generateDescriptionMutation.isLoading ? (
-                                <Spinner className="h-4 w-4" />
-                              ) : (
-                                <SparklesIcon className="h-4 w-4" />
-                              )}
-                              {generateDescriptionMutation.isLoading
-                                ? t("aiDescriptionGenerating")
-                                : t("aiDescriptionGenerate")}
-                            </Button>
+                            <FormDescription>
+                              {descriptionSourceImageUrls.length
+                                ? t("aiDescriptionHint")
+                                : t("aiDescriptionImageHint")}
+                            </FormDescription>
                           ) : null}
-                        </div>
-                        <FormControl>
-                          <Textarea {...field} rows={4} disabled={readOnly} />
-                        </FormControl>
-                        {!readOnly ? (
-                          <FormDescription>
-                            {descriptionSourceImageUrls.length
-                              ? t("aiDescriptionHint")
-                              : t("aiDescriptionImageHint")}
-                          </FormDescription>
-                        ) : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : null}
                 </div>
               </FormSection>
 
@@ -2714,7 +2898,7 @@ export const ProductForm = ({
                   title={t("bundleComponentsTitle")}
                   description={t("bundleComponentsHint")}
                 >
-                  <div className="space-y-3 rounded-md border border-border p-3">
+                  <div className="space-y-3 rounded-none border border-border p-3">
                     <div className="relative">
                       <Input
                         value={bundleSearch}
@@ -2730,7 +2914,7 @@ export const ProductForm = ({
                         disabled={readOnly}
                       />
                       {showBundleResults && bundleSearch.trim().length > 0 ? (
-                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-none border border-border bg-background shadow-lg">
                           {bundleSearchQuery.isLoading ? (
                             <div className="px-3 py-2 text-sm text-muted-foreground">
                               {tCommon("loading")}
@@ -2764,7 +2948,7 @@ export const ProductForm = ({
                         {bundleComponentFields.map((component, index) => (
                           <div
                             key={component.id}
-                            className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_120px_auto]"
+                            className="grid gap-2 rounded-none border border-border p-3 sm:grid-cols-[1fr_120px_auto]"
                           >
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-foreground">
@@ -2827,160 +3011,237 @@ export const ProductForm = ({
               {showAdvanced ? (
                 <>
                   <Separator />
-                  <FormSection title={t("barcodes")}>
-                    <FormField
-                      control={form.control}
-                      name="barcodes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="sr-only">{t("barcodes")}</FormLabel>
-                          <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
-                            <FormControl>
-                              <Input
-                                value={barcodeInput}
-                                onChange={(event) => setBarcodeInput(event.target.value)}
-                                placeholder={t("barcodePlaceholder")}
-                                className="flex-1"
+                  {compactCreate ? (
+                    <>
+                      <FormSection title={t("profitabilityTitle")}>
+                        <FormGrid className="items-start">
+                          <FormField
+                            control={form.control}
+                            name="avgCostKgs"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t("avgCost")}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    placeholder={t("pricePlaceholder")}
+                                    disabled={readOnly}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </FormGrid>
+                      </FormSection>
+                      <Separator />
+                      <FormSection title={t("descriptionTitle")}>
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <FormLabel>{t("description")}</FormLabel>
+                                {!readOnly ? (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={handleGenerateDescription}
+                                    disabled={
+                                      isUploadingImages ||
+                                      generateDescriptionMutation.isLoading ||
+                                      !descriptionSourceImageUrls.length
+                                    }
+                                  >
+                                    {generateDescriptionMutation.isLoading ? (
+                                      <Spinner className="h-4 w-4" />
+                                    ) : (
+                                      <SparklesIcon className="h-4 w-4" />
+                                    )}
+                                    {generateDescriptionMutation.isLoading
+                                      ? t("aiDescriptionGenerating")
+                                      : t("aiDescriptionGenerate")}
+                                  </Button>
+                                ) : null}
+                              </div>
+                              <FormControl>
+                                <Textarea {...field} rows={4} disabled={readOnly} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </FormSection>
+                      <Separator />
+                      {imageManagementSection}
+                      <Separator />
+                    </>
+                  ) : null}
+                  {!compactCreate ? (
+                    <FormSection title={t("barcodes")}>
+                      <FormField
+                        control={form.control}
+                        name="barcodes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="sr-only">{t("barcodes")}</FormLabel>
+                            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                              <FormControl>
+                                <Input
+                                  value={barcodeInput}
+                                  onChange={(event) => setBarcodeInput(event.target.value)}
+                                  placeholder={t("barcodePlaceholder")}
+                                  className="flex-1"
+                                  disabled={readOnly}
+                                />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full sm:w-auto"
+                                onClick={() => {
+                                  if (readOnly) {
+                                    return;
+                                  }
+                                  const value = barcodeInput.trim();
+                                  if (!value) {
+                                    return;
+                                  }
+                                  const current = field.value ?? [];
+                                  if (current.includes(value)) {
+                                    form.setError("barcodes", { message: t("barcodeDuplicate") });
+                                    return;
+                                  }
+                                  form.clearErrors("barcodes");
+                                  form.setValue("barcodes", [...current, value], {
+                                    shouldValidate: true,
+                                  });
+                                  setBarcodeInput("");
+                                }}
                                 disabled={readOnly}
-                              />
-                            </FormControl>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full sm:w-auto"
-                              onClick={() => {
-                                if (readOnly) {
-                                  return;
-                                }
-                                const value = barcodeInput.trim();
-                                if (!value) {
-                                  return;
-                                }
-                                const current = field.value ?? [];
-                                if (current.includes(value)) {
-                                  form.setError("barcodes", { message: t("barcodeDuplicate") });
-                                  return;
-                                }
-                                form.clearErrors("barcodes");
-                                form.setValue("barcodes", [...current, value], {
-                                  shouldValidate: true,
-                                });
-                                setBarcodeInput("");
-                              }}
-                              disabled={readOnly}
-                            >
-                              <AddIcon className="h-4 w-4" aria-hidden />
-                              {t("addBarcode")}
-                            </Button>
-                          </FormRow>
-                          <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
-                            <div className="w-full sm:w-[220px]">
-                              <Select
-                                value={barcodeGenerateMode}
-                                onValueChange={(value) =>
-                                  setBarcodeGenerateMode(value as "EAN13" | "CODE128")
-                                }
+                              >
+                                <AddIcon className="h-4 w-4" aria-hidden />
+                                {t("addBarcode")}
+                              </Button>
+                            </FormRow>
+                            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                              <div className="w-full sm:w-[220px]">
+                                <Select
+                                  value={barcodeGenerateMode}
+                                  onValueChange={(value) =>
+                                    setBarcodeGenerateMode(value as "EAN13" | "CODE128")
+                                  }
+                                  disabled={
+                                    readOnly || !productId || generateBarcodeMutation.isLoading
+                                  }
+                                >
+                                  <SelectTrigger aria-label={t("generateBarcodeMode")}>
+                                    <SelectValue placeholder={t("generateBarcodeMode")} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="EAN13">{t("barcodeModeEan13")}</SelectItem>
+                                    <SelectItem value="CODE128">
+                                      {t("barcodeModeCode128")}
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full sm:w-auto"
+                                onClick={() => {
+                                  if (!productId || readOnly) {
+                                    return;
+                                  }
+                                  const currentBarcodes =
+                                    form
+                                      .getValues("barcodes")
+                                      ?.map((value) => value.trim())
+                                      .filter(Boolean) ?? [];
+                                  generateBarcodeMutation.mutate({
+                                    productId,
+                                    mode: barcodeGenerateMode,
+                                    force: currentBarcodes.length === 0,
+                                  });
+                                }}
                                 disabled={
                                   readOnly || !productId || generateBarcodeMutation.isLoading
                                 }
                               >
-                                <SelectTrigger aria-label={t("generateBarcodeMode")}>
-                                  <SelectValue placeholder={t("generateBarcodeMode")} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="EAN13">{t("barcodeModeEan13")}</SelectItem>
-                                  <SelectItem value="CODE128">{t("barcodeModeCode128")}</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full sm:w-auto"
-                              onClick={() => {
-                                if (!productId || readOnly) {
-                                  return;
-                                }
-                                const currentBarcodes =
-                                  form
-                                    .getValues("barcodes")
-                                    ?.map((value) => value.trim())
-                                    .filter(Boolean) ?? [];
-                                generateBarcodeMutation.mutate({
-                                  productId,
-                                  mode: barcodeGenerateMode,
-                                  force: currentBarcodes.length === 0,
-                                });
-                              }}
-                              disabled={readOnly || !productId || generateBarcodeMutation.isLoading}
-                            >
-                              {generateBarcodeMutation.isLoading ? (
-                                <Spinner className="h-4 w-4" />
-                              ) : (
-                                <AddIcon className="h-4 w-4" aria-hidden />
-                              )}
-                              {generateBarcodeMutation.isLoading
-                                ? tCommon("loading")
-                                : t("generateBarcode")}
-                            </Button>
-                          </FormRow>
-                          <p className="text-xs text-muted-foreground">
-                            {t("barcodeInternalHint")}
-                          </p>
-                          {!productId ? (
+                                {generateBarcodeMutation.isLoading ? (
+                                  <Spinner className="h-4 w-4" />
+                                ) : (
+                                  <AddIcon className="h-4 w-4" aria-hidden />
+                                )}
+                                {generateBarcodeMutation.isLoading
+                                  ? tCommon("loading")
+                                  : t("generateBarcode")}
+                              </Button>
+                            </FormRow>
                             <p className="text-xs text-muted-foreground">
-                              {t("barcodeGenerateRequiresSave")}
+                              {t("barcodeInternalHint")}
                             </p>
-                          ) : null}
-                          <div className="flex min-h-[36px] flex-wrap gap-2">
-                            {field.value?.length ? (
-                              field.value.map((barcode, index) => (
-                                <Badge
-                                  key={`${barcode}-${index}`}
-                                  variant="muted"
-                                  className="gap-1 pr-1"
-                                >
-                                  <span>{barcode}</span>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-6 w-6 shadow-none"
-                                        aria-label={t("removeBarcode")}
-                                        onClick={() => {
-                                          if (readOnly) {
-                                            return;
-                                          }
-                                          const next = (field.value ?? []).filter(
-                                            (_, i) => i !== index,
-                                          );
-                                          form.clearErrors("barcodes");
-                                          form.setValue("barcodes", next, {
-                                            shouldValidate: false,
-                                            shouldDirty: true,
-                                          });
-                                        }}
-                                        disabled={readOnly}
-                                      >
-                                        <CloseIcon className="h-3 w-3" aria-hidden />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{t("removeBarcode")}</TooltipContent>
-                                  </Tooltip>
-                                </Badge>
-                              ))
-                            ) : (
-                              <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
-                            )}
-                          </div>
-                          <FormDescription>{t("barcodeHint")}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </FormSection>
+                            {!productId ? (
+                              <p className="text-xs text-muted-foreground">
+                                {t("barcodeGenerateRequiresSave")}
+                              </p>
+                            ) : null}
+                            <div className="flex min-h-[36px] flex-wrap gap-2">
+                              {field.value?.length ? (
+                                field.value.map((barcode, index) => (
+                                  <Badge
+                                    key={`${barcode}-${index}`}
+                                    variant="muted"
+                                    className="gap-1 pr-1"
+                                  >
+                                    <span>{barcode}</span>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6 shadow-none"
+                                          aria-label={t("removeBarcode")}
+                                          onClick={() => {
+                                            if (readOnly) {
+                                              return;
+                                            }
+                                            const next = (field.value ?? []).filter(
+                                              (_, i) => i !== index,
+                                            );
+                                            form.clearErrors("barcodes");
+                                            form.setValue("barcodes", next, {
+                                              shouldValidate: false,
+                                              shouldDirty: true,
+                                            });
+                                          }}
+                                          disabled={readOnly}
+                                        >
+                                          <CloseIcon className="h-3 w-3" aria-hidden />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{t("removeBarcode")}</TooltipContent>
+                                    </Tooltip>
+                                  </Badge>
+                                ))
+                              ) : (
+                                <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
+                              )}
+                            </div>
+                            <FormDescription>{t("barcodeHint")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </FormSection>
+                  ) : null}
 
                   <Separator />
 
@@ -3010,7 +3271,7 @@ export const ProductForm = ({
                         {packFields.map((field, index) => (
                           <div
                             key={field.id}
-                            className="space-y-3 rounded-lg border border-border/70 bg-card p-4"
+                            className="space-y-3 rounded-none border border-border/70 bg-card p-4"
                           >
                             <FormGrid className="items-start">
                               <FormField
@@ -3192,7 +3453,7 @@ export const ProductForm = ({
                       return (
                         <div
                           key={field.id}
-                          className="space-y-4 rounded-lg border border-border/70 bg-card p-4"
+                          className="space-y-4 rounded-none border border-border/70 bg-card p-4"
                         >
                           <FormGrid className="items-start">
                             <FormField
@@ -3316,7 +3577,7 @@ export const ProductForm = ({
                                       control={form.control}
                                       name={fieldName}
                                       render={({ field: attrField }) => (
-                                        <FormItem className="rounded-md border border-border/70 p-3">
+                                        <FormItem className="rounded-none border border-border/70 p-3">
                                           <div className="flex items-center justify-between gap-2">
                                             <FormLabel>
                                               {label}
@@ -3583,7 +3844,7 @@ export const ProductForm = ({
                     return (
                       <div
                         key={attribute.key}
-                        className="rounded-lg border border-border/70 bg-card p-3"
+                        className="rounded-none border border-border/70 bg-card p-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
@@ -3734,14 +3995,14 @@ export const ProductForm = ({
               {templateKeys.length ? <span>{t("generatorTemplateHint")}</span> : null}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2">
+            <ModalFooter>
               <Button type="button" variant="ghost" onClick={() => setGeneratorOpen(false)}>
                 {tCommon("cancel")}
               </Button>
               <Button type="button" onClick={handleGenerateVariants}>
                 {t("generatorConfirm")}
               </Button>
-            </div>
+            </ModalFooter>
           </div>
         </Modal>
       ) : null}
@@ -3757,14 +4018,14 @@ export const ProductForm = ({
           title={t("removeVariant")}
           subtitle={t("confirmRemoveVariant")}
         >
-          <div className="flex flex-wrap justify-end gap-2">
+          <ModalFooter>
             <Button type="button" variant="ghost" onClick={() => setVariantToRemove(null)}>
               {tCommon("cancel")}
             </Button>
             <Button type="button" variant="danger" onClick={handleConfirmRemoveVariant}>
               {tCommon("confirm")}
             </Button>
-          </div>
+          </ModalFooter>
         </Modal>
       ) : null}
 
@@ -3782,7 +4043,7 @@ export const ProductForm = ({
         usePortal
       >
         <div className="space-y-4">
-          <div className="relative h-[48vh] min-h-[280px] overflow-hidden rounded-lg border border-border bg-black/70">
+          <div className="relative h-[48vh] min-h-[280px] overflow-hidden rounded-none border border-border bg-black/70">
             {isPreparingImageEditor ? (
               <div className="flex h-full items-center justify-center text-sm text-white/90">
                 <Spinner className="h-4 w-4" />
@@ -3822,7 +4083,7 @@ export const ProductForm = ({
 
           {!readOnly ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
+              <div className="space-y-3 rounded-none border border-border bg-secondary/40 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">
                     {t("imageEditorZoom")}
@@ -3846,7 +4107,7 @@ export const ProductForm = ({
                 />
               </div>
 
-              <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
+              <div className="space-y-3 rounded-none border border-border bg-secondary/40 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">
                     {t("imageEditorRotation")}
@@ -3885,7 +4146,7 @@ export const ProductForm = ({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap justify-end gap-2">
+          <ModalFooter>
             <Button
               type="button"
               variant="ghost"
@@ -3908,7 +4169,7 @@ export const ProductForm = ({
                 {isSavingImageEdit ? tCommon("loading") : t("imageEditorSave")}
               </Button>
             ) : null}
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
     </Form>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -89,8 +89,8 @@ import {
   PRICE_TAG_TEMPLATES,
   ROLL_PRICE_TAG_TEMPLATE,
   isRollPriceTagTemplate,
-  type PriceTagsTemplate,
 } from "@/lib/priceTags";
+import { buildSavedLabelPrintValues, resolveLabelPrintFlowAction } from "@/lib/labelPrintFlow";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { normalizeCurrencyCode } from "@/lib/currency";
@@ -127,8 +127,16 @@ type ProductSortKey =
   | "stores";
 
 type ProductSortDirection = "asc" | "desc";
+type ProductReadinessBadgeVariant = "muted" | "warning" | "danger";
 
 const productTypeFilterSchema = z.enum(["all", "product", "bundle"]);
+const productReadinessFilterSchema = z.enum([
+  "all",
+  "missingBarcode",
+  "missingPrice",
+  "lowStock",
+  "negativeStock",
+]);
 const productViewModeSchema = z.enum(["table", "grid"]);
 const productSortKeySchema = z.enum([
   "sku",
@@ -152,24 +160,21 @@ const productVisibleColumnSchema = z.enum([
   "salePrice",
   "avgCost",
   "barcodes",
+  "readiness",
   "stores",
 ]);
 const defaultProductVisibleColumns = [
-  "sku",
   "image",
   "name",
-  "category",
-  "unit",
   "onHandQty",
   "salePrice",
-  "avgCost",
-  "barcodes",
-  "stores",
+  "readiness",
 ] as const;
 const productsTableStateSchema = z.object({
   search: z.string(),
   category: z.string(),
   productType: productTypeFilterSchema,
+  readiness: productReadinessFilterSchema.optional().default("all"),
   storeId: z.string(),
   showArchived: z.boolean(),
   viewMode: productViewModeSchema,
@@ -183,6 +188,8 @@ const productsTableStateSchema = z.object({
     .optional()
     .default([...defaultProductVisibleColumns]),
 });
+
+const legacyProductsPrintModalEnabled = process.env.NODE_ENV !== "production";
 
 const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = {
   sku: "asc",
@@ -240,6 +247,7 @@ const ProductsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
@@ -266,7 +274,10 @@ const ProductsPage = () => {
   const [bulkDescriptionProgress, setBulkDescriptionProgress] =
     useState<BulkDescriptionProgressState | null>(null);
   const [bulkDescriptionElapsedSeconds, setBulkDescriptionElapsedSeconds] = useState(0);
-  const [printOpen, setPrintOpen] = useState(false);
+  const [printSetupOpen, setPrintSetupOpen] = useState(false);
+  // Dev-only fallback for the old all-in-one print modal. Normal product and inventory
+  // actions must use the saved-profile quick print flow instead.
+  const [legacyProductsPrintModalOpen, setLegacyProductsPrintModalOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
   const [printAdvancedOpen, setPrintAdvancedOpen] = useState(false);
   const inlineEditingEnabled = true;
@@ -276,6 +287,7 @@ const ProductsPage = () => {
       search: "",
       category: "",
       productType: "all",
+      readiness: "all",
       storeId: "",
       showArchived: false,
       viewMode: "table",
@@ -345,12 +357,14 @@ const ProductsPage = () => {
   const search = productsTableState.search;
   const category = productsTableState.category;
   const productType = productsTableState.productType;
+  const readiness = productsTableState.readiness;
   const rawStoreId = productsTableState.storeId;
   const showArchived = productsTableState.showArchived;
   const viewMode = productsTableState.viewMode;
   const productsPageSize = productsTableState.pageSize;
   const productSort = productsTableState.sort;
   const visibleProductColumns = productsTableState.visibleColumns;
+  const readinessParam = searchParams.get("readiness");
   const setSearch = useCallback(
     (nextValue: string) =>
       setProductsTableState((current) => ({
@@ -375,6 +389,21 @@ const ProductsPage = () => {
       })),
     [setProductsTableState],
   );
+  const setReadiness = useCallback(
+    (nextValue: z.infer<typeof productReadinessFilterSchema>) =>
+      setProductsTableState((current) => ({
+        ...current,
+        readiness: nextValue,
+      })),
+    [setProductsTableState],
+  );
+  useEffect(() => {
+    const parsed = productReadinessFilterSchema.safeParse(readinessParam);
+    if (!parsed.success || readiness === parsed.data) {
+      return;
+    }
+    setReadiness(parsed.data);
+  }, [readiness, readinessParam, setReadiness]);
   const setStoreId = useCallback(
     (nextValue: string) =>
       setProductsTableState((current) => ({
@@ -432,6 +461,7 @@ const ProductsPage = () => {
       { key: "salePrice", label: t("salePrice") },
       { key: "avgCost", label: t("avgCost") },
       { key: "barcodes", label: t("barcodes") },
+      { key: "readiness", label: t("readinessColumn") },
       { key: "stores", label: t("stores") },
     ],
     [t, tInventory],
@@ -446,6 +476,7 @@ const ProductsPage = () => {
       category: category || undefined,
       type: productType,
       includeArchived: isAdmin ? showArchived : undefined,
+      readiness: readiness === "all" ? undefined : readiness,
       storeId: rawStoreId || undefined,
       page: productsPage,
       pageSize: productsPageSize,
@@ -458,6 +489,7 @@ const ProductsPage = () => {
       productSort.direction,
       productSort.key,
       productType,
+      readiness,
       productsPage,
       productsPageSize,
       search,
@@ -483,11 +515,9 @@ const ProductsPage = () => {
     () => stores.find((store) => store.id === defaultPrintStoreId) ?? selectedStore,
     [defaultPrintStoreId, selectedStore, stores],
   );
-  const rollPreviewPriceText = formatCurrency(
-    0,
-    locale,
-    normalizeCurrencyCode(printPreviewStore?.currencyCode),
-  );
+  const rollPreviewPriceText = printPreviewStore
+    ? formatCurrency(0, locale, normalizeCurrencyCode(printPreviewStore.currencyCode))
+    : t("rollPreviewPriceUnavailable");
   const printProfileQuery = trpc.stores.hardware.useQuery(
     { storeId: defaultPrintStoreId },
     { enabled: Boolean(defaultPrintStoreId) },
@@ -1057,7 +1087,7 @@ const ProductsPage = () => {
   const queueIdsForQuery = useMemo(() => Array.from(new Set(printQueue)).sort(), [printQueue]);
   const queueProductsQuery = trpc.products.byIds.useQuery(
     { ids: queueIdsForQuery },
-    { enabled: printOpen && queueIdsForQuery.length > 0 },
+    { enabled: legacyProductsPrintModalOpen && queueIdsForQuery.length > 0 },
   );
   type QueueProductLite = {
     id: string;
@@ -1233,29 +1263,29 @@ const ProductsPage = () => {
   );
 
   useEffect(() => {
-    if (printOpen) {
+    if (legacyProductsPrintModalOpen) {
       setPrintAdvancedOpen(false);
       setPrintQueue((current) => (current.length ? current : selectedList));
     } else {
       setPrintQueue([]);
     }
-  }, [printOpen, selectedList]);
+  }, [legacyProductsPrintModalOpen, selectedList]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV === "production") {
+    if (!legacyProductsPrintModalEnabled) {
       return;
     }
     const target = window as typeof window & {
-      __seedPrintQueue?: (count?: number) => void;
+      __seedLegacyProductsPrintModalQueue?: (count?: number) => void;
     };
-    target.__seedPrintQueue = (count = 500) => {
+    target.__seedLegacyProductsPrintModalQueue = (count = 500) => {
       const ids = products.slice(0, count).map((product) => product.id);
       setSelectedIds(new Set(ids));
       setPrintQueue(ids);
-      setPrintOpen(true);
+      setLegacyProductsPrintModalOpen(true);
     };
     return () => {
-      delete target.__seedPrintQueue;
+      delete target.__seedLegacyProductsPrintModalQueue;
     };
   }, [products]);
 
@@ -1311,6 +1341,32 @@ const ProductsPage = () => {
     images?: { url: string }[];
   }) => product.images?.[0]?.url ?? product.photoUrl ?? null;
   type ProductRow = NonNullable<typeof products>[number];
+  const getProductReadiness = (product: ProductRow) => {
+    const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
+    return {
+      missingBarcode: !product.barcodes.some((barcode) => barcode.value.trim()),
+      missingPrice: price === null || price === undefined,
+      negativeStock: product.onHandQty < 0,
+      lowStock: product.onHandQty <= 0,
+    };
+  };
+  const getProductReadinessSummary = (
+    readinessState: ReturnType<typeof getProductReadiness>,
+  ): { label: string; variant: ProductReadinessBadgeVariant } => {
+    if (readinessState.negativeStock) {
+      return { label: t("negativeStock"), variant: "danger" };
+    }
+    if (readinessState.missingPrice) {
+      return { label: t("missingPrice"), variant: "danger" };
+    }
+    if (readinessState.missingBarcode) {
+      return { label: t("missingBarcode"), variant: "warning" };
+    }
+    if (readinessState.lowStock) {
+      return { label: t("missingStock"), variant: "warning" };
+    }
+    return { label: t("readyForSale"), variant: "muted" };
+  };
   const sortCollator = useMemo(
     () =>
       new Intl.Collator(locale, {
@@ -1461,28 +1517,26 @@ const ProductsPage = () => {
     </TableHead>
   );
 
-  const buildSavedPrintValues = useCallback((quantity?: number): z.infer<typeof printSchema> => {
-    const settings = printProfileSettings;
-    const template = PRICE_TAG_TEMPLATES.includes(settings?.labelTemplate as PriceTagsTemplate)
-      ? (settings?.labelTemplate as PriceTagsTemplate)
-      : ROLL_PRICE_TAG_TEMPLATE;
-    const copies = quantity ?? settings?.labelDefaultCopies ?? 1;
-    return {
-      template,
-      storeId: defaultPrintStoreId,
-      quantity: Math.max(1, Math.trunc(copies)),
-      widthMm: settings?.labelWidthMm ?? PRICE_TAG_ROLL_DEFAULTS.widthMm,
-      heightMm: settings?.labelHeightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
-      allowWithoutBarcode: false,
-    };
-  }, [defaultPrintStoreId, printProfileSettings]);
+  const buildSavedPrintValues = useCallback(
+    (quantity?: number): z.infer<typeof printSchema> =>
+      buildSavedLabelPrintValues({
+        settings: printProfileSettings,
+        storeId: defaultPrintStoreId,
+        quantity,
+      }),
+    [defaultPrintStoreId, printProfileSettings],
+  );
+
+  const openPrintSettings = useCallback(() => {
+    if (defaultPrintStoreId) {
+      router.push(`/stores/${defaultPrintStoreId}/hardware`);
+      return;
+    }
+    router.push("/settings/printing");
+  }, [defaultPrintStoreId, router]);
 
   const performPrintTags = useCallback(
-    async (
-      queue: string[],
-      values: z.infer<typeof printSchema>,
-      mode: "download" | "print",
-    ) => {
+    async (queue: string[], values: z.infer<typeof printSchema>, mode: "download" | "print") => {
       if (!queue.length) {
         return false;
       }
@@ -1559,12 +1613,34 @@ const ProductsPage = () => {
       const savedValues = buildSavedPrintValues(quantity);
       printForm.reset(savedValues);
       setPrintQueue(activeIds);
-      if (options?.settings || !defaultPrintStoreId || printProfileQuery.isLoading) {
-        setPrintOpen(true);
+      const action = resolveLabelPrintFlowAction({
+        settings: printProfileSettings,
+        storeId: defaultPrintStoreId,
+        isLoading: printProfileQuery.isLoading,
+        explicitSettings: options?.settings,
+      });
+      if (action === "openSettings") {
+        openPrintSettings();
+        return;
+      }
+      if (action === "setupRequired") {
+        setPrintSetupOpen(true);
+        return;
+      }
+      if (action === "loading") {
+        toast({ variant: "info", description: t("printProfileLoading") });
         return;
       }
       void performPrintTags(activeIds, savedValues, "print").then((ok) => {
         if (ok) {
+          toast({
+            variant: "success",
+            description: t("printQueued", { count: activeIds.length }),
+            actionLabel: t("changePrintSettings"),
+            actionHref: defaultPrintStoreId
+              ? `/stores/${defaultPrintStoreId}/hardware`
+              : "/settings/printing",
+          });
           setSelectedIds(new Set());
           setPrintQueue([]);
         }
@@ -1575,8 +1651,10 @@ const ProductsPage = () => {
       defaultPrintStoreId,
       performPrintTags,
       printForm,
+      printProfileSettings,
       printProfileQuery.isLoading,
       productById,
+      openPrintSettings,
       t,
       toast,
     ],
@@ -1683,7 +1761,7 @@ const ProductsPage = () => {
     const queue = printQueue;
     const ok = await performPrintTags(queue, values, mode);
     if (ok) {
-      setPrintOpen(false);
+      setLegacyProductsPrintModalOpen(false);
       setSelectedIds(new Set());
       setPrintQueue([]);
     }
@@ -2136,20 +2214,12 @@ const ProductsPage = () => {
           <TooltipProvider>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {isAdmin ? (
-                <>
-                  <Link href="/products/new" className="w-full sm:w-auto">
-                    <Button className="w-full sm:w-auto" data-tour="products-create">
-                      <AddIcon className="h-4 w-4" aria-hidden />
-                      {t("newProduct")}
-                    </Button>
-                  </Link>
-                  <Link href="/products/new?type=bundle" className="w-full sm:w-auto">
-                    <Button variant="secondary" className="w-full sm:w-auto">
-                      <AddIcon className="h-4 w-4" aria-hidden />
-                      {t("newBundle")}
-                    </Button>
-                  </Link>
-                </>
+                <Link href="/products/new" className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto" data-tour="products-create">
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {t("newProduct")}
+                  </Button>
+                </Link>
               ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2164,6 +2234,27 @@ const ProductsPage = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[240px]">
+                  {isAdmin ? (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/products/new?type=bundle">
+                          <AddIcon className="h-4 w-4" aria-hidden />
+                          {t("newBundle")}
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/settings/import">
+                          <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
+                          {t("importProducts")}
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  <DropdownMenuItem onSelect={openPrintSettings}>
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                    {t("changePrintSettings")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {canManagePrices ? (
                     <DropdownMenuItem disabled={!stores.length} onSelect={() => setBulkOpen(true)}>
                       <EditIcon className="h-4 w-4" aria-hidden />
@@ -2193,7 +2284,9 @@ const ProductsPage = () => {
                         {t("printPriceTags")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onSelect={() => openPrintForProducts(selectedList, undefined, { settings: true })}
+                        onSelect={() =>
+                          openPrintForProducts(selectedList, undefined, { settings: true })
+                        }
                       >
                         <MoreIcon className="h-4 w-4" aria-hidden />
                         {t("changePrintSettings")}
@@ -2304,8 +2397,27 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="w-full sm:max-w-xs">
+              <Select
+                value={readiness}
+                onValueChange={(value) =>
+                  setReadiness(value as z.infer<typeof productReadinessFilterSchema>)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("readinessFilter")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("readinessAll")}</SelectItem>
+                  <SelectItem value="missingBarcode">{t("missingBarcode")}</SelectItem>
+                  <SelectItem value="missingPrice">{t("missingPrice")}</SelectItem>
+                  <SelectItem value="lowStock">{t("lowStock")}</SelectItem>
+                  <SelectItem value="negativeStock">{t("negativeStock")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {isAdmin ? (
-              <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+              <div className="flex items-center gap-2 rounded-none border border-border px-3 py-2">
                 <Switch
                   checked={showArchived}
                   onCheckedChange={setShowArchived}
@@ -2345,7 +2457,7 @@ const ProductsPage = () => {
                 />
               ) : null}
             </div>
-            <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+            <div className="flex items-center gap-1 rounded-none border border-border p-1">
               <Button
                 type="button"
                 size="sm"
@@ -2428,109 +2540,85 @@ const ProductsPage = () => {
                         : tCommon("selectAllResults", { count: productsTotal })}
                     </Button>
                   ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-tour="products-print-tags"
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        aria-label={t("printPriceTags")}
-                        onClick={() => openPrintForProducts(selectedList)}
-                      >
-                        <PrintIcon className="h-4 w-4" aria-hidden />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t("printPriceTags")}</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t("changePrintSettings")}
-                        onClick={() => openPrintForProducts(selectedList, undefined, { settings: true })}
-                      >
-                        <MoreIcon className="h-4 w-4" aria-hidden />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t("changePrintSettings")}</TooltipContent>
-                  </Tooltip>
+                  <Button
+                    data-tour="products-print-tags"
+                    type="button"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => openPrintForProducts(selectedList)}
+                  >
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                    {t("printLabels")}
+                  </Button>
+                  {canManagePrices ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setBulkStorePriceOpen(true)}
+                    >
+                      <PriceIcon className="h-4 w-4" aria-hidden />
+                      {t("bulkSetStorePrice")}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleExport("csv")}
+                    disabled={exportQuery.isFetching}
+                  >
+                    {exportQuery.isFetching ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {t("exportCsv")}
+                  </Button>
                   {hasActiveSelected && isAdmin ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="text-danger shadow-none hover:text-danger"
-                          aria-label={t("bulkArchive")}
-                          onClick={handleBulkArchive}
-                        >
-                          <ArchiveIcon className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("bulkArchive")}</TooltipContent>
-                    </Tooltip>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full text-danger hover:text-danger sm:w-auto"
+                      onClick={handleBulkArchive}
+                    >
+                      <ArchiveIcon className="h-4 w-4" aria-hidden />
+                      {t("bulkArchive")}
+                    </Button>
                   ) : null}
                   {hasArchivedSelected && isAdmin ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="shadow-none"
-                          aria-label={t("bulkRestore")}
-                          onClick={handleBulkRestore}
-                        >
-                          <RestoreIcon className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("bulkRestore")}</TooltipContent>
-                    </Tooltip>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={handleBulkRestore}
+                    >
+                      <RestoreIcon className="h-4 w-4" aria-hidden />
+                      {t("bulkRestore")}
+                    </Button>
                   ) : null}
                   {isAdmin ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="shadow-none"
-                          aria-label={t("bulkSetCategory")}
-                          onClick={() => setBulkCategoryOpen(true)}
-                        >
-                          <TagIcon className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("bulkSetCategory")}</TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                  {canManagePrices ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="shadow-none"
-                          aria-label={t("bulkSetStorePrice")}
-                          onClick={() => setBulkStorePriceOpen(true)}
-                        >
-                          <PriceIcon className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("bulkSetStorePrice")}</TooltipContent>
-                    </Tooltip>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setBulkCategoryOpen(true)}
+                    >
+                      <TagIcon className="h-4 w-4" aria-hidden />
+                      {t("bulkSetCategory")}
+                    </Button>
                   ) : null}
                   {isAdmin ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
                           type="button"
-                          variant="primary"
+                          variant="secondary"
                           size="sm"
                           className="w-full sm:w-auto"
                           aria-label={t("bulkAiActions")}
@@ -2606,7 +2694,7 @@ const ProductsPage = () => {
                             <TableHead className="w-10">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={allSelected}
                                 onChange={toggleSelectAll}
                                 aria-label={t("selectAll")}
@@ -2643,6 +2731,9 @@ const ProductsPage = () => {
                             {visibleProductColumnSet.has("barcodes")
                               ? renderSortableHead("barcodes", t("barcodes"))
                               : null}
+                            {visibleProductColumnSet.has("readiness") ? (
+                              <TableHead>{t("readinessColumn")}</TableHead>
+                            ) : null}
                             {visibleProductColumnSet.has("stores")
                               ? renderSortableHead("stores", t("stores"))
                               : null}
@@ -2657,12 +2748,14 @@ const ProductsPage = () => {
                               product.inventorySnapshots.map((snapshot) => snapshot.storeId),
                             );
                             const productCategories = getProductCategories(product);
+                            const readinessState = getProductReadiness(product);
+                            const readinessSummary = getProductReadinessSummary(readinessState);
                             return (
                               <TableRow key={product.id}>
                                 <TableCell>
                                   <input
                                     type="checkbox"
-                                    className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                     checked={selectedIds.has(product.id)}
                                     onChange={() => toggleSelect(product.id)}
                                     aria-label={t("selectProduct", { name: product.name })}
@@ -2751,7 +2844,13 @@ const ProductsPage = () => {
                                   </TableCell>
                                 ) : null}
                                 {visibleProductColumnSet.has("onHandQty") ? (
-                                  <TableCell className="text-xs text-muted-foreground">
+                                  <TableCell
+                                    className={
+                                      readinessState.negativeStock
+                                        ? "text-sm font-semibold text-danger"
+                                        : "text-xs text-muted-foreground"
+                                    }
+                                  >
                                     <InlineEditableCell
                                       rowId={product.id}
                                       row={product}
@@ -2818,6 +2917,13 @@ const ProductsPage = () => {
                                     {barcodeSummary.label}
                                   </TableCell>
                                 ) : null}
+                                {visibleProductColumnSet.has("readiness") ? (
+                                  <TableCell>
+                                    <Badge variant={readinessSummary.variant}>
+                                      {readinessSummary.label}
+                                    </Badge>
+                                  </TableCell>
+                                ) : null}
                                 {visibleProductColumnSet.has("stores") ? (
                                   <TableCell className="text-xs text-muted-foreground">
                                     {storeInfo.names.length ? (
@@ -2857,10 +2963,12 @@ const ProductsPage = () => {
                       const previewImageUrl = getProductPreviewUrl(product);
                       const actions = getProductActions(product);
                       const productCategories = getProductCategories(product);
+                      const readinessState = getProductReadiness(product);
+                      const readinessSummary = getProductReadinessSummary(readinessState);
                       return (
                         <div
                           key={product.id}
-                          className="overflow-hidden rounded-lg border border-border bg-card"
+                          className="overflow-hidden rounded-none border border-border bg-card"
                         >
                           <div className="relative aspect-[4/3] bg-muted/30">
                             {previewImageUrl ? (
@@ -2878,7 +2986,7 @@ const ProductsPage = () => {
                             <label className="absolute right-2 top-2">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={selectedIds.has(product.id)}
                                 onChange={() => toggleSelect(product.id)}
                                 aria-label={t("selectProduct", { name: product.name })}
@@ -2907,6 +3015,9 @@ const ProductsPage = () => {
                               {product.isDeleted ? (
                                 <Badge variant="muted">{t("archived")}</Badge>
                               ) : null}
+                              <Badge variant={readinessSummary.variant}>
+                                {readinessSummary.label}
+                              </Badge>
                               {productCategories.map((value) => (
                                 <Badge key={value} variant="muted">
                                   {value}
@@ -2994,10 +3105,12 @@ const ProductsPage = () => {
                 );
                 const actions = getProductActions(product);
                 const productCategories = getProductCategories(product);
+                const readinessState = getProductReadiness(product);
+                const readinessSummary = getProductReadinessSummary(readinessState);
 
                 if (viewMode === "grid") {
                   return (
-                    <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    <div className="overflow-hidden rounded-none border border-border bg-card">
                       <div className="relative aspect-[4/3] bg-muted/30">
                         {previewImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -3014,7 +3127,7 @@ const ProductsPage = () => {
                         <label className="absolute left-2 top-2">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             checked={selectedIds.has(product.id)}
                             onChange={() => toggleSelect(product.id)}
                             aria-label={t("selectProduct", { name: product.name })}
@@ -3043,6 +3156,7 @@ const ProductsPage = () => {
                           {product.isDeleted ? (
                             <Badge variant="muted">{t("archived")}</Badge>
                           ) : null}
+                          <Badge variant={readinessSummary.variant}>{readinessSummary.label}</Badge>
                           {productCategories.map((value) => (
                             <Badge key={value} variant="muted">
                               {value}
@@ -3115,12 +3229,12 @@ const ProductsPage = () => {
                 }
 
                 return (
-                  <div className="rounded-lg border border-border bg-card p-4">
+                  <div className="rounded-none border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-3">
                       <label className="flex items-start gap-3">
                         <input
                           type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          className="mt-1 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                           checked={selectedIds.has(product.id)}
                           onChange={() => toggleSelect(product.id)}
                           aria-label={t("selectProduct", { name: product.name })}
@@ -3148,6 +3262,9 @@ const ProductsPage = () => {
                             {product.isDeleted ? (
                               <Badge variant="muted">{t("archived")}</Badge>
                             ) : null}
+                            <Badge variant={readinessSummary.variant}>
+                              {readinessSummary.label}
+                            </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {t("sku")}: {product.sku}
@@ -3293,7 +3410,7 @@ const ProductsPage = () => {
       >
         {arrangeCategoriesProgress ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="rounded-none border border-border bg-muted/30 p-4">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">
                   {t("aiArrangeCategoriesProgressLabel", {
@@ -3333,7 +3450,7 @@ const ProductsPage = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressScanned")}
                 </p>
@@ -3341,7 +3458,7 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgress.scannedCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressEligible")}
                 </p>
@@ -3349,7 +3466,7 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgress.eligibleCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressUpdated")}
                 </p>
@@ -3357,7 +3474,7 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgress.updatedCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressSkipped")}
                 </p>
@@ -3368,7 +3485,7 @@ const ProductsPage = () => {
             </div>
 
             {arrangeCategoriesProgress.errorMessage ? (
-              <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="rounded-none border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {arrangeCategoriesProgress.errorMessage}
               </div>
             ) : null}
@@ -3413,7 +3530,7 @@ const ProductsPage = () => {
       >
         {bulkDescriptionProgress ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="rounded-none border border-border bg-muted/30 p-4">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">
                   {t("bulkGenerateDescriptionsProgressLabel", {
@@ -3453,7 +3570,7 @@ const ProductsPage = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressUpdated")}
                 </p>
@@ -3461,7 +3578,7 @@ const ProductsPage = () => {
                   {bulkDescriptionProgress.updatedCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressSkipped")}
                 </p>
@@ -3469,7 +3586,7 @@ const ProductsPage = () => {
                   {bulkDescriptionProgress.skippedCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressFailed")}
                 </p>
@@ -3477,7 +3594,7 @@ const ProductsPage = () => {
                   {bulkDescriptionProgress.failedCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-card p-3">
+              <div className="rounded-none border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressDeferred")}
                 </p>
@@ -3488,7 +3605,7 @@ const ProductsPage = () => {
             </div>
 
             {bulkDescriptionProgress.errorMessage ? (
-              <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="rounded-none border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {bulkDescriptionProgress.errorMessage}
               </div>
             ) : null}
@@ -3643,7 +3760,7 @@ const ProductsPage = () => {
               )}
             />
 
-            <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded-none border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               {previewQuery.isLoading
                 ? tCommon("loading")
                 : t("bulkPreview", { count: previewQuery.data?.total ?? 0 })}
@@ -3938,352 +4055,390 @@ const ProductsPage = () => {
       </Modal>
 
       <Modal
-        open={printOpen}
+        open={printSetupOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setPrintOpen(false);
+            setPrintSetupOpen(false);
           }
         }}
-        title={t("printSettingsTitle")}
-        subtitle={t("printSubtitle", { count: printQueue.length })}
-        className="sm:!max-w-6xl"
+        title={t("printSetupRequiredTitle")}
+        subtitle={t("printSetupRequiredSubtitle")}
       >
-        <Form {...printForm}>
-          <form
-            className="space-y-4"
-            onSubmit={printForm.handleSubmit((values) => handlePrintTags(values, "download"))}
-          >
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {tCommon("selectedCount", { count: printQueue.length })}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">
-                      {printQueue.length}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {t("printQty")}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">{printLabelCount}</p>
-                  </div>
-                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {t("template")}
-                    </p>
-                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
-                      {t("templateRollXp365b")}
-                    </p>
-                  </div>
-                </div>
+        <div className="space-y-4">
+          <div className="border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">
+              {t("printSetupSelected", { count: printQueue.length })}
+            </p>
+            <p className="mt-1">{t("printSetupBody")}</p>
+          </div>
+          <FormActions>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setPrintSetupOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button type="button" className="w-full sm:w-auto" onClick={openPrintSettings}>
+              <PrintIcon className="h-4 w-4" aria-hidden />
+              {t("openPrintSettings")}
+            </Button>
+          </FormActions>
+        </div>
+      </Modal>
 
-                <div className="rounded-md border border-border/70 bg-card p-3">
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
-                    <FormField
-                      control={printForm.control}
-                      name="storeId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{tCommon("store")}</FormLabel>
-                          <FormControl>
-                            <Select
-                              value={field.value || "all"}
-                              onValueChange={(value) =>
-                                field.onChange(value === "all" ? "" : value)
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder={tCommon("selectStore")} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">{t("allStores")}</SelectItem>
-                                {stores.map((store) => (
-                                  <SelectItem key={store.id} value={store.id}>
-                                    {store.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </FormControl>
-                          <FormDescription>{t("printStoreHint")}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={printForm.control}
-                      name="quantity"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("printQty")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" inputMode="numeric" min={1} />
-                          </FormControl>
-                          <div className="flex gap-1.5 pt-1">
-                            {priceTagQuickQuantities.map((quantity) => (
-                              <Button
-                                key={quantity}
-                                type="button"
-                                variant={
-                                  resolvedPrintQuantity === quantity ? "default" : "secondary"
-                                }
-                                size="sm"
-                                className="h-7 flex-1 px-2"
-                                onClick={() =>
-                                  printForm.setValue("quantity", quantity, {
-                                    shouldDirty: true,
-                                    shouldValidate: true,
-                                  })
+      {legacyProductsPrintModalEnabled ? (
+        <Modal
+          open={legacyProductsPrintModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLegacyProductsPrintModalOpen(false);
+            }
+          }}
+          title={t("printSettingsTitle")}
+          subtitle={t("printSubtitle", { count: printQueue.length })}
+          className="sm:!max-w-6xl"
+        >
+          <Form {...printForm}>
+            <form
+              className="space-y-4"
+              onSubmit={printForm.handleSubmit((values) => handlePrintTags(values, "download"))}
+            >
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {tCommon("selectedCount", { count: printQueue.length })}
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-foreground">
+                        {printQueue.length}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {t("printQty")}
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-foreground">
+                        {printLabelCount}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {t("template")}
+                      </p>
+                      <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                        {t("templateRollXp365b")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border/70 bg-card p-3">
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+                      <FormField
+                        control={printForm.control}
+                        name="storeId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{tCommon("store")}</FormLabel>
+                            <FormControl>
+                              <Select
+                                value={field.value || "all"}
+                                onValueChange={(value) =>
+                                  field.onChange(value === "all" ? "" : value)
                                 }
                               >
-                                {quantity}
-                              </Button>
-                            ))}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {printRequiresBarcodeConfirmation ? (
-                  <div className="flex flex-col gap-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-medium">
-                        {t("rollMissingBarcodeCount", { count: queueMissingBarcodeCount })}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t("printWithoutBarcodeHint")}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() =>
-                        printForm.setValue("allowWithoutBarcode", true, {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        })
-                      }
-                    >
-                      {t("printWithoutBarcode")}
-                    </Button>
-                  </div>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-md border border-border/70 bg-secondary/20 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/40"
-                  onClick={() => setPrintAdvancedOpen((current) => !current)}
-                >
-                  <span>{printAdvancedOpen ? t("hideAdvanced") : t("showAdvanced")}</span>
-                  {printAdvancedOpen ? (
-                    <ArrowUpIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  ) : (
-                    <ArrowDownIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  )}
-                </button>
-
-                {printAdvancedOpen ? (
-                  <div className="grid gap-3 rounded-md border border-border/70 bg-card p-3 sm:grid-cols-2">
-                    <FormField
-                      control={printForm.control}
-                      name="widthMm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("rollWidthMm")}</FormLabel>
-                          <FormControl>
-                            <Input
-                              value={field.value ?? ""}
-                              onChange={(event) => field.onChange(event.target.value)}
-                              onBlur={(event) => {
-                                const raw = event.target.value.trim();
-                                if (raw === "") {
-                                  field.onChange(0);
-                                } else {
-                                  const parsed = Number(raw);
-                                  field.onChange(Number.isFinite(parsed) ? parsed : 0);
-                                }
-                                field.onBlur();
-                              }}
-                              type="number"
-                              min={PRICE_TAG_ROLL_LIMITS.widthMm.min}
-                              max={PRICE_TAG_ROLL_LIMITS.widthMm.max}
-                              step={PRICE_TAG_ROLL_LIMITS.widthMm.step}
-                            />
-                          </FormControl>
-                          <FormDescription>{t("rollSizeHint")}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={printForm.control}
-                      name="heightMm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("rollHeightMm")}</FormLabel>
-                          <FormControl>
-                            <Input
-                              value={field.value ?? ""}
-                              onChange={(event) => field.onChange(event.target.value)}
-                              onBlur={(event) => {
-                                const raw = event.target.value.trim();
-                                if (raw === "") {
-                                  field.onChange(0);
-                                } else {
-                                  const parsed = Number(raw);
-                                  field.onChange(Number.isFinite(parsed) ? parsed : 0);
-                                }
-                                field.onBlur();
-                              }}
-                              type="number"
-                              min={PRICE_TAG_ROLL_LIMITS.heightMm.min}
-                              max={PRICE_TAG_ROLL_LIMITS.heightMm.max}
-                              step={PRICE_TAG_ROLL_LIMITS.heightMm.step}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={printForm.control}
-                      name="allowWithoutBarcode"
-                      render={({ field }) => (
-                        <FormItem className="sm:col-span-2">
-                          <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-secondary/20 p-3">
-                            <div>
-                              <FormLabel>{t("printWithoutBarcode")}</FormLabel>
-                              <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
-                            </div>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={tCommon("selectStore")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">{t("allStores")}</SelectItem>
+                                  {stores.map((store) => (
+                                    <SelectItem key={store.id} value={store.id}>
+                                      {store.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
+                            <FormDescription>{t("printStoreHint")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={printForm.control}
+                        name="quantity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("printQty")}</FormLabel>
                             <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                disabled={queueMissingBarcodeCount === 0}
+                              <Input {...field} type="number" inputMode="numeric" min={1} />
+                            </FormControl>
+                            <div className="flex gap-1.5 pt-1">
+                              {priceTagQuickQuantities.map((quantity) => (
+                                <Button
+                                  key={quantity}
+                                  type="button"
+                                  variant={
+                                    resolvedPrintQuantity === quantity ? "default" : "secondary"
+                                  }
+                                  size="sm"
+                                  className="h-7 flex-1 px-2"
+                                  onClick={() =>
+                                    printForm.setValue("quantity", quantity, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                >
+                                  {quantity}
+                                </Button>
+                              ))}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {printRequiresBarcodeConfirmation ? (
+                    <div className="flex flex-col gap-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {t("rollMissingBarcodeCount", { count: queueMissingBarcodeCount })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {t("printWithoutBarcodeHint")}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() =>
+                          printForm.setValue("allowWithoutBarcode", true, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                      >
+                        {t("printWithoutBarcode")}
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md border border-border/70 bg-secondary/20 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/40"
+                    onClick={() => setPrintAdvancedOpen((current) => !current)}
+                  >
+                    <span>{printAdvancedOpen ? t("hideAdvanced") : t("showAdvanced")}</span>
+                    {printAdvancedOpen ? (
+                      <ArrowUpIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    ) : (
+                      <ArrowDownIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    )}
+                  </button>
+
+                  {printAdvancedOpen ? (
+                    <div className="grid gap-3 rounded-md border border-border/70 bg-card p-3 sm:grid-cols-2">
+                      <FormField
+                        control={printForm.control}
+                        name="widthMm"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("rollWidthMm")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                value={field.value ?? ""}
+                                onChange={(event) => field.onChange(event.target.value)}
+                                onBlur={(event) => {
+                                  const raw = event.target.value.trim();
+                                  if (raw === "") {
+                                    field.onChange(0);
+                                  } else {
+                                    const parsed = Number(raw);
+                                    field.onChange(Number.isFinite(parsed) ? parsed : 0);
+                                  }
+                                  field.onBlur();
+                                }}
+                                type="number"
+                                min={PRICE_TAG_ROLL_LIMITS.widthMm.min}
+                                max={PRICE_TAG_ROLL_LIMITS.widthMm.max}
+                                step={PRICE_TAG_ROLL_LIMITS.widthMm.step}
                               />
                             </FormControl>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="space-y-3">
-                {rollTemplateSelected ? (
-                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-foreground">
-                        {t("rollTemplatePreviewTitle")}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("rollPreviewSize", {
-                          width: resolvedRollWidthMm,
-                          height: resolvedRollHeightMm,
-                        })}
-                      </p>
+                            <FormDescription>{t("rollSizeHint")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={printForm.control}
+                        name="heightMm"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("rollHeightMm")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                value={field.value ?? ""}
+                                onChange={(event) => field.onChange(event.target.value)}
+                                onBlur={(event) => {
+                                  const raw = event.target.value.trim();
+                                  if (raw === "") {
+                                    field.onChange(0);
+                                  } else {
+                                    const parsed = Number(raw);
+                                    field.onChange(Number.isFinite(parsed) ? parsed : 0);
+                                  }
+                                  field.onBlur();
+                                }}
+                                type="number"
+                                min={PRICE_TAG_ROLL_LIMITS.heightMm.min}
+                                max={PRICE_TAG_ROLL_LIMITS.heightMm.max}
+                                step={PRICE_TAG_ROLL_LIMITS.heightMm.step}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={printForm.control}
+                        name="allowWithoutBarcode"
+                        render={({ field }) => (
+                          <FormItem className="sm:col-span-2">
+                            <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-secondary/20 p-3">
+                              <div>
+                                <FormLabel>{t("printWithoutBarcode")}</FormLabel>
+                                <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  disabled={queueMissingBarcodeCount === 0}
+                                />
+                              </FormControl>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
-                    <div className="mx-auto w-[210px] max-w-full rounded-md border border-border bg-card p-2">
-                      <div
-                        className="rounded-md border border-dashed border-border/70"
-                        style={{
-                          aspectRatio: `${Math.max(1, resolvedRollWidthMm)} / ${Math.max(1, resolvedRollHeightMm)}`,
-                        }}
-                      >
+                  ) : null}
+                </div>
+
+                <div className="space-y-3">
+                  {rollTemplateSelected ? (
+                    <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="text-xs font-medium text-foreground">
+                          {t("rollTemplatePreviewTitle")}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("rollPreviewSize", {
+                            width: resolvedRollWidthMm,
+                            height: resolvedRollHeightMm,
+                          })}
+                        </p>
+                      </div>
+                      <div className="mx-auto w-[210px] max-w-full rounded-md border border-border bg-card p-2">
                         <div
-                          className="flex h-full flex-col justify-between"
+                          className="rounded-md border border-dashed border-border/70"
                           style={{
-                            padding: `${rollPreviewPaddingY}% ${rollPreviewPaddingX}%`,
+                            aspectRatio: `${Math.max(1, resolvedRollWidthMm)} / ${Math.max(1, resolvedRollHeightMm)}`,
                           }}
                         >
-                          <p className="line-clamp-2 text-[10px] font-medium text-foreground">
-                            {rollPreviewProduct?.name ?? t("rollPreviewName")}
-                          </p>
-                          <p className="mt-1 text-[11px] font-semibold text-foreground">
-                            {rollPreviewPriceText}
-                          </p>
-                          <p className="mt-1 text-[8px] text-muted-foreground">
-                            {rollPreviewProduct?.sku || t("rollPreviewSku")}
-                          </p>
-                          <div className="mt-1 h-4 rounded-md bg-muted" />
-                          <p className="mt-1 text-center text-[7px] text-muted-foreground">
-                            {t("rollPreviewBarcode")}
-                          </p>
+                          <div
+                            className="flex h-full flex-col justify-between"
+                            style={{
+                              padding: `${rollPreviewPaddingY}% ${rollPreviewPaddingX}%`,
+                            }}
+                          >
+                            <p className="line-clamp-2 text-[10px] font-medium text-foreground">
+                              {rollPreviewProduct?.name ?? t("rollPreviewName")}
+                            </p>
+                            <p className="mt-1 text-[11px] font-semibold text-foreground">
+                              {rollPreviewPriceText}
+                            </p>
+                            <p className="mt-1 text-[8px] text-muted-foreground">
+                              {rollPreviewProduct?.sku || t("rollPreviewSku")}
+                            </p>
+                            <div className="mt-1 h-4 rounded-md bg-muted" />
+                            <p className="mt-1 text-center text-[7px] text-muted-foreground">
+                              {t("rollPreviewBarcode")}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
-                  <p className="text-xs font-medium text-foreground">{t("printQueueTitle")}</p>
-                  {queueProductsQuery.isLoading && queueIdsForQuery.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">{tCommon("loading")}</p>
                   ) : null}
-                  <div className="max-h-44 space-y-1 overflow-y-auto pr-1 text-xs">
-                    {printQueue.map((productId) => {
-                      const product = productById.get(productId);
-                      return (
-                        <div
-                          key={productId}
-                          className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-card/80 px-2 py-1.5"
-                        >
-                          <span className="truncate text-foreground">
-                            {product?.name ?? productId}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground">
-                            {product?.sku ?? tCommon("notAvailable")}
-                          </span>
-                        </div>
-                      );
-                    })}
+
+                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                    <p className="text-xs font-medium text-foreground">{t("printQueueTitle")}</p>
+                    {queueProductsQuery.isLoading && queueIdsForQuery.length > 0 ? (
+                      <p className="text-xs text-muted-foreground">{tCommon("loading")}</p>
+                    ) : null}
+                    <div className="max-h-44 space-y-1 overflow-y-auto pr-1 text-xs">
+                      {printQueue.map((productId) => {
+                        const product = productById.get(productId);
+                        return (
+                          <div
+                            key={productId}
+                            className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-card/80 px-2 py-1.5"
+                          >
+                            <span className="truncate text-foreground">
+                              {product?.name ?? productId}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground">
+                              {product?.sku ?? tCommon("notAvailable")}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <FormActions>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setPrintOpen(false)}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button
-                type="submit"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                disabled={printRequiresBarcodeConfirmation}
-              >
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-                {t("printDownload")}
-              </Button>
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                disabled={printRequiresBarcodeConfirmation}
-                onClick={() => {
-                  void printForm.handleSubmit((values) => handlePrintTags(values, "print"))();
-                }}
-              >
-                <PrintIcon className="h-4 w-4" aria-hidden />
-                {t("printAction")}
-              </Button>
-            </FormActions>
-          </form>
-        </Form>
-      </Modal>
+              <FormActions>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => setLegacyProductsPrintModalOpen(false)}
+                >
+                  {tCommon("cancel")}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  disabled={printRequiresBarcodeConfirmation}
+                >
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                  {t("printDownload")}
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  disabled={printRequiresBarcodeConfirmation}
+                  onClick={() => {
+                    void printForm.handleSubmit((values) => handlePrintTags(values, "print"))();
+                  }}
+                >
+                  <PrintIcon className="h-4 w-4" aria-hidden />
+                  {t("printAction")}
+                </Button>
+              </FormActions>
+            </form>
+          </Form>
+        </Modal>
+      ) : null}
       {confirmDialog}
     </div>
   );

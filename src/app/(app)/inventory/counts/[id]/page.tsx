@@ -584,7 +584,7 @@ const StockCountDetailPage = () => {
               <span>{t("shortages")}</span>
               <span className="font-semibold text-red-600">{summary.shortages}</span>
             </div>
-            <div className="rounded-lg border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="rounded-none border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {t("summaryHint")}
             </div>
           </CardContent>

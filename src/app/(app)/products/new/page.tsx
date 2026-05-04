@@ -108,6 +108,7 @@ const NewProductPage = () => {
         isSubmitting={createMutation.isLoading}
         currencyCode={defaultCurrencyStore?.currencyCode ?? null}
         currencyRateKgsPerUnit={defaultCurrencyRate}
+        quickCreateMode
       />
       {createMutation.error ? (
         <p className="mt-3 text-sm text-danger">{translateError(tErrors, createMutation.error)}</p>
