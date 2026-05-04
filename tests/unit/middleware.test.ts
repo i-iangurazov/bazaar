@@ -46,4 +46,70 @@ describe("middleware route protection", () => {
     expect(response.headers.get("location")).toBeNull();
     expect(mockGetToken).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      role: "CASHIER",
+      path: "/products",
+      expectedPath: "/pos",
+      expectedFrom: "/products",
+    },
+    {
+      role: "MANAGER",
+      path: "/settings/users?create=1",
+      expectedPath: "/dashboard",
+      expectedFrom: "/settings/users?create=1",
+    },
+    {
+      role: "MANAGER",
+      path: "/admin/support",
+      expectedPath: "/dashboard",
+      expectedFrom: "/admin/support",
+    },
+    {
+      role: "MANAGER",
+      path: "/billing",
+      expectedPath: "/dashboard",
+      expectedFrom: "/billing",
+    },
+    {
+      role: "ADMIN",
+      path: "/platform",
+      expectedPath: "/dashboard",
+      expectedFrom: "/platform",
+    },
+  ])("redirects denied $role access to $path", async ({ role, path, expectedPath, expectedFrom }) => {
+    mockGetToken.mockResolvedValue({
+      sub: "user-1",
+      role,
+      organizationId: "org-1",
+      isPlatformOwner: false,
+      isOrgOwner: false,
+    });
+
+    const response = await middleware(requestFor(path));
+    const location = new URL(response.headers.get("location") ?? "");
+
+    expect(location.pathname).toBe(expectedPath);
+    expect(location.searchParams.get("from")).toBe(expectedFrom);
+  });
+
+  it.each([
+    { role: "CASHIER", path: "/pos" },
+    { role: "MANAGER", path: "/products" },
+    { role: "ADMIN", path: "/dashboard" },
+    { role: "ADMIN", path: "/platform", isPlatformOwner: true },
+  ])("allows permitted $role access to $path", async ({ role, path, isPlatformOwner = false }) => {
+    mockGetToken.mockResolvedValue({
+      sub: "user-1",
+      role,
+      organizationId: "org-1",
+      isPlatformOwner,
+      isOrgOwner: false,
+    });
+
+    const response = await middleware(requestFor(path));
+
+    expect(response.headers.get("location")).toBeNull();
+  });
 });

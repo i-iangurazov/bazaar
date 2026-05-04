@@ -50,6 +50,12 @@ import {
   buildScopedStorageKey,
   useScopedLocalStorageState,
 } from "@/lib/useScopedLocalStorageState";
+import {
+  hasPermission,
+  permissionForSearchResultType,
+  type AppPermission,
+  type RoleAccess,
+} from "@/lib/roleAccess";
 import { cn } from "@/lib/utils";
 import type { SearchResult } from "@/server/services/search/global";
 
@@ -65,6 +71,7 @@ type PaletteItem = {
   product?: ProductSearchResultProduct;
   keywords?: string[];
   queryValue?: string;
+  permission?: AppPermission;
 };
 
 const actionCategories: CommandPaletteCategory[] = ["documents", "products", "other", "payments"];
@@ -86,6 +93,14 @@ export const CommandPalette = ({
   const router = useRouter();
   const { toast } = useToast();
   const { data: session } = useSession();
+  const access: RoleAccess = useMemo(
+    () => ({
+      role: session?.user?.role,
+      isPlatformOwner: Boolean(session?.user?.isPlatformOwner),
+      isOrgOwner: Boolean(session?.user?.isOrgOwner),
+    }),
+    [session?.user?.isOrgOwner, session?.user?.isPlatformOwner, session?.user?.role],
+  );
   const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -170,6 +185,7 @@ export const CommandPalette = ({
         icon: SalesOrdersIcon,
         group: "actions",
         category: "documents",
+        permission: "usePos",
       },
       {
         id: "sale-return",
@@ -180,6 +196,7 @@ export const CommandPalette = ({
         icon: ArrowDownIcon,
         group: "actions",
         category: "documents",
+        permission: "viewSales",
       },
       {
         id: "inventory-receive",
@@ -190,6 +207,7 @@ export const CommandPalette = ({
         icon: ReceiveIcon,
         group: "actions",
         category: "documents",
+        permission: "viewInventory",
       },
       {
         id: "inventory-adjust",
@@ -200,6 +218,7 @@ export const CommandPalette = ({
         icon: AdjustIcon,
         group: "actions",
         category: "documents",
+        permission: "viewInventory",
       },
       {
         id: "inventory-count",
@@ -210,6 +229,7 @@ export const CommandPalette = ({
         icon: InventoryIcon,
         group: "actions",
         category: "documents",
+        permission: "viewInventory",
       },
       {
         id: "inventory-transfer",
@@ -220,6 +240,7 @@ export const CommandPalette = ({
         icon: TransferIcon,
         group: "actions",
         category: "documents",
+        permission: "viewInventory",
       },
       {
         id: "create-product",
@@ -230,6 +251,7 @@ export const CommandPalette = ({
         icon: ProductsIcon,
         group: "actions",
         category: "products",
+        permission: "manageProducts",
       },
       {
         id: "create-bundle",
@@ -240,6 +262,7 @@ export const CommandPalette = ({
         icon: TagIcon,
         group: "actions",
         category: "products",
+        permission: "manageProducts",
       },
       {
         id: "new-customer",
@@ -250,6 +273,7 @@ export const CommandPalette = ({
         icon: UserIcon,
         group: "actions",
         category: "other",
+        permission: "viewSales",
       },
       {
         id: "new-supplier",
@@ -260,6 +284,7 @@ export const CommandPalette = ({
         icon: SuppliersIcon,
         group: "actions",
         category: "other",
+        permission: "viewSuppliers",
       },
       {
         id: "new-employee",
@@ -270,6 +295,7 @@ export const CommandPalette = ({
         icon: UsersIcon,
         group: "actions",
         category: "other",
+        permission: "manageUsers",
       },
       {
         id: "new-store",
@@ -280,6 +306,7 @@ export const CommandPalette = ({
         icon: StoresIcon,
         group: "actions",
         category: "other",
+        permission: "viewStores",
       },
       {
         id: "cash",
@@ -290,6 +317,7 @@ export const CommandPalette = ({
         icon: BillingIcon,
         group: "actions",
         category: "other",
+        permission: "viewCash",
       },
       {
         id: "finance-income",
@@ -300,6 +328,7 @@ export const CommandPalette = ({
         icon: ArrowDownIcon,
         group: "actions",
         category: "payments",
+        permission: "viewCash",
       },
       {
         id: "finance-expense",
@@ -310,13 +339,15 @@ export const CommandPalette = ({
         icon: ArrowUpIcon,
         group: "actions",
         category: "payments",
+        permission: "viewCash",
       },
     ],
     [t],
   );
 
   const filteredActions = useMemo(() => {
-    const searchable = actions.map((action) => ({
+    const visibleActions = actions.filter((action) => hasPermission(access, action.permission));
+    const searchable = visibleActions.map((action) => ({
       id: action.id,
       category: action.category ?? "other",
       label: action.label,
@@ -324,61 +355,63 @@ export const CommandPalette = ({
       href: action.href,
     }));
     const matches = filterCommandPaletteActions(searchable, normalizedQuery);
-    const actionMap = new Map(actions.map((action) => [action.id, action]));
+    const actionMap = new Map(visibleActions.map((action) => [action.id, action]));
     return matches.flatMap((match) => {
       const item = actionMap.get(match.id);
       return item ? [item] : [];
     });
-  }, [actions, normalizedQuery]);
+  }, [access, actions, normalizedQuery]);
 
   const results = useMemo<PaletteItem[]>(() => {
     const items = searchQuery.data?.results ?? [];
-    return items.map((item) => {
-      switch (item.type) {
-        case "supplier":
-          return {
-            id: item.id,
-            label: item.label,
-            sublabel: item.sublabel,
-            href: item.href,
-            icon: SuppliersIcon,
-            group: "results",
-            resultType: item.type,
-          };
-        case "store":
-          return {
-            id: item.id,
-            label: item.label,
-            sublabel: item.sublabel,
-            href: item.href,
-            icon: StoresIcon,
-            group: "results",
-            resultType: item.type,
-          };
-        case "purchaseOrder":
-          return {
-            id: item.id,
-            label: item.label,
-            sublabel: item.sublabel,
-            href: item.href,
-            icon: PurchaseOrdersIcon,
-            group: "results",
-            resultType: item.type,
-          };
-        default:
-          return {
-            id: item.id,
-            label: item.label,
-            sublabel: item.sublabel,
-            href: item.href,
-            icon: ProductsIcon,
-            group: "results",
-            resultType: item.type,
-            product: item.product,
-          };
-      }
-    });
-  }, [searchQuery.data]);
+    return items
+      .filter((item) => hasPermission(access, permissionForSearchResultType(item.type)))
+      .map((item) => {
+        switch (item.type) {
+          case "supplier":
+            return {
+              id: item.id,
+              label: item.label,
+              sublabel: item.sublabel,
+              href: item.href,
+              icon: SuppliersIcon,
+              group: "results",
+              resultType: item.type,
+            };
+          case "store":
+            return {
+              id: item.id,
+              label: item.label,
+              sublabel: item.sublabel,
+              href: item.href,
+              icon: StoresIcon,
+              group: "results",
+              resultType: item.type,
+            };
+          case "purchaseOrder":
+            return {
+              id: item.id,
+              label: item.label,
+              sublabel: item.sublabel,
+              href: item.href,
+              icon: PurchaseOrdersIcon,
+              group: "results",
+              resultType: item.type,
+            };
+          default:
+            return {
+              id: item.id,
+              label: item.label,
+              sublabel: item.sublabel,
+              href: item.href,
+              icon: ProductsIcon,
+              group: "results",
+              resultType: item.type,
+              product: item.product,
+            };
+        }
+      });
+  }, [access, searchQuery.data]);
 
   const resultGroups = useMemo(
     () =>

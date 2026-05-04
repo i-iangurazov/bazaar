@@ -1,7 +1,13 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { defaultLocale, getLocaleFromAcceptLanguage, normalizeLocale, type Locale } from "./src/lib/locales";
+import {
+  defaultLocale,
+  getLocaleFromAcceptLanguage,
+  normalizeLocale,
+  type Locale,
+} from "./src/lib/locales";
+import { canAccessAppRoute, getRoleHomePath } from "./src/lib/roleAccess";
 
 const localeCookieOptions = {
   path: "/",
@@ -78,6 +84,20 @@ export const middleware = async (request: NextRequest) => {
       const redirectResponse = NextResponse.redirect(loginUrl);
       redirectResponse.headers.set("x-request-id", requestId);
       redirectResponse.cookies.set("NEXT_LOCALE", locale, localeCookieOptions);
+      return redirectResponse;
+    }
+    const access = {
+      role: token.role,
+      isPlatformOwner: Boolean(token.isPlatformOwner),
+      isOrgOwner: Boolean(token.isOrgOwner),
+    };
+    if (!canAccessAppRoute(pathname, access)) {
+      const nextPath = pathname === "/" ? "/" : pathname;
+      const nextParam = request.nextUrl.search ? `${nextPath}${request.nextUrl.search}` : nextPath;
+      const deniedUrl = new URL(getRoleHomePath(access), request.url);
+      deniedUrl.searchParams.set("from", nextParam);
+      const redirectResponse = NextResponse.redirect(deniedUrl);
+      redirectResponse.headers.set("x-request-id", requestId);
       return redirectResponse;
     }
   }

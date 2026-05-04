@@ -1,5 +1,48 @@
 # Final Improvement Summary
 
+## Conservative Role Navigation Pass - 2026-05-05
+
+### Changed
+
+- Reverted the role-navigation direction back to the existing app shell mental model: same groups, item order, labels, sidebar CTA placement, command palette grouping, and dashboard layout.
+- Added `src/lib/roleAccess.ts` as a central permission helper for role-aware UI filtering and middleware route denial.
+- Added permission metadata to the existing AppShell nav items without moving or renaming them.
+- Filtered command palette actions and global search results by the same role permissions as navigation.
+- Filtered Dashboard quick actions and needs-attention links when a role cannot access the target area, without changing the dashboard composition.
+- Added middleware role denial for sensitive/private routes after authentication.
+- Updated `docs/role-navigation-audit.md` and `docs/permission-matrix.md` to describe this as a conservative filtering pass, not a redesign.
+
+### Preserved
+
+- Previous navigation groups: Core, Operations, Insights, Admin, Help.
+- Previous item order and labels.
+- Previous sidebar layout and large command-palette CTA visual style.
+- Previous platform/admin/support placement, with filtering and route denial layered on top.
+- Existing command palette categories and ordering.
+
+### Tests Added
+
+- Role permission matrix and route-access helper tests.
+- Middleware denied/allowed route tests for cashier, manager, admin, and platform-owner cases.
+- Source-level regression tests for AppShell group/order/CTA preservation.
+- Source-level regression tests for command palette action order and permission filtering.
+
+### Remaining Risks
+
+- This slice aligns navigation, dashboard links, command palette links, and middleware. It does not redesign every tRPC/API procedure permission.
+- Platform owners with non-admin org roles can access `/platform` directly if `isPlatformOwner` is set, but the sidebar item remains in its previous admin/platform-owner placement to avoid changing the nav IA.
+- Cash/shift links remain where the current UI already places them, mostly under POS.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed after Prisma generation.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed: 95 files passed; 428 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next build, type/lint checks, static generation, and route trace collection.
+
 ## Currency Deep Pass - 2026-05-05
 
 ### Changed

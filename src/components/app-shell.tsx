@@ -47,6 +47,12 @@ import {
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { normalizeLocale } from "@/lib/locales";
+import {
+  canCreateProductForRole,
+  hasPermission,
+  type AppPermission,
+  type RoleAccess,
+} from "@/lib/roleAccess";
 import { trpc } from "@/lib/trpc";
 import type { GuidanceRole } from "@/lib/guidance";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -59,6 +65,7 @@ type NavItem = {
   managerOnly?: boolean;
   platformOwnerOnly?: boolean;
   orgOwnerOnly?: boolean;
+  requiredPermission?: AppPermission;
   children?: NavItem[];
 };
 
@@ -72,6 +79,7 @@ type NavGroup = {
   managerOnly?: boolean;
   platformOwnerOnly?: boolean;
   orgOwnerOnly?: boolean;
+  requiredPermission?: AppPermission;
 };
 
 const defaultGroupState: Record<NavGroupId, boolean> = {
@@ -127,7 +135,15 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
     enabled: Boolean(user.organizationId),
   });
-  const isOrgOwner = Boolean(profileQuery.data?.isOrgOwner);
+  const isOrgOwner = Boolean(profileQuery.data?.isOrgOwner ?? user.isOrgOwner);
+  const access: RoleAccess = useMemo(
+    () => ({
+      role: user.role,
+      isPlatformOwner: Boolean(user.isPlatformOwner),
+      isOrgOwner,
+    }),
+    [isOrgOwner, user.isPlatformOwner, user.role],
+  );
   const storageKey = useMemo(
     () =>
       `nav-groups:${user.organizationId ?? "org"}:${user.role}:${user.email ?? user.name ?? "user"}`,
@@ -142,37 +158,101 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         id: "core",
         labelKey: "groups.core",
         items: [
-          { key: "dashboard", href: "/dashboard", icon: DashboardIcon },
-          { key: "pos", href: "/pos", icon: PosIcon },
-          { key: "products", href: "/products", icon: ProductsIcon },
-          { key: "inventory", href: "/inventory", icon: InventoryIcon },
+          {
+            key: "dashboard",
+            href: "/dashboard",
+            icon: DashboardIcon,
+            requiredPermission: "viewDashboard",
+          },
+          { key: "pos", href: "/pos", icon: PosIcon, requiredPermission: "usePos" },
+          {
+            key: "products",
+            href: "/products",
+            icon: ProductsIcon,
+            requiredPermission: "viewProducts",
+          },
+          {
+            key: "inventory",
+            href: "/inventory",
+            icon: InventoryIcon,
+            requiredPermission: "viewInventory",
+          },
           {
             key: "orders",
             icon: OrdersIcon,
             children: [
-              { key: "salesOrders", href: "/sales/orders", icon: SalesOrdersIcon },
-              { key: "purchaseOrders", href: "/purchase-orders", icon: PurchaseOrdersIcon },
+              {
+                key: "salesOrders",
+                href: "/sales/orders",
+                icon: SalesOrdersIcon,
+                requiredPermission: "viewSales",
+              },
+              {
+                key: "purchaseOrders",
+                href: "/purchase-orders",
+                icon: PurchaseOrdersIcon,
+                requiredPermission: "viewPurchaseOrders",
+              },
             ],
           },
-          { key: "suppliers", href: "/suppliers", icon: SuppliersIcon },
-          { key: "stores", href: "/stores", icon: StoresIcon },
+          {
+            key: "suppliers",
+            href: "/suppliers",
+            icon: SuppliersIcon,
+            requiredPermission: "viewSuppliers",
+          },
+          {
+            key: "stores",
+            href: "/stores",
+            icon: StoresIcon,
+            requiredPermission: "viewStores",
+          },
         ],
       },
       {
         id: "operations",
         labelKey: "groups.operations",
         items: [
-          { key: "integrations", href: "/operations/integrations", icon: IntegrationsIcon },
-          { key: "imports", href: "/settings/import", icon: UploadIcon, adminOnly: true },
-          { key: "onboarding", href: "/onboarding", icon: OnboardingIcon, adminOnly: true },
+          {
+            key: "integrations",
+            href: "/operations/integrations",
+            icon: IntegrationsIcon,
+            requiredPermission: "manageIntegrations",
+          },
+          {
+            key: "imports",
+            href: "/settings/import",
+            icon: UploadIcon,
+            adminOnly: true,
+            requiredPermission: "manageImports",
+          },
+          {
+            key: "onboarding",
+            href: "/onboarding",
+            icon: OnboardingIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
         ],
       },
       {
         id: "insights",
         labelKey: "groups.insights",
         items: [
-          { key: "reports", href: "/reports", icon: ActivityIcon, managerOnly: true },
-          { key: "adminMetrics", href: "/admin/metrics", icon: MetricsIcon, adminOnly: true },
+          {
+            key: "reports",
+            href: "/reports",
+            icon: ActivityIcon,
+            managerOnly: true,
+            requiredPermission: "viewReports",
+          },
+          {
+            key: "adminMetrics",
+            href: "/admin/metrics",
+            icon: MetricsIcon,
+            adminOnly: true,
+            requiredPermission: "viewSystem",
+          },
         ],
       },
       {
@@ -180,18 +260,55 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         labelKey: "groups.admin",
         adminOnly: true,
         items: [
-          { key: "users", href: "/settings/users", icon: UsersIcon, adminOnly: true },
-          { key: "printing", href: "/settings/printing", icon: PrintIcon, adminOnly: true },
-          { key: "attributes", href: "/settings/attributes", icon: AdjustIcon, adminOnly: true },
-          { key: "units", href: "/settings/units", icon: UnitsIcon, adminOnly: true },
-          { key: "adminJobs", href: "/admin/jobs", icon: JobsIcon, adminOnly: true },
-          { key: "billing", href: "/billing", icon: BillingIcon, adminOnly: true },
+          {
+            key: "users",
+            href: "/settings/users",
+            icon: UsersIcon,
+            adminOnly: true,
+            requiredPermission: "manageUsers",
+          },
+          {
+            key: "printing",
+            href: "/settings/printing",
+            icon: PrintIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
+          {
+            key: "attributes",
+            href: "/settings/attributes",
+            icon: AdjustIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
+          {
+            key: "units",
+            href: "/settings/units",
+            icon: UnitsIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
+          {
+            key: "adminJobs",
+            href: "/admin/jobs",
+            icon: JobsIcon,
+            adminOnly: true,
+            requiredPermission: "viewSystem",
+          },
+          {
+            key: "billing",
+            href: "/billing",
+            icon: BillingIcon,
+            adminOnly: true,
+            requiredPermission: "manageBilling",
+          },
           {
             key: "platformOwner",
             href: "/platform",
             icon: MetricsIcon,
             adminOnly: true,
             platformOwnerOnly: true,
+            requiredPermission: "viewPlatform",
           },
         ],
       },
@@ -199,15 +316,28 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         id: "help",
         labelKey: "groups.help",
         items: [
-          { key: "adminSupport", href: "/admin/support", icon: SupportIcon, adminOnly: true },
-          { key: "help", href: "/help", icon: HelpIcon },
+          {
+            key: "adminSupport",
+            href: "/admin/support",
+            icon: SupportIcon,
+            adminOnly: true,
+            requiredPermission: "viewSupport",
+          },
+          { key: "help", href: "/help", icon: HelpIcon, requiredPermission: "viewHelp" },
           {
             key: "diagnostics",
             href: "/settings/diagnostics",
             icon: ActivityIcon,
             orgOwnerOnly: true,
+            requiredPermission: "viewDiagnostics",
           },
-          { key: "whatsNew", href: "/settings/whats-new", icon: WhatsNewIcon, adminOnly: true },
+          {
+            key: "whatsNew",
+            href: "/settings/whats-new",
+            icon: WhatsNewIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
         ],
       },
     ],
@@ -305,7 +435,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     }
   };
 
-  const canCreateProduct = user.role !== "STAFF";
+  const canCreateProduct = canCreateProductForRole(access);
   const handleScanResolved = async (result: ScanResolvedResult) => {
     if (result.kind === "exact") {
       router.push(`/products/${result.item.id}`);
@@ -331,13 +461,16 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     if (item.adminOnly && user.role !== "ADMIN") {
       return false;
     }
-    if (item.managerOnly && user.role === "STAFF") {
+    if (item.managerOnly && user.role !== "ADMIN" && user.role !== "MANAGER") {
       return false;
     }
     if (item.platformOwnerOnly && !user.isPlatformOwner) {
       return false;
     }
     if (item.orgOwnerOnly && !isOrgOwner) {
+      return false;
+    }
+    if (!hasPermission(access, item.requiredPermission)) {
       return false;
     }
     if (item.children?.length) {
@@ -375,13 +508,16 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         if (group.adminOnly && user.role !== "ADMIN") {
           return false;
         }
-        if (group.managerOnly && user.role === "STAFF") {
+        if (group.managerOnly && user.role !== "ADMIN" && user.role !== "MANAGER") {
           return false;
         }
         if (group.platformOwnerOnly && !user.isPlatformOwner) {
           return false;
         }
         if (group.orgOwnerOnly && !isOrgOwner) {
+          return false;
+        }
+        if (!hasPermission(access, group.requiredPermission)) {
           return false;
         }
         return group.items.some((item) => isItemVisible(item));

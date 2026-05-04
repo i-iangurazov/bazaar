@@ -23,7 +23,7 @@
 
 | Area | Minimum Access |
 | --- | --- |
-| Dashboard | authenticated |
+| Dashboard | admin/manager by navigation; cashier/staff land on POS |
 | POS / Cash | cashier-capable authenticated roles |
 | Products list/detail | authenticated for read, admin for mutation |
 | Inventory | authenticated read, manager/admin changes |
@@ -36,11 +36,11 @@
 | Platform | platform owner |
 | Public catalog | public, tenant-scoped, no private fields |
 
-## Follow-Up
+## Conservative Navigation Filtering
 
-The navigation should expose fewer items by role:
+Navigation keeps the existing app shell groups, labels, item order, and sidebar CTA. Role work should filter the existing model in place rather than creating a new IA:
 
-- Cashier: POS, Sales/orders if allowed, Cash shift, Help/Profile.
-- Manager: Dashboard, Products, Inventory, Purchase orders, Suppliers, Reports, POS if allowed.
-- Admin/owner: Settings, users, stores, integrations, billing.
-- Technical/admin tools grouped under System/Admin and hidden from normal users.
+- Cashier/staff: POS, sales/order history where allowed, cash/shift flows where allowed, Help/Profile.
+- Manager: the existing operational nav items that match permissions: Dashboard, POS, Products, Inventory, Sales/orders, Purchase orders, Suppliers, Stores, Reports, and Integrations.
+- Admin/owner: the previous full business/admin nav, filtered only for explicit platform/org-owner gates.
+- Platform/support/system routes stay in their previous placement but are hidden and middleware-denied unless the matching permission is present.

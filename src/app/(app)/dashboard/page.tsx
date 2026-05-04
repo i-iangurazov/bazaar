@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ import {
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
+import { hasPermission, type AppPermission, type RoleAccess } from "@/lib/roleAccess";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
@@ -41,6 +43,15 @@ const DashboardPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
+  const { data: session } = useSession();
+  const access: RoleAccess = useMemo(
+    () => ({
+      role: session?.user?.role,
+      isPlatformOwner: Boolean(session?.user?.isPlatformOwner),
+      isOrgOwner: Boolean(session?.user?.isOrgOwner),
+    }),
+    [session?.user?.isOrgOwner, session?.user?.isPlatformOwner, session?.user?.role],
+  );
   const [requestedStoreId, setRequestedStoreId] = useState<string | null>(null);
   const dashboardQuery = trpc.dashboard.bootstrap.useQuery(
     requestedStoreId
@@ -176,6 +187,7 @@ const DashboardPage = () => {
       value: business?.missingBarcodeCount ?? 0,
       href: "/products?readiness=missingBarcode",
       variant: "warning" as const,
+      permission: "viewProducts" as const,
     },
     {
       key: "missingPrice",
@@ -183,6 +195,7 @@ const DashboardPage = () => {
       value: business?.missingPriceCount ?? 0,
       href: "/products?readiness=missingPrice",
       variant: "danger" as const,
+      permission: "viewProducts" as const,
     },
     {
       key: "lowStock",
@@ -190,6 +203,7 @@ const DashboardPage = () => {
       value: business?.lowStockCount ?? 0,
       href: "/inventory",
       variant: "warning" as const,
+      permission: "viewInventory" as const,
     },
     {
       key: "negativeStock",
@@ -197,6 +211,7 @@ const DashboardPage = () => {
       value: business?.negativeStockCount ?? 0,
       href: "/inventory",
       variant: "danger" as const,
+      permission: "viewInventory" as const,
     },
     {
       key: "pendingPurchaseOrders",
@@ -204,6 +219,7 @@ const DashboardPage = () => {
       value: business?.pendingPurchaseOrdersCount ?? pendingOrders.length,
       href: "/purchase-orders",
       variant: "muted" as const,
+      permission: "viewPurchaseOrders" as const,
     },
     {
       key: "failedReceipts",
@@ -211,8 +227,70 @@ const DashboardPage = () => {
       value: business?.failedReceiptsCount ?? 0,
       href: "/pos/receipts",
       variant: "danger" as const,
+      permission: "viewReports" as const,
     },
   ];
+  const visibleAttentionItems = attentionItems.filter((item) =>
+    hasPermission(access, item.permission),
+  );
+  const quickActions: Array<{
+    key: string;
+    href: string;
+    label: string;
+    icon?: ComponentType<{ className?: string }>;
+    permission: AppPermission;
+    variant?: "secondary";
+  }> = [
+    {
+      key: "startSale",
+      href: "/pos",
+      label: t("startSale"),
+      icon: PosIcon,
+      permission: "usePos",
+    },
+    {
+      key: "addProduct",
+      href: "/products/new",
+      label: t("addProduct"),
+      icon: AddIcon,
+      permission: "manageProducts",
+      variant: "secondary",
+    },
+    {
+      key: "receiveStock",
+      href: "/inventory",
+      label: t("receiveStock"),
+      icon: ReceiveIcon,
+      permission: "viewInventory",
+      variant: "secondary",
+    },
+    {
+      key: "printLabels",
+      href: "/products",
+      label: t("printLabels"),
+      icon: PrintIcon,
+      permission: "viewProducts",
+      variant: "secondary",
+    },
+    {
+      key: "createPurchaseOrder",
+      href: "/purchase-orders/new",
+      label: t("createPurchaseOrder"),
+      icon: PurchaseOrdersIcon,
+      permission: "viewPurchaseOrders",
+      variant: "secondary",
+    },
+    {
+      key: "viewReports",
+      href: "/reports",
+      label: t("viewReports"),
+      permission: "viewReports",
+      variant: "secondary",
+    },
+  ];
+  const visibleQuickActions = quickActions.filter((action) =>
+    hasPermission(access, action.permission),
+  );
 
   return (
     <div>
@@ -270,39 +348,17 @@ const DashboardPage = () => {
             <CardTitle>{t("quickActions")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Button asChild>
-              <Link href="/pos">
-                <PosIcon className="h-4 w-4" aria-hidden />
-                {t("startSale")}
-              </Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/products/new">
-                <AddIcon className="h-4 w-4" aria-hidden />
-                {t("addProduct")}
-              </Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/inventory">
-                <ReceiveIcon className="h-4 w-4" aria-hidden />
-                {t("receiveStock")}
-              </Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/products">
-                <PrintIcon className="h-4 w-4" aria-hidden />
-                {t("printLabels")}
-              </Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/purchase-orders/new">
-                <PurchaseOrdersIcon className="h-4 w-4" aria-hidden />
-                {t("createPurchaseOrder")}
-              </Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/reports">{t("viewReports")}</Link>
-            </Button>
+            {visibleQuickActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Button key={action.key} asChild variant={action.variant}>
+                  <Link href={action.href}>
+                    {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}
+                    {action.label}
+                  </Link>
+                </Button>
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -311,7 +367,7 @@ const DashboardPage = () => {
             <CardTitle>{t("needsAttention")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {attentionItems.map((item) => (
+            {visibleAttentionItems.map((item) => (
               <Link
                 key={item.key}
                 href={item.href}
