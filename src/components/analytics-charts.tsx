@@ -31,7 +31,8 @@ import {
   ProductsIcon,
   StatusWarningIcon,
 } from "@/components/icons";
-import { formatCurrencyKGS, formatDate, formatNumber } from "@/lib/i18nFormat";
+import { formatKgsMoney, type CurrencySource } from "@/lib/currencyDisplay";
+import { formatDate, formatNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import type { AppRouter } from "@/server/trpc/routers/_app";
 
@@ -61,6 +62,7 @@ type AnalyticsChartsProps = {
   inventoryLoading: boolean;
   inventoryError?: TRPCClientErrorLike<AppRouter> | null;
   locale: string;
+  currencySource?: CurrencySource;
 };
 
 const chartColors = {
@@ -94,6 +96,7 @@ export const AnalyticsCharts = ({
   inventoryLoading,
   inventoryError,
   locale,
+  currencySource,
 }: AnalyticsChartsProps) => {
   const t = useTranslations("analytics");
   const tCommon = useTranslations("common");
@@ -101,7 +104,7 @@ export const AnalyticsCharts = ({
 
   const formatMetricValue = (value: number) => {
     if (metric === "revenue" || metric === "profit") {
-      return formatCurrencyKGS(value, locale);
+      return formatKgsMoney(value, locale, currencySource);
     }
     return formatNumber(value, locale);
   };
@@ -318,7 +321,7 @@ export const AnalyticsCharts = ({
           ) : inventoryValue ? (
             <div className="space-y-4">
               <div className="text-2xl font-semibold text-foreground">
-                {formatCurrencyKGS(inventoryValue.valueKgs, locale)}
+                {formatKgsMoney(inventoryValue.valueKgs, locale, currencySource)}
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-none border border-border bg-muted/20 p-3">

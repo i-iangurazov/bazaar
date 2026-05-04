@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -77,9 +77,10 @@ const NewSalesOrderPage = () => {
       setStoreId(storesQuery.data[0].id);
     }
   }, [storeId, storesQuery.data]);
+  const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch.trim() },
+    { q: lineSearch.trim(), storeId: storeId || undefined },
     { enabled: lineSearch.trim().length >= 1 },
   );
 
@@ -352,6 +353,7 @@ const NewSalesOrderPage = () => {
                         <ProductSearchResultItem
                           key={product.id}
                           product={product}
+                          currencySource={selectedStore}
                           rightSlot={<AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => {
@@ -396,13 +398,13 @@ const NewSalesOrderPage = () => {
                           {t("unitPrice")}:{" "}
                           {line.unitPriceKgs === null
                             ? t("priceNotSet")
-                            : formatCurrencyKGS(line.unitPriceKgs, locale)}
+                            : formatKgsMoney(line.unitPriceKgs, locale, selectedStore)}
                         </span>
                         <span>
                           {t("lineTotal")}:{" "}
                           {line.lineTotalKgs === null
                             ? t("priceNotSet")
-                            : formatCurrencyKGS(line.lineTotalKgs, locale)}
+                            : formatKgsMoney(line.lineTotalKgs, locale, selectedStore)}
                         </span>
                       </div>
                     </div>
@@ -436,7 +438,7 @@ const NewSalesOrderPage = () => {
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-muted-foreground">{t("total")}</span>
               <span className="font-semibold text-foreground">
-                {formatCurrencyKGS(orderTotalKgs, locale)}
+                {formatKgsMoney(orderTotalKgs, locale, selectedStore)}
               </span>
             </div>
             {draftLines.some((line) => line.unitPriceKgs === null) ? (

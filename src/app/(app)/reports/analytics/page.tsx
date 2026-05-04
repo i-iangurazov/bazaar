@@ -50,6 +50,9 @@ const AnalyticsPage = () => {
   }, [storeId, storesQuery.data, canViewOrg]);
 
   const resolvedStoreId = storeId === "all" ? undefined : storeId || undefined;
+  const selectedStore = resolvedStoreId
+    ? storesQuery.data?.find((store) => store.id === resolvedStoreId) ?? null
+    : null;
   const analyticsEnabled =
     status === "authenticated" && (canViewOrg || Boolean(resolvedStoreId));
 
@@ -166,6 +169,11 @@ const AnalyticsPage = () => {
           </>
         }
       />
+      {storeId === "all" ? (
+        <p className="-mt-4 mb-4 text-sm text-muted-foreground">
+          {t("baseCurrencyNotice")}
+        </p>
+      ) : null}
 
       <AnalyticsCharts
         salesSeries={salesSeries}
@@ -186,6 +194,7 @@ const AnalyticsPage = () => {
         inventoryLoading={inventoryValueQuery.isLoading}
         inventoryError={inventoryValueQuery.error}
         locale={locale}
+        currencySource={selectedStore}
       />
     </div>
   );

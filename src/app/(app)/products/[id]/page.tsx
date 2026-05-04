@@ -155,7 +155,7 @@ const ProductDetailPage = () => {
     { enabled: movementsOpen && Boolean(movementStoreId) && Boolean(productId) },
   );
   const componentSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: componentSearch },
+    { q: componentSearch, storeId: pricingStoreId || undefined },
     { enabled: componentDialogOpen && componentSearch.trim().length >= 2 },
   );
   const componentDetailQuery = trpc.products.getById.useQuery(
@@ -1539,6 +1539,7 @@ const ProductDetailPage = () => {
                           <ProductSearchResultItem
                             key={product.id}
                             product={product}
+                            currencySource={selectedPricingStore}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() => {
                               setSelectedComponent({

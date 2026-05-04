@@ -10,6 +10,7 @@ import {
 } from "@/lib/priceTags";
 import {
   convertFromKgs,
+  formatCurrencyAmount,
   normalizeCurrencyCode,
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
@@ -50,9 +51,7 @@ export const formatPriceTagCurrency = (
   const currencyCode = normalizeCurrencyCode(currencyCodeInput);
   const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(currencyRateInput, currencyCode);
   const displayAmount = convertFromKgs(amountKgs, currencyRateKgsPerUnit, currencyCode);
-  return new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode }).format(
-    displayAmount,
-  );
+  return formatCurrencyAmount(displayAmount, locale, currencyCode);
 };
 
 const truncateLine = (doc: InstanceType<typeof PDFDocument>, text: string, maxWidth: number, fontSize: number) => {

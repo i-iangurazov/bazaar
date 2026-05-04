@@ -64,7 +64,8 @@ import {
 } from "@/components/ui/tooltip";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
-import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
+import { formatStoreMoney } from "@/lib/currencyDisplay";
+import { formatNumber } from "@/lib/i18nFormat";
 import { parseNumberInput, resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
@@ -90,6 +91,8 @@ const PurchaseOrderDetailPage = () => {
   const [pdfActionPending, setPdfActionPending] = useState<null | "download" | "print">(null);
 
   const poQuery = trpc.purchaseOrders.getById.useQuery({ id: poId }, { enabled: Boolean(poId) });
+  const po = poQuery.data;
+  const poCurrencySource = po?.store ?? null;
   type PurchaseOrderLine = NonNullable<typeof poQuery.data>["lines"][number];
   type ProductPackOption = {
     id: string;
@@ -158,8 +161,8 @@ const PurchaseOrderDetailPage = () => {
   const lineUnitSelection = lineForm.watch("unitSelection");
   const lineQtyOrdered = lineForm.watch("qtyOrdered");
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch },
-    { enabled: lineDialogOpen && lineSearch.trim().length >= 2 },
+    { q: lineSearch, storeId: po?.store.id },
+    { enabled: Boolean(po?.store.id) && lineDialogOpen && lineSearch.trim().length >= 2 },
   );
   const lineProductQuery = trpc.products.getById.useQuery(
     { productId: lineProductId },
@@ -368,7 +371,6 @@ const PurchaseOrderDetailPage = () => {
     "purchaseOrder.updated": () => poQuery.refetch(),
   });
 
-  const po = poQuery.data;
   const lineProductMap = useMemo(() => {
     return new Map((po?.lines ?? []).map((line) => [line.id, line.product]));
   }, [po]);
@@ -686,14 +688,15 @@ const PurchaseOrderDetailPage = () => {
                           <TableCell className="hidden md:table-cell">
                             {line.unitCost === null
                               ? tCommon("notAvailable")
-                              : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                              : formatStoreMoney(line.unitCost ?? 0, locale, poCurrencySource)}
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
                             {line.unitCost === null
                               ? tCommon("notAvailable")
-                              : formatCurrencyKGS(
+                              : formatStoreMoney(
                                   totals.lines.find((item) => item.id === line.id)?.total ?? 0,
                                   locale,
+                                  poCurrencySource,
                                 )}
                           </TableCell>
                           {canEditLines ? (
@@ -795,13 +798,13 @@ const PurchaseOrderDetailPage = () => {
                         {t("unitCost")}{" "}
                         {line.unitCost === null
                           ? tCommon("notAvailable")
-                          : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                          : formatStoreMoney(line.unitCost ?? 0, locale, poCurrencySource)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {t("lineTotal")}{" "}
                         {line.unitCost === null
                           ? tCommon("notAvailable")
-                          : formatCurrencyKGS(total, locale)}
+                          : formatStoreMoney(total, locale, poCurrencySource)}
                       </p>
                     </div>
                     {canEditLines ? (
@@ -824,7 +827,7 @@ const PurchaseOrderDetailPage = () => {
           ) : null}
           <div className="mt-4 flex justify-end text-sm font-semibold">
             {t("total")}:{" "}
-            {hasCost ? formatCurrencyKGS(totals.total, locale) : tCommon("notAvailable")}
+            {hasCost ? formatStoreMoney(totals.total, locale, poCurrencySource) : tCommon("notAvailable")}
           </div>
         </CardContent>
       </Card>
@@ -1197,6 +1200,7 @@ const PurchaseOrderDetailPage = () => {
                               <ProductSearchResultItem
                                 key={product.id}
                                 product={product}
+                                currencySource={poCurrencySource}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => {
                                   applySelectedProduct({
@@ -1339,6 +1343,7 @@ const PurchaseOrderDetailPage = () => {
                     <FormDescription>
                       {t("unitCostHint", {
                         unit: resolveUnitLabel(lineProduct?.baseUnit ?? null),
+                        currency: po?.store.currencyCode ?? tCommon("notAvailable"),
                       })}
                     </FormDescription>
                     <FormMessage />

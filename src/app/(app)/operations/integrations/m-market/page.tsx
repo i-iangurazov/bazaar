@@ -35,7 +35,8 @@ import { CopyIcon, HideIcon, IntegrationsIcon, SparklesIcon, ViewIcon } from "@/
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -1426,7 +1427,7 @@ const MMarketSettingsPage = () => {
                             <TableCell>
                               {product.exportPriceKgs === null
                                 ? "-"
-                                : formatCurrencyKGS(product.exportPriceKgs, locale)}
+                                : formatKgsMoney(product.exportPriceKgs, locale, baseAccountingCurrency)}
                             </TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
                             <TableCell>
@@ -1506,7 +1507,7 @@ const MMarketSettingsPage = () => {
                       {t("productsSelection.columns.exportPrice")}:{" "}
                       {product.exportPriceKgs === null
                         ? "-"
-                        : formatCurrencyKGS(product.exportPriceKgs, locale)}
+                        : formatKgsMoney(product.exportPriceKgs, locale, baseAccountingCurrency)}
                     </p>
                     <p>
                       {t("productsSelection.columns.onHand")}: {product.onHandQty}

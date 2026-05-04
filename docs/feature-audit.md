@@ -20,7 +20,7 @@ QA checklist:
 QA checklist:
 - Create PO (draft), submit, approve, receive; ensure invalid transitions rejected.
 - Call receive twice with same idempotency key; verify movements created once.
-- Download PDF and confirm KGS totals + localized labels.
+- Download PDF and confirm selected store currency totals + localized labels.
 
 ## Import/Export (CSV) — OK
 - Preview → confirm flow in `src/app/[locale]/(app)/products/page.tsx`.

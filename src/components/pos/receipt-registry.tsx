@@ -15,7 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/components/ui/toast";
 import { DownloadIcon, PrintIcon } from "@/components/icons";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
-import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -105,11 +106,11 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     receipt.store.name,
     receipt.register?.code ?? "",
     receipt.cashier?.email ?? "",
-    String(receipt.totalKgs),
-    String(receipt.paymentBreakdown.CASH ?? 0),
-    String(receipt.paymentBreakdown.CARD ?? 0),
-    String(receipt.paymentBreakdown.TRANSFER ?? 0),
-    String(receipt.paymentBreakdown.OTHER ?? 0),
+    formatKgsMoney(receipt.totalKgs, locale, receipt.store),
+    formatKgsMoney(receipt.paymentBreakdown.CASH ?? 0, locale, receipt.store),
+    formatKgsMoney(receipt.paymentBreakdown.CARD ?? 0, locale, receipt.store),
+    formatKgsMoney(receipt.paymentBreakdown.TRANSFER ?? 0, locale, receipt.store),
+    formatKgsMoney(receipt.paymentBreakdown.OTHER ?? 0, locale, receipt.store),
     receipt.status,
     receipt.kkmStatus,
     receipt.fiscalReceipt?.id ?? "",
@@ -288,13 +289,13 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                               <TableCell className="text-xs text-muted-foreground">
                                 {item.cashier?.name ?? item.cashier?.email ?? t("unknownCashier")}
                               </TableCell>
-                              <TableCell>{formatCurrencyKGS(item.totalKgs, locale)}</TableCell>
+                              <TableCell>{formatKgsMoney(item.totalKgs, locale, item.store)}</TableCell>
                               <TableCell className="text-xs text-muted-foreground">
                                 {paymentMethods
                                   .filter((method) => (item.paymentBreakdown[method] ?? 0) > 0)
                                   .map(
                                     (method) =>
-                                      `${tPos(`payments.${method.toLowerCase()}`)}: ${formatCurrencyKGS(item.paymentBreakdown[method] ?? 0, locale)}`,
+                                      `${tPos(`payments.${method.toLowerCase()}`)}: ${formatKgsMoney(item.paymentBreakdown[method] ?? 0, locale, item.store)}`,
                                   )
                                   .join(" · ") || tCommon("notAvailable")}
                               </TableCell>
@@ -352,7 +353,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                         {item.store.name} ({item.store.code})
                       </p>
                       <p className="mt-2 text-sm font-semibold text-foreground">
-                        {formatCurrencyKGS(item.totalKgs, locale)}
+                        {formatKgsMoney(item.totalKgs, locale, item.store)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">{kkmStatusLabel(item.kkmStatus)}</p>
                       <div className="mt-3 flex gap-2">

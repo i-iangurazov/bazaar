@@ -6,7 +6,8 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { EmptyIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
+import { formatKgsMoney, type CurrencySource } from "@/lib/currencyDisplay";
+import { formatNumber } from "@/lib/i18nFormat";
 import { cn } from "@/lib/utils";
 
 export type ProductSearchResultProduct = {
@@ -34,6 +35,7 @@ type ProductSearchResultItemProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>
   selected?: boolean;
   rightSlot?: ReactNode;
   compact?: boolean;
+  currencySource?: CurrencySource;
 };
 
 const getProductCategory = (product: ProductSearchResultProduct) =>
@@ -51,6 +53,7 @@ export const ProductSearchResultItem = ({
   selected,
   rightSlot,
   compact,
+  currencySource,
   className,
   ...buttonProps
 }: ProductSearchResultItemProps) => {
@@ -66,7 +69,7 @@ export const ProductSearchResultItem = ({
     primaryBarcode ? { key: "barcode", value: primaryBarcode, title: t("searchResultBarcode") } : null,
     category ? { key: "category", value: category } : null,
     price !== null
-      ? { key: "price", value: formatCurrencyKGS(price, locale), title: t("searchResultPrice") }
+      ? { key: "price", value: formatKgsMoney(price, locale, currencySource), title: t("searchResultPrice") }
       : null,
     stock !== null
       ? {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   __buildReceiptMetaLinesForTests,
+  __formatReceiptCurrencyForTests,
   buildPosReceiptPdf,
   type PosReceiptPdfLabels,
 } from "@/server/services/posReceiptPdf";
@@ -44,6 +45,8 @@ const baseJob: Omit<ReceiptPrintJob, "variant" | "fiscal"> = {
   number: "S-000001",
   createdAt: new Date("2026-02-28T10:10:00.000Z"),
   storeName: "Store",
+  currencyCode: "KGS",
+  currencyRateKgsPerUnit: "1",
   legalName: "Store LLC",
   inn: "12345678901234",
   address: "Bishkek",
@@ -69,6 +72,30 @@ const baseJob: Omit<ReceiptPrintJob, "variant" | "fiscal"> = {
 };
 
 describe("pos receipt pdf", () => {
+  it("formats receipt totals with the selected store currency", () => {
+    const formatted = __formatReceiptCurrencyForTests(895, {
+      ...baseJob,
+      currencyCode: "USD",
+      currencyRateKgsPerUnit: "89.5",
+      locale: "en-US",
+      variant: "PRECHECK",
+      fiscal: {
+        modeStatus: "NOT_SENT",
+        providerReceiptId: null,
+        fiscalNumber: null,
+        kkmFactoryNumber: null,
+        kkmRegistrationNumber: null,
+        upfdOrFiscalMemory: null,
+        qrPayload: null,
+        fiscalizedAt: null,
+        lastError: null,
+      },
+    });
+
+    expect(formatted).toContain("$10.00");
+    expect(formatted).not.toContain("KGS");
+  });
+
   it("omits INN, phone, and shift from payment receipt meta lines", () => {
     const meta = __buildReceiptMetaLinesForTests({
       job: {

@@ -55,7 +55,7 @@
 - Cancel draft/submitted PO; status moves to cancelled.
 - Reject invalid transitions (e.g., approve draft).
 - Receiving twice with same idempotency key does not duplicate movements.
-- PDF export opens and shows KGS totals.
+- PDF export opens and shows totals in the selected store currency when a store context exists.
 
 ## Users management
 - Admin adds user; role/locale saved.
@@ -78,7 +78,7 @@
 
 ## RU/KG localization + formatting
 - Toggle language; UI updates and persists on refresh.
-- Dates and currency render in locale (KGS).
+- Dates render in the selected locale and money renders in the selected store currency when a store context exists.
 - Missing translations log in dev.
 
 ## Responsive checks

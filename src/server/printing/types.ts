@@ -12,6 +12,8 @@ export type ReceiptPrintJob = {
   number: string;
   createdAt: Date;
   storeName: string;
+  currencyCode: string | null;
+  currencyRateKgsPerUnit: number | string | null;
   legalName: string | null;
   inn: string | null;
   address: string | null;

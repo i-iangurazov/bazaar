@@ -742,6 +742,8 @@ export const getCurrentRegisterShift = async (input: {
           id: true,
           name: true,
           code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
           complianceProfile: {
             select: {
               enableMarking: true,
@@ -786,7 +788,15 @@ export const listRegisterShifts = async (input: {
       where,
       include: {
         register: { select: { id: true, name: true, code: true } },
-        store: { select: { id: true, name: true, code: true } },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
         openedBy: { select: { id: true, name: true } },
         closedBy: { select: { id: true, name: true } },
       },
@@ -1238,7 +1248,15 @@ export const listPosSales = async (input: {
     prisma.customerOrder.findMany({
       where,
       include: {
-        store: { select: { id: true, name: true, code: true } },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
         register: { select: { id: true, name: true, code: true } },
         payments: {
           select: { id: true, method: true, amountKgs: true, isRefund: true, createdAt: true },
@@ -1292,6 +1310,8 @@ export const getPosSale = async (input: {
           id: true,
           name: true,
           code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
           complianceProfile: {
             select: {
               enableMarking: true,
@@ -1761,7 +1781,15 @@ export const listPosReceipts = async (input: {
     prisma.customerOrder.findMany({
       where,
       include: {
-        store: { select: { id: true, name: true, code: true } },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
         register: { select: { id: true, name: true, code: true } },
         shift: {
           select: {
@@ -2545,7 +2573,15 @@ export const listSaleReturns = async (input: {
       where,
       include: {
         register: { select: { id: true, name: true, code: true } },
-        store: { select: { id: true, name: true, code: true } },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
         originalSale: { select: { id: true, number: true } },
         lines: true,
       },
@@ -2585,7 +2621,15 @@ export const getSaleReturn = async (input: {
     },
     include: {
       register: { select: { id: true, name: true, code: true } },
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
+        },
+      },
       originalSale: {
         select: {
           id: true,

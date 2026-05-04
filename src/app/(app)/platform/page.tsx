@@ -31,6 +31,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
+import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 
 type BillingModalState = {
   organizationId: string;
@@ -160,9 +161,9 @@ const PlatformPage = () => {
               <CardTitle className="text-sm font-medium">{t("summary.estimatedMrr")}</CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-foreground">
-              {new Intl.NumberFormat(locale, {
+              {formatKgsMoney(summaryQuery.data.estimatedMrrKgs, locale, baseAccountingCurrency, {
                 maximumFractionDigits: 0,
-              }).format(summaryQuery.data.estimatedMrrKgs)}
+              })}
             </CardContent>
           </Card>
           <Card>

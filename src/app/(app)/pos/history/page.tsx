@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -56,6 +57,7 @@ const PosHistoryPage = () => {
   } | null>(null);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
 
@@ -147,6 +149,7 @@ const PosHistoryPage = () => {
   });
 
   const selectedSale = saleDetailQuery.data;
+  const selectedSaleCurrencySource = selectedSale?.store ?? selectedRegister?.store ?? null;
   const selectedSaleIdForReturn = saleDetailQuery.data?.id;
   const selectedSaleLinesForReturn = saleDetailQuery.data?.lines;
   const isReturnMutationBusy =
@@ -373,7 +376,7 @@ const PosHistoryPage = () => {
                 </p>
                 {sale.returnedTotalKgs > 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    {t("history.returnedTotal")}: {formatCurrencyKGS(sale.returnedTotalKgs, locale)}
+                    {t("history.returnedTotal")}: {formatKgsMoney(sale.returnedTotalKgs, locale, sale.store)}
                   </p>
                 ) : null}
                 {sale.kkmStatus !== "NOT_SENT" ? (
@@ -390,7 +393,7 @@ const PosHistoryPage = () => {
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <p className="text-sm font-semibold text-foreground">
-                  {formatCurrencyKGS(sale.totalKgs, locale)}
+                  {formatKgsMoney(sale.totalKgs, locale, sale.store)}
                 </p>
                 <Button
                   variant="secondary"
@@ -510,7 +513,7 @@ const PosHistoryPage = () => {
                 <div>
                   <p className="font-semibold text-foreground">{item.number}</p>
                   <p className="text-xs text-muted-foreground">
-                    {item.originalSale.number} · {formatCurrencyKGS(item.totalKgs, locale)}
+                    {item.originalSale.number} · {formatKgsMoney(item.totalKgs, locale, item.store)}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {item.completedAt
@@ -562,7 +565,7 @@ const PosHistoryPage = () => {
             <div key={line.id} className="rounded-md border border-border bg-card p-3">
               <p className="text-sm font-medium text-foreground">{line.product.name}</p>
               <p className="text-xs text-muted-foreground">
-                {line.qty} × {formatCurrencyKGS(line.unitPriceKgs, locale)}
+                {line.qty} × {formatKgsMoney(line.unitPriceKgs, locale, selectedSaleCurrencySource)}
               </p>
               <p className="text-xs text-muted-foreground">
                 {t("history.availableQty")}:{" "}
@@ -604,7 +607,7 @@ const PosHistoryPage = () => {
           </div>
 
           <p className="text-sm font-semibold text-foreground">
-            {t("history.returnTotal")}: {formatCurrencyKGS(returnTotal, locale)}
+            {t("history.returnTotal")}: {formatKgsMoney(returnTotal, locale, selectedSaleCurrencySource)}
           </p>
 
           <ModalFooter>

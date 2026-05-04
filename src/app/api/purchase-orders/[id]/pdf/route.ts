@@ -10,11 +10,9 @@ import { getServerAuthToken } from "@/server/auth/token";
 import { getPurchaseOrderStatusLabel, type Translator } from "@/lib/i18n/status";
 import { normalizeLocale, toIntlLocale, defaultLocale } from "@/lib/locales";
 import { getMessageFromFallback } from "@/lib/i18nFallback";
+import { formatStoreMoney } from "@/lib/currencyDisplay";
 
 export const runtime = "nodejs";
-
-const formatCurrency = (amount: number, locale: string) =>
-  new Intl.NumberFormat(locale, { style: "currency", currency: "KGS" }).format(amount);
 
 const formatDate = (value: Date, locale: string) =>
   new Intl.DateTimeFormat(locale, {
@@ -232,16 +230,16 @@ export const GET = async (
     doc.text(name, colX[0], y, { width: 180 });
     doc.text(String(line.qtyOrdered), colX[1], y);
     doc.text(line.product.unit, colX[2], y);
-    doc.text(formatCurrency(line.unitCost ? Number(line.unitCost) : 0, intlLocale), colX[3], y, {
+    doc.text(formatStoreMoney(line.unitCost ? Number(line.unitCost) : 0, intlLocale, po.store), colX[3], y, {
       width: 60,
       align: "right",
     });
-    doc.text(formatCurrency(lineTotal, intlLocale), colX[4], y, { width: 60, align: "right" });
+    doc.text(formatStoreMoney(lineTotal, intlLocale, po.store), colX[4], y, { width: 60, align: "right" });
     y += rowHeight;
   }
 
   doc.y = y + 12;
-  doc.fontSize(12).text(`${labels.total}: ${formatCurrency(total, intlLocale)}`, {
+  doc.fontSize(12).text(`${labels.total}: ${formatStoreMoney(total, intlLocale, po.store)}`, {
     align: "right",
   });
 

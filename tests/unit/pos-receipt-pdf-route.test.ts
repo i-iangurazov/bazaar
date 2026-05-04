@@ -37,6 +37,8 @@ const saleFixture = {
   store: {
     id: "store-1",
     name: "Тестовый магазин",
+    currencyCode: "KGS",
+    currencyRateKgsPerUnit: "1",
     legalName: "Тестовый магазин ОсОО",
     inn: "12345678901234",
     address: "Бишкек",

@@ -21,7 +21,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { displayMoneyFromKgs, displayMoneyToKgs, formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -136,9 +137,11 @@ const PosShiftsPage = () => {
   const report = reportQuery.data;
   const expectedCash = report?.summary.expectedCashKgs ?? 0;
   const countedCashNumber = Number(countedCash);
-  const countedCashValid = Number.isFinite(countedCashNumber) && countedCashNumber >= 0;
+  const countedCashKgs = displayMoneyToKgs(countedCashNumber, currentShift?.store ?? null);
+  const countedCashValid =
+    Number.isFinite(countedCashNumber) && countedCashNumber >= 0 && Number.isFinite(countedCashKgs);
   const cashDifference = countedCashValid
-    ? Math.round((countedCashNumber - expectedCash) * 100) / 100
+    ? Math.round((countedCashKgs - expectedCash) * 100) / 100
     : null;
   const cashDifferenceStatus =
     cashDifference === null
@@ -165,16 +168,17 @@ const PosShiftsPage = () => {
       return;
     }
     if (!countedCash) {
-      setCountedCash(String(report.summary.expectedCashKgs));
+      setCountedCash(String(displayMoneyFromKgs(report.summary.expectedCashKgs, currentShift?.store ?? null)));
     }
-  }, [report, countedCash]);
+  }, [currentShift?.store, report, countedCash]);
 
   const handleCloseShift = async () => {
     if (!currentShift) {
       return;
     }
     const amount = Number(countedCash);
-    if (!Number.isFinite(amount) || amount < 0) {
+    const amountKgs = displayMoneyToKgs(amount, currentShift.store);
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amountKgs)) {
       toast({ variant: "error", description: t("shifts.invalidAmount") });
       return;
     }
@@ -185,7 +189,7 @@ const PosShiftsPage = () => {
 
     await closeShiftMutation.mutateAsync({
       shiftId: currentShift.id,
-      closingCashCountedKgs: amount,
+      closingCashCountedKgs: amountKgs,
       notes: closeNote.trim() || null,
       idempotencyKey: createIdempotencyKey(),
     });
@@ -196,7 +200,8 @@ const PosShiftsPage = () => {
       return;
     }
     const amount = Number(cashAmount);
-    if (!Number.isFinite(amount) || amount <= 0 || cashReason.trim().length < 2) {
+    const amountKgs = displayMoneyToKgs(amount, currentShift.store);
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(amountKgs) || cashReason.trim().length < 2) {
       toast({ variant: "error", description: t("shifts.cashMovementInvalid") });
       return;
     }
@@ -204,13 +209,15 @@ const PosShiftsPage = () => {
     await cashMovementMutation.mutateAsync({
       shiftId: currentShift.id,
       type: cashType,
-      amountKgs: amount,
+      amountKgs,
       reason: cashReason.trim(),
       idempotencyKey: createIdempotencyKey(),
     });
   };
 
   const historyItems = historyQuery.data?.items ?? [];
+  const formatCurrentShiftMoney = (amountKgs: number) =>
+    formatKgsMoney(amountKgs, locale, currentShift?.store ?? null);
 
   return (
     <div className="space-y-6">
@@ -281,7 +288,7 @@ const PosShiftsPage = () => {
                       <CardContent className="pt-4">
                         <p className="text-xs text-muted-foreground">{t("shifts.salesTotal")}</p>
                         <p className="text-sm font-semibold text-foreground">
-                          {formatCurrencyKGS(report.summary.salesTotalKgs, locale)}
+                          {formatCurrentShiftMoney(report.summary.salesTotalKgs)}
                         </p>
                       </CardContent>
                     </Card>
@@ -289,7 +296,7 @@ const PosShiftsPage = () => {
                       <CardContent className="pt-4">
                         <p className="text-xs text-muted-foreground">{t("shifts.returnsTotal")}</p>
                         <p className="text-sm font-semibold text-foreground">
-                          {formatCurrencyKGS(report.summary.returnsTotalKgs, locale)}
+                          {formatCurrentShiftMoney(report.summary.returnsTotalKgs)}
                         </p>
                       </CardContent>
                     </Card>
@@ -297,7 +304,7 @@ const PosShiftsPage = () => {
                       <CardContent className="pt-4">
                         <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
                         <p className="text-sm font-semibold text-foreground">
-                          {formatCurrencyKGS(report.summary.expectedCashKgs, locale)}
+                          {formatCurrentShiftMoney(report.summary.expectedCashKgs)}
                         </p>
                       </CardContent>
                     </Card>
@@ -305,8 +312,8 @@ const PosShiftsPage = () => {
                       <CardContent className="pt-4">
                         <p className="text-xs text-muted-foreground">{t("shifts.cashInOut")}</p>
                         <p className="text-sm font-semibold text-foreground">
-                          +{formatCurrencyKGS(report.summary.payInKgs, locale)} / -
-                          {formatCurrencyKGS(report.summary.payOutKgs, locale)}
+                          +{formatCurrentShiftMoney(report.summary.payInKgs)} / -
+                          {formatCurrentShiftMoney(report.summary.payOutKgs)}
                         </p>
                       </CardContent>
                     </Card>
@@ -325,13 +332,13 @@ const PosShiftsPage = () => {
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium text-foreground">{entry.label}</p>
                             <p className="text-sm font-semibold text-foreground">
-                              {formatCurrencyKGS(entry.netKgs, locale)}
+                              {formatCurrentShiftMoney(entry.netKgs)}
                             </p>
                           </div>
                           <p className="mt-1 text-[11px] text-muted-foreground">
                             {t("shifts.salesNetBreakdown", {
-                              sales: formatCurrencyKGS(entry.salesKgs, locale),
-                              refunds: formatCurrencyKGS(entry.refundsKgs, locale),
+                              sales: formatCurrentShiftMoney(entry.salesKgs),
+                              refunds: formatCurrentShiftMoney(entry.refundsKgs),
                             })}
                           </p>
                         </div>
@@ -382,13 +389,13 @@ const PosShiftsPage = () => {
                   <div className="rounded-md border border-border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
                     <p className="text-sm font-semibold text-foreground">
-                      {formatCurrencyKGS(currentShift.openingCashKgs, locale)}
+                      {formatCurrentShiftMoney(currentShift.openingCashKgs)}
                     </p>
                   </div>
                   <div className="rounded-md border border-border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
                     <p className="text-sm font-semibold text-foreground">
-                      {formatCurrencyKGS(expectedCash, locale)}
+                      {formatCurrentShiftMoney(expectedCash)}
                     </p>
                   </div>
                   <div className="rounded-md border border-border bg-muted/20 p-3">
@@ -404,7 +411,7 @@ const PosShiftsPage = () => {
                     >
                       {cashDifference === null
                         ? tCommon("notAvailable")
-                        : `${cashDifferenceStatus ? t(`shifts.${cashDifferenceStatus}`) : ""} · ${formatCurrencyKGS(Math.abs(cashDifference), locale)}`}
+                        : `${cashDifferenceStatus ? t(`shifts.${cashDifferenceStatus}`) : ""} · ${formatCurrentShiftMoney(Math.abs(cashDifference))}`}
                     </p>
                   </div>
                 </div>
@@ -513,17 +520,17 @@ const PosShiftsPage = () => {
                   </div>
                   <div className="grid gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 sm:text-right">
                     <p>
-                      {t("entry.openingCash")}: {formatCurrencyKGS(shift.openingCashKgs, locale)}
+                      {t("entry.openingCash")}: {formatKgsMoney(shift.openingCashKgs, locale, shift.store)}
                     </p>
                     <p>
                       {t("shifts.expectedCash")}:{" "}
-                      {formatCurrencyKGS(shift.expectedCashKgs ?? 0, locale)}
+                      {formatKgsMoney(shift.expectedCashKgs ?? 0, locale, shift.store)}
                     </p>
                     <p>
                       {t("shifts.countedCash")}:{" "}
                       {shift.closingCashCountedKgs === null
                         ? tCommon("notAvailable")
-                        : formatCurrencyKGS(shift.closingCashCountedKgs, locale)}
+                        : formatKgsMoney(shift.closingCashCountedKgs, locale, shift.store)}
                     </p>
                     <p
                       className={
@@ -537,7 +544,7 @@ const PosShiftsPage = () => {
                       {t("shifts.difference")}:{" "}
                       {difference === null
                         ? tCommon("notAvailable")
-                        : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatCurrencyKGS(Math.abs(difference), locale)}`}
+                        : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatKgsMoney(Math.abs(difference), locale, shift.store)}`}
                     </p>
                   </div>
                 </div>

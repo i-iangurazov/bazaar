@@ -23,7 +23,11 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import {
+  displayMoneyFromKgs,
+  displayMoneyToKgs,
+  formatKgsMoney,
+} from "@/lib/currencyDisplay";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   createDefaultPosPaymentDraft,
@@ -104,6 +108,7 @@ const PosSellPage = () => {
   });
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -259,6 +264,7 @@ const PosSellPage = () => {
 
   const sale = saleQuery.data;
   const activeDraft = activeDraftQuery.data;
+  const currencySource = sale?.store ?? shiftQuery.data?.store ?? selectedRegister?.store ?? null;
   const saleIdForPaymentInit = saleQuery.data?.id;
   const saleTotalForPaymentInit = saleQuery.data?.totalKgs;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
@@ -274,6 +280,7 @@ const PosSellPage = () => {
         currentPayments,
         saleId: saleIdForPaymentInit,
         totalKgs: saleTotalForPaymentInit,
+        displayTotal: roundMoney(displayMoneyFromKgs(saleTotalForPaymentInit, currencySource)),
         previousAutoFill,
       });
       return next.payments;
@@ -282,7 +289,7 @@ const PosSellPage = () => {
       saleId: saleIdForPaymentInit,
       totalKgs: saleTotalForPaymentInit,
     };
-  }, [saleIdForPaymentInit, saleTotalForPaymentInit]);
+  }, [currencySource, saleIdForPaymentInit, saleTotalForPaymentInit]);
 
   useEffect(() => {
     setSaleId(null);
@@ -337,6 +344,7 @@ const PosSellPage = () => {
       return sum + amount;
     }, 0),
   );
+  const totalPaymentKgs = roundMoney(displayMoneyToKgs(totalPayment, currencySource));
 
   const handleAddLine = useCallback(
     async (productId: string): Promise<boolean> => {
@@ -573,7 +581,7 @@ const PosSellPage = () => {
     const normalized = payments
       .map((payment) => ({
         method: payment.method,
-        amountKgs: roundMoney(Number(payment.amount)),
+        amountKgs: roundMoney(displayMoneyToKgs(Number(payment.amount), currencySource)),
         providerRef: payment.providerRef.trim() || null,
       }))
       .filter((payment) => Number.isFinite(payment.amountKgs) && payment.amountKgs > 0);
@@ -584,7 +592,7 @@ const PosSellPage = () => {
       return;
     }
 
-    if (Math.abs(roundMoney(totalPayment - sale.totalKgs)) > 0.009) {
+    if (Math.abs(roundMoney(totalPaymentKgs - sale.totalKgs)) > 0.009) {
       toast({ variant: "error", description: t("sell.paymentMismatch") });
       focusPaymentsInput();
       return;
@@ -600,6 +608,8 @@ const PosSellPage = () => {
       // handled by mutation onError
     }
   };
+
+  const formatSaleMoney = (amountKgs: number) => formatKgsMoney(amountKgs, locale, currencySource);
 
   const addPaymentRow = () => {
     setPayments((current) => [...current, createDefaultPosPaymentDraft()]);
@@ -915,6 +925,7 @@ const PosSellPage = () => {
                   <ProductSearchResultItem
                     key={product.id}
                     product={product}
+                    currencySource={currencySource}
                     rightSlot={
                       isLineBusy ? (
                         <Spinner className="h-4 w-4" />
@@ -951,7 +962,7 @@ const PosSellPage = () => {
                           </p>
                           <p className="text-xs text-muted-foreground">{line.product.sku}</p>
                           <p className="text-xs text-muted-foreground">
-                            {t("sell.unitPrice")}: {formatCurrencyKGS(line.unitPriceKgs, locale)}
+                            {t("sell.unitPrice")}: {formatSaleMoney(line.unitPriceKgs)}
                           </p>
                           {saleMarkingEnabled && line.product.complianceFlags?.requiresMarking ? (
                             <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/20 p-2">
@@ -1000,7 +1011,7 @@ const PosSellPage = () => {
                             disabled={isLineBusy || completeMutation.isLoading}
                           />
                           <p className="text-sm font-medium text-foreground sm:min-w-[100px] sm:text-right">
-                            {formatCurrencyKGS(line.lineTotalKgs, locale)}
+                            {formatSaleMoney(line.lineTotalKgs)}
                           </p>
                           <Button
                             variant="secondary"
@@ -1020,7 +1031,7 @@ const PosSellPage = () => {
                   </div>
 
                   <div className="rounded-md border border-border bg-muted/20 p-3 text-sm font-semibold text-foreground">
-                    {t("sell.orderTotal")}: {formatCurrencyKGS(sale?.totalKgs ?? 0, locale)}
+                    {t("sell.orderTotal")}: {formatSaleMoney(sale?.totalKgs ?? 0)}
                   </div>
                 </>
               ) : null}
@@ -1114,7 +1125,7 @@ const PosSellPage = () => {
                   </div>
 
                   <p className="text-sm text-muted-foreground">
-                    {t("sell.paymentTotal")}: {formatCurrencyKGS(totalPayment, locale)}
+                    {t("sell.paymentTotal")}: {formatKgsMoney(totalPaymentKgs, locale, currencySource)}
                   </p>
                 </CardContent>
               </Card>

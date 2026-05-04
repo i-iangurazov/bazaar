@@ -267,7 +267,15 @@ export const listCustomerOrders = async (input: {
     prisma.customerOrder.findMany({
       where,
       include: {
-        store: { select: { id: true, name: true, code: true } },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: (input.page - 1) * input.pageSize,
@@ -290,7 +298,15 @@ export const getCustomerOrder = async (input: {
   const order = await prisma.customerOrder.findFirst({
     where: { id: input.customerOrderId, organizationId: input.organizationId },
     include: {
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
+        },
+      },
       lines: {
         include: {
           product: {

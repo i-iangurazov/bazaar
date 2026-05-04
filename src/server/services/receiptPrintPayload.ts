@@ -33,6 +33,8 @@ export const buildReceiptPrintPayload = async (input: {
         select: {
           id: true,
           name: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
           legalName: true,
           inn: true,
           address: true,
@@ -117,6 +119,8 @@ export const buildReceiptPrintPayload = async (input: {
     number: sale.number,
     createdAt: sale.completedAt ?? sale.createdAt,
     storeName: sale.store.name,
+    currencyCode: sale.store.currencyCode ?? null,
+    currencyRateKgsPerUnit: sale.store.currencyRateKgsPerUnit?.toString?.() ?? null,
     legalName: sale.store.legalName ?? null,
     inn: sale.store.inn ?? null,
     address: sale.store.address ?? null,

@@ -39,7 +39,8 @@ import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
+import { formatStoreMoney } from "@/lib/currencyDisplay";
+import { formatDate } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -369,7 +370,7 @@ const PurchaseOrdersPage = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
+                            {po.hasCost ? formatStoreMoney(po.total, locale, po.store) : tCommon("notAvailable")}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                             {formatDate(po.createdAt, locale)}
@@ -499,7 +500,7 @@ const PurchaseOrdersPage = () => {
                       {status}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {po.hasCost ? formatCurrencyKGS(po.total, locale) : tCommon("notAvailable")}
+                      {po.hasCost ? formatStoreMoney(po.total, locale, po.store) : tCommon("notAvailable")}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {formatDate(po.createdAt, locale)}

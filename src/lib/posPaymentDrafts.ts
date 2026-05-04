@@ -9,6 +9,7 @@ export type PosPaymentDraft = {
 export type PosPaymentAutoFillState = {
   saleId: string | null;
   totalKgs: number | null;
+  displayTotal?: number | null;
 };
 
 export const createDefaultPosPaymentDraft = (amount = ""): PosPaymentDraft => ({
@@ -21,10 +22,16 @@ export const reconcilePosPaymentDraftsForSaleTotal = (input: {
   currentPayments: PosPaymentDraft[];
   saleId: string;
   totalKgs: number;
+  displayTotal?: number;
   previousAutoFill: PosPaymentAutoFillState;
 }): { payments: PosPaymentDraft[]; autoFill: PosPaymentAutoFillState } => {
-  const nextAutoFill = { saleId: input.saleId, totalKgs: input.totalKgs };
-  const nextAmount = String(input.totalKgs);
+  const nextDisplayTotal = input.displayTotal ?? input.totalKgs;
+  const nextAutoFill = {
+    saleId: input.saleId,
+    totalKgs: input.totalKgs,
+    displayTotal: nextDisplayTotal,
+  };
+  const nextAmount = String(nextDisplayTotal);
 
   if (input.previousAutoFill.saleId !== input.saleId) {
     return {
@@ -42,7 +49,11 @@ export const reconcilePosPaymentDraftsForSaleTotal = (input: {
 
   const [payment] = input.currentPayments;
   const previousAmount =
-    input.previousAutoFill.totalKgs === null ? "" : String(input.previousAutoFill.totalKgs);
+    input.previousAutoFill.displayTotal === null || input.previousAutoFill.displayTotal === undefined
+      ? input.previousAutoFill.totalKgs === null
+        ? ""
+        : String(input.previousAutoFill.totalKgs)
+      : String(input.previousAutoFill.displayTotal);
   const amountWasAutoFilled = payment.amount === "" || payment.amount === previousAmount;
 
   if (!amountWasAutoFilled) {

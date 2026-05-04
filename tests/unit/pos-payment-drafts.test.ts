@@ -16,7 +16,7 @@ describe("POS payment draft autofill", () => {
     });
 
     expect(result.payments).toEqual([createDefaultPosPaymentDraft("120")]);
-    expect(result.autoFill).toEqual({ saleId: "sale-1", totalKgs: 120 });
+    expect(result.autoFill).toEqual({ saleId: "sale-1", totalKgs: 120, displayTotal: 120 });
   });
 
   it("keeps the selected payment method when the auto-filled total changes", () => {
@@ -56,5 +56,18 @@ describe("POS payment draft autofill", () => {
     });
 
     expect(result.payments).toBe(currentPayments);
+  });
+
+  it("auto-fills the selected currency amount while tracking the KGS total", () => {
+    const result = reconcilePosPaymentDraftsForSaleTotal({
+      currentPayments: [],
+      saleId: "sale-usd",
+      totalKgs: 895,
+      displayTotal: 10,
+      previousAutoFill: { saleId: null, totalKgs: null },
+    });
+
+    expect(result.payments).toEqual([createDefaultPosPaymentDraft("10")]);
+    expect(result.autoFill).toEqual({ saleId: "sale-usd", totalKgs: 895, displayTotal: 10 });
   });
 });

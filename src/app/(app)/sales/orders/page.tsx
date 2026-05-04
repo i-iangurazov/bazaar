@@ -31,7 +31,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -256,7 +257,7 @@ const SalesOrdersPage = () => {
                             {sourceLabel(order.source)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatCurrencyKGS(order.totalKgs, locale)}</TableCell>
+                        <TableCell>{formatKgsMoney(order.totalKgs, locale, order.store)}</TableCell>
                         <TableCell>{formatDate(order.createdAt, locale)}</TableCell>
                         <TableCell>
                           <div className="flex justify-end">
@@ -355,7 +356,7 @@ const SalesOrdersPage = () => {
                     <div>
                       <p>{t("total")}</p>
                       <p className="font-medium text-foreground">
-                        {formatCurrencyKGS(order.totalKgs, locale)}
+                        {formatKgsMoney(order.totalKgs, locale, order.store)}
                       </p>
                     </div>
                     <div>

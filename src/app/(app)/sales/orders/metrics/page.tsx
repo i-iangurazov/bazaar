@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyIcon, SalesOrdersIcon } from "@/components/icons";
-import { formatCurrencyKGS } from "@/lib/i18nFormat";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -84,6 +84,8 @@ const SalesOrdersMetricsPage = () => {
   const costSeries = metricsQuery.data?.costSeries ?? [];
   const topProducts = metricsQuery.data?.topProductsByRevenue ?? [];
   const topBundles = metricsQuery.data?.topBundlesByRevenue ?? [];
+  const selectedStore = storeId === "all" ? null : storesQuery.data?.find((store) => store.id === storeId) ?? null;
+  const formatMetricsMoney = (amountKgs: number) => formatKgsMoney(amountKgs, locale, selectedStore);
 
   const seriesRows = revenueSeries.map((revenueItem, index) => ({
     date: revenueItem.date,
@@ -150,6 +152,11 @@ const SalesOrdersMetricsPage = () => {
           </div>
         </CardContent>
       </Card>
+      {storeId === "all" ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          {t("metricsBaseCurrencyNotice")}
+        </p>
+      ) : null}
 
       {metricsQuery.isLoading ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -168,7 +175,7 @@ const SalesOrdersMetricsPage = () => {
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsRevenue")}</p>
               <p className="text-lg font-semibold text-foreground">
-                {formatCurrencyKGS(summary.totalRevenueKgs, locale)}
+                {formatMetricsMoney(summary.totalRevenueKgs)}
               </p>
             </CardContent>
           </Card>
@@ -176,7 +183,7 @@ const SalesOrdersMetricsPage = () => {
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsCost")}</p>
               <p className="text-lg font-semibold text-foreground">
-                {formatCurrencyKGS(summary.totalCostKgs, locale)}
+                {formatMetricsMoney(summary.totalCostKgs)}
               </p>
             </CardContent>
           </Card>
@@ -184,7 +191,7 @@ const SalesOrdersMetricsPage = () => {
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsProfit")}</p>
               <p className="text-lg font-semibold text-foreground">
-                {formatCurrencyKGS(summary.totalProfitKgs, locale)}
+                {formatMetricsMoney(summary.totalProfitKgs)}
               </p>
             </CardContent>
           </Card>
@@ -198,7 +205,7 @@ const SalesOrdersMetricsPage = () => {
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsAvgOrder")}</p>
               <p className="text-lg font-semibold text-foreground">
-                {formatCurrencyKGS(summary.avgOrderValueKgs, locale)}
+                {formatMetricsMoney(summary.avgOrderValueKgs)}
               </p>
             </CardContent>
           </Card>
@@ -232,9 +239,9 @@ const SalesOrdersMetricsPage = () => {
                     {seriesRows.map((row) => (
                       <TableRow key={row.date}>
                         <TableCell>{row.date}</TableCell>
-                        <TableCell>{formatCurrencyKGS(row.revenueKgs, locale)}</TableCell>
-                        <TableCell>{formatCurrencyKGS(row.costKgs, locale)}</TableCell>
-                        <TableCell>{formatCurrencyKGS(row.profitKgs, locale)}</TableCell>
+                        <TableCell>{formatMetricsMoney(row.revenueKgs)}</TableCell>
+                        <TableCell>{formatMetricsMoney(row.costKgs)}</TableCell>
+                        <TableCell>{formatMetricsMoney(row.profitKgs)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -271,7 +278,7 @@ const SalesOrdersMetricsPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>{item.qty}</TableCell>
-                        <TableCell>{formatCurrencyKGS(item.revenueKgs, locale)}</TableCell>
+                        <TableCell>{formatMetricsMoney(item.revenueKgs)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -309,7 +316,7 @@ const SalesOrdersMetricsPage = () => {
                         </div>
                       </TableCell>
                       <TableCell>{item.qty}</TableCell>
-                      <TableCell>{formatCurrencyKGS(item.revenueKgs, locale)}</TableCell>
+                      <TableCell>{formatMetricsMoney(item.revenueKgs)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

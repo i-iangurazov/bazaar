@@ -37,7 +37,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-import { formatCurrencyKGS, formatDate } from "@/lib/i18nFormat";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -100,6 +101,7 @@ const SalesOrderDetailPage = () => {
     { customerOrderId },
     { enabled: Boolean(customerOrderId) },
   );
+  const orderCurrencySource = orderQuery.data?.store ?? null;
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -116,8 +118,8 @@ const SalesOrderDetailPage = () => {
   const lineQtyInputRef = useRef<HTMLInputElement | null>(null);
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch.trim() },
-    { enabled: lineDialogMode === "add" && lineSearch.trim().length >= 1 },
+    { q: lineSearch.trim(), storeId: orderCurrencySource?.id },
+    { enabled: lineDialogMode === "add" && Boolean(orderCurrencySource?.id) && lineSearch.trim().length >= 1 },
   );
 
   const selectedProductQuery = trpc.products.getById.useQuery(
@@ -517,13 +519,13 @@ const SalesOrderDetailPage = () => {
                 <div>
                   <p className="text-xs text-muted-foreground">{t("subtotal")}</p>
                   <p className="text-sm font-medium text-foreground">
-                    {formatCurrencyKGS(order.subtotalKgs, locale)}
+                    {formatKgsMoney(order.subtotalKgs, locale, orderCurrencySource)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t("total")}</p>
                   <p className="text-sm font-medium text-foreground">
-                    {formatCurrencyKGS(order.totalKgs, locale)}
+                    {formatKgsMoney(order.totalKgs, locale, orderCurrencySource)}
                   </p>
                 </div>
               </FormGrid>
@@ -639,8 +641,8 @@ const SalesOrderDetailPage = () => {
                             </TableCell>
                             <TableCell>{line.variant?.name ?? t("variantBase")}</TableCell>
                             <TableCell>{line.qty}</TableCell>
-                            <TableCell>{formatCurrencyKGS(line.unitPriceKgs, locale)}</TableCell>
-                            <TableCell>{formatCurrencyKGS(line.lineTotalKgs, locale)}</TableCell>
+                            <TableCell>{formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}</TableCell>
+                            <TableCell>{formatKgsMoney(line.lineTotalKgs, locale, orderCurrencySource)}</TableCell>
                             <TableCell>
                               <div className="flex justify-end">
                                 <RowActions
@@ -710,13 +712,13 @@ const SalesOrderDetailPage = () => {
                             <div>
                               <p>{t("unitPrice")}</p>
                               <p className="font-medium text-foreground">
-                                {formatCurrencyKGS(line.unitPriceKgs, locale)}
+                                {formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
                               </p>
                             </div>
                             <div>
                               <p>{t("lineTotal")}</p>
                               <p className="font-medium text-foreground">
-                                {formatCurrencyKGS(line.lineTotalKgs, locale)}
+                                {formatKgsMoney(line.lineTotalKgs, locale, orderCurrencySource)}
                               </p>
                             </div>
                           </div>
@@ -810,6 +812,7 @@ const SalesOrderDetailPage = () => {
                         <ProductSearchResultItem
                           key={product.id}
                           product={product}
+                          currencySource={orderCurrencySource}
                           onClick={() => {
                             applySelectedProduct({
                               id: product.id,

@@ -37,7 +37,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -1135,7 +1136,7 @@ const BakaiStorePage = () => {
                             <TableCell>
                               {product.priceKgs === null
                                 ? "-"
-                                : formatCurrencyKGS(product.priceKgs, locale)}
+                                : formatKgsMoney(product.priceKgs, locale, baseAccountingCurrency)}
                             </TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
                             <TableCell>
@@ -1206,7 +1207,7 @@ const BakaiStorePage = () => {
                       {t("productsSelection.columns.price")}:{" "}
                       {product.priceKgs === null
                         ? "-"
-                        : formatCurrencyKGS(product.priceKgs, locale)}
+                        : formatKgsMoney(product.priceKgs, locale, baseAccountingCurrency)}
                     </p>
                     <p>
                       {t("productsSelection.columns.onHand")}: {product.onHandQty}

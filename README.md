@@ -153,12 +153,12 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Store selector with low-stock alerts, pending purchase orders, recent movements, and recent activity summaries (from audit logs).
 - Real-time refresh via SSE events (dashboard, inventory, and purchase orders).
 
-## Localization (ru/kg)
-- Locales: `ru` (default) and `kg` (Kyrgyz). Locale persistence uses the `NEXT_LOCALE` cookie (HttpOnly).
+## Localization (en/ru/kg)
+- Locales: `ru` (default), `kg` (Kyrgyz), and `en` (English). Locale persistence uses the `NEXT_LOCALE` cookie (HttpOnly).
 - Canonical URLs do not include a locale prefix (e.g. `/inventory`).
-- Legacy links with `/ru/*`, `/kg/*`, or `/ky/*` redirect to canonical paths and update the locale cookie.
-- Message catalogs live in `messages/ru.json` and `messages/kg.json`.
-- Add new copy by introducing a key in both files and reading it via `useTranslations("...")` / `getTranslations("...")`.
+- Legacy links with `/ru/*`, `/kg/*`, `/ky/*`, or `/en/*` redirect to canonical paths and update the locale cookie.
+- Message catalogs live in `messages/en.json`, `messages/ru.json`, and `messages/kg.json`.
+- Add new copy by introducing a key in all three files and reading it via `useTranslations("...")` / `getTranslations("...")`.
 - User locale preference is stored in `User.preferredLocale` and synced on login.
 
 ## Help Center
@@ -171,8 +171,8 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - `/admin/metrics` (ADMIN): onboarding completion, time-to-first-value, WAU, adjustments, stockouts.
 
 ## Currency & Formatting
-- Use `src/lib/i18nFormat.ts` and `src/lib/currency.ts` helpers for dates, numbers, currency normalization, and KGS storage/display conversion.
-- Store/accounting amounts are persisted in KGS where schema fields are named `*Kgs`; customer-facing display should use the selected store currency when a store context exists.
+- Use `src/lib/i18nFormat.ts`, `src/lib/currency.ts`, and `src/lib/currencyDisplay.ts` helpers for dates, numbers, currency normalization, and store-currency display.
+- Store/accounting amounts are persisted in KGS where schema fields are named `*Kgs`; customer-facing display uses the selected store currency when a store context exists.
 
 ## Catalog & CSV (Products)
 - Fields: `sku`, `name`, `category`, `unit`, `description`, `photoUrl`

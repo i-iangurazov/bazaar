@@ -22,12 +22,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrency, formatDateTime } from "@/lib/i18nFormat";
-import {
-  convertFromKgs,
-  normalizeCurrencyCode,
-  normalizeCurrencyRateKgsPerUnit,
-} from "@/lib/currency";
+import { displayMoneyToKgs, formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -61,12 +57,13 @@ const PosEntryPage = () => {
   );
 
   const openShiftMutation = trpc.pos.shifts.open.useMutation({
-    onSuccess: () => {
+    onSuccess: (shift) => {
       setOpenShiftDialogOpen(false);
       setOpeningCash("");
       setOpeningNote("");
       toast({ variant: "success", description: t("openShiftSuccess") });
-      entryQuery.refetch();
+      void entryQuery.refetch();
+      router.push(`/pos/sell?registerId=${shift.registerId}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -108,33 +105,22 @@ const PosEntryPage = () => {
   }, [entryQuery.data?.registers, registerId]);
 
   const openShift = entryQuery.data?.currentShift;
-  const currencyCode = normalizeCurrencyCode(selectedRegister?.store.currencyCode);
-  const currencyRate = normalizeCurrencyRateKgsPerUnit(
-    selectedRegister?.store.currencyRateKgsPerUnit?.toString(),
-    currencyCode,
-  );
   const formatStoreMoney = (amountKgs: number | string) =>
-    formatCurrency(convertFromKgs(Number(amountKgs), currencyRate, currencyCode), locale, currencyCode);
-
-  useEffect(() => {
-    if (!openShift?.id || !selectedRegister?.id) {
-      return;
-    }
-    router.replace(`/pos/sell?registerId=${selectedRegister.id}`);
-  }, [openShift?.id, router, selectedRegister?.id]);
+    formatKgsMoney(Number(amountKgs), locale, selectedRegister?.store ?? null);
 
   const handleOpenShift = async () => {
     if (!selectedRegister) {
       return;
     }
     const amount = Number(openingCash || "0");
-    if (!Number.isFinite(amount) || amount < 0) {
+    const amountKgs = displayMoneyToKgs(amount, selectedRegister.store);
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amountKgs)) {
       toast({ variant: "error", description: t("entry.openingCashInvalid") });
       return;
     }
     await openShiftMutation.mutateAsync({
       registerId: selectedRegister.id,
-      openingCashKgs: amount,
+      openingCashKgs: amountKgs,
       notes: openingNote.trim() || null,
       idempotencyKey: createIdempotencyKey(),
     });
@@ -153,7 +139,7 @@ const PosEntryPage = () => {
                   {openShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
                 </Badge>
                 <h3 className="text-2xl font-semibold text-foreground">
-                  {openShift ? t("entry.redirectingToSale") : t("entry.openShiftTitle")}
+                  {openShift ? t("entry.readyToSell") : t("entry.openShiftTitle")}
                 </h3>
                 <p className="max-w-xl text-sm text-muted-foreground">
                   {selectedRegister

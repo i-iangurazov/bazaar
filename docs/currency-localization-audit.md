@@ -10,9 +10,9 @@
 
 ## Findings
 
-- `src/lib/i18nFormat.ts` still exports `formatCurrencyKGS`, and many POS/report/admin views use it directly.
-- Price tag PDF generation formats currency as `KGS` internally.
-- Some messages still say the system uses KGS or show sample prices as `0,00 KGS`.
+- `src/lib/i18nFormat.ts` still exports `formatCurrencyKGS` for explicit base-accounting use, but app-facing POS/report/admin screens should use `src/lib/currencyDisplay.ts` helpers when a store context exists.
+- Price tag PDF generation accepts store currency code/rate and no longer hardcodes display as `KGS`.
+- User-facing examples should avoid KGS-looking sample prices unless the selected store currency is actually KGS.
 - Internal accounting columns and DB fields remain `*Kgs`; those names are storage semantics and should not automatically be renamed.
 - Billing plan catalog is currently KGS-oriented; this may be acceptable if billing is not store-currency-aware, but UI should label it explicitly.
 
@@ -29,6 +29,7 @@
 - Use saved store print profile and store currency in fast print flows.
 - Replace hardcoded KGS preview strings in product print UI with formatted selected currency where practical.
 
-## Remaining Risk
+## Deep Pass
 
-POS, reports, cash, exports, purchase-order PDFs, and admin metrics still need a deeper pass because they combine KGS storage fields with user-facing amounts across many screens and tests.
+- POS, cash shifts, sales/orders, reports, purchase-order PDFs, receipt PDFs, receipt exports, and admin/platform metrics now use `src/lib/currencyDisplay.ts` helpers.
+- See `docs/currency-deep-audit.md` for the current source of truth, intentional base-KGS surfaces, and remaining risks.

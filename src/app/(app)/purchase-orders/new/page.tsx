@@ -50,7 +50,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
+import { formatStoreMoney } from "@/lib/currencyDisplay";
+import { formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -110,6 +111,7 @@ const NewPurchaseOrderPage = () => {
     control: form.control,
     name: "lines",
   });
+  const storeId = form.watch("storeId");
 
   const [lineDialogOpen, setLineDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -155,8 +157,8 @@ const NewPurchaseOrderPage = () => {
   const lineProductId = lineForm.watch("productId");
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch },
-    { enabled: !isForbidden && lineDialogOpen && lineSearch.trim().length >= 1 },
+    { q: lineSearch, storeId: storeId || undefined },
+    { enabled: !isForbidden && Boolean(storeId) && lineDialogOpen && lineSearch.trim().length >= 1 },
   );
   const lineProductQuery = trpc.products.getById.useQuery(
     { productId: lineProductId },
@@ -193,8 +195,8 @@ const NewPurchaseOrderPage = () => {
     return true;
   };
 
-  const storeId = form.watch("storeId");
   const lines = form.watch("lines");
+  const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
 
   const resolveUnitLabel = (unit?: ProductCacheEntry["baseUnit"]) => {
     if (!unit) {
@@ -508,14 +510,15 @@ const NewPurchaseOrderPage = () => {
                               <TableCell className="hidden md:table-cell">
                                 {line.unitCost === undefined
                                   ? tCommon("notAvailable")
-                                  : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                                  : formatStoreMoney(line.unitCost ?? 0, locale, selectedStore)}
                               </TableCell>
                               <TableCell className="hidden md:table-cell">
                                 {line.unitCost === undefined
                                   ? tCommon("notAvailable")
-                                  : formatCurrencyKGS(
+                                  : formatStoreMoney(
                                       (line.unitCost ?? 0) * resolveLineBaseQty(line),
                                       locale,
+                                      selectedStore,
                                     )}
                               </TableCell>
                               <TableCell>
@@ -610,11 +613,11 @@ const NewPurchaseOrderPage = () => {
                           {t("unitCost")}{" "}
                           {line.unitCost === undefined
                             ? tCommon("notAvailable")
-                            : formatCurrencyKGS(line.unitCost ?? 0, locale)}
+                            : formatStoreMoney(line.unitCost ?? 0, locale, selectedStore)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {t("lineTotal")}{" "}
-                          {lineTotal === null ? tCommon("notAvailable") : formatCurrencyKGS(lineTotal, locale)}
+                          {lineTotal === null ? tCommon("notAvailable") : formatStoreMoney(lineTotal, locale, selectedStore)}
                         </p>
                       </div>
                       <RowActions
@@ -659,7 +662,7 @@ const NewPurchaseOrderPage = () => {
             ) : null}
             <div className="mt-4 flex justify-end text-sm font-semibold">
               {t("total")}:{" "}
-              {hasCost ? formatCurrencyKGS(totals, locale) : tCommon("notAvailable")}
+              {hasCost ? formatStoreMoney(totals, locale, selectedStore) : tCommon("notAvailable")}
             </div>
 
             <FormActions className="mt-6">
@@ -812,6 +815,7 @@ const NewPurchaseOrderPage = () => {
                               <ProductSearchResultItem
                                 key={product.id}
                                 product={product}
+                                currencySource={selectedStore}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onPointerDown={(event) => event.preventDefault()}
                                 onClick={() => {
@@ -953,6 +957,7 @@ const NewPurchaseOrderPage = () => {
                     <FormDescription>
                       {t("unitCostHint", {
                         unit: resolveUnitLabel(lineProduct?.baseUnit ?? null),
+                        currency: selectedStore?.currencyCode ?? tCommon("notAvailable"),
                       })}
                     </FormDescription>
                     <FormMessage />

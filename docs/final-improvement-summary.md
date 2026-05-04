@@ -1,5 +1,53 @@
 # Final Improvement Summary
 
+## Currency Deep Pass - 2026-05-05
+
+### Changed
+
+- Added `src/lib/currencyDisplay.ts` to centralize store-currency resolution, KGS-storage display conversion, selected-currency-to-KGS input conversion, store-denominated formatting, and explicit base-accounting formatting.
+- Added `docs/currency-deep-audit.md` with the source of truth, audited surfaces, intentional KGS uses, multi-store rules, and remaining risks.
+- Updated POS sell/open-shift/shifts/history flows so selected register/store currency is used for cashier display, payment autofill, counted cash, cash movements, and receipt totals while mutations still persist KGS-backed values.
+- Updated POS receipt PDFs and receipt registry exports to format totals and payment breakdowns with the receipt store currency.
+- Updated sales/orders, purchase orders, purchase-order PDF, analytics reports, dashboard-linked charts, product quick-search snippets, platform/admin metrics, and integration price displays to use selected store currency or explicit base accounting currency.
+- Updated README and the older currency/localization audit to document `en`, `ru`, and `kg` support plus the current store-currency display model.
+- Fixed receipt print payload fallback safety so older/mocked payloads without store currency fields fall back cleanly instead of throwing.
+- Added explicit all-store report notices for base KGS mixed-store totals.
+- Clarified purchase-order unit-cost copy so it follows the selected/order store currency, not supplier currency.
+- Passed store currency context through additional store-scoped product-search snippets.
+
+### Files Touched In This Slice
+
+- Currency helpers: `src/lib/currencyDisplay.ts`, `src/lib/posPaymentDrafts.ts`.
+- POS/cash/receipts: `src/app/(app)/pos/page.tsx`, `src/app/(app)/pos/sell/page.tsx`, `src/app/(app)/pos/history/page.tsx`, `src/app/(app)/pos/shifts/page.tsx`, `src/server/services/pos.ts`, `src/server/services/receiptPrintPayload.ts`, `src/server/services/posReceiptPdf.ts`, `src/server/printing/types.ts`, `src/components/pos/receipt-registry.tsx`.
+- Sales/orders/reports/purchase orders: `src/server/services/salesOrders.ts`, `src/app/(app)/sales/orders/*`, `src/app/(app)/reports/analytics/page.tsx`, `src/components/analytics-charts.tsx`, `src/app/(app)/purchase-orders/*`, `src/app/api/purchase-orders/[id]/pdf/route.ts`.
+- Products/labels/admin/integrations/docs/tests: `src/components/product-search-result-item.tsx`, `src/server/services/priceTagsPdf.ts`, `src/app/(app)/platform/page.tsx`, `src/app/(app)/admin/metrics/page.tsx`, integration pages, README, currency docs, and currency/POS receipt tests.
+
+### Verified
+
+- No app-facing usage of `formatCurrencyKGS` remains under `src/app`, `src/components`, `src/server`, or `tests`.
+- Hardcoded `KGS` now remains only in explicit defaults, KGS-backed storage semantics, billing/integration rules, settings UI, migrations, tests, and docs that intentionally describe base accounting or billing.
+- POS payment and cash inputs display selected-currency amounts but convert back to KGS before sending mutations.
+- Receipt/PDF currency tests cover a non-KGS store and verify the output does not emit `KGS`.
+- Product quick-search, reports, orders, and purchase-order surfaces receive store currency context where a single store is known.
+- Multi-store/admin/platform views use explicit base accounting currency rather than guessing a store currency.
+- All-store analytics and sales-order metrics visibly explain that mixed-store totals are shown in base accounting currency.
+- Purchase-order forms visibly state the unit-cost currency source.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed after Prisma generation.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed: 92 files passed; 408 tests passed.
+- `rm -rf .next && pnpm build` passed, including Prisma generation, environment preflight, Next build, type/lint checks, static generation, and route trace collection.
+
+### Remaining Risks
+
+- Historical sales and receipts still read the current store currency/rate. If a store changes currency later, historical display can change until currency snapshots are added to persisted sale/receipt records.
+- Purchase-order `unitCost` is treated as store-denominated because the schema does not mark it as `*Kgs`; a future schema pass should make that explicit.
+- All-store reports remain base KGS by design because mixed-currency aggregation needs a product decision.
+
 ## Restrained Color And Product UX Slice - 2026-05-04
 
 ### Changed
@@ -255,6 +303,6 @@
 
 ## Remaining Risks
 
-- Many existing POS, reports, purchase-order, sales-order, and admin-metrics screens still use `formatCurrencyKGS`; they need a deeper store/org currency context pass.
+- Currency display across POS, reports, purchase orders, sales orders, and admin/platform metrics was handled in the 2026-05-05 currency deep pass above.
 - The no-rounded direction was applied to shared components and high-traffic private app surfaces, but public storefront/landing and lower-traffic private pages still need follow-up cleanup.
 - POS/dashboard/onboarding/report redesign was audited and planned, but this pass prioritized route security, shared UI direction, and the barcode printing workflow.

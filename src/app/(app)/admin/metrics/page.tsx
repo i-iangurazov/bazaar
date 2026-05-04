@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { trpc } from "@/lib/trpc";
-import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 
 const AdminMetricsPage = () => {
   const t = useTranslations("adminMetrics");
@@ -144,7 +145,7 @@ const AdminMetricsPage = () => {
               </p>
               <p>
                 {t("sales7dRevenue", {
-                  amount: formatCurrencyKGS(metricsQuery.data.sales7d.revenueKgs, locale),
+                  amount: formatKgsMoney(metricsQuery.data.sales7d.revenueKgs, locale, baseAccountingCurrency),
                 })}
               </p>
               <p>
@@ -154,7 +155,7 @@ const AdminMetricsPage = () => {
               </p>
               <p>
                 {t("sales30dRevenue", {
-                  amount: formatCurrencyKGS(metricsQuery.data.sales30d.revenueKgs, locale),
+                  amount: formatKgsMoney(metricsQuery.data.sales30d.revenueKgs, locale, baseAccountingCurrency),
                 })}
               </p>
             </CardContent>
@@ -172,7 +173,7 @@ const AdminMetricsPage = () => {
               </p>
               <p>
                 {t("returns30dAmount", {
-                  amount: formatCurrencyKGS(metricsQuery.data.returns30d.amountKgs, locale),
+                  amount: formatKgsMoney(metricsQuery.data.returns30d.amountKgs, locale, baseAccountingCurrency),
                 })}
               </p>
               <p>
@@ -182,7 +183,7 @@ const AdminMetricsPage = () => {
               </p>
               <p>
                 {t("grossProfit30d", {
-                  amount: formatCurrencyKGS(metricsQuery.data.gross30d.profitKgs, locale),
+                  amount: formatKgsMoney(metricsQuery.data.gross30d.profitKgs, locale, baseAccountingCurrency),
                 })}
               </p>
               <p>

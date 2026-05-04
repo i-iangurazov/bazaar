@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import { formatKgsMoney } from "@/lib/currencyDisplay";
 import type { ReceiptPrintJob } from "@/server/printing/types";
 
 export type PosReceiptPdfLabels = {
@@ -41,14 +42,13 @@ const RECEIPT_HEIGHT_BUFFER_MM = 4;
 const RECEIPT_MARGIN_X_MM = 2;
 const RECEIPT_MARGIN_Y_MM = 3;
 
-const formatCurrency = (amount: number, locale: string) =>
-  new Intl.NumberFormat(locale, { style: "currency", currency: "KGS" }).format(amount);
+const formatReceiptCurrency = (amountKgs: number, job: ReceiptPrintJob) =>
+  formatKgsMoney(amountKgs, job.locale, {
+    currencyCode: job.currencyCode,
+    currencyRateKgsPerUnit: job.currencyRateKgsPerUnit,
+  });
 
-const formatAmount = (amount: number, locale: string) =>
-  new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+export const __formatReceiptCurrencyForTests = formatReceiptCurrency;
 
 const formatDateTime = (value: Date, locale: string) =>
   new Intl.DateTimeFormat(locale, {
@@ -301,7 +301,7 @@ export const buildPosReceiptPdf = async (input: {
     const detailWidth = showLineTotalPerItem ? contentWidth - amountColumnWidth - 4 : contentWidth;
     const qtyLine = truncateSingleLine(
       doc,
-      `${input.labels.qty}: ${item.qty} × ${formatAmount(item.unitPriceKgs, input.job.locale)}`,
+      `${input.labels.qty}: ${item.qty} × ${formatReceiptCurrency(item.unitPriceKgs, input.job)}`,
       detailWidth,
       7.5,
     );
@@ -311,7 +311,7 @@ export const buildPosReceiptPdf = async (input: {
       lineBreak: false,
     });
     if (showLineTotalPerItem) {
-      doc.text(formatCurrency(item.lineTotalKgs, input.job.locale), rightEdge - amountColumnWidth, y, {
+      doc.text(formatReceiptCurrency(item.lineTotalKgs, input.job), rightEdge - amountColumnWidth, y, {
         width: amountColumnWidth,
         align: "right",
         lineBreak: false,
@@ -322,9 +322,9 @@ export const buildPosReceiptPdf = async (input: {
   }
 
   if (showSubtotal) {
-    drawAmountRow(input.labels.subtotal, formatCurrency(input.job.totals.subtotalKgs, input.job.locale));
+    drawAmountRow(input.labels.subtotal, formatReceiptCurrency(input.job.totals.subtotalKgs, input.job));
   }
-  drawAmountRow(input.labels.total, formatCurrency(input.job.totals.totalKgs, input.job.locale), true);
+  drawAmountRow(input.labels.total, formatReceiptCurrency(input.job.totals.totalKgs, input.job), true);
 
   if (input.job.totals.payments.length) {
     y += 2;
@@ -340,7 +340,7 @@ export const buildPosReceiptPdf = async (input: {
         width: contentWidth - amountColumnWidth - 4,
         lineBreak: false,
       });
-      doc.text(formatCurrency(payment.amountKgs, input.job.locale), rightEdge - amountColumnWidth, y, {
+      doc.text(formatReceiptCurrency(payment.amountKgs, input.job), rightEdge - amountColumnWidth, y, {
         width: amountColumnWidth,
         align: "right",
         lineBreak: false,
