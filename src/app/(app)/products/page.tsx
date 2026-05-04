@@ -193,10 +193,25 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
   stores: "asc",
 };
 
+const aiArrangeCategoriesBatchSize = 500;
 const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";
 const priceTagQuickQuantities = [1, 2, 3, 5] as const;
+
+type AiArrangeCategoriesProgressState = {
+  status: "running" | "done" | "error";
+  totalCount: number;
+  processedCount: number;
+  scannedCount: number;
+  eligibleCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  batchIndex: number;
+  batchCount: number;
+  startedAt: number;
+  errorMessage: string | null;
+};
 
 type BulkDescriptionProgressState = {
   status: "running" | "done" | "rateLimited" | "error";
@@ -242,6 +257,9 @@ const ProductsPage = () => {
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
+  const [arrangeCategoriesProgress, setArrangeCategoriesProgress] =
+    useState<AiArrangeCategoriesProgressState | null>(null);
+  const [arrangeCategoriesElapsedSeconds, setArrangeCategoriesElapsedSeconds] = useState(0);
   const [bulkDescriptionProgress, setBulkDescriptionProgress] =
     useState<BulkDescriptionProgressState | null>(null);
   const [bulkDescriptionElapsedSeconds, setBulkDescriptionElapsedSeconds] = useState(0);
@@ -562,11 +580,7 @@ const ProductsPage = () => {
     },
   });
 
-  const arrangeCategoriesMutation = trpc.products.arrangeClothingCategories.useMutation({
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
+  const arrangeCategoriesMutation = trpc.products.arrangeClothingCategories.useMutation();
 
   const bulkStorePriceMutation = trpc.storePrices.upsert.useMutation({
     onError: (error) => {
@@ -632,6 +646,27 @@ const ProductsPage = () => {
   useEffect(() => {
     setSelectedIds(new Set());
   }, [search, category, showArchived, storeId, productType]);
+
+  useEffect(() => {
+    if (!arrangeCategoriesProgress) {
+      setArrangeCategoriesElapsedSeconds(0);
+      return;
+    }
+    if (arrangeCategoriesProgress.status !== "running") {
+      setArrangeCategoriesElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - arrangeCategoriesProgress.startedAt) / 1000)),
+      );
+      return;
+    }
+    const updateElapsed = () => {
+      setArrangeCategoriesElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - arrangeCategoriesProgress.startedAt) / 1000)),
+      );
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1_000);
+    return () => window.clearInterval(timer);
+  }, [arrangeCategoriesProgress]);
 
   useEffect(() => {
     if (!bulkDescriptionProgress) {
@@ -986,6 +1021,14 @@ const ProductsPage = () => {
   const allSelected =
     Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
   const allResultsSelected = productsTotal > 0 && selectedIds.size === productsTotal;
+  const arrangeCategoriesProgressPercent = arrangeCategoriesProgress
+    ? Math.round(
+        (arrangeCategoriesProgress.processedCount /
+          Math.max(1, arrangeCategoriesProgress.totalCount)) *
+          100,
+      )
+    : 0;
+  const arrangeCategoriesRunning = arrangeCategoriesProgress?.status === "running";
   const bulkDescriptionProgressPercent = bulkDescriptionProgress
     ? Math.round(
         (bulkDescriptionProgress.processedCount / Math.max(1, bulkDescriptionProgress.totalCount)) *
@@ -1647,7 +1690,7 @@ const ProductsPage = () => {
   };
 
   const handleArrangeCategoriesWithAi = async () => {
-    if (!isAdmin || arrangeCategoriesMutation.isLoading) {
+    if (!isAdmin || arrangeCategoriesRunning) {
       return;
     }
     const targetIds = selectedList.length ? selectedList : products.map((product) => product.id);
@@ -1665,24 +1708,106 @@ const ProductsPage = () => {
     }
 
     const chunks: string[][] = [];
-    for (let index = 0; index < targetIds.length; index += 500) {
-      chunks.push(targetIds.slice(index, index + 500));
+    for (let index = 0; index < targetIds.length; index += aiArrangeCategoriesBatchSize) {
+      chunks.push(targetIds.slice(index, index + aiArrangeCategoriesBatchSize));
     }
 
-    let updated = 0;
-    let skipped = 0;
-    for (const chunk of chunks) {
-      const result = await arrangeCategoriesMutation.mutateAsync({ productIds: chunk });
-      updated += result.updated;
-      skipped += result.skipped;
-    }
+    const summary = {
+      processedCount: 0,
+      scannedCount: 0,
+      eligibleCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+    };
 
-    await productsBootstrapQuery.refetch();
-    setSelectedIds(new Set());
-    toast({
-      variant: "success",
-      description: t("aiArrangeCategoriesSuccess", { updated, skipped }),
+    setArrangeCategoriesProgress({
+      status: "running",
+      totalCount: targetIds.length,
+      processedCount: 0,
+      scannedCount: 0,
+      eligibleCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      batchIndex: 0,
+      batchCount: chunks.length,
+      startedAt: Date.now(),
+      errorMessage: null,
     });
+
+    try {
+      for (const [batchIndex, chunk] of chunks.entries()) {
+        setArrangeCategoriesProgress((current) =>
+          current
+            ? {
+                ...current,
+                batchIndex: batchIndex + 1,
+              }
+            : current,
+        );
+
+        const result = await arrangeCategoriesMutation.mutateAsync({ productIds: chunk });
+        summary.processedCount += chunk.length;
+        summary.scannedCount += result.scanned;
+        summary.eligibleCount += result.eligible;
+        summary.updatedCount += result.updated;
+        summary.skippedCount += result.skipped;
+
+        setArrangeCategoriesProgress((current) =>
+          current
+            ? {
+                ...current,
+                processedCount: summary.processedCount,
+                scannedCount: summary.scannedCount,
+                eligibleCount: summary.eligibleCount,
+                updatedCount: summary.updatedCount,
+                skippedCount: summary.skippedCount,
+                batchIndex: batchIndex + 1,
+              }
+            : current,
+        );
+      }
+
+      setArrangeCategoriesProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "done",
+              processedCount: targetIds.length,
+              scannedCount: summary.scannedCount,
+              eligibleCount: summary.eligibleCount,
+              updatedCount: summary.updatedCount,
+              skippedCount: summary.skippedCount,
+              batchIndex: chunks.length,
+            }
+          : current,
+      );
+
+      await productsBootstrapQuery.refetch();
+      setSelectedIds(new Set());
+      toast({
+        variant: "success",
+        description: t("aiArrangeCategoriesSuccess", {
+          updated: summary.updatedCount,
+          skipped: summary.skippedCount,
+        }),
+      });
+    } catch (error) {
+      await productsBootstrapQuery.refetch();
+      const errorMessage = translateError(tErrors, error as Parameters<typeof translateError>[1]);
+      setArrangeCategoriesProgress((current) =>
+        current
+          ? {
+              ...current,
+              status: "error",
+              errorMessage,
+            }
+          : current,
+      );
+      toast({
+        variant: "error",
+        description: errorMessage,
+      });
+    }
   };
 
   const handleCategoryCreate = () => {
@@ -1972,17 +2097,15 @@ const ProductsPage = () => {
                   ) : null}
                   {isAdmin ? (
                     <DropdownMenuItem
-                      disabled={!products.length || arrangeCategoriesMutation.isLoading}
+                      disabled={!products.length || arrangeCategoriesRunning}
                       onSelect={() => void handleArrangeCategoriesWithAi()}
                     >
-                      {arrangeCategoriesMutation.isLoading ? (
+                      {arrangeCategoriesRunning ? (
                         <Spinner className="h-4 w-4" />
                       ) : (
                         <SparklesIcon className="h-4 w-4" aria-hidden />
                       )}
-                      {arrangeCategoriesMutation.isLoading
-                        ? tCommon("loading")
-                        : t("aiArrangeCategories")}
+                      {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
                     </DropdownMenuItem>
                   ) : null}
                   {selectedList.length ? (
@@ -2321,17 +2444,15 @@ const ProductsPage = () => {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-[260px]">
                         <DropdownMenuItem
-                          disabled={arrangeCategoriesMutation.isLoading}
+                          disabled={arrangeCategoriesRunning}
                           onSelect={() => void handleArrangeCategoriesWithAi()}
                         >
-                          {arrangeCategoriesMutation.isLoading ? (
+                          {arrangeCategoriesRunning ? (
                             <Spinner className="h-4 w-4" />
                           ) : (
                             <SparklesIcon className="h-4 w-4" aria-hidden />
                           )}
-                          {arrangeCategoriesMutation.isLoading
-                            ? tCommon("loading")
-                            : t("aiArrangeCategories")}
+                          {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={bulkDescriptionRunning}
@@ -3054,6 +3175,122 @@ const ProductsPage = () => {
           ) : null}
         </CardContent>
       </Card>
+
+      <Modal
+        open={Boolean(arrangeCategoriesProgress)}
+        onOpenChange={(open) => {
+          if (!open && !arrangeCategoriesRunning) {
+            setArrangeCategoriesProgress(null);
+          }
+        }}
+        title={t("aiArrangeCategoriesProgressTitle")}
+        subtitle={
+          arrangeCategoriesProgress
+            ? arrangeCategoriesProgress.status === "running"
+              ? t("aiArrangeCategoriesProgressRunning")
+              : arrangeCategoriesProgress.status === "error"
+                ? t("aiArrangeCategoriesProgressError")
+                : t("aiArrangeCategoriesProgressDone")
+            : undefined
+        }
+      >
+        {arrangeCategoriesProgress ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="font-medium text-foreground">
+                  {t("aiArrangeCategoriesProgressLabel", {
+                    processed: arrangeCategoriesProgress.processedCount,
+                    total: arrangeCategoriesProgress.totalCount,
+                  })}
+                </p>
+                <span className="text-sm font-semibold text-foreground">
+                  {arrangeCategoriesProgressPercent}%
+                </span>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-border/70">
+                <div
+                  className="h-2 rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${arrangeCategoriesProgressPercent}%` }}
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span>
+                  {t("aiArrangeCategoriesProgressBatch", {
+                    current:
+                      arrangeCategoriesProgress.batchCount > 0
+                        ? Math.min(
+                            arrangeCategoriesProgress.batchCount,
+                            Math.max(1, arrangeCategoriesProgress.batchIndex),
+                          )
+                        : 0,
+                    total: arrangeCategoriesProgress.batchCount,
+                  })}
+                </span>
+                <span>
+                  {t("aiArrangeCategoriesProgressElapsed", {
+                    seconds: arrangeCategoriesElapsedSeconds,
+                  })}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {t("aiArrangeCategoriesProgressScanned")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {arrangeCategoriesProgress.scannedCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {t("aiArrangeCategoriesProgressEligible")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {arrangeCategoriesProgress.eligibleCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {t("aiArrangeCategoriesProgressUpdated")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {arrangeCategoriesProgress.updatedCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-3">
+                <p className="text-xs text-muted-foreground">
+                  {t("aiArrangeCategoriesProgressSkipped")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {arrangeCategoriesProgress.skippedCount}
+                </p>
+              </div>
+            </div>
+
+            {arrangeCategoriesProgress.errorMessage ? (
+              <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+                {arrangeCategoriesProgress.errorMessage}
+              </div>
+            ) : null}
+
+            {!arrangeCategoriesRunning ? (
+              <FormActions>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => setArrangeCategoriesProgress(null)}
+                >
+                  {tCommon("close")}
+                </Button>
+              </FormActions>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={Boolean(bulkDescriptionProgress)}
