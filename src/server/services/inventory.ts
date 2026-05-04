@@ -35,6 +35,24 @@ export type StockAdjustmentResult = {
   movementId: string;
 };
 
+export type BulkSetOnHandInput = {
+  storeId: string;
+  snapshotIds: string[];
+  targetOnHand: number;
+  reason: string;
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+  idempotencyKey: string;
+};
+
+export type BulkSetOnHandResult = {
+  requestedCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  targetOnHand: number;
+};
+
 export type ApplyStockMovementInput = {
   storeId: string;
   productId: string;
@@ -238,6 +256,137 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
     onHand: result.onHand,
     requestId: input.requestId,
   });
+
+  return result;
+};
+
+export const bulkSetOnHand = async (
+  input: BulkSetOnHandInput,
+): Promise<BulkSetOnHandResult> => {
+  const logger = getLogger(input.requestId);
+  const snapshotIds = Array.from(new Set(input.snapshotIds.filter(Boolean)));
+  if (!snapshotIds.length) {
+    throw new AppError("inventorySelectionRequired", "BAD_REQUEST", 400);
+  }
+  if (input.targetOnHand < 0) {
+    throw new AppError("inventoryOnHandNonNegative", "BAD_REQUEST", 400);
+  }
+
+  const changedItems: Array<{ storeId: string; productId: string; variantId: string | null }> = [];
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: bulkResult } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "inventory.bulkSetOnHand",
+        userId: input.actorId,
+      },
+      async () => {
+        const store = await tx.store.findUnique({
+          where: { id: input.storeId },
+          select: { id: true, organizationId: true },
+        });
+        if (!store || store.organizationId !== input.organizationId) {
+          throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+        }
+
+        const snapshots = await tx.inventorySnapshot.findMany({
+          where: {
+            id: { in: snapshotIds },
+            storeId: input.storeId,
+            store: { organizationId: input.organizationId },
+            product: { organizationId: input.organizationId, isDeleted: false },
+          },
+          include: {
+            product: { select: { id: true, organizationId: true, isDeleted: true } },
+          },
+        });
+
+        if (snapshots.length !== snapshotIds.length) {
+          throw new AppError("inventorySelectionInvalid", "FORBIDDEN", 403);
+        }
+
+        let updatedCount = 0;
+        for (const snapshot of snapshots) {
+          const qtyDelta = input.targetOnHand - snapshot.onHand;
+          if (qtyDelta === 0) {
+            continue;
+          }
+
+          const { snapshot: updatedSnapshot, movementId } = await applyStockMovement(tx, {
+            storeId: input.storeId,
+            productId: snapshot.productId,
+            variantId: snapshot.variantId,
+            qtyDelta,
+            type: StockMovementType.ADJUSTMENT,
+            note: input.reason,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+          });
+
+          const lot = await applyStockLotAdjustment(tx, {
+            storeId: input.storeId,
+            productId: snapshot.productId,
+            variantId: snapshot.variantId,
+            qtyDelta,
+            expiryDate: null,
+            organizationId: input.organizationId,
+          });
+          if (lot) {
+            await tx.stockMovement.update({
+              where: { id: movementId },
+              data: { stockLotId: lot.id },
+            });
+          }
+
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "INVENTORY_BULK_SET_ON_HAND",
+            entity: "InventorySnapshot",
+            entityId: updatedSnapshot.id,
+            before: toJson(snapshot),
+            after: toJson(updatedSnapshot),
+            requestId: input.requestId,
+          });
+
+          updatedCount += 1;
+          changedItems.push({
+            storeId: input.storeId,
+            productId: snapshot.productId,
+            variantId: snapshot.variantId ?? null,
+          });
+        }
+
+        return {
+          requestedCount: snapshotIds.length,
+          updatedCount,
+          unchangedCount: snapshotIds.length - updatedCount,
+          targetOnHand: input.targetOnHand,
+        };
+      },
+    );
+
+    return bulkResult as BulkSetOnHandResult;
+  });
+
+  changedItems.forEach((item) => {
+    eventBus.publish({
+      type: "inventory.updated",
+      payload: item,
+    });
+  });
+
+  logger.info(
+    {
+      storeId: input.storeId,
+      requestedCount: result.requestedCount,
+      updatedCount: result.updatedCount,
+      targetOnHand: input.targetOnHand,
+    },
+    "inventory bulk on hand adjusted",
+  );
 
   return result;
 };

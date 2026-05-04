@@ -1,6 +1,14 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type HTMLAttributes,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -62,10 +70,12 @@ import {
   ReceiveIcon,
   PrintIcon,
   TransferIcon,
+  CheckIcon,
   StatusSuccessIcon,
   EmptyIcon,
   GridViewIcon,
   MoreIcon,
+  SearchIcon,
   TableViewIcon,
   ViewIcon,
 } from "@/components/icons";
@@ -144,6 +154,101 @@ const legacyInventoryPrintModalEnabled = process.env.NODE_ENV !== "production";
 
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
+type InventoryProductOption = {
+  key: string;
+  productId: string;
+  variantId: string | null;
+  label: string;
+};
+
+type ProductSearchSelectProps = HTMLAttributes<HTMLDivElement> & {
+  value: string;
+  options: InventoryProductOption[];
+  search: string;
+  onSearchChange: (value: string) => void;
+  onProductSelect: (option: InventoryProductOption) => void;
+  placeholder: string;
+  selectedLabel: string;
+  noResultsLabel: string;
+  disabled?: boolean;
+};
+
+const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>(
+  (
+    {
+      value,
+      options,
+      search,
+      onSearchChange,
+      onProductSelect,
+      placeholder,
+      selectedLabel,
+      noResultsLabel,
+      disabled,
+      ...props
+    },
+    ref,
+  ) => {
+    const selectedOption = options.find((option) => option.key === value) ?? null;
+    const normalizedSearch = search.trim().toLowerCase();
+    const visibleOptions = options
+      .filter((option) =>
+        normalizedSearch ? option.label.toLowerCase().includes(normalizedSearch) : true,
+      )
+      .slice(0, 8);
+
+    return (
+      <div ref={ref} className="space-y-2" {...props}>
+        <div className="relative">
+          <SearchIcon
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={selectedOption?.label ?? placeholder}
+            disabled={disabled}
+            className="pl-9"
+            autoComplete="off"
+          />
+        </div>
+        <div className="max-h-56 overflow-y-auto border border-border bg-background">
+          {visibleOptions.length ? (
+            visibleOptions.map((option) => {
+              const selected = option.key === value;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => {
+                    onProductSelect(option);
+                    onSearchChange("");
+                  }}
+                  disabled={disabled}
+                >
+                  <span className="min-w-0 truncate">{option.label}</span>
+                  {selected ? (
+                    <CheckIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  ) : null}
+                </button>
+              );
+            })
+          ) : (
+            <div className="px-3 py-2 text-sm text-muted-foreground">{noResultsLabel}</div>
+          )}
+        </div>
+        {selectedOption ? (
+          <p className="text-xs text-muted-foreground">
+            {selectedLabel}: <span className="text-foreground">{selectedOption.label}</span>
+          </p>
+        ) : null}
+      </div>
+    );
+  },
+);
+ProductSearchSelect.displayName = "ProductSearchSelect";
 
 const InventoryPage = () => {
   const t = useTranslations("inventory");
@@ -166,7 +271,7 @@ const InventoryPage = () => {
   const [expandedReorderId, setExpandedReorderId] = useState<string | null>(null);
   const [expiryWindow, setExpiryWindow] = useState<30 | 60 | 90>(30);
   const [activeDialog, setActiveDialog] = useState<
-    "receive" | "adjust" | "transfer" | "minStock" | "movements" | null
+    "receive" | "adjust" | "transfer" | "minStock" | "bulkOnHand" | "movements" | null
   >(null);
   const [movementTarget, setMovementTarget] = useState<{
     productId: string;
@@ -196,6 +301,7 @@ const InventoryPage = () => {
   // saved-profile quick print and must not open this settings form.
   const [legacyInventoryPrintModalOpen, setLegacyInventoryPrintModalOpen] = useState(false);
   const [calibrationLoadedStoreKey, setCalibrationLoadedStoreKey] = useState("");
+  const [adjustProductSearch, setAdjustProductSearch] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
   const suppliersQuery = trpc.suppliers.list.useQuery(undefined, {
     enabled: canManage && poDraftOpen,
@@ -371,6 +477,15 @@ const InventoryPage = () => {
     [t],
   );
 
+  const bulkOnHandSchema = useMemo(
+    () =>
+      z.object({
+        targetOnHand: z.coerce.number().int().min(0, t("onHandNonNegative")),
+        reason: z.string().min(1, t("reasonRequired")),
+      }),
+    [t],
+  );
+
   const transferSchema = useMemo(
     () =>
       z
@@ -495,6 +610,14 @@ const InventoryPage = () => {
       unitSelection: "BASE",
       reason: "",
       expiryDate: "",
+    },
+  });
+
+  const bulkOnHandForm = useForm<z.infer<typeof bulkOnHandSchema>>({
+    resolver: zodResolver(bulkOnHandSchema),
+    defaultValues: {
+      targetOnHand: 0,
+      reason: "",
     },
   });
 
@@ -623,7 +746,7 @@ const InventoryPage = () => {
     return imageUrl;
   };
 
-  const productOptions = useMemo(() => {
+  const productOptions = useMemo<InventoryProductOption[]>(() => {
     return inventoryItems.map((item) => {
       const label = item.variant?.name
         ? `${item.product.name} • ${item.variant.name}`
@@ -900,6 +1023,12 @@ const InventoryPage = () => {
   useEffect(() => {
     setSelectedIds(new Set());
   }, [storeId, search]);
+
+  useEffect(() => {
+    if (activeDialog !== "adjust") {
+      setAdjustProductSearch("");
+    }
+  }, [activeDialog]);
 
   useEffect(() => {
     if (!legacyInventoryPrintModalOpen) {
@@ -1327,6 +1456,23 @@ const InventoryPage = () => {
       adjustForm.setValue("qtyDelta", 0);
       adjustForm.setValue("reason", "");
       toast({ variant: "success", description: t("adjustSuccess") });
+      setActiveDialog(null);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const bulkOnHandMutation = trpc.inventory.bulkSetOnHand.useMutation({
+    onSuccess: (result) => {
+      inventoryQuery.refetch();
+      bulkOnHandForm.setValue("targetOnHand", 0);
+      bulkOnHandForm.setValue("reason", "");
+      toast({
+        variant: "success",
+        description: t("bulkOnHandSuccess", { count: result.updatedCount }),
+      });
+      setSelectedIds(new Set());
       setActiveDialog(null);
     },
     onError: (error) => {
@@ -1863,6 +2009,18 @@ const InventoryPage = () => {
                     )}
                     {inventoryQuickPrintLoading ? tCommon("loading") : t("printSelected")}
                   </Button>
+                  {canManage ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setActiveDialog("bulkOnHand")}
+                    >
+                      <AdjustIcon className="h-4 w-4" aria-hidden />
+                      {t("bulkEditOnHand")}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="secondary"
@@ -3135,6 +3293,95 @@ const InventoryPage = () => {
       </Modal>
 
       <Modal
+        open={activeDialog === "bulkOnHand"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setActiveDialog(null);
+          }
+        }}
+        title={t("bulkOnHandTitle")}
+        subtitle={t("bulkOnHandSubtitle", { count: selectedCount })}
+      >
+        <Form {...bulkOnHandForm}>
+          <form
+            className="space-y-4"
+            onSubmit={bulkOnHandForm.handleSubmit((values) => {
+              if (!storeId || !selectedSnapshotIds.length) {
+                return;
+              }
+              bulkOnHandMutation.mutate({
+                storeId,
+                snapshotIds: selectedSnapshotIds,
+                targetOnHand: values.targetOnHand,
+                reason: values.reason,
+                idempotencyKey: crypto.randomUUID(),
+              });
+            })}
+          >
+            <FormGrid>
+              <FormField
+                control={bulkOnHandForm.control}
+                name="targetOnHand"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("onHand")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        placeholder={t("qtyPlaceholder")}
+                      />
+                    </FormControl>
+                    <FormDescription>{t("bulkOnHandHint")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={bulkOnHandForm.control}
+                name="reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("reason")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder={t("bulkOnHandReasonPlaceholder")} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormGrid>
+            <FormActions>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setActiveDialog(null)}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={
+                  bulkOnHandMutation.isLoading || !storeId || selectedSnapshotIds.length === 0
+                }
+              >
+                {bulkOnHandMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <AdjustIcon className="h-4 w-4" aria-hidden />
+                )}
+                {bulkOnHandMutation.isLoading ? tCommon("loading") : t("bulkOnHandSubmit")}
+              </Button>
+            </FormActions>
+          </form>
+        </Form>
+      </Modal>
+
+      <Modal
         open={activeDialog === "adjust"}
         onOpenChange={(open) => {
           if (!open) {
@@ -3170,34 +3417,25 @@ const InventoryPage = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tCommon("product")}</FormLabel>
-                    <Select
-                      value={adjustSelectionKey}
-                      onValueChange={(value) => {
-                        const option = productOptions.find((item) => item.key === value);
-                        if (!option) {
-                          return;
-                        }
-                        field.onChange(option.productId);
-                        adjustForm.setValue("variantId", option.variantId, {
-                          shouldValidate: true,
-                        });
-                        adjustForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                      }}
-                      disabled={!productOptions.length}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={tCommon("selectProduct")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {productOptions.map((option) => (
-                          <SelectItem key={option.key} value={option.key}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <ProductSearchSelect
+                        value={adjustSelectionKey}
+                        options={productOptions}
+                        search={adjustProductSearch}
+                        onSearchChange={setAdjustProductSearch}
+                        placeholder={t("productSearchPlaceholder")}
+                        selectedLabel={t("selectedProduct")}
+                        noResultsLabel={t("productSearchEmpty")}
+                        disabled={!productOptions.length}
+                        onProductSelect={(option) => {
+                          field.onChange(option.productId);
+                          adjustForm.setValue("variantId", option.variantId, {
+                            shouldValidate: true,
+                          });
+                          adjustForm.setValue("unitSelection", "BASE", { shouldValidate: true });
+                        }}
+                      />
+                    </FormControl>
                     {!productOptions.length ? (
                       <FormDescription>{t("noInventory")}</FormDescription>
                     ) : null}

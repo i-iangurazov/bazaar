@@ -7,6 +7,7 @@ import { logProfileSection } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
+  bulkSetOnHand,
   receiveStock,
   recomputeInventorySnapshots,
   transferStock,
@@ -308,6 +309,34 @@ export const inventoryRouter = router({
           packId: input.packId,
           reason: input.reason,
           expiryDate: input.expiryDate ? new Date(input.expiryDate) : undefined,
+          actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          requestId: ctx.requestId,
+          idempotencyKey: input.idempotencyKey,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkSetOnHand: managerProcedure
+    .use(rateLimit({ windowMs: 30_000, max: 10, prefix: "inventory-bulk-on-hand" }))
+    .input(
+      z.object({
+        storeId: z.string(),
+        snapshotIds: z.array(z.string()).min(1).max(5_000),
+        targetOnHand: z.number().int().min(0),
+        reason: z.string().min(3),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await bulkSetOnHand({
+          storeId: input.storeId,
+          snapshotIds: input.snapshotIds,
+          targetOnHand: input.targetOnHand,
+          reason: input.reason,
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,

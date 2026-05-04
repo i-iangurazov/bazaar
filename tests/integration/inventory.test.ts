@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
-import { adjustStock, receiveStock, recomputeInventorySnapshots, transferStock } from "@/server/services/inventory";
+import {
+  adjustStock,
+  bulkSetOnHand,
+  receiveStock,
+  recomputeInventorySnapshots,
+  transferStock,
+} from "@/server/services/inventory";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -157,6 +163,76 @@ describeDb("inventory service", () => {
     });
 
     expect(result.onHand).toBe(-5);
+  });
+
+  it("bulk sets selected inventory rows to the same on-hand quantity", async () => {
+    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "TEST-2",
+        name: "Second Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 3,
+      reason: "Seed first",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-on-hand-seed-1",
+      idempotencyKey: "idem-bulk-on-hand-seed-1",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: secondProduct.id,
+      qtyDelta: 8,
+      reason: "Seed second",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-on-hand-seed-2",
+      idempotencyKey: "idem-bulk-on-hand-seed-2",
+    });
+
+    const snapshots = await prisma.inventorySnapshot.findMany({
+      where: { storeId: store.id, productId: { in: [product.id, secondProduct.id] } },
+      orderBy: { productId: "asc" },
+    });
+
+    const result = await bulkSetOnHand({
+      storeId: store.id,
+      snapshotIds: snapshots.map((snapshot) => snapshot.id),
+      targetOnHand: 5,
+      reason: "Full recount",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-on-hand",
+      idempotencyKey: "idem-bulk-on-hand",
+    });
+
+    expect(result.updatedCount).toBe(2);
+    expect(result.unchangedCount).toBe(0);
+
+    const updated = await prisma.inventorySnapshot.findMany({
+      where: { id: { in: snapshots.map((snapshot) => snapshot.id) } },
+    });
+    expect(updated.map((snapshot) => snapshot.onHand).sort()).toEqual([5, 5]);
+
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        storeId: store.id,
+        productId: { in: [product.id, secondProduct.id] },
+        type: StockMovementType.ADJUSTMENT,
+        note: "Full recount",
+      },
+      orderBy: { qtyDelta: "asc" },
+    });
+    expect(movements.map((movement) => movement.qtyDelta)).toEqual([-3, 2]);
   });
 
   it("creates paired transfer movements and updates both snapshots", async () => {
