@@ -1,5 +1,110 @@
 # Final Improvement Summary
 
+## Font, Switch, And Integration Polish - 2026-05-05
+
+### Changed
+
+- Switched the global app font stack to `Jost`, with `Inter` and system UI as fallbacks.
+- Tuned the shared Switch component so the off state remains visibly switch-like and the on state is less aggressive.
+- Kept the public catalog and integration page UI aligned with the sharp/no-radius direction.
+- Fixed public catalog image presentation so product cards are square and transparent PNG padding is only applied when transparency actually exists.
+- Expanded Bazaar API product payloads for external integrations while keeping private accounting/cost fields out of the public API response.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm i18n:check` passed.
+- `pnpm prisma migrate status` passed: 55 migrations found and the database schema is up to date.
+- `pnpm prisma migrate dev` passed: already in sync, no pending migration.
+- `pnpm prisma generate` passed.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 96 files passed, 438 tests passed.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next build, static generation, and route trace collection.
+- `pnpm prisma studio` started successfully on `http://localhost:5555`; `curl -I` returned `HTTP/1.1 200 OK`, and Studio was stopped after verification.
+
+## Integrations And Bazaar Catalog QA - 2026-05-05
+
+### Changed
+
+- Checked the integration surfaces for Bazaar Catalog, Bazaar API, Bakai Store, M-Market, and Product Image Studio.
+- Removed page-level rounded styling from `/operations/integrations`, individual integration pages, Bazaar Catalog settings, and the public catalog shell/cart/product UI so those routes follow the sharp UI direction instead of bypassing shared radius tokens.
+- Changed public catalog product media to render as square `1:1` images.
+- Fixed catalog image processing so only images with actual transparent pixels receive padded framing; opaque JPEG/WebP/PNG product photos are square-cropped without added whitespace.
+- Changed catalog image transformation from `4:3` to square output so the public catalog image pipeline matches the card ratio.
+- Expanded `GET /api/bazaar/v1/products` payloads with safe product details needed by integrations: categories, description, unit/base unit, supplier, barcodes, packs, bundle flag, timestamps, image objects, variants, variant attribute values, stock by variant, currency code, and currency rate.
+- Verified `POST /api/bazaar/v1/orders` still creates API orders from the same product identifiers exposed by `GET /api/bazaar/v1/products`.
+
+### Tests Added Or Updated
+
+- Added `tests/integration/bazaar-api.test.ts` for rich Bazaar API product payloads and API order creation.
+- Updated catalog image transform tests for square output, transparent-only framing, and opaque photo square output.
+- Focused integration test set passed for Bazaar API, Bazaar Catalog, Bakai Store, M-Market, Product Image Studio, and related payload/unit tests.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- Focused integration/catalog tests passed: 8 files passed, 45 tests passed.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 96 files passed, 438 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next build, static generation, and route trace collection.
+
+### Remaining Risks
+
+- I did not run a browser screenshot pass for the public catalog; validation is code/test/build based.
+- The expanded Bazaar API product payload intentionally omits private cost/accounting fields.
+
+## Real Retail Workflow QA Bug-Fix Pass - 2026-05-05
+
+### QA Coverage
+
+- Product creation and product readiness were covered through the product integration suite and the full tRPC contract smoke flow.
+- Stock receiving, adjustments, transfers, movement history, low/negative inventory paths, stock counts, and inventory recomputation were covered through inventory, stock-count, purchase-order, and tRPC contract tests.
+- Barcode/label printing was covered through label print-flow, price-tag route, price-tag PDF/layout, and print source tests, including saved-profile quick print behavior and selected-currency label output.
+- POS sale, payment, receipt, stock decrement, returns/refunds, cash drawer movement, shift open/close, and transaction currency snapshots were covered through the POS integration suite.
+- Receipt/PDF/export behavior was covered through receipt print payload/PDF tests, receipt PDF route tests, purchase-order PDF route tests, and export integration tests.
+- Reports, dashboard-adjacent analytics, all-store/base-currency behavior, and role navigation filtering were covered through reports, analytics, middleware, role-access, AppShell navigation, and command palette tests.
+- Browser-console testing was not run in a live browser in this slice; the production build completed cleanly and source/tests covered the validated flows.
+
+### Bug Found And Fixed
+
+- Shift close accepted a non-zero cash difference without a closing note.
+- Added a server-side guard in `closeRegisterShift` so API/tRPC callers cannot close a shift with a surplus/shortage unless `notes` is supplied.
+- Added UI validation on `/pos/shifts` so the close button stays disabled for a non-zero difference until a note is entered, and the user sees a localized explanation.
+- Added `posShiftDifferenceNoteRequired` error translations and shift-close helper text in `en`, `ru`, and `kg`.
+- Updated POS integration coverage so a close attempt with a cash shortage fails without a note and succeeds once the note is supplied.
+- Added a source-level POS shift UI regression test for the note-required guard.
+
+### Files Touched In This Slice
+
+- `src/server/services/pos.ts`
+- `src/app/(app)/pos/shifts/page.tsx`
+- `messages/en.json`
+- `messages/ru.json`
+- `messages/kg.json`
+- `tests/integration/pos.test.ts`
+- `tests/unit/pos-entry-source.test.ts`
+- `docs/final-improvement-summary.md`
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- Focused workflow tests passed with local PostgreSQL enabled: products, inventory, label printing, price-tag route, exports, reports, sales orders, purchase orders, AppShell navigation, role access, and command palette navigation.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 95 files passed, 435 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next build, static generation, and route trace collection.
+- `pnpm prisma migrate status` passed: 55 migrations found and the database schema is up to date.
+- `pnpm prisma generate` passed.
+
+### Remaining Risks
+
+- This was not a browser-driven end-to-end QA run; it used integration/unit/source tests plus production build validation.
+- No new workflow behavior was added beyond the required note enforcement for shift close discrepancies.
+
 ## Historical Currency Snapshots - 2026-05-05
 
 ### Changed

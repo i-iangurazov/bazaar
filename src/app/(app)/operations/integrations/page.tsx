@@ -165,7 +165,7 @@ const IntegrationsPage = () => {
                 {t("bazaarApi.activeKeys", { count: activeApiKeyCount })}
               </p>
             ) : null}
-            <div className="grid gap-2 rounded-md border border-border p-3 text-sm">
+            <div className="grid gap-2 rounded-none border border-border p-3 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">{t("bazaarApi.productsEndpoint")}</p>
                 <p className="break-all font-mono text-xs">

@@ -925,6 +925,11 @@ export const closeRegisterShift = async (input: {
           countedCashKgs: counted,
           expectedCashKgs: expected,
         });
+        const closingNotes = input.notes?.trim() || null;
+
+        if (Math.abs(discrepancy) > 0.009 && !closingNotes) {
+          throw new AppError("posShiftDifferenceNoteRequired", "BAD_REQUEST", 400);
+        }
 
         const updated = await tx.registerShift.update({
           where: { id: shift.id },
@@ -934,7 +939,7 @@ export const closeRegisterShift = async (input: {
             closedById: input.actorId,
             closingCashCountedKgs: counted,
             expectedCashKgs: expected,
-            notes: input.notes ?? shift.notes,
+            notes: closingNotes ?? shift.notes,
           },
         });
 

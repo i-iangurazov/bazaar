@@ -757,9 +757,21 @@ describeDb("pos", () => {
       isOrgOwner: false,
     });
 
+    await expect(
+      managerCaller.pos.shifts.close({
+        shiftId: shift.id,
+        closingCashCountedKgs: 130,
+        idempotencyKey: "pos-shift-close-missing-note-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "posShiftDifferenceNoteRequired",
+    });
+
     const close = await managerCaller.pos.shifts.close({
       shiftId: shift.id,
       closingCashCountedKgs: 130,
+      notes: "Cash counted short at close",
       idempotencyKey: "pos-shift-close-1",
     });
 

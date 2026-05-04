@@ -7,7 +7,7 @@ import {
 } from "@/server/services/catalogImageTransform";
 
 describe("catalog image transform", () => {
-  it("frames transparent PNG cutouts on a padded 4:3 canvas", async () => {
+  it("frames transparent PNG cutouts on a padded square canvas", async () => {
     const sourceBuffer = await sharp({
       create: {
         width: 100,
@@ -37,7 +37,7 @@ describe("catalog image transform", () => {
     const metadata = await sharp(output).metadata();
 
     expect(metadata.width).toBe(400);
-    expect(metadata.height).toBe(300);
+    expect(metadata.height).toBe(400);
 
     const alpha = await sharp(output).ensureAlpha().extractChannel("alpha").raw().toBuffer();
     const width = metadata.width ?? 0;
@@ -62,10 +62,10 @@ describe("catalog image transform", () => {
     expect(minX).toBeGreaterThan(30);
     expect(minY).toBeGreaterThan(30);
     expect(maxX).toBeLessThan(370);
-    expect(maxY).toBeLessThan(270);
+    expect(maxY).toBeLessThan(370);
   });
 
-  it("only frames PNG or alpha product images", () => {
+  it("only considers images with an alpha channel for transparent cutout framing", () => {
     expect(
       shouldFrameCatalogProductImage({
         metadata: { format: "jpeg", hasAlpha: false },
@@ -77,6 +77,36 @@ describe("catalog image transform", () => {
         metadata: { format: "png", hasAlpha: false },
         sourceMimeType: "image/png",
       }),
+    ).toBe(false);
+    expect(
+      shouldFrameCatalogProductImage({
+        metadata: { format: "png", hasAlpha: true },
+        sourceMimeType: "image/png",
+      }),
     ).toBe(true);
+  });
+
+  it("outputs opaque product photos as square images without transparent padding", async () => {
+    const sourceBuffer = await sharp({
+      create: {
+        width: 300,
+        height: 180,
+        channels: 3,
+        background: { r: 12, g: 80, b: 180 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const output = await transformCatalogImageToWebp({
+      sourceBuffer,
+      width: 400,
+      quality: 80,
+      sourceMimeType: "image/jpeg",
+    });
+    const metadata = await sharp(output).metadata();
+
+    expect(metadata.width).toBe(400);
+    expect(metadata.height).toBe(400);
   });
 });

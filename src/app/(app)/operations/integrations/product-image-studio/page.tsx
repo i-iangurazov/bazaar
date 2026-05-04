@@ -71,13 +71,13 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
       <img
         src={imageUrl}
         alt={name}
-        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+        className="h-10 w-10 shrink-0 rounded-none border border-border object-cover"
       />
     );
   }
 
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
       {fallbackLabel}
     </div>
   );
@@ -389,7 +389,7 @@ const ProductImageStudioPage = () => {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
-              <div className="rounded-lg border border-border p-4">
+              <div className="rounded-none border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.totalJobs")}
                 </p>
@@ -397,7 +397,7 @@ const ProductImageStudioPage = () => {
                   {overview?.totalJobs ?? 0}
                 </p>
               </div>
-              <div className="rounded-lg border border-border p-4">
+              <div className="rounded-none border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.succeeded")}
                 </p>
@@ -405,7 +405,7 @@ const ProductImageStudioPage = () => {
                   {overview?.succeededJobs ?? 0}
                 </p>
               </div>
-              <div className="rounded-lg border border-border p-4">
+              <div className="rounded-none border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.failed")}
                 </p>
@@ -413,7 +413,7 @@ const ProductImageStudioPage = () => {
                   {overview?.failedJobs ?? 0}
                 </p>
               </div>
-              <div className="rounded-lg border border-border p-4">
+              <div className="rounded-none border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.lastGenerated")}
                 </p>
@@ -425,7 +425,7 @@ const ProductImageStudioPage = () => {
               </div>
             </div>
             {providerMissing ? (
-              <p className="mt-4 rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+              <p className="mt-4 rounded-none border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
                 {t("overview.providerMissing")}
               </p>
             ) : null}
@@ -443,7 +443,7 @@ const ProductImageStudioPage = () => {
                 <Label>{t("input.uploadLabel")}</Label>
                 <button
                   type="button"
-                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/20 px-6 py-10 text-center"
+                  className="flex w-full flex-col items-center justify-center rounded-none border border-dashed border-border bg-secondary/20 px-6 py-10 text-center"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!canEdit || uploadingSource}
                 >
@@ -470,7 +470,7 @@ const ProductImageStudioPage = () => {
                   }}
                 />
                 {sourceImage ? (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3 rounded-none border border-border px-3 py-2 text-sm">
                     <div>
                       <p className="font-medium">{sourceImage.fileName}</p>
                       <p className="text-xs text-muted-foreground">
@@ -498,7 +498,7 @@ const ProductImageStudioPage = () => {
                   placeholder={t("input.productPlaceholder")}
                 />
                 {selectedProduct ? (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 rounded-none border border-border px-3 py-2">
                     <div className="flex items-center gap-3">
                       <ProductImageThumb imageUrl={selectedProduct.imageUrl} name={selectedProduct.name} />
                       <div>
@@ -517,7 +517,7 @@ const ProductImageStudioPage = () => {
                   </div>
                 ) : null}
                 {!selectedProduct && productSearch.trim().length >= 2 ? (
-                  <div className="rounded-lg border border-border">
+                  <div className="rounded-none border border-border">
                     {productSearchQuery.isLoading ? (
                       <div className="px-3 py-3 text-sm text-muted-foreground">
                         {tCommon("loading")}
@@ -548,7 +548,7 @@ const ProductImageStudioPage = () => {
                 ) : null}
               </div>
 
-              <p className="rounded-lg border border-dashed border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+              <p className="rounded-none border border-dashed border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
                 {t("input.reviewNote")}
               </p>
             </CardContent>
@@ -686,7 +686,7 @@ const ProductImageStudioPage = () => {
                     </span>
                   ) : null}
                 </div>
-                <div className="overflow-hidden rounded-xl border border-border bg-secondary/20">
+                <div className="overflow-hidden rounded-none border border-border bg-secondary/20">
                   {sourcePreviewUrl ? (
                     <img
                       src={sourcePreviewUrl}
@@ -708,7 +708,7 @@ const ProductImageStudioPage = () => {
                     <Badge variant={jobBadgeVariant(selectedJob.status)}>{selectedJob.status}</Badge>
                   ) : null}
                 </div>
-                <div className="overflow-hidden rounded-xl border border-border bg-secondary/20">
+                <div className="overflow-hidden rounded-none border border-border bg-secondary/20">
                   {selectedJob?.outputPreviewPath ? (
                     <img
                       src={selectedJob.outputPreviewPath}
@@ -731,7 +731,7 @@ const ProductImageStudioPage = () => {
             </div>
 
             {selectedJob?.errorMessage ? (
-              <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+              <div className="rounded-none border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                 {formatJobErrorMessage(selectedJob.errorMessage, tErrors)}
               </div>
             ) : null}

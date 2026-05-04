@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-const CATALOG_IMAGE_ASPECT_RATIO = 4 / 3;
+const CATALOG_IMAGE_ASPECT_RATIO = 1;
 const CATALOG_IMAGE_PADDING_RATIO = 0.1;
 const WEBP_EFFORT = 4;
 const TRIM_THRESHOLD = 10;
@@ -11,12 +11,21 @@ export const shouldFrameCatalogProductImage = (input: {
   metadata: Pick<sharp.Metadata, "format" | "hasAlpha">;
   sourceMimeType: string;
 }) => {
-  const sourceMimeType = input.sourceMimeType.toLowerCase();
-  return (
-    input.metadata.hasAlpha === true ||
-    input.metadata.format === "png" ||
-    sourceMimeType === "image/png"
-  );
+  return input.metadata.hasAlpha === true;
+};
+
+const hasTransparentPixels = async (sourceBuffer: Buffer) => {
+  try {
+    const alpha = await sharp(sourceBuffer)
+      .rotate()
+      .ensureAlpha()
+      .extractChannel("alpha")
+      .raw()
+      .toBuffer();
+    return alpha.some((value) => value < 250);
+  } catch {
+    return false;
+  }
 };
 
 const resizeCatalogImage = async (input: {
@@ -60,17 +69,20 @@ export const transformCatalogImageToWebp = async (input: {
   sourceMimeType: string;
 }) => {
   const metadata = await sharp(input.sourceBuffer).metadata();
-  const shouldFrame = shouldFrameCatalogProductImage({
+  const canFrame = shouldFrameCatalogProductImage({
     metadata,
     sourceMimeType: input.sourceMimeType,
   });
+  const shouldFrame = canFrame && (await hasTransparentPixels(input.sourceBuffer));
 
   if (!shouldFrame) {
     return sharp(input.sourceBuffer)
       .rotate()
       .resize({
         width: input.width,
-        withoutEnlargement: true,
+        height: input.width,
+        fit: "cover",
+        position: "center",
       })
       .webp({
         quality: input.quality,

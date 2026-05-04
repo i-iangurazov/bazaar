@@ -540,7 +540,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     return (
       <Card key={product.id} className="overflow-hidden">
         <CardContent className="space-y-3 p-3">
-          <div className="aspect-[4/3] overflow-hidden rounded-lg bg-secondary">
+          <div className="aspect-square overflow-hidden bg-secondary">
             {product.imageUrl ? (
               <img
                 src={imageSrc ?? undefined}
@@ -550,7 +550,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 loading={prioritizeImage ? "eager" : "lazy"}
                 fetchPriority={prioritizeImage ? "high" : "auto"}
                 decoding="async"
-                className="h-full w-full object-contain p-3 sm:p-4"
+                className="h-full w-full object-cover"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
@@ -670,19 +670,19 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
         <div className="animate-pulse space-y-6">
           <div className="space-y-3">
-            <div className="h-16 w-16 rounded-xl bg-muted" />
-            <div className="h-8 w-56 rounded-md bg-muted" />
-            <div className="h-10 w-full rounded-md bg-muted" />
-            <div className="h-10 w-full rounded-md bg-muted" />
+            <div className="h-16 w-16 rounded-none bg-muted" />
+            <div className="h-8 w-56 rounded-none bg-muted" />
+            <div className="h-10 w-full rounded-none bg-muted" />
+            <div className="h-10 w-full rounded-none bg-muted" />
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (
               <Card key={`skeleton-${index}`}>
                 <CardContent className="space-y-3 p-4">
-                  <div className="h-36 rounded-md bg-muted" />
-                  <div className="h-4 w-2/3 rounded bg-muted" />
-                  <div className="h-4 w-1/3 rounded bg-muted" />
-                  <div className="h-10 rounded bg-muted" />
+                  <div className="h-36 rounded-none bg-muted" />
+                  <div className="h-4 w-2/3 rounded-none bg-muted" />
+                  <div className="h-4 w-1/3 rounded-none bg-muted" />
+                  <div className="h-10 rounded-none bg-muted" />
                 </CardContent>
               </Card>
             ))}
@@ -722,7 +722,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     >
       <div
         className={cn(
-          "rounded-2xl border border-border/80 bg-card/80 shadow-sm",
+          "rounded-none border border-border/80 bg-card/80 shadow-sm",
           isCompactHeader ? "p-3 sm:p-4" : "p-4 sm:p-5",
         )}
       >
@@ -744,14 +744,14 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                   fetchPriority="high"
                   decoding="async"
                   className={cn(
-                    "rounded-xl border border-border object-cover",
+                    "rounded-none border border-border object-cover",
                     isCompactHeader ? "h-11 w-11" : "h-14 w-14",
                   )}
                 />
               ) : (
                 <div
                   className={cn(
-                    "flex items-center justify-center rounded-xl border border-border bg-secondary font-semibold",
+                    "flex items-center justify-center rounded-none border border-border bg-secondary font-semibold",
                     isCompactHeader ? "h-11 w-11 text-base" : "h-14 w-14 text-xl",
                   )}
                 >
@@ -779,7 +779,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             </div>
             <LanguageSwitcher
               compact={isCompactHeader}
-              className="shrink-0 rounded-xl bg-background/70"
+              className="shrink-0 rounded-none bg-background/70"
               activeButtonClassName="text-white"
               activeButtonStyle={{ backgroundColor: accentColor, borderColor: accentColor }}
               buttonClassName="font-medium"
@@ -827,7 +827,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
 
       <div className="mt-6 space-y-4">
         {groupedProducts.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-none border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             {t("emptyProducts")}
           </div>
         ) : !hasNamedCategories ? (
@@ -838,7 +838,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           groupedProducts.map((group) => {
             const collapsed = collapsedCategories[group.key] ?? false;
             return (
-              <section key={group.key} className="rounded-2xl border border-border/70 bg-card/70">
+              <section key={group.key} className="rounded-none border border-border/70 bg-card/70">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -882,7 +882,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <button
               type="button"
               onClick={openCart}
-              className="mx-auto flex h-[4.35rem] w-full max-w-xl items-center justify-between rounded-2xl border border-border/80 bg-card px-4 shadow-2xl backdrop-blur"
+              className="mx-auto flex h-[4.35rem] w-full max-w-xl items-center justify-between rounded-none border border-border/80 bg-card px-4 shadow-2xl backdrop-blur"
               style={{ borderLeft: `4px solid ${accentColor}` }}
             >
               <span className="inline-flex items-center gap-2">
@@ -891,7 +891,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 </span>
               </span>
               <span
-                className="inline-flex items-center rounded-xl px-3.5 py-2 text-sm font-semibold text-white shadow-sm"
+                className="inline-flex items-center rounded-none px-3.5 py-2 text-sm font-semibold text-white shadow-sm"
                 style={{ backgroundColor: accentColor }}
               >
                 {t("cartButton", { count: cartItemsCount })}
@@ -902,7 +902,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <button
               type="button"
               onClick={openCart}
-              className="inline-flex h-12 items-center gap-3 rounded-xl border border-border/80 bg-card px-4 shadow-xl"
+              className="inline-flex h-12 items-center gap-3 rounded-none border border-border/80 bg-card px-4 shadow-xl"
               style={{ borderLeft: `4px solid ${accentColor}` }}
             >
               <span className="text-sm font-semibold">
@@ -1020,7 +1020,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
         ) : (
           <div className="space-y-4">
             {cartItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+              <div className="rounded-none border border-dashed border-border px-4 py-8 text-center">
                 <p className="text-sm font-semibold">{t("cartEmptyTitle")}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{t("cartEmptyDescription")}</p>
               </div>
@@ -1030,7 +1030,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                   {cartItems.map((item) => {
                     const qtyInput = qtyInputs[item.lineKey] ?? String(item.qty);
                     return (
-                      <div key={item.lineKey} className="rounded-lg border border-border p-3">
+                      <div key={item.lineKey} className="rounded-none border border-border p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold">{item.product.name}</p>
@@ -1120,7 +1120,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       </Modal>
 
       <div className="mt-10 text-center">
-        <Link href="/" className="inline-flex items-center justify-center rounded-md px-2 py-1 hover:opacity-90">
+        <Link href="/" className="inline-flex items-center justify-center rounded-none px-2 py-1 hover:opacity-90">
           <img src="/brand/logo.png" alt={t("poweredBy")} className="h-7 w-auto" />
           <span className="sr-only">{t("poweredBy")}</span>
         </Link>

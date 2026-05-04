@@ -15,4 +15,13 @@ describe("pos entry navigation", () => {
     expect(source).not.toContain("router.replace(`/pos/sell?registerId=");
     expect(source).toContain('t("entry.readyToSell")');
   });
+
+  it("requires a closing note in the shift UI when counted cash does not match expected cash", async () => {
+    const source = await readSource("src/app/(app)/pos/shifts/page.tsx");
+
+    expect(source).toContain("const closeNoteRequired =");
+    expect(source).toContain("Math.abs(cashDifference) > 0.009");
+    expect(source).toContain('t("shifts.differenceNoteRequired")');
+    expect(source).toContain("!closeNoteValid");
+  });
 });

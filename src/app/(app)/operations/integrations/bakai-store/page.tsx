@@ -105,13 +105,13 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
       <img
         src={imageUrl}
         alt={name}
-        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+        className="h-10 w-10 shrink-0 rounded-none border border-border object-cover"
       />
     );
   }
 
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
       {fallbackLabel}
     </div>
   );
@@ -626,7 +626,7 @@ const BakaiStorePage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.mode")}</p>
               <p className="text-sm font-semibold">
                 {t(
@@ -636,7 +636,7 @@ const BakaiStorePage = () => {
                 )}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.token")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.hasApiToken
@@ -644,7 +644,7 @@ const BakaiStorePage = () => {
                   : t("overview.tokenMissing")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.endpoint")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.importEndpoint
@@ -652,7 +652,7 @@ const BakaiStorePage = () => {
                   : t("overview.endpointMissing")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.lastSync")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.lastSyncAt
@@ -663,25 +663,25 @@ const BakaiStorePage = () => {
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.template")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.fileName ?? t("overview.notUploaded")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.sheet")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.sheetName ?? "-"}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.stockColumns")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.stockColumns.join(", ") ?? "pp1"}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("overview.metrics.lastConnectionCheck")}
               </p>
@@ -694,7 +694,7 @@ const BakaiStorePage = () => {
           </div>
 
           {settingsQuery.data?.integration.template ? (
-            <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+            <div className="rounded-none border border-border p-3 text-sm text-muted-foreground">
               <p>
                 {t("overview.templateMeta", {
                   fileSize: formatFileSize(settingsQuery.data.integration.template.fileSize),
@@ -703,19 +703,19 @@ const BakaiStorePage = () => {
               </p>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+            <div className="rounded-none border border-dashed border-border p-3 text-sm text-muted-foreground">
               {t("overview.uploadHint")}
             </div>
           )}
 
           {settingsQuery.data?.integration.lastErrorSummary ? (
-            <div className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+            <div className="rounded-none border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
               {settingsQuery.data.integration.lastErrorSummary}
             </div>
           ) : null}
 
           {settingsQuery.data?.integration.lastConnectionCheckSummary ? (
-            <div className="rounded-md border border-border p-3 text-xs text-muted-foreground">
+            <div className="rounded-none border border-border p-3 text-xs text-muted-foreground">
               {settingsQuery.data.integration.lastConnectionCheckSummary}
             </div>
           ) : null}
@@ -796,7 +796,7 @@ const BakaiStorePage = () => {
             </div>
           </FormGrid>
 
-          <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+          <div className="rounded-none border border-border p-3 text-sm text-muted-foreground">
             <p>
               {settingsQuery.data?.integration.importEndpoint
                 ? t("settings.endpointConfigured", {
@@ -963,25 +963,25 @@ const BakaiStorePage = () => {
           <p className="text-sm text-muted-foreground">{t("productsSelection.subtitle")}</p>
           <p className="text-xs text-muted-foreground">{t("productsSelection.note")}</p>
           {isApiMode ? (
-            <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
+            <div className="rounded-none border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
               {t("productsSelection.apiWarning")}
             </div>
           ) : null}
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.total")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.included")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.includedProducts ?? 0}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="rounded-none border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.excluded")}
               </p>
@@ -1090,7 +1090,7 @@ const BakaiStorePage = () => {
                             <TableHead className="w-10">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-border bg-background text-primary accent-primary"
+                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary"
                                 checked={allProductsSelectedOnPage}
                                 onChange={toggleSelectAllProductsOnPage}
                                 aria-label={t("productsSelection.selectAll")}
@@ -1118,7 +1118,7 @@ const BakaiStorePage = () => {
                               <TableCell>
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded border-border bg-background text-primary accent-primary"
+                                  className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary"
                                   checked={selectedProductIds.has(product.id)}
                                   onChange={() => toggleProductSelection(product.id)}
                                   aria-label={t("productsSelection.selectProduct", {
@@ -1182,7 +1182,7 @@ const BakaiStorePage = () => {
                 )
               }
               renderMobile={(product) => (
-                <div className="rounded-lg border border-border bg-card p-4">
+                <div className="rounded-none border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
@@ -1218,7 +1218,7 @@ const BakaiStorePage = () => {
                       <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-border bg-background text-primary accent-primary"
+                          className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary"
                           checked={selectedProductIds.has(product.id)}
                           onChange={() => toggleProductSelection(product.id)}
                           aria-label={t("productsSelection.selectProduct", { name: product.name })}
@@ -1271,7 +1271,7 @@ const BakaiStorePage = () => {
           {preflightData ? (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-md border border-border p-3">
+                <div className="rounded-none border border-border p-3">
                   <p className="text-xs text-muted-foreground">
                     {t("preflight.metrics.considered")}
                   </p>
@@ -1279,21 +1279,21 @@ const BakaiStorePage = () => {
                     {preflightData.summary.productsConsidered}
                   </p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="rounded-none border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.ready")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsReady}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="rounded-none border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.failed")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsFailed}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="rounded-none border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.warnings")}</p>
                   <p className="text-lg font-semibold">{preflightData.warnings.total}</p>
                 </div>
               </div>
 
-              <div className="rounded-md border border-border p-3">
+              <div className="rounded-none border border-border p-3">
                 <p className="text-sm font-medium text-foreground">
                   {t("preflight.blockersTitle")}
                 </p>
@@ -1324,7 +1324,7 @@ const BakaiStorePage = () => {
               </div>
 
               {preflightData.warnings.total > 0 ? (
-                <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-foreground">
+                <div className="rounded-none border border-warning/40 bg-warning/5 p-3 text-sm text-foreground">
                   <p className="font-medium">{t("preflight.warningsTitle")}</p>
                   <div className="mt-2 space-y-1">
                     {preflightData.warnings.global.map((warning) => (

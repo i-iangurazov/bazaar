@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: "Jost", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-jost: "Jost";
   --font-inter: "Inter";
   --font-roboto: "Roboto";
   --font-open-sans: "Open Sans";

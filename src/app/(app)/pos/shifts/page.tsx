@@ -160,6 +160,8 @@ const PosShiftsPage = () => {
         : cashDifference < -0.009
           ? "shortage"
           : "balanced";
+  const closeNoteRequired = cashDifference !== null && Math.abs(cashDifference) > 0.009;
+  const closeNoteValid = !closeNoteRequired || closeNote.trim().length > 0;
   const paymentBreakdown = report
     ? [
         { method: "CASH" as const, label: t("payments.cash") },
@@ -195,6 +197,10 @@ const PosShiftsPage = () => {
     }
     if (!closeConfirmed) {
       toast({ variant: "error", description: t("shifts.confirmCloseRequired") });
+      return;
+    }
+    if (!closeNoteValid) {
+      toast({ variant: "error", description: t("shifts.differenceNoteRequired") });
       return;
     }
 
@@ -454,6 +460,11 @@ const PosShiftsPage = () => {
                       placeholder={t("shifts.closingNotePlaceholder")}
                       rows={3}
                     />
+                    {closeNoteRequired ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t("shifts.differenceNoteRequired")}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -473,7 +484,12 @@ const PosShiftsPage = () => {
                   </Button>
                   <Button
                     onClick={handleCloseShift}
-                    disabled={closeShiftMutation.isLoading || !countedCashValid || !closeConfirmed}
+                    disabled={
+                      closeShiftMutation.isLoading ||
+                      !countedCashValid ||
+                      !closeConfirmed ||
+                      !closeNoteValid
+                    }
                   >
                     {closeShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                     {t("shifts.closeShift")}

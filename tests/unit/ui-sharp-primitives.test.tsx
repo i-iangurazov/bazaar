@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { PopoverSurface } from "@/components/ui/popover";
 import { Select, SelectTrigger } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { TableContainer } from "@/components/ui/table";
 import { TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +30,7 @@ describe("sharp UI primitives", () => {
         <Select>
           <SelectTrigger aria-label="select" />
         </Select>
+        <Switch aria-label="archive" />
         <Badge>Active</Badge>
         <Badge variant="danger">Missing price</Badge>
       </div>,
@@ -38,6 +40,10 @@ describe("sharp UI primitives", () => {
     expect(screen.getByLabelText("name").className).toContain("rounded-none");
     expect(screen.getByLabelText("description").className).toContain("rounded-none");
     expect(screen.getByLabelText("select").className).toContain("rounded-none");
+    expect(screen.getByRole("switch", { name: "archive" }).className).toContain("bg-secondary");
+    expect(screen.getByRole("switch", { name: "archive" }).className).toContain(
+      "data-[state=checked]:bg-primary/10",
+    );
     expect(screen.getByText("Active").className).toContain("rounded-none");
     expect(screen.getByText("Active").className).toContain("bg-muted");
     expect(screen.getByText("Missing price").className).toContain("bg-danger/10");

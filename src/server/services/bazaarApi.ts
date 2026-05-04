@@ -248,16 +248,63 @@ export const listBazaarApiProducts = async (input: {
         category: true,
         categories: true,
         description: true,
+        unit: true,
+        isBundle: true,
+        createdAt: true,
+        updatedAt: true,
         basePriceKgs: true,
         photoUrl: true,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        baseUnit: {
+          select: {
+            id: true,
+            code: true,
+            labelRu: true,
+            labelKg: true,
+          },
+        },
+        barcodes: {
+          select: { value: true },
+          orderBy: { createdAt: "asc" },
+        },
+        packs: {
+          select: {
+            id: true,
+            packName: true,
+            packBarcode: true,
+            multiplierToBase: true,
+            allowInPurchasing: true,
+            allowInReceiving: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
         images: {
           where: { AND: [{ url: { not: "" } }, { NOT: { url: { startsWith: "data:image/" } } }] },
-          select: { url: true, position: true },
+          select: { id: true, url: true, position: true, isAiGenerated: true },
           orderBy: { position: "asc" },
         },
         variants: {
           where: { isActive: true },
-          select: { id: true, name: true, sku: true, attributes: true },
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            attributes: true,
+            createdAt: true,
+            updatedAt: true,
+            attributeValues: {
+              select: {
+                key: true,
+                value: true,
+              },
+              orderBy: { key: "asc" },
+            },
+          },
           orderBy: { createdAt: "asc" },
         },
       },
@@ -299,6 +346,7 @@ export const listBazaarApiProducts = async (input: {
   return {
     store: { id: store.id, name: store.name },
     currencyCode,
+    currencyRateKgsPerUnit,
     page,
     pageSize,
     total,
@@ -312,12 +360,40 @@ export const listBazaarApiProducts = async (input: {
         category: product.category,
         categories: product.categories,
         description: product.description,
+        unit: product.unit,
+        baseUnit: product.baseUnit,
+        supplier: product.supplier,
+        isBundle: product.isBundle,
+        barcodes: product.barcodes.map((barcode) => barcode.value),
+        packs: product.packs,
+        createdAt: product.createdAt.toISOString(),
+        updatedAt: product.updatedAt.toISOString(),
         price: roundMoney(convertFromKgs(basePriceKgs, currencyRateKgsPerUnit, currencyCode)),
         priceKgs: roundMoney(basePriceKgs),
         stockQty: stockByProductVariant.get(`${product.id}:BASE`) ?? 0,
+        stockByVariant: Array.from(stockByProductVariant.entries())
+          .filter(([key]) => key.startsWith(`${product.id}:`))
+          .map(([key, onHand]) => ({
+            variantKey: key.slice(product.id.length + 1),
+            stockQty: onHand,
+          })),
         images: [product.photoUrl, ...product.images.map((image) => image.url)]
           .filter((url): url is string => Boolean(url?.trim()))
           .filter((url, index, urls) => urls.indexOf(url) === index),
+        imageObjects: [
+          ...(product.photoUrl
+            ? [{ id: null, url: product.photoUrl, position: 0, isPrimary: true, isAiGenerated: false }]
+            : []),
+          ...product.images.map((image) => ({
+            id: image.id,
+            url: image.url,
+            position: image.position,
+            isPrimary: false,
+            isAiGenerated: image.isAiGenerated,
+          })),
+        ].filter(
+          (image, index, images) => images.findIndex((item) => item.url === image.url) === index,
+        ),
         variants: product.variants.map((variant) => {
           const variantKey = variantKeyFrom(variant.id);
           const variantPriceKgs =
@@ -327,6 +403,9 @@ export const listBazaarApiProducts = async (input: {
             sku: variant.sku,
             name: variant.name,
             attributes: variant.attributes,
+            attributeValues: variant.attributeValues,
+            createdAt: variant.createdAt.toISOString(),
+            updatedAt: variant.updatedAt.toISOString(),
             price: roundMoney(
               convertFromKgs(variantPriceKgs, currencyRateKgsPerUnit, currencyCode),
             ),
