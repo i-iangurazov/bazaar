@@ -2329,7 +2329,7 @@
     "bulkCategoryHint": "Bulk category hint",
     "bulkCategorySuccess": "Bulk category success {count}",
     "aiArrangeCategories": "Arrange categories with AI",
-    "aiArrangeCategoriesConfirm": "AI will arrange {count} products: it will add Men or Women as the primary category and keep current categories as subcategories. Ambiguous products will be skipped. Continue?",
+    "aiArrangeCategoriesConfirm": "AI will arrange {count} products using names, variants, sizes, categories, descriptions, and images. It will add Men or Women as the primary category and infer a product category for uncategorized items when possible. Ambiguous products will be skipped. Continue?",
     "aiArrangeCategoriesSuccess": "Categories arranged. Updated: {updated}. Skipped: {skipped}.",
     "aiArrangeCategoriesEmpty": "No products to arrange.",
     "aiArrangeCategoriesProgressTitle": "Arranging categories",

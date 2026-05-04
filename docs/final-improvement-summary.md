@@ -584,3 +584,36 @@
 - `rm -rf .next` completed before the clean production build.
 - `pnpm build` passed.
 - `pnpm start` production smoke test passed on `127.0.0.1:3000`; server was stopped after review.
+
+## AI Category Arrangement Fix
+
+### Changed
+
+- Fixed `Упорядочить категории с ИИ` so products without an existing category are no longer excluded before analysis.
+- Expanded category arrangement evidence from only name/category/description to include SKU, variants, variant SKUs, variant attributes such as size, product images, and existing categories.
+- Added local classification for common apparel/footwear signals and adult size ranges so many products are handled without an OpenAI call.
+- Added ordinary category inference for uncategorized products, for example `Платья`, `Обувь`, `Футболки`, `Брюки`, and similar categories.
+- Ordinary inferred categories are now restricted to the organization's existing category list. AI/local inference can reuse `Платья`, `Обувь`, or another existing category, but it will not create a new ordinary product category when no existing match is available.
+- Existing category matching is language-tolerant for common apparel groups, so an AI/local suggestion such as `Платья` can reuse an existing `Dresses` category instead of creating a duplicate.
+- Updated the saved category structure so categoryless apparel can become `Мужчины` or `Женщины` as primary category with a matching existing product category preserved underneath when available.
+- Added image-aware AI fallback for products that remain ambiguous after local rules.
+- Reduced slow AI behavior by adding a category-specific model fallback, shortening the timeout, using smaller AI batches when image inputs are present, and running fallback AI batches in parallel.
+- Updated the confirmation copy in EN/RU/KG to clarify that names, variants, sizes, descriptions, categories, and images are used.
+
+### Tests Added
+
+- Categoryless dress with variant size is arranged locally as `Женщины` / existing `Dresses`.
+- Categoryless shoes with adult men size are arranged locally as `Мужчины` / existing `Shoes`.
+- Categoryless item does not create a new ordinary category when the inferred category is not already available.
+- Categoryless image-based product uses AI fallback and maps Russian category output to an existing English ordinary category.
+
+### Validation
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `git diff --check` passed.
+- `CI=1 pnpm test` passed before the existing-category allow-list refinement: 99 files, 451 tests.
+- After the allow-list and language-tolerant matching refinement, sandboxed `CI=1 pnpm test` could not reach local PostgreSQL through Prisma and therefore skipped DB tests: 67 files passed, 32 skipped, 303 tests passed, 149 skipped.
+- Product integration regression was rerun with direct local PostgreSQL access: `DATABASE_TEST_URL='postgresql://inventory:inventory@127.0.0.1:5432/inventory_test?schema=public' CI=1 pnpm test tests/integration/products.test.ts` passed: 1 file, 23 tests.
+- `pnpm build` passed.

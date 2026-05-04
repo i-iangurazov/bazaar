@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  arrangeClothingCategoriesWithAi,
   bulkUpdateProductCategory,
   createProduct,
   importProducts,
@@ -17,6 +18,11 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 describeDb("products", () => {
   beforeEach(async () => {
     await resetDatabase();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("auto-generates unique SKU when create input omits it", async () => {
@@ -156,6 +162,225 @@ describeDb("products", () => {
     expect(afterPromote).toEqual({
       category: "Featured",
       categories: ["Featured", "Phones"],
+    });
+  });
+
+  it("arranges categoryless clothing by gender and inferred category from local product signals", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    await prisma.productCategory.createMany({
+      data: [
+        { organizationId: org.id, name: "Dresses" },
+        { organizationId: org.id, name: "Shoes" },
+      ],
+    });
+
+    const dress = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-dress",
+      sku: "AI-DRESS-1",
+      name: "Платье летнее",
+      baseUnitId: baseUnit.id,
+      variants: [
+        {
+          name: "Размер 42",
+          sku: "AI-DRESS-1-42",
+          attributes: { size: "42" },
+        },
+      ],
+    });
+    const shoes = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-shoes",
+      sku: "AI-SHOES-1",
+      name: "Кроссовки",
+      baseUnitId: baseUnit.id,
+      variants: [
+        {
+          name: "Размер 43",
+          sku: "AI-SHOES-1-43",
+          attributes: { size: "43" },
+        },
+      ],
+    });
+
+    const result = await arrangeClothingCategoriesWithAi({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-local",
+      productIds: [dress.id, shoes.id],
+    });
+
+    expect(result).toMatchObject({
+      scanned: 2,
+      eligible: 2,
+      updated: 2,
+      skipped: 0,
+      aiUsed: false,
+    });
+
+    const updatedProducts = await prisma.product.findMany({
+      where: { id: { in: [dress.id, shoes.id] } },
+      select: { sku: true, category: true, categories: true },
+      orderBy: { sku: "asc" },
+    });
+
+    expect(updatedProducts).toEqual([
+      {
+        sku: "AI-DRESS-1",
+        category: "Женщины",
+        categories: ["Женщины", "Dresses"],
+      },
+      {
+        sku: "AI-SHOES-1",
+        category: "Мужчины",
+        categories: ["Мужчины", "Shoes"],
+      },
+    ]);
+  });
+
+  it("does not create ordinary categories that are not already available", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-no-new-category",
+      sku: "AI-NO-NEW-CATEGORY-1",
+      name: "Платье вечернее",
+      baseUnitId: baseUnit.id,
+      variants: [
+        {
+          name: "Размер 44",
+          sku: "AI-NO-NEW-CATEGORY-1-44",
+          attributes: { size: "44" },
+        },
+      ],
+    });
+
+    const result = await arrangeClothingCategoriesWithAi({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-no-new-category-run",
+      productIds: [product.id],
+    });
+
+    expect(result).toMatchObject({
+      scanned: 1,
+      eligible: 1,
+      updated: 1,
+      skipped: 0,
+      aiUsed: false,
+    });
+
+    const updated = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { category: true, categories: true },
+    });
+    const categoryNames = await prisma.productCategory.findMany({
+      where: { organizationId: org.id },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    });
+
+    expect(updated).toEqual({
+      category: "Женщины",
+      categories: ["Женщины"],
+    });
+    expect(categoryNames.map((category) => category.name)).toEqual(["Женщины", "Мужчины"]);
+  });
+
+  it("uses AI image fallback with language-insensitive existing ordinary categories only", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    await prisma.productCategory.create({
+      data: { organizationId: org.id, name: "Dresses" },
+    });
+    vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        input?: Array<{ content?: Array<{ type?: string; text?: string; image_url?: string }> }>;
+      };
+      const userContent = body.input?.[1]?.content ?? [];
+      expect(userContent.some((item) => item.type === "input_image")).toBe(true);
+      expect(userContent.find((item) => item.type === "input_text")?.text).toContain("AI-IMAGE-1");
+      expect(userContent.find((item) => item.type === "input_text")?.text).toContain(
+        "allowedOrdinaryCategories",
+      );
+      return new Response(
+        JSON.stringify({
+          output_text: JSON.stringify([
+            {
+              id: "replace-after-create",
+              gender: "WOMEN",
+              category: "Платья",
+              confidence: 0.91,
+              reason: "image",
+            },
+          ]),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-image",
+      sku: "AI-IMAGE-1",
+      name: "Look 2026",
+      baseUnitId: baseUnit.id,
+      photoUrl: "https://cdn.example.com/products/look-2026.png",
+    });
+
+    fetchMock.mockImplementationOnce(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        input?: Array<{ content?: Array<{ type?: string; text?: string; image_url?: string }> }>;
+      };
+      const userContent = body.input?.[1]?.content ?? [];
+      expect(userContent.some((item) => item.type === "input_image")).toBe(true);
+      expect(userContent.find((item) => item.type === "input_text")?.text).toContain(product.id);
+      expect(userContent.find((item) => item.type === "input_text")?.text).toContain('"Dresses"');
+      return new Response(
+        JSON.stringify({
+          output_text: JSON.stringify([
+            {
+              id: product.id,
+              gender: "WOMEN",
+              category: "Платья",
+              confidence: 0.91,
+              reason: "image",
+            },
+          ]),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const result = await arrangeClothingCategoriesWithAi({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-ai-arrange-image-run",
+      productIds: [product.id],
+    });
+
+    expect(result).toMatchObject({
+      scanned: 1,
+      eligible: 1,
+      updated: 1,
+      skipped: 0,
+      aiUsed: true,
+    });
+
+    const updated = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { category: true, categories: true },
+    });
+
+    expect(updated).toEqual({
+      category: "Женщины",
+      categories: ["Женщины", "Dresses"],
     });
   });
 
