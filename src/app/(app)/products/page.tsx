@@ -89,9 +89,12 @@ import {
   PRICE_TAG_TEMPLATES,
   ROLL_PRICE_TAG_TEMPLATE,
   isRollPriceTagTemplate,
+  type PriceTagsTemplate,
 } from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { normalizeCurrencyCode } from "@/lib/currency";
+import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import {
   buildScopedStorageKey,
@@ -476,6 +479,20 @@ const ProductsPage = () => {
     [storeId, stores],
   );
   const defaultPrintStoreId = storeId || (stores.length === 1 ? (stores[0]?.id ?? "") : "");
+  const printPreviewStore = useMemo(
+    () => stores.find((store) => store.id === defaultPrintStoreId) ?? selectedStore,
+    [defaultPrintStoreId, selectedStore, stores],
+  );
+  const rollPreviewPriceText = formatCurrency(
+    0,
+    locale,
+    normalizeCurrencyCode(printPreviewStore?.currencyCode),
+  );
+  const printProfileQuery = trpc.stores.hardware.useQuery(
+    { storeId: defaultPrintStoreId },
+    { enabled: Boolean(defaultPrintStoreId) },
+  );
+  const printProfileSettings = printProfileQuery.data?.settings;
   const products = useMemo(
     () => productsBootstrapQuery.data?.list.items ?? [],
     [productsBootstrapQuery.data?.list.items],
@@ -1218,19 +1235,11 @@ const ProductsPage = () => {
   useEffect(() => {
     if (printOpen) {
       setPrintAdvancedOpen(false);
-      printForm.reset({
-        template: ROLL_PRICE_TAG_TEMPLATE,
-        storeId: defaultPrintStoreId,
-        quantity: 1,
-        widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
-        heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
-        allowWithoutBarcode: false,
-      });
       setPrintQueue((current) => (current.length ? current : selectedList));
     } else {
       setPrintQueue([]);
     }
-  }, [defaultPrintStoreId, printOpen, printForm, selectedList]);
+  }, [printOpen, selectedList]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
@@ -1451,19 +1460,126 @@ const ProductsPage = () => {
       </button>
     </TableHead>
   );
+
+  const buildSavedPrintValues = useCallback((quantity?: number): z.infer<typeof printSchema> => {
+    const settings = printProfileSettings;
+    const template = PRICE_TAG_TEMPLATES.includes(settings?.labelTemplate as PriceTagsTemplate)
+      ? (settings?.labelTemplate as PriceTagsTemplate)
+      : ROLL_PRICE_TAG_TEMPLATE;
+    const copies = quantity ?? settings?.labelDefaultCopies ?? 1;
+    return {
+      template,
+      storeId: defaultPrintStoreId,
+      quantity: Math.max(1, Math.trunc(copies)),
+      widthMm: settings?.labelWidthMm ?? PRICE_TAG_ROLL_DEFAULTS.widthMm,
+      heightMm: settings?.labelHeightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
+      allowWithoutBarcode: false,
+    };
+  }, [defaultPrintStoreId, printProfileSettings]);
+
+  const performPrintTags = useCallback(
+    async (
+      queue: string[],
+      values: z.infer<typeof printSchema>,
+      mode: "download" | "print",
+    ) => {
+      if (!queue.length) {
+        return false;
+      }
+      try {
+        const settings = printProfileSettings;
+        const blob = await fetchPdfBlob({
+          url: "/api/price-tags/pdf",
+          init: {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              template: values.template,
+              storeId: values.storeId || undefined,
+              allowWithoutBarcode: values.allowWithoutBarcode,
+              rollCalibration: isRollPriceTagTemplate(values.template)
+                ? {
+                    widthMm: values.widthMm,
+                    heightMm: values.heightMm,
+                    gapMm: settings?.labelRollGapMm,
+                    xOffsetMm: settings?.labelRollXOffsetMm,
+                    yOffsetMm: settings?.labelRollYOffsetMm,
+                  }
+                : undefined,
+              display: settings
+                ? {
+                    showProductName: settings.labelShowProductName,
+                    showPrice: settings.labelShowPrice,
+                    showSku: settings.labelShowSku,
+                    showStoreName: settings.labelShowStoreName,
+                  }
+                : undefined,
+              items: buildBarcodeLabelPrintItems({
+                productIds: queue,
+                quantity: values.quantity,
+              }),
+            }),
+          },
+        });
+        const fileName = `price-tags-${values.template}.pdf`;
+        if (mode === "print") {
+          const result = await printPdfBlob(blob);
+          if (!result.autoPrintAttempted) {
+            toast({ variant: "info", description: t("printFallback") });
+          }
+        } else {
+          downloadPdfBlob(blob, fileName);
+        }
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
+          toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+          return false;
+        }
+        if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
+          toast({ variant: "error", description: message });
+          return false;
+        }
+        toast({ variant: "error", description: t("priceTagsFailed") });
+        return false;
+      }
+    },
+    [printProfileSettings, t, tErrors, toast],
+  );
+
   const openPrintForProducts = useCallback(
-    (ids: string[], quantity = 1) => {
+    (ids: string[], quantity?: number, options?: { settings?: boolean }) => {
       const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
       const activeIds = uniqueIds.filter((id) => !productById.get(id)?.isDeleted);
       if (!activeIds.length) {
         toast({ variant: "error", description: t("printNoPrintableProducts") });
         return;
       }
-      printForm.setValue("quantity", quantity);
+      const savedValues = buildSavedPrintValues(quantity);
+      printForm.reset(savedValues);
       setPrintQueue(activeIds);
-      setPrintOpen(true);
+      if (options?.settings || !defaultPrintStoreId || printProfileQuery.isLoading) {
+        setPrintOpen(true);
+        return;
+      }
+      void performPrintTags(activeIds, savedValues, "print").then((ok) => {
+        if (ok) {
+          setSelectedIds(new Set());
+          setPrintQueue([]);
+        }
+      });
     },
-    [printForm, productById, t, toast],
+    [
+      buildSavedPrintValues,
+      defaultPrintStoreId,
+      performPrintTags,
+      printForm,
+      printProfileQuery.isLoading,
+      productById,
+      t,
+      toast,
+    ],
   );
   const getProductActions = (product: ProductRow) => [
     ...(isAdmin
@@ -1500,7 +1616,7 @@ const ProductsPage = () => {
                   toast({ variant: "error", description: t("printMissingBarcode") });
                   return;
                 }
-                openPrintForProducts([product.id], 1);
+                openPrintForProducts([product.id]);
               },
             },
             {
@@ -1565,52 +1681,11 @@ const ProductsPage = () => {
     mode: "download" | "print",
   ) => {
     const queue = printQueue;
-    if (!queue.length) {
-      return;
-    }
-    try {
-      const blob = await fetchPdfBlob({
-        url: "/api/price-tags/pdf",
-        init: {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            template: values.template,
-            storeId: values.storeId || undefined,
-            allowWithoutBarcode: values.allowWithoutBarcode,
-            rollCalibration: isRollPriceTagTemplate(values.template)
-              ? {
-                  widthMm: values.widthMm,
-                  heightMm: values.heightMm,
-                }
-              : undefined,
-            items: buildBarcodeLabelPrintItems({
-              productIds: queue,
-              quantity: values.quantity,
-            }),
-          }),
-        },
-      });
-      const fileName = `price-tags-${values.template}.pdf`;
-      if (mode === "print") {
-        await printPdfBlob(blob);
-      } else {
-        downloadPdfBlob(blob, fileName);
-      }
+    const ok = await performPrintTags(queue, values, mode);
+    if (ok) {
       setPrintOpen(false);
       setSelectedIds(new Set());
       setPrintQueue([]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
-        toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
-        return;
-      }
-      if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
-        toast({ variant: "error", description: message });
-        return;
-      }
-      toast({ variant: "error", description: t("priceTagsFailed") });
     }
   };
 
@@ -2109,13 +2184,21 @@ const ProductsPage = () => {
                     </DropdownMenuItem>
                   ) : null}
                   {selectedList.length ? (
-                    <DropdownMenuItem
-                      data-tour="products-print-tags"
-                      onSelect={() => openPrintForProducts(selectedList, 1)}
-                    >
-                      <PrintIcon className="h-4 w-4" aria-hidden />
-                      {t("printPriceTags")}
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem
+                        data-tour="products-print-tags"
+                        onSelect={() => openPrintForProducts(selectedList)}
+                      >
+                        <PrintIcon className="h-4 w-4" aria-hidden />
+                        {t("printPriceTags")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => openPrintForProducts(selectedList, undefined, { settings: true })}
+                      >
+                        <MoreIcon className="h-4 w-4" aria-hidden />
+                        {t("changePrintSettings")}
+                      </DropdownMenuItem>
+                    </>
                   ) : null}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -2353,12 +2436,26 @@ const ProductsPage = () => {
                         variant="secondary"
                         size="icon"
                         aria-label={t("printPriceTags")}
-                        onClick={() => openPrintForProducts(selectedList, 1)}
+                        onClick={() => openPrintForProducts(selectedList)}
                       >
                         <PrintIcon className="h-4 w-4" aria-hidden />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>{t("printPriceTags")}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("changePrintSettings")}
+                        onClick={() => openPrintForProducts(selectedList, undefined, { settings: true })}
+                      >
+                        <MoreIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("changePrintSettings")}</TooltipContent>
                   </Tooltip>
                   {hasActiveSelected && isAdmin ? (
                     <Tooltip>
@@ -3847,7 +3944,7 @@ const ProductsPage = () => {
             setPrintOpen(false);
           }
         }}
-        title={t("printPriceTags")}
+        title={t("printSettingsTitle")}
         subtitle={t("printSubtitle", { count: printQueue.length })}
         className="sm:!max-w-6xl"
       >
@@ -3859,7 +3956,7 @@ const ProductsPage = () => {
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       {tCommon("selectedCount", { count: printQueue.length })}
                     </p>
@@ -3867,13 +3964,13 @@ const ProductsPage = () => {
                       {printQueue.length}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       {t("printQty")}
                     </p>
                     <p className="mt-1 text-lg font-semibold text-foreground">{printLabelCount}</p>
                   </div>
-                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                       {t("template")}
                     </p>
@@ -3883,7 +3980,7 @@ const ProductsPage = () => {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-border/70 bg-card p-3">
+                <div className="rounded-md border border-border/70 bg-card p-3">
                   <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
                     <FormField
                       control={printForm.control}
@@ -3954,7 +4051,7 @@ const ProductsPage = () => {
                 </div>
 
                 {printRequiresBarcodeConfirmation ? (
-                  <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-medium">
                         {t("rollMissingBarcodeCount", { count: queueMissingBarcodeCount })}
@@ -3982,7 +4079,7 @@ const ProductsPage = () => {
 
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between rounded-lg border border-border/70 bg-secondary/20 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/40"
+                  className="flex w-full items-center justify-between rounded-md border border-border/70 bg-secondary/20 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/40"
                   onClick={() => setPrintAdvancedOpen((current) => !current)}
                 >
                   <span>{printAdvancedOpen ? t("hideAdvanced") : t("showAdvanced")}</span>
@@ -3994,7 +4091,7 @@ const ProductsPage = () => {
                 </button>
 
                 {printAdvancedOpen ? (
-                  <div className="grid gap-3 rounded-lg border border-border/70 bg-card p-3 sm:grid-cols-2">
+                  <div className="grid gap-3 rounded-md border border-border/70 bg-card p-3 sm:grid-cols-2">
                     <FormField
                       control={printForm.control}
                       name="widthMm"
@@ -4084,7 +4181,7 @@ const ProductsPage = () => {
 
               <div className="space-y-3">
                 {rollTemplateSelected ? (
-                  <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
+                  <div className="rounded-md border border-border/70 bg-secondary/20 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-xs font-medium text-foreground">
                         {t("rollTemplatePreviewTitle")}
@@ -4096,9 +4193,9 @@ const ProductsPage = () => {
                         })}
                       </p>
                     </div>
-                    <div className="mx-auto w-[210px] max-w-full rounded border border-border bg-card p-2">
+                    <div className="mx-auto w-[210px] max-w-full rounded-md border border-border bg-card p-2">
                       <div
-                        className="rounded border border-dashed border-border/70"
+                        className="rounded-md border border-dashed border-border/70"
                         style={{
                           aspectRatio: `${Math.max(1, resolvedRollWidthMm)} / ${Math.max(1, resolvedRollHeightMm)}`,
                         }}
@@ -4113,12 +4210,12 @@ const ProductsPage = () => {
                             {rollPreviewProduct?.name ?? t("rollPreviewName")}
                           </p>
                           <p className="mt-1 text-[11px] font-semibold text-foreground">
-                            {t("rollPreviewPrice")}
+                            {rollPreviewPriceText}
                           </p>
                           <p className="mt-1 text-[8px] text-muted-foreground">
                             {rollPreviewProduct?.sku || t("rollPreviewSku")}
                           </p>
-                          <div className="mt-1 h-4 rounded bg-muted" />
+                          <div className="mt-1 h-4 rounded-md bg-muted" />
                           <p className="mt-1 text-center text-[7px] text-muted-foreground">
                             {t("rollPreviewBarcode")}
                           </p>
@@ -4128,7 +4225,7 @@ const ProductsPage = () => {
                   </div>
                 ) : null}
 
-                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+                <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
                   <p className="text-xs font-medium text-foreground">{t("printQueueTitle")}</p>
                   {queueProductsQuery.isLoading && queueIdsForQuery.length > 0 ? (
                     <p className="text-xs text-muted-foreground">{tCommon("loading")}</p>
@@ -4139,7 +4236,7 @@ const ProductsPage = () => {
                       return (
                         <div
                           key={productId}
-                          className="flex items-center justify-between gap-3 rounded border border-border/60 bg-card/80 px-2 py-1.5"
+                          className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-card/80 px-2 py-1.5"
                         >
                           <span className="truncate text-foreground">
                             {product?.name ?? productId}
@@ -4164,6 +4261,15 @@ const ProductsPage = () => {
                 {tCommon("cancel")}
               </Button>
               <Button
+                type="submit"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                disabled={printRequiresBarcodeConfirmation}
+              >
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+                {t("printDownload")}
+              </Button>
+              <Button
                 type="button"
                 className="w-full sm:w-auto"
                 disabled={printRequiresBarcodeConfirmation}
@@ -4173,15 +4279,6 @@ const ProductsPage = () => {
               >
                 <PrintIcon className="h-4 w-4" aria-hidden />
                 {t("printAction")}
-              </Button>
-              <Button
-                type="submit"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                disabled={printRequiresBarcodeConfirmation}
-              >
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-                {t("printDownload")}
               </Button>
             </FormActions>
           </form>

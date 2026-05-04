@@ -541,9 +541,24 @@ model StorePrinterSettings {
   labelPrintMode      PrinterPrintMode @default(PDF)
   receiptPrinterModel String?          @default("XP-P501A")
   labelPrinterModel   String?          @default("XP-365B")
+  labelTemplate        String           @default("xp365b-roll-58x40")
+  labelPaperMode       String           @default("ROLL")
+  labelBarcodeType     String           @default("auto")
+  labelDefaultCopies   Int              @default(1)
+  labelShowProductName Boolean          @default(true)
+  labelShowPrice       Boolean          @default(true)
+  labelShowSku         Boolean          @default(true)
+  labelShowStoreName   Boolean          @default(false)
   labelRollGapMm      Float            @default(3.5)
   labelRollXOffsetMm  Float            @default(0)
   labelRollYOffsetMm  Float            @default(0)
+  labelWidthMm        Float            @default(58)
+  labelHeightMm       Float            @default(40)
+  labelMarginTopMm    Float            @default(0)
+  labelMarginRightMm  Float            @default(0)
+  labelMarginBottomMm Float            @default(0)
+  labelMarginLeftMm   Float            @default(0)
+  labelLastPrintedAt  DateTime?
   connectorDeviceId   String?
   updatedById         String?
   updatedAt           DateTime         @updatedAt

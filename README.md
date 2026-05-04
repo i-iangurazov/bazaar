@@ -71,6 +71,10 @@ pnpm prisma:migrate
 pnpm prisma:seed
 ```
 
+The seed script is for local development and test data only. It refuses to run when
+`NODE_ENV=production` or `VERCEL_ENV=production` because it creates demo users with
+public local-only passwords.
+
 For a full reset (drop + migrate + seed):
 ```bash
 pnpm db:reset
@@ -88,7 +92,7 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
-### Demo users
+### Local-only demo users
 - `admin@example.com / Admin123!`
 - `manager@example.com / Manager123!`
 - `staff@example.com / Staff123!`
@@ -111,7 +115,7 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 
 - Billing state model: `ACTIVE`, `PAST_DUE`, `CANCELED` with `trialEndsAt` and `currentPeriodEndsAt`.
 - Hard checks are applied on create/invite/import flows (stores, users, products) and on feature routers (exports, analytics, imports, compliance).
-- `/billing` shows current tier, usage, limits, features, trial status, and monthly price in KGS.
+- `/billing` shows current tier, usage, limits, features, trial status, and monthly price. Platform plan analytics are currently KGS-denominated.
 
 ## Access Control & Users
 - Role-based access: ADMIN, MANAGER, STAFF with protected routes.
@@ -166,9 +170,9 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - `/admin/jobs` (ADMIN): dead-letter job queue with retry/resolve.
 - `/admin/metrics` (ADMIN): onboarding completion, time-to-first-value, WAU, adjustments, stockouts.
 
-## Currency & Formatting (KGS)
-- Use `src/lib/i18nFormat.ts` helpers for dates, numbers, and currency.
-- All monetary values render in KGS via `formatCurrencyKGS(amount, locale)`.
+## Currency & Formatting
+- Use `src/lib/i18nFormat.ts` and `src/lib/currency.ts` helpers for dates, numbers, currency normalization, and KGS storage/display conversion.
+- Store/accounting amounts are persisted in KGS where schema fields are named `*Kgs`; customer-facing display should use the selected store currency when a store context exists.
 
 ## Catalog & CSV (Products)
 - Fields: `sku`, `name`, `category`, `unit`, `description`, `photoUrl`
@@ -263,7 +267,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Supplier directory with contact details and notes.
 - Supplier deletion is guarded when referenced by products or purchase orders.
 - PO workflow: `DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED` (plus `CANCELLED`).
-- Line items support product/variant search, unit costs, add/edit/remove, and totals in KGS.
+- Line items support product/variant search, unit costs, add/edit/remove, and totals. Display currency should follow the selected store context where supported.
 - Partial receipts track `receivedQty` per line; optional over-receive toggle (default off).
 - Receiving is idempotent per receipt event and writes RECEIVE ledger movements.
 - PDF export available per PO.

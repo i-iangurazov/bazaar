@@ -2,6 +2,27 @@ import { prisma } from "@/server/db/prisma";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 
+const sensitiveKeyPattern =
+  /(password|token|secret|api.?key|authorization|cookie|credential|hash|session)/i;
+
+const redactSensitive = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactSensitive(entry));
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      sensitiveKeyPattern.test(key) ? "[REDACTED]" : redactSensitive(entry),
+    ]),
+  );
+};
+
 export const getSupportBundle = async (input: {
   organizationId: string;
   actorId: string;
@@ -16,8 +37,19 @@ export const getSupportBundle = async (input: {
     const stores = await tx.store.findMany({
       where: { organizationId: input.organizationId },
       orderBy: { createdAt: "asc" },
-      include: {
-        featureFlags: { orderBy: { key: "asc" } },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        allowNegativeStock: true,
+        trackExpiryLots: true,
+        currencyCode: true,
+        createdAt: true,
+        updatedAt: true,
+        featureFlags: {
+          select: { id: true, storeId: true, key: true, enabled: true, updatedAt: true },
+          orderBy: { key: "asc" },
+        },
       },
     });
 
@@ -56,6 +88,17 @@ export const getSupportBundle = async (input: {
       where: { organizationId: input.organizationId },
       orderBy: { createdAt: "desc" },
       take: 200,
+      select: {
+        id: true,
+        actorId: true,
+        action: true,
+        entity: true,
+        entityId: true,
+        before: true,
+        after: true,
+        requestId: true,
+        createdAt: true,
+      },
     });
 
     const bundle = {
@@ -65,7 +108,11 @@ export const getSupportBundle = async (input: {
       users,
       recentMovements,
       recentPurchaseOrders,
-      recentAuditLogs,
+      recentAuditLogs: recentAuditLogs.map((entry) => ({
+        ...entry,
+        before: redactSensitive(entry.before),
+        after: redactSensitive(entry.after),
+      })),
     };
 
     await writeAuditLog(tx, {

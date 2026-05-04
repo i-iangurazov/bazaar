@@ -107,8 +107,8 @@ export const Modal = ({
         className={cn(
           "relative z-10 flex w-full flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-2xl",
           mobileSheet
-            ? "max-h-[90dvh] rounded-t-2xl border-b-0 sm:max-h-[85dvh] sm:rounded-xl sm:border-b"
-            : "max-h-[85dvh] max-w-lg rounded-xl",
+            ? "max-h-[90dvh] rounded-md border-b-0 sm:max-h-[85dvh] sm:border-b"
+            : "max-h-[85dvh] max-w-lg rounded-md",
           animated && "transition-all duration-250 ease-out will-change-transform",
           animated &&
             (mobileSheet
@@ -123,7 +123,7 @@ export const Modal = ({
       >
         <div
           className={cn(
-            "sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-xl border-b border-border bg-card p-6",
+            "sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card p-6",
             headerClassName,
           )}
         >

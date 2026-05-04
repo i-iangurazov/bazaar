@@ -5,6 +5,11 @@ import { adminProcedure, managerProcedure, protectedProcedure, router } from "@/
 import { toTRPCError } from "@/server/trpc/errors";
 import { createStore, updateStore, updateStoreLegalDetails, updateStorePolicy } from "@/server/services/stores";
 import {
+  PRICE_TAG_ROLL_LIMITS,
+  PRICE_TAG_TEMPLATES,
+  ROLL_PRICE_TAG_TEMPLATE,
+} from "@/lib/priceTags";
+import {
   getStorePrinterSettings,
   updateStorePrinterSettings,
 } from "@/server/services/storePrinterSettings";
@@ -176,6 +181,23 @@ export const storesRouter = router({
         labelPrintMode: z.nativeEnum(PrinterPrintMode),
         receiptPrinterModel: z.string().max(120).nullable().optional(),
         labelPrinterModel: z.string().max(120).nullable().optional(),
+        labelTemplate: z.enum(PRICE_TAG_TEMPLATES).default(ROLL_PRICE_TAG_TEMPLATE),
+        labelPaperMode: z.enum(["A4", "ROLL", "LABEL_PRINTER", "THERMAL"]).default("ROLL"),
+        labelBarcodeType: z.enum(["auto", "ean13", "code128"]).default("auto"),
+        labelDefaultCopies: z.number().int().min(1).max(100).default(1),
+        labelShowProductName: z.boolean().default(true),
+        labelShowPrice: z.boolean().default(true),
+        labelShowSku: z.boolean().default(true),
+        labelShowStoreName: z.boolean().default(false),
+        labelRollGapMm: z.number().min(PRICE_TAG_ROLL_LIMITS.gapMm.min).max(PRICE_TAG_ROLL_LIMITS.gapMm.max).optional(),
+        labelRollXOffsetMm: z.number().min(PRICE_TAG_ROLL_LIMITS.offsetMm.min).max(PRICE_TAG_ROLL_LIMITS.offsetMm.max).optional(),
+        labelRollYOffsetMm: z.number().min(PRICE_TAG_ROLL_LIMITS.offsetMm.min).max(PRICE_TAG_ROLL_LIMITS.offsetMm.max).optional(),
+        labelWidthMm: z.number().min(PRICE_TAG_ROLL_LIMITS.widthMm.min).max(PRICE_TAG_ROLL_LIMITS.widthMm.max).optional(),
+        labelHeightMm: z.number().min(PRICE_TAG_ROLL_LIMITS.heightMm.min).max(PRICE_TAG_ROLL_LIMITS.heightMm.max).optional(),
+        labelMarginTopMm: z.number().min(0).max(20).optional(),
+        labelMarginRightMm: z.number().min(0).max(20).optional(),
+        labelMarginBottomMm: z.number().min(0).max(20).optional(),
+        labelMarginLeftMm: z.number().min(0).max(20).optional(),
         connectorDeviceId: z.string().nullable().optional(),
       }),
     )
@@ -190,6 +212,23 @@ export const storesRouter = router({
           labelPrintMode: input.labelPrintMode,
           receiptPrinterModel: input.receiptPrinterModel ?? null,
           labelPrinterModel: input.labelPrinterModel ?? null,
+          labelTemplate: input.labelTemplate,
+          labelPaperMode: input.labelPaperMode,
+          labelBarcodeType: input.labelBarcodeType,
+          labelDefaultCopies: input.labelDefaultCopies,
+          labelShowProductName: input.labelShowProductName,
+          labelShowPrice: input.labelShowPrice,
+          labelShowSku: input.labelShowSku,
+          labelShowStoreName: input.labelShowStoreName,
+          labelRollGapMm: input.labelRollGapMm,
+          labelRollXOffsetMm: input.labelRollXOffsetMm,
+          labelRollYOffsetMm: input.labelRollYOffsetMm,
+          labelWidthMm: input.labelWidthMm,
+          labelHeightMm: input.labelHeightMm,
+          labelMarginTopMm: input.labelMarginTopMm,
+          labelMarginRightMm: input.labelMarginRightMm,
+          labelMarginBottomMm: input.labelMarginBottomMm,
+          labelMarginLeftMm: input.labelMarginLeftMm,
           connectorDeviceId: input.connectorDeviceId ?? null,
         });
       } catch (error) {

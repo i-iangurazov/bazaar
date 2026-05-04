@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
+import React from "react";
 import { forwardRef } from "react";
 import { Slot } from "@radix-ui/react-slot";
 
@@ -36,7 +37,7 @@ const variantClasses: Record<Variant, string> = {
 
 const sizeClasses: Record<Size, string> = {
   default: "h-10 px-4",
-  icon: "h-10 w-10 p-0 shadow-none",
+  icon: "h-10 w-10 shrink-0 p-0 shadow-none",
   sm: "h-9 px-3.5 text-sm",
 };
 

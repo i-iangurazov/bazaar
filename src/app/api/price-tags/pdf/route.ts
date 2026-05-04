@@ -62,6 +62,14 @@ const priceTagRequestSchema = z
           .optional(),
       })
       .optional(),
+    display: z
+      .object({
+        showProductName: z.boolean().optional(),
+        showPrice: z.boolean().optional(),
+        showSku: z.boolean().optional(),
+        showStoreName: z.boolean().optional(),
+      })
+      .optional(),
     items: z
       .array(
         z.object({
@@ -166,12 +174,42 @@ export const POST = async (request: Request) => {
   };
 
   let storeName: string | null = null;
+  let currencyCode: string | null = null;
+  let currencyRateKgsPerUnit: number | string | null = null;
+  let savedPrintProfile:
+    | {
+        labelShowProductName: boolean;
+        labelShowPrice: boolean;
+        labelShowSku: boolean;
+        labelShowStoreName: boolean;
+      }
+    | null = null;
   if (storeId) {
-    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+        printerSettings: {
+          select: {
+            labelShowProductName: true,
+            labelShowPrice: true,
+            labelShowSku: true,
+            labelShowStoreName: true,
+          },
+        },
+      },
+    });
     if (!store || store.organizationId !== token.organizationId) {
       return new Response(tErrors("storeAccessDenied"), { status: 403 });
     }
     storeName = store.name;
+    currencyCode = store.currencyCode;
+    currencyRateKgsPerUnit = store.currencyRateKgsPerUnit.toString();
+    savedPrintProfile = store.printerSettings;
   }
 
   const productIds = Array.from(new Set(parsedItems.map((item: PriceTagItem) => item.productId)));
@@ -266,12 +304,18 @@ export const POST = async (request: Request) => {
         labelRollGapMm: rollCalibration.gapMm,
         labelRollXOffsetMm: rollCalibration.xOffsetMm,
         labelRollYOffsetMm: rollCalibration.yOffsetMm,
+        labelWidthMm: rollCalibration.widthMm,
+        labelHeightMm: rollCalibration.heightMm,
+        labelLastPrintedAt: new Date(),
         updatedById: token.sub ?? null,
       },
       update: {
         labelRollGapMm: rollCalibration.gapMm,
         labelRollXOffsetMm: rollCalibration.xOffsetMm,
         labelRollYOffsetMm: rollCalibration.yOffsetMm,
+        labelWidthMm: rollCalibration.widthMm,
+        labelHeightMm: rollCalibration.heightMm,
+        labelLastPrintedAt: new Date(),
         updatedById: token.sub ?? null,
       },
     });
@@ -281,11 +325,19 @@ export const POST = async (request: Request) => {
     labels,
     template,
     locale: toIntlLocale(locale),
+    currencyCode,
+    currencyRateKgsPerUnit,
     storeName,
     noPriceLabel: tPriceTags("noPrice"),
     noBarcodeLabel: tPriceTags("noBarcode"),
     skuLabel: tPriceTags("sku"),
     rollCalibration,
+    showProductName:
+      parsed.data.display?.showProductName ?? savedPrintProfile?.labelShowProductName ?? true,
+    showPrice: parsed.data.display?.showPrice ?? savedPrintProfile?.labelShowPrice ?? true,
+    showSku: parsed.data.display?.showSku ?? savedPrintProfile?.labelShowSku ?? true,
+    showStoreName:
+      parsed.data.display?.showStoreName ?? savedPrintProfile?.labelShowStoreName ?? true,
   });
   const response = new Response(pdf, {
     headers: {

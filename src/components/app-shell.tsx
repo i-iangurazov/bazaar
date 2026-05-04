@@ -483,7 +483,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href="/settings/profile"
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex w-full items-center justify-between rounded-lg border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group flex w-full items-center justify-between rounded-md border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div className="flex min-w-0 items-center gap-2">
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
@@ -562,7 +562,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   type="button"
                   onClick={() => setCommandPaletteOpen(true)}
                   size="default"
-                  className="h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                  className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                   aria-label={tCommand("openButton")}
                 >
                   <CirclePlusIcon className="h-5 w-5" aria-hidden />
@@ -657,7 +657,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 setMobileOpen(false);
               }}
               size="default"
-              className="mt-3 h-10 w-full rounded-lg bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+              className="mt-3 h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
               aria-label={tCommand("openButton")}
             >
               <CirclePlusIcon className="h-5 w-5" aria-hidden />

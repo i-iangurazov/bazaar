@@ -17,6 +17,17 @@ const RESET_PASSWORDS = process.env.SEED_RESET_PASSWORDS === "1";
 const PLATFORM_OWNER_EMAIL = process.env.SEED_PLATFORM_OWNER_EMAIL?.trim() || "owner@example.com";
 const PLATFORM_OWNER_PASSWORD = process.env.SEED_PLATFORM_OWNER_PASSWORD || "Owner123!";
 const PLATFORM_OWNER_NAME = process.env.SEED_PLATFORM_OWNER_NAME || "Platform Owner";
+const isProductionSeedTarget =
+  process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+
+const assertSeedAllowed = () => {
+  if (!isProductionSeedTarget) {
+    return;
+  }
+  throw new Error(
+    "Refusing to seed local demo users in production. This seed creates public local-only credentials.",
+  );
+};
 
 const seededRandom = (seed: number) => {
   let state = seed;
@@ -477,6 +488,7 @@ const seedForecasts = async (storeId: string, products: Product[]) => {
 };
 
 const main = async () => {
+  assertSeedAllowed();
   await ensureInventoryConstraints();
 
   const org = await getOrCreateOrganization();

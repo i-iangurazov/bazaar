@@ -61,9 +61,9 @@ const config: Config = {
         ink: "hsl(var(--foreground))",
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        lg: "var(--radius-lg)",
+        md: "var(--radius-md)",
+        sm: "var(--radius-sm)",
       },
       boxShadow: {
         soft: "0 10px 30px hsl(var(--foreground) / 0.08)",

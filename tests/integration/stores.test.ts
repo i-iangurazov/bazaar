@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { LegalEntityType } from "@prisma/client";
+import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -58,5 +58,70 @@ describeDb("stores", () => {
         legalName: "Test LLC",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("saves and returns the default barcode label print profile", async () => {
+    const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+
+    const updated = await caller.stores.updateHardware({
+      storeId: store.id,
+      receiptPrintMode: PrinterPrintMode.PDF,
+      labelPrintMode: PrinterPrintMode.PDF,
+      receiptPrinterModel: "XP-P501A",
+      labelPrinterModel: "XP-365B",
+      labelTemplate: "2x5",
+      labelPaperMode: "A4",
+      labelBarcodeType: "code128",
+      labelDefaultCopies: 3,
+      labelShowProductName: true,
+      labelShowPrice: false,
+      labelShowSku: true,
+      labelShowStoreName: true,
+      labelRollGapMm: 4,
+      labelRollXOffsetMm: 1,
+      labelRollYOffsetMm: -1,
+      labelWidthMm: 60,
+      labelHeightMm: 45,
+      labelMarginTopMm: 2,
+      labelMarginRightMm: 3,
+      labelMarginBottomMm: 4,
+      labelMarginLeftMm: 5,
+    });
+
+    expect(updated).toMatchObject({
+      storeId: store.id,
+      labelTemplate: "2x5",
+      labelPaperMode: "A4",
+      labelBarcodeType: "code128",
+      labelDefaultCopies: 3,
+      labelShowPrice: false,
+      labelShowStoreName: true,
+      labelWidthMm: 60,
+      labelHeightMm: 45,
+      labelMarginLeftMm: 5,
+    });
+
+    const hardware = await caller.stores.hardware({ storeId: store.id });
+    expect(hardware.settings).toMatchObject({
+      labelTemplate: "2x5",
+      labelPaperMode: "A4",
+      labelBarcodeType: "code128",
+      labelDefaultCopies: 3,
+      labelShowPrice: false,
+      labelShowStoreName: true,
+      labelRollGapMm: 4,
+      labelRollXOffsetMm: 1,
+      labelRollYOffsetMm: -1,
+    });
+
+    const stored = await prisma.storePrinterSettings.findUnique({ where: { storeId: store.id } });
+    expect(stored?.labelTemplate).toBe("2x5");
+    expect(stored?.labelDefaultCopies).toBe(3);
   });
 });

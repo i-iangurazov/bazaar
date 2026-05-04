@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useTranslations } from "next-intl";
 
 import { CloseIcon, HelpIcon } from "@/components/icons";
@@ -27,7 +28,7 @@ export const GuidanceTipsTriggerButton = ({
             type="button"
             variant="secondary"
             size="icon"
-            className="relative h-10 w-10"
+            className="relative h-10 w-10 shrink-0"
             onClick={onClick}
             aria-label={t("tipsButton")}
           >
@@ -115,7 +116,7 @@ export const GuidanceCloseButton = ({
     type="button"
     variant="ghost"
     size="icon"
-    className="h-10 w-10"
+    className="h-10 w-10 shrink-0"
     aria-label={label}
     onClick={onClick}
   >

@@ -8,6 +8,11 @@ import {
   type PriceTagRollCalibration,
   type PriceTagsTemplate,
 } from "@/lib/priceTags";
+import {
+  convertFromKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+} from "@/lib/currency";
 import { resolveBarcodeRenderSpec } from "@/server/services/barcodes";
 import { buildPriceTagLayout, clampPriceTagTextLines, mmToPoints } from "@/server/services/priceTagsLayout";
 
@@ -22,16 +27,33 @@ type PriceTagsPdfInput = {
   labels: PriceTagLabel[];
   template: PriceTagsTemplate;
   locale: string;
+  currencyCode?: string | null;
+  currencyRateKgsPerUnit?: number | string | null;
   storeName: string | null;
   noPriceLabel: string;
   noBarcodeLabel: string;
   skuLabel: string;
   rollCalibration?: PriceTagRollCalibration;
+  showProductName?: boolean;
+  showPrice?: boolean;
+  showSku?: boolean;
+  showStoreName?: boolean;
 };
 type BwipModule = { toBuffer: (options: Record<string, unknown>) => Promise<Buffer> };
 
-const formatCurrency = (amount: number, locale: string) =>
-  new Intl.NumberFormat(locale, { style: "currency", currency: "KGS" }).format(amount);
+const formatCurrency = (
+  amountKgs: number,
+  locale: string,
+  currencyCodeInput?: string | null,
+  currencyRateInput?: number | string | null,
+) => {
+  const currencyCode = normalizeCurrencyCode(currencyCodeInput);
+  const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(currencyRateInput, currencyCode);
+  const displayAmount = convertFromKgs(amountKgs, currencyRateKgsPerUnit, currencyCode);
+  return new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode }).format(
+    displayAmount,
+  );
+};
 
 const truncateLine = (doc: InstanceType<typeof PDFDocument>, text: string, maxWidth: number, fontSize: number) => {
   doc.fontSize(fontSize);
@@ -77,11 +99,17 @@ export const buildPriceTagsPdf = async ({
   labels,
   template,
   locale,
+  currencyCode,
+  currencyRateKgsPerUnit,
   storeName,
   noPriceLabel,
   noBarcodeLabel,
   skuLabel,
   rollCalibration,
+  showProductName = true,
+  showPrice = true,
+  showSku = true,
+  showStoreName = true,
 }: PriceTagsPdfInput) => {
   const isRollTemplate = template === ROLL_PRICE_TAG_TEMPLATE;
   const resolvedRollCalibration = toRollCalibration(rollCalibration);
@@ -159,41 +187,46 @@ export const buildPriceTagsPdf = async ({
       });
     };
 
-    doc.fontSize(layout.config.nameFont);
-    const nameLines = clampPriceTagTextLines({
-      text: label.name,
-      maxLines: layout.config.nameLines,
-      canFit: (candidate) => doc.widthOfString(candidate) <= contentWidth,
-    });
-    doc.fillColor("#111111");
-    nameLines.forEach((line, lineIndex) => {
-      doc.text(
-        line,
-        contentX,
-        y + layout.name.y + lineIndex * layout.config.nameLineHeight,
-        { width: contentWidth, lineBreak: false },
-      );
-    });
+    if (showProductName) {
+      doc.fontSize(layout.config.nameFont);
+      const nameLines = clampPriceTagTextLines({
+        text: label.name,
+        maxLines: layout.config.nameLines,
+        canFit: (candidate) => doc.widthOfString(candidate) <= contentWidth,
+      });
+      doc.fillColor("#111111");
+      nameLines.forEach((line, lineIndex) => {
+        doc.text(line, contentX, y + layout.name.y + lineIndex * layout.config.nameLineHeight, {
+          width: contentWidth,
+          lineBreak: false,
+        });
+      });
+    }
 
-    const priceText = label.price !== null ? formatCurrency(label.price, locale) : noPriceLabel;
-    const priceFont =
-      label.price !== null ? layout.config.priceFont : Math.max(layout.config.priceFont - 2, 9);
-    const priceLine = truncateLine(doc, priceText, contentWidth, priceFont);
-    doc.fontSize(priceFont).fillColor("#000000");
-    doc.text(priceLine, contentX, y + layout.price.y, {
-      width: contentWidth,
-      lineBreak: false,
-    });
+    if (showPrice) {
+      const priceText =
+        label.price !== null
+          ? formatCurrency(label.price, locale, currencyCode, currencyRateKgsPerUnit)
+          : noPriceLabel;
+      const priceFont =
+        label.price !== null ? layout.config.priceFont : Math.max(layout.config.priceFont - 2, 9);
+      const priceLine = truncateLine(doc, priceText, contentWidth, priceFont);
+      doc.fontSize(priceFont).fillColor("#000000");
+      doc.text(priceLine, contentX, y + layout.price.y, {
+        width: contentWidth,
+        lineBreak: false,
+      });
+    }
 
     doc.fontSize(layout.config.metaFont).fillColor("#444444");
-    if (label.sku.trim()) {
+    if (showSku && label.sku.trim()) {
       const skuText = truncateLine(doc, `${skuLabel}: ${label.sku}`, contentWidth, layout.config.metaFont);
       doc.text(skuText, contentX, y + layout.meta.y, {
         width: contentWidth,
         lineBreak: false,
       });
     }
-    if (!isRollTemplate && storeName && layout.config.metaLines > 1) {
+    if (showStoreName && !isRollTemplate && storeName && layout.config.metaLines > 1) {
       const storeLine = truncateLine(doc, storeName, contentWidth, layout.config.metaFont);
       doc.text(storeLine, contentX, y + layout.meta.y + layout.config.metaLineHeight, {
         width: contentWidth,

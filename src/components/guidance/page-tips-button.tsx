@@ -50,7 +50,7 @@ export const PageTipsButton = () => {
         title={t("tipsPanelTitle")}
         subtitle={t("tipsPanelSubtitle")}
         usePortal
-        className="max-w-lg rounded-2xl"
+        className="max-w-lg rounded-md"
         headerClassName="px-4 py-4 sm:px-6 sm:py-5"
         bodyClassName="space-y-4 px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4"
       >

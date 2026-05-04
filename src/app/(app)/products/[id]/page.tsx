@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -63,7 +64,12 @@ import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
-import { PRICE_TAG_ROLL_DEFAULTS, ROLL_PRICE_TAG_TEMPLATE } from "@/lib/priceTags";
+import {
+  PRICE_TAG_ROLL_DEFAULTS,
+  PRICE_TAG_TEMPLATES,
+  ROLL_PRICE_TAG_TEMPLATE,
+  type PriceTagsTemplate,
+} from "@/lib/priceTags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -482,6 +488,18 @@ const ProductDetailPage = () => {
   const bundleComponents: BundleComponent[] = bundleComponentsQuery.data ?? [];
   const lots: LotRow[] = lotsQuery.data ?? [];
   const labelStoreId = pricingStoreId || (stores.length === 1 ? (stores[0]?.id ?? "") : "");
+  const labelPrintProfileQuery = trpc.stores.hardware.useQuery(
+    { storeId: labelStoreId },
+    { enabled: Boolean(labelStoreId) },
+  );
+
+  useEffect(() => {
+    const copies = labelPrintProfileQuery.data?.settings.labelDefaultCopies;
+    if (!copies) {
+      return;
+    }
+    setLabelQty((current) => (current === "1" ? String(copies) : current));
+  }, [labelPrintProfileQuery.data?.settings.labelDefaultCopies]);
 
   useEffect(() => {
     if (productQuery.data?.isBundle || bundleComponentsQuery.data?.length) {
@@ -710,19 +728,34 @@ const ProductDetailPage = () => {
 
     setLabelAction(mode);
     try {
+      const settings = labelPrintProfileQuery.data?.settings;
+      const template = PRICE_TAG_TEMPLATES.includes(settings?.labelTemplate as PriceTagsTemplate)
+        ? (settings?.labelTemplate as PriceTagsTemplate)
+        : ROLL_PRICE_TAG_TEMPLATE;
       const blob = await fetchPdfBlob({
         url: "/api/price-tags/pdf",
         init: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            template: ROLL_PRICE_TAG_TEMPLATE,
+            template,
             storeId: labelStoreId || undefined,
             allowWithoutBarcode: false,
             rollCalibration: {
-              widthMm: PRICE_TAG_ROLL_DEFAULTS.widthMm,
-              heightMm: PRICE_TAG_ROLL_DEFAULTS.heightMm,
+              widthMm: settings?.labelWidthMm ?? PRICE_TAG_ROLL_DEFAULTS.widthMm,
+              heightMm: settings?.labelHeightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
+              gapMm: settings?.labelRollGapMm,
+              xOffsetMm: settings?.labelRollXOffsetMm,
+              yOffsetMm: settings?.labelRollYOffsetMm,
             },
+            display: settings
+              ? {
+                  showProductName: settings.labelShowProductName,
+                  showPrice: settings.labelShowPrice,
+                  showSku: settings.labelShowSku,
+                  showStoreName: settings.labelShowStoreName,
+                }
+              : undefined,
             items: buildBarcodeLabelPrintItems({
               productIds: [product.id],
               quantity,
@@ -822,6 +855,11 @@ const ProductDetailPage = () => {
                 )}
               </Button>
             </div>
+            {labelStoreId ? (
+              <Button asChild variant="secondary" className="w-full sm:w-auto">
+                <Link href={`/stores/${labelStoreId}/hardware`}>{t("changePrintSettings")}</Link>
+              </Button>
+            ) : null}
             <Button
               variant="secondary"
               className="w-full sm:w-auto"

@@ -10,19 +10,31 @@ const localeCookieOptions = {
   httpOnly: true,
 } as const;
 
-const protectedPrefixes = [
+export const protectedPrefixes = [
+  "/admin",
+  "/billing",
+  "/cash",
+  "/customers",
   "/dashboard",
+  "/dev",
+  "/finance",
   "/inventory",
+  "/operations",
+  "/orders",
+  "/platform",
+  "/pos",
   "/purchase-orders",
   "/products",
-  "/stores",
   "/reports",
+  "/sales",
   "/onboarding",
   "/help",
   "/settings",
+  "/stores",
+  "/suppliers",
 ];
 
-const isProtectedPath = (pathname: string) =>
+export const isProtectedPath = (pathname: string) =>
   protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

@@ -48,7 +48,19 @@ describe("price tags pdf route", () => {
       subscriptionStatus: "ACTIVE",
       currentPeriodEndsAt: null,
     });
-    prisma.store.findUnique.mockResolvedValue({ id: "store-1", organizationId: "org-1", name: "Тест" });
+    prisma.store.findUnique.mockResolvedValue({
+      id: "store-1",
+      organizationId: "org-1",
+      name: "Тест",
+      currencyCode: "KGS",
+      currencyRateKgsPerUnit: "1",
+      printerSettings: {
+        labelShowProductName: true,
+        labelShowPrice: true,
+        labelShowSku: true,
+        labelShowStoreName: false,
+      },
+    });
     prisma.product.findMany.mockResolvedValue([
       {
         id: "prod-1",
@@ -143,6 +155,60 @@ describe("price tags pdf route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    expect(prisma.storePrinterSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          labelWidthMm: 58,
+          labelHeightMm: 40,
+          labelLastPrintedAt: expect.any(Date),
+        }),
+        update: expect.objectContaining({
+          labelWidthMm: 58,
+          labelHeightMm: 40,
+          labelLastPrintedAt: expect.any(Date),
+        }),
+      }),
+    );
+    const pdf = Buffer.from(await response.arrayBuffer());
+    expect(pdf.length).toBeGreaterThan(500);
+  });
+
+  it("uses the selected store currency when generating price tag PDFs", async () => {
+    prisma.store.findUnique.mockResolvedValueOnce({
+      id: "store-1",
+      organizationId: "org-1",
+      name: "USD Store",
+      currencyCode: "USD",
+      currencyRateKgsPerUnit: "89.5",
+      printerSettings: {
+        labelShowProductName: true,
+        labelShowPrice: true,
+        labelShowSku: true,
+        labelShowStoreName: true,
+      },
+    });
+    prisma.product.findMany.mockResolvedValueOnce([
+      {
+        id: "prod-1",
+        name: "Dollar product",
+        sku: "USD-1",
+        basePriceKgs: 895,
+        barcodes: [{ value: "1234567890" }],
+      },
+    ]);
+
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: JSON.stringify({
+        template: "3x8",
+        items: [{ productId: "prod-1", quantity: 1 }],
+        storeId: "store-1",
+      }),
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(200);
     const pdf = Buffer.from(await response.arrayBuffer());
     expect(pdf.length).toBeGreaterThan(500);
   });

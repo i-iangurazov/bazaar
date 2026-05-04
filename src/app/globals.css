@@ -55,7 +55,11 @@
   --destructive: 0 74% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --radius: 0.75rem;
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-control: 0px;
   color-scheme: light;
 }
 
@@ -99,6 +103,11 @@
   --destructive: 0 84% 64%;
   --destructive-foreground: 222 47% 11%;
 
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-control: 0px;
   color-scheme: dark;
 }
 

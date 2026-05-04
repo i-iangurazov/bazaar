@@ -39,7 +39,7 @@ describeDb("billing", () => {
       expect(summary.limits).toMatchObject({
         maxStores: 1,
         maxUsers: 5,
-        maxProducts: 100,
+        maxProducts: 1000,
       });
       expect(summary.featureFlags.exports).toBe(false);
       expect(summary.featureFlags.analytics).toBe(false);
