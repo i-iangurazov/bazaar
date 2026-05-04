@@ -161,6 +161,14 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Add new copy by introducing a key in all three files and reading it via `useTranslations("...")` / `getTranslations("...")`.
 - User locale preference is stored in `User.preferredLocale` and synced on login.
 
+## Install Bazaar as an app
+- Bazaar is web-only, but it ships with PWA metadata so supported browsers can install it as a standalone home-screen/desktop app.
+- Android Chrome and desktop Chromium browsers can show the browser install prompt from the app header's **Install app** action once the browser marks the app installable.
+- iPhone and iPad users install through Safari: open Bazaar in Safari, tap Share, choose **Add to Home Screen**, then confirm.
+- In-app browsers may block installation. Open Bazaar in Safari or Chrome first.
+- Production installation requires HTTPS. Localhost is acceptable for local testing.
+- Offline support is intentionally minimal: static app/icon assets and an offline message can load, but POS, inventory, orders, auth, and API-backed work still require network access.
+
 ## Help Center
 - `/help` provides short, task-focused articles in `ru` and `kg`.
 - Contextual `?` links on complex screens open the relevant article anchor.

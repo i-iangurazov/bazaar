@@ -1506,6 +1506,42 @@
     "barcodeNotFound": "Штрихкод {value} табылган жок.",
     "createWithBarcode": "Ушул штрихкод менен буюм түзүү"
   },
+  "pwaInstall": {
+    "buttonLabel": "Колдонмону орнотуу",
+    "installedToast": "Bazaar орнотулду.",
+    "close": "Жабуу",
+    "ios": {
+      "title": "Bazaar'ды iPhone же iPad'га орнотуу",
+      "subtitle": "Safari Bazaar'ды Бөлүшүү менюсу аркылуу орнотот.",
+      "steps": {
+        "openSafari": "Бул баракты Safari'де ачыңыз.",
+        "tapShare": "Бөлүшүү баскычын басыңыз.",
+        "addToHome": "Башкы экранга кошууну тандаңыз.",
+        "confirm": "Кошуу баскычын басып, Bazaar'ды Башкы экрандан ачыңыз."
+      }
+    },
+    "safari": {
+      "title": "Bazaar'ды Safari аркылуу орнотуу",
+      "subtitle": "Safari Bazaar'ды колдонмо катары кошо алат.",
+      "steps": {
+        "openSafari": "Bazaar'ды Safari'де ачык калтырыңыз.",
+        "openShare": "Бөлүшүү баскычын же Mac'тагы Файл менюсун колдонуңуз.",
+        "add": "iPhone же iPad'да Башкы экранга кошууну тандаңыз. Mac'та Dock'ко кошууну тандаңыз.",
+        "confirm": "Кошууну ырастап, Bazaar'ды Башкы экрандан же Dock'тон ачыңыз."
+      }
+    },
+    "unsupported": {
+      "title": "Bazaar'ды колдоого алынган браузерде ачыңыз",
+      "subtitle": "Бул браузер веб-колдонмону түз орното албайт.",
+      "body": "Bazaar'ды Android же компьютердеги Chrome'до, же iPhone жана iPad'дагы Safari'де ачып, Колдонмону орнотуу же Башкы экранга кошууну колдонуңуз.",
+      "httpsRequired": "Production орнотуу үчүн HTTPS керек. Localhost тест үчүн уруксат."
+    },
+    "browser": {
+      "title": "Bazaar'ды браузерден орнотуңуз",
+      "subtitle": "Колдонмо даяр болгондо браузер орнотуу сунушун көрсөтөт.",
+      "body": "Сунуш чыкпаса, браузер менюсун ачып Колдонмону орнотууну тандаңыз. iPhone же iPad'да Safari'ди ачып, Башкы экранга кошууну колдонуңуз."
+    }
+  },
   "commandPalette": {
     "openButton": "Командалык панель",
     "title": "Командалык панель",

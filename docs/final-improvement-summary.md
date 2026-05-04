@@ -505,3 +505,82 @@
 - Currency display across POS, reports, purchase orders, sales orders, and admin/platform metrics was handled in the 2026-05-05 currency deep pass above.
 - The no-rounded direction was applied to shared components and high-traffic private app surfaces, but public storefront/landing and lower-traffic private pages still need follow-up cleanup.
 - POS/dashboard/onboarding/report redesign was audited and planned, but this pass prioritized route security, shared UI direction, and the barcode printing workflow.
+
+## PWA Installation Slice
+
+### Changed
+
+- Added `public/manifest.webmanifest` with standalone display metadata, launcher icons, maskable icons, and shortcuts for Dashboard, POS, Products, and Inventory.
+- Generated PWA icon assets from the original Bazaar icon on a plain white square background; `public/brand/icon.png` was not modified.
+- Added Next.js metadata for manifest discovery, apple web app mode, apple touch icon, app title, and theme color.
+- Added a conservative service worker and static offline fallback that avoid caching API/auth/private responses.
+- Added a small localized `Install app` header action beside tips and the language switcher.
+- Added iOS Add to Home Screen guidance and unsupported/in-app browser guidance.
+- Added PWA install detection utilities for `beforeinstallprompt`, standalone mode, iOS, in-app browsers, and secure install context.
+- Added README and `docs/pwa-installation-plan.md` installation guidance.
+
+### Safety Notes
+
+- The service worker only precaches static shell-safe files and uses network-first navigation fallback.
+- API routes, auth routes, login/signup/reset/invite/verify pages, and `/_next/data` are explicitly excluded from SW caching.
+- Offline mode does not pretend POS, inventory, orders, or authenticated mutations work without a network connection.
+- Final launcher icon polish still needs design approval; current generated assets use the original Bazaar mark on white.
+
+### Tests Added
+
+- Manifest required fields, icon sizes, maskable icons, and shortcuts.
+- Service worker source checks for private/API cache exclusions and network-first offline fallback.
+- Install hook prompt capture and `prompt()` call.
+- Standalone detection hides the install button.
+- iOS and unsupported browser paths open the correct guidance modals.
+- Header source check keeps the install action beside tips and language switcher.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- Targeted PWA tests passed: `pnpm exec vitest run tests/unit/pwa-install.test.tsx tests/unit/pwa-manifest.test.ts tests/unit/pwa-service-worker-source.test.ts`.
+- `CI=1 pnpm test` passed: 99 files, 448 tests.
+- `rm -rf .next` completed before the production build.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next.js compile, type/lint checks, static generation, and route trace collection.
+- Manual device QA is still required for real browser install behavior: Chrome desktop prompt, Android Chrome prompt, iOS Safari Add to Home Screen instructions, installed standalone launch, icon/splash appearance, login, dashboard/POS/products loading, and API/auth cache behavior in production HTTPS.
+
+### Pre-Push Review Findings
+
+- Manifest was validated from the built production server and through Chrome DevTools Protocol `Page.getAppManifest`; Chrome returned no manifest errors.
+- Manifest fields are present: `name`, `short_name`, `description`, `start_url: /dashboard`, `scope: /`, `display: standalone`, portrait orientation, theme/background colors, 192/512 icons, maskable icons, and shortcuts.
+- Icon assets were verified on disk:
+  - `public/icons/icon-192.png` is 192x192.
+  - `public/icons/icon-512.png` is 512x512.
+  - `public/icons/maskable-192.png` is 192x192.
+  - `public/icons/maskable-512.png` is 512x512.
+  - `public/apple-touch-icon.png` is 180x180.
+- PWA icons use the original Bazaar icon on a plain white square background. The original `public/brand/icon.png` was not changed.
+- iOS Safari metadata is present in the built HTML: `apple-mobile-web-app-capable`, `apple-mobile-web-app-title`, `apple-mobile-web-app-status-bar-style`, and `apple-touch-icon`.
+- The production server served `/manifest.webmanifest`, `/sw.js`, and `/offline.html` with `HTTP/1.1 200 OK`.
+- `public/sw.js` parses with `node --check`.
+- Headless Chrome confirmed the service worker registered and became active with script URL `http://127.0.0.1:3000/sw.js`.
+- Browser cache inspection after registration showed only static shell-safe entries: offline page, brand/logo icons, generated PWA icons, apple touch icon, and manifest.
+- No API, auth, login, dashboard, or private page response was present in the service worker cache.
+- Unauthenticated `/dashboard` on the production server still returned `307 Temporary Redirect` to `/login`.
+- `/login` served normally with PWA metadata present, so logout/login pages are not blocked by the service worker cache.
+- Offline fallback page contains English, Russian, and Kyrgyz offline copy and does not include private data.
+- Install button behavior remains covered by tests: standalone mode hides it; Chromium prompt calls `prompt()`; iOS opens instructions; unsupported/in-app browser opens guidance.
+- Safari now has a separate calm install-in-Safari guidance path instead of being treated as unsupported. The warning-style unsupported copy is reserved for in-app or genuinely unsupported browsers.
+- Service worker registration is production-only in `PwaServiceWorkerRegister`, with localhost allowed as a secure install context for local production smoke tests.
+- `pnpm start` launched the built app and served requests successfully. Next.js still prints its existing warning that `next start` is not the preferred command with `output: "standalone"`; this was not changed in the PWA slice.
+
+### Pre-Push Review Validation
+
+- `node --check public/sw.js` passed.
+- Manifest file and referenced icon paths validated with a local script.
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed: 99 files, 448 tests.
+- `rm -rf .next` completed before the clean production build.
+- `pnpm build` passed.
+- `pnpm start` production smoke test passed on `127.0.0.1:3000`; server was stopped after review.

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 
@@ -11,18 +11,32 @@ import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/t
 const catalogFontsStylesheetHref =
   "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Lato:wght@400;700&family=PT+Sans:wght@400;700&family=Source+Sans+3:wght@400;600;700&family=Manrope:wght@400;600;700&display=swap&subset=cyrillic";
 
+export const viewport: Viewport = {
+  themeColor: "#2563eb",
+};
+
 export const generateMetadata = async (): Promise<Metadata> => {
   const t = await getTranslations("meta");
   return {
-    title: t("title"),
+    title: {
+      default: t("title"),
+      template: `%s | ${t("title")}`,
+    },
     description: t("description"),
+    applicationName: "Bazaar",
+    manifest: "/manifest.webmanifest",
+    appleWebApp: {
+      capable: true,
+      title: "Bazaar",
+      statusBarStyle: "default",
+    },
     icons: {
       icon: [
         { url: "/brand/icon.png", type: "image/png" },
-        { url: "/brand/icon.png", sizes: "32x32", type: "image/png" },
-        { url: "/brand/icon.png", sizes: "192x192", type: "image/png" },
+        { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
       ],
-      apple: [{ url: "/brand/icon.png", type: "image/png" }],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
       shortcut: ["/brand/icon.png"],
     },
   };

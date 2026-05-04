@@ -15,6 +15,7 @@ import { createLocalizedZodErrorMap } from "@/lib/zodErrorMap";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSync } from "@/components/theme-sync";
+import { PwaServiceWorkerRegister } from "@/components/pwa-service-worker-register";
 
 type IntlMessages = ComponentProps<typeof NextIntlClientProvider>["messages"];
 
@@ -74,6 +75,7 @@ export const Providers = ({
             getMessageFallback={createMessageFallback(locale)}
           >
             <ThemeSync />
+            <PwaServiceWorkerRegister />
             <TooltipProvider>
               <ToastProvider>{children}</ToastProvider>
             </TooltipProvider>

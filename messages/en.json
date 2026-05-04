@@ -1506,6 +1506,42 @@
     "barcodeNotFound": "Barcode {value} was not found.",
     "createWithBarcode": "Create product with this barcode"
   },
+  "pwaInstall": {
+    "buttonLabel": "Install app",
+    "installedToast": "Bazaar was installed.",
+    "close": "Close",
+    "ios": {
+      "title": "Install Bazaar on iPhone or iPad",
+      "subtitle": "Safari installs Bazaar from the Share menu.",
+      "steps": {
+        "openSafari": "Open this page in Safari.",
+        "tapShare": "Tap the Share button.",
+        "addToHome": "Choose Add to Home Screen.",
+        "confirm": "Tap Add, then open Bazaar from the Home Screen."
+      }
+    },
+    "safari": {
+      "title": "Install Bazaar from Safari",
+      "subtitle": "Safari can add Bazaar as an app.",
+      "steps": {
+        "openSafari": "Keep Bazaar open in Safari.",
+        "openShare": "Use the Share button, or the File menu on Mac.",
+        "add": "On iPhone or iPad choose Add to Home Screen. On Mac choose Add to Dock.",
+        "confirm": "Confirm Add, then open Bazaar from the Home Screen or Dock."
+      }
+    },
+    "unsupported": {
+      "title": "Open Bazaar in a supported browser",
+      "subtitle": "This browser cannot install the web app directly.",
+      "body": "Open Bazaar in Chrome on Android or desktop, or Safari on iPhone and iPad, then use Install app or Add to Home Screen.",
+      "httpsRequired": "Production installation requires HTTPS. Localhost is allowed for testing."
+    },
+    "browser": {
+      "title": "Install Bazaar from your browser",
+      "subtitle": "Your browser will show the install prompt when the app is ready.",
+      "body": "If no prompt appears, use the browser menu and choose Install app. On iPhone or iPad, open Safari and use Add to Home Screen."
+    }
+  },
   "commandPalette": {
     "openButton": "Command palette",
     "title": "Command palette",

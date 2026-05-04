@@ -10,6 +10,7 @@ import { GuidanceOverlay } from "@/components/guidance/guidance-overlay";
 import { GuidanceProvider } from "@/components/guidance/guidance-provider";
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PwaInstallButton } from "@/components/pwa-install-button";
 import { SignOutButton } from "@/components/signout-button";
 import { ScanInput } from "@/components/ScanInput";
 import { CommandPalette } from "@/components/command-palette";
@@ -680,6 +681,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           </div>
           <div className="flex items-center gap-2">
             <PageTipsButton />
+            <PwaInstallButton />
             <LanguageSwitcher />
           </div>
         </header>
@@ -736,6 +738,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 </div>
                 <div className="hidden lg:flex lg:items-center lg:gap-2">
                   <PageTipsButton />
+                  <PwaInstallButton />
                   <LanguageSwitcher />
                 </div>
               </div>
