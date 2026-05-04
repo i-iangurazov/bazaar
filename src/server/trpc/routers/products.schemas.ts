@@ -232,7 +232,7 @@ export const bulkUpdateProductCategoryInputSchema = z.object({
 });
 
 export const arrangeClothingCategoriesInputSchema = z.object({
-  productIds: z.array(z.string().min(1)).min(1).max(500),
+  productIds: z.array(z.string().min(1)).min(1).max(25),
 });
 
 export const importCsvRowSchema = z.object({

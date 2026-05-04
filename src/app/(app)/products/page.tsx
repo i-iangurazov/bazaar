@@ -193,7 +193,7 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
   stores: "asc",
 };
 
-const aiArrangeCategoriesBatchSize = 500;
+const aiArrangeCategoriesBatchSize = 25;
 const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";

@@ -77,7 +77,8 @@ const CATEGORY_ARRANGEMENT_MODEL =
   process.env.PRODUCT_CATEGORY_AI_MODEL?.trim() ||
   process.env.OPENAI_MODEL?.trim() ||
   "gpt-5-mini";
-const CATEGORY_ARRANGEMENT_BATCH_SIZE = 80;
+const CATEGORY_ARRANGEMENT_BATCH_SIZE = 25;
+const CATEGORY_ARRANGEMENT_OPENAI_TIMEOUT_MS = 45_000;
 const MEN_CATEGORY_NAME = "Мужчины";
 const WOMEN_CATEGORY_NAME = "Женщины";
 
@@ -280,54 +281,64 @@ const callCategoryArrangementAi = async (products: CategoryArrangementProduct[])
     return new Map<string, CategoryArrangementDecision>();
   }
 
-  const response = await fetch(CATEGORY_ARRANGEMENT_OPENAI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: CATEGORY_ARRANGEMENT_MODEL,
-      reasoning: { effort: "minimal" },
-      max_output_tokens: 4000,
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text:
-                "Classify clothing products into MEN or WOMEN only when the product name, description, or existing categories clearly indicate the target customer. Return SKIP for unisex, kids, ambiguous, cosmetics, accessories without clear gender, or anything uncertain. Never invent subcategories. Return only a JSON array.",
-            },
-          ],
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: JSON.stringify(
-                products.map((product) => ({
-                  id: product.id,
-                  name: product.name,
-                  categories: normalizeProductCategoryNames([
-                    product.category,
-                    ...product.categories,
-                  ]),
-                  description: product.description?.slice(0, 240) ?? null,
-                })),
-              ),
-            },
-            {
-              type: "input_text",
-              text:
-                'JSON shape: [{"id":"product id","gender":"MEN|WOMEN|SKIP","confidence":0.0-1.0,"reason":"short reason"}].',
-            },
-          ],
-        },
-      ],
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CATEGORY_ARRANGEMENT_OPENAI_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(CATEGORY_ARRANGEMENT_OPENAI_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: CATEGORY_ARRANGEMENT_MODEL,
+        reasoning: { effort: "minimal" },
+        max_output_tokens: 4000,
+        input: [
+          {
+            role: "system",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  "Classify clothing products into MEN or WOMEN only when the product name, description, or existing categories clearly indicate the target customer. Return SKIP for unisex, kids, ambiguous, cosmetics, accessories without clear gender, or anything uncertain. Never invent subcategories. Return only a JSON array.",
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: JSON.stringify(
+                  products.map((product) => ({
+                    id: product.id,
+                    name: product.name,
+                    categories: normalizeProductCategoryNames([
+                      product.category,
+                      ...product.categories,
+                    ]),
+                    description: product.description?.slice(0, 240) ?? null,
+                  })),
+                ),
+              },
+              {
+                type: "input_text",
+                text:
+                  'JSON shape: [{"id":"product id","gender":"MEN|WOMEN|SKIP","confidence":0.0-1.0,"reason":"short reason"}].',
+              },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch {
+    return new Map<string, CategoryArrangementDecision>();
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     return new Map<string, CategoryArrangementDecision>();

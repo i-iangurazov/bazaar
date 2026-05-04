@@ -280,7 +280,7 @@ export const productsRouter = router({
     ),
 
   arrangeClothingCategories: adminProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "products-category-arrange" }))
+    .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-category-arrange" }))
     .input(arrangeClothingCategoriesInputSchema)
     .mutation(({ ctx, input }) =>
       arrangeClothingCategoriesMutation({
