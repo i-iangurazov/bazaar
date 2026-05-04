@@ -302,6 +302,101 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("keeps POS sale, payment, shift and cash movement currency snapshots after store currency changes", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { currencyCode: "USD", currencyRateKgsPerUnit: 89.5 },
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 895 },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 5,
+      reason: "seed-currency-snapshot",
+      idempotencyKey: "pos-seed-currency-snapshot-1",
+      requestId: "pos-seed-currency-snapshot-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 895,
+      idempotencyKey: "pos-open-currency-snapshot-1",
+    });
+    const shift = await caller.pos.shifts.current({ registerId: register.id });
+    if (!shift) {
+      throw new Error("expected open shift");
+    }
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 1 });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-currency-snapshot-1",
+      payments: [{ method: "CARD", amountKgs: 895 }],
+    });
+    await caller.pos.cash.record({
+      shiftId: shift.id,
+      type: CashDrawerMovementType.PAY_IN,
+      amountKgs: 179,
+      reason: "float",
+      idempotencyKey: "pos-cash-currency-snapshot-1",
+    });
+
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { currencyCode: "KGS", currencyRateKgsPerUnit: 1 },
+    });
+
+    const listedSales = await caller.pos.sales.list({
+      registerId: register.id,
+      statuses: ["COMPLETED"],
+      page: 1,
+      pageSize: 25,
+    });
+    const listedShifts = await caller.pos.shifts.list({
+      registerId: register.id,
+      page: 1,
+      pageSize: 25,
+    });
+    const dbPayment = await prisma.salePayment.findFirst({
+      where: { customerOrderId: sale.id },
+    });
+    const dbMovement = await prisma.cashDrawerMovement.findFirst({
+      where: { shiftId: shift.id },
+    });
+
+    expect(listedSales.items[0]?.currencyCode).toBe("USD");
+    expect(Number(listedSales.items[0]?.currencyRateKgsPerUnit ?? 0)).toBe(89.5);
+    expect(listedSales.items[0]?.payments[0]?.currencyCode).toBe("USD");
+    expect(listedShifts.items[0]?.currencyCode).toBe("USD");
+    expect(dbPayment?.currencyCode).toBe("USD");
+    expect(dbMovement?.currencyCode).toBe("USD");
+  });
+
   it("adds the same product line by increasing quantity instead of duplicate error", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -461,7 +556,9 @@ describeDb("pos", () => {
   });
 
   it("completes return idempotently and restores inventory", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -515,7 +612,9 @@ describeDb("pos", () => {
       payments: [{ method: "CASH", amountKgs: 200 }],
     });
 
-    const saleLine = await prisma.customerOrderLine.findFirst({ where: { customerOrderId: sale.id } });
+    const saleLine = await prisma.customerOrderLine.findFirst({
+      where: { customerOrderId: sale.id },
+    });
     if (!saleLine) {
       throw new Error("expected sale line");
     }
@@ -579,7 +678,9 @@ describeDb("pos", () => {
   });
 
   it("closes shift with expected cash and discrepancy", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -801,7 +902,9 @@ describeDb("pos", () => {
   });
 
   it("blocks card refund when original sale shift differs", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -903,8 +1006,14 @@ describeDb("pos", () => {
   });
 
   it("creates manual refund request for transfer refunds without inventory reversal", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
 
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { currencyCode: "USD", currencyRateKgsPerUnit: 89.5 },
+    });
     await prisma.product.update({
       where: { id: product.id },
       data: { basePriceKgs: 100 },
@@ -991,17 +1100,27 @@ describeDb("pos", () => {
 
     const returnDoc = await prisma.saleReturn.findUnique({
       where: { id: returnDraft.id },
-      select: { status: true },
+      select: { status: true, currencyCode: true, currencyRateKgsPerUnit: true },
     });
     expect(returnDoc?.status).toBe("CANCELED");
+    expect(returnDoc?.currencyCode).toBe("USD");
+    expect(Number(returnDoc?.currencyRateKgsPerUnit ?? 0)).toBe(89.5);
 
     const request = await prisma.refundRequest.findUnique({
       where: { saleReturnId: returnDraft.id },
-      select: { id: true, status: true, reasonCode: true },
+      select: {
+        id: true,
+        status: true,
+        reasonCode: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+      },
     });
     expect(request?.id).toBe(completion.refundRequestId);
     expect(request?.status).toBe("OPEN");
     expect(request?.reasonCode).toBe("MKASSA_QR_MANUAL");
+    expect(request?.currencyCode).toBe("USD");
+    expect(Number(request?.currencyRateKgsPerUnit ?? 0)).toBe(89.5);
 
     const refundMovements = await prisma.stockMovement.findMany({
       where: {

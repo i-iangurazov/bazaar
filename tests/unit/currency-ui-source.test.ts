@@ -22,12 +22,14 @@ describe("currency UI clarity", () => {
     const detailSource = await readSource("src/app/(app)/purchase-orders/[id]/page.tsx");
 
     expect(newOrderSource).toContain("currency: selectedStore?.currencyCode");
-    expect(detailSource).toContain("currency: po?.store.currencyCode");
+    expect(detailSource).toContain("currency: poCurrencyCode");
   });
 
   it("passes store currency context to store-scoped product search snippets", async () => {
     const newPurchaseOrderSource = await readSource("src/app/(app)/purchase-orders/new/page.tsx");
-    const purchaseOrderDetailSource = await readSource("src/app/(app)/purchase-orders/[id]/page.tsx");
+    const purchaseOrderDetailSource = await readSource(
+      "src/app/(app)/purchase-orders/[id]/page.tsx",
+    );
     const salesOrderDetailSource = await readSource("src/app/(app)/sales/orders/[id]/page.tsx");
     const productDetailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
 

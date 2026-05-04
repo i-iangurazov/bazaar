@@ -1,6 +1,7 @@
 import type { PosPaymentMethod } from "@prisma/client";
 
 import type { ReceiptPrintJob, ReceiptPrintVariant } from "@/server/printing/types";
+import { currencySourceWithFallback, resolveCurrency } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { extractFiscalMetadata } from "@/server/services/fiscalReceiptMetadata";
@@ -9,7 +10,12 @@ const toMoney = (value: { toNumber?: () => number } | number | null | undefined)
   if (typeof value === "number") {
     return value;
   }
-  if (value && typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+  if (
+    value &&
+    typeof value === "object" &&
+    "toNumber" in value &&
+    typeof value.toNumber === "function"
+  ) {
     return value.toNumber();
   }
   return 0;
@@ -79,6 +85,8 @@ export const buildReceiptPrintPayload = async (input: {
         orderBy: { createdAt: "desc" },
         take: 1,
         select: {
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
           providerReceiptId: true,
           fiscalNumber: true,
           kkmFactoryNumber: true,
@@ -110,6 +118,12 @@ export const buildReceiptPrintPayload = async (input: {
 
   const fiscalizedAt = fiscalReceipt?.fiscalizedAt ?? fiscalReceipt?.sentAt ?? null;
   const qrPayload = fiscalReceipt?.qrPayload ?? fiscalReceipt?.qr ?? rawFiscal.qrPayload ?? null;
+  const receiptCurrency = resolveCurrency(
+    currencySourceWithFallback(
+      sale,
+      currencySourceWithFallback(fiscalReceipt, sale.store),
+    ),
+  );
 
   return {
     saleId: sale.id,
@@ -119,8 +133,8 @@ export const buildReceiptPrintPayload = async (input: {
     number: sale.number,
     createdAt: sale.completedAt ?? sale.createdAt,
     storeName: sale.store.name,
-    currencyCode: sale.store.currencyCode ?? null,
-    currencyRateKgsPerUnit: sale.store.currencyRateKgsPerUnit?.toString?.() ?? null,
+    currencyCode: receiptCurrency.currencyCode,
+    currencyRateKgsPerUnit: receiptCurrency.currencyRateKgsPerUnit,
     legalName: sale.store.legalName ?? null,
     inn: sale.store.inn ?? null,
     address: sale.store.address ?? null,
@@ -152,8 +166,7 @@ export const buildReceiptPrintPayload = async (input: {
       kkmFactoryNumber: fiscalReceipt?.kkmFactoryNumber ?? rawFiscal.kkmFactoryNumber ?? null,
       kkmRegistrationNumber:
         fiscalReceipt?.kkmRegistrationNumber ?? rawFiscal.kkmRegistrationNumber ?? null,
-      upfdOrFiscalMemory:
-        fiscalReceipt?.upfdOrFiscalMemory ?? rawFiscal.upfdOrFiscalMemory ?? null,
+      upfdOrFiscalMemory: fiscalReceipt?.upfdOrFiscalMemory ?? rawFiscal.upfdOrFiscalMemory ?? null,
       qrPayload,
       fiscalizedAt,
       lastError: fiscalReceipt?.lastError ?? null,

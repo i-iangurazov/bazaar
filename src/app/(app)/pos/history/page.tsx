@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
@@ -149,7 +149,10 @@ const PosHistoryPage = () => {
   });
 
   const selectedSale = saleDetailQuery.data;
-  const selectedSaleCurrencySource = selectedSale?.store ?? selectedRegister?.store ?? null;
+  const selectedSaleCurrencySource = currencySourceWithFallback(
+    selectedSale,
+    selectedSale?.store ?? selectedRegister?.store ?? null,
+  );
   const selectedSaleIdForReturn = saleDetailQuery.data?.id;
   const selectedSaleLinesForReturn = saleDetailQuery.data?.lines;
   const isReturnMutationBusy =
@@ -376,7 +379,12 @@ const PosHistoryPage = () => {
                 </p>
                 {sale.returnedTotalKgs > 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    {t("history.returnedTotal")}: {formatKgsMoney(sale.returnedTotalKgs, locale, sale.store)}
+                    {t("history.returnedTotal")}:{" "}
+                    {formatKgsMoney(
+                      sale.returnedTotalKgs,
+                      locale,
+                      currencySourceWithFallback(sale, sale.store),
+                    )}
                   </p>
                 ) : null}
                 {sale.kkmStatus !== "NOT_SENT" ? (
@@ -393,7 +401,11 @@ const PosHistoryPage = () => {
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <p className="text-sm font-semibold text-foreground">
-                  {formatKgsMoney(sale.totalKgs, locale, sale.store)}
+                  {formatKgsMoney(
+                    sale.totalKgs,
+                    locale,
+                    currencySourceWithFallback(sale, sale.store),
+                  )}
                 </p>
                 <Button
                   variant="secondary"
@@ -513,7 +525,12 @@ const PosHistoryPage = () => {
                 <div>
                   <p className="font-semibold text-foreground">{item.number}</p>
                   <p className="text-xs text-muted-foreground">
-                    {item.originalSale.number} · {formatKgsMoney(item.totalKgs, locale, item.store)}
+                    {item.originalSale.number} ·{" "}
+                    {formatKgsMoney(
+                      item.totalKgs,
+                      locale,
+                      currencySourceWithFallback(item, item.store),
+                    )}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {item.completedAt
@@ -607,7 +624,8 @@ const PosHistoryPage = () => {
           </div>
 
           <p className="text-sm font-semibold text-foreground">
-            {t("history.returnTotal")}: {formatKgsMoney(returnTotal, locale, selectedSaleCurrencySource)}
+            {t("history.returnTotal")}:{" "}
+            {formatKgsMoney(returnTotal, locale, selectedSaleCurrencySource)}
           </p>
 
           <ModalFooter>

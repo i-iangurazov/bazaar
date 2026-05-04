@@ -56,15 +56,14 @@ import {
   StatusSuccessIcon,
   UploadIcon,
 } from "@/components/icons";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
-import { formatStoreMoney } from "@/lib/currencyDisplay";
+import {
+  currencySourceWithFallback,
+  formatStoreMoney,
+  resolveCurrency,
+} from "@/lib/currencyDisplay";
 import { formatNumber } from "@/lib/i18nFormat";
 import { parseNumberInput, resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
@@ -92,7 +91,8 @@ const PurchaseOrderDetailPage = () => {
 
   const poQuery = trpc.purchaseOrders.getById.useQuery({ id: poId }, { enabled: Boolean(poId) });
   const po = poQuery.data;
-  const poCurrencySource = po?.store ?? null;
+  const poCurrencySource = currencySourceWithFallback(po, po?.store ?? null);
+  const poCurrencyCode = po ? resolveCurrency(poCurrencySource).currencyCode : null;
   type PurchaseOrderLine = NonNullable<typeof poQuery.data>["lines"][number];
   type ProductPackOption = {
     id: string;
@@ -153,7 +153,9 @@ const PurchaseOrderDetailPage = () => {
       unitSelection: string;
     }[]
   >([]);
-  const [receiveQtyInputByLineId, setReceiveQtyInputByLineId] = useState<Record<string, string>>({});
+  const [receiveQtyInputByLineId, setReceiveQtyInputByLineId] = useState<Record<string, string>>(
+    {},
+  );
   const [allowOverReceive, setAllowOverReceive] = useState(false);
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -197,9 +199,7 @@ const PurchaseOrderDetailPage = () => {
     return true;
   };
 
-  const resolveUnitLabel = (
-    unit?: { labelRu: string; labelKg: string; code: string } | null,
-  ) => {
+  const resolveUnitLabel = (unit?: { labelRu: string; labelKg: string; code: string } | null) => {
     if (!unit) {
       return tCommon("notAvailable");
     }
@@ -224,11 +224,7 @@ const PurchaseOrderDetailPage = () => {
   };
 
   const resolveBasePreview = useCallback(
-    (
-      product: Pick<ProductUnitInfo, "packs"> | null,
-      selection: string,
-      qty: number,
-    ) => {
+    (product: Pick<ProductUnitInfo, "packs"> | null, selection: string, qty: number) => {
       if (!product || !Number.isFinite(qty)) {
         return null;
       }
@@ -405,9 +401,7 @@ const PurchaseOrderDetailPage = () => {
   const commitReceiveQtyInput = useCallback((lineId: string, rawValue: string) => {
     const nextQty = resolveNumberInputOnBlur(rawValue, 0);
     setReceiveLines((prev) =>
-      prev.map((item) =>
-        item.lineId === lineId ? { ...item, qtyReceived: nextQty } : item,
-      ),
+      prev.map((item) => (item.lineId === lineId ? { ...item, qtyReceived: nextQty } : item)),
     );
     setReceiveQtyInputByLineId((prev) => ({
       ...prev,
@@ -536,7 +530,11 @@ const PurchaseOrderDetailPage = () => {
                 void handlePurchaseOrderPdf("download");
               }}
             >
-              {pdfActionPending === "download" ? <Spinner className="h-4 w-4" /> : <PdfIcon className="h-4 w-4" aria-hidden />}
+              {pdfActionPending === "download" ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <PdfIcon className="h-4 w-4" aria-hidden />
+              )}
               {t("downloadPdf")}
             </Button>
             <Button
@@ -546,7 +544,11 @@ const PurchaseOrderDetailPage = () => {
                 void handlePurchaseOrderPdf("print");
               }}
             >
-              {pdfActionPending === "print" ? <Spinner className="h-4 w-4" /> : <PrintIcon className="h-4 w-4" aria-hidden />}
+              {pdfActionPending === "print" ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <PrintIcon className="h-4 w-4" aria-hidden />
+              )}
               {t("printPdf")}
             </Button>
             {canManage ? (
@@ -599,14 +601,18 @@ const PurchaseOrderDetailPage = () => {
                     if (po.status !== "DRAFT" && po.status !== "SUBMITTED") {
                       return;
                     }
-                    if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
+                    if (
+                      !(await confirm({
+                        description: t("confirmCancel"),
+                        confirmVariant: "danger",
+                      }))
+                    ) {
                       return;
                     }
                     cancelMutation.mutate({ purchaseOrderId: poId });
                   }}
                   disabled={
-                    (po.status !== "DRAFT" && po.status !== "SUBMITTED") ||
-                    cancelMutation.isLoading
+                    (po.status !== "DRAFT" && po.status !== "SUBMITTED") || cancelMutation.isLoading
                   }
                 >
                   {cancelMutation.isLoading ? (
@@ -627,9 +633,9 @@ const PurchaseOrderDetailPage = () => {
                 ? "success"
                 : po.status === "PARTIALLY_RECEIVED"
                   ? "warning"
-                : po.status === "CANCELLED"
-                  ? "danger"
-                  : "warning"
+                  : po.status === "CANCELLED"
+                    ? "danger"
+                    : "warning"
             }
           >
             {(() => {
@@ -674,7 +680,7 @@ const PurchaseOrderDetailPage = () => {
                       {visibleItems.map((line) => (
                         <TableRow key={line.id}>
                           <TableCell className="font-medium">{line.product.name}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                          <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                             {line.variant?.name ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>
@@ -726,7 +732,12 @@ const PurchaseOrderDetailPage = () => {
                                       className="text-danger shadow-none hover:text-danger"
                                       aria-label={t("removeLine")}
                                       onClick={async () => {
-                                        if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                                        if (
+                                          !(await confirm({
+                                            description: t("confirmRemoveLine"),
+                                            confirmVariant: "danger",
+                                          }))
+                                        ) {
                                           return;
                                         }
                                         removeLineMutation.mutate({ lineId: line.id });
@@ -769,7 +780,12 @@ const PurchaseOrderDetailPage = () => {
                       variant: "danger",
                       disabled: removingLineId === line.id,
                       onSelect: async () => {
-                        if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                        if (
+                          !(await confirm({
+                            description: t("confirmRemoveLine"),
+                            confirmVariant: "danger",
+                          }))
+                        ) {
                           return;
                         }
                         removeLineMutation.mutate({ lineId: line.id });
@@ -782,7 +798,9 @@ const PurchaseOrderDetailPage = () => {
                 <div className="rounded-md border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{line.product.name}</p>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {line.product.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {line.variant?.name ?? tCommon("notAvailable")}
                       </p>
@@ -827,7 +845,9 @@ const PurchaseOrderDetailPage = () => {
           ) : null}
           <div className="mt-4 flex justify-end text-sm font-semibold">
             {t("total")}:{" "}
-            {hasCost ? formatStoreMoney(totals.total, locale, poCurrencySource) : tCommon("notAvailable")}
+            {hasCost
+              ? formatStoreMoney(totals.total, locale, poCurrencySource)
+              : tCommon("notAvailable")}
           </div>
         </CardContent>
       </Card>
@@ -905,7 +925,7 @@ const PurchaseOrderDetailPage = () => {
                       {visibleItems.map((line) => (
                         <TableRow key={line.lineId}>
                           <TableCell className="font-medium">{line.productName}</TableCell>
-                          <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                             {line.variantName}
                           </TableCell>
                           <TableCell>{formatNumber(line.remaining, locale)}</TableCell>
@@ -914,7 +934,9 @@ const PurchaseOrderDetailPage = () => {
                               type="number"
                               inputMode="numeric"
                               min={0}
-                              value={toNumberInputValue(receiveQtyInputByLineId[line.lineId] ?? line.qtyReceived)}
+                              value={toNumberInputValue(
+                                receiveQtyInputByLineId[line.lineId] ?? line.qtyReceived,
+                              )}
                               onChange={(event) => {
                                 const nextValue = event.target.value;
                                 setReceiveQtyInputByLineId((prev) => ({
@@ -933,7 +955,9 @@ const PurchaseOrderDetailPage = () => {
                                   ),
                                 );
                               }}
-                              onBlur={(event) => commitReceiveQtyInput(line.lineId, event.target.value)}
+                              onBlur={(event) =>
+                                commitReceiveQtyInput(line.lineId, event.target.value)
+                              }
                             />
                           </TableCell>
                           <TableCell>
@@ -954,36 +978,37 @@ const PurchaseOrderDetailPage = () => {
                                   <SelectValue placeholder={t("unitPlaceholder")} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {buildUnitOptions(lineProductMap.get(line.lineId) ?? null, "receiving").map(
-                                    (option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ),
-                                  )}
+                                  {buildUnitOptions(
+                                    lineProductMap.get(line.lineId) ?? null,
+                                    "receiving",
+                                  ).map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
-                              {line.unitSelection !== "BASE" ? (
-                                (() => {
-                                  const product = lineProductMap.get(line.lineId) ?? null;
-                                  const baseQty = resolveBasePreview(
-                                    product,
-                                    line.unitSelection,
-                                    line.qtyReceived,
-                                  );
-                                  if (baseQty === null) {
-                                    return null;
-                                  }
-                                  return (
-                                    <span className="text-xs text-muted-foreground">
-                                      {t("baseQtyPreview", {
-                                        qty: formatNumber(baseQty, locale),
-                                        unit: resolveUnitLabel(product?.baseUnit ?? null),
-                                      })}
-                                    </span>
-                                  );
-                                })()
-                              ) : null}
+                              {line.unitSelection !== "BASE"
+                                ? (() => {
+                                    const product = lineProductMap.get(line.lineId) ?? null;
+                                    const baseQty = resolveBasePreview(
+                                      product,
+                                      line.unitSelection,
+                                      line.qtyReceived,
+                                    );
+                                    if (baseQty === null) {
+                                      return null;
+                                    }
+                                    return (
+                                      <span className="text-xs text-muted-foreground">
+                                        {t("baseQtyPreview", {
+                                          qty: formatNumber(baseQty, locale),
+                                          unit: resolveUnitLabel(product?.baseUnit ?? null),
+                                        })}
+                                      </span>
+                                    );
+                                  })()
+                                : null}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1013,7 +1038,9 @@ const PurchaseOrderDetailPage = () => {
                         type="number"
                         inputMode="numeric"
                         min={0}
-                        value={toNumberInputValue(receiveQtyInputByLineId[line.lineId] ?? line.qtyReceived)}
+                        value={toNumberInputValue(
+                          receiveQtyInputByLineId[line.lineId] ?? line.qtyReceived,
+                        )}
                         onChange={(event) => {
                           const nextValue = event.target.value;
                           setReceiveQtyInputByLineId((prev) => ({
@@ -1040,7 +1067,9 @@ const PurchaseOrderDetailPage = () => {
                           onValueChange={(value) => {
                             setReceiveLines((prev) =>
                               prev.map((item) =>
-                                item.lineId === line.lineId ? { ...item, unitSelection: value } : item,
+                                item.lineId === line.lineId
+                                  ? { ...item, unitSelection: value }
+                                  : item,
                               ),
                             );
                           }}
@@ -1197,19 +1226,19 @@ const PurchaseOrderDetailPage = () => {
                               </div>
                             ) : productSearchQuery.data?.length ? (
                               productSearchQuery.data.map((product) => (
-                              <ProductSearchResultItem
-                                key={product.id}
-                                product={product}
-                                currencySource={poCurrencySource}
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => {
-                                  applySelectedProduct({
-                                    id: product.id,
-                                    name: product.name,
-                                    sku: product.sku,
-                                  });
-                                }}
-                              />
+                                <ProductSearchResultItem
+                                  key={product.id}
+                                  product={product}
+                                  currencySource={poCurrencySource}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => {
+                                    applySelectedProduct({
+                                      id: product.id,
+                                      name: product.name,
+                                      sku: product.sku,
+                                    });
+                                  }}
+                                />
                               ))
                             ) : (
                               <div className="px-3 py-3 text-sm text-muted-foreground">
@@ -1220,7 +1249,9 @@ const PurchaseOrderDetailPage = () => {
                         </div>
                       ) : null}
                     </div>
-                    {!editingLine ? <FormDescription>{t("productSearchHint")}</FormDescription> : null}
+                    {!editingLine ? (
+                      <FormDescription>{t("productSearchHint")}</FormDescription>
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1233,9 +1264,7 @@ const PurchaseOrderDetailPage = () => {
                     <FormLabel>{t("variant")}</FormLabel>
                     <Select
                       value={field.value ?? "BASE"}
-                      onValueChange={(value) =>
-                        field.onChange(value === "BASE" ? null : value)
-                      }
+                      onValueChange={(value) => field.onChange(value === "BASE" ? null : value)}
                       disabled={!lineProductId}
                     >
                       <FormControl>
@@ -1343,7 +1372,7 @@ const PurchaseOrderDetailPage = () => {
                     <FormDescription>
                       {t("unitCostHint", {
                         unit: resolveUnitLabel(lineProduct?.baseUnit ?? null),
-                        currency: po?.store.currencyCode ?? tCommon("notAvailable"),
+                        currency: poCurrencyCode ?? tCommon("notAvailable"),
                       })}
                     </FormDescription>
                     <FormMessage />

@@ -21,7 +21,12 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { displayMoneyFromKgs, displayMoneyToKgs, formatKgsMoney } from "@/lib/currencyDisplay";
+import {
+  currencySourceWithFallback,
+  displayMoneyFromKgs,
+  displayMoneyToKgs,
+  formatKgsMoney,
+} from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -134,10 +139,14 @@ const PosShiftsPage = () => {
   });
 
   const currentShift = currentShiftQuery.data;
+  const currentShiftCurrencySource = currencySourceWithFallback(
+    currentShift,
+    currentShift?.store ?? null,
+  );
   const report = reportQuery.data;
   const expectedCash = report?.summary.expectedCashKgs ?? 0;
   const countedCashNumber = Number(countedCash);
-  const countedCashKgs = displayMoneyToKgs(countedCashNumber, currentShift?.store ?? null);
+  const countedCashKgs = displayMoneyToKgs(countedCashNumber, currentShiftCurrencySource);
   const countedCashValid =
     Number.isFinite(countedCashNumber) && countedCashNumber >= 0 && Number.isFinite(countedCashKgs);
   const cashDifference = countedCashValid
@@ -168,16 +177,18 @@ const PosShiftsPage = () => {
       return;
     }
     if (!countedCash) {
-      setCountedCash(String(displayMoneyFromKgs(report.summary.expectedCashKgs, currentShift?.store ?? null)));
+      setCountedCash(
+        String(displayMoneyFromKgs(report.summary.expectedCashKgs, currentShiftCurrencySource)),
+      );
     }
-  }, [currentShift?.store, report, countedCash]);
+  }, [currentShiftCurrencySource, report, countedCash]);
 
   const handleCloseShift = async () => {
     if (!currentShift) {
       return;
     }
     const amount = Number(countedCash);
-    const amountKgs = displayMoneyToKgs(amount, currentShift.store);
+    const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
     if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amountKgs)) {
       toast({ variant: "error", description: t("shifts.invalidAmount") });
       return;
@@ -200,8 +211,13 @@ const PosShiftsPage = () => {
       return;
     }
     const amount = Number(cashAmount);
-    const amountKgs = displayMoneyToKgs(amount, currentShift.store);
-    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(amountKgs) || cashReason.trim().length < 2) {
+    const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !Number.isFinite(amountKgs) ||
+      cashReason.trim().length < 2
+    ) {
       toast({ variant: "error", description: t("shifts.cashMovementInvalid") });
       return;
     }
@@ -217,7 +233,7 @@ const PosShiftsPage = () => {
 
   const historyItems = historyQuery.data?.items ?? [];
   const formatCurrentShiftMoney = (amountKgs: number) =>
-    formatKgsMoney(amountKgs, locale, currentShift?.store ?? null);
+    formatKgsMoney(amountKgs, locale, currentShiftCurrencySource);
 
   return (
     <div className="space-y-6">
@@ -520,17 +536,30 @@ const PosShiftsPage = () => {
                   </div>
                   <div className="grid gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 sm:text-right">
                     <p>
-                      {t("entry.openingCash")}: {formatKgsMoney(shift.openingCashKgs, locale, shift.store)}
+                      {t("entry.openingCash")}:{" "}
+                      {formatKgsMoney(
+                        shift.openingCashKgs,
+                        locale,
+                        currencySourceWithFallback(shift, shift.store),
+                      )}
                     </p>
                     <p>
                       {t("shifts.expectedCash")}:{" "}
-                      {formatKgsMoney(shift.expectedCashKgs ?? 0, locale, shift.store)}
+                      {formatKgsMoney(
+                        shift.expectedCashKgs ?? 0,
+                        locale,
+                        currencySourceWithFallback(shift, shift.store),
+                      )}
                     </p>
                     <p>
                       {t("shifts.countedCash")}:{" "}
                       {shift.closingCashCountedKgs === null
                         ? tCommon("notAvailable")
-                        : formatKgsMoney(shift.closingCashCountedKgs, locale, shift.store)}
+                        : formatKgsMoney(
+                            shift.closingCashCountedKgs,
+                            locale,
+                            currencySourceWithFallback(shift, shift.store),
+                          )}
                     </p>
                     <p
                       className={
@@ -544,7 +573,11 @@ const PosShiftsPage = () => {
                       {t("shifts.difference")}:{" "}
                       {difference === null
                         ? tCommon("notAvailable")
-                        : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatKgsMoney(Math.abs(difference), locale, shift.store)}`}
+                        : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatKgsMoney(
+                            Math.abs(difference),
+                            locale,
+                            currencySourceWithFallback(shift, shift.store),
+                          )}`}
                     </p>
                   </div>
                 </div>

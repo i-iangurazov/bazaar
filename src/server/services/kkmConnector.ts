@@ -23,8 +23,7 @@ import {
 import { toJson } from "@/server/services/json";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 
-const toTokenHash = (token: string) =>
-  createHash("sha256").update(token).digest("hex");
+const toTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const pairingCodeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 const pairingCodeLength = 8;
@@ -58,6 +57,8 @@ export const queueFiscalReceipt = async (input: {
   idempotencyKey: string;
   mode: KkmMode;
   providerKey?: string | null;
+  currencyCode?: string | null;
+  currencyRateKgsPerUnit?: number | string | Prisma.Decimal | null;
   payload: FiscalReceiptDraft;
 }) => {
   return input.tx.fiscalReceipt.upsert({
@@ -69,6 +70,8 @@ export const queueFiscalReceipt = async (input: {
       idempotencyKey: input.idempotencyKey,
       mode: input.mode,
       providerKey: input.providerKey ?? null,
+      currencyCode: input.currencyCode ?? null,
+      currencyRateKgsPerUnit: input.currencyRateKgsPerUnit ?? null,
       status: FiscalReceiptStatus.QUEUED,
       payloadJson: toJson(input.payload) as Prisma.InputJsonValue,
       fiscalModeStatus: "NOT_SENT",
@@ -77,6 +80,8 @@ export const queueFiscalReceipt = async (input: {
       payloadJson: toJson(input.payload) as Prisma.InputJsonValue,
       mode: input.mode,
       providerKey: input.providerKey ?? null,
+      currencyCode: input.currencyCode ?? null,
+      currencyRateKgsPerUnit: input.currencyRateKgsPerUnit ?? null,
       status: FiscalReceiptStatus.QUEUED,
       fiscalModeStatus: "NOT_SENT",
       kkmFactoryNumber: null,
@@ -122,10 +127,7 @@ export const createConnectorPairingCode = async (input: {
       });
       break;
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         continue;
       }
       throw error;
@@ -149,10 +151,7 @@ export const createConnectorPairingCode = async (input: {
   return { id: created.id, code: created.code, expiresAt: created.expiresAt };
 };
 
-export const pairConnectorDevice = async (input: {
-  code: string;
-  deviceName: string;
-}) => {
+export const pairConnectorDevice = async (input: { code: string; deviceName: string }) => {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
     const pairing = await tx.kkmConnectorPairingCode.findFirst({
@@ -345,19 +344,16 @@ export const connectorPushResult = async (input: {
         status: nextStatus,
         providerReceiptId: input.providerReceiptId ?? null,
         fiscalNumber: input.fiscalNumber ?? null,
-        kkmFactoryNumber:
-          input.status === "SENT" ? connectorMetadata.kkmFactoryNumber : null,
+        kkmFactoryNumber: input.status === "SENT" ? connectorMetadata.kkmFactoryNumber : null,
         kkmRegistrationNumber:
           input.status === "SENT" ? connectorMetadata.kkmRegistrationNumber : null,
         fiscalModeStatus: input.status,
-        upfdOrFiscalMemory:
-          input.status === "SENT" ? connectorMetadata.upfdOrFiscalMemory : null,
+        upfdOrFiscalMemory: input.status === "SENT" ? connectorMetadata.upfdOrFiscalMemory : null,
         qrPayload: input.status === "SENT" ? connectorMetadata.qrPayload : null,
-        qr: input.status === "SENT" ? input.qr ?? connectorMetadata.qrPayload : null,
+        qr: input.status === "SENT" ? (input.qr ?? connectorMetadata.qrPayload) : null,
         fiscalizedAt: input.status === "SENT" ? now : null,
-        lastError: input.status === "FAILED" ? input.errorMessage ?? "connectorFailed" : null,
-        nextAttemptAt:
-          input.status === "FAILED" ? new Date(Date.now() + 30_000) : null,
+        lastError: input.status === "FAILED" ? (input.errorMessage ?? "connectorFailed") : null,
+        nextAttemptAt: input.status === "FAILED" ? new Date(Date.now() + 30_000) : null,
         sentAt: input.status === "SENT" ? now : null,
         connectorDeviceId: device.id,
       },

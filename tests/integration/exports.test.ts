@@ -52,7 +52,7 @@ describeDb("exports", () => {
         type: ExportType.RECEIPTS_REGISTRY,
         format: "csv",
         header:
-          "orgId,storeCode,storeName,receiptNumber,createdAt,completedAt,status,registerCode,registerName,cashierEmail,totalKgs,cashKgs,cardKgs,transferKgs,otherKgs,kkmStatus,fiscalStatus,fiscalMode,fiscalNumber,providerReceiptId,fiscalError",
+          "orgId,storeCode,storeName,receiptNumber,createdAt,completedAt,status,registerCode,registerName,cashierEmail,currencyCode,currencyRateKgsPerUnit,totalKgs,cashKgs,cardKgs,transferKgs,otherKgs,kkmStatus,fiscalStatus,fiscalMode,fiscalNumber,providerReceiptId,fiscalError",
       },
       {
         type: ExportType.MARKING_SALES_REGISTRY,

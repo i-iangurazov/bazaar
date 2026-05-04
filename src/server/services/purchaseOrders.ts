@@ -14,6 +14,7 @@ import { updateProductCost } from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { recordFirstEvent } from "@/server/services/productEvents";
+import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 
 const allowedTransitions: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
   DRAFT: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.CANCELLED],
@@ -36,9 +37,7 @@ const assertDraft = (status: PurchaseOrderStatus) => {
   }
 };
 
-const assertUniqueLines = (
-  lines: CreatePurchaseOrderInput["lines"],
-) => {
+const assertUniqueLines = (lines: CreatePurchaseOrderInput["lines"]) => {
   const seen = new Set<string>();
   for (const line of lines) {
     const key = `${line.productId}:${line.variantId ?? "BASE"}`;
@@ -223,6 +222,7 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
         supplierId: resolvedSupplierId,
         status: input.submit ? PurchaseOrderStatus.SUBMITTED : PurchaseOrderStatus.DRAFT,
         submittedAt: input.submit ? new Date() : null,
+        ...resolveCurrencySnapshot(store),
         createdById: input.actorId,
         updatedById: input.actorId,
         lines: {
@@ -377,6 +377,7 @@ export const createDraftsFromReorder = async (input: CreateDraftsFromReorderInpu
               storeId: input.storeId,
               supplierId,
               status: PurchaseOrderStatus.DRAFT,
+              ...resolveCurrencySnapshot(store),
               createdById: input.actorId,
               updatedById: input.actorId,
               lines: {

@@ -53,6 +53,10 @@ describeDb("bazaar catalog integration", () => {
   it("creates confirmed customer order from public checkout with source=CATALOG", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { currencyCode: "USD", currencyRateKgsPerUnit: 89.5 },
+    });
     await prisma.product.update({
       where: { id: product.id },
       data: { basePriceKgs: 120 },
@@ -92,6 +96,8 @@ describeDb("bazaar catalog integration", () => {
     expect(dbOrder?.status).toBe(CustomerOrderStatus.CONFIRMED);
     expect(dbOrder?.source).toBe(CustomerOrderSource.CATALOG);
     expect(dbOrder?.storeId).toBe(store.id);
+    expect(dbOrder?.currencyCode).toBe("USD");
+    expect(Number(dbOrder?.currencyRateKgsPerUnit ?? 0)).toBe(89.5);
     expect(dbOrder?.customerEmail).toBe("catalog.customer@example.com");
     expect(Number(dbOrder?.totalKgs ?? 0)).toBe(285);
     expect(dbOrder?.lines).toHaveLength(1);

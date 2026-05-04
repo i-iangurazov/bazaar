@@ -10,7 +10,7 @@ import { getServerAuthToken } from "@/server/auth/token";
 import { getPurchaseOrderStatusLabel, type Translator } from "@/lib/i18n/status";
 import { normalizeLocale, toIntlLocale, defaultLocale } from "@/lib/locales";
 import { getMessageFromFallback } from "@/lib/i18nFallback";
-import { formatStoreMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatStoreMoney } from "@/lib/currencyDisplay";
 
 export const runtime = "nodejs";
 
@@ -113,10 +113,7 @@ const getLegalEntityLabel = (tStores: Translator, value?: string | null) => {
   }
 };
 
-export const GET = async (
-  _request: Request,
-  { params }: { params: { id: string } },
-) => {
+export const GET = async (_request: Request, { params }: { params: { id: string } }) => {
   const localeCookie = cookies().get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
   let messages: MessageTree | undefined;
@@ -148,11 +145,16 @@ export const GET = async (
   if (!po) {
     return new Response(tErrors("poNotFound"), { status: 404 });
   }
+  const poCurrencySource = currencySourceWithFallback(po, po.store);
 
   const doc = new PDFDocument({ size: "A4", margin: 40 });
   const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
   const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
-  const resolvedFont = existsSync(fontPath) ? fontPath : existsSync(fallbackPath) ? fallbackPath : null;
+  const resolvedFont = existsSync(fontPath)
+    ? fontPath
+    : existsSync(fallbackPath)
+      ? fallbackPath
+      : null;
   if (resolvedFont) {
     doc.registerFont("Body", resolvedFont);
     doc.font("Body");
@@ -230,18 +232,28 @@ export const GET = async (
     doc.text(name, colX[0], y, { width: 180 });
     doc.text(String(line.qtyOrdered), colX[1], y);
     doc.text(line.product.unit, colX[2], y);
-    doc.text(formatStoreMoney(line.unitCost ? Number(line.unitCost) : 0, intlLocale, po.store), colX[3], y, {
+    doc.text(
+      formatStoreMoney(line.unitCost ? Number(line.unitCost) : 0, intlLocale, poCurrencySource),
+      colX[3],
+      y,
+      {
+        width: 60,
+        align: "right",
+      },
+    );
+    doc.text(formatStoreMoney(lineTotal, intlLocale, poCurrencySource), colX[4], y, {
       width: 60,
       align: "right",
     });
-    doc.text(formatStoreMoney(lineTotal, intlLocale, po.store), colX[4], y, { width: 60, align: "right" });
     y += rowHeight;
   }
 
   doc.y = y + 12;
-  doc.fontSize(12).text(`${labels.total}: ${formatStoreMoney(total, intlLocale, po.store)}`, {
-    align: "right",
-  });
+  doc
+    .fontSize(12)
+    .text(`${labels.total}: ${formatStoreMoney(total, intlLocale, poCurrencySource)}`, {
+      align: "right",
+    });
 
   doc.end();
   return new Response(body, {

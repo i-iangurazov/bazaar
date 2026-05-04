@@ -13,6 +13,7 @@ import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
+import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 
 const allowedTransitions: Record<CustomerOrderStatus, CustomerOrderStatus[]> = {
   DRAFT: [CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.CANCELED],
@@ -524,6 +525,7 @@ export const createCustomerOrderDraft = async (input: {
         customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
         notes: input.notes ?? null,
+        ...resolveCurrencySnapshot(store),
         createdById: input.actorId,
         updatedById: input.actorId,
       },
@@ -970,6 +972,7 @@ export const completeCustomerOrder = async (input: {
             status: CustomerOrderStatus.COMPLETED,
             completedAt: new Date(),
             completedEventId: input.idempotencyKey,
+            ...(order.currencyCode ? {} : resolveCurrencySnapshot(order.store)),
             updatedById: input.actorId,
           },
         });

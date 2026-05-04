@@ -37,7 +37,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -101,7 +101,8 @@ const SalesOrderDetailPage = () => {
     { customerOrderId },
     { enabled: Boolean(customerOrderId) },
   );
-  const orderCurrencySource = orderQuery.data?.store ?? null;
+  const orderStore = orderQuery.data?.store ?? null;
+  const orderCurrencySource = currencySourceWithFallback(orderQuery.data, orderStore);
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -118,8 +119,10 @@ const SalesOrderDetailPage = () => {
   const lineQtyInputRef = useRef<HTMLInputElement | null>(null);
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch.trim(), storeId: orderCurrencySource?.id },
-    { enabled: lineDialogMode === "add" && Boolean(orderCurrencySource?.id) && lineSearch.trim().length >= 1 },
+    { q: lineSearch.trim(), storeId: orderStore?.id },
+    {
+      enabled: lineDialogMode === "add" && Boolean(orderStore?.id) && lineSearch.trim().length >= 1,
+    },
   );
 
   const selectedProductQuery = trpc.products.getById.useQuery(
@@ -641,8 +644,12 @@ const SalesOrderDetailPage = () => {
                             </TableCell>
                             <TableCell>{line.variant?.name ?? t("variantBase")}</TableCell>
                             <TableCell>{line.qty}</TableCell>
-                            <TableCell>{formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}</TableCell>
-                            <TableCell>{formatKgsMoney(line.lineTotalKgs, locale, orderCurrencySource)}</TableCell>
+                            <TableCell>
+                              {formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
+                            </TableCell>
+                            <TableCell>
+                              {formatKgsMoney(line.lineTotalKgs, locale, orderCurrencySource)}
+                            </TableCell>
                             <TableCell>
                               <div className="flex justify-end">
                                 <RowActions

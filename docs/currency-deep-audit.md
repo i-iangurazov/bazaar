@@ -3,12 +3,14 @@
 ## Source Of Truth
 
 - Store currency is the display/catalog source of truth: `Store.currencyCode` and `Store.currencyRateKgsPerUnit`.
+- Historical transaction currency is now snapshotted on financial records: `CustomerOrder`, `RegisterShift`, `SalePayment`, `CashDrawerMovement`, `SaleReturn`, `FiscalReceipt`, `RefundRequest`, and `PurchaseOrder`.
 - Supported display currencies are centralized in `src/lib/currency.ts`: `KGS`, `USD`, and `GBP`.
 - `KGS` remains the base accounting/storage fallback because legacy financial columns are named and persisted as `*Kgs`.
 - Display conversion is centralized in `src/lib/currencyDisplay.ts`:
   - `formatKgsMoney` converts persisted KGS values to the selected store currency.
   - `displayMoneyToKgs` converts selected-currency cashier inputs back to KGS for storage.
   - `formatStoreMoney` formats values that are already store-denominated, such as purchase-order `unitCost`.
+  - `currencySourceWithFallback` prefers a saved transaction snapshot and falls back to current store currency only for older/incomplete rows.
   - `baseAccountingCurrency` is the explicit KGS base for platform/admin and integration surfaces without one store context.
 
 ## Audited Areas
@@ -41,6 +43,9 @@
 - All-store analytics and sales-order metrics now tell users that mixed-store totals are shown in base accounting currency.
 - Purchase-order unit-cost hints now state that the value is entered in the selected/order store currency rather than implying supplier-currency support.
 - Store-scoped product search snippets in purchase orders, sales order detail, POS, product detail, and sales order creation now pass store currency context to the shared search-result row.
+- Added nullable transaction currency snapshots and a safe backfill migration for historical sales, receipts, payments, returns, shifts, cash movements, refund requests, and purchase orders.
+- New POS, sales order, public catalog/API order, cash movement, return, fiscal receipt, and purchase-order writes now persist the transaction currency at creation/completion time.
+- POS history, receipt print payload/PDF, receipt registry, shifts, sales orders, purchase orders, and related exports now prefer saved transaction snapshots over current store settings.
 - README and the older currency/localization audit now document `en`, `ru`, and `kg` plus the current store-currency display model.
 
 ## Multi-Store Rule
@@ -72,10 +77,10 @@ The review searched for `KGS`, `сом`, `formatCurrencyKGS`, `currency: "KGS"`,
   - All-store report pages now explicitly label base-currency totals.
   - Purchase-order line copy now states that unit cost follows the selected/order store currency.
 - Deferred with reason:
-  - Historical sales/receipts still use current store currency/rate. Proper historical accuracy requires currency snapshots on persisted transaction records, which is a schema/product-design change outside this review.
-  - All-store mixed-currency reports remain base KGS. Per-row currencies or forced store selection should be decided in a reporting product pass.
-  - Purchase-order `unitCost` remains store-denominated by convention until a future schema pass makes the currency snapshot explicit.
+  - All-store mixed-currency reports remain base KGS. Per-row currencies, grouping by currency, or forced store selection should be decided in a reporting product pass.
+  - Purchase-order `unitCost` remains store-denominated by convention; the purchase order now carries a currency snapshot, but the line amount column is not renamed until a broader schema cleanup.
   - Generic product search rows in the command palette, reusable scan input, product form bundle editor, and product image studio have no single store context; they fall back through the centralized base currency until those flows get explicit store selection.
+  - Manually imported or hand-created legacy rows with null snapshots fall back to related store currency. This can be imperfect if they bypass the backfill and the store currency later changes.
 
 ## Intentional KGS Uses
 
@@ -87,6 +92,6 @@ The review searched for `KGS`, `сом`, `formatCurrencyKGS`, `currency: "KGS"`,
 
 ## Remaining Risks
 
-- Purchase-order `unitCost` is store-denominated by convention, not enforced by schema. A future schema migration should either rename it or add explicit currency snapshots.
-- Completed sales store currency is read from the current store settings. If a store changes currency after historical sales, historical display will use the latest store rate unless currency snapshots are added to orders/receipts.
+- Purchase-order `unitCost` is store-denominated by convention, not enforced by column naming. Purchase orders now snapshot the order currency, but a future schema migration should rename or document the line field more strongly.
+- Legacy rows without snapshots fall back to current store settings. The backfill migration covers existing normal production rows, but imported/manual rows can still be imperfect.
 - All-store reports remain base KGS; mixed-currency reporting needs a product decision before conversion.

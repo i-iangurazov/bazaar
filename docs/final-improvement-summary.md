@@ -1,5 +1,56 @@
 # Final Improvement Summary
 
+## Historical Currency Snapshots - 2026-05-05
+
+### Changed
+
+- Added nullable transaction currency snapshots to sales/orders, POS shifts, payments, cash drawer movements, returns, fiscal receipts, refund requests, and purchase orders.
+- Added a non-destructive schema migration plus a separate backfill migration that copies current store currency/rate into existing rows where possible.
+- Added `currencySourceWithFallback` and `resolveCurrencySnapshot` to centralize "snapshot first, store fallback second" behavior.
+- POS shift open, sale draft/complete, payment writes, sale returns, refund requests, cash movements, manual/API/catalog customer orders, fiscal receipt queueing, and purchase orders now persist transaction currency context.
+- POS sell/history/shifts, receipt registry, receipt print payload/PDF, sales order list/detail, purchase order list/detail/PDF, and receipt/shift/cash exports now display historical rows with saved snapshots instead of the current store currency.
+- Export rows for receipt registries, shift reports, and cash drawer movements now include `currencyCode` and `currencyRateKgsPerUnit` alongside KGS-backed amounts.
+- Review pass tightened receipt payload fallback so legacy rows can use a fiscal receipt snapshot before falling back to current store currency.
+- Added `docs/currency-snapshot-plan.md` and updated `docs/currency-deep-audit.md`.
+
+### Files Touched In This Slice
+
+- Schema/migrations: `prisma/schema.prisma`, `prisma/migrations/20260504194525_currency_snapshots`, `prisma/migrations/20260504194600_currency_snapshot_backfill`.
+- Helpers/services: `src/lib/currencyDisplay.ts`, `src/server/services/pos.ts`, `src/server/services/salesOrders.ts`, `src/server/services/purchaseOrders.ts`, `src/server/services/bazaarApi.ts`, `src/server/services/bazaarCatalog.ts`, `src/server/services/kkmConnector.ts`, `src/server/services/receiptPrintPayload.ts`, `src/server/services/exports.ts`.
+- UI/API display: POS pages, sales order pages, purchase order pages, purchase-order PDF route, and receipt registry.
+- Tests/docs: POS/catalog integration tests, currency/receipt unit tests, currency docs, and this summary.
+
+### Tests Added
+
+- Currency helper test proving saved snapshots beat current store currency and old rows fall back safely.
+- POS integration test proving sale, payment, shift, and cash movement snapshots survive a later store currency change.
+- Receipt print payload test proving receipt/PDF data uses the sale snapshot instead of current store currency.
+- Receipt print payload test proving fiscal receipt snapshot fallback beats current store currency for legacy rows.
+- POS refund integration assertions proving sale return and manual refund request snapshots are persisted.
+- Purchase-order PDF route assertion proving totals format through the purchase-order snapshot source.
+- Public catalog checkout integration expectation for persisted order currency snapshots.
+- Source-level purchase-order UI expectation updated for snapshot-aware order detail currency.
+
+### Remaining Risks
+
+- Snapshot fields preserve display currency/rate only; this is not a full multi-currency accounting ledger.
+- All-store mixed-currency aggregates remain base KGS unless a future reporting pass groups by currency or adds conversion rules.
+- Legacy/imported rows that bypass the backfill and keep null snapshots still fall back to related store currency, which can be imperfect after later currency changes.
+- `PurchaseOrderLine.unitCost` remains store-denominated by convention; purchase orders now snapshot currency, but the line field name still does not encode currency.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed: 95 files passed, 434 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed, including Prisma generation, environment preflight, Next build, static generation, and route trace collection.
+- `pnpm prisma migrate status` passed: database schema is up to date.
+- `pnpm prisma migrate dev` passed: already in sync, no pending migration.
+- `pnpm prisma generate` passed.
+
 ## Conservative Role Navigation Pass - 2026-05-05
 
 ### Changed

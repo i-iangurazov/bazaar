@@ -29,17 +29,12 @@ import {
 } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-import { formatStoreMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatStoreMoney } from "@/lib/currencyDisplay";
 import { formatDate } from "@/lib/i18nFormat";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -285,7 +280,11 @@ const PurchaseOrdersPage = () => {
                         onClick={handleBulkCancel}
                         disabled={bulkCanceling || !selectedList.length}
                       >
-                        {bulkCanceling ? <Spinner className="h-4 w-4" /> : <CloseIcon className="h-4 w-4" aria-hidden />}
+                        {bulkCanceling ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : (
+                          <CloseIcon className="h-4 w-4" aria-hidden />
+                        )}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>{t("bulkCancel")}</TooltipContent>
@@ -337,7 +336,9 @@ const PurchaseOrdersPage = () => {
                                 className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={selectedIds.has(po.id)}
                                 onChange={() => toggleSelect(po.id)}
-                                aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
+                                aria-label={t("selectPurchaseOrder", {
+                                  number: po.id.slice(0, 8).toUpperCase(),
+                                })}
                               />
                             </TableCell>
                           ) : null}
@@ -345,23 +346,28 @@ const PurchaseOrdersPage = () => {
                             {po.id.slice(0, 8).toUpperCase()}
                           </TableCell>
                           <TableCell>
-                            <Link className="font-medium text-foreground" href={`/purchase-orders/${po.id}`}>
+                            <Link
+                              className="font-medium text-foreground"
+                              href={`/purchase-orders/${po.id}`}
+                            >
                               {po.supplier?.name ?? tCommon("supplierUnassigned")}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{po.store.name}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {po.store.name}
+                          </TableCell>
                           <TableCell>
-                              <Badge
-                                variant={
-                                  po.status === "RECEIVED"
-                                    ? "success"
-                                    : po.status === "PARTIALLY_RECEIVED"
-                                      ? "warning"
-                                      : po.status === "CANCELLED"
-                                        ? "danger"
-                                        : "warning"
-                                }
-                              >
+                            <Badge
+                              variant={
+                                po.status === "RECEIVED"
+                                  ? "success"
+                                  : po.status === "PARTIALLY_RECEIVED"
+                                    ? "warning"
+                                    : po.status === "CANCELLED"
+                                      ? "danger"
+                                      : "warning"
+                              }
+                            >
                               {(() => {
                                 const Icon = statusIcon(po.status);
                                 return <Icon className="h-3 w-3" aria-hidden />;
@@ -370,9 +376,15 @@ const PurchaseOrdersPage = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {po.hasCost ? formatStoreMoney(po.total, locale, po.store) : tCommon("notAvailable")}
+                            {po.hasCost
+                              ? formatStoreMoney(
+                                  po.total,
+                                  locale,
+                                  currencySourceWithFallback(po, po.store),
+                                )
+                              : tCommon("notAvailable")}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                             {formatDate(po.createdAt, locale)}
                           </TableCell>
                           <TableCell>
@@ -402,7 +414,12 @@ const PurchaseOrdersPage = () => {
                                       className="text-danger shadow-none hover:text-danger"
                                       aria-label={t("cancelOrder")}
                                       onClick={async () => {
-                                        if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
+                                        if (
+                                          !(await confirm({
+                                            description: t("confirmCancel"),
+                                            confirmVariant: "danger",
+                                          }))
+                                        ) {
                                           return;
                                         }
                                         cancelMutation.mutate({ purchaseOrderId: po.id });
@@ -447,7 +464,12 @@ const PurchaseOrdersPage = () => {
                         variant: "danger",
                         disabled: cancelingId === po.id,
                         onSelect: async () => {
-                          if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
+                          if (
+                            !(await confirm({
+                              description: t("confirmCancel"),
+                              confirmVariant: "danger",
+                            }))
+                          ) {
                             return;
                           }
                           cancelMutation.mutate({ purchaseOrderId: po.id });
@@ -467,11 +489,15 @@ const PurchaseOrdersPage = () => {
                           className="mt-1 h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                           checked={selectedIds.has(po.id)}
                           onChange={() => toggleSelect(po.id)}
-                          aria-label={t("selectPurchaseOrder", { number: po.id.slice(0, 8).toUpperCase() })}
+                          aria-label={t("selectPurchaseOrder", {
+                            number: po.id.slice(0, 8).toUpperCase(),
+                          })}
                         />
                       ) : null}
                       <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">{po.id.slice(0, 8).toUpperCase()}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {po.id.slice(0, 8).toUpperCase()}
+                        </p>
                         <p className="truncate text-sm font-medium text-foreground">
                           {po.supplier?.name ?? tCommon("supplierUnassigned")}
                         </p>
@@ -500,7 +526,13 @@ const PurchaseOrdersPage = () => {
                       {status}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {po.hasCost ? formatStoreMoney(po.total, locale, po.store) : tCommon("notAvailable")}
+                      {po.hasCost
+                        ? formatStoreMoney(
+                            po.total,
+                            locale,
+                            currencySourceWithFallback(po, po.store),
+                          )
+                        : tCommon("notAvailable")}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {formatDate(po.createdAt, locale)}

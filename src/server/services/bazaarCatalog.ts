@@ -22,6 +22,7 @@ import {
   roundUpToCurrencyTens,
   type SupportedCurrencyCode,
 } from "@/lib/currency";
+import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
@@ -930,6 +931,12 @@ export const createCatalogCheckoutOrder = async (input: {
         organizationId: true,
         storeId: true,
         status: true,
+        store: {
+          select: {
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
       },
     });
     if (!catalog || catalog.status !== BazaarCatalogStatus.PUBLISHED) {
@@ -1070,6 +1077,7 @@ export const createCatalogCheckoutOrder = async (input: {
         notes: normalizeOptionalText(input.comment),
         subtotalKgs: subtotal,
         totalKgs: subtotal,
+        ...resolveCurrencySnapshot(catalog.store),
         lines: {
           create: lines,
         },

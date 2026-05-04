@@ -10,12 +10,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { DownloadIcon, PrintIcon } from "@/components/icons";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
-import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
@@ -54,7 +67,9 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const now = useMemo(() => new Date(), []);
   const [storeId, setStoreId] = useState("");
   const [status, setStatus] = useState<"ALL" | CustomerOrderStatus>("ALL");
-  const [fromDate, setFromDate] = useState(formatDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)));
+  const [fromDate, setFromDate] = useState(
+    formatDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)),
+  );
   const [toDate, setToDate] = useState(formatDateInput(now));
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
   const [receiptAction, setReceiptAction] = useState<{
@@ -99,24 +114,27 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     return tPos("history.kkmStatusNotSent");
   };
 
-  const exportRows = (receiptsQuery.data?.items ?? []).map((receipt) => [
-    receipt.number,
-    receipt.createdAt ? new Date(receipt.createdAt).toISOString() : "",
-    receipt.store.code,
-    receipt.store.name,
-    receipt.register?.code ?? "",
-    receipt.cashier?.email ?? "",
-    formatKgsMoney(receipt.totalKgs, locale, receipt.store),
-    formatKgsMoney(receipt.paymentBreakdown.CASH ?? 0, locale, receipt.store),
-    formatKgsMoney(receipt.paymentBreakdown.CARD ?? 0, locale, receipt.store),
-    formatKgsMoney(receipt.paymentBreakdown.TRANSFER ?? 0, locale, receipt.store),
-    formatKgsMoney(receipt.paymentBreakdown.OTHER ?? 0, locale, receipt.store),
-    receipt.status,
-    receipt.kkmStatus,
-    receipt.fiscalReceipt?.id ?? "",
-    receipt.fiscalReceipt?.fiscalNumber ?? "",
-    receipt.fiscalReceipt?.lastError ?? "",
-  ]);
+  const exportRows = (receiptsQuery.data?.items ?? []).map((receipt) => {
+    const currencySource = currencySourceWithFallback(receipt, receipt.store);
+    return [
+      receipt.number,
+      receipt.createdAt ? new Date(receipt.createdAt).toISOString() : "",
+      receipt.store.code,
+      receipt.store.name,
+      receipt.register?.code ?? "",
+      receipt.cashier?.email ?? "",
+      formatKgsMoney(receipt.totalKgs, locale, currencySource),
+      formatKgsMoney(receipt.paymentBreakdown.CASH ?? 0, locale, currencySource),
+      formatKgsMoney(receipt.paymentBreakdown.CARD ?? 0, locale, currencySource),
+      formatKgsMoney(receipt.paymentBreakdown.TRANSFER ?? 0, locale, currencySource),
+      formatKgsMoney(receipt.paymentBreakdown.OTHER ?? 0, locale, currencySource),
+      receipt.status,
+      receipt.kkmStatus,
+      receipt.fiscalReceipt?.id ?? "",
+      receipt.fiscalReceipt?.fiscalNumber ?? "",
+      receipt.fiscalReceipt?.lastError ?? "",
+    ];
+  });
 
   const handleExportCurrentView = () => {
     downloadTableFile({
@@ -184,7 +202,10 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
               <CardTitle>{t("filtersTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-5">
-              <Select value={storeId || "all"} onValueChange={(value) => setStoreId(value === "all" ? "" : value)}>
+              <Select
+                value={storeId || "all"}
+                onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
+              >
                 <SelectTrigger aria-label={t("storeLabel")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
@@ -198,7 +219,10 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                 </SelectContent>
               </Select>
 
-              <Select value={status} onValueChange={(value) => setStatus(value as "ALL" | CustomerOrderStatus)}>
+              <Select
+                value={status}
+                onValueChange={(value) => setStatus(value as "ALL" | CustomerOrderStatus)}
+              >
                 <SelectTrigger aria-label={t("statusLabel")}>
                   <SelectValue />
                 </SelectTrigger>
@@ -227,7 +251,10 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
               />
 
               <div className="flex gap-2">
-                <Select value={downloadFormat} onValueChange={(value) => setDownloadFormat(value as DownloadFormat)}>
+                <Select
+                  value={downloadFormat}
+                  onValueChange={(value) => setDownloadFormat(value as DownloadFormat)}
+                >
                   <SelectTrigger aria-label={tExports("formatLabel")}>
                     <SelectValue />
                   </SelectTrigger>
@@ -255,7 +282,9 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                   {tCommon("loading")}
                 </div>
               ) : receiptsQuery.error ? (
-                <div className="text-sm text-danger">{translateError(tErrors, receiptsQuery.error)}</div>
+                <div className="text-sm text-danger">
+                  {translateError(tErrors, receiptsQuery.error)}
+                </div>
               ) : (receiptsQuery.data?.items ?? []).length ? (
                 <ResponsiveDataList
                   items={receiptsQuery.data?.items ?? []}
@@ -289,20 +318,32 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                               <TableCell className="text-xs text-muted-foreground">
                                 {item.cashier?.name ?? item.cashier?.email ?? t("unknownCashier")}
                               </TableCell>
-                              <TableCell>{formatKgsMoney(item.totalKgs, locale, item.store)}</TableCell>
+                              <TableCell>
+                                {formatKgsMoney(
+                                  item.totalKgs,
+                                  locale,
+                                  currencySourceWithFallback(item, item.store),
+                                )}
+                              </TableCell>
                               <TableCell className="text-xs text-muted-foreground">
                                 {paymentMethods
                                   .filter((method) => (item.paymentBreakdown[method] ?? 0) > 0)
                                   .map(
                                     (method) =>
-                                      `${tPos(`payments.${method.toLowerCase()}`)}: ${formatKgsMoney(item.paymentBreakdown[method] ?? 0, locale, item.store)}`,
+                                      `${tPos(`payments.${method.toLowerCase()}`)}: ${formatKgsMoney(
+                                        item.paymentBreakdown[method] ?? 0,
+                                        locale,
+                                        currencySourceWithFallback(item, item.store),
+                                      )}`,
                                   )
                                   .join(" · ") || tCommon("notAvailable")}
                               </TableCell>
                               <TableCell>{statusLabel(item.status)}</TableCell>
                               <TableCell className="text-xs text-muted-foreground">
                                 {kkmStatusLabel(item.kkmStatus)}
-                                {item.fiscalReceipt?.lastError ? ` · ${item.fiscalReceipt.lastError}` : ""}
+                                {item.fiscalReceipt?.lastError
+                                  ? ` · ${item.fiscalReceipt.lastError}`
+                                  : ""}
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
@@ -312,9 +353,12 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                     size="icon"
                                     aria-label={tPos("history.printPrecheck")}
                                     disabled={Boolean(receiptAction)}
-                                    onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
+                                    onClick={() =>
+                                      void handleReceiptPdf(item.id, item.number, "print")
+                                    }
                                   >
-                                    {receiptAction?.saleId === item.id && receiptAction.mode === "print" ? (
+                                    {receiptAction?.saleId === item.id &&
+                                    receiptAction.mode === "print" ? (
                                       <Spinner className="h-4 w-4" />
                                     ) : (
                                       <PrintIcon className="h-4 w-4" aria-hidden />
@@ -326,9 +370,12 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                     size="icon"
                                     aria-label={tPos("history.downloadPrecheck")}
                                     disabled={Boolean(receiptAction)}
-                                    onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
+                                    onClick={() =>
+                                      void handleReceiptPdf(item.id, item.number, "download")
+                                    }
                                   >
-                                    {receiptAction?.saleId === item.id && receiptAction.mode === "download" ? (
+                                    {receiptAction?.saleId === item.id &&
+                                    receiptAction.mode === "download" ? (
                                       <Spinner className="h-4 w-4" />
                                     ) : (
                                       <DownloadIcon className="h-4 w-4" aria-hidden />
@@ -346,16 +393,26 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                     <div className="rounded-none border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-semibold text-foreground">{item.number}</p>
-                        <span className="text-xs text-muted-foreground">{statusLabel(item.status)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {statusLabel(item.status)}
+                        </span>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(item.createdAt, locale)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDateTime(item.createdAt, locale)}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {item.store.name} ({item.store.code})
                       </p>
                       <p className="mt-2 text-sm font-semibold text-foreground">
-                        {formatKgsMoney(item.totalKgs, locale, item.store)}
+                        {formatKgsMoney(
+                          item.totalKgs,
+                          locale,
+                          currencySourceWithFallback(item, item.store),
+                        )}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">{kkmStatusLabel(item.kkmStatus)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {kkmStatusLabel(item.kkmStatus)}
+                      </p>
                       <div className="mt-3 flex gap-2">
                         <Button
                           type="button"

@@ -17,6 +17,7 @@ import { eventBus } from "@/server/events/eventBus";
 import type { FiscalReceiptDraft } from "@/server/kkm/adapter";
 import { getKkmAdapter } from "@/server/kkm/registry";
 import { getLogger } from "@/server/logging";
+import { currencySourceWithFallback, resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import {
   incrementCounter,
   kkmReceiptsFailedTotal,
@@ -242,10 +243,7 @@ const recomputeSaleTotals = async (
   });
 };
 
-const recomputeSaleReturnTotals = async (
-  tx: Prisma.TransactionClient,
-  saleReturnId: string,
-) => {
+const recomputeSaleReturnTotals = async (tx: Prisma.TransactionClient, saleReturnId: string) => {
   const aggregate = await tx.saleReturnLine.aggregate({
     where: { saleReturnId },
     _sum: { lineTotalKgs: true },
@@ -260,10 +258,13 @@ const recomputeSaleReturnTotals = async (
   });
 };
 
-const requireOpenShift = async (tx: Prisma.TransactionClient, input: {
-  organizationId: string;
-  registerId: string;
-}) => {
+const requireOpenShift = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    registerId: string;
+  },
+) => {
   const shift = await tx.registerShift.findFirst({
     where: {
       organizationId: input.organizationId,
@@ -273,7 +274,19 @@ const requireOpenShift = async (tx: Prisma.TransactionClient, input: {
     orderBy: { openedAt: "desc" },
     include: {
       register: {
-        select: { id: true, storeId: true, code: true, name: true, isActive: true },
+        select: {
+          id: true,
+          storeId: true,
+          code: true,
+          name: true,
+          isActive: true,
+          store: {
+            select: {
+              currencyCode: true,
+              currencyRateKgsPerUnit: true,
+            },
+          },
+        },
       },
     },
   });
@@ -316,10 +329,13 @@ const normalizeMarkingCodes = (codes: string[]) => {
   return Array.from(unique);
 };
 
-const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
-  organizationId: string;
-  shiftId: string;
-}) => {
+const loadShiftReport = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    shiftId: string;
+  },
+) => {
   const shift = await tx.registerShift.findFirst({
     where: { id: input.shiftId, organizationId: input.organizationId },
     include: {
@@ -438,9 +454,7 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
   const persistedExpectedCashKgs = shift.expectedCashKgs
     ? toMoney(shift.expectedCashKgs)
     : expectedCashKgs;
-  const countedCashKgs = shift.closingCashCountedKgs
-    ? toMoney(shift.closingCashCountedKgs)
-    : null;
+  const countedCashKgs = shift.closingCashCountedKgs ? toMoney(shift.closingCashCountedKgs) : null;
   const discrepancyKgs =
     countedCashKgs === null
       ? null
@@ -459,7 +473,8 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
       closingCashCountedKgs: countedCashKgs,
       expectedCashKgs: persistedExpectedCashKgs,
       discrepancyKgs,
-      differenceStatus: discrepancyKgs === null ? null : resolveCashDifferenceStatus(discrepancyKgs),
+      differenceStatus:
+        discrepancyKgs === null ? null : resolveCashDifferenceStatus(discrepancyKgs),
       notes: shift.notes,
       register: shift.register,
       store: shift.store,
@@ -479,10 +494,7 @@ const loadShiftReport = async (tx: Prisma.TransactionClient, input: {
   };
 };
 
-export const listPosRegisters = async (input: {
-  organizationId: string;
-  storeId?: string;
-}) => {
+export const listPosRegisters = async (input: { organizationId: string; storeId?: string }) => {
   const registers = await prisma.posRegister.findMany({
     where: {
       organizationId: input.organizationId,
@@ -609,10 +621,7 @@ export const updatePosRegister = async (input: {
   });
 };
 
-export const getPosEntry = async (input: {
-  organizationId: string;
-  registerId?: string;
-}) => {
+export const getPosEntry = async (input: { organizationId: string; registerId?: string }) => {
   const registers = await listPosRegisters({ organizationId: input.organizationId });
   if (!registers.length) {
     return {
@@ -659,7 +668,18 @@ export const openRegisterShift = async (input: {
       async () => {
         const register = await tx.posRegister.findFirst({
           where: { id: input.registerId, organizationId: input.organizationId },
-          select: { id: true, isActive: true, storeId: true, code: true },
+          select: {
+            id: true,
+            isActive: true,
+            storeId: true,
+            code: true,
+            store: {
+              select: {
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+          },
         });
         if (!register) {
           throw new AppError("posRegisterNotFound", "NOT_FOUND", 404);
@@ -688,6 +708,7 @@ export const openRegisterShift = async (input: {
             status: RegisterShiftStatus.OPEN,
             openedById: input.actorId,
             openingCashKgs: roundMoney(input.openingCashKgs),
+            ...resolveCurrencySnapshot(register.store),
             notes: input.notes ?? null,
           },
         });
@@ -764,7 +785,9 @@ export const getCurrentRegisterShift = async (input: {
   return {
     ...shift,
     openingCashKgs: toMoney(shift.openingCashKgs),
-    closingCashCountedKgs: shift.closingCashCountedKgs ? toMoney(shift.closingCashCountedKgs) : null,
+    closingCashCountedKgs: shift.closingCashCountedKgs
+      ? toMoney(shift.closingCashCountedKgs)
+      : null,
     expectedCashKgs: shift.expectedCashKgs ? toMoney(shift.expectedCashKgs) : null,
   };
 };
@@ -810,7 +833,9 @@ export const listRegisterShifts = async (input: {
     items: items.map((item) => ({
       ...item,
       openingCashKgs: toMoney(item.openingCashKgs),
-      closingCashCountedKgs: item.closingCashCountedKgs ? toMoney(item.closingCashCountedKgs) : null,
+      closingCashCountedKgs: item.closingCashCountedKgs
+        ? toMoney(item.closingCashCountedKgs)
+        : null,
       expectedCashKgs: item.expectedCashKgs ? toMoney(item.expectedCashKgs) : null,
       discrepancyKgs:
         item.expectedCashKgs && item.closingCashCountedKgs
@@ -835,10 +860,7 @@ export const listRegisterShifts = async (input: {
   };
 };
 
-export const getShiftXReport = async (input: {
-  organizationId: string;
-  shiftId: string;
-}) => {
+export const getShiftXReport = async (input: { organizationId: string; shiftId: string }) => {
   return prisma.$transaction(async (tx) => loadShiftReport(tx, input));
 };
 
@@ -1016,6 +1038,9 @@ export const createPosSaleDraft = async (input: {
       }
 
       const number = await nextPosSaleNumber(tx, input.organizationId);
+      const transactionCurrency = resolveCurrencySnapshot(
+        currencySourceWithFallback(shift, shift.register.store),
+      );
       const order = await tx.customerOrder.create({
         data: {
           organizationId: input.organizationId,
@@ -1028,6 +1053,7 @@ export const createPosSaleDraft = async (input: {
           customerName: input.customerName ?? null,
           customerPhone: input.customerPhone ?? null,
           notes: input.notes ?? null,
+          ...transactionCurrency,
           createdById: input.actorId,
           updatedById: input.actorId,
         },
@@ -1233,7 +1259,7 @@ export const listPosSales = async (input: {
           ],
         }
       : {}),
-    ...((input.dateFrom || input.dateTo)
+    ...(input.dateFrom || input.dateTo
       ? {
           createdAt: {
             ...(input.dateFrom ? { gte: input.dateFrom } : {}),
@@ -1259,7 +1285,15 @@ export const listPosSales = async (input: {
         },
         register: { select: { id: true, name: true, code: true } },
         payments: {
-          select: { id: true, method: true, amountKgs: true, isRefund: true, createdAt: true },
+          select: {
+            id: true,
+            method: true,
+            amountKgs: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+            isRefund: true,
+            createdAt: true,
+          },
           orderBy: { createdAt: "asc" },
         },
         saleReturns: {
@@ -1279,7 +1313,9 @@ export const listPosSales = async (input: {
 
   return {
     items: items.map((item) => ({
-      returnedTotalKgs: roundMoney(item.saleReturns.reduce((sum, row) => sum + toMoney(row.totalKgs), 0)),
+      returnedTotalKgs: roundMoney(
+        item.saleReturns.reduce((sum, row) => sum + toMoney(row.totalKgs), 0),
+      ),
       ...item,
       subtotalKgs: toMoney(item.subtotalKgs),
       totalKgs: toMoney(item.totalKgs),
@@ -1294,10 +1330,7 @@ export const listPosSales = async (input: {
   };
 };
 
-export const getPosSale = async (input: {
-  organizationId: string;
-  saleId: string;
-}) => {
+export const getPosSale = async (input: { organizationId: string; saleId: string }) => {
   const sale = await prisma.customerOrder.findFirst({
     where: {
       id: input.saleId,
@@ -1334,18 +1367,18 @@ export const getPosSale = async (input: {
           product: {
             select: {
               id: true,
-                sku: true,
-                name: true,
-                isBundle: true,
-                complianceFlags: {
-                  select: {
-                    requiresMarking: true,
-                    markingType: true,
-                  },
+              sku: true,
+              name: true,
+              isBundle: true,
+              complianceFlags: {
+                select: {
+                  requiresMarking: true,
+                  markingType: true,
                 },
-                baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
               },
+              baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
             },
+          },
           variant: { select: { id: true, name: true } },
           markingCodeCaptures: {
             where: { status: MarkingCodeStatus.CAPTURED },
@@ -1560,9 +1593,7 @@ export const updatePosSaleLine = async (input: {
         qty: input.qty,
         lineTotalKgs: roundMoney(toMoney(line.unitPriceKgs) * input.qty),
         lineCostTotalKgs:
-          line.unitCostKgs === null
-            ? null
-            : roundMoney(toMoney(line.unitCostKgs) * input.qty),
+          line.unitCostKgs === null ? null : roundMoney(toMoney(line.unitCostKgs) * input.qty),
       },
     });
 
@@ -1766,7 +1797,7 @@ export const listPosReceipts = async (input: {
     ...(input.registerId ? { registerId: input.registerId } : {}),
     ...(input.cashierId ? { createdById: input.cashierId } : {}),
     ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
-    ...((input.dateFrom || input.dateTo)
+    ...(input.dateFrom || input.dateTo
       ? {
           createdAt: {
             ...(input.dateFrom ? { gte: input.dateFrom } : {}),
@@ -1802,7 +1833,12 @@ export const listPosReceipts = async (input: {
         createdBy: { select: { id: true, name: true, email: true } },
         payments: {
           where: { isRefund: false },
-          select: { method: true, amountKgs: true },
+          select: {
+            method: true,
+            amountKgs: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
         },
         fiscalReceipts: {
           orderBy: { createdAt: "desc" },
@@ -1853,6 +1889,8 @@ export const listPosReceipts = async (input: {
         completedAt: item.completedAt,
         totalKgs: toMoney(item.totalKgs),
         subtotalKgs: toMoney(item.subtotalKgs),
+        currencyCode: item.currencyCode,
+        currencyRateKgsPerUnit: item.currencyRateKgsPerUnit,
         customerName: item.customerName,
         customerPhone: item.customerPhone,
         store: item.store,
@@ -1913,7 +1951,13 @@ export const completePosSale = async (input: {
               },
             },
             store: {
-              select: { id: true, name: true, code: true },
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
             },
           },
         });
@@ -1935,6 +1979,8 @@ export const completePosSale = async (input: {
             status: true,
             registerId: true,
             storeId: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
           },
         });
         if (!shift) {
@@ -1973,6 +2019,9 @@ export const completePosSale = async (input: {
         if (Math.abs(paymentsTotal - orderTotal) > 0.009) {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }
+        const transactionCurrency = resolveCurrencySnapshot(
+          currencySourceWithFallback(sale, currencySourceWithFallback(shift, sale.store)),
+        );
 
         const compliance = await tx.storeComplianceProfile.findUnique({
           where: { storeId: sale.storeId },
@@ -1985,10 +2034,7 @@ export const completePosSale = async (input: {
           },
         });
 
-        if (
-          compliance?.enableMarking &&
-          compliance.markingMode === MarkingMode.REQUIRED_ON_SALE
-        ) {
+        if (compliance?.enableMarking && compliance.markingMode === MarkingMode.REQUIRED_ON_SALE) {
           const productIds = Array.from(new Set(sale.lines.map((line) => line.productId)));
           const requiredFlags = productIds.length
             ? await tx.productComplianceFlags.findMany({
@@ -2045,6 +2091,7 @@ export const completePosSale = async (input: {
             customerOrderId: sale.id,
             method: payment.method,
             amountKgs: payment.amountKgs,
+            ...transactionCurrency,
             providerRef: payment.providerRef,
             isRefund: false,
             createdById: input.actorId,
@@ -2057,6 +2104,7 @@ export const completePosSale = async (input: {
             status: CustomerOrderStatus.COMPLETED,
             completedAt: new Date(),
             completedEventId: input.idempotencyKey,
+            ...transactionCurrency,
             updatedById: input.actorId,
           },
         });
@@ -2073,9 +2121,7 @@ export const completePosSale = async (input: {
         });
 
         const kkmMode =
-          compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF
-            ? compliance.kkmMode
-            : null;
+          compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF ? compliance.kkmMode : null;
         const kkmCandidate: FiscalReceiptDraft | null = kkmMode
           ? {
               storeId: sale.storeId,
@@ -2110,6 +2156,7 @@ export const completePosSale = async (input: {
               idempotencyKey: `pos-sale:${sale.id}:${input.idempotencyKey}`,
               mode: kkmMode ?? KkmMode.EXPORT_ONLY,
               providerKey: compliance?.kkmProviderKey ?? null,
+              ...transactionCurrency,
               payload: kkmCandidate,
             })
           : null;
@@ -2257,7 +2304,19 @@ export const createSaleReturnDraft = async (input: {
         organizationId: input.organizationId,
         status: RegisterShiftStatus.OPEN,
       },
-      select: { id: true, registerId: true, storeId: true },
+      select: {
+        id: true,
+        registerId: true,
+        storeId: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+        store: {
+          select: {
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
+      },
     });
     if (!shift) {
       throw new AppError("posShiftNotOpen", "CONFLICT", 409);
@@ -2273,6 +2332,14 @@ export const createSaleReturnDraft = async (input: {
       select: {
         id: true,
         storeId: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+        store: {
+          select: {
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
       },
     });
     if (!originalSale) {
@@ -2283,6 +2350,9 @@ export const createSaleReturnDraft = async (input: {
     }
 
     const number = await nextPosReturnNumber(tx, input.organizationId);
+    const transactionCurrency = resolveCurrencySnapshot(
+      currencySourceWithFallback(originalSale, currencySourceWithFallback(shift, shift.store)),
+    );
 
     const created = await tx.saleReturn.create({
       data: {
@@ -2293,6 +2363,7 @@ export const createSaleReturnDraft = async (input: {
         originalSaleId: originalSale.id,
         number,
         notes: input.notes ?? null,
+        ...transactionCurrency,
         createdById: input.actorId,
       },
     });
@@ -2312,11 +2383,14 @@ export const createSaleReturnDraft = async (input: {
   });
 };
 
-const assertReturnLineAvailable = async (tx: Prisma.TransactionClient, input: {
-  customerOrderLineId: string;
-  requestedQty: number;
-  excludeReturnLineId?: string;
-}) => {
+const assertReturnLineAvailable = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    customerOrderLineId: string;
+    requestedQty: number;
+    excludeReturnLineId?: string;
+  },
+) => {
   const orderLine = await tx.customerOrderLine.findUnique({
     where: { id: input.customerOrderLineId },
     include: {
@@ -2482,9 +2556,7 @@ export const updateSaleReturnLine = async (input: {
         qty: input.qty,
         lineTotalKgs: roundMoney(toMoney(line.unitPriceKgs) * input.qty),
         lineCostTotalKgs:
-          line.unitCostKgs === null
-            ? null
-            : roundMoney(toMoney(line.unitCostKgs) * input.qty),
+          line.unitCostKgs === null ? null : roundMoney(toMoney(line.unitCostKgs) * input.qty),
       },
     });
 
@@ -2610,10 +2682,7 @@ export const listSaleReturns = async (input: {
   };
 };
 
-export const getSaleReturn = async (input: {
-  organizationId: string;
-  saleReturnId: string;
-}) => {
+export const getSaleReturn = async (input: { organizationId: string; saleReturnId: string }) => {
   const saleReturn = await prisma.saleReturn.findFirst({
     where: {
       id: input.saleReturnId,
@@ -2736,7 +2805,11 @@ export const completeSaleReturn = async (input: {
             organizationId: input.organizationId,
             status: RegisterShiftStatus.OPEN,
           },
-          select: { id: true },
+          select: {
+            id: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
         });
         if (!shift) {
           throw new AppError("posShiftNotOpen", "CONFLICT", 409);
@@ -2752,6 +2825,14 @@ export const completeSaleReturn = async (input: {
           select: {
             id: true,
             shiftId: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+            store: {
+              select: {
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
             payments: {
               where: { isRefund: false },
               select: { method: true },
@@ -2771,6 +2852,15 @@ export const completeSaleReturn = async (input: {
         const originalHasQrLike = originalSale.payments.some(
           (payment) => payment.method === PosPaymentMethod.TRANSFER,
         );
+        const transactionCurrency = resolveCurrencySnapshot(
+          currencySourceWithFallback(
+            saleReturn,
+            currencySourceWithFallback(
+              originalSale,
+              currencySourceWithFallback(shift, originalSale.store),
+            ),
+          ),
+        );
 
         if (
           refundHasCard &&
@@ -2787,18 +2877,16 @@ export const completeSaleReturn = async (input: {
               storeId: saleReturn.storeId,
               saleReturnId: saleReturn.id,
               originalSaleId: saleReturn.originalSaleId,
-              paymentMethod: refundHasQrLike
-                ? PosPaymentMethod.TRANSFER
-                : PosPaymentMethod.OTHER,
+              paymentMethod: refundHasQrLike ? PosPaymentMethod.TRANSFER : PosPaymentMethod.OTHER,
+              ...transactionCurrency,
               reasonCode: "MKASSA_QR_MANUAL",
               notes: saleReturn.notes,
               createdById: input.actorId,
               status: RefundRequestStatus.OPEN,
             },
             update: {
-              paymentMethod: refundHasQrLike
-                ? PosPaymentMethod.TRANSFER
-                : PosPaymentMethod.OTHER,
+              paymentMethod: refundHasQrLike ? PosPaymentMethod.TRANSFER : PosPaymentMethod.OTHER,
+              ...transactionCurrency,
               reasonCode: "MKASSA_QR_MANUAL",
               notes: saleReturn.notes,
               status: RefundRequestStatus.OPEN,
@@ -2810,6 +2898,7 @@ export const completeSaleReturn = async (input: {
             data: {
               status: PosReturnStatus.CANCELED,
               canceledAt: new Date(),
+              ...transactionCurrency,
               notes: saleReturn.notes
                 ? `${saleReturn.notes}\n[MANUAL_REFUND_REQUIRED]`
                 : "[MANUAL_REFUND_REQUIRED]",
@@ -2877,6 +2966,7 @@ export const completeSaleReturn = async (input: {
             saleReturnId: saleReturn.id,
             method: payment.method,
             amountKgs: payment.amountKgs,
+            ...transactionCurrency,
             providerRef: payment.providerRef,
             isRefund: true,
             createdById: input.actorId,
@@ -2889,6 +2979,7 @@ export const completeSaleReturn = async (input: {
             status: PosReturnStatus.COMPLETED,
             completedAt: new Date(),
             completedEventId: input.idempotencyKey,
+            ...transactionCurrency,
             completedById: input.actorId,
           },
         });
@@ -3171,7 +3262,19 @@ export const recordCashDrawerMovement = async (input: {
             id: input.shiftId,
             organizationId: input.organizationId,
           },
-          select: { id: true, storeId: true, status: true },
+          select: {
+            id: true,
+            storeId: true,
+            status: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+            store: {
+              select: {
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+          },
         });
         if (!shift) {
           throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
@@ -3187,6 +3290,7 @@ export const recordCashDrawerMovement = async (input: {
             shiftId: shift.id,
             type: input.type,
             amountKgs: roundMoney(input.amountKgs),
+            ...resolveCurrencySnapshot(currencySourceWithFallback(shift, shift.store)),
             reason: input.reason,
             createdById: input.actorId,
           },

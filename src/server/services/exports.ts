@@ -41,6 +41,8 @@ type StoreSummary = {
   id: string;
   name: string;
   code: string;
+  currencyCode: string;
+  currencyRateKgsPerUnit: Prisma.Decimal;
 };
 
 export type ExportFormat = "csv" | "xlsx";
@@ -81,7 +83,10 @@ const buildExportFile = (
 ) => {
   if (format === "xlsx") {
     const workbook = XLSX.utils.book_new();
-    const values = [header, ...rows.map((row) => keys.map((key) => sanitizeSpreadsheetValue(row[key])))];
+    const values = [
+      header,
+      ...rows.map((row) => keys.map((key) => sanitizeSpreadsheetValue(row[key]))),
+    ];
     const worksheet = XLSX.utils.aoa_to_sheet(values);
     XLSX.utils.book_append_sheet(workbook, worksheet, "export");
     const content = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
@@ -114,7 +119,10 @@ const resolveComplianceFlags = async (
 
 const loadComplianceFlags = async (organizationId: string, productIds: string[]) => {
   if (!productIds.length) {
-    return new Map<string, { requiresMarking: boolean; requiresEttn: boolean; markingType: string | null }>();
+    return new Map<
+      string,
+      { requiresMarking: boolean; requiresEttn: boolean; markingType: string | null }
+    >();
   }
   const flags = await prisma.productComplianceFlags.findMany({
     where: { organizationId, productId: { in: productIds } },
@@ -248,7 +256,9 @@ const buildPurchasesRows = async (
     },
     include: {
       supplier: true,
-      lines: { include: { product: { select: { id: true, sku: true, name: true } }, variant: true } },
+      lines: {
+        include: { product: { select: { id: true, sku: true, name: true } }, variant: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -487,6 +497,9 @@ const buildReceiptsRegistryRows = async (
       registerCode: receipt.register?.code ?? "",
       registerName: receipt.register?.name ?? "",
       cashierEmail: receipt.createdBy?.email ?? "",
+      currencyCode: receipt.currencyCode ?? store.currencyCode,
+      currencyRateKgsPerUnit:
+        receipt.currencyRateKgsPerUnit?.toString?.() ?? store.currencyRateKgsPerUnit.toString(),
       totalKgs: Number(receipt.totalKgs),
       cashKgs: payments.cash,
       cardKgs: payments.card,
@@ -616,6 +629,9 @@ const buildShiftReportRows = async (
       reportType: mode === "x" ? "SHIFT_X" : "SHIFT_Z",
       shiftId: shift.id,
       status: shift.status,
+      currencyCode: shift.currencyCode ?? store.currencyCode,
+      currencyRateKgsPerUnit:
+        shift.currencyRateKgsPerUnit?.toString?.() ?? store.currencyRateKgsPerUnit.toString(),
       registerCode: shift.register.code,
       registerName: shift.register.name,
       openedAt: shift.openedAt.toISOString(),
@@ -700,19 +716,27 @@ const buildSalesByItemRows = async (
     },
   });
 
-  const grouped = new Map<string, { sku: string; productName: string; variantSku: string; variantName: string; qty: number; revenueKgs: number }>();
+  const grouped = new Map<
+    string,
+    {
+      sku: string;
+      productName: string;
+      variantSku: string;
+      variantName: string;
+      qty: number;
+      revenueKgs: number;
+    }
+  >();
   for (const line of lines) {
     const key = `${line.product.sku}:${line.variant?.sku ?? "BASE"}`;
-    const entry =
-      grouped.get(key) ??
-      {
-        sku: line.product.sku,
-        productName: line.product.name,
-        variantSku: line.variant?.sku ?? "",
-        variantName: line.variant?.name ?? "",
-        qty: 0,
-        revenueKgs: 0,
-      };
+    const entry = grouped.get(key) ?? {
+      sku: line.product.sku,
+      productName: line.product.name,
+      variantSku: line.variant?.sku ?? "",
+      variantName: line.variant?.name ?? "",
+      qty: 0,
+      revenueKgs: 0,
+    };
     entry.qty += line.qty;
     entry.revenueKgs = roundMoney(entry.revenueKgs + Number(line.lineTotalKgs));
     grouped.set(key, entry);
@@ -787,19 +811,27 @@ const buildReturnsByItemRows = async (
     },
   });
 
-  const grouped = new Map<string, { sku: string; productName: string; variantSku: string; variantName: string; qty: number; returnsTotalKgs: number }>();
+  const grouped = new Map<
+    string,
+    {
+      sku: string;
+      productName: string;
+      variantSku: string;
+      variantName: string;
+      qty: number;
+      returnsTotalKgs: number;
+    }
+  >();
   for (const line of lines) {
     const key = `${line.product.sku}:${line.variant?.sku ?? "BASE"}`;
-    const entry =
-      grouped.get(key) ??
-      {
-        sku: line.product.sku,
-        productName: line.product.name,
-        variantSku: line.variant?.sku ?? "",
-        variantName: line.variant?.name ?? "",
-        qty: 0,
-        returnsTotalKgs: 0,
-      };
+    const entry = grouped.get(key) ?? {
+      sku: line.product.sku,
+      productName: line.product.name,
+      variantSku: line.variant?.sku ?? "",
+      variantName: line.variant?.name ?? "",
+      qty: 0,
+      returnsTotalKgs: 0,
+    };
     entry.qty += line.qty;
     entry.returnsTotalKgs = roundMoney(entry.returnsTotalKgs + Number(line.lineTotalKgs));
     grouped.set(key, entry);
@@ -839,6 +871,9 @@ const buildCashDrawerMovementRows = async (
     registerCode: row.shift.register.code,
     registerName: row.shift.register.name,
     type: row.type,
+    currencyCode: row.currencyCode ?? store.currencyCode,
+    currencyRateKgsPerUnit:
+      row.currencyRateKgsPerUnit?.toString?.() ?? store.currencyRateKgsPerUnit.toString(),
     amountKgs: Number(row.amountKgs),
     reason: row.reason,
     createdBy: row.createdBy?.email ?? "",
@@ -960,7 +995,16 @@ const buildInventoryMovementsLedgerRows = async (
   const movements = await prisma.stockMovement.findMany({
     where: { storeId: store.id, createdAt: { gte: periodStart, lte: periodEnd } },
     include: {
-      product: { select: { id: true, sku: true, name: true, unit: true, basePriceKgs: true, barcodes: { select: { value: true } } } },
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          unit: true,
+          basePriceKgs: true,
+          barcodes: { select: { value: true } },
+        },
+      },
       variant: { select: { id: true, name: true, sku: true } },
       createdBy: { select: { email: true } },
     },
@@ -1058,7 +1102,12 @@ const buildPurchasesReceiptsRows = async (
     },
     include: {
       supplier: true,
-      lines: { include: { product: { select: { sku: true, name: true, unit: true } }, variant: { select: { sku: true } } } },
+      lines: {
+        include: {
+          product: { select: { sku: true, name: true, unit: true } },
+          variant: { select: { sku: true } },
+        },
+      },
     },
   });
 
@@ -1478,6 +1527,8 @@ const buildExportData = async (
         "registerCode",
         "registerName",
         "cashierEmail",
+        "currencyCode",
+        "currencyRateKgsPerUnit",
         "totalKgs",
         "cashKgs",
         "cardKgs",
@@ -1506,6 +1557,8 @@ const buildExportData = async (
         "reportType",
         "shiftId",
         "status",
+        "currencyCode",
+        "currencyRateKgsPerUnit",
         "registerCode",
         "registerName",
         "openedAt",
@@ -1539,6 +1592,8 @@ const buildExportData = async (
         "reportType",
         "shiftId",
         "status",
+        "currencyCode",
+        "currencyRateKgsPerUnit",
         "registerCode",
         "registerName",
         "openedAt",
@@ -1579,8 +1634,26 @@ const buildExportData = async (
         input.periodEnd,
       );
       return {
-        header: ["orgId", "storeCode", "sku", "productName", "variantSku", "variantName", "qty", "revenueKgs"],
-        keys: ["orgId", "storeCode", "sku", "productName", "variantSku", "variantName", "qty", "revenueKgs"],
+        header: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "productName",
+          "variantSku",
+          "variantName",
+          "qty",
+          "revenueKgs",
+        ],
+        keys: [
+          "orgId",
+          "storeCode",
+          "sku",
+          "productName",
+          "variantSku",
+          "variantName",
+          "qty",
+          "revenueKgs",
+        ],
         rows,
       };
     }
@@ -1644,6 +1717,8 @@ const buildExportData = async (
           "registerCode",
           "registerName",
           "type",
+          "currencyCode",
+          "currencyRateKgsPerUnit",
           "amountKgs",
           "reason",
           "createdBy",
@@ -1656,6 +1731,8 @@ const buildExportData = async (
           "registerCode",
           "registerName",
           "type",
+          "currencyCode",
+          "currencyRateKgsPerUnit",
           "amountKgs",
           "reason",
           "createdBy",
@@ -1913,7 +1990,9 @@ export const requestExport = async (input: ExportRequestInput) => {
   return job;
 };
 
-const runExportJob = async (payload?: JobPayload): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
+const runExportJob = async (
+  payload?: JobPayload,
+): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
   const jobId =
     payload && typeof payload === "object" && payload !== null && "jobId" in payload
       ? String((payload as Record<string, unknown>).jobId ?? "")
@@ -1932,7 +2011,13 @@ const runExportJob = async (payload?: JobPayload): Promise<{ job: string; status
 
   const store = await prisma.store.findFirst({
     where: { id: job.storeId, organizationId: job.organizationId },
-    select: { id: true, name: true, code: true },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
+    },
   });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -1954,7 +2039,12 @@ const runExportJob = async (payload?: JobPayload): Promise<{ job: string; status
 
   const running = await prisma.exportJob.update({
     where: { id: job.id },
-    data: { status: ExportJobStatus.RUNNING, startedAt: new Date(), errorMessage: null, errorJson: Prisma.DbNull },
+    data: {
+      status: ExportJobStatus.RUNNING,
+      startedAt: new Date(),
+      errorMessage: null,
+      errorJson: Prisma.DbNull,
+    },
   });
 
   try {

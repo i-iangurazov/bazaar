@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetServerAuthToken, prisma } = vi.hoisted(() => ({
+const { formatStoreMoneyMock, mockGetServerAuthToken, prisma } = vi.hoisted(() => ({
+  formatStoreMoneyMock: vi.fn(
+    (amount: number, _locale?: string, _currencySource?: unknown) => `money:${amount}`,
+  ),
   mockGetServerAuthToken: vi.fn(),
   prisma: {
     purchaseOrder: {
@@ -13,6 +16,13 @@ vi.mock("@/server/auth/token", () => ({
   getServerAuthToken: () => mockGetServerAuthToken(),
 }));
 vi.mock("@/server/db/prisma", () => ({ prisma }));
+vi.mock("@/lib/currencyDisplay", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/currencyDisplay")>();
+  return {
+    ...actual,
+    formatStoreMoney: formatStoreMoneyMock,
+  };
+});
 vi.mock("next/headers", () => ({
   cookies: () => ({
     get: () => ({ value: "ru" }),
@@ -27,6 +37,8 @@ describe("purchase order pdf route", () => {
     mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
     prisma.purchaseOrder.findFirst.mockResolvedValue({
       id: "po-1",
+      currencyCode: "USD",
+      currencyRateKgsPerUnit: "89.5",
       status: "DRAFT",
       createdAt: new Date("2026-02-20T10:00:00.000Z"),
       supplier: {
@@ -36,6 +48,8 @@ describe("purchase order pdf route", () => {
       },
       store: {
         name: "Магазин",
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: "1",
         legalName: null,
         legalEntityType: null,
         inn: null,
@@ -65,5 +79,19 @@ describe("purchase order pdf route", () => {
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     const pdf = Buffer.from(await response.arrayBuffer());
     expect(pdf.length).toBeGreaterThan(500);
+  });
+
+  it("formats totals with the purchase-order currency snapshot", async () => {
+    await purchaseOrderPdfGet(new Request("http://localhost"), {
+      params: { id: "po-1" },
+    });
+
+    expect(formatStoreMoneyMock).toHaveBeenCalled();
+    expect(
+      formatStoreMoneyMock.mock.calls.some(([, , currencySource]) => {
+        const source = currencySource as { currencyCode?: string; currencyRateKgsPerUnit?: string };
+        return source.currencyCode === "USD" && source.currencyRateKgsPerUnit === "89.5";
+      }),
+    ).toBe(true);
   });
 });

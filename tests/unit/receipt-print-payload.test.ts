@@ -141,4 +141,118 @@ describe("receipt print payload", () => {
       }),
     ).rejects.toBeInstanceOf(AppError);
   });
+
+  it("uses the saved sale currency snapshot instead of the current store currency", async () => {
+    prisma.customerOrder.findFirst.mockResolvedValue({
+      id: "sale-usd",
+      storeId: "store-1",
+      number: "S-USD",
+      kkmStatus: "NOT_SENT",
+      kkmReceiptId: null,
+      kkmRawJson: null,
+      currencyCode: "USD",
+      currencyRateKgsPerUnit: "89.5",
+      createdAt: new Date("2026-02-28T10:00:00.000Z"),
+      completedAt: new Date("2026-02-28T10:01:00.000Z"),
+      subtotalKgs: 895,
+      totalKgs: 895,
+      store: {
+        id: "store-1",
+        name: "Store",
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: "1",
+        legalName: null,
+        inn: null,
+        address: null,
+        phone: null,
+      },
+      register: null,
+      shift: null,
+      createdBy: null,
+      lines: [],
+      payments: [{ id: "p1", method: "CARD", amountKgs: 895 }],
+      fiscalReceipts: [],
+    });
+
+    const payload = await buildReceiptPrintPayload({
+      organizationId: "org-1",
+      saleId: "sale-usd",
+      locale: "en-US",
+      variant: "PRECHECK",
+      paymentMethodLabels: {
+        CASH: "Cash",
+        CARD: "Card",
+        TRANSFER: "Transfer",
+        OTHER: "Other",
+      },
+    });
+
+    expect(payload.currencyCode).toBe("USD");
+    expect(payload.currencyRateKgsPerUnit).toBe(89.5);
+  });
+
+  it("falls back to the fiscal receipt snapshot before current store currency", async () => {
+    prisma.customerOrder.findFirst.mockResolvedValue({
+      id: "sale-legacy",
+      storeId: "store-1",
+      number: "S-FISCAL-USD",
+      kkmStatus: "SENT",
+      kkmReceiptId: "provider-1",
+      kkmRawJson: null,
+      currencyCode: null,
+      currencyRateKgsPerUnit: null,
+      createdAt: new Date("2026-02-28T10:00:00.000Z"),
+      completedAt: new Date("2026-02-28T10:01:00.000Z"),
+      subtotalKgs: 895,
+      totalKgs: 895,
+      store: {
+        id: "store-1",
+        name: "Store",
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: "1",
+        legalName: null,
+        inn: null,
+        address: null,
+        phone: null,
+      },
+      register: null,
+      shift: null,
+      createdBy: null,
+      lines: [],
+      payments: [{ id: "p1", method: "CARD", amountKgs: 895 }],
+      fiscalReceipts: [
+        {
+          currencyCode: "USD",
+          currencyRateKgsPerUnit: "89.5",
+          providerReceiptId: "provider-1",
+          fiscalNumber: "100500",
+          kkmFactoryNumber: null,
+          kkmRegistrationNumber: null,
+          fiscalModeStatus: "SENT",
+          upfdOrFiscalMemory: null,
+          qrPayload: null,
+          qr: null,
+          fiscalizedAt: new Date("2026-02-28T10:02:00.000Z"),
+          sentAt: new Date("2026-02-28T10:02:00.000Z"),
+          lastError: null,
+        },
+      ],
+    });
+
+    const payload = await buildReceiptPrintPayload({
+      organizationId: "org-1",
+      saleId: "sale-legacy",
+      locale: "en-US",
+      variant: "PRECHECK",
+      paymentMethodLabels: {
+        CASH: "Cash",
+        CARD: "Card",
+        TRANSFER: "Transfer",
+        OTHER: "Other",
+      },
+    });
+
+    expect(payload.currencyCode).toBe("USD");
+    expect(payload.currencyRateKgsPerUnit).toBe(89.5);
+  });
 });

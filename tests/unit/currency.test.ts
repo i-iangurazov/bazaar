@@ -9,6 +9,7 @@ import {
 } from "@/lib/currency";
 import {
   baseAccountingCurrency,
+  currencySourceWithFallback,
   displayMoneyFromKgs,
   displayMoneyToKgs,
   formatKgsMoney,
@@ -55,5 +56,23 @@ describe("currency helpers", () => {
     expect(resolved.currencyCode).toBe("KGS");
     expect(resolved.currencyRateKgsPerUnit).toBe(1);
     expect(resolved.isFallback).toBe(true);
+  });
+
+  it("prefers transaction currency snapshots over current store currency", () => {
+    const snapshot = { currencyCode: "USD", currencyRateKgsPerUnit: "89.5" };
+    const currentStore = { currencyCode: "KGS", currencyRateKgsPerUnit: "1" };
+
+    const source = currencySourceWithFallback(snapshot, currentStore);
+
+    expect(formatKgsMoney(895, "en-US", source)).toContain("$10.00");
+  });
+
+  it("falls back to current store currency for older records without a snapshot", () => {
+    const oldRecord = { currencyCode: null, currencyRateKgsPerUnit: null };
+    const currentStore = { currencyCode: "USD", currencyRateKgsPerUnit: "89.5" };
+
+    const source = currencySourceWithFallback(oldRecord, currentStore);
+
+    expect(formatKgsMoney(895, "en-US", source)).toContain("$10.00");
   });
 });

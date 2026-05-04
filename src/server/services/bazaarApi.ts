@@ -1,7 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { CustomerOrderSource, CustomerOrderStatus, type Prisma } from "@prisma/client";
 
-import { convertFromKgs, normalizeCurrencyCode, normalizeCurrencyRateKgsPerUnit } from "@/lib/currency";
+import {
+  convertFromKgs,
+  normalizeCurrencyCode,
+  normalizeCurrencyRateKgsPerUnit,
+} from "@/lib/currency";
+import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import { writeAuditLog } from "@/server/services/audit";
@@ -371,7 +376,12 @@ export const createBazaarApiOrder = async (input: {
   const result = await prisma.$transaction(async (tx) => {
     const store = await tx.store.findUnique({
       where: { id: input.storeId },
-      select: { id: true, organizationId: true },
+      select: {
+        id: true,
+        organizationId: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+      },
     });
     if (!store || store.organizationId !== input.organizationId) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -419,7 +429,10 @@ export const createBazaarApiOrder = async (input: {
 
     const variantsById = new Map(variants.map((variant) => [variant.id, variant]));
     const priceByProductVariant = new Map(
-      storePrices.map((price) => [`${price.productId}:${price.variantKey}`, Number(price.priceKgs)]),
+      storePrices.map((price) => [
+        `${price.productId}:${price.variantKey}`,
+        Number(price.priceKgs),
+      ]),
     );
     const costByProductVariant = new Map(
       productCosts.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
@@ -477,6 +490,7 @@ export const createBazaarApiOrder = async (input: {
         notes: notes || null,
         subtotalKgs: subtotal,
         totalKgs: subtotal,
+        ...resolveCurrencySnapshot(store),
         lines: { create: lines },
       },
       select: { id: true, number: true, storeId: true, status: true, totalKgs: true },

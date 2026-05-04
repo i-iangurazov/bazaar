@@ -22,7 +22,11 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { displayMoneyToKgs, formatKgsMoney } from "@/lib/currencyDisplay";
+import {
+  currencySourceWithFallback,
+  displayMoneyToKgs,
+  formatKgsMoney,
+} from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -106,7 +110,11 @@ const PosEntryPage = () => {
 
   const openShift = entryQuery.data?.currentShift;
   const formatStoreMoney = (amountKgs: number | string) =>
-    formatKgsMoney(Number(amountKgs), locale, selectedRegister?.store ?? null);
+    formatKgsMoney(
+      Number(amountKgs),
+      locale,
+      currencySourceWithFallback(openShift, selectedRegister?.store ?? null),
+    );
 
   const handleOpenShift = async () => {
     if (!selectedRegister) {

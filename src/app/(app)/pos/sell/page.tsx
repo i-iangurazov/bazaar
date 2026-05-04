@@ -24,6 +24,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import {
+  currencySourceWithFallback,
   displayMoneyFromKgs,
   displayMoneyToKgs,
   formatKgsMoney,
@@ -264,7 +265,13 @@ const PosSellPage = () => {
 
   const sale = saleQuery.data;
   const activeDraft = activeDraftQuery.data;
-  const currencySource = sale?.store ?? shiftQuery.data?.store ?? selectedRegister?.store ?? null;
+  const currencySource = currencySourceWithFallback(
+    sale,
+    currencySourceWithFallback(
+      shiftQuery.data,
+      shiftQuery.data?.store ?? selectedRegister?.store ?? null,
+    ),
+  );
   const saleIdForPaymentInit = saleQuery.data?.id;
   const saleTotalForPaymentInit = saleQuery.data?.totalKgs;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
@@ -1125,7 +1132,8 @@ const PosSellPage = () => {
                   </div>
 
                   <p className="text-sm text-muted-foreground">
-                    {t("sell.paymentTotal")}: {formatKgsMoney(totalPaymentKgs, locale, currencySource)}
+                    {t("sell.paymentTotal")}:{" "}
+                    {formatKgsMoney(totalPaymentKgs, locale, currencySource)}
                   </p>
                 </CardContent>
               </Card>
