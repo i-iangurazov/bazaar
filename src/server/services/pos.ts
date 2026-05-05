@@ -39,6 +39,7 @@ import {
   resolveCashDifferenceStatus,
   roundCashAmount,
 } from "@/server/services/posCashAccounting";
+import { resolveAccessibleStoreIds, type StoreAccessUser } from "@/server/services/storeAccess";
 
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
   typeof value === "number" ? value : value ? Number(value) : 0;
@@ -99,6 +100,18 @@ const resolveUnitPrice = async (input: {
   }
   if (product.organizationId !== organizationId) {
     throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
+  }
+  const storeProduct = await tx.storeProduct.findFirst({
+    where: {
+      organizationId,
+      storeId,
+      productId,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  if (!storeProduct) {
+    throw new AppError("productNotAvailableInStore", "FORBIDDEN", 403);
   }
 
   if (variantId) {
@@ -494,11 +507,28 @@ const loadShiftReport = async (
   };
 };
 
-export const listPosRegisters = async (input: { organizationId: string; storeId?: string }) => {
+export const listPosRegisters = async (input: {
+  organizationId: string;
+  storeId?: string;
+  user?: StoreAccessUser;
+}) => {
+  const accessibleStoreIds = input.user
+    ? await resolveAccessibleStoreIds(prisma, input.user)
+    : null;
+  if (accessibleStoreIds && !accessibleStoreIds.length) {
+    return [];
+  }
+  if (input.storeId && accessibleStoreIds && !accessibleStoreIds.includes(input.storeId)) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
   const registers = await prisma.posRegister.findMany({
     where: {
       organizationId: input.organizationId,
-      ...(input.storeId ? { storeId: input.storeId } : {}),
+      ...(input.storeId
+        ? { storeId: input.storeId }
+        : accessibleStoreIds
+          ? { storeId: { in: accessibleStoreIds } }
+          : {}),
     },
     include: {
       store: {
@@ -621,8 +651,12 @@ export const updatePosRegister = async (input: {
   });
 };
 
-export const getPosEntry = async (input: { organizationId: string; registerId?: string }) => {
-  const registers = await listPosRegisters({ organizationId: input.organizationId });
+export const getPosEntry = async (input: {
+  organizationId: string;
+  registerId?: string;
+  user?: StoreAccessUser;
+}) => {
+  const registers = await listPosRegisters({ organizationId: input.organizationId, user: input.user });
   if (!registers.length) {
     return {
       registers: [],

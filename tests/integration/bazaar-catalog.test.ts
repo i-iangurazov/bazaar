@@ -262,6 +262,13 @@ describeDb("bazaar catalog integration", () => {
         basePriceKgs: 75,
       },
     });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: orgB.id,
+        storeId: storeB.id,
+        productId: productB.id,
+      },
+    });
     const managerB = await prisma.user.create({
       data: {
         organizationId: orgB.id,

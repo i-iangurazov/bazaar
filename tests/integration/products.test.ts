@@ -1278,7 +1278,7 @@ describeDb("products", () => {
     expect(generatedRows.every((row) => row.value.startsWith("BZ"))).toBe(true);
   });
 
-  it("initializes base snapshots for create and import across stores", async () => {
+  it("initializes base snapshots only for the targeted store in multi-store orgs", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase();
 
     const storeB = await prisma.store.create({
@@ -1297,16 +1297,17 @@ describeDb("products", () => {
       sku: "SKU-SNAP-1",
       name: "Snapshot Product",
       baseUnitId: baseUnit.id,
+      storeId: store.id,
     });
 
     const snapshots = await prisma.inventorySnapshot.findMany({
       where: { productId: product.id },
       orderBy: { storeId: "asc" },
     });
-    expect(snapshots).toHaveLength(2);
+    expect(snapshots).toHaveLength(1);
     const snapshotByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot]));
     expect(snapshotByStore.get(store.id)?.allowNegativeStock).toBe(false);
-    expect(snapshotByStore.get(storeB.id)?.allowNegativeStock).toBe(true);
+    expect(snapshotByStore.get(storeB.id)).toBeUndefined();
 
     await importProducts({
       organizationId: org.id,
@@ -1319,8 +1320,9 @@ describeDb("products", () => {
           unit: baseUnit.code,
           barcodes: ["IMP-001"],
         },
-      ],
-    });
+	      ],
+	      storeId: storeB.id,
+	    });
 
     const imported = await prisma.product.findUnique({
       where: { organizationId_sku: { organizationId: org.id, sku: "SKU-SNAP-2" } },
@@ -1329,8 +1331,9 @@ describeDb("products", () => {
     const importSnapshots = await prisma.inventorySnapshot.findMany({
       where: { productId: imported!.id },
     });
-    expect(importSnapshots).toHaveLength(2);
-  });
+	    expect(importSnapshots).toHaveLength(1);
+	    expect(importSnapshots[0]?.storeId).toBe(storeB.id);
+	  });
 
   it("blocks variant removal when movements exist", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();

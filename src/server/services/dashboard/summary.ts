@@ -13,6 +13,11 @@ import { TRPCError } from "@trpc/server";
 import { logProfileSection } from "@/server/profiling/perf";
 import { enrichRecentActivity } from "@/server/services/activity";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
+import {
+  canAccessStore,
+  listAccessibleStores,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 
 type ProductSummary = {
   id: string;
@@ -142,21 +147,20 @@ const resolveDashboardSummaryOptions = (
 const assertDashboardStoreAccess = async ({
   prisma,
   logger,
+  user,
   organizationId,
   storeId,
   scope,
 }: {
   prisma: PrismaClient | Prisma.TransactionClient;
   logger: Logger;
+  user: StoreAccessUser;
   organizationId: string;
   storeId: string;
   scope: "dashboard.summary" | "dashboard.activity";
 }) => {
   const storeLookupStartedAt = Date.now();
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { id: true, organizationId: true },
-  });
+  const allowed = await canAccessStore(prisma, user, storeId);
   logProfileSection({
     logger,
     scope,
@@ -165,7 +169,7 @@ const assertDashboardStoreAccess = async ({
     details: { storeId },
   });
 
-  if (!store || store.organizationId !== organizationId) {
+  if (!allowed || user.organizationId !== organizationId) {
     throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
   }
 };
@@ -271,6 +275,7 @@ const loadDashboardRecentActivity = async ({
 export const getDashboardSummary = async ({
   prisma,
   logger,
+  user,
   organizationId,
   storeId,
   includeRecentActivity,
@@ -278,6 +283,7 @@ export const getDashboardSummary = async ({
 }: {
   prisma: PrismaClient | Prisma.TransactionClient;
   logger: Logger;
+  user: StoreAccessUser;
   organizationId: string;
   storeId: string;
   includeRecentActivity?: boolean;
@@ -290,6 +296,7 @@ export const getDashboardSummary = async ({
   await assertDashboardStoreAccess({
     prisma,
     logger,
+    user,
     organizationId,
     storeId,
     scope: "dashboard.summary",
@@ -481,6 +488,7 @@ export const getDashboardSummary = async ({
       where: {
         organizationId,
         isDeleted: false,
+        storeProducts: { some: { storeId, isActive: true } },
         barcodes: { none: {} },
       },
     }),
@@ -488,7 +496,9 @@ export const getDashboardSummary = async ({
       where: {
         organizationId,
         isDeleted: false,
+        storeProducts: { some: { storeId, isActive: true } },
         basePriceKgs: null,
+        storePrices: { none: { storeId, variantKey: "BASE" } },
       },
     }),
     prisma.purchaseOrder.count({
@@ -626,17 +636,20 @@ export const getDashboardSummary = async ({
 export const getDashboardActivity = async ({
   prisma,
   logger,
+  user,
   organizationId,
   storeId,
 }: {
   prisma: PrismaClient | Prisma.TransactionClient;
   logger: Logger;
+  user: StoreAccessUser;
   organizationId: string;
   storeId: string;
 }): Promise<DashboardActivityResult> => {
   await assertDashboardStoreAccess({
     prisma,
     logger,
+    user,
     organizationId,
     storeId,
     scope: "dashboard.activity",
@@ -656,6 +669,7 @@ export const getDashboardActivity = async ({
 export const getDashboardBootstrap = async ({
   prisma,
   logger,
+  user,
   organizationId,
   preferredStoreId,
   includeRecentActivity,
@@ -663,22 +677,19 @@ export const getDashboardBootstrap = async ({
 }: {
   prisma: PrismaClient | Prisma.TransactionClient;
   logger: Logger;
+  user: StoreAccessUser;
   organizationId: string;
   preferredStoreId?: string;
   includeRecentActivity?: boolean;
   includeRecentMovements?: boolean;
 }) => {
   const storesLookupStartedAt = Date.now();
-  const stores = await prisma.store.findMany({
-    where: { organizationId },
-    select: {
-      id: true,
-      name: true,
-      currencyCode: true,
-      currencyRateKgsPerUnit: true,
-    },
-    orderBy: { name: "asc" },
-  });
+  const stores = (await listAccessibleStores(prisma, user)).map((store) => ({
+    id: store.id,
+    name: store.name,
+    currencyCode: store.currencyCode,
+    currencyRateKgsPerUnit: store.currencyRateKgsPerUnit,
+  }));
   logProfileSection({
     logger,
     scope: "dashboard.bootstrap",
@@ -699,6 +710,7 @@ export const getDashboardBootstrap = async ({
     ? await getDashboardSummary({
         prisma,
         logger,
+        user,
         organizationId,
         storeId: selectedStoreId,
         includeRecentActivity,

@@ -118,10 +118,11 @@ export const posRouter = router({
     .input(z.object({ registerId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        return await getPosEntry({
-          organizationId: ctx.user.organizationId,
-          registerId: input?.registerId,
-        });
+          return await getPosEntry({
+            organizationId: ctx.user.organizationId,
+            registerId: input?.registerId,
+            user: ctx.user,
+          });
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -135,6 +136,7 @@ export const posRouter = router({
           return await listPosRegisters({
             organizationId: ctx.user.organizationId,
             storeId: input?.storeId,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);

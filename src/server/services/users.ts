@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -24,6 +25,48 @@ export type CreateUserInput = {
   role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
   password: string;
   preferredLocale: string;
+  storeIds?: string[];
+};
+
+const roleUsesStoreAssignments = (role: CreateUserInput["role"]) => role !== "ADMIN";
+
+const syncUserStoreAccesses = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    userId: string;
+    role: CreateUserInput["role"];
+    storeIds?: string[];
+  },
+) => {
+  await tx.userStoreAccess.deleteMany({
+    where: { organizationId: input.organizationId, userId: input.userId },
+  });
+  if (!roleUsesStoreAssignments(input.role)) {
+    return;
+  }
+
+  const storeIds = Array.from(new Set(input.storeIds?.filter(Boolean) ?? []));
+  if (!storeIds.length) {
+    return;
+  }
+
+  const stores = await tx.store.findMany({
+    where: { organizationId: input.organizationId, id: { in: storeIds } },
+    select: { id: true },
+  });
+  if (stores.length !== storeIds.length) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
+
+  await tx.userStoreAccess.createMany({
+    data: stores.map((store) => ({
+      organizationId: input.organizationId,
+      userId: input.userId,
+      storeId: store.id,
+    })),
+    skipDuplicates: true,
+  });
 };
 
 export const createUser = async (input: CreateUserInput) =>
@@ -42,8 +85,14 @@ export const createUser = async (input: CreateUserInput) =>
       },
     });
 
-    const { passwordHash: _passwordHash, ...safeUser } = user;
-    void _passwordHash;
+	    const { passwordHash: _passwordHash, ...safeUser } = user;
+	    void _passwordHash;
+	    await syncUserStoreAccesses(tx, {
+	      organizationId: input.organizationId,
+	      userId: user.id,
+	      role: input.role,
+	      storeIds: input.storeIds,
+	    });
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
@@ -105,6 +154,7 @@ export type UpdateUserInput = {
   name: string;
   role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
   preferredLocale: string;
+  storeIds?: string[];
 };
 
 export const updateUser = async (input: UpdateUserInput) =>
@@ -118,7 +168,7 @@ export const updateUser = async (input: UpdateUserInput) =>
       throw new AppError("cannotDemoteSelf", "BAD_REQUEST", 400);
     }
 
-    const updated = await tx.user.update({
+	    const updated = await tx.user.update({
       where: { id: input.userId },
       data: {
         email: input.email,
@@ -126,7 +176,13 @@ export const updateUser = async (input: UpdateUserInput) =>
         role: input.role,
         preferredLocale: input.preferredLocale,
       },
-    });
+	    });
+	    await syncUserStoreAccesses(tx, {
+	      organizationId: input.organizationId,
+	      userId: updated.id,
+	      role: input.role,
+	      storeIds: input.storeIds,
+	    });
 
     const { passwordHash: _passwordHash, ...safeUser } = updated;
     void _passwordHash;

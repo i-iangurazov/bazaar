@@ -26,6 +26,7 @@ import {
 } from "@/server/services/productImageStorage";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { assignProductToStore } from "@/server/services/storeAccess";
 
 export type CreateProductInput = {
   organizationId: string;
@@ -33,6 +34,7 @@ export type CreateProductInput = {
   requestId: string;
   sku?: string | null;
   name: string;
+  storeId?: string | null;
   category?: string | null;
   categories?: string[] | null;
   baseUnitId: string;
@@ -1372,6 +1374,33 @@ const ensureBaseSnapshots = async (
   });
 };
 
+const resolveProductCreateStores = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    storeId?: string | null;
+  },
+) => {
+  if (input.storeId) {
+    const store = await tx.store.findFirst({
+      where: { id: input.storeId, organizationId: input.organizationId },
+      select: { id: true, allowNegativeStock: true },
+    });
+    if (!store) {
+      throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+    }
+    return [store];
+  }
+
+  const stores = await tx.store.findMany({
+    where: { organizationId: input.organizationId },
+    select: { id: true, allowNegativeStock: true },
+    orderBy: { createdAt: "asc" },
+    take: 2,
+  });
+  return stores.length === 1 ? stores : [];
+};
+
 const syncProductImages = async (
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -1557,7 +1586,19 @@ export const createProduct = async (input: CreateProductInput) => {
           mode: "create-only",
         });
       }
-      await ensureBaseSnapshots(tx, input.organizationId, product.id);
+      const assignmentStores = await resolveProductCreateStores(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+      });
+      for (const store of assignmentStores) {
+        await assignProductToStore(tx, {
+          organizationId: input.organizationId,
+          storeId: store.id,
+          productId: product.id,
+          actorId: input.actorId,
+        });
+      }
+      await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
       if (resolvedBaseCost !== undefined) {
         await upsertBaseProductCost(tx, {
           organizationId: input.organizationId,
@@ -2171,13 +2212,11 @@ export const bulkGenerateProductBarcodes = async (input: {
     } else if (input.filter?.type === "bundle") {
       filters.push({ isBundle: true });
     }
-    if (input.filter?.storeId) {
-      filters.push({
-        inventorySnapshots: {
-          some: { storeId: input.filter.storeId },
-        },
-      });
-    }
+	    if (input.filter?.storeId) {
+	      filters.push({
+	        storeProducts: { some: { storeId: input.filter.storeId, isActive: true } },
+	      });
+	    }
 
     const where: Prisma.ProductWhereInput = {
       organizationId: input.organizationId,
@@ -2955,10 +2994,19 @@ export const importProductsTx = async (
   const updateMask = new Set<ImportUpdateField>(input.updateMask ?? []);
   const shouldApplyField = (field: ImportUpdateField) =>
     !isUpdateSelectedMode || updateMask.has(field);
-  const stores = await tx.store.findMany({
+  const orgStores = await tx.store.findMany({
     where: { organizationId: input.organizationId },
     select: { id: true, allowNegativeStock: true },
+    orderBy: { createdAt: "asc" },
   });
+  const stores = input.storeId
+    ? orgStores.filter((store) => store.id === input.storeId)
+    : orgStores.length === 1
+      ? orgStores
+      : [];
+  if (input.storeId && stores.length !== 1) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
 
   const recordImportedEntity = async (entityType: string, entityId: string) => {
     if (!input.batchId) {
@@ -3359,6 +3407,14 @@ export const importProductsTx = async (
         }
       }
 
+      for (const store of stores) {
+        await assignProductToStore(tx, {
+          organizationId: input.organizationId,
+          storeId: store.id,
+          productId: existing.id,
+          actorId: input.actorId,
+        });
+      }
       await ensureBaseSnapshots(tx, input.organizationId, existing.id, stores);
       if (shouldApplyField("basePriceKgs") && basePriceKgs !== undefined) {
         await upsertStoreBasePrice(existing.id, basePriceKgs);
@@ -3439,6 +3495,14 @@ export const importProductsTx = async (
         await recordImportedEntity("ProductBarcode", barcode.id);
       }
 
+      for (const store of stores) {
+        await assignProductToStore(tx, {
+          organizationId: input.organizationId,
+          storeId: store.id,
+          productId: product.id,
+          actorId: input.actorId,
+        });
+      }
       await ensureBaseSnapshots(tx, input.organizationId, product.id, stores);
       if (basePriceKgs !== undefined) {
         await upsertStoreBasePrice(product.id, basePriceKgs);

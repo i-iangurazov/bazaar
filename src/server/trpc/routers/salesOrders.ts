@@ -1,9 +1,16 @@
-import { CustomerOrderStatus } from "@prisma/client";
+import { CustomerOrderStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { AppError } from "@/server/services/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  userHasAllStoreAccess,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 import {
   addCustomerOrderLine,
   cancelCustomerOrder,
@@ -45,6 +52,55 @@ const salesOrdersManagerProcedure = managerProcedure.use(async ({ ctx, next }) =
   return next();
 });
 
+type SalesOrdersContext = {
+  prisma: PrismaClient;
+  user: StoreAccessUser;
+};
+
+const resolveSalesOrderStoreScope = async (
+  ctx: SalesOrdersContext,
+  requestedStoreId?: string,
+) => {
+  if (requestedStoreId) {
+    await assertUserCanAccessStore(ctx.prisma, ctx.user, requestedStoreId);
+    return { storeId: requestedStoreId };
+  }
+
+  if (userHasAllStoreAccess(ctx.user)) {
+    return {};
+  }
+
+  return { storeIds: await resolveAccessibleStoreIds(ctx.prisma, ctx.user) };
+};
+
+const assertCustomerOrderStoreAccess = async (
+  ctx: SalesOrdersContext,
+  customerOrderId: string,
+) => {
+  const order = await ctx.prisma.customerOrder.findFirst({
+    where: { id: customerOrderId, organizationId: ctx.user.organizationId },
+    select: { storeId: true },
+  });
+  if (!order) {
+    throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+  }
+  await assertUserCanAccessStore(ctx.prisma, ctx.user, order.storeId);
+};
+
+const assertCustomerOrderLineStoreAccess = async (ctx: SalesOrdersContext, lineId: string) => {
+  const line = await ctx.prisma.customerOrderLine.findFirst({
+    where: {
+      id: lineId,
+      customerOrder: { organizationId: ctx.user.organizationId },
+    },
+    select: { customerOrder: { select: { storeId: true } } },
+  });
+  if (!line) {
+    throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+  }
+  await assertUserCanAccessStore(ctx.prisma, ctx.user, line.customerOrder.storeId);
+};
+
 export const salesOrdersRouter = router({
   metrics: salesOrdersManagerProcedure
     .input(
@@ -57,9 +113,10 @@ export const salesOrdersRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        const storeScope = await resolveSalesOrderStoreScope(ctx, input.storeId);
         return await getSalesOrderMetrics({
           organizationId: ctx.user.organizationId,
-          storeId: input.storeId,
+          ...storeScope,
           dateFrom: input.dateFrom,
           dateTo: input.dateTo,
           groupBy: input.groupBy,
@@ -85,9 +142,10 @@ export const salesOrdersRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        const storeScope = await resolveSalesOrderStoreScope(ctx, input?.storeId);
         return await listCustomerOrders({
           organizationId: ctx.user.organizationId,
-          storeId: input?.storeId,
+          ...storeScope,
           status: input?.status,
           search: input?.search?.trim() || undefined,
           dateFrom: input?.dateFrom,
@@ -104,6 +162,7 @@ export const salesOrdersRouter = router({
     .input(z.object({ customerOrderId: z.string() }))
     .query(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await getCustomerOrder({
           organizationId: ctx.user.organizationId,
           customerOrderId: input.customerOrderId,
@@ -134,6 +193,7 @@ export const salesOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await createCustomerOrderDraft({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -162,6 +222,7 @@ export const salesOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await setCustomerOrderCustomer({
           organizationId: ctx.user.organizationId,
           customerOrderId: input.customerOrderId,
@@ -188,6 +249,7 @@ export const salesOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await addCustomerOrderLine({
           organizationId: ctx.user.organizationId,
           customerOrderId: input.customerOrderId,
@@ -211,6 +273,7 @@ export const salesOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderLineStoreAccess(ctx, input.lineId);
         return await updateCustomerOrderLine({
           organizationId: ctx.user.organizationId,
           lineId: input.lineId,
@@ -227,6 +290,7 @@ export const salesOrdersRouter = router({
     .input(z.object({ lineId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderLineStoreAccess(ctx, input.lineId);
         return await removeCustomerOrderLine({
           organizationId: ctx.user.organizationId,
           lineId: input.lineId,
@@ -242,6 +306,7 @@ export const salesOrdersRouter = router({
     .input(z.object({ customerOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await confirmCustomerOrder({
           customerOrderId: input.customerOrderId,
           organizationId: ctx.user.organizationId,
@@ -257,6 +322,7 @@ export const salesOrdersRouter = router({
     .input(z.object({ customerOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await markCustomerOrderReady({
           customerOrderId: input.customerOrderId,
           organizationId: ctx.user.organizationId,
@@ -278,6 +344,7 @@ export const salesOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await completeCustomerOrder({
           customerOrderId: input.customerOrderId,
           organizationId: ctx.user.organizationId,
@@ -294,6 +361,7 @@ export const salesOrdersRouter = router({
     .input(z.object({ customerOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
         return await cancelCustomerOrder({
           customerOrderId: input.customerOrderId,
           organizationId: ctx.user.organizationId,

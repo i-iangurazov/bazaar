@@ -87,6 +87,7 @@ const UsersPage = () => {
   const trpcUtils = trpc.useUtils();
   const isForbidden = status === "authenticated" && !isAdmin;
   const usersQuery = trpc.users.list.useQuery(undefined, { enabled: isAdmin });
+  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: isAdmin });
   const inlineEditingEnabled = isInlineEditingEnabled();
 
   type UserRow = NonNullable<typeof usersQuery.data>[number];
@@ -106,6 +107,7 @@ const UsersPage = () => {
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         preferredLocale: z.enum(locales),
         isActive: z.boolean(),
+        storeIds: z.array(z.string()),
         password: isEditing
           ? z.string().optional()
           : z.string().min(8, t("passwordRequired")),
@@ -121,6 +123,7 @@ const UsersPage = () => {
       role: "STAFF",
       preferredLocale: "ru",
       isActive: true,
+      storeIds: [],
       password: "",
     },
   });
@@ -316,8 +319,9 @@ const UsersPage = () => {
       role: "STAFF",
       preferredLocale: "ru",
       isActive: true,
-      password: "",
-    });
+	      password: "",
+	      storeIds: [],
+	    });
     setDialogOpen(true);
   }, [form]);
 
@@ -343,9 +347,10 @@ const UsersPage = () => {
       email: user.email,
       role: user.role,
       preferredLocale: normalizeLocale(user.preferredLocale) ?? defaultLocale,
-      isActive: user.isActive,
-      password: "",
-    });
+	      isActive: user.isActive,
+	      password: "",
+	      storeIds: user.storeAccesses.map((access) => access.store.id),
+	    });
     setDialogOpen(true);
   };
 
@@ -868,13 +873,14 @@ const UsersPage = () => {
             onSubmit={form.handleSubmit(async (values) => {
               if (isEditing && editingUser) {
                 try {
-                  await updateMutation.mutateAsync({
-                    userId: editingUser.id,
-                    name: values.name,
-                    email: values.email,
-                    role: values.role,
-                    preferredLocale: values.preferredLocale,
-                  });
+	                  await updateMutation.mutateAsync({
+	                    userId: editingUser.id,
+	                    name: values.name,
+	                    email: values.email,
+	                    role: values.role,
+	                    preferredLocale: values.preferredLocale,
+	                    storeIds: values.storeIds,
+	                  });
                   if (values.isActive !== editingUser.isActive) {
                     await setActiveMutation.mutateAsync({
                       userId: editingUser.id,
@@ -891,10 +897,11 @@ const UsersPage = () => {
                 const created = await createMutation.mutateAsync({
                   name: values.name,
                   email: values.email,
-                  role: values.role,
-                  preferredLocale: values.preferredLocale,
-                  password: values.password ?? "",
-                });
+	                  role: values.role,
+	                  preferredLocale: values.preferredLocale,
+	                  password: values.password ?? "",
+	                  storeIds: values.storeIds,
+	                });
                 if (!values.isActive) {
                   await setActiveMutation.mutateAsync({
                     userId: created.id,
@@ -985,9 +992,66 @@ const UsersPage = () => {
                 )}
               />
             </FormGrid>
-            <FormField
-              control={form.control}
-              name="isActive"
+	            <FormField
+	              control={form.control}
+	              name="storeIds"
+	              render={({ field }) => {
+	                const selectedRole = form.watch("role");
+	                const usesStoreAssignments = selectedRole !== "ADMIN";
+	                return (
+	                  <FormItem>
+	                    <div className="border border-border p-3">
+	                      <div className="mb-3">
+	                        <FormLabel>{t("storeAccess")}</FormLabel>
+	                        <FormDescription>
+	                          {usesStoreAssignments ? t("storeAccessHint") : t("allStoresByRole")}
+	                        </FormDescription>
+	                      </div>
+	                      {!usesStoreAssignments ? null : storesQuery.isLoading ? (
+	                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+	                          <Spinner className="h-4 w-4" />
+	                          {tCommon("loading")}
+	                        </div>
+	                      ) : storesQuery.data?.length ? (
+	                        <div className="grid gap-2 sm:grid-cols-2">
+	                          {storesQuery.data.map((store) => {
+	                            const checked = field.value.includes(store.id);
+	                            return (
+	                              <label
+	                                key={store.id}
+	                                className="flex items-center gap-2 border border-border bg-card px-3 py-2 text-sm"
+	                              >
+	                                <input
+	                                  type="checkbox"
+	                                  className="h-4 w-4"
+	                                  checked={checked}
+	                                  onChange={(event) => {
+	                                    field.onChange(
+	                                      event.target.checked
+	                                        ? [...field.value, store.id]
+	                                        : field.value.filter((id) => id !== store.id),
+	                                    );
+	                                  }}
+	                                />
+	                                <span className="min-w-0 truncate">
+	                                  {store.name} ({store.code})
+	                                </span>
+	                              </label>
+	                            );
+	                          })}
+	                        </div>
+	                      ) : (
+	                        <p className="text-sm text-muted-foreground">{t("noStores")}</p>
+	                      )}
+	                    </div>
+	                    <FormMessage />
+	                  </FormItem>
+	                );
+	              }}
+	            />
+	            <FormField
+	              control={form.control}
+	              name="isActive"
               render={({ field }) => (
                 <FormItem>
                   <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">

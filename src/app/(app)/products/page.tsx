@@ -2245,6 +2245,14 @@ const ProductsPage = () => {
     }
   };
 
+  const productCreateStoreQuery = storeId ? `storeId=${encodeURIComponent(storeId)}` : "";
+  const newProductHref = productCreateStoreQuery
+    ? `/products/new?${productCreateStoreQuery}`
+    : "/products/new";
+  const newBundleHref = productCreateStoreQuery
+    ? `/products/new?type=bundle&${productCreateStoreQuery}`
+    : "/products/new?type=bundle";
+
   return (
     <div>
       <PageHeader
@@ -2254,7 +2262,7 @@ const ProductsPage = () => {
           <TooltipProvider>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {isAdmin ? (
-                <Link href="/products/new" className="w-full sm:w-auto">
+                <Link href={newProductHref} className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto" data-tour="products-create">
                     <AddIcon className="h-4 w-4" aria-hidden />
                     {t("newProduct")}
@@ -2277,7 +2285,7 @@ const ProductsPage = () => {
                   {isAdmin ? (
                     <>
                       <DropdownMenuItem asChild>
-                        <Link href="/products/new?type=bundle">
+                        <Link href={newBundleHref}>
                           <AddIcon className="h-4 w-4" aria-hidden />
                           {t("newBundle")}
                         </Link>

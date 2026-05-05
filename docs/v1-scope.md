@@ -3,7 +3,7 @@
 ## Included
 - Barcode-first workflow: global scan/search, barcode lookup, and create-from-barcode.
 - Store legal entity details (IP/OSOO/AO/Other) managed in Stores and printed on PO PDFs.
-- Products store visibility via base snapshots for all stores on create/import.
+- Products are organization master records; operational store visibility is controlled by explicit store assignment, not by creating base snapshots in every store.
 - Core screens only: Dashboard (minimal), Products, Inventory, Purchase Orders, Suppliers, Stores, Users.
 
 ## Parked for Later

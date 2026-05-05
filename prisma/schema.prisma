@@ -301,7 +301,9 @@ model Organization {
   updatedAt           DateTime                       @updatedAt
 
   users                    User[]
+  userStoreAccesses        UserStoreAccess[]
   stores                   Store[]
+  storeProducts            StoreProduct[]
   suppliers                Supplier[]
   products                 Product[]
   units                    Unit[]
@@ -426,7 +428,26 @@ model User {
   markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
   ettnReferencesCreated         EttnReference[]           @relation("ettnReferenceCreatedBy")
   esfReferencesCreated          EsfReference[]            @relation("esfReferenceCreatedBy")
+  storeAccesses                 UserStoreAccess[]
+  storeProductsAssigned         StoreProduct[]            @relation("storeProductsAssignedBy")
   guideState                    UserGuideState?
+}
+
+model UserStoreAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  storeId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([organizationId, userId])
+  @@index([organizationId, storeId])
 }
 
 model OrganizationCounter {
@@ -503,6 +524,8 @@ model Store {
   ettnReferences           EttnReference[]
   esfReferences            EsfReference[]
   bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
+  userAccesses             UserStoreAccess[]
+  storeProducts            StoreProduct[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -958,11 +981,32 @@ model Product {
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
   customerOrderLines CustomerOrderLine[]
   saleReturnLines    SaleReturnLine[]
+  storeProducts      StoreProduct[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
   @@index([organizationId, isDeleted, name])
   @@index([organizationId, category, isDeleted])
+}
+
+model StoreProduct {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String
+  productId      String
+  isActive       Boolean  @default(true)
+  assignedById   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  assignedBy   User?        @relation("storeProductsAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([storeId, productId])
+  @@index([organizationId, storeId, isActive])
+  @@index([organizationId, productId, isActive])
 }
 
 model ProductImage {

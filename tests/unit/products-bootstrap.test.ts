@@ -11,12 +11,12 @@ describe("products bootstrap store resolution", () => {
     ).toBe("store-1");
   });
 
-  it("keeps multi-store orgs unfiltered until the user chooses a store", () => {
+  it("uses a safe accessible fallback instead of showing all stores when no preference exists", () => {
     expect(
       resolveProductsBootstrapStoreId({
         storeIds: ["store-1", "store-2"],
       }),
-    ).toBeNull();
+    ).toBe("store-1");
   });
 
   it("preserves an explicit stored preference", () => {

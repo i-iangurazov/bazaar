@@ -12,6 +12,7 @@ import { toJson } from "@/server/services/json";
 import { updateProductCost } from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
+import { assignProductToStore } from "@/server/services/storeAccess";
 
 const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 10;
 
@@ -93,6 +94,12 @@ export const applyStockMovement = async (
   if (input.organizationId && product.organizationId !== input.organizationId) {
     throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
   }
+  await assignProductToStore(tx, {
+    organizationId: input.organizationId ?? store.organizationId,
+    storeId: input.storeId,
+    productId: input.productId,
+    actorId: input.actorId,
+  });
 
   if (input.variantId) {
     const variant = await tx.productVariant.findUnique({

@@ -148,6 +148,7 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Multi-store directory with unique store codes and per-store policy (allow negative stock).
 - Optional expiry lot tracking per store.
 - Store profiles include legal entity details (type, legal name, INN, address, phone).
+- Stores are operationally isolated: products are organization master records, but a store only shows products assigned to that store through `StoreProduct`, inventory actions, imports, or explicit copy/setup flows.
 
 ## Dashboard
 - Store selector with low-stock alerts, pending purchase orders, recent movements, and recent activity summaries (from audit logs).

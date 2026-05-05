@@ -227,6 +227,9 @@ export const listBazaarApiProducts = async (input: {
     hiddenInBazaarCatalogs: {
       none: { storeId: input.storeId },
     },
+    storeProducts: {
+      some: { storeId: input.storeId, isActive: true },
+    },
     ...(search
       ? {
           OR: [

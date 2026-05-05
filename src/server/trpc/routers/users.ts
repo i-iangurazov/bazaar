@@ -18,6 +18,18 @@ export const usersRouter = router({
         isActive: true,
         preferredLocale: true,
         createdAt: true,
+        storeAccesses: {
+          select: {
+            store: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+          orderBy: { store: { name: "asc" } },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -31,6 +43,7 @@ export const usersRouter = router({
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         password: z.string().min(8),
         preferredLocale: localeSchema.optional(),
+        storeIds: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -44,6 +57,7 @@ export const usersRouter = router({
           role: input.role,
           password: input.password,
           preferredLocale: input.preferredLocale ?? defaultLocale,
+          storeIds: input.storeIds,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -58,6 +72,7 @@ export const usersRouter = router({
         name: z.string().min(2),
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         preferredLocale: localeSchema,
+        storeIds: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -71,6 +86,7 @@ export const usersRouter = router({
           name: input.name,
           role: input.role,
           preferredLocale: input.preferredLocale,
+          storeIds: input.storeIds,
         });
       } catch (error) {
         throw toTRPCError(error);

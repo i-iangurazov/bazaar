@@ -1,5 +1,57 @@
 # Final Improvement Summary
 
+## Multi-Store Isolation And Store-Scoped Access - 2026-05-06
+
+### Changed
+
+- Added explicit store access and store product availability tables: `UserStoreAccess` and `StoreProduct`.
+- Added `src/server/services/storeAccess.ts` for central store-access checks, accessible-store lists, default-store resolution, and product-to-store assignment.
+- Changed operational product list/search/export, Bazaar API products, public catalog products, POS lookup, inventory actions, and store pricing so they respect selected store availability instead of showing every organization product.
+- Product creation now asks for the target store explicitly and assigns the new product only to that store; imports still use the selected store target.
+- New stores no longer copy inventory by default; clone/copy behavior remains explicit.
+- User create/edit now supports assigning non-admin users to one or more stores.
+- Store selector now returns only stores the current user can access.
+- Dashboard bootstrap/summary/activity now use accessible stores only; staff cannot request another store's dashboard data directly.
+- Sales orders list, metrics, detail, create, edit, complete, and cancel routes now enforce store access server-side and default unfiltered lists to the user's accessible stores.
+- `/settings/import` now requires an explicit import store, auto-selects the first accessible store, and sends that store to preview/apply import calls.
+- Added non-destructive migration/backfill for product-store assignments and user-store assignments.
+- Updated README and `docs/v1-scope.md` so docs no longer describe the old "all stores get product snapshots" behavior.
+
+### Tests Added Or Updated
+
+- Added `tests/integration/store-isolation.test.ts` for new-store empty state, store-scoped product create/search, cashier access restriction, and inventory isolation.
+- Added dashboard/sales-order isolation coverage for a cashier assigned to one store.
+- Added a source regression test to keep the product creation store selector wired to the submitted `storeId`.
+- Added a source regression test to keep product import preview/apply store-scoped.
+- Updated product/import tests so create/import store assignment is explicit.
+- Updated Bazaar Catalog tests so public catalogs require product-store assignment.
+- Updated test seed helpers to create a `StoreProduct` assignment for the base product.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- Follow-up product-create store picker validation passed:
+  - `CI=1 pnpm test tests/unit/product-create-store-source.test.ts tests/unit/product-barcode-capture-source.test.ts`
+- Focused DB tests passed outside the sandbox:
+  - `CI=1 pnpm test tests/integration/store-isolation.test.ts`
+  - `CI=1 pnpm test tests/integration/products.test.ts tests/integration/inventory.test.ts tests/integration/bazaar-catalog.test.ts`
+- `CI=1 pnpm test` passed outside the sandbox: 103 files passed, 471 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed after a clean `.next` rebuild. The first clean build attempt compiled but hit a transient Next `PageNotFoundError` during page-data collection; rerunning `pnpm build` completed successfully.
+- `pnpm prisma migrate status` passed: 57 migrations found and the database schema is up to date.
+- `pnpm prisma migrate dev` passed: already in sync, no pending migration.
+- `pnpm prisma generate` passed.
+
+### Remaining Risks
+
+- A polished "Add existing product to this store" UI is still needed; current assignment happens through create/import/stock/price actions and migration backfill.
+- Existing manager/staff/cashier users are backfilled to all current stores to avoid production lockouts; admins should tighten assignments after migration.
+- Marketplace integration inclusion lists remain partly organization-level, though stock/export payloads are store/mapping based.
+- Browser QA for the exact admin creates Store B flow was not run in this slice; coverage is integration/unit/build based.
+
 ## Font, Switch, And Integration Polish - 2026-05-05
 
 ### Changed

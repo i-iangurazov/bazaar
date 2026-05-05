@@ -2,6 +2,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
+import { assignProductToStore, productStoreAssignmentWhere } from "@/server/services/storeAccess";
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
 
@@ -30,6 +31,12 @@ export const upsertStorePrice = async (input: {
         throw new AppError("variantNotFound", "NOT_FOUND", 404);
       }
     }
+    await assignProductToStore(tx, {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId: input.productId,
+      actorId: input.actorId,
+    });
 
     const variantKey = resolveVariantKey(input.variantId);
     const before = await tx.storePrice.findUnique({
@@ -104,6 +111,7 @@ export const bulkUpdateStorePrices = async (input: {
     const products = await tx.product.findMany({
       where: {
         organizationId: input.organizationId,
+        ...productStoreAssignmentWhere(input.storeId),
         ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
         ...(input.filter?.search
           ? {
@@ -183,6 +191,12 @@ export const bulkUpdateStorePrices = async (input: {
           priceKgs: next,
           updatedById: input.actorId,
         },
+      });
+      await assignProductToStore(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: product.id,
+        actorId: input.actorId,
       });
 
       updated += 1;

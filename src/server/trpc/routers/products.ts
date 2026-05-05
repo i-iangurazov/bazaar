@@ -57,6 +57,7 @@ import {
   searchQuickProductsInputSchema,
   updateProductInputSchema,
 } from "@/server/trpc/routers/products.schemas";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 export const productsRouter = router({
   suggestSku: adminProcedure.query(({ ctx }) =>
@@ -89,6 +90,7 @@ export const productsRouter = router({
       searchQuickProducts({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         query: input.q,
         storeId: input.storeId,
       }),
@@ -101,6 +103,7 @@ export const productsRouter = router({
         prisma: ctx.prisma,
         logger: ctx.logger,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         input,
       }),
     ),
@@ -112,6 +115,7 @@ export const productsRouter = router({
         prisma: ctx.prisma,
         logger: ctx.logger,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         input,
       }),
     ),
@@ -122,6 +126,7 @@ export const productsRouter = router({
       listProductIds({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         input,
       }),
     ),
@@ -295,31 +300,34 @@ export const productsRouter = router({
   importCsv: adminProcedure
     .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import" }))
     .input(importProductsCsvInputSchema)
-    .mutation(({ ctx, input }) =>
-      importProductsCsvMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      return importProductsCsvMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   previewImportCsv: adminProcedure
     .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import-preview" }))
     .input(previewProductsImportCsvInputSchema)
-    .mutation(({ ctx, input }) =>
-      previewProductsCsvImportMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      return previewProductsCsvImportMutation({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
         input,
         logger: ctx.logger,
-      }),
-    ),
+      });
+    }),
 
   exportCsv: protectedProcedure.input(exportProductsInputSchema).query(({ ctx, input }) =>
     exportProductsCsv({
       prisma: ctx.prisma,
       organizationId: ctx.user.organizationId,
+      user: ctx.user,
       storeId: input?.storeId,
     }),
   ),

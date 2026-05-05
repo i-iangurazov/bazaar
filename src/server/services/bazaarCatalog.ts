@@ -343,6 +343,7 @@ export const listBazaarCatalogProducts = async (input: {
   const baseWhere: Prisma.ProductWhereInput = {
     organizationId: input.organizationId,
     isDeleted: false,
+    storeProducts: { some: { storeId: input.storeId, isActive: true } },
   };
 
   const searchWhere: Prisma.ProductWhereInput = search
@@ -748,10 +749,11 @@ export const getPublicBazaarCatalog = async (
     where: {
       organizationId: catalog.organizationId,
       isDeleted: false,
-      hiddenInBazaarCatalogs: {
-        none: { storeId: catalog.storeId },
-      },
-    },
+	      hiddenInBazaarCatalogs: {
+	        none: { storeId: catalog.storeId },
+	      },
+	      storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+	    },
     select: {
       id: true,
       name: true,
@@ -958,10 +960,11 @@ export const createCatalogCheckoutOrder = async (input: {
           organizationId: catalog.organizationId,
           isDeleted: false,
           id: { in: productIds },
-          hiddenInBazaarCatalogs: {
-            none: { storeId: catalog.storeId },
-          },
-        },
+	          hiddenInBazaarCatalogs: {
+	            none: { storeId: catalog.storeId },
+	          },
+	          storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+	        },
         select: {
           id: true,
           basePriceKgs: true,

@@ -13,35 +13,50 @@ import {
   getStorePrinterSettings,
   updateStorePrinterSettings,
 } from "@/server/services/storePrinterSettings";
+import { userHasAllStoreAccess } from "@/server/services/storeAccess";
 
 export const storesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.store.findMany({
-      where: { organizationId: ctx.user.organizationId },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        allowNegativeStock: true,
-        trackExpiryLots: true,
-        legalEntityType: true,
-        legalName: true,
-        inn: true,
-        address: true,
-        phone: true,
-        currencyCode: true,
-        currencyRateKgsPerUnit: true,
-        complianceProfile: {
-          select: {
-            enableKkm: true,
-            kkmMode: true,
-            kkmProviderKey: true,
-            enableEsf: true,
-            enableEttn: true,
-            enableMarking: true,
-          },
+    const storeSelect = {
+      id: true,
+      name: true,
+      code: true,
+      allowNegativeStock: true,
+      trackExpiryLots: true,
+      legalEntityType: true,
+      legalName: true,
+      inn: true,
+      address: true,
+      phone: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
+      complianceProfile: {
+        select: {
+          enableKkm: true,
+          kkmMode: true,
+          kkmProviderKey: true,
+          enableEsf: true,
+          enableEttn: true,
+          enableMarking: true,
         },
       },
+    } as const;
+    if (!userHasAllStoreAccess(ctx.user)) {
+      const accessRows = await ctx.prisma.userStoreAccess.findMany({
+        where: {
+          organizationId: ctx.user.organizationId,
+          userId: ctx.user.id,
+          store: { organizationId: ctx.user.organizationId },
+        },
+        select: { store: { select: storeSelect } },
+        orderBy: { store: { name: "asc" } },
+      });
+      return accessRows.map((row) => row.store);
+    }
+
+    return ctx.prisma.store.findMany({
+      where: { organizationId: ctx.user.organizationId },
+      select: storeSelect,
       orderBy: { name: "asc" },
     });
   }),

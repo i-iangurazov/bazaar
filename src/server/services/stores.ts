@@ -86,9 +86,10 @@ export const createStore = async (input: CreateStoreInput) =>
           sourceStoreId: string;
           inventorySnapshots: number;
           stockMovements: number;
-          storePrices: number;
-          reorderPolicies: number;
-        }
+	          storePrices: number;
+	          reorderPolicies: number;
+	          storeProducts: number;
+	        }
       | null = null;
 
     const cloneFromStoreId = normalizeOptional(input.cloneFromStoreId);
@@ -101,12 +102,12 @@ export const createStore = async (input: CreateStoreInput) =>
         throw new AppError("storeNotFound", "NOT_FOUND", 404);
       }
 
-      const copyInventory = input.copyInventory ?? true;
+      const copyInventory = input.copyInventory ?? false;
       const stockQuantityDelta = Math.trunc(input.stockQuantityDelta ?? 0);
       const priceAdjustmentMode = input.priceAdjustmentMode ?? "none";
       const priceAdjustmentValue = input.priceAdjustmentValue ?? 0;
 
-      const [sourceSnapshots, sourcePrices, sourceReorderPolicies] = await Promise.all([
+	      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] = await Promise.all([
         copyInventory
           ? tx.inventorySnapshot.findMany({
               where: {
@@ -138,7 +139,7 @@ export const createStore = async (input: CreateStoreInput) =>
             priceKgs: true,
           },
         }),
-        tx.reorderPolicy.findMany({
+	        tx.reorderPolicy.findMany({
           where: {
             storeId: cloneFromStoreId,
             product: {
@@ -153,9 +154,18 @@ export const createStore = async (input: CreateStoreInput) =>
             reviewPeriodDays: true,
             safetyStockDays: true,
             minOrderQty: true,
-          },
-        }),
-      ]);
+	          },
+	        }),
+	        tx.storeProduct.findMany({
+	          where: {
+	            organizationId: input.organizationId,
+	            storeId: cloneFromStoreId,
+	            isActive: true,
+	            product: { isDeleted: false },
+	          },
+	          select: { productId: true },
+	        }),
+	      ]);
 
       const nextSnapshots = sourceSnapshots.map((snapshot) => ({
         storeId: store.id,
@@ -214,17 +224,39 @@ export const createStore = async (input: CreateStoreInput) =>
         safetyStockDays: policy.safetyStockDays,
         minOrderQty: policy.minOrderQty,
       }));
-      if (nextReorderPolicies.length) {
-        await tx.reorderPolicy.createMany({ data: nextReorderPolicies });
-      }
+	      if (nextReorderPolicies.length) {
+	        await tx.reorderPolicy.createMany({ data: nextReorderPolicies });
+	      }
 
-      cloneSummary = {
-        sourceStoreId: sourceStore.id,
-        inventorySnapshots: nextSnapshots.length,
-        stockMovements: stockMovements.length,
-        storePrices: nextPrices.length,
-        reorderPolicies: nextReorderPolicies.length,
-      };
+	      const assignedProductIds = Array.from(
+	        new Set([
+	          ...sourceStoreProducts.map((row) => row.productId),
+	          ...sourceSnapshots.map((row) => row.productId),
+	          ...sourcePrices.map((row) => row.productId),
+	          ...sourceReorderPolicies.map((row) => row.productId),
+	        ]),
+	      );
+	      if (assignedProductIds.length) {
+	        await tx.storeProduct.createMany({
+	          data: assignedProductIds.map((productId) => ({
+	            organizationId: input.organizationId,
+	            storeId: store.id,
+	            productId,
+	            assignedById: input.actorId,
+	            isActive: true,
+	          })),
+	          skipDuplicates: true,
+	        });
+	      }
+
+	      cloneSummary = {
+	        sourceStoreId: sourceStore.id,
+	        inventorySnapshots: nextSnapshots.length,
+	        stockMovements: stockMovements.length,
+	        storePrices: nextPrices.length,
+	        reorderPolicies: nextReorderPolicies.length,
+	        storeProducts: assignedProductIds.length,
+	      };
     }
 
     await writeAuditLog(tx, {

@@ -9,6 +9,12 @@ import { toCsv } from "@/server/services/csv";
 import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
 import { getProductDuplicateDiagnostics } from "@/server/services/products/diagnostics";
+import {
+  assertUserCanAccessStore,
+  productStoreAssignmentWhere,
+  type StoreAccessUser,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
 import { toTRPCError } from "@/server/trpc/errors";
 import type {
   ProductListIdsInput,
@@ -72,6 +78,9 @@ const buildProductListWhere = (
   }
   if (readinessProductIds) {
     filters.push({ id: { in: readinessProductIds.length ? readinessProductIds : ["__none__"] } });
+  }
+  if (input?.storeId) {
+    filters.push(productStoreAssignmentWhere(input.storeId));
   }
 
   return {
@@ -159,24 +168,6 @@ const getDbProductOrderBy = (
   return [{ name: sortDirection }, { sku: sortDirection }, { id: sortDirection }];
 };
 
-const assertStoreAccess = async ({
-  prisma,
-  storeId,
-  organizationId,
-}: {
-  prisma: PrismaDbClient;
-  storeId: string;
-  organizationId: string;
-}) => {
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { id: true, organizationId: true },
-  });
-  if (!store || store.organizationId !== organizationId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
-  }
-};
-
 export const resolveProductsBootstrapStoreId = ({
   preferredStoreId,
   storeIds,
@@ -188,7 +179,7 @@ export const resolveProductsBootstrapStoreId = ({
     return preferredStoreId;
   }
 
-  return storeIds.length === 1 ? (storeIds[0] ?? null) : null;
+  return storeIds[0] ?? null;
 };
 
 const productPreviewSelect = {
@@ -330,11 +321,13 @@ export const findProductByBarcode = async ({
 export const searchQuickProducts = async ({
   prisma,
   organizationId,
+  user,
   query,
   storeId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   query: string;
   storeId?: string;
 }) => {
@@ -349,13 +342,21 @@ export const searchQuickProducts = async ({
   const barcodeNeedle = normalized || fuzzyNeedle;
   const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
   const barcodeNeedleLower = barcodeNeedle.toLowerCase();
+  if (storeId && user) {
+    try {
+      await assertUserCanAccessStore(prisma, user, storeId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }
+  const storeAssignmentWhere = productStoreAssignmentWhere(storeId);
 
   const [exactBarcodeMatches, exactSkuMatches, fuzzyMatches] = await Promise.all([
     prisma.productBarcode.findMany({
       where: {
         organizationId,
         value: exactNeedle,
-        product: { isDeleted: false },
+        product: { isDeleted: false, ...storeAssignmentWhere },
       },
       select: {
         value: true,
@@ -369,6 +370,7 @@ export const searchQuickProducts = async ({
       where: {
         organizationId,
         isDeleted: false,
+        ...storeAssignmentWhere,
         sku: { equals: exactNeedle, mode: "insensitive" },
       },
       select: productPreviewSelect,
@@ -378,6 +380,7 @@ export const searchQuickProducts = async ({
       where: {
         organizationId,
         isDeleted: false,
+        ...storeAssignmentWhere,
         OR: [
           { name: { contains: fuzzyNeedle, mode: "insensitive" } },
           { sku: { contains: fuzzyNeedle, mode: "insensitive" } },
@@ -570,21 +573,33 @@ const sortProductListItems = ({
 export const listProducts = async ({
   prisma,
   organizationId,
+  user,
   input,
   logger,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   input: ProductListInput;
   logger?: Logger;
 }) => {
   if (input?.storeId) {
     const storeAccessStartedAt = Date.now();
-    await assertStoreAccess({
-      prisma,
-      storeId: input.storeId,
-      organizationId,
-    });
+    if (user) {
+      try {
+        await assertUserCanAccessStore(prisma, user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    } else {
+      const store = await prisma.store.findFirst({
+        where: { id: input.storeId, organizationId },
+        select: { id: true },
+      });
+      if (!store) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      }
+    }
     if (logger) {
       logProfileSection({
         logger,
@@ -772,31 +787,42 @@ export const listProducts = async ({
 export const getProductsBootstrap = async ({
   prisma,
   organizationId,
+  user,
   input,
   logger,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   input: ProductBootstrapInput;
   logger?: Logger;
 }) => {
   const bootstrapReadsStartedAt = Date.now();
+  const storeSelect = {
+    id: true,
+    name: true,
+    currencyCode: true,
+    currencyRateKgsPerUnit: true,
+    printerSettings: { select: { id: true } },
+  } satisfies Prisma.StoreSelect;
   const [stores, categories] = await Promise.all([
-    prisma.store.findMany({
-      where: { organizationId },
-      select: {
-        id: true,
-        name: true,
-        currencyCode: true,
-        currencyRateKgsPerUnit: true,
-        printerSettings: {
-          select: {
-            id: true,
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    }),
+    user && !userHasAllStoreAccess(user)
+      ? prisma.userStoreAccess
+          .findMany({
+            where: {
+              organizationId,
+              userId: user.id,
+              store: { organizationId },
+            },
+            select: { store: { select: storeSelect } },
+            orderBy: { store: { name: "asc" } },
+          })
+          .then((rows) => rows.map((row) => row.store))
+      : prisma.store.findMany({
+          where: { organizationId },
+          select: storeSelect,
+          orderBy: { name: "asc" },
+        }),
     listProductCategoriesFromDb(prisma, organizationId),
   ]);
   const selectedStoreId = resolveProductsBootstrapStoreId({
@@ -820,6 +846,7 @@ export const getProductsBootstrap = async ({
   const list = await listProducts({
     prisma,
     organizationId,
+    user,
     input: {
       ...input,
       storeId: selectedStoreId ?? undefined,
@@ -841,18 +868,22 @@ export const getProductsBootstrap = async ({
 export const listProductIds = async ({
   prisma,
   organizationId,
+  user,
   input,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   input: ProductListIdsInput;
 }) => {
   if (input?.storeId) {
-    await assertStoreAccess({
-      prisma,
-      storeId: input.storeId,
-      organizationId,
-    });
+    if (user) {
+      try {
+        await assertUserCanAccessStore(prisma, user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }
   }
 
   const rows = await prisma.product.findMany({
@@ -1037,7 +1068,13 @@ export const getProductPricing = async ({
   }
 
   if (storeId) {
-    await assertStoreAccess({ prisma, storeId, organizationId });
+    const store = await prisma.store.findFirst({
+      where: { id: storeId, organizationId },
+      select: { id: true },
+    });
+    if (!store) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    }
   }
 
   const [storePrice, cost] = await Promise.all([
@@ -1171,12 +1208,21 @@ export const getProductStorePricing = async ({
 export const exportProductsCsv = async ({
   prisma,
   organizationId,
+  user,
   storeId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   storeId?: string;
 }) => {
+  if (storeId && user) {
+    try {
+      await assertUserCanAccessStore(prisma, user, storeId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }
   const exportStore = storeId
     ? await prisma.store.findFirst({
         where: { id: storeId, organizationId },
@@ -1185,7 +1231,11 @@ export const exportProductsCsv = async ({
     : null;
   const exportStoreId = exportStore?.id;
   const products = await prisma.product.findMany({
-    where: { organizationId, isDeleted: false },
+    where: {
+      organizationId,
+      isDeleted: false,
+      ...productStoreAssignmentWhere(exportStoreId),
+    },
     select: {
       id: true,
       sku: true,

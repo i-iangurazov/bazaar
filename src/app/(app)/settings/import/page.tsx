@@ -532,7 +532,7 @@ const MAX_IMPORT_TRANSPORT_BYTES = 1_500_000;
 
 type ImportTransportBase = {
   source: ImportSource;
-  storeId?: string;
+  storeId: string;
   mode: ImportMode;
   updateMask?: ImportUpdateField[];
   previewLimit?: number;
@@ -752,6 +752,21 @@ const ImportPage = () => {
   useEffect(() => {
     importCsvRef.current = importMutation.mutateAsync;
   }, [importMutation.mutateAsync]);
+
+  const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
+  const selectedTargetStore = stores.find((store) => store.id === targetStoreId) ?? null;
+
+  useEffect(() => {
+    setTargetStoreId((currentStoreId) => {
+      if (!stores.length) {
+        return "";
+      }
+      if (currentStoreId && stores.some((store) => store.id === currentStoreId)) {
+        return currentStoreId;
+      }
+      return stores[0].id;
+    });
+  }, [stores]);
 
   const rollbackMutation = trpc.imports.rollback.useMutation({
     onSuccess: () => {
@@ -1083,13 +1098,14 @@ const ImportPage = () => {
   const previewInput = useMemo(
     () =>
       missingRequired.length > 0 ||
+      !targetStoreId ||
       (isUpdateSelectedMode && selectedUpdateFields.length === 0) ||
       validation.rows.length === 0
         ? null
         : {
             rows: validation.rows,
             source,
-            storeId: targetStoreId || undefined,
+            storeId: targetStoreId,
             mode: importMode,
             updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
           },
@@ -1412,6 +1428,10 @@ const ImportPage = () => {
       toast({ variant: "error", description: tErrors("invalidInput") });
       return;
     }
+    if (!targetStoreId) {
+      toast({ variant: "error", description: tErrors("storeRequired") });
+      return;
+    }
     if (dryRunPreviewPending || dryRunPreviewError) {
       toast({ variant: "error", description: dryRunPreviewError ?? t("dryRunLoading") });
       return;
@@ -1423,7 +1443,7 @@ const ImportPage = () => {
 
     const chunks = splitRowsForTransport(validation.rows, {
       source,
-      storeId: targetStoreId || undefined,
+      storeId: targetStoreId,
       mode: importMode,
       updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
     });
@@ -1431,7 +1451,7 @@ const ImportPage = () => {
       source,
       mode: importMode,
       updateMask: isUpdateSelectedMode ? selectedUpdateFields : null,
-      targetStoreId: targetStoreId || undefined,
+      targetStoreId,
       rows: 0,
       created: 0,
       updated: 0,
@@ -1544,6 +1564,39 @@ const ImportPage = () => {
           </Button>
         }
       />
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>{t("targetStoreTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="max-w-sm space-y-2">
+            <Select
+              value={targetStoreId}
+              onValueChange={setTargetStoreId}
+              disabled={storesQuery.isLoading || !stores.length}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("targetStorePlaceholder")} />
+              </SelectTrigger>
+              <SelectContent>
+                {stores.map((store) => (
+                  <SelectItem key={store.id} value={store.id}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {storesQuery.isLoading
+                ? tCommon("loading")
+                : selectedTargetStore
+                  ? t("targetStoreHint")
+                  : tErrors("storeRequired")}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>
@@ -1732,31 +1785,6 @@ const ImportPage = () => {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">{t("defaultUnitHint")}</p>
-              </div>
-              <div className="max-w-sm space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">{t("targetStoreTitle")}</p>
-                  <Badge variant="muted" className="text-[10px]">
-                    {t("optional")}
-                  </Badge>
-                </div>
-                <Select
-                  value={targetStoreId || "none"}
-                  onValueChange={(value) => setTargetStoreId(value === "none" ? "" : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("targetStorePlaceholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("targetStoreNone")}</SelectItem>
-                    {(storesQuery.data ?? []).map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t("targetStoreHint")}</p>
               </div>
             </div>
           ) : (
@@ -1998,6 +2026,7 @@ const ImportPage = () => {
                 dryRunPreviewPending ||
                 missingRequired.length > 0 ||
                 (isUpdateSelectedMode && selectedUpdateFields.length === 0) ||
+                !targetStoreId ||
                 validation.errors.length > 0 ||
                 validation.rows.length === 0 ||
                 Boolean(dryRunPreviewError) ||

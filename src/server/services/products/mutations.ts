@@ -52,6 +52,7 @@ export const createProductMutation = async ({
       requestId: ctx.requestId,
       sku: input.sku,
       name: input.name,
+      storeId: input.storeId,
       category: input.category,
       categories: input.categories,
       baseUnitId: input.baseUnitId,

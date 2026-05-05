@@ -232,6 +232,7 @@ const serializeOrder = <T extends { subtotalKgs: Prisma.Decimal; totalKgs: Prism
 export const listCustomerOrders = async (input: {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
   status?: CustomerOrderStatus;
   search?: string;
   dateFrom?: Date;
@@ -241,7 +242,11 @@ export const listCustomerOrders = async (input: {
 }) => {
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
-    ...(input.storeId ? { storeId: input.storeId } : {}),
+    ...(input.storeId
+      ? { storeId: input.storeId }
+      : input.storeIds
+        ? { storeId: { in: input.storeIds.length ? input.storeIds : ["__no_accessible_store__"] } }
+        : {}),
     ...(input.status ? { status: input.status } : {}),
     ...(input.search
       ? {
@@ -355,6 +360,7 @@ const toSeriesDateKey = (value: Date, groupBy: "day" | "week") => {
 export const getSalesOrderMetrics = async (input: {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
   dateFrom: Date;
   dateTo: Date;
   groupBy: "day" | "week";
@@ -363,7 +369,11 @@ export const getSalesOrderMetrics = async (input: {
     where: {
       organizationId: input.organizationId,
       status: CustomerOrderStatus.COMPLETED,
-      ...(input.storeId ? { storeId: input.storeId } : {}),
+      ...(input.storeId
+        ? { storeId: input.storeId }
+        : input.storeIds
+          ? { storeId: { in: input.storeIds.length ? input.storeIds : ["__no_accessible_store__"] } }
+          : {}),
       completedAt: {
         gte: input.dateFrom,
         lte: input.dateTo,

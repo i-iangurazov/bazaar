@@ -68,6 +68,14 @@ export const seedBase = async (options?: {
       baseUnitId: baseUnit.id,
     },
   });
+  await prisma.storeProduct.create({
+    data: {
+      organizationId: org.id,
+      storeId: store.id,
+      productId: product.id,
+      isActive: true,
+    },
+  });
   const adminUser = await prisma.user.create({
     data: {
       organizationId: org.id,

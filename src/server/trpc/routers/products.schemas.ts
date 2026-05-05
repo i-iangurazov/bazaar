@@ -140,6 +140,7 @@ export const createProductInputSchema = z.object({
     z.string().min(2).optional(),
   ),
   name: z.string().min(2),
+  storeId: z.string().optional(),
   category: z.string().optional(),
   categories: z.array(z.string()).optional(),
   baseUnitId: z.string().min(1),
@@ -272,7 +273,7 @@ export const importCsvRowSchema = z.object({
 export const importProductsCsvInputSchema = z.object({
   rows: z.array(importCsvRowSchema).min(1),
   source: importSourceEnum.optional(),
-  storeId: z.string().optional(),
+  storeId: z.string().min(1),
   mode: importModeEnum.optional(),
   updateMask: z.array(importUpdateFieldEnum).optional(),
 });

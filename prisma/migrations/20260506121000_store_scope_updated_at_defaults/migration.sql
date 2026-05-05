@@ -1,0 +1,2 @@
+ALTER TABLE "UserStoreAccess" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "StoreProduct" ALTER COLUMN "updatedAt" DROP DEFAULT;

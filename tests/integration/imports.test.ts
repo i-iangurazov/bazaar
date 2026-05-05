@@ -425,7 +425,7 @@ describeDb("import batches", () => {
   });
 
   it("previews create, update, and skipped product imports before apply", async () => {
-    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const { org, adminUser, baseUnit, store } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -445,6 +445,7 @@ describeDb("import batches", () => {
 
     const fullPreview = await caller.products.previewImportCsv({
       source: "csv",
+      storeId: store.id,
       mode: "full",
       rows: [
         {
@@ -491,6 +492,7 @@ describeDb("import batches", () => {
 
     const selectivePreview = await caller.products.previewImportCsv({
       source: "csv",
+      storeId: store.id,
       mode: "update_selected",
       updateMask: ["basePriceKgs"],
       rows: [
@@ -524,7 +526,7 @@ describeDb("import batches", () => {
   });
 
   it("shows blocking barcode conflicts and likely duplicate-name warnings in import preview", async () => {
-    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const { org, adminUser, baseUnit, store } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -544,6 +546,7 @@ describeDb("import batches", () => {
 
     const preview = await caller.products.previewImportCsv({
       source: "csv",
+      storeId: store.id,
       mode: "full",
       rows: [
         {
@@ -577,7 +580,7 @@ describeDb("import batches", () => {
   });
 
   it("keeps import preview responses bounded while reporting full totals", async () => {
-    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const { org, adminUser, baseUnit, store } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -587,6 +590,7 @@ describeDb("import batches", () => {
 
     const preview = await caller.products.previewImportCsv({
       source: "csv",
+      storeId: store.id,
       mode: "full",
       previewLimit: 3,
       rows: Array.from({ length: 8 }, (_, index) => ({

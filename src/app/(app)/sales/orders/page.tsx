@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -54,6 +54,21 @@ const SalesOrdersPage = () => {
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const storesQuery = trpc.stores.list.useQuery();
+  const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
+  const showAllStoresFilter = stores.length !== 1;
+
+  useEffect(() => {
+    setStoreId((current) => {
+      if (!stores.length) {
+        return "all";
+      }
+      if (current !== "all" && stores.some((store) => store.id === current)) {
+        return current;
+      }
+      return showAllStoresFilter ? "all" : stores[0].id;
+    });
+  }, [showAllStoresFilter, stores]);
+
   const listQuery = trpc.salesOrders.list.useQuery(
     {
       page,
@@ -166,8 +181,10 @@ const SalesOrdersPage = () => {
                 <SelectValue placeholder={t("store")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{tCommon("allStores")}</SelectItem>
-                {(storesQuery.data ?? []).map((store) => (
+                {showAllStoresFilter ? (
+                  <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+                ) : null}
+                {stores.map((store) => (
                   <SelectItem key={store.id} value={store.id}>
                     {store.name}
                   </SelectItem>
