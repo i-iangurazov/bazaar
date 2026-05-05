@@ -13,6 +13,8 @@ import { updateProductCost } from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 
+const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 250;
+
 export type StockAdjustmentInput = {
   storeId: string;
   productId: string;
@@ -51,6 +53,10 @@ export type BulkSetOnHandResult = {
   updatedCount: number;
   unchangedCount: number;
   targetOnHand: number;
+};
+
+type BulkSetOnHandChunkResult = BulkSetOnHandResult & {
+  changedItems: Array<{ storeId: string; productId: string; variantId: string | null }>;
 };
 
 export type ApplyStockMovementInput = {
@@ -272,104 +278,132 @@ export const bulkSetOnHand = async (
     throw new AppError("inventoryOnHandNonNegative", "BAD_REQUEST", 400);
   }
 
-  const changedItems: Array<{ storeId: string; productId: string; variantId: string | null }> = [];
+  const chunks: string[][] = [];
+  for (
+    let index = 0;
+    index < snapshotIds.length;
+    index += BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE
+  ) {
+    chunks.push(snapshotIds.slice(index, index + BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE));
+  }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const { result: bulkResult } = await withIdempotency(
-      tx,
-      {
-        key: input.idempotencyKey,
-        route: "inventory.bulkSetOnHand",
-        userId: input.actorId,
-      },
-      async () => {
-        const store = await tx.store.findUnique({
-          where: { id: input.storeId },
-          select: { id: true, organizationId: true },
-        });
-        if (!store || store.organizationId !== input.organizationId) {
-          throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-        }
+  const changedItems: BulkSetOnHandChunkResult["changedItems"] = [];
+  let updatedCount = 0;
+  let unchangedCount = 0;
 
-        const snapshots = await tx.inventorySnapshot.findMany({
-          where: {
-            id: { in: snapshotIds },
-            storeId: input.storeId,
-            store: { organizationId: input.organizationId },
-            product: { organizationId: input.organizationId, isDeleted: false },
+  for (const [chunkIndex, chunkSnapshotIds] of chunks.entries()) {
+    const chunkResult = await prisma.$transaction(
+      async (tx) => {
+        const { result: bulkResult } = await withIdempotency(
+          tx,
+          {
+            key: `${input.idempotencyKey}:${chunkIndex}`,
+            route: "inventory.bulkSetOnHand",
+            userId: input.actorId,
           },
-          include: {
-            product: { select: { id: true, organizationId: true, isDeleted: true } },
-          },
-        });
-
-        if (snapshots.length !== snapshotIds.length) {
-          throw new AppError("inventorySelectionInvalid", "FORBIDDEN", 403);
-        }
-
-        let updatedCount = 0;
-        for (const snapshot of snapshots) {
-          const qtyDelta = input.targetOnHand - snapshot.onHand;
-          if (qtyDelta === 0) {
-            continue;
-          }
-
-          const { snapshot: updatedSnapshot, movementId } = await applyStockMovement(tx, {
-            storeId: input.storeId,
-            productId: snapshot.productId,
-            variantId: snapshot.variantId,
-            qtyDelta,
-            type: StockMovementType.ADJUSTMENT,
-            note: input.reason,
-            actorId: input.actorId,
-            organizationId: input.organizationId,
-          });
-
-          const lot = await applyStockLotAdjustment(tx, {
-            storeId: input.storeId,
-            productId: snapshot.productId,
-            variantId: snapshot.variantId,
-            qtyDelta,
-            expiryDate: null,
-            organizationId: input.organizationId,
-          });
-          if (lot) {
-            await tx.stockMovement.update({
-              where: { id: movementId },
-              data: { stockLotId: lot.id },
+          async () => {
+            const chunkChangedItems: BulkSetOnHandChunkResult["changedItems"] = [];
+            const store = await tx.store.findUnique({
+              where: { id: input.storeId },
+              select: { id: true, organizationId: true },
             });
-          }
+            if (!store || store.organizationId !== input.organizationId) {
+              throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+            }
 
-          await writeAuditLog(tx, {
-            organizationId: input.organizationId,
-            actorId: input.actorId,
-            action: "INVENTORY_BULK_SET_ON_HAND",
-            entity: "InventorySnapshot",
-            entityId: updatedSnapshot.id,
-            before: toJson(snapshot),
-            after: toJson(updatedSnapshot),
-            requestId: input.requestId,
-          });
+            const snapshots = await tx.inventorySnapshot.findMany({
+              where: {
+                id: { in: chunkSnapshotIds },
+                storeId: input.storeId,
+                store: { organizationId: input.organizationId },
+                product: { organizationId: input.organizationId, isDeleted: false },
+              },
+              include: {
+                product: { select: { id: true, organizationId: true, isDeleted: true } },
+              },
+            });
 
-          updatedCount += 1;
-          changedItems.push({
-            storeId: input.storeId,
-            productId: snapshot.productId,
-            variantId: snapshot.variantId ?? null,
-          });
-        }
+            if (snapshots.length !== chunkSnapshotIds.length) {
+              throw new AppError("inventorySelectionInvalid", "FORBIDDEN", 403);
+            }
 
-        return {
-          requestedCount: snapshotIds.length,
-          updatedCount,
-          unchangedCount: snapshotIds.length - updatedCount,
-          targetOnHand: input.targetOnHand,
-        };
+            let chunkUpdatedCount = 0;
+            for (const snapshot of snapshots) {
+              const qtyDelta = input.targetOnHand - snapshot.onHand;
+              if (qtyDelta === 0) {
+                continue;
+              }
+
+              const { snapshot: updatedSnapshot, movementId } = await applyStockMovement(tx, {
+                storeId: input.storeId,
+                productId: snapshot.productId,
+                variantId: snapshot.variantId,
+                qtyDelta,
+                type: StockMovementType.ADJUSTMENT,
+                note: input.reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+
+              const lot = await applyStockLotAdjustment(tx, {
+                storeId: input.storeId,
+                productId: snapshot.productId,
+                variantId: snapshot.variantId,
+                qtyDelta,
+                expiryDate: null,
+                organizationId: input.organizationId,
+              });
+              if (lot) {
+                await tx.stockMovement.update({
+                  where: { id: movementId },
+                  data: { stockLotId: lot.id },
+                });
+              }
+
+              await writeAuditLog(tx, {
+                organizationId: input.organizationId,
+                actorId: input.actorId,
+                action: "INVENTORY_BULK_SET_ON_HAND",
+                entity: "InventorySnapshot",
+                entityId: updatedSnapshot.id,
+                before: toJson(snapshot),
+                after: toJson(updatedSnapshot),
+                requestId: input.requestId,
+              });
+
+              chunkUpdatedCount += 1;
+              chunkChangedItems.push({
+                storeId: input.storeId,
+                productId: snapshot.productId,
+                variantId: snapshot.variantId ?? null,
+              });
+            }
+
+            return {
+              requestedCount: chunkSnapshotIds.length,
+              updatedCount: chunkUpdatedCount,
+              unchangedCount: chunkSnapshotIds.length - chunkUpdatedCount,
+              targetOnHand: input.targetOnHand,
+              changedItems: chunkChangedItems,
+            };
+          },
+        );
+
+        return bulkResult as BulkSetOnHandChunkResult;
       },
+      { timeout: 10_000 },
     );
+    updatedCount += chunkResult.updatedCount;
+    unchangedCount += chunkResult.unchangedCount;
+    changedItems.push(...chunkResult.changedItems);
+  }
 
-    return bulkResult as BulkSetOnHandResult;
-  });
+  const result = {
+    requestedCount: snapshotIds.length,
+    updatedCount,
+    unchangedCount,
+    targetOnHand: input.targetOnHand,
+  };
 
   changedItems.forEach((item) => {
     eventBus.publish({
