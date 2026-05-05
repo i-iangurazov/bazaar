@@ -110,6 +110,11 @@ export const PwaInstallButton = () => {
         title={title}
         subtitle={subtitle}
         className="max-w-md"
+        headerClassName="p-4 sm:p-6"
+        bodyClassName="p-4 sm:p-6"
+        usePortal
+        mobileSheet
+        animated
       >
         {guidanceMode === "ios" || guidanceMode === "safari" ? (
           <ol className="space-y-3 text-sm text-muted-foreground">

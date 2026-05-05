@@ -174,4 +174,16 @@ describe("PWA install utilities", () => {
     expect(appShellSource).toContain("<PageTipsButton />\n            <PwaInstallButton />\n            <LanguageSwitcher />");
     expect(appShellSource).toContain("<PageTipsButton />\n                  <PwaInstallButton />\n                  <LanguageSwitcher />");
   });
+
+  it("uses a portaled mobile sheet for install guidance so the header cannot clip it", () => {
+    const buttonSource = readFileSync(
+      resolve(process.cwd(), "src/components/pwa-install-button.tsx"),
+      "utf8",
+    );
+
+    expect(buttonSource).toContain("usePortal");
+    expect(buttonSource).toContain("mobileSheet");
+    expect(buttonSource).toContain("headerClassName=\"p-4 sm:p-6\"");
+    expect(buttonSource).toContain("bodyClassName=\"p-4 sm:p-6\"");
+  });
 });
