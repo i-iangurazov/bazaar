@@ -1,5 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
+import { normalizeScanValue } from "@/lib/scanning/normalize";
+
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
 export type ProductDuplicateMatch = {
@@ -24,7 +26,7 @@ const normalizeBarcodesForDiagnostics = (barcodes?: string[]) =>
   Array.from(
     new Set(
       (barcodes ?? [])
-        .map((value) => value.trim())
+        .map((value) => normalizeScanValue(value))
         .filter((value) => value.length > 0),
     ),
   );

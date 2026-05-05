@@ -45,10 +45,14 @@ const buildProductListWhere = (
 ): Prisma.ProductWhereInput => {
   const filters: Prisma.ProductWhereInput[] = [];
   if (input?.search) {
+    const normalizedScanSearch = normalizeScanValue(input.search);
+    const barcodeSearch = normalizedScanSearch || input.search;
     filters.push({
       OR: [
         { name: { contains: input.search, mode: "insensitive" } },
         { sku: { contains: input.search, mode: "insensitive" } },
+        { barcodes: { some: { value: { contains: barcodeSearch, mode: "insensitive" } } } },
+        { packs: { some: { packBarcode: { contains: barcodeSearch, mode: "insensitive" } } } },
       ],
     });
   }

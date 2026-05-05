@@ -410,6 +410,84 @@ describeDb("products", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
+  it("normalizes scanned manufacturer barcodes on product create and rejects short scans", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-scanned-barcode-create",
+      sku: "SCAN-CREATE-1",
+      name: "Scanned Create Product",
+      baseUnitId: baseUnit.id,
+      barcodes: ["  0000 1234  "],
+    });
+
+    await expect(
+      prisma.productBarcode.findUnique({
+        where: {
+          organizationId_value: {
+            organizationId: org.id,
+            value: "00001234",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ productId: product.id });
+
+    await expect(
+      createProduct({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "req-product-scanned-barcode-short",
+        sku: "SCAN-CREATE-2",
+        name: "Short Barcode Product",
+        baseUnitId: baseUnit.id,
+        barcodes: ["12"],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: "barcodeTooShort" });
+  });
+
+  it("saves scanned manufacturer barcodes on product edit and finds them through POS scan lookup", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-scanned-barcode-edit-create",
+      sku: "SCAN-EDIT-1",
+      name: "Scanned Edit Product",
+      baseUnitId: baseUnit.id,
+    });
+
+    await updateProduct({
+      productId: product.id,
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-scanned-barcode-edit-update",
+      sku: product.sku,
+      name: product.name,
+      baseUnitId: baseUnit.id,
+      barcodes: ["  9876 5432  "],
+    });
+
+    const result = await caller.products.lookupScan({ q: "98765432" });
+    expect(result.exactMatch).toBe(true);
+    expect(result.items[0]).toMatchObject({ id: product.id, matchType: "barcode" });
+
+    const listResult = await caller.products.list({
+      search: "9876 5432",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(listResult.items.map((item) => item.id)).toContain(product.id);
+  });
+
   it("allows the same barcode across different organizations", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
 
@@ -875,7 +953,7 @@ describeDb("products", () => {
       sku: "DUP-BARCODE-1",
       name: "Barcode Collision Product",
       baseUnitId: baseUnit.id,
-      barcodes: ["DUP-BC-1"],
+      barcodes: ["00001234"],
     });
     await createProduct({
       organizationId: org.id,
@@ -889,7 +967,7 @@ describeDb("products", () => {
     const diagnostics = await caller.products.duplicateDiagnostics({
       sku: "DUP-SKU-1",
       name: " Apple   iPhone-15   Pro ",
-      barcodes: ["DUP-BC-1"],
+      barcodes: [" 0000 1234 "],
     });
 
     expect(diagnostics.exactSkuMatch).toMatchObject({
@@ -898,7 +976,7 @@ describeDb("products", () => {
     });
     expect(diagnostics.exactBarcodeMatches).toEqual([
       expect.objectContaining({
-        barcode: "DUP-BC-1",
+        barcode: "00001234",
         sku: "DUP-BARCODE-1",
       }),
     ]);

@@ -1,6 +1,14 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
@@ -66,6 +74,7 @@ import {
   resolvePrimaryImageUrl,
 } from "@/lib/productImageUpload";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { normalizeScanValue } from "@/lib/scanning/normalize";
 
 export type ProductFormValues = {
   sku: string;
@@ -269,6 +278,13 @@ const resolveImageMimeTypeFromUrl = (sourceUrl: string) => {
   }
 };
 
+const minimumProductBarcodeLength = 4;
+const normalizeProductBarcodeInput = (value?: string | null) => normalizeScanValue(value ?? "");
+const normalizeProductBarcodes = (values?: string[] | null) =>
+  Array.from(
+    new Set((values ?? []).map((value) => normalizeProductBarcodeInput(value)).filter(Boolean)),
+  );
+
 const resolveHeicLikeMimeType = (file: File) => {
   const normalizedType = normalizeImageMimeType(file.type);
   if (normalizedType === "image/heic" || normalizedType === "image/heif") {
@@ -451,14 +467,31 @@ export const ProductForm = ({
               path: ["sku"],
             });
           }
-          return;
-        }
-
-        if (normalizedSku.length > 0 && normalizedSku.length < 2) {
+        } else if (normalizedSku.length > 0 && normalizedSku.length < 2) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
             message: t("skuMinLength"),
             path: ["sku"],
+          });
+        }
+        const normalizedBarcodes = (values.barcodes ?? [])
+          .map((value) => normalizeProductBarcodeInput(value))
+          .filter(Boolean);
+        const shortBarcode = normalizedBarcodes.find(
+          (value) => value.length < minimumProductBarcodeLength,
+        );
+        if (shortBarcode) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t("barcodeTooShort", { min: minimumProductBarcodeLength }),
+            path: ["barcodes"],
+          });
+        }
+        if (new Set(normalizedBarcodes).size !== normalizedBarcodes.length) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t("barcodeDuplicate"),
+            path: ["barcodes"],
           });
         }
       });
@@ -500,7 +533,7 @@ export const ProductForm = ({
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
       images: initialValues.images ?? [],
-      barcodes: initialValues.barcodes ?? [],
+      barcodes: normalizeProductBarcodes(initialValues.barcodes),
       packs: initialValues.packs ?? [],
       variants:
         initialValues.variants.length > 0
@@ -723,22 +756,24 @@ export const ProductForm = ({
       productId,
       sku: watchedSku?.trim() || undefined,
       name: watchedName?.trim() || undefined,
-      barcodes: watchedBarcodes.map((value) => value.trim()).filter(Boolean),
+      barcodes: normalizeProductBarcodes(watchedBarcodes),
     }),
     [productId, watchedBarcodes, watchedName, watchedSku],
   );
   const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
   const duplicateDiagnosticsEnabled =
     !readOnly &&
-    !compactCreate &&
-    (Boolean(
-      deferredDuplicateDiagnosticsInput.sku && deferredDuplicateDiagnosticsInput.sku.length >= 2,
-    ) ||
-      Boolean(
-        deferredDuplicateDiagnosticsInput.name &&
-        deferredDuplicateDiagnosticsInput.name.length >= 4,
-      ) ||
-      deferredDuplicateDiagnosticsInput.barcodes.length > 0);
+    (compactCreate
+      ? deferredDuplicateDiagnosticsInput.barcodes.length > 0
+      : Boolean(
+          deferredDuplicateDiagnosticsInput.sku &&
+            deferredDuplicateDiagnosticsInput.sku.length >= 2,
+        ) ||
+        Boolean(
+          deferredDuplicateDiagnosticsInput.name &&
+            deferredDuplicateDiagnosticsInput.name.length >= 4,
+        ) ||
+        deferredDuplicateDiagnosticsInput.barcodes.length > 0);
   const duplicateDiagnosticsQuery = trpc.products.duplicateDiagnostics.useQuery(
     deferredDuplicateDiagnosticsInput,
     {
@@ -785,6 +820,43 @@ export const ProductForm = ({
       });
     },
   });
+
+  const addBarcodeFromDraft = () => {
+    if (readOnly) {
+      return false;
+    }
+    const value = normalizeProductBarcodeInput(barcodeInput);
+    if (!value) {
+      return false;
+    }
+    if (value.length < minimumProductBarcodeLength) {
+      form.setError("barcodes", {
+        message: t("barcodeTooShort", { min: minimumProductBarcodeLength }),
+      });
+      return false;
+    }
+    const current = normalizeProductBarcodes(form.getValues("barcodes"));
+    if (current.includes(value)) {
+      form.setError("barcodes", { message: t("barcodeDuplicate") });
+      return false;
+    }
+    form.clearErrors("barcodes");
+    form.setValue("barcodes", [...current, value], {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    setBarcodeInput("");
+    return true;
+  };
+
+  const handleBarcodeInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    addBarcodeFromDraft();
+  };
 
   const shouldLogImagePrepDebug =
     process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_IMAGE_UPLOAD_DEBUG === "1";
@@ -2039,6 +2111,18 @@ export const ProductForm = ({
       return;
     }
 
+    const draftBarcode = normalizeProductBarcodeInput(barcodeInput);
+    if (draftBarcode && draftBarcode.length < minimumProductBarcodeLength) {
+      form.setError("barcodes", {
+        message: t("barcodeTooShort", { min: minimumProductBarcodeLength }),
+      });
+      return;
+    }
+    const submittedBarcodes = normalizeProductBarcodes([
+      ...(values.barcodes ?? []),
+      ...(draftBarcode ? [draftBarcode] : []),
+    ]);
+
     onSubmit({
       sku: values.sku.trim(),
       name: values.name.trim(),
@@ -2052,7 +2136,7 @@ export const ProductForm = ({
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,
-      barcodes: values.barcodes?.map((value) => value.trim()).filter(Boolean) ?? [],
+      barcodes: submittedBarcodes,
       packs:
         values.packs?.map((pack) => ({
           id: pack.id,
@@ -2637,6 +2721,7 @@ export const ProductForm = ({
                                 <Input
                                   value={barcodeInput}
                                   onChange={(event) => setBarcodeInput(event.target.value)}
+                                  onKeyDown={handleBarcodeInputKeyDown}
                                   placeholder={t("barcodePlaceholder")}
                                   className="flex-1"
                                   disabled={readOnly}
@@ -2646,26 +2731,7 @@ export const ProductForm = ({
                                 type="button"
                                 variant="secondary"
                                 className="w-full sm:w-auto"
-                                onClick={() => {
-                                  if (readOnly) {
-                                    return;
-                                  }
-                                  const value = barcodeInput.trim();
-                                  if (!value) {
-                                    return;
-                                  }
-                                  const current = field.value ?? [];
-                                  if (current.includes(value)) {
-                                    form.setError("barcodes", { message: t("barcodeDuplicate") });
-                                    return;
-                                  }
-                                  form.clearErrors("barcodes");
-                                  form.setValue("barcodes", [...current, value], {
-                                    shouldValidate: true,
-                                    shouldDirty: true,
-                                  });
-                                  setBarcodeInput("");
-                                }}
+                                onClick={addBarcodeFromDraft}
                                 disabled={readOnly}
                               >
                                 <AddIcon className="h-4 w-4" aria-hidden />
@@ -2710,6 +2776,7 @@ export const ProductForm = ({
                                 <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
                               )}
                             </div>
+                            <FormDescription>{t("barcodeHint")}</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -3095,6 +3162,7 @@ export const ProductForm = ({
                                 <Input
                                   value={barcodeInput}
                                   onChange={(event) => setBarcodeInput(event.target.value)}
+                                  onKeyDown={handleBarcodeInputKeyDown}
                                   placeholder={t("barcodePlaceholder")}
                                   className="flex-1"
                                   disabled={readOnly}
@@ -3104,25 +3172,7 @@ export const ProductForm = ({
                                 type="button"
                                 variant="secondary"
                                 className="w-full sm:w-auto"
-                                onClick={() => {
-                                  if (readOnly) {
-                                    return;
-                                  }
-                                  const value = barcodeInput.trim();
-                                  if (!value) {
-                                    return;
-                                  }
-                                  const current = field.value ?? [];
-                                  if (current.includes(value)) {
-                                    form.setError("barcodes", { message: t("barcodeDuplicate") });
-                                    return;
-                                  }
-                                  form.clearErrors("barcodes");
-                                  form.setValue("barcodes", [...current, value], {
-                                    shouldValidate: true,
-                                  });
-                                  setBarcodeInput("");
-                                }}
+                                onClick={addBarcodeFromDraft}
                                 disabled={readOnly}
                               >
                                 <AddIcon className="h-4 w-4" aria-hidden />
@@ -3185,7 +3235,7 @@ export const ProductForm = ({
                               </Button>
                             </FormRow>
                             <p className="text-xs text-muted-foreground">
-                              {t("barcodeInternalHint")}
+                              {t("barcodeScanHint")}
                             </p>
                             {!productId ? (
                               <p className="text-xs text-muted-foreground">

@@ -25,6 +25,7 @@ import {
   type ResolveProductImageUrlResult,
 } from "@/server/services/productImageStorage";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
+import { normalizeScanValue } from "@/lib/scanning/normalize";
 
 export type CreateProductInput = {
   organizationId: string;
@@ -73,6 +74,7 @@ const GENERATED_SKU_PREFIX = "SKU-";
 const GENERATED_SKU_PAD_LENGTH = 6;
 const GENERATED_SKU_MAX_PROBES = 10_000;
 const GENERATED_SKU_MAX_RETRIES = 5;
+const MIN_PRODUCT_BARCODE_LENGTH = 4;
 const CATEGORY_ARRANGEMENT_OPENAI_URL = "https://api.openai.com/v1/responses";
 const CATEGORY_ARRANGEMENT_MODEL =
   process.env.PRODUCT_CATEGORY_AI_MODEL?.trim() ||
@@ -865,7 +867,10 @@ const normalizeBarcodes = (barcodes?: string[]) => {
   if (!barcodes) {
     return [];
   }
-  const cleaned = barcodes.map((value) => value.trim()).filter(Boolean);
+  const cleaned = barcodes.map((value) => normalizeScanValue(value)).filter(Boolean);
+  if (cleaned.some((value) => value.length < MIN_PRODUCT_BARCODE_LENGTH)) {
+    throw new AppError("barcodeTooShort", "BAD_REQUEST", 400);
+  }
   const unique = new Set(cleaned);
   if (unique.size !== cleaned.length) {
     throw new AppError("duplicateBarcode", "CONFLICT", 409);
