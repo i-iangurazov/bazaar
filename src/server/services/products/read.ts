@@ -785,6 +785,11 @@ export const getProductsBootstrap = async ({
         name: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
+        printerSettings: {
+          select: {
+            id: true,
+          },
+        },
       },
       orderBy: { name: "asc" },
     }),

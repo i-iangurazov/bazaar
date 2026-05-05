@@ -16,6 +16,15 @@ describe("pos entry navigation", () => {
     expect(source).toContain('t("entry.readyToSell")');
   });
 
+  it("shows a scoped close-shift path from the open-shift POS hub", async () => {
+    const source = await readSource("src/app/(app)/pos/page.tsx");
+
+    expect(source).toContain("const activeRegisterId =");
+    expect(source).toContain('href={`/pos/shifts?registerId=${activeRegisterId}`}');
+    expect(source).toContain('t("shifts.closeShift")');
+    expect(source).toContain("{!openShift ? (");
+  });
+
   it("requires a closing note in the shift UI when counted cash does not match expected cash", async () => {
     const source = await readSource("src/app/(app)/pos/shifts/page.tsx");
 

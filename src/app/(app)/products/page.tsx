@@ -275,6 +275,7 @@ const ProductsPage = () => {
     useState<BulkDescriptionProgressState | null>(null);
   const [bulkDescriptionElapsedSeconds, setBulkDescriptionElapsedSeconds] = useState(0);
   const [printSetupOpen, setPrintSetupOpen] = useState(false);
+  const [quickPrintLoading, setQuickPrintLoading] = useState(false);
   // Dev-only fallback for the old all-in-one print modal. Normal product and inventory
   // actions must use the saved-profile quick print flow instead.
   const [legacyProductsPrintModalOpen, setLegacyProductsPrintModalOpen] = useState(false);
@@ -510,7 +511,10 @@ const ProductsPage = () => {
     () => stores.find((store) => store.id === storeId) ?? null,
     [storeId, stores],
   );
-  const defaultPrintStoreId = storeId || (stores.length === 1 ? (stores[0]?.id ?? "") : "");
+  const defaultPrintStoreId =
+    storeId ||
+    stores.find((store) => Boolean(store.printerSettings?.id))?.id ||
+    (stores.length === 1 ? (stores[0]?.id ?? "") : "");
   const printPreviewStore = useMemo(
     () => stores.find((store) => store.id === defaultPrintStoreId) ?? selectedStore,
     [defaultPrintStoreId, selectedStore, stores],
@@ -1588,7 +1592,7 @@ const ProductsPage = () => {
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
-          toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+          toast({ variant: "error", description: t("printMissingBarcode") });
           return false;
         }
         if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
@@ -1603,21 +1607,26 @@ const ProductsPage = () => {
   );
 
   const openPrintForProducts = useCallback(
-    (ids: string[], quantity?: number, options?: { settings?: boolean }) => {
+    async (ids: string[], quantity?: number, options?: { settings?: boolean }) => {
+      if (options?.settings) {
+        openPrintSettings();
+        return;
+      }
+      if (quickPrintLoading) {
+        return;
+      }
       const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
-      const activeIds = uniqueIds.filter((id) => !productById.get(id)?.isDeleted);
-      if (!activeIds.length) {
+      if (!uniqueIds.length) {
         toast({ variant: "error", description: t("printNoPrintableProducts") });
         return;
       }
       const savedValues = buildSavedPrintValues(quantity);
       printForm.reset(savedValues);
-      setPrintQueue(activeIds);
+      setPrintQueue(uniqueIds);
       const action = resolveLabelPrintFlowAction({
         settings: printProfileSettings,
         storeId: defaultPrintStoreId,
         isLoading: printProfileQuery.isLoading,
-        explicitSettings: options?.settings,
       });
       if (action === "openSettings") {
         openPrintSettings();
@@ -1631,7 +1640,27 @@ const ProductsPage = () => {
         toast({ variant: "info", description: t("printProfileLoading") });
         return;
       }
-      void performPrintTags(activeIds, savedValues, "print").then((ok) => {
+      setQuickPrintLoading(true);
+      try {
+        const productsForPrint = await trpcUtils.products.byIds.fetch({ ids: uniqueIds });
+        const activeProducts = productsForPrint.filter((product) => !product.isDeleted);
+        const activeIds = activeProducts.map((product) => product.id);
+        const missingBarcodeCount = activeProducts.filter(
+          (product) => !hasPrintableBarcode(product as BarcodePrintProduct),
+        ).length;
+        if (missingBarcodeCount > 0) {
+          toast({
+            variant: "error",
+            description: t("printMissingBarcodeCount", { count: missingBarcodeCount }),
+          });
+          return;
+        }
+        if (!activeIds.length) {
+          toast({ variant: "error", description: t("printNoPrintableProducts") });
+          return;
+        }
+        setPrintQueue(activeIds);
+        const ok = await performPrintTags(activeIds, savedValues, "print");
         if (ok) {
           toast({
             variant: "success",
@@ -1644,7 +1673,14 @@ const ProductsPage = () => {
           setSelectedIds(new Set());
           setPrintQueue([]);
         }
-      });
+      } catch (error) {
+        toast({
+          variant: "error",
+          description: error instanceof Error ? error.message : t("priceTagsFailed"),
+        });
+      } finally {
+        setQuickPrintLoading(false);
+      }
     },
     [
       buildSavedPrintValues,
@@ -1653,10 +1689,11 @@ const ProductsPage = () => {
       printForm,
       printProfileSettings,
       printProfileQuery.isLoading,
-      productById,
+      quickPrintLoading,
       openPrintSettings,
       t,
       toast,
+      trpcUtils.products.byIds,
     ],
   );
   const getProductActions = (product: ProductRow) => [
@@ -1694,7 +1731,7 @@ const ProductsPage = () => {
                   toast({ variant: "error", description: t("printMissingBarcode") });
                   return;
                 }
-                openPrintForProducts([product.id]);
+                void openPrintForProducts([product.id]);
               },
             },
             {
@@ -2278,14 +2315,14 @@ const ProductsPage = () => {
                     <>
                       <DropdownMenuItem
                         data-tour="products-print-tags"
-                        onSelect={() => openPrintForProducts(selectedList)}
+                        onSelect={() => void openPrintForProducts(selectedList)}
                       >
                         <PrintIcon className="h-4 w-4" aria-hidden />
                         {t("printPriceTags")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() =>
-                          openPrintForProducts(selectedList, undefined, { settings: true })
+                          void openPrintForProducts(selectedList, undefined, { settings: true })
                         }
                       >
                         <MoreIcon className="h-4 w-4" aria-hidden />
@@ -2545,10 +2582,15 @@ const ProductsPage = () => {
                     type="button"
                     size="sm"
                     className="w-full sm:w-auto"
-                    onClick={() => openPrintForProducts(selectedList)}
+                    onClick={() => void openPrintForProducts(selectedList)}
+                    disabled={quickPrintLoading}
                   >
-                    <PrintIcon className="h-4 w-4" aria-hidden />
-                    {t("printLabels")}
+                    {quickPrintLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <PrintIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {quickPrintLoading ? tCommon("loading") : t("printLabels")}
                   </Button>
                   {canManagePrices ? (
                     <Button

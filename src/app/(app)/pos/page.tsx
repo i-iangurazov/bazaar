@@ -109,6 +109,7 @@ const PosEntryPage = () => {
   }, [entryQuery.data?.registers, registerId]);
 
   const openShift = entryQuery.data?.currentShift;
+  const activeRegisterId = openShift?.registerId ?? selectedRegister?.id ?? registerId;
   const formatStoreMoney = (amountKgs: number | string) =>
     formatKgsMoney(
       Number(amountKgs),
@@ -201,22 +202,38 @@ const PosEntryPage = () => {
             ) : null}
 
             {openShift ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("entry.shiftOpenedAt")}</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatDateTime(openShift.openedAt, locale)}
-                  </p>
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">{t("entry.shiftOpenedAt")}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {formatDateTime(openShift.openedAt, locale)}
+                    </p>
+                  </div>
+                  <div className="border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {formatStoreMoney(openShift.openingCashKgs)}
+                    </p>
+                  </div>
+                  <div className="border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">{t("entry.openedBy")}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {openShift.openedBy.name}
+                    </p>
+                  </div>
                 </div>
-                <div className="border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatStoreMoney(openShift.openingCashKgs)}
-                  </p>
-                </div>
-                <div className="border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{t("entry.openedBy")}</p>
-                  <p className="text-sm font-medium text-foreground">{openShift.openedBy.name}</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button className="h-11 w-full sm:w-auto" asChild>
+                    <Link href={`/pos/sell?registerId=${activeRegisterId}`}>
+                      {t("entry.sell")}
+                    </Link>
+                  </Button>
+                  <Button variant="secondary" className="h-11 w-full sm:w-auto" asChild>
+                    <Link href={`/pos/shifts?registerId=${activeRegisterId}`}>
+                      {t("shifts.closeShift")}
+                    </Link>
+                  </Button>
                 </div>
               </div>
             ) : null}
@@ -228,14 +245,16 @@ const PosEntryPage = () => {
             <CardTitle>{t("entry.quickActionsTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Button asChild disabled={!openShift}>
-              <Link href={`/pos/sell?registerId=${registerId}`}>{t("entry.sell")}</Link>
+            {!openShift ? (
+              <Button asChild disabled>
+                <Link href={`/pos/sell?registerId=${activeRegisterId}`}>{t("entry.sell")}</Link>
+              </Button>
+            ) : null}
+            <Button variant="secondary" asChild>
+              <Link href={`/pos/history?registerId=${activeRegisterId}`}>{t("entry.history")}</Link>
             </Button>
             <Button variant="secondary" asChild>
-              <Link href={`/pos/history?registerId=${registerId}`}>{t("entry.history")}</Link>
-            </Button>
-            <Button variant="secondary" asChild>
-              <Link href={`/pos/shifts?registerId=${registerId}`}>{t("entry.shifts")}</Link>
+              <Link href={`/pos/shifts?registerId=${activeRegisterId}`}>{t("entry.shifts")}</Link>
             </Button>
             {canManageRegisters ? (
               <Button variant="secondary" asChild>

@@ -1214,6 +1214,17 @@ const InventoryPage = () => {
         toast({ variant: "error", description: t("printNoPrintableProducts") });
         return;
       }
+      const productsForPrint = await trpcUtils.products.byIds.fetch({ ids: snapshotProductIds });
+      const missingBarcodeCount = productsForPrint.filter(
+        (product) => !hasPrintableBarcode(product as BarcodePrintProduct),
+      ).length;
+      if (missingBarcodeCount > 0) {
+        toast({
+          variant: "error",
+          description: t("printMissingBarcodeCount", { count: missingBarcodeCount }),
+        });
+        return;
+      }
 
       const printValues = buildSavedLabelPrintValues({
         settings: printProfileSettings,
@@ -1268,7 +1279,7 @@ const InventoryPage = () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
-        toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+        toast({ variant: "error", description: t("printMissingBarcode") });
         return;
       }
       if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {

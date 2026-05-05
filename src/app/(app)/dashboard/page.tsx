@@ -91,7 +91,6 @@ const DashboardPage = () => {
     [dashboardQuery.data?.stores, storeId],
   );
 
-  const lowStockItems = dashboardQuery.data?.summary.lowStock ?? [];
   const pendingOrders = dashboardQuery.data?.summary.pendingPurchaseOrders ?? [];
   const business = dashboardQuery.data?.summary.business;
   const activity = activityQuery.data?.recentActivity ?? [];
@@ -174,10 +173,9 @@ const DashboardPage = () => {
     {
       key: "lowStockCount",
       label: t("lowStock"),
-      value: formatNumber(business?.lowStockCount ?? lowStockItems.length, locale),
+      value: formatNumber(business?.lowStockCount ?? 0, locale),
       hint: t("lowStockHint"),
-      valueClassName:
-        (business?.lowStockCount ?? lowStockItems.length) > 0 ? "text-warning" : "text-foreground",
+      valueClassName: (business?.lowStockCount ?? 0) > 0 ? "text-warning" : "text-foreground",
     },
   ];
   const attentionItems = [
@@ -362,7 +360,7 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
 
-        <Card className="h-full md:col-span-3 xl:col-span-4">
+        <Card className="h-full md:col-span-3 xl:col-span-8">
           <CardHeader>
             <CardTitle>{t("needsAttention")}</CardTitle>
           </CardHeader>
@@ -379,49 +377,6 @@ const DashboardPage = () => {
                 </Badge>
               </Link>
             ))}
-          </CardContent>
-        </Card>
-
-        <Card className="h-full md:col-span-6 xl:col-span-4">
-          <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <CardTitle>{t("lowStock")}</CardTitle>
-            <Badge variant={lowStockItems.length > 0 ? "warning" : "muted"}>
-              {formatNumber(lowStockItems.length, locale)}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            {dashboardQuery.isLoading ? (
-              loadingState
-            ) : lowStockItems.length ? (
-              <div className="space-y-3">
-                {lowStockItems.map((item) => (
-                  <div
-                    key={item.snapshot.id}
-                    className="rounded-none border border-border/80 bg-secondary/30 p-3"
-                  >
-                    <p className="text-sm font-semibold text-foreground">
-                      {item.product.name}
-                      {item.variant?.name ? ` • ${item.variant.name}` : ""}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("onHand")}: {formatNumber(item.snapshot.onHand, locale)} • {t("minStock")}:{" "}
-                      {formatNumber(item.minStock, locale)}
-                    </p>
-                    {item.reorder && item.reorder.suggestedOrderQty > 0 ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t("suggestedOrder")}:{" "}
-                        {formatNumber(item.reorder.suggestedOrderQty, locale)}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noLowStock")}
-              </div>
-            )}
           </CardContent>
         </Card>
 
