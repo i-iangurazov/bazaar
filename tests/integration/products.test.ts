@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as XLSX from "xlsx";
 
 import {
   arrangeClothingCategoriesWithAi,
@@ -841,6 +842,103 @@ describeDb("products", () => {
       name: "Large",
       canDelete: true,
     });
+  });
+
+  it("exports import-ready product data with categories, prices, images, variants and barcodes", async () => {
+    const { org, adminUser, baseUnit, store } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-export-rich",
+      sku: "SKU-EXPORT-1",
+      name: "Export Rich Product",
+      category: "Women",
+      categories: ["Women", "Shoes"],
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 200,
+      avgCostKgs: 125,
+      description: "Exported product description.",
+      photoUrl: "https://cdn.example.com/products/export-main.jpg",
+      images: [{ url: "https://cdn.example.com/products/export-detail.jpg", position: 1 }],
+      barcodes: ["EXPORT-BC-1", "EXPORT-BC-2"],
+      variants: [{ name: "M", sku: "SKU-EXPORT-1-M", attributes: { size: "M", color: "Black" } }],
+    });
+
+    await prisma.reorderPolicy.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        minStock: 8,
+        leadTimeDays: 7,
+        reviewPeriodDays: 7,
+        safetyStockDays: 3,
+        minOrderQty: 0,
+      },
+    });
+    await prisma.purchaseOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        status: "RECEIVED",
+        receivedAt: new Date(),
+        lines: {
+          create: {
+            productId: product.id,
+            qtyOrdered: 1,
+            qtyReceived: 1,
+            unitCost: 140,
+          },
+        },
+      },
+    });
+
+    const csv = await caller.products.exportCsv({ storeId: store.id });
+    const workbook = XLSX.read(csv, { type: "string" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
+      header: 1,
+      raw: false,
+      blankrows: false,
+    });
+    const header = (rows[0] ?? []).map((cell, index) =>
+      index === 0 ? cell.replace(/^\uFEFF/, "") : cell,
+    );
+    const exported = rows.find((row) => row[0] === "SKU-EXPORT-1");
+
+    expect(header).toEqual([
+      "SKU",
+      "Название",
+      "Ед. измерения",
+      "Категории",
+      "Описание",
+      "Цена продажи",
+      "Цена закупки",
+      "Себестоимость",
+      "Минимальный остаток",
+      "Фото / ссылки на изображения",
+      "Варианты",
+      "Штрихкоды",
+    ]);
+    expect(exported).toBeDefined();
+    const byHeader = new Map(header.map((label, index) => [label, exported?.[index]]));
+    expect(byHeader.get("Категории")).toBe("Women, Shoes");
+    expect(byHeader.get("Цена продажи")).toBe("200");
+    expect(byHeader.get("Цена закупки")).toBe("140");
+    expect(byHeader.get("Себестоимость")).toBe("125");
+    expect(byHeader.get("Минимальный остаток")).toBe("8");
+    expect(byHeader.get("Фото / ссылки на изображения")).toContain("export-main.jpg");
+    expect(byHeader.get("Фото / ссылки на изображения")).toContain("export-detail.jpg");
+    expect(JSON.parse(byHeader.get("Варианты") ?? "[]")).toEqual([
+      { name: "M", sku: "SKU-EXPORT-1-M", size: "M", color: "Black" },
+    ]);
+    expect(byHeader.get("Штрихкоды")).toBe("EXPORT-BC-1, EXPORT-BC-2");
   });
 
   it("reflects create, update, archive, and restore flows in subsequent product lists", async () => {

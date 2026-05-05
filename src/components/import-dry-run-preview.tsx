@@ -32,6 +32,7 @@ type ImportPreviewRow = {
       | "name"
       | "unit"
       | "category"
+      | "color"
       | "description"
       | "photoUrl"
       | "variants"
@@ -142,6 +143,8 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
         return t("fieldUnit");
       case "category":
         return t("fieldCategory");
+      case "color":
+        return t("fieldColor");
       case "description":
         return t("fieldDescription");
       case "photoUrl":

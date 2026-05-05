@@ -74,10 +74,45 @@ const normalizeBarcodes = (barcodes?: string[]) =>
 
 const normalizeCategories = (value?: string | null) =>
   (value ?? "")
-    .split("|")
+    .split(/[|,]/)
     .map((item) => item.trim().replace(/\s+/g, " "))
     .filter((item) => item.length > 0)
     .filter((item, index, list) => list.indexOf(item) === index);
+
+const normalizeRowCategories = (row: Pick<ImportCsvRowInput, "category" | "categories">) => {
+  if (row.categories?.length) {
+    return row.categories
+      .flatMap((value) => normalizeCategories(value))
+      .filter((item, index, list) => list.indexOf(item) === index);
+  }
+  return normalizeCategories(row.category);
+};
+
+const normalizeRowColor = (value?: string | null) => {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized ? normalized : null;
+};
+
+const extractVariantColorValues = (
+  variants: Array<{ attributes?: Prisma.JsonValue | Record<string, unknown> | null }>,
+) =>
+  variants
+    .map((variant) => {
+      const attributes = variant.attributes;
+      if (!attributes || typeof attributes !== "object" || Array.isArray(attributes)) {
+        return null;
+      }
+      const color = (attributes as Record<string, unknown>).color;
+      if (typeof color === "string") {
+        return normalizeRowColor(color);
+      }
+      if (color === null || color === undefined) {
+        return null;
+      }
+      return normalizeRowColor(String(color));
+    })
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, list) => list.indexOf(value) === index);
 
 const areStringArraysEqual = (left: string[], right: string[]) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
@@ -483,8 +518,11 @@ export const previewProductImport = async ({
       ? normalizeBarcodes(row.barcodes)
       : [];
     const normalizedRowCategories = shouldApplyImportField(mode, updateMask, "category")
-      ? normalizeCategories(row.category)
+      ? normalizeRowCategories(row)
       : [];
+    const normalizedRowColor = shouldApplyImportField(mode, updateMask, "color")
+      ? normalizeRowColor(row.color)
+      : null;
     const normalizedName = normalizeProductNameForDiagnostics(name);
 
     normalizedRowBarcodes.forEach((barcode) => {
@@ -549,6 +587,15 @@ export const previewProductImport = async ({
               ? [existing.category]
               : [],
           normalizedRowCategories,
+        );
+      }
+
+      if (shouldApplyImportField(mode, updateMask, "color") && normalizedRowColor) {
+        addChange(
+          changes,
+          "color",
+          extractVariantColorValues(existing.variants),
+          normalizedRowColor,
         );
       }
 
@@ -635,6 +682,9 @@ export const previewProductImport = async ({
       }
       if (normalizedRowCategories.length) {
         changes.push({ field: "category", before: null, after: normalizedRowCategories });
+      }
+      if (normalizedRowColor) {
+        changes.push({ field: "color", before: null, after: normalizedRowColor });
       }
       if (row.description) {
         changes.push({ field: "description", before: null, after: row.description });

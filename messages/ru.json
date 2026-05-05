@@ -3567,8 +3567,8 @@
       "csv": "CSV"
     },
     "templateDownload": "Скачать шаблон 1С",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
-    "templateExample": "SKU-001,Товар,шт,Категория,Описание,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Товар,шт,\"Women, Shoes\",Black,Описание,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "mappingTitle": "Сопоставление колонок",
     "mappingPlaceholder": "Выберите колонку",
     "mappingEmpty": "Нет колонок для сопоставления.",
@@ -3579,6 +3579,7 @@
     "fieldName": "Название",
     "fieldUnit": "Ед. измерения",
     "fieldCategory": "Категория",
+    "fieldColor": "Цвет",
     "fieldDescription": "Описание",
     "fieldBasePrice": "Цена продажи",
     "fieldPurchasePrice": "Цена закупки",

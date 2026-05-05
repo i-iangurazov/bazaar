@@ -5,7 +5,7 @@ import type { Logger } from "pino";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
 import { listProductCategoriesFromDb } from "@/server/services/productCategories";
-import { sanitizeSpreadsheetValue } from "@/server/services/csv";
+import { toCsv } from "@/server/services/csv";
 import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
 import { getProductDuplicateDiagnostics } from "@/server/services/products/diagnostics";
@@ -1171,13 +1171,23 @@ export const getProductStorePricing = async ({
 export const exportProductsCsv = async ({
   prisma,
   organizationId,
+  storeId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  storeId?: string;
 }) => {
+  const exportStore = storeId
+    ? await prisma.store.findFirst({
+        where: { id: storeId, organizationId },
+        select: { id: true },
+      })
+    : null;
+  const exportStoreId = exportStore?.id;
   const products = await prisma.product.findMany({
     where: { organizationId, isDeleted: false },
     select: {
+      id: true,
       sku: true,
       name: true,
       category: true,
@@ -1186,28 +1196,171 @@ export const exportProductsCsv = async ({
       description: true,
       photoUrl: true,
       barcodes: { select: { value: true } },
+      basePriceKgs: true,
+      images: {
+        select: { url: true, position: true },
+        orderBy: { position: "asc" },
+      },
+      variants: {
+        where: { isActive: true },
+        select: { name: true, sku: true, attributes: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
     orderBy: { name: "asc" },
   });
 
-  const header = ["sku", "name", "category", "unit", "description", "photoUrl", "barcodes"];
-  const lines = products.map((product) => {
-    const barcodes = product.barcodes.map((barcode) => barcode.value).join("|");
-    const exportedCategory =
-      product.categories.length > 0 ? product.categories.join("|") : (product.category ?? "");
-    const values = [
-      product.sku,
-      product.name,
-      exportedCategory,
-      product.unit,
-      product.description ?? "",
-      sanitizeDetailImageUrl(product.photoUrl) ?? "",
-      barcodes,
-    ];
-    return values
-      .map((value) => `"${sanitizeSpreadsheetValue(value).replace(/\"/g, '\"\"')}"`)
-      .join(",");
+  const productIds = products.map((product) => product.id);
+  const [baseCosts, latestPurchaseLines, minStockRows, storePrices] = productIds.length
+    ? await Promise.all([
+        prisma.productCost.findMany({
+          where: {
+            organizationId,
+            productId: { in: productIds },
+            variantKey: "BASE",
+          },
+          select: {
+            productId: true,
+            avgCostKgs: true,
+          },
+        }),
+        prisma.purchaseOrderLine.findMany({
+          where: {
+            productId: { in: productIds },
+            variantId: null,
+            unitCost: { not: null },
+            purchaseOrder: {
+              organizationId,
+              status: { in: ["PARTIALLY_RECEIVED", "RECEIVED"] },
+            },
+          },
+          select: {
+            productId: true,
+            unitCost: true,
+          },
+          orderBy: [{ productId: "asc" }, { purchaseOrder: { receivedAt: "desc" } }],
+          distinct: ["productId"],
+        }),
+        exportStoreId
+          ? prisma.reorderPolicy.findMany({
+              where: {
+                storeId: exportStoreId,
+                productId: { in: productIds },
+              },
+              select: {
+                productId: true,
+                minStock: true,
+              },
+            })
+          : Promise.resolve([]),
+        exportStoreId
+          ? prisma.storePrice.findMany({
+              where: {
+                organizationId,
+                storeId: exportStoreId,
+                productId: { in: productIds },
+                variantKey: "BASE",
+              },
+              select: {
+                productId: true,
+                priceKgs: true,
+              },
+            })
+          : Promise.resolve([]),
+      ])
+    : [[], [], [], []];
+
+  const avgCostByProductId = new Map(
+    baseCosts.map((cost) => [cost.productId, decimalToNumber(cost.avgCostKgs)]),
+  );
+  const purchasePriceByProductId = new Map(
+    latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
+  );
+  const minStockByProductId = new Map(minStockRows.map((row) => [row.productId, row.minStock]));
+  const storePriceByProductId = new Map(
+    storePrices.map((price) => [price.productId, decimalToNumber(price.priceKgs)]),
+  );
+
+  const serializeVariants = (product: (typeof products)[number]) =>
+    product.variants.length
+      ? JSON.stringify(
+          product.variants.map((variant) => {
+            const attributes =
+              variant.attributes &&
+              typeof variant.attributes === "object" &&
+              !Array.isArray(variant.attributes)
+                ? (variant.attributes as Record<string, unknown>)
+                : {};
+            return {
+              name: variant.name ?? undefined,
+              sku: variant.sku ?? undefined,
+              ...attributes,
+            };
+          }),
+        )
+      : "";
+
+  const serializeImages = (product: (typeof products)[number]) => {
+    const urls = [
+      product.photoUrl,
+      ...product.images.map((image) => image.url),
+    ]
+      .map((url) => sanitizeDetailImageUrl(url))
+      .filter((url): url is string => Boolean(url))
+      .filter((url, index, list) => list.indexOf(url) === index);
+    return urls.join(", ");
+  };
+
+  const header = [
+    "SKU",
+    "Название",
+    "Ед. измерения",
+    "Категории",
+    "Описание",
+    "Цена продажи",
+    "Цена закупки",
+    "Себестоимость",
+    "Минимальный остаток",
+    "Фото / ссылки на изображения",
+    "Варианты",
+    "Штрихкоды",
+  ];
+  const keys = [
+    "sku",
+    "name",
+    "unit",
+    "categories",
+    "description",
+    "basePriceKgs",
+    "purchasePriceKgs",
+    "avgCostKgs",
+    "minStock",
+    "images",
+    "variants",
+    "barcodes",
+  ];
+  const rows = products.map((product) => {
+    const avgCostKgs = avgCostByProductId.get(product.id) ?? null;
+    const purchasePriceKgs = purchasePriceByProductId.get(product.id) ?? avgCostKgs;
+    const basePriceKgs =
+      storePriceByProductId.get(product.id) ?? decimalToNumber(product.basePriceKgs);
+    return {
+      sku: product.sku,
+      name: product.name,
+      unit: product.unit,
+      categories: product.categories.length
+        ? product.categories.join(", ")
+        : (product.category ?? ""),
+      description: product.description ?? "",
+      basePriceKgs: basePriceKgs ?? "",
+      purchasePriceKgs: purchasePriceKgs ?? "",
+      avgCostKgs: avgCostKgs ?? "",
+      minStock: minStockByProductId.get(product.id) ?? "",
+      images: serializeImages(product),
+      variants: serializeVariants(product),
+      barcodes: product.barcodes.map((barcode) => barcode.value).join(", "),
+    };
   });
 
-  return [header.join(","), ...lines].join("\n");
+  return toCsv(header, rows, keys);
 };

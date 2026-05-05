@@ -187,6 +187,45 @@ describeDb("import batches", () => {
     });
   });
 
+  it("imports comma-separated category hierarchy and color text for variants", async () => {
+    const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+
+    await runProductImport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-category-color-1",
+      source: "csv",
+      rows: [
+        {
+          sku: "IMP-COLOR-1",
+          name: "Imported Color Product",
+          unit: baseUnit.code,
+          category: "Women, Shoes",
+          color: "Black",
+          variants: [
+            {
+              name: "M",
+              attributes: { size: "M" },
+            },
+          ],
+        },
+      ],
+    });
+
+    const product = await prisma.product.findUnique({
+      where: { organizationId_sku: { organizationId: org.id, sku: "IMP-COLOR-1" } },
+      include: { variants: true },
+    });
+
+    expect(product).not.toBeNull();
+    expect(product?.category).toBe("Women");
+    expect(product?.categories).toEqual(["Women", "Shoes"]);
+    expect(product?.variants[0]?.attributes).toMatchObject({
+      color: "Black",
+      size: "M",
+    });
+  });
+
   it("rolls back imported products by archiving and removing barcodes", async () => {
     const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
 

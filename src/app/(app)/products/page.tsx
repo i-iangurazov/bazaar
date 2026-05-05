@@ -532,7 +532,10 @@ const ProductsPage = () => {
     [productsBootstrapQuery.data?.list.items],
   );
   const productsTotal = productsBootstrapQuery.data?.list.total ?? 0;
-  const exportQuery = trpc.products.exportCsv.useQuery(undefined, { enabled: false });
+  const exportQuery = trpc.products.exportCsv.useQuery(
+    { storeId: storeId || undefined },
+    { enabled: false },
+  );
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: () => {
       productsBootstrapQuery.refetch();

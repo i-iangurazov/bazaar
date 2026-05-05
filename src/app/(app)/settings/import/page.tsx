@@ -46,6 +46,8 @@ type ImportRow = {
   name?: string;
   unit?: string;
   category?: string;
+  categories?: string[];
+  color?: string;
   description?: string;
   photoUrl?: string;
   images?: { url: string; position?: number }[];
@@ -68,6 +70,7 @@ type MappingKey =
   | "name"
   | "unit"
   | "category"
+  | "color"
   | "description"
   | "photoUrl"
   | "variants"
@@ -99,6 +102,7 @@ type ImportUpdateField =
   | "name"
   | "unit"
   | "category"
+  | "color"
   | "description"
   | "photoUrl"
   | "variants"
@@ -228,6 +232,29 @@ const normalizeVariantAttributeValue = (value: unknown): unknown => {
   return value;
 };
 
+const parseCategoryHierarchy = (value: string) =>
+  value
+    .split(/[|,]/)
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .filter((item) => item.length > 0)
+    .filter((item, index, list) => list.indexOf(item) === index);
+
+const applyColorToVariants = (
+  variants: NonNullable<ImportRow["variants"]>,
+  color: string,
+) => {
+  if (!color || !variants.length) {
+    return variants;
+  }
+  return variants.map((variant) => ({
+    ...variant,
+    attributes: {
+      color,
+      ...(variant.attributes ?? {}),
+    },
+  }));
+};
+
 const parseVariants = (value: string) => {
   const normalized = value.trim();
   if (!normalized) {
@@ -241,6 +268,23 @@ const parseVariants = (value: string) => {
   try {
     parsed = JSON.parse(normalized);
   } catch {
+    if (/^[\[{]/.test(normalized)) {
+      return {
+        variants: [] as NonNullable<ImportRow["variants"]>,
+        invalid: true,
+      };
+    }
+    const names = normalized
+      .split(/[|,;\n\r]+/)
+      .map((item) => item.trim().replace(/\s+/g, " "))
+      .filter((item) => item.length > 0)
+      .filter((item, index, list) => list.indexOf(item) === index);
+    if (names.length) {
+      return {
+        variants: names.map((name) => ({ name })) as NonNullable<ImportRow["variants"]>,
+        invalid: false,
+      };
+    }
     return {
       variants: [] as NonNullable<ImportRow["variants"]>,
       invalid: true,
@@ -402,8 +446,18 @@ const detectSource = (headers: string[]): ImportSource => {
 const buildDefaultMapping = (headers: string[]): MappingState => ({
   sku: detectColumn(headers, ["sku", "артикул", "код", "code"]),
   name: detectColumn(headers, ["name", "наименование", "название", "товар"]),
-  unit: detectColumn(headers, ["unit", "ед.изм", "едизм", "ед", "unitcode"]),
-  category: detectColumn(headers, ["category", "категория", "группа"]),
+  unit: detectColumn(headers, [
+    "unit",
+    "ед.изм",
+    "едизм",
+    "ед",
+    "ед измерения",
+    "единица измерения",
+    "единицы измерения",
+    "unitcode",
+  ]),
+  category: detectColumn(headers, ["category", "categories", "категория", "категории", "группа"]),
+  color: detectColumn(headers, ["color", "colour", "цвет", "цветтовара", "түс"]),
   description: detectColumn(headers, ["description", "описание"]),
   basePriceKgs: detectColumn(
     headers,
@@ -614,6 +668,7 @@ const resetImportFormState = (setters: {
     name: "",
     unit: "",
     category: "",
+    color: "",
     description: "",
     basePriceKgs: "",
     purchasePriceKgs: "",
@@ -646,6 +701,7 @@ const ImportPage = () => {
     name: "",
     unit: "",
     category: "",
+    color: "",
     description: "",
     basePriceKgs: "",
     purchasePriceKgs: "",
@@ -735,6 +791,7 @@ const ImportPage = () => {
       { key: "name" as const, label: t("fieldName"), required: true },
       { key: "unit" as const, label: t("fieldUnit"), required: true },
       { key: "category" as const, label: t("fieldCategory"), required: false },
+      { key: "color" as const, label: t("fieldColor"), required: false },
       { key: "description" as const, label: t("fieldDescription"), required: false },
       { key: "basePriceKgs" as const, label: t("fieldBasePrice"), required: false },
       { key: "purchasePriceKgs" as const, label: t("fieldPurchasePrice"), required: false },
@@ -887,6 +944,12 @@ const ImportPage = () => {
           : "";
       const minStockCandidate =
         shouldApply("minStock") && mapping.minStock ? normalizeValue(row[mapping.minStock]) : "";
+      const categories =
+        shouldApply("category") && mapping.category
+          ? parseCategoryHierarchy(normalizeValue(row[mapping.category]))
+          : [];
+      const color =
+        shouldApply("color") && mapping.color ? normalizeValue(row[mapping.color]) : "";
       const imageValue =
         shouldApply("photoUrl") && mapping.photoUrl ? normalizeValue(row[mapping.photoUrl]) : "";
       const imageUrls = imageValue ? parseImageLinks(imageValue) : [];
@@ -895,6 +958,9 @@ const ImportPage = () => {
       const parsedVariants = variantsValue
         ? parseVariants(variantsValue)
         : { variants: [] as NonNullable<ImportRow["variants"]>, invalid: false };
+      const variants = color
+        ? applyColorToVariants(parsedVariants.variants, color)
+        : parsedVariants.variants;
       const basePriceResult = parseOptionalNumericValue(basePriceCandidate);
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
@@ -978,10 +1044,9 @@ const ImportPage = () => {
         sku,
         name: shouldApply("name") ? name || undefined : undefined,
         unit: shouldApply("unit") ? unit || undefined : undefined,
-        category:
-          shouldApply("category") && mapping.category
-            ? normalizeValue(row[mapping.category]) || undefined
-            : undefined,
+        category: categories[0],
+        categories: categories.length ? categories : undefined,
+        color: color || undefined,
         description:
           shouldApply("description") && mapping.description
             ? normalizeValue(row[mapping.description]) || undefined
@@ -995,8 +1060,8 @@ const ImportPage = () => {
           ? imageUrls.map((url, position) => ({ url, position }))
           : undefined,
         variants:
-          shouldApply("variants") && parsedVariants.variants.length
-            ? parsedVariants.variants
+          (shouldApply("variants") || shouldApply("color")) && variants.length
+            ? variants
             : undefined,
         barcodes: shouldApply("barcodes") && barcodes.length ? barcodes : undefined,
       });
@@ -1110,6 +1175,7 @@ const ImportPage = () => {
       name: "",
       unit: "",
       category: "",
+      color: "",
       description: "",
       basePriceKgs: "",
       purchasePriceKgs: "",

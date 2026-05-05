@@ -3569,8 +3569,8 @@
       "csv": "CSV"
     },
     "templateDownload": "Download 1C template",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
-    "templateExample": "SKU-001,Product,pcs,Category,Description,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Product,pcs,\"Women, Shoes\",Black,Description,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "mappingTitle": "Mapping",
     "mappingPlaceholder": "Enter mapping",
     "mappingEmpty": "No mapping.",
@@ -3581,6 +3581,7 @@
     "fieldName": "Field name",
     "fieldUnit": "Field unit",
     "fieldCategory": "Field category",
+    "fieldColor": "Color",
     "fieldDescription": "Field description",
     "fieldBasePrice": "Field base price",
     "fieldPurchasePrice": "Field purchase price",

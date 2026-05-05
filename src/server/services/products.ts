@@ -2661,6 +2661,8 @@ export type ImportProductRow = {
   sku: string;
   name?: string;
   category?: string | null;
+  categories?: string[] | null;
+  color?: string | null;
   unit?: string;
   description?: string | null;
   photoUrl?: string | null;
@@ -2680,6 +2682,7 @@ export type ImportUpdateField =
   | "name"
   | "unit"
   | "category"
+  | "color"
   | "description"
   | "photoUrl"
   | "variants"
@@ -2766,6 +2769,42 @@ const normalizeImportVariants = (variants?: CreateProductInput["variants"]) => {
   }
 
   return normalized;
+};
+
+const splitImportCategoryHierarchy = (value?: string | null) =>
+  (value ?? "")
+    .split(/[|,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const normalizeImportRowCategories = (
+  row: Pick<ImportProductRow, "category" | "categories">,
+) => {
+  if (row.categories?.length) {
+    return normalizeProductCategoryNames(row.categories.flatMap(splitImportCategoryHierarchy));
+  }
+  return normalizeProductCategoryNames(splitImportCategoryHierarchy(row.category));
+};
+
+const normalizeImportText = (value?: string | null) => {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized ? normalized : null;
+};
+
+const mergeImportColorIntoVariants = (
+  variants: NonNullable<CreateProductInput["variants"]>,
+  color: string | null,
+) => {
+  if (!color || !variants.length) {
+    return variants;
+  }
+  return variants.map((variant) => ({
+    ...variant,
+    attributes: {
+      color,
+      ...(variant.attributes ?? {}),
+    },
+  }));
 };
 
 const resolveImportImageWorkerCount = (rowsCount: number) => {
@@ -3133,6 +3172,51 @@ export const importProductsTx = async (
     }
   };
 
+  const applyImportColorToExistingVariants = async (productId: string, color: string) => {
+    const existingVariants = await tx.productVariant.findMany({
+      where: { productId, isActive: true },
+      select: { id: true, attributes: true },
+    });
+    if (!existingVariants.length) {
+      return;
+    }
+
+    const attributeDefinitions = await resolveAttributeDefinitions();
+    const definitionMap = new Map<string, AttributeDefinitionRow>(
+      attributeDefinitions.map((definition: AttributeDefinitionRow) => [
+        definition.key,
+        definition,
+      ]),
+    );
+
+    for (const variant of existingVariants) {
+      const currentAttributes =
+        variant.attributes &&
+        typeof variant.attributes === "object" &&
+        !Array.isArray(variant.attributes)
+          ? (variant.attributes as Record<string, unknown>)
+          : {};
+      const nextAttributes = { ...currentAttributes, color };
+      await tx.productVariant.update({
+        where: { id: variant.id },
+        data: { attributes: toJson(nextAttributes) },
+      });
+      await tx.variantAttributeValue.deleteMany({
+        where: { variantId: variant.id, key: "color" },
+      });
+      await syncVariantAttributeValues(
+        tx,
+        {
+          organizationId: input.organizationId,
+          productId,
+          variantId: variant.id,
+          attributes: { color },
+        },
+        definitionMap,
+      );
+    }
+  };
+
   for (const row of input.rows) {
     const sku = row.sku.trim();
     if (!sku) {
@@ -3142,7 +3226,11 @@ export const importProductsTx = async (
     const barcodes = shouldApplyField("barcodes") ? normalizeBarcodes(row.barcodes) : [];
     const images = shouldApplyField("photoUrl") ? normalizeImportImages(row) : [];
     const photoUrl = images[0]?.url ?? null;
-    const variants = shouldApplyField("variants") ? normalizeImportVariants(row.variants) : [];
+    const rowColor = shouldApplyField("color") ? normalizeImportText(row.color) : null;
+    const variants = mergeImportColorIntoVariants(
+      shouldApplyField("variants") ? normalizeImportVariants(row.variants) : [],
+      rowColor,
+    );
     const basePriceKgs = shouldApplyField("basePriceKgs")
       ? resolveOptionalPrice(row.basePriceKgs)
       : undefined;
@@ -3156,12 +3244,7 @@ export const importProductsTx = async (
       ? resolveOptionalInteger(row.minStock)
       : undefined;
     const resolvedBaseCost = avgCostKgs ?? purchasePriceKgs;
-    const normalizedRowCategories = normalizeProductCategoryNames(
-      (row.category ?? "")
-        .split("|")
-        .map((value) => value.trim())
-        .filter(Boolean),
-    );
+    const normalizedRowCategories = normalizeImportRowCategories(row);
     const unitCode = row.unit?.trim() ?? "";
     const baseUnit =
       shouldApplyField("unit") && unitCode
@@ -3243,6 +3326,8 @@ export const importProductsTx = async (
 
       if (shouldApplyField("variants") && variants.length) {
         await upsertImportVariants(existing.id, variants);
+      } else if (rowColor) {
+        await applyImportColorToExistingVariants(existing.id, rowColor);
       }
 
       if (shouldApplyField("barcodes")) {

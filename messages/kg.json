@@ -3566,8 +3566,8 @@
       "csv": "CSV"
     },
     "templateDownload": "1C шаблонун жүктөө",
-    "templateHeaders": "sku,name,unit,category,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
-    "templateExample": "SKU-001,Буюм,шт,Категория,Сыпаттама,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Буюм,шт,\"Women, Shoes\",Black,Сыпаттама,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "mappingTitle": "Тилкелерди дал келтирүү",
     "mappingPlaceholder": "Тилкени тандаңыз",
     "mappingEmpty": "Дал келтирүү үчүн тилкелер жок.",
@@ -3578,6 +3578,7 @@
     "fieldName": "Аталышы",
     "fieldUnit": "Өлчөм бирдиги",
     "fieldCategory": "Категория",
+    "fieldColor": "Түс",
     "fieldDescription": "Сыпаттамасы",
     "fieldBasePrice": "Сатуу баасы",
     "fieldPurchasePrice": "Сатып алуу баасы",

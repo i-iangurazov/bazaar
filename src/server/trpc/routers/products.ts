@@ -38,6 +38,7 @@ import {
   bulkUpdateProductCategoryInputSchema,
   createProductInputSchema,
   duplicateProductInputSchema,
+  exportProductsInputSchema,
   findProductByBarcodeInputSchema,
   generateProductBarcodeInputSchema,
   generateProductDescriptionInputSchema,
@@ -315,10 +316,11 @@ export const productsRouter = router({
       }),
     ),
 
-  exportCsv: protectedProcedure.query(({ ctx }) =>
+  exportCsv: protectedProcedure.input(exportProductsInputSchema).query(({ ctx, input }) =>
     exportProductsCsv({
       prisma: ctx.prisma,
       organizationId: ctx.user.organizationId,
+      storeId: input?.storeId,
     }),
   ),
 

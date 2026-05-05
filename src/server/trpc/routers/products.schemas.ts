@@ -31,6 +31,7 @@ export const importUpdateFieldEnum = z.enum([
   "name",
   "unit",
   "category",
+  "color",
   "description",
   "photoUrl",
   "variants",
@@ -113,6 +114,12 @@ export const searchQuickProductsInputSchema = z.object({
 export const productsByIdsInputSchema = z.object({
   ids: z.array(z.string()).max(10_000),
 });
+
+export const exportProductsInputSchema = z
+  .object({
+    storeId: z.string().optional(),
+  })
+  .optional();
 
 export const productDetailInputSchema = z.object({
   productId: z.string(),
@@ -247,6 +254,8 @@ export const importCsvRowSchema = z.object({
   sku: z.string().min(2),
   name: z.string().min(2).optional(),
   category: z.string().optional(),
+  categories: z.array(z.string()).optional(),
+  color: z.string().optional(),
   unit: z.string().min(1).optional(),
   description: z.string().optional(),
   photoUrl: z.string().optional(),
