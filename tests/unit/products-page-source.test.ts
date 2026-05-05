@@ -28,4 +28,16 @@ describe("index page source layout", () => {
       expect(tableHeaderSource).not.toContain("sm:items-end");
     },
   );
+
+  it("chunks inventory bulk on-hand updates instead of sending huge selections in one request", async () => {
+    const source = await readSource("src/app/(app)/inventory/page.tsx");
+    const handlerStart = source.indexOf("const handleBulkOnHandSubmit");
+    const handlerSource = source.slice(handlerStart, handlerStart + 2200);
+
+    expect(source).toContain("const BULK_ON_HAND_CHUNK_SIZE = 5_000");
+    expect(handlerSource).toContain("index += BULK_ON_HAND_CHUNK_SIZE");
+    expect(handlerSource).toContain("snapshotIds.slice(index, index + BULK_ON_HAND_CHUNK_SIZE)");
+    expect(handlerSource).toContain("bulkOnHandMutation.mutateAsync");
+    expect(handlerSource).toContain("setBulkOnHandProgress");
+  });
 });

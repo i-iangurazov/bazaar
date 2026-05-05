@@ -151,6 +151,7 @@ const inventoryTableStateSchema = z.object({
 });
 
 const legacyInventoryPrintModalEnabled = process.env.NODE_ENV !== "production";
+const BULK_ON_HAND_CHUNK_SIZE = 5_000;
 
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
@@ -273,6 +274,10 @@ const InventoryPage = () => {
   const [activeDialog, setActiveDialog] = useState<
     "receive" | "adjust" | "transfer" | "minStock" | "bulkOnHand" | "movements" | null
   >(null);
+  const [bulkOnHandProgress, setBulkOnHandProgress] = useState<{
+    processed: number;
+    total: number;
+  } | null>(null);
   const [movementTarget, setMovementTarget] = useState<{
     productId: string;
     variantId?: string | null;
@@ -471,7 +476,7 @@ const InventoryPage = () => {
         variantId: z.string().optional().nullable(),
         qtyDelta: z.coerce.number().int(),
         unitSelection: z.string().min(1, t("unitRequired")),
-        reason: z.string().min(1, t("reasonRequired")),
+        reason: z.string().trim().min(3, t("reasonRequired")),
         expiryDate: z.string().optional(),
       }),
     [t],
@@ -481,7 +486,7 @@ const InventoryPage = () => {
     () =>
       z.object({
         targetOnHand: z.coerce.number().int().min(0, t("onHandNonNegative")),
-        reason: z.string().min(1, t("reasonRequired")),
+        reason: z.string().trim().min(3, t("reasonRequired")),
       }),
     [t],
   );
@@ -1474,22 +1479,53 @@ const InventoryPage = () => {
     },
   });
 
-  const bulkOnHandMutation = trpc.inventory.bulkSetOnHand.useMutation({
-    onSuccess: (result) => {
-      inventoryQuery.refetch();
+  const bulkOnHandMutation = trpc.inventory.bulkSetOnHand.useMutation();
+  const bulkOnHandBusy = bulkOnHandMutation.isLoading || Boolean(bulkOnHandProgress);
+
+  const handleBulkOnHandSubmit = async (values: z.infer<typeof bulkOnHandSchema>) => {
+    if (!storeId || !selectedSnapshotIds.length || bulkOnHandBusy) {
+      return;
+    }
+
+    const snapshotIds = [...selectedSnapshotIds];
+    const total = snapshotIds.length;
+    let processedCount = 0;
+    let updatedCount = 0;
+    setBulkOnHandProgress({ processed: 0, total });
+
+    try {
+      for (let index = 0; index < snapshotIds.length; index += BULK_ON_HAND_CHUNK_SIZE) {
+        const chunk = snapshotIds.slice(index, index + BULK_ON_HAND_CHUNK_SIZE);
+        const result = await bulkOnHandMutation.mutateAsync({
+          storeId,
+          snapshotIds: chunk,
+          targetOnHand: values.targetOnHand,
+          reason: values.reason.trim(),
+          idempotencyKey: crypto.randomUUID(),
+        });
+        processedCount += chunk.length;
+        updatedCount += result.updatedCount;
+        setBulkOnHandProgress({ processed: processedCount, total });
+      }
+
+      await inventoryQuery.refetch();
       bulkOnHandForm.setValue("targetOnHand", 0);
       bulkOnHandForm.setValue("reason", "");
       toast({
         variant: "success",
-        description: t("bulkOnHandSuccess", { count: result.updatedCount }),
+        description: t("bulkOnHandSuccess", { count: total, updated: updatedCount }),
       });
       setSelectedIds(new Set());
       setActiveDialog(null);
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setBulkOnHandProgress(null);
+    }
+  };
 
   const receiveMutation = trpc.inventory.receive.useMutation({
     onSuccess: () => {
@@ -3306,7 +3342,7 @@ const InventoryPage = () => {
       <Modal
         open={activeDialog === "bulkOnHand"}
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !bulkOnHandBusy) {
             setActiveDialog(null);
           }
         }}
@@ -3316,18 +3352,7 @@ const InventoryPage = () => {
         <Form {...bulkOnHandForm}>
           <form
             className="space-y-4"
-            onSubmit={bulkOnHandForm.handleSubmit((values) => {
-              if (!storeId || !selectedSnapshotIds.length) {
-                return;
-              }
-              bulkOnHandMutation.mutate({
-                storeId,
-                snapshotIds: selectedSnapshotIds,
-                targetOnHand: values.targetOnHand,
-                reason: values.reason,
-                idempotencyKey: crypto.randomUUID(),
-              });
-            })}
+            onSubmit={bulkOnHandForm.handleSubmit(handleBulkOnHandSubmit)}
           >
             <FormGrid>
               <FormField
@@ -3364,28 +3389,40 @@ const InventoryPage = () => {
                 )}
               />
             </FormGrid>
+            {bulkOnHandProgress ? (
+              <div className="border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                {t("bulkOnHandProgress", {
+                  processed: bulkOnHandProgress.processed,
+                  total: bulkOnHandProgress.total,
+                })}
+              </div>
+            ) : null}
             <FormActions>
               <Button
                 type="button"
                 variant="secondary"
                 className="w-full sm:w-auto"
                 onClick={() => setActiveDialog(null)}
+                disabled={bulkOnHandBusy}
               >
                 {tCommon("cancel")}
               </Button>
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={
-                  bulkOnHandMutation.isLoading || !storeId || selectedSnapshotIds.length === 0
-                }
+                disabled={bulkOnHandBusy || !storeId || selectedSnapshotIds.length === 0}
               >
-                {bulkOnHandMutation.isLoading ? (
+                {bulkOnHandBusy ? (
                   <Spinner className="h-4 w-4" />
                 ) : (
                   <AdjustIcon className="h-4 w-4" aria-hidden />
                 )}
-                {bulkOnHandMutation.isLoading ? tCommon("loading") : t("bulkOnHandSubmit")}
+                {bulkOnHandBusy
+                  ? t("bulkOnHandProgressShort", {
+                      processed: bulkOnHandProgress?.processed ?? 0,
+                      total: bulkOnHandProgress?.total ?? selectedCount,
+                    })
+                  : t("bulkOnHandSubmit")}
               </Button>
             </FormActions>
           </form>

@@ -324,7 +324,7 @@ export const inventoryRouter = router({
     .input(
       z.object({
         storeId: z.string(),
-        snapshotIds: z.array(z.string()).min(1).max(5_000),
+        snapshotIds: z.array(z.string()).min(1).max(5_000, "inventoryBulkSelectionLimit"),
         targetOnHand: z.number().int().min(0),
         reason: z.string().min(3),
         idempotencyKey: z.string().min(8),
