@@ -47,9 +47,9 @@
 
 ### Remaining Risks
 
-- A polished "Add existing product to this store" UI is still needed; current assignment happens through create/import/stock/price actions and migration backfill.
-- Existing manager/staff/cashier users are backfilled to all current stores to avoid production lockouts; admins should tighten assignments after migration.
+- Existing manager/staff/cashier users are backfilled to all current stores to avoid production lockouts; admins should tighten assignments after migration. Settings > Users now surfaces this review task.
 - Marketplace integration inclusion lists remain partly organization-level, though stock/export payloads are store/mapping based.
+- The "Add existing products" flow is now functional and explicit, but later polish can add richer filters and select-all across catalog search.
 - Browser QA for the exact admin creates Store B flow was not run in this slice; coverage is integration/unit/build based.
 
 ## Font, Switch, And Integration Polish - 2026-05-05
@@ -669,3 +669,68 @@
 - After the allow-list and language-tolerant matching refinement, sandboxed `CI=1 pnpm test` could not reach local PostgreSQL through Prisma and therefore skipped DB tests: 67 files passed, 32 skipped, 303 tests passed, 149 skipped.
 - Product integration regression was rerun with direct local PostgreSQL access: `DATABASE_TEST_URL='postgresql://inventory:inventory@127.0.0.1:5432/inventory_test?schema=public' CI=1 pnpm test tests/integration/products.test.ts` passed: 1 file, 23 tests.
 - `pnpm build` passed.
+
+## Store-Scope Follow-Up Pass
+
+### Changed
+
+- Reports, analytics, and core export job endpoints now resolve unfiltered reads for restricted users to their assigned stores instead of the full organization.
+- Explicit inaccessible store filters in reports, analytics, and export creation now fail server-side with `FORBIDDEN`.
+- Export job list/get/retry now hides jobs outside the user's accessible store set.
+- Analytics cache keys now include the resolved restricted store set, preventing restricted "all stores" views from sharing org-wide cache entries.
+- Marketplace integration inclusion toggles were reviewed and documented as intentionally organization-level configuration for now; store/product availability, stock, POS, dashboard, reports, core exports, and public catalog are still store-scoped.
+
+### Tests
+
+- Added regression coverage proving a manager assigned only to Store A cannot see Store B data through reports, analytics, or export jobs.
+- Re-ran import DB tests with local PostgreSQL reachable through Prisma instead of the sandbox-limited runner.
+
+### Validation
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- Focused DB validation with local PostgreSQL passed: `DATABASE_TEST_URL='postgresql://inventory:inventory@localhost:5432/inventory_test?schema=public' CI=1 pnpm test tests/integration/imports.test.ts tests/integration/store-isolation.test.ts tests/integration/analytics.test.ts tests/integration/reports.test.ts tests/integration/exports.test.ts` passed: 5 files, 22 tests.
+
+## Store Product Assignment UX
+
+### Changed
+
+- Added `products.assignToStore`, an explicit admin mutation for attaching existing organization catalog products to a selected store.
+- Added an "Add existing products" action on the Products page and in the empty-store state.
+- The assignment flow creates or reactivates `StoreProduct` rows only; it does not copy inventory, store prices, or stock movements.
+- Empty new stores now guide admins to create a product, import into that store, or add existing catalog products.
+- Settings > Users now shows an admin reminder to review store assignments after the non-admin backfill.
+
+### Tests
+
+- Added integration coverage that assigning an existing product to Store B makes it visible in Store B products while Store A stock remains unchanged and Store B gets no copied stock.
+- Added duplicate assignment coverage: already-active `StoreProduct` rows are skipped instead of duplicated.
+
+### Remaining Risks
+
+- Marketplace integration inclusion toggles remain organization-level by design; the follow-up decision is whether marketplace inclusion should become per-store.
+- The add-existing-products modal is intentionally simple; later polish can add select-all across catalog search, richer filters, and clearer already-assigned hints.
+
+### Validation
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `git diff --check` passed.
+- Sandboxed DB test run skipped because Prisma could not reach local PostgreSQL from the sandbox.
+- Focused DB validation with local PostgreSQL passed: `DATABASE_TEST_URL='postgresql://inventory:inventory@localhost:5432/inventory_test?schema=public' CI=1 pnpm test tests/integration/store-isolation.test.ts` passed: 1 file, 7 tests.
+- `pnpm build` passed.
+
+### Pre-Push Validation
+
+- `CI=1 pnpm test` passed: 105 files, 476 tests.
+- `pnpm build` passed.
+- `pnpm prisma migrate status` passed: database schema is up to date.
+- `pnpm prisma migrate dev` passed: already in sync, no schema change or pending migration.
+- `pnpm prisma generate` passed.
+- `pnpm prisma studio --browser none` started successfully on `localhost:5555` and was stopped after the smoke check.
+- `pnpm i18n:check` passed.
+- `pnpm typecheck` was rerun after build generation and passed.
+- `pnpm lint` passed with no warnings/errors.
+- `git diff --check` passed.

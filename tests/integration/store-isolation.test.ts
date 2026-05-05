@@ -1,4 +1,4 @@
-import { CustomerOrderStatus, Role } from "@prisma/client";
+import { CustomerOrderStatus, ExportJobStatus, ExportType, Prisma, Role, StockMovementType } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
@@ -48,6 +48,78 @@ describeDb("store isolation", () => {
     expect(storeAProducts.items.map((item) => item.id)).toContain(product.id);
     expect(storeBProducts.items.map((item) => item.id)).not.toContain(product.id);
     expect(storeBInventory.total).toBe(0);
+  });
+
+  it("explicitly assigns existing catalog products to a store without copying stock", async () => {
+    const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const storeB = await caller.stores.create({
+      name: "Second Store",
+      code: "SEC",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+    });
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-assign-existing-product",
+      sku: "ASSIGN-001",
+      name: "Assignable Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+    });
+    await adjustStock({
+      organizationId: org.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 7,
+      reason: "receive",
+      actorId: adminUser.id,
+      requestId: "req-assign-stock",
+      idempotencyKey: "assign-existing-stock",
+    });
+
+    const firstResult = await caller.products.assignToStore({
+      storeId: storeB.id,
+      productIds: [product.id],
+    });
+    const secondResult = await caller.products.assignToStore({
+      storeId: storeB.id,
+      productIds: [product.id],
+    });
+    const storeBProducts = await caller.products.list({ storeId: storeB.id });
+    const storeASnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const storeBSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: storeB.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+
+    expect(firstResult.assignedCount).toBe(1);
+    expect(firstResult.skippedCount).toBe(0);
+    expect(secondResult.assignedCount).toBe(0);
+    expect(secondResult.skippedCount).toBe(1);
+    expect(storeBProducts.items.map((item) => item.id)).toContain(product.id);
+    expect(storeASnapshot?.onHand).toBe(7);
+    expect(storeBSnapshot).toBeNull();
   });
 
   it("scopes product creation and POS lookup to the selected store", async () => {
@@ -174,6 +246,131 @@ describeDb("store isolation", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
       cashierCaller.salesOrders.list({ storeId: storeB.id, page: 1, pageSize: 25 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("scopes reports, analytics and exports to assigned stores", async () => {
+    const { org, managerUser, adminUser, store, product, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const storeB = await prisma.store.create({
+      data: { organizationId: org.id, name: "Store B", code: "B" },
+    });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: org.id, userId: managerUser.id, storeId: store.id },
+    });
+    const storeBProduct = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-store-b-report-product",
+      sku: "REPORT-B",
+      name: "Report Store B Product",
+      baseUnitId: baseUnit.id,
+      storeId: storeB.id,
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: new Prisma.Decimal(100) },
+    });
+    await prisma.product.update({
+      where: { id: storeBProduct.id },
+      data: { basePriceKgs: new Prisma.Decimal(500) },
+    });
+    await Promise.all([
+      prisma.stockMovement.create({
+        data: {
+          storeId: store.id,
+          productId: product.id,
+          type: StockMovementType.SALE,
+          qtyDelta: -1,
+          createdById: managerUser.id,
+        },
+      }),
+      prisma.stockMovement.create({
+        data: {
+          storeId: storeB.id,
+          productId: storeBProduct.id,
+          type: StockMovementType.SALE,
+          qtyDelta: -9,
+          createdById: adminUser.id,
+        },
+      }),
+      prisma.stockMovement.create({
+        data: {
+          storeId: store.id,
+          productId: product.id,
+          type: StockMovementType.ADJUSTMENT,
+          qtyDelta: -1,
+          createdById: managerUser.id,
+        },
+      }),
+      prisma.stockMovement.create({
+        data: {
+          storeId: storeB.id,
+          productId: storeBProduct.id,
+          type: StockMovementType.ADJUSTMENT,
+          qtyDelta: -2,
+          createdById: adminUser.id,
+        },
+      }),
+    ]);
+    const [storeAJob, storeBJob] = await Promise.all([
+      prisma.exportJob.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          type: ExportType.PRICE_LIST,
+          status: ExportJobStatus.DONE,
+          periodStart: new Date("2026-01-01T00:00:00Z"),
+          periodEnd: new Date("2026-01-31T23:59:59Z"),
+          requestedById: managerUser.id,
+        },
+      }),
+      prisma.exportJob.create({
+        data: {
+          organizationId: org.id,
+          storeId: storeB.id,
+          type: ExportType.PRICE_LIST,
+          status: ExportJobStatus.DONE,
+          periodStart: new Date("2026-01-01T00:00:00Z"),
+          periodEnd: new Date("2026-01-31T23:59:59Z"),
+          requestedById: adminUser.id,
+        },
+      }),
+    ]);
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: Role.MANAGER,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const shrinkage = await managerCaller.reports.shrinkage({ days: 30 });
+    const topProducts = await managerCaller.analytics.topProducts({
+      rangeDays: 30,
+      metric: "units",
+    });
+    const exportJobs = await managerCaller.exports.list();
+    const storeBExport = await managerCaller.exports.get({ jobId: storeBJob.id });
+
+    expect(shrinkage.map((item) => item.storeId)).toEqual([store.id]);
+    expect(topProducts.items.map((item) => item.name)).toContain(product.name);
+    expect(topProducts.items.map((item) => item.name)).not.toContain(storeBProduct.name);
+    expect(exportJobs.map((job) => job.id)).toContain(storeAJob.id);
+    expect(exportJobs.map((job) => job.id)).not.toContain(storeBJob.id);
+    expect(storeBExport).toBeNull();
+    await expect(managerCaller.reports.shrinkage({ storeId: storeB.id, days: 30 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      managerCaller.analytics.topProducts({ storeId: storeB.id, rangeDays: 30, metric: "units" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      managerCaller.exports.create({
+        storeId: storeB.id,
+        type: ExportType.PRICE_LIST,
+        periodStart: new Date("2026-01-01T00:00:00Z"),
+        periodEnd: new Date("2026-01-31T23:59:59Z"),
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 

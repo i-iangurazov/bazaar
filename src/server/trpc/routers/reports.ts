@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { managerProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, router, type Context } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
@@ -8,6 +8,11 @@ import {
   getSlowMoversReport,
   getStockoutsReport,
 } from "@/server/services/reports";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
 
 const rangeSchema = z.object({
   storeId: z.string().optional(),
@@ -30,13 +35,28 @@ const reportsProcedure = managerProcedure.use(async ({ ctx, next }) => {
   return next();
 });
 
+type AuthedContext = Context & { user: NonNullable<Context["user"]> };
+type StoreScope = { storeId?: string; storeIds?: string[] };
+
+const resolveReportStoreScope = async (ctx: AuthedContext, storeId?: string): Promise<StoreScope> => {
+  if (storeId) {
+    await assertUserCanAccessStore(ctx.prisma, ctx.user, storeId);
+    return { storeId };
+  }
+  if (userHasAllStoreAccess(ctx.user)) {
+    return {};
+  }
+  return { storeIds: await resolveAccessibleStoreIds(ctx.prisma, ctx.user) };
+};
+
 export const reportsRouter = router({
   stockouts: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input.days);
+      const storeScope = await resolveReportStoreScope(ctx, input.storeId);
       return await getStockoutsReport({
         organizationId: ctx.user.organizationId,
-        storeId: input.storeId,
+        ...storeScope,
         ...range,
       });
     } catch (error) {
@@ -46,9 +66,10 @@ export const reportsRouter = router({
   slowMovers: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input.days);
+      const storeScope = await resolveReportStoreScope(ctx, input.storeId);
       return await getSlowMoversReport({
         organizationId: ctx.user.organizationId,
-        storeId: input.storeId,
+        ...storeScope,
         ...range,
       });
     } catch (error) {
@@ -58,9 +79,10 @@ export const reportsRouter = router({
   shrinkage: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input.days);
+      const storeScope = await resolveReportStoreScope(ctx, input.storeId);
       return await getShrinkageReport({
         organizationId: ctx.user.organizationId,
-        storeId: input.storeId,
+        ...storeScope,
         ...range,
       });
     } catch (error) {

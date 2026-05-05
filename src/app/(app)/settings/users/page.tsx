@@ -391,6 +391,10 @@ const UsersPage = () => {
       />
 
       <div className="mt-6 space-y-6">
+        <div className="border border-border bg-muted/20 p-4">
+          <p className="text-sm font-semibold text-foreground">{t("storeAccessReviewTitle")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("storeAccessReviewHint")}</p>
+        </div>
         <Card>
           <CardHeader>
             <CardTitle>{t("title")}</CardTitle>

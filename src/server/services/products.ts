@@ -72,6 +72,14 @@ export type CreateProductInput = {
   }[];
 };
 
+export type AssignExistingProductsToStoreInput = {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  storeId: string;
+  productIds: string[];
+};
+
 const GENERATED_SKU_PREFIX = "SKU-";
 const GENERATED_SKU_PAD_LENGTH = 6;
 const GENERATED_SKU_MAX_PROBES = 10_000;
@@ -1646,6 +1654,119 @@ export const createProduct = async (input: CreateProductInput) => {
   }
 
   throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
+};
+
+export const assignExistingProductsToStore = async (
+  input: AssignExistingProductsToStoreInput,
+) => {
+  const productIds = Array.from(
+    new Set(input.productIds.map((value) => value.trim()).filter(Boolean)),
+  );
+  if (!productIds.length) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const [store, products] = await Promise.all([
+      tx.store.findFirst({
+        where: { id: input.storeId, organizationId: input.organizationId },
+        select: { id: true },
+      }),
+      tx.product.findMany({
+        where: {
+          id: { in: productIds },
+          organizationId: input.organizationId,
+          isDeleted: false,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!store) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
+    const ownedProductIds = products.map((product) => product.id);
+    if (!ownedProductIds.length) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+
+    const existingAssignments = await tx.storeProduct.findMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: { in: ownedProductIds },
+      },
+      select: { productId: true, isActive: true },
+    });
+    const activeIds = new Set(
+      existingAssignments
+        .filter((assignment) => assignment.isActive)
+        .map((assignment) => assignment.productId),
+    );
+    const inactiveIds = new Set(
+      existingAssignments
+        .filter((assignment) => !assignment.isActive)
+        .map((assignment) => assignment.productId),
+    );
+    const existingIds = new Set(existingAssignments.map((assignment) => assignment.productId));
+    const createIds = ownedProductIds.filter((productId) => !existingIds.has(productId));
+    const reactivateIds = ownedProductIds.filter((productId) => inactiveIds.has(productId));
+
+    const [created, reactivated] = await Promise.all([
+      createIds.length
+        ? tx.storeProduct.createMany({
+            data: createIds.map((productId) => ({
+              organizationId: input.organizationId,
+              storeId: input.storeId,
+              productId,
+              assignedById: input.actorId,
+              isActive: true,
+            })),
+            skipDuplicates: true,
+          })
+        : Promise.resolve({ count: 0 }),
+      reactivateIds.length
+        ? tx.storeProduct.updateMany({
+            where: {
+              organizationId: input.organizationId,
+              storeId: input.storeId,
+              productId: { in: reactivateIds },
+            },
+            data: {
+              isActive: true,
+              assignedById: input.actorId,
+            },
+          })
+        : Promise.resolve({ count: 0 }),
+    ]);
+
+    const assignedCount = created.count + reactivated.count;
+    const result = {
+      requestedCount: productIds.length,
+      eligibleCount: ownedProductIds.length,
+      assignedCount,
+      skippedCount: activeIds.size,
+      missingCount: Math.max(0, productIds.length - ownedProductIds.length),
+    };
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "PRODUCT_STORE_ASSIGN",
+      entity: "StoreProduct",
+      entityId: input.storeId,
+      before: null,
+      after: toJson({
+        storeId: input.storeId,
+        productIds: ownedProductIds,
+        ...result,
+      }),
+      requestId: input.requestId,
+    });
+
+    return result;
+  });
 };
 
 export type UpdateProductInput = {

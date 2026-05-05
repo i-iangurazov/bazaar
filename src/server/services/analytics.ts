@@ -67,6 +67,33 @@ const resolveStoreIds = async (organizationId: string, storeId?: string) => {
   return stores.map((store) => store.id);
 };
 
+const resolveScopedStoreIds = async (input: {
+  organizationId: string;
+  storeId?: string;
+  storeIds?: string[];
+}) => {
+  if (input.storeIds && input.storeIds.length === 0) {
+    return [];
+  }
+  if (input.storeIds) {
+    return input.storeIds;
+  }
+  return resolveStoreIds(input.organizationId, input.storeId);
+};
+
+const resolveScopeCacheKey = (input: { storeId?: string; storeIds?: string[] }) =>
+  input.storeId ?? (input.storeIds ? `stores:${[...input.storeIds].sort().join(",")}` : "all");
+
+const buildMovementStoreFilter = (input: { storeId?: string; storeIds?: string[] }) => {
+  if (input.storeId) {
+    return Prisma.sql`AND m."storeId" = ${input.storeId}`;
+  }
+  if (input.storeIds) {
+    return Prisma.sql`AND m."storeId" IN (${Prisma.join(input.storeIds)})`;
+  }
+  return Prisma.empty;
+};
+
 const toDateKey = (date: Date) => date.toISOString().slice(0, 10);
 
 const buildKey = (storeId: string, productId: string, variantId?: string | null) =>
@@ -127,26 +154,24 @@ const computeEventSeries = ({
 export const getSalesTrend = async (input: {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
   rangeDays: number;
   granularity: Granularity;
 }): Promise<SalesTrendResult> => {
-  const cacheKey = `analytics:sales:${input.organizationId}:${input.storeId ?? "all"}:${input.rangeDays}:${input.granularity}`;
+  const storeIds = await resolveScopedStoreIds(input);
+  if (!storeIds.length) {
+    return { series: [], usesFallback: false };
+  }
+  const cacheKey = `analytics:sales:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}:${input.granularity}`;
   const cached = await cacheGet<SalesTrendResult>(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const storeIds = await resolveStoreIds(input.organizationId, input.storeId);
-  if (!storeIds.length) {
-    return { series: [], usesFallback: false };
-  }
-
   const from = new Date(Date.now() - input.rangeDays * 24 * 60 * 60 * 1000);
   const to = new Date();
   const granularity = input.granularity === "week" ? "week" : "day";
-  const storeFilter = input.storeId
-    ? Prisma.sql`AND m."storeId" = ${input.storeId}`
-    : Prisma.empty;
+  const storeFilter = buildMovementStoreFilter(input);
 
   const rows = await prisma.$queryRaw<Array<{ bucket: Date; units: number }>>(Prisma.sql`
     SELECT date_trunc(${granularity}, m."createdAt") AS bucket,
@@ -196,25 +221,23 @@ export const getSalesTrend = async (input: {
 export const getTopProducts = async (input: {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
   rangeDays: number;
   metric: "revenue" | "units" | "profit";
 }): Promise<TopProductsResult> => {
-  const cacheKey = `analytics:top:${input.organizationId}:${input.storeId ?? "all"}:${input.rangeDays}:${input.metric}`;
+  const storeIds = await resolveScopedStoreIds(input);
+  if (!storeIds.length) {
+    return { items: [], canProfit: false };
+  }
+  const cacheKey = `analytics:top:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}:${input.metric}`;
   const cached = await cacheGet<TopProductsResult>(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const storeIds = await resolveStoreIds(input.organizationId, input.storeId);
-  if (!storeIds.length) {
-    return { items: [], canProfit: false };
-  }
-
   const from = new Date(Date.now() - input.rangeDays * 24 * 60 * 60 * 1000);
   const to = new Date();
-  const storeFilter = input.storeId
-    ? Prisma.sql`AND m."storeId" = ${input.storeId}`
-    : Prisma.empty;
+  const storeFilter = buildMovementStoreFilter(input);
 
   const rows = await prisma.$queryRaw<
     Array<{
@@ -275,17 +298,17 @@ export const getTopProducts = async (input: {
 export const getStockoutsLowStockSeries = async (input: {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
   rangeDays: number;
 }): Promise<StockoutLowStockResult> => {
-  const cacheKey = `analytics:stock:${input.organizationId}:${input.storeId ?? "all"}:${input.rangeDays}`;
+  const storeIds = await resolveScopedStoreIds(input);
+  if (!storeIds.length) {
+    return { lowStockCountSeries: [] };
+  }
+  const cacheKey = `analytics:stock:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}`;
   const cached = await cacheGet<StockoutLowStockResult>(cacheKey);
   if (cached) {
     return cached;
-  }
-
-  const storeIds = await resolveStoreIds(input.organizationId, input.storeId);
-  if (!storeIds.length) {
-    return { lowStockCountSeries: [] };
   }
 
   const from = new Date(Date.now() - input.rangeDays * 24 * 60 * 60 * 1000);
@@ -369,16 +392,16 @@ export const getStockoutsLowStockSeries = async (input: {
 export const getInventoryValue = async (input: {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
 }): Promise<InventoryValueResult> => {
-  const cacheKey = `analytics:value:${input.organizationId}:${input.storeId ?? "all"}`;
+  const storeIds = await resolveScopedStoreIds(input);
+  if (!storeIds.length) {
+    return { valueKgs: 0, deadStock30: 0, deadStock60: 0, deadStock90: 0 };
+  }
+  const cacheKey = `analytics:value:${input.organizationId}:${resolveScopeCacheKey(input)}`;
   const cached = await cacheGet<InventoryValueResult>(cacheKey);
   if (cached) {
     return cached;
-  }
-
-  const storeIds = await resolveStoreIds(input.organizationId, input.storeId);
-  if (!storeIds.length) {
-    return { valueKgs: 0, deadStock30: 0, deadStock60: 0, deadStock90: 0 };
   }
 
   const storeFilter = input.storeId

@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -267,6 +267,11 @@ const ProductsPage = () => {
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [assignExistingOpen, setAssignExistingOpen] = useState(false);
+  const [assignExistingSearch, setAssignExistingSearch] = useState("");
+  const [assignExistingSelectedIds, setAssignExistingSelectedIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [arrangeCategoriesProgress, setArrangeCategoriesProgress] =
     useState<AiArrangeCategoriesProgressState | null>(null);
@@ -532,6 +537,45 @@ const ProductsPage = () => {
     [productsBootstrapQuery.data?.list.items],
   );
   const productsTotal = productsBootstrapQuery.data?.list.total ?? 0;
+  const hasProductFilters = Boolean(
+    search || category || readiness !== "all" || productType !== "all" || showArchived,
+  );
+  const assignExistingProductsQuery = trpc.products.list.useQuery(
+    {
+      search: assignExistingSearch.trim() || undefined,
+      page: 1,
+      pageSize: 12,
+      includeArchived: false,
+      sortKey: "name",
+      sortDirection: "asc",
+    },
+    {
+      enabled: assignExistingOpen && isAdmin && Boolean(storeId),
+      keepPreviousData: true,
+    },
+  );
+  const assignProductsToStoreMutation = trpc.products.assignToStore.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([
+        productsBootstrapQuery.refetch(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+      ]);
+      toast({
+        variant: "success",
+        description: t("addExistingProductsSuccess", {
+          assigned: result.assignedCount,
+          skipped: result.skippedCount,
+        }),
+      });
+      setAssignExistingOpen(false);
+      setAssignExistingSearch("");
+      setAssignExistingSelectedIds(new Set());
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
   const exportQuery = trpc.products.exportCsv.useQuery(
     { storeId: storeId || undefined },
     { enabled: false },
@@ -700,6 +744,19 @@ const ProductsPage = () => {
   useEffect(() => {
     setSelectedIds(new Set());
   }, [search, category, showArchived, storeId, productType]);
+
+  useEffect(() => {
+    if (!assignExistingOpen) {
+      setAssignExistingSearch("");
+      setAssignExistingSelectedIds(new Set());
+    }
+  }, [assignExistingOpen]);
+
+  useEffect(() => {
+    if (assignExistingOpen) {
+      setAssignExistingSelectedIds(new Set());
+    }
+  }, [assignExistingOpen, storeId]);
 
   useEffect(() => {
     if (!arrangeCategoriesProgress) {
@@ -1200,6 +1257,39 @@ const ProductsPage = () => {
       }
       return next;
     });
+  };
+
+  const toggleAssignExistingProduct = (id: string) => {
+    setAssignExistingSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const openAssignExistingProducts = () => {
+    if (!storeId) {
+      toast({ variant: "error", description: t("storeRequired") });
+      return;
+    }
+    setAssignExistingOpen(true);
+  };
+
+  const submitAssignExistingProducts = async () => {
+    if (!storeId) {
+      toast({ variant: "error", description: t("storeRequired") });
+      return;
+    }
+    const productIds = Array.from(assignExistingSelectedIds);
+    if (!productIds.length) {
+      toast({ variant: "error", description: t("addExistingProductsSelectOne") });
+      return;
+    }
+    await assignProductsToStoreMutation.mutateAsync({ storeId, productIds });
   };
 
   const applyProductsSavedView = useCallback(
@@ -2252,6 +2342,9 @@ const ProductsPage = () => {
   const newBundleHref = productCreateStoreQuery
     ? `/products/new?type=bundle&${productCreateStoreQuery}`
     : "/products/new?type=bundle";
+  const importProductsHref = productCreateStoreQuery
+    ? `/settings/import?${productCreateStoreQuery}`
+    : "/settings/import";
 
   return (
     <div>
@@ -2291,10 +2384,14 @@ const ProductsPage = () => {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <Link href="/settings/import">
+                        <Link href={importProductsHref}>
                           <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
                           {t("importProducts")}
                         </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
+                        <CopyIcon className="h-4 w-4" aria-hidden />
+                        {t("addExistingProducts")}
                       </DropdownMenuItem>
                     </>
                   ) : null}
@@ -3420,12 +3517,55 @@ const ProductsPage = () => {
               {tCommon("loading")}
             </div>
           ) : productsTotal === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noProducts")}
+            selectedStore && !hasProductFilters ? (
+              <div className="mt-4 border border-dashed border-border bg-muted/20 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <EmptyIcon className="h-4 w-4" aria-hidden />
+                      {t("storeEmptyTitle")}
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {t("storeEmptySubtitle", { store: selectedStore.name })}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {isAdmin ? (
+                      <>
+                        <Link href={newProductHref} className="w-full sm:w-auto">
+                          <Button className="w-full sm:w-auto">
+                            <AddIcon className="h-4 w-4" aria-hidden />
+                            {t("newProduct")}
+                          </Button>
+                        </Link>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full sm:w-auto"
+                          onClick={openAssignExistingProducts}
+                        >
+                          <CopyIcon className="h-4 w-4" aria-hidden />
+                          {t("addExistingProducts")}
+                        </Button>
+                        <Link href={importProductsHref} className="w-full sm:w-auto">
+                          <Button type="button" variant="secondary" className="w-full sm:w-auto">
+                            <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
+                            {t("importProducts")}
+                          </Button>
+                        </Link>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <EmptyIcon className="h-4 w-4" aria-hidden />
+                  {t("noProducts")}
+                </div>
+              </div>
+            )
           ) : null}
           {productsBootstrapQuery.error ? (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
@@ -3442,6 +3582,107 @@ const ProductsPage = () => {
           ) : null}
         </CardContent>
       </Card>
+
+      <Modal
+        open={assignExistingOpen}
+        onOpenChange={setAssignExistingOpen}
+        title={t("addExistingProductsTitle")}
+        subtitle={t("addExistingProductsSubtitle")}
+        className="max-w-3xl"
+      >
+        <div className="space-y-4">
+          <Input
+            value={assignExistingSearch}
+            onChange={(event) => setAssignExistingSearch(event.target.value)}
+            placeholder={t("addExistingProductsSearch")}
+            aria-label={t("addExistingProductsSearch")}
+          />
+          <div className="border border-border">
+            <div className="flex items-center justify-between border-b border-border bg-muted/20 px-4 py-3 text-sm">
+              <span className="font-semibold text-foreground">
+                {t("addExistingProductsSelected", { count: assignExistingSelectedIds.size })}
+              </span>
+              <span className="text-muted-foreground">{t("addExistingProductsHint")}</span>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {assignExistingProductsQuery.isLoading ? (
+                <div className="flex items-center gap-2 px-4 py-4 text-sm text-muted-foreground">
+                  <Spinner className="h-4 w-4" />
+                  {tCommon("loading")}
+                </div>
+              ) : assignExistingProductsQuery.data?.items.length ? (
+                assignExistingProductsQuery.data.items.map((product) => {
+                  const productCategories = getProductCategories(product);
+                  const previewImageUrl = getProductPreviewUrl(product);
+                  const barcodeSummary = getBarcodeSummary(product.barcodes);
+                  return (
+                    <label
+                      key={product.id}
+                      className="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 hover:bg-muted/30"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        checked={assignExistingSelectedIds.has(product.id)}
+                        onChange={() => toggleAssignExistingProduct(product.id)}
+                        aria-label={t("selectProduct", { name: product.name })}
+                      />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-muted/20">
+                        {previewImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewImageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {product.name}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {product.sku}
+                          {productCategories.length ? ` · ${productCategories.join(", ")}` : ""}
+                        </p>
+                      </div>
+                      <span className="hidden text-xs text-muted-foreground sm:inline">
+                        {barcodeSummary.label}
+                      </span>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-6 text-sm text-muted-foreground">
+                  {t("addExistingProductsEmpty")}
+                </div>
+              )}
+            </div>
+          </div>
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setAssignExistingOpen(false)}
+              disabled={assignProductsToStoreMutation.isLoading}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void submitAssignExistingProducts()}
+              disabled={
+                assignProductsToStoreMutation.isLoading || assignExistingSelectedIds.size === 0
+              }
+            >
+              {assignProductsToStoreMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("addExistingProductsConfirm")}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
       <Modal
         open={Boolean(arrangeCategoriesProgress)}

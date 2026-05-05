@@ -37,6 +37,8 @@ Central helper: `src/server/services/storeAccess.ts`
 - POS lookup and sale creation require the product to be assigned to the register store.
 - Inventory actions assign a product to the store only when the action explicitly affects that store.
 - Dashboard and sales-order reads use the user's accessible store set; restricted users do not get organization-wide data when no store filter is supplied.
+- Reports, analytics, and export job reads use the user's accessible store set when no store filter is supplied.
+- Export creation, report filters, and analytics filters reject explicit inaccessible `storeId` values server-side.
 
 ## Store Selector
 
@@ -56,5 +58,12 @@ Central helper: `src/server/services/storeAccess.ts`
 - Store B product list starts empty after Store B is created.
 - Product creation asks for a target store; a product created for Store B appears in Store B only.
 - Product import asks for a target store; imported products are assigned to that selected store only.
+- Store product lists have an explicit "Add existing products" action that attaches selected master-catalog products to the selected store without copying stock.
 - Store A-only product does not appear in Store B POS lookup.
 - Copying assortment between stores must remain explicit and auditable.
+
+## Integrations
+
+- Bazaar Catalog is store-scoped: each public catalog belongs to one store and product payloads only include products assigned to that store.
+- Marketplace integrations such as M-Market and Bakai Store still keep product inclusion toggles at organization level by design. Their stock/export payloads remain store/mapping-aware, but the inclusion UX is not yet per-store.
+- The org-level marketplace inclusion model is a documented product decision, not a store-access bypass for POS, inventory, product lists, dashboard, reports, or core exports.

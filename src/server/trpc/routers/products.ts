@@ -2,6 +2,7 @@ import { adminProcedure, protectedProcedure, rateLimit, router } from "@/server/
 import {
   archiveProductMutation,
   arrangeClothingCategoriesMutation,
+  assignProductsToStoreMutation,
   bulkGenerateProductBarcodesMutation,
   bulkGenerateProductDescriptionsMutation,
   bulkUpdateProductCategoryMutation,
@@ -33,6 +34,7 @@ import {
 import {
   archiveProductInputSchema,
   arrangeClothingCategoriesInputSchema,
+  assignProductsToStoreInputSchema,
   bulkGenerateProductBarcodesInputSchema,
   bulkGenerateProductDescriptionsInputSchema,
   bulkUpdateProductCategoryInputSchema,
@@ -227,6 +229,18 @@ export const productsRouter = router({
         input,
       }),
     ),
+
+  assignToStore: adminProcedure
+    .input(assignProductsToStoreInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      return assignProductsToStoreMutation({
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        requestId: ctx.requestId,
+        input,
+      });
+    }),
 
   generateBarcode: adminProcedure
     .input(generateProductBarcodeInputSchema)

@@ -6,6 +6,7 @@ import type { Locale } from "@/lib/locales";
 import {
   archiveProduct,
   arrangeClothingCategoriesWithAi,
+  assignExistingProductsToStore,
   bulkGenerateProductBarcodes,
   bulkGenerateProductDescriptions,
   bulkUpdateProductCategory,
@@ -25,6 +26,7 @@ import type {
   BulkGenerateProductDescriptionsInput,
   BulkUpdateProductCategoryInput,
   ArrangeClothingCategoriesInput,
+  AssignProductsToStoreInput,
   CreateProductInput,
   ImportProductsCsvInput,
   PreviewProductsImportCsvInput,
@@ -208,6 +210,23 @@ export const duplicateProductMutation = async ({
       requestId: ctx.requestId,
       productId: input.productId,
       sku: input.sku,
+    });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+};
+
+export const assignProductsToStoreMutation = async ({
+  input,
+  ...ctx
+}: ProductMutationContext & { input: AssignProductsToStoreInput }) => {
+  try {
+    return await assignExistingProductsToStore({
+      organizationId: ctx.organizationId,
+      actorId: ctx.actorId,
+      requestId: ctx.requestId,
+      storeId: input.storeId,
+      productIds: input.productIds,
     });
   } catch (error) {
     throw toTRPCError(error);

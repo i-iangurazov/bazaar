@@ -115,6 +115,11 @@ export const productsByIdsInputSchema = z.object({
   ids: z.array(z.string()).max(10_000),
 });
 
+export const assignProductsToStoreInputSchema = z.object({
+  storeId: z.string().min(1),
+  productIds: z.array(z.string().min(1)).min(1).max(500),
+});
+
 export const exportProductsInputSchema = z
   .object({
     storeId: z.string().optional(),
@@ -302,6 +307,7 @@ export type CreateProductInput = z.infer<typeof createProductInputSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductInputSchema>;
 export type InlineUpdatePatchInput = z.infer<typeof inlineUpdatePatchSchema>;
 export type InlineUpdateProductInput = z.infer<typeof inlineUpdateProductInputSchema>;
+export type AssignProductsToStoreInput = z.infer<typeof assignProductsToStoreInputSchema>;
 export type BulkGenerateProductBarcodesInput = z.infer<
   typeof bulkGenerateProductBarcodesInputSchema
 >;

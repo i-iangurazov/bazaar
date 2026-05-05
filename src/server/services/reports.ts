@@ -5,6 +5,7 @@ import { prisma } from "@/server/db/prisma";
 type ReportRangeInput = {
   organizationId: string;
   storeId?: string;
+  storeIds?: string[];
   from: Date;
   to: Date;
 };
@@ -51,9 +52,15 @@ type ShrinkageRow = {
 const buildKey = (storeId: string, productId: string, variantId: string | null) =>
   `${storeId}:${productId}:${variantId ?? "BASE"}`;
 
-const loadStores = async (organizationId: string, storeId?: string) => {
+const loadStores = async (organizationId: string, storeId?: string, limitedStoreIds?: string[]) => {
+  if (limitedStoreIds && limitedStoreIds.length === 0) {
+    return { storeIds: [], storeMap: new Map<string, string>() };
+  }
   const stores = await prisma.store.findMany({
-    where: { organizationId, ...(storeId ? { id: storeId } : {}) },
+    where: {
+      organizationId,
+      ...(storeId ? { id: storeId } : limitedStoreIds ? { id: { in: limitedStoreIds } } : {}),
+    },
     select: { id: true, name: true },
   });
   const storeIds = stores.map((store) => store.id);
@@ -81,7 +88,7 @@ const loadVariants = async (variantIds: string[]) => {
 };
 
 export const getStockoutsReport = async (input: ReportRangeInput): Promise<StockoutRow[]> => {
-  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId);
+  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId, input.storeIds);
   if (!storeIds.length) {
     return [];
   }
@@ -174,7 +181,7 @@ export const getStockoutsReport = async (input: ReportRangeInput): Promise<Stock
 };
 
 export const getSlowMoversReport = async (input: ReportRangeInput): Promise<SlowMoverRow[]> => {
-  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId);
+  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId, input.storeIds);
   if (!storeIds.length) {
     return [];
   }
@@ -236,7 +243,7 @@ export const getSlowMoversReport = async (input: ReportRangeInput): Promise<Slow
 };
 
 export const getShrinkageReport = async (input: ReportRangeInput): Promise<ShrinkageRow[]> => {
-  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId);
+  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId, input.storeIds);
   if (!storeIds.length) {
     return [];
   }

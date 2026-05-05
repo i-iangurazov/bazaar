@@ -1848,6 +1848,7 @@ const buildExportData = async (
 
 type ListExportJobsInput = {
   storeId?: string;
+  storeIds?: string[];
   limit?: number;
 };
 
@@ -1874,16 +1875,33 @@ const assertExportQueueCapacity = async (organizationId: string) => {
 
 export const listExportJobs = async (organizationId: string, input?: ListExportJobsInput) => {
   const take = normalizeListLimit(input?.limit);
+  if (input?.storeIds && input.storeIds.length === 0) {
+    return [];
+  }
   return prisma.exportJob.findMany({
-    where: { organizationId, ...(input?.storeId ? { storeId: input.storeId } : {}) },
+    where: {
+      organizationId,
+      ...(input?.storeId
+        ? { storeId: input.storeId }
+        : input?.storeIds
+          ? { storeId: { in: input.storeIds } }
+          : {}),
+    },
     orderBy: { createdAt: "desc" },
     take,
   });
 };
 
-export const getExportJob = async (organizationId: string, jobId: string) => {
+export const getExportJob = async (organizationId: string, jobId: string, storeIds?: string[]) => {
+  if (storeIds && storeIds.length === 0) {
+    return null;
+  }
   return prisma.exportJob.findFirst({
-    where: { id: jobId, organizationId },
+    where: {
+      id: jobId,
+      organizationId,
+      ...(storeIds ? { storeId: { in: storeIds } } : {}),
+    },
   });
 };
 
@@ -1892,9 +1910,17 @@ export const retryExportJob = async (input: {
   jobId: string;
   actorId: string;
   requestId: string;
+  storeIds?: string[];
 }) => {
+  if (input.storeIds && input.storeIds.length === 0) {
+    throw new AppError("exportJobNotFound", "NOT_FOUND", 404);
+  }
   const job = await prisma.exportJob.findFirst({
-    where: { id: input.jobId, organizationId: input.organizationId },
+    where: {
+      id: input.jobId,
+      organizationId: input.organizationId,
+      ...(input.storeIds ? { storeId: { in: input.storeIds } } : {}),
+    },
   });
   if (!job) {
     throw new AppError("exportJobNotFound", "NOT_FOUND", 404);

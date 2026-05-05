@@ -71,8 +71,11 @@ describeDb("analytics", () => {
     expect(Array.isArray(orgSales.series)).toBe(true);
   });
 
-  it("blocks org-wide charts for staff", async () => {
+  it("scopes org-wide charts for staff to assigned stores", async () => {
     const { store, staffUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: staffUser.organizationId!, userId: staffUser.id, storeId: store.id },
+    });
     const staffCaller = createTestCaller({
       id: staffUser.id,
       email: staffUser.email,
@@ -80,12 +83,11 @@ describeDb("analytics", () => {
       organizationId: staffUser.organizationId!,
     });
 
-    await expect(
-      staffCaller.analytics.salesTrend({
-        rangeDays: 30,
-        granularity: "day",
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const scopedSales = await staffCaller.analytics.salesTrend({
+      rangeDays: 30,
+      granularity: "day",
+    });
+    expect(Array.isArray(scopedSales.series)).toBe(true);
 
     const storeSales = await staffCaller.analytics.salesTrend({
       storeId: store.id,

@@ -31,6 +31,8 @@ Date: 2026-05-06
 - Store selector only returns stores the current user can access.
 - Dashboard store bootstrap, summary, and activity endpoints only use stores the current user can access.
 - Sales order list/detail/mutation endpoints enforce store access; an unfiltered list for a restricted user resolves to accessible stores, not the whole organization.
+- Reports, analytics, and core export job endpoints enforce store access; unfiltered reads for restricted users resolve to assigned stores instead of organization-wide data.
+- Explicit inaccessible store filters in reports, analytics, and export creation return `FORBIDDEN`.
 - Product list, quick search, product ids, CSV export, Bazaar API products, and public catalog products require active `StoreProduct` assignment when a store context exists.
 - Product import from `/settings/import` requires a target store and applies imported products/store prices/minimum-stock settings only to that selected store.
 - Creating a product requires an explicit target store in the create form and assigns it only to that store.
@@ -65,11 +67,14 @@ Migrations:
 
 - User create/edit includes store assignment checkboxes for non-admin roles.
 - Product creation shows a target-store selector before the form so admins can choose the store the product should belong to.
+- Products empty-store state now offers explicit actions to create a product, import into the selected store, or add existing organization catalog products to the store.
+- "Add existing products" opens a selection modal backed by `products.assignToStore`; it creates/reactivates `StoreProduct` rows and does not copy stock.
+- Settings > Users now shows an admin reminder to review store assignments after the migration/backfill.
 - Store creation copy inventory is no longer enabled by default.
 
 ## Risks / Follow-Up
 
-- A dedicated "Add existing product to this store" UI is still needed for a polished admin workflow; today assignment happens through create/import/stock/price actions and migration backfill.
-- Manager/staff users created before this migration are intentionally backfilled to all current stores to avoid surprise lockouts; admins should tighten assignments afterward.
-- Marketplace integrations still have some organization-level inclusion lists, but stock/export payloads are store/mapping based. A later integrations pass should move inclusion UX to explicit store availability where needed.
+- The "Add existing products" flow is functional and explicit; a later UX pass can make it richer with saved filters, select-all catalog search, and per-product availability hints.
+- Manager/staff users created before this migration are intentionally backfilled to all current stores to avoid surprise lockouts; Settings > Users now surfaces this as an admin review task.
+- Marketplace integrations still have some organization-level inclusion lists by design. This pass classified them as integration configuration/product-selection state, while stock/export payloads remain store/mapping based. A later integrations UX pass should decide whether marketplace inclusion should become per-store.
 - Full browser QA for the new empty-store state was not run in this slice.
