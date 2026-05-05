@@ -2470,7 +2470,7 @@ const ProductsPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <SavedTableViews
                 views={productsSavedViewsState.views}
@@ -2494,7 +2494,7 @@ const ProductsPage = () => {
                 />
               ) : null}
             </div>
-            <div className="flex items-center gap-1 rounded-none border border-border p-1">
+            <div className="flex shrink-0 items-center gap-1 rounded-none border border-border p-1">
               <Button
                 type="button"
                 size="sm"

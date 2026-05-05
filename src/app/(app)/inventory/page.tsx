@@ -1898,7 +1898,7 @@ const InventoryPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("inventoryOverview")}</CardTitle>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <SavedTableViews
                 views={inventorySavedViewsState.views}
@@ -1922,7 +1922,7 @@ const InventoryPage = () => {
                 />
               ) : null}
             </div>
-            <div className="inline-flex w-full items-center gap-1 rounded-none border border-border p-1 sm:w-auto">
+            <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-none border border-border p-1 sm:w-auto">
               <Button
                 type="button"
                 size="sm"
