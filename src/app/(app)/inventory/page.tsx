@@ -151,7 +151,7 @@ const inventoryTableStateSchema = z.object({
 });
 
 const legacyInventoryPrintModalEnabled = process.env.NODE_ENV !== "production";
-const BULK_ON_HAND_CHUNK_SIZE = 1_000;
+const BULK_ON_HAND_CHUNK_SIZE = 100;
 
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;

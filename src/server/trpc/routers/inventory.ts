@@ -320,7 +320,7 @@ export const inventoryRouter = router({
     }),
 
   bulkSetOnHand: managerProcedure
-    .use(rateLimit({ windowMs: 30_000, max: 30, prefix: "inventory-bulk-on-hand" }))
+    .use(rateLimit({ windowMs: 600_000, max: 250, prefix: "inventory-bulk-on-hand" }))
     .input(
       z.object({
         storeId: z.string(),

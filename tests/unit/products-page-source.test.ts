@@ -35,12 +35,12 @@ describe("index page source layout", () => {
     const handlerStart = source.indexOf("const handleBulkOnHandSubmit");
     const handlerSource = source.slice(handlerStart, handlerStart + 2200);
 
-    expect(source).toContain("const BULK_ON_HAND_CHUNK_SIZE = 1_000");
+    expect(source).toContain("const BULK_ON_HAND_CHUNK_SIZE = 100");
     expect(handlerSource).toContain("index += BULK_ON_HAND_CHUNK_SIZE");
     expect(handlerSource).toContain("snapshotIds.slice(index, index + BULK_ON_HAND_CHUNK_SIZE)");
     expect(handlerSource).toContain("bulkOnHandMutation.mutateAsync");
     expect(handlerSource).toContain("setBulkOnHandProgress");
-    expect(serviceSource).toContain("const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 250");
+    expect(serviceSource).toContain("const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 10");
     expect(serviceSource).toContain("index += BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE");
     expect(serviceSource).toContain("key: `${input.idempotencyKey}:${chunkIndex}`");
     expect(serviceSource).toContain("{ timeout: 10_000 }");

@@ -13,7 +13,7 @@ import { updateProductCost } from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 
-const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 250;
+const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 10;
 
 export type StockAdjustmentInput = {
   storeId: string;
