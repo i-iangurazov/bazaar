@@ -328,6 +328,8 @@ export const ProductForm = ({
   currencyCode,
   currencyRateKgsPerUnit,
   quickCreateMode = false,
+  formId,
+  hideActions = false,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -340,6 +342,8 @@ export const ProductForm = ({
   currencyCode?: string | null;
   currencyRateKgsPerUnit?: number | string | null;
   quickCreateMode?: boolean;
+  formId?: string;
+  hideActions?: boolean;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -2467,7 +2471,7 @@ export const ProductForm = ({
 
   return (
     <Form {...form}>
-      <form className="space-y-6" onSubmit={form.handleSubmit(handleSubmit)}>
+      <form id={formId} className="space-y-6" onSubmit={form.handleSubmit(handleSubmit)}>
         <TooltipProvider>
           <Card>
             <CardHeader>
@@ -3819,7 +3823,7 @@ export const ProductForm = ({
           </Card>
         </TooltipProvider>
 
-        {!readOnly ? (
+        {!readOnly && !hideActions ? (
           <FormActions>
             <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
               {isSubmitting ? (

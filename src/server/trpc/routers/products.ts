@@ -169,6 +169,7 @@ export const productsRouter = router({
       getProductPricing({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         productId: input.productId,
         storeId: input.storeId,
       }),
@@ -180,6 +181,7 @@ export const productsRouter = router({
       getProductStorePricing({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         productId: input.productId,
       }),
     ),

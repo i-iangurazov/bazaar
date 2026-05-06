@@ -59,6 +59,7 @@ import {
   EmptyIcon,
   MoreIcon,
   PrintIcon,
+  StatusSuccessIcon,
   ViewIcon,
 } from "@/components/icons";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/i18nFormat";
@@ -94,6 +95,7 @@ const createIdempotencyKey = () => {
 const ProductDetailPage = () => {
   const params = useParams();
   const productId = String(params?.id ?? "");
+  const productEditFormId = "product-edit-form";
   const t = useTranslations("products");
   const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
@@ -149,7 +151,6 @@ const ProductDetailPage = () => {
   );
   const attributesQuery = trpc.attributes.list.useQuery();
   const unitsQuery = trpc.units.list.useQuery();
-  const storesQuery = trpc.stores.list.useQuery();
   const movementsQuery = trpc.inventory.movements.useQuery(
     movementStoreId ? { storeId: movementStoreId, productId } : { storeId: "", productId: "" },
     { enabled: movementsOpen && Boolean(movementStoreId) && Boolean(productId) },
@@ -162,9 +163,11 @@ const ProductDetailPage = () => {
     { productId: selectedComponent?.id ?? "" },
     { enabled: Boolean(selectedComponent?.id) },
   );
-  type StoreRow = NonNullable<typeof storesQuery.data>[number] & { trackExpiryLots?: boolean };
-  const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
-  const selectedPricingStore = stores.find((store) => store.id === pricingStoreId);
+  const assignedStoreRows = useMemo(
+    () => storePricingQuery.data?.stores ?? [],
+    [storePricingQuery.data?.stores],
+  );
+  const selectedPricingStore = assignedStoreRows.find((store) => store.storeId === pricingStoreId);
   const selectedPricingCurrencyCode = normalizeCurrencyCode(selectedPricingStore?.currencyCode);
   const selectedPricingCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
     Number(selectedPricingStore?.currencyRateKgsPerUnit ?? 1),
@@ -357,16 +360,24 @@ const ProductDetailPage = () => {
   });
 
   useEffect(() => {
-    if (!movementStoreId && storesQuery.data?.[0]) {
-      setMovementStoreId(storesQuery.data[0].id);
+    if (!assignedStoreRows.length) {
+      return;
     }
-  }, [movementStoreId, storesQuery.data]);
+    if (movementStoreId && assignedStoreRows.some((store) => store.storeId === movementStoreId)) {
+      return;
+    }
+    setMovementStoreId(assignedStoreRows[0]?.storeId ?? "");
+  }, [assignedStoreRows, movementStoreId]);
 
   useEffect(() => {
-    if (!pricingStoreId && storesQuery.data?.length === 1) {
-      setPricingStoreId(storesQuery.data[0].id);
+    if (!assignedStoreRows.length) {
+      return;
     }
-  }, [pricingStoreId, storesQuery.data]);
+    if (pricingStoreId && assignedStoreRows.some((store) => store.storeId === pricingStoreId)) {
+      return;
+    }
+    setPricingStoreId(assignedStoreRows[0]?.storeId ?? "");
+  }, [assignedStoreRows, pricingStoreId]);
 
   useEffect(() => {
     if (!storePricingQuery.data) {
@@ -495,7 +506,8 @@ const ProductDetailPage = () => {
   type LotRow = NonNullable<typeof lotsQuery.data>[number];
   const bundleComponents: BundleComponent[] = bundleComponentsQuery.data ?? [];
   const lots: LotRow[] = lotsQuery.data ?? [];
-  const labelStoreId = pricingStoreId || (stores.length === 1 ? (stores[0]?.id ?? "") : "");
+  const labelStoreId =
+    pricingStoreId || (assignedStoreRows.length === 1 ? (assignedStoreRows[0]?.storeId ?? "") : "");
   const labelPrintProfileQuery = trpc.stores.hardware.useQuery(
     { storeId: labelStoreId },
     { enabled: Boolean(labelStoreId) },
@@ -827,7 +839,7 @@ const ProductDetailPage = () => {
   }
 
   return (
-    <div>
+    <div className={isAdmin ? "pb-24" : undefined}>
       <PageHeader
         title={t("editTitle")}
         subtitle={productQuery.data.name}
@@ -1008,6 +1020,8 @@ const ProductDetailPage = () => {
           showBasePriceField={false}
           currencyCode={selectedPricingCurrencyCode}
           currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
+          formId={productEditFormId}
+          hideActions
         />
       </div>
 
@@ -1189,17 +1203,16 @@ const ProductDetailPage = () => {
           <CardTitle>{t("profitabilityTitle")}</CardTitle>
           <div className="w-full sm:max-w-xs">
             <Select
-              value={pricingStoreId || "all"}
-              onValueChange={(value) => setPricingStoreId(value === "all" ? "" : value)}
+              value={pricingStoreId}
+              onValueChange={(value) => setPricingStoreId(value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t("allStores")}</SelectItem>
-                {storesQuery.data?.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
+                {assignedStoreRows.map((store) => (
+                  <SelectItem key={store.storeId} value={store.storeId}>
+                    {store.storeName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1480,8 +1493,27 @@ const ProductDetailPage = () => {
           )}
         </CardContent>
       </Card>
-      {updateMutation.error ? (
-        <p className="mt-3 text-sm text-danger">{translateError(tErrors, updateMutation.error)}</p>
+      {isAdmin ? (
+        <div className="fixed bottom-4 right-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2 sm:bottom-6 sm:right-6">
+          {updateMutation.error ? (
+            <div className="max-w-sm border border-danger/30 bg-danger/10 px-3 py-2 text-right text-sm text-danger shadow-lg">
+              {translateError(tErrors, updateMutation.error)}
+            </div>
+          ) : null}
+          <Button
+            type="submit"
+            form={productEditFormId}
+            disabled={updateMutation.isLoading}
+            className="min-w-[180px] shadow-lg"
+          >
+            {updateMutation.isLoading ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+            )}
+            {updateMutation.isLoading ? t("saving") : t("save")}
+          </Button>
+        </div>
       ) : null}
 
       <Modal
@@ -1717,9 +1749,9 @@ const ProductDetailPage = () => {
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
               <SelectContent>
-                {storesQuery.data?.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
+                {assignedStoreRows.map((store) => (
+                  <SelectItem key={store.storeId} value={store.storeId}>
+                    {store.storeName}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -1051,11 +1051,13 @@ export const getProductById = async ({
 export const getProductPricing = async ({
   prisma,
   organizationId,
+  user,
   productId,
   storeId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   productId: string;
   storeId?: string;
 }) => {
@@ -1068,12 +1070,33 @@ export const getProductPricing = async ({
   }
 
   if (storeId) {
-    const store = await prisma.store.findFirst({
-      where: { id: storeId, organizationId },
+    if (user) {
+      try {
+        await assertUserCanAccessStore(prisma, user, storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    } else {
+      const store = await prisma.store.findFirst({
+        where: { id: storeId, organizationId },
+        select: { id: true },
+      });
+      if (!store) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      }
+    }
+
+    const assignment = await prisma.storeProduct.findFirst({
+      where: {
+        organizationId,
+        storeId,
+        productId,
+        isActive: true,
+      },
       select: { id: true },
     });
-    if (!store) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    if (!assignment) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
     }
   }
 
@@ -1114,10 +1137,12 @@ export const getProductPricing = async ({
 export const getProductStorePricing = async ({
   prisma,
   organizationId,
+  user,
   productId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
+  user?: StoreAccessUser;
   productId: string;
 }) => {
   const product = await prisma.product.findUnique({
@@ -1132,22 +1157,45 @@ export const getProductStorePricing = async ({
     throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
   }
 
-  const [stores, overrides, cost, snapshots] = await Promise.all([
-    prisma.store.findMany({
-      where: { organizationId },
-      select: {
-        id: true,
-        name: true,
-        currencyCode: true,
-        currencyRateKgsPerUnit: true,
+  const stores = await prisma.store.findMany({
+    where: {
+      organizationId,
+      storeProducts: {
+        some: {
+          organizationId,
+          productId,
+          isActive: true,
+        },
       },
-      orderBy: { name: "asc" },
-    }),
+      ...(user && !userHasAllStoreAccess(user)
+        ? {
+            userAccesses: {
+              some: {
+                organizationId,
+                userId: user.id,
+              },
+            },
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      trackExpiryLots: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
+    },
+    orderBy: { name: "asc" },
+  });
+  const storeIds = stores.map((store) => store.id);
+
+  const [overrides, cost, snapshots] = await Promise.all([
     prisma.storePrice.findMany({
       where: {
         organizationId,
         productId,
         variantKey: "BASE",
+        storeId: { in: storeIds },
       },
       select: {
         storeId: true,
@@ -1168,6 +1216,7 @@ export const getProductStorePricing = async ({
       where: {
         productId,
         variantId: null,
+        storeId: { in: storeIds },
         store: {
           organizationId,
         },
@@ -1194,6 +1243,7 @@ export const getProductStorePricing = async ({
       return {
         storeId: store.id,
         storeName: store.name,
+        trackExpiryLots: store.trackExpiryLots,
         currencyCode: store.currencyCode,
         currencyRateKgsPerUnit: Number(store.currencyRateKgsPerUnit),
         effectivePriceKgs: effective,

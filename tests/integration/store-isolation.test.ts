@@ -50,6 +50,52 @@ describeDb("store isolation", () => {
     expect(storeBInventory.total).toBe(0);
   });
 
+  it("scopes product detail store pricing to stores where the product is assigned", async () => {
+    const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const storeB = await caller.stores.create({
+      name: "Second Store",
+      code: "SEC",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+    });
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-store-pricing-scope",
+      sku: "PRICE-SCOPE",
+      name: "Store Pricing Scoped Product",
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 100,
+      storeId: store.id,
+    });
+    await prisma.storePrice.create({
+      data: {
+        organizationId: org.id,
+        storeId: storeB.id,
+        productId: product.id,
+        variantKey: "BASE",
+        priceKgs: new Prisma.Decimal(250),
+        updatedById: adminUser.id,
+      },
+    });
+
+    const pricing = await caller.products.storePricing({ productId: product.id });
+
+    expect(pricing.stores.map((item) => item.storeId)).toEqual([store.id]);
+    await expect(
+      caller.products.pricing({ productId: product.id, storeId: storeB.id }),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
   it("explicitly assigns existing catalog products to a store without copying stock", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
