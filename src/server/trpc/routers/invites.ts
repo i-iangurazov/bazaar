@@ -16,7 +16,13 @@ export const invitesRouter = router({
   }),
 
   create: adminProcedure
-    .input(z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]) }))
+    .input(
+      z.object({
+        email: z.string().email(),
+        role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
+        storeIds: z.array(z.string()).default([]),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await createInvite({
@@ -25,6 +31,7 @@ export const invitesRouter = router({
           requestId: ctx.requestId,
           email: input.email,
           role: input.role,
+          storeIds: input.storeIds,
         });
         const baseUrl = process.env.NEXTAUTH_URL ?? "";
         let emailSent = false;

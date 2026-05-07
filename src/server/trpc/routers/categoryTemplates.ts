@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { adminProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   listCategoryTemplates,
@@ -10,7 +10,7 @@ import {
 } from "@/server/services/categoryTemplates";
 
 export const categoryTemplatesRouter = router({
-  list: adminProcedure
+  list: managerProcedure
     .input(z.object({ category: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       return await listCategoryTemplates({
@@ -19,11 +19,11 @@ export const categoryTemplatesRouter = router({
       });
     }),
 
-  categories: adminProcedure.query(async ({ ctx }) => {
+  categories: managerProcedure.query(async ({ ctx }) => {
     return await listTemplateCategories(ctx.user.organizationId);
   }),
 
-  set: adminProcedure
+  set: managerProcedure
     .input(
       z.object({
         category: z.string().min(1),
@@ -44,7 +44,7 @@ export const categoryTemplatesRouter = router({
       }
     }),
 
-  remove: adminProcedure
+  remove: managerProcedure
     .input(z.object({ category: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {

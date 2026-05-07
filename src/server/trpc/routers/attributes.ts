@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { adminProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
@@ -50,7 +50,7 @@ export const attributesRouter = router({
     });
   }),
 
-  create: adminProcedure
+  create: managerProcedure
     .input(definitionSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -112,7 +112,7 @@ export const attributesRouter = router({
       }
     }),
 
-  update: adminProcedure
+  update: managerProcedure
     .input(definitionUpdateSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -151,7 +151,7 @@ export const attributesRouter = router({
       }
     }),
 
-  remove: adminProcedure
+  remove: managerProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {

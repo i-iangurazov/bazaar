@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { adminProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { createUnit, listUnits, removeUnit, updateUnit } from "@/server/services/units";
 
@@ -9,7 +9,7 @@ export const unitsRouter = router({
     return listUnits(ctx.user.organizationId);
   }),
 
-  create: adminProcedure
+  create: managerProcedure
     .input(
       z.object({
         code: z.string().min(1),
@@ -32,7 +32,7 @@ export const unitsRouter = router({
       }
     }),
 
-  update: adminProcedure
+  update: managerProcedure
     .input(
       z.object({
         unitId: z.string(),
@@ -55,7 +55,7 @@ export const unitsRouter = router({
       }
     }),
 
-  remove: adminProcedure
+  remove: managerProcedure
     .input(z.object({ unitId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {

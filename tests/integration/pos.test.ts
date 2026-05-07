@@ -678,8 +678,11 @@ describeDb("pos", () => {
   });
 
   it("closes shift with expected cash and discrepancy", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+    const { org, store, product, cashierUser, adminUser } = await seedBase({
       plan: "BUSINESS",
+    });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: org.id, userId: cashierUser.id, storeId: store.id },
     });
 
     await prisma.product.update({
@@ -749,16 +752,8 @@ describeDb("pos", () => {
       idempotencyKey: "pos-cash-out-1",
     });
 
-    const managerCaller = createTestCaller({
-      id: managerUser.id,
-      email: managerUser.email,
-      role: managerUser.role,
-      organizationId: org.id,
-      isOrgOwner: false,
-    });
-
     await expect(
-      managerCaller.pos.shifts.close({
+      cashierCaller.pos.shifts.close({
         shiftId: shift.id,
         closingCashCountedKgs: 130,
         idempotencyKey: "pos-shift-close-missing-note-1",
@@ -768,7 +763,7 @@ describeDb("pos", () => {
       message: "posShiftDifferenceNoteRequired",
     });
 
-    const close = await managerCaller.pos.shifts.close({
+    const close = await cashierCaller.pos.shifts.close({
       shiftId: shift.id,
       closingCashCountedKgs: 130,
       notes: "Cash counted short at close",
@@ -777,6 +772,51 @@ describeDb("pos", () => {
 
     expect(close.expectedCashKgs).toBe(140);
     expect(close.discrepancyKgs).toBe(-10);
+  });
+
+  it("blocks cashier from closing shifts outside assigned stores", async () => {
+    const { org, store, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: org.id, userId: cashierUser.id, storeId: store.id },
+    });
+    const otherStore = await prisma.store.create({
+      data: { organizationId: org.id, name: "Other Store", code: "OTHER" },
+    });
+    const otherRegister = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: otherStore.id,
+        name: "Other Register",
+        code: "OTHER",
+      },
+    });
+    const otherShift = await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: otherStore.id,
+        registerId: otherRegister.id,
+        openedById: adminUser.id,
+        openingCashKgs: 0,
+      },
+    });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await expect(
+      cashierCaller.pos.shifts.close({
+        shiftId: otherShift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "pos-shift-close-other-store",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "storeAccessDenied",
+    });
   });
 
   it("blocks connector workflow when kkm feature is locked", async () => {
@@ -956,6 +996,13 @@ describeDb("pos", () => {
       organizationId: org.id,
       isOrgOwner: false,
     });
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
 
     await cashierCaller.pos.shifts.open({
       registerId: register.id,
@@ -975,7 +1022,7 @@ describeDb("pos", () => {
       payments: [{ method: "CARD", amountKgs: 100 }],
     });
 
-    await managerCaller.pos.shifts.close({
+    await adminCaller.pos.shifts.close({
       shiftId: firstShift.id,
       closingCashCountedKgs: 0,
       idempotencyKey: "pos-close-card-return-1",

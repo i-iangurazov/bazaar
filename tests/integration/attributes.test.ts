@@ -11,11 +11,11 @@ describeDb("attribute definitions", () => {
   });
 
   it("creates and updates attribute definitions", async () => {
-    const { org, adminUser } = await seedBase();
+    const { org, managerUser } = await seedBase();
     const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
       organizationId: org.id,
     });
 

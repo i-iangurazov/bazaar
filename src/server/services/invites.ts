@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -15,12 +16,45 @@ const hashToken = (token: string) =>
 
 const createRawToken = () => randomBytes(24).toString("hex");
 
+type InviteRole = "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
+
+const roleUsesStoreAssignments = (role: InviteRole) => role !== "ADMIN";
+
+const resolveInviteStoreIds = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    role: InviteRole;
+    storeIds?: string[];
+  },
+) => {
+  if (!roleUsesStoreAssignments(input.role)) {
+    return [];
+  }
+
+  const storeIds = Array.from(new Set(input.storeIds?.filter(Boolean) ?? []));
+  if (!storeIds.length) {
+    return [];
+  }
+
+  const stores = await tx.store.findMany({
+    where: { organizationId: input.organizationId, id: { in: storeIds } },
+    select: { id: true },
+  });
+  if (stores.length !== storeIds.length) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
+
+  return storeIds;
+};
+
 export const createInvite = async (input: {
   organizationId: string;
   createdById: string;
   requestId: string;
   email: string;
-  role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
+  role: InviteRole;
+  storeIds?: string[];
 }) => {
   await assertWithinLimits({ organizationId: input.organizationId, kind: "users" });
   return prisma.$transaction(async (tx) => {
@@ -32,12 +66,18 @@ export const createInvite = async (input: {
     const rawToken = createRawToken();
     const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const storeIds = await resolveInviteStoreIds(tx, {
+      organizationId: input.organizationId,
+      role: input.role,
+      storeIds: input.storeIds,
+    });
 
     const invite = await tx.inviteToken.create({
       data: {
         organizationId: input.organizationId,
         email: input.email,
         role: input.role,
+        storeIds,
         tokenHash,
         createdById: input.createdById,
         expiresAt,
@@ -50,7 +90,7 @@ export const createInvite = async (input: {
       action: "INVITE_CREATE",
       entity: "InviteToken",
       entityId: invite.id,
-      after: toJson({ email: invite.email, role: invite.role, expiresAt }),
+      after: toJson({ email: invite.email, role: invite.role, storeIds, expiresAt }),
       requestId: input.requestId,
     });
 
@@ -109,6 +149,21 @@ export const acceptInvite = async (input: {
         emailVerifiedAt,
       },
     });
+    if (roleUsesStoreAssignments(invite.role) && invite.storeIds.length) {
+      const storeIds = await resolveInviteStoreIds(tx, {
+        organizationId: invite.organizationId,
+        role: invite.role,
+        storeIds: invite.storeIds,
+      });
+      await tx.userStoreAccess.createMany({
+        data: storeIds.map((storeId) => ({
+          organizationId: invite.organizationId,
+          userId: user.id,
+          storeId,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     const updatedInvite = await tx.inviteToken.update({
       where: { id: invite.id },

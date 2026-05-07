@@ -1,0 +1,2 @@
+ALTER TABLE "InviteToken"
+  ADD COLUMN "storeIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

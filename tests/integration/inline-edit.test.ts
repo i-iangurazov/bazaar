@@ -37,12 +37,15 @@ describeDb("inline edit mutations", () => {
     });
     expect(Number(stored?.basePriceKgs ?? 0)).toBe(155);
 
-    await expect(
-      managerCaller.products.inlineUpdate({
-        productId: product.id,
-        patch: { basePriceKgs: 160 },
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await managerCaller.products.inlineUpdate({
+      productId: product.id,
+      patch: { basePriceKgs: 160 },
+    });
+    const managerUpdated = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { basePriceKgs: true },
+    });
+    expect(Number(managerUpdated?.basePriceKgs ?? 0)).toBe(160);
 
     await expect(
       adminCaller.products.inlineUpdate({

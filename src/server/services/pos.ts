@@ -574,6 +574,7 @@ export const createPosRegister = async (input: {
   name: string;
   code: string;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -583,6 +584,12 @@ export const createPosRegister = async (input: {
     });
     if (!store) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      const accessibleStoreIds = await resolveAccessibleStoreIds(tx, input.user);
+      if (!accessibleStoreIds.includes(input.storeId)) {
+        throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+      }
     }
 
     const before = null;
@@ -617,6 +624,7 @@ export const updatePosRegister = async (input: {
   code?: string;
   isActive?: boolean;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -625,6 +633,12 @@ export const updatePosRegister = async (input: {
     });
     if (!register) {
       throw new AppError("posRegisterNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      const accessibleStoreIds = await resolveAccessibleStoreIds(tx, input.user);
+      if (!accessibleStoreIds.includes(register.storeId)) {
+        throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+      }
     }
 
     const updated = await tx.posRegister.update({
@@ -904,6 +918,7 @@ export const closeRegisterShift = async (input: {
   closingCashCountedKgs: number;
   notes?: string | null;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
   idempotencyKey: string;
 }) => {
@@ -925,6 +940,12 @@ export const closeRegisterShift = async (input: {
         });
         if (!shift) {
           throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
+        }
+        if (input.user) {
+          const accessibleStoreIds = await resolveAccessibleStoreIds(tx, input.user);
+          if (!accessibleStoreIds.includes(shift.storeId)) {
+            throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+          }
         }
 
         if (shift.status === RegisterShiftStatus.CLOSED) {

@@ -155,6 +155,7 @@ const UsersPage = () => {
       z.object({
         email: z.string().email(t("emailInvalid")),
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
+        storeIds: z.array(z.string()),
       }),
     [t],
   );
@@ -164,6 +165,7 @@ const UsersPage = () => {
     defaultValues: {
       email: "",
       role: "STAFF",
+      storeIds: [],
     },
   });
 
@@ -185,7 +187,7 @@ const UsersPage = () => {
   const inviteMutation = trpc.invites.create.useMutation({
     onSuccess: (result) => {
       invitesQuery.refetch();
-      inviteForm.reset({ email: "", role: "STAFF" });
+      inviteForm.reset({ email: "", role: "STAFF", storeIds: [] });
       if (typeof window !== "undefined") {
         setInviteLink(`${window.location.origin}/invite/${result.token}`);
       }
@@ -367,6 +369,22 @@ const UsersPage = () => {
       default:
         return role;
     }
+  };
+
+  const storesById = new Map((storesQuery.data ?? []).map((store) => [store.id, store]));
+  const storeAccessText = (roleValue: string, storeIds: string[]) => {
+    if (roleValue === "ADMIN") {
+      return tCommon("allStores");
+    }
+    if (!storeIds.length) {
+      return t("noStores");
+    }
+    return storeIds
+      .map((storeId) => {
+        const store = storesById.get(storeId);
+        return store ? `${store.name} (${store.code})` : storeId;
+      })
+      .join(", ");
   };
 
   if (isForbidden) {
@@ -696,7 +714,12 @@ const UsersPage = () => {
             <Form {...inviteForm}>
               <form
                 className="space-y-4"
-                onSubmit={inviteForm.handleSubmit((values) => inviteMutation.mutate(values))}
+                onSubmit={inviteForm.handleSubmit((values) =>
+                  inviteMutation.mutate({
+                    ...values,
+                    storeIds: values.role === "ADMIN" ? [] : values.storeIds,
+                  }),
+                )}
               >
                 <FormGrid>
                   <FormField
@@ -732,6 +755,63 @@ const UsersPage = () => {
                     )}
                   />
                 </FormGrid>
+                <FormField
+                  control={inviteForm.control}
+                  name="storeIds"
+                  render={({ field }) => {
+                    const selectedRole = inviteForm.watch("role");
+                    const usesStoreAssignments = selectedRole !== "ADMIN";
+                    return (
+                      <FormItem>
+                        <div className="border border-border p-3">
+                          <div className="mb-3">
+                            <FormLabel>{t("storeAccess")}</FormLabel>
+                            <FormDescription>
+                              {usesStoreAssignments ? t("storeAccessHint") : t("allStoresByRole")}
+                            </FormDescription>
+                          </div>
+                          {!usesStoreAssignments ? null : storesQuery.isLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Spinner className="h-4 w-4" />
+                              {tCommon("loading")}
+                            </div>
+                          ) : storesQuery.data?.length ? (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {storesQuery.data.map((store) => {
+                                const checked = field.value.includes(store.id);
+                                return (
+                                  <label
+                                    key={store.id}
+                                    className="flex items-center gap-2 border border-border bg-card px-3 py-2 text-sm"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4"
+                                      checked={checked}
+                                      onChange={(event) => {
+                                        field.onChange(
+                                          event.target.checked
+                                            ? [...field.value, store.id]
+                                            : field.value.filter((id) => id !== store.id),
+                                        );
+                                      }}
+                                    />
+                                    <span className="min-w-0 truncate">
+                                      {store.name} ({store.code})
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">{t("noStores")}</p>
+                          )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
                 <FormActions>
                   <Button
                     type="submit"
@@ -767,6 +847,7 @@ const UsersPage = () => {
                       <TableRow>
                         <TableHead>{t("inviteEmail")}</TableHead>
                         <TableHead>{t("inviteRole")}</TableHead>
+                        <TableHead>{t("storeAccess")}</TableHead>
                         <TableHead>{t("inviteStatus")}</TableHead>
                         <TableHead>{t("inviteExpires")}</TableHead>
                         <TableHead>{t("inviteCreatedBy")}</TableHead>
@@ -784,6 +865,9 @@ const UsersPage = () => {
                           <TableRow key={invite.id}>
                             <TableCell className="font-medium">{invite.email}</TableCell>
                             <TableCell>{roleLabel(invite.role)}</TableCell>
+                            <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
+                              {storeAccessText(invite.role, invite.storeIds)}
+                            </TableCell>
                             <TableCell>{status}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(invite.expiresAt, locale)}
@@ -816,6 +900,12 @@ const UsersPage = () => {
                         <span>
                           {t("inviteRole")}:{" "}
                           <span className="text-foreground">{roleLabel(invite.role)}</span>
+                        </span>
+                        <span>
+                          {t("storeAccess")}:{" "}
+                          <span className="text-foreground">
+                            {storeAccessText(invite.role, invite.storeIds)}
+                          </span>
                         </span>
                         <span>
                           {t("inviteStatus")}: <span className="text-foreground">{status}</span>

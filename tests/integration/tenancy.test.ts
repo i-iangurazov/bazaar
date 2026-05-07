@@ -94,7 +94,7 @@ describeDb("tenant isolation and signup", () => {
   });
 
   it("accepts invite within the correct organization", async () => {
-    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, adminUser, store } = await seedBase({ plan: "BUSINESS" });
     const adminCaller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -105,7 +105,9 @@ describeDb("tenant isolation and signup", () => {
     const invite = await adminCaller.invites.create({
       email: "new.user@test.local",
       role: "STAFF",
+      storeIds: [store.id],
     });
+    expect(invite.invite.storeIds).toEqual([store.id]);
 
     const publicCaller = createTestCaller();
     const accepted = await publicCaller.publicAuth.acceptInvite({
@@ -118,6 +120,13 @@ describeDb("tenant isolation and signup", () => {
     expect(Boolean(accepted.verifyLink) || Boolean(accepted.user?.emailVerifiedAt)).toBe(true);
     const created = await prisma.user.findUnique({ where: { email: "new.user@test.local" } });
     expect(created?.organizationId).toBe(org.id);
+    const storeAccess = created
+      ? await prisma.userStoreAccess.findMany({
+          where: { organizationId: org.id, userId: created.id },
+          select: { storeId: true },
+        })
+      : [];
+    expect(storeAccess.map((access) => access.storeId)).toEqual([store.id]);
     if (accepted.verifyLink) {
       expect(created?.emailVerifiedAt).toBeNull();
       const verifyToken = getTokenFromPath(accepted.verifyLink);
@@ -128,6 +137,33 @@ describeDb("tenant isolation and signup", () => {
     } else {
       expect(created?.emailVerifiedAt).not.toBeNull();
     }
+  });
+
+  it("rejects invites with store access outside the organization", async () => {
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const otherOrg = await prisma.organization.create({ data: { name: "Invite Other Org" } });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: otherOrg.id,
+        name: "Other Store",
+        code: "OTH-INV",
+        allowNegativeStock: false,
+      },
+    });
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await expect(
+      adminCaller.invites.create({
+        email: "bad.store@test.local",
+        role: "CASHIER",
+        storeIds: [otherStore.id],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("blocks cross-org access for stores, products, inventory, and POs", async () => {

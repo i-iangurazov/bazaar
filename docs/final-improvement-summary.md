@@ -734,3 +734,27 @@
 - `pnpm typecheck` was rerun after build generation and passed.
 - `pnpm lint` passed with no warnings/errors.
 - `git diff --check` passed.
+
+## Manager Permissions and Store-Based Invites
+
+### Changed
+
+- Managers can now create, edit, duplicate, archive, restore, assign, and bulk-update master products.
+- Managers can run product barcode, description, category, and AI category-arrangement tools.
+- Managers can manage units, attributes, product categories, and category templates.
+- Managers can create and update POS registers, but only for stores they can access.
+- Cashiers can close shifts for their assigned stores; shifts from inaccessible stores still fail server-side.
+- Pending invites now store selected `storeIds`; accepting a non-admin invite creates matching `UserStoreAccess` rows.
+- Settings > Users > Invites now includes `Доступ к магазинам` with the existing store assignment copy.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- Targeted DB validation passed: `DATABASE_TEST_URL=postgresql://inventory:inventory@127.0.0.1:5432/inventory_test?schema=public CI=1 pnpm test tests/integration/manager-permissions.test.ts tests/integration/tenancy.test.ts tests/integration/products.test.ts tests/integration/attributes.test.ts tests/integration/inline-edit.test.ts tests/integration/pos.test.ts`.
+- `pnpm build` passed.
+- `pnpm prisma migrate dev` applied `20260507120000_invite_store_access`.
+- `pnpm prisma migrate status` passed: database schema is up to date.
+- Full DB test suite passed: `CI=1 pnpm test` passed, 106 files and 481 tests.

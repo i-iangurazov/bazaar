@@ -449,11 +449,11 @@ describeDb("products", () => {
   });
 
   it("saves scanned manufacturer barcodes on product edit and finds them through POS scan lookup", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, adminUser, managerUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
       organizationId: org.id,
     });
 
@@ -535,11 +535,11 @@ describeDb("products", () => {
   });
 
   it("finds products by barcode within the organization", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, adminUser, managerUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
       organizationId: org.id,
     });
 
@@ -611,11 +611,11 @@ describeDb("products", () => {
   });
 
   it("normalizes scanned barcode input while keeping org scoping", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, adminUser, managerUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
       organizationId: org.id,
     });
 
@@ -654,11 +654,11 @@ describeDb("products", () => {
   });
 
   it("keeps paginated product list ordering stable for default sortable fields", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, adminUser, managerUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
       organizationId: org.id,
     });
 
@@ -942,11 +942,11 @@ describeDb("products", () => {
   });
 
   it("reflects create, update, archive, and restore flows in subsequent product lists", async () => {
-    const { org, adminUser, baseUnit } = await seedBase();
+    const { org, managerUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
       organizationId: org.id,
     });
 

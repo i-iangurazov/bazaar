@@ -2102,6 +2102,7 @@ model InviteToken {
   organizationId String
   email          String
   role           Role
+  storeIds       String[]  @default([])
   tokenHash      String    @unique
   expiresAt      DateTime
   createdById    String

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { adminProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   createProductCategory,
@@ -13,7 +13,7 @@ export const productCategoriesRouter = router({
     return listProductCategories(ctx.user.organizationId);
   }),
 
-  create: adminProcedure
+  create: managerProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -32,7 +32,7 @@ export const productCategoriesRouter = router({
       }
     }),
 
-  remove: adminProcedure
+  remove: managerProcedure
     .input(
       z.object({
         name: z.string().min(1),

@@ -1,4 +1,4 @@
-import { adminProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import {
   archiveProductMutation,
   arrangeClothingCategoriesMutation,
@@ -62,7 +62,7 @@ import {
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 export const productsRouter = router({
-  suggestSku: adminProcedure.query(({ ctx }) =>
+  suggestSku: managerProcedure.query(({ ctx }) =>
     getSuggestedProductSku(ctx.user.organizationId),
   ),
 
@@ -133,7 +133,7 @@ export const productsRouter = router({
       }),
     ),
 
-  duplicateDiagnostics: adminProcedure
+  duplicateDiagnostics: managerProcedure
     .input(productDuplicateDiagnosticsInputSchema)
     .query(({ ctx, input }) =>
       getProductDuplicateDiagnosticsQuery({
@@ -186,7 +186,7 @@ export const productsRouter = router({
       }),
     ),
 
-  create: adminProcedure
+  create: managerProcedure
     .input(createProductInputSchema)
     .mutation(({ ctx, input }) =>
       createProductMutation({
@@ -197,7 +197,7 @@ export const productsRouter = router({
       }),
     ),
 
-  update: adminProcedure
+  update: managerProcedure
     .input(updateProductInputSchema)
     .mutation(({ ctx, input }) =>
       updateProductMutation({
@@ -208,7 +208,7 @@ export const productsRouter = router({
       }),
     ),
 
-  inlineUpdate: adminProcedure
+  inlineUpdate: managerProcedure
     .input(inlineUpdateProductInputSchema)
     .mutation(({ ctx, input }) =>
       inlineUpdateProductMutation({
@@ -221,7 +221,7 @@ export const productsRouter = router({
       }),
     ),
 
-  duplicate: adminProcedure
+  duplicate: managerProcedure
     .input(duplicateProductInputSchema)
     .mutation(({ ctx, input }) =>
       duplicateProductMutation({
@@ -232,7 +232,7 @@ export const productsRouter = router({
       }),
     ),
 
-  assignToStore: adminProcedure
+  assignToStore: managerProcedure
     .input(assignProductsToStoreInputSchema)
     .mutation(async ({ ctx, input }) => {
       await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
@@ -244,7 +244,7 @@ export const productsRouter = router({
       });
     }),
 
-  generateBarcode: adminProcedure
+  generateBarcode: managerProcedure
     .input(generateProductBarcodeInputSchema)
     .mutation(({ ctx, input }) =>
       generateProductBarcodeMutation({
@@ -255,7 +255,7 @@ export const productsRouter = router({
       }),
     ),
 
-  generateDescription: adminProcedure
+  generateDescription: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "products-description-generate" }))
     .input(generateProductDescriptionInputSchema)
     .mutation(({ ctx, input }) =>
@@ -265,7 +265,7 @@ export const productsRouter = router({
       }),
     ),
 
-  bulkGenerateBarcodes: adminProcedure
+  bulkGenerateBarcodes: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 3, prefix: "products-barcodes-bulk" }))
     .input(bulkGenerateProductBarcodesInputSchema)
     .mutation(({ ctx, input }) =>
@@ -277,7 +277,7 @@ export const productsRouter = router({
       }),
     ),
 
-  bulkGenerateDescriptions: adminProcedure
+  bulkGenerateDescriptions: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-descriptions-bulk" }))
     .input(bulkGenerateProductDescriptionsInputSchema)
     .mutation(({ ctx, input }) =>
@@ -290,7 +290,7 @@ export const productsRouter = router({
       }),
     ),
 
-  bulkUpdateCategory: adminProcedure
+  bulkUpdateCategory: managerProcedure
     .input(bulkUpdateProductCategoryInputSchema)
     .mutation(({ ctx, input }) =>
       bulkUpdateProductCategoryMutation({
@@ -301,7 +301,7 @@ export const productsRouter = router({
       }),
     ),
 
-  arrangeClothingCategories: adminProcedure
+  arrangeClothingCategories: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-category-arrange" }))
     .input(arrangeClothingCategoriesInputSchema)
     .mutation(({ ctx, input }) =>
@@ -348,7 +348,7 @@ export const productsRouter = router({
     }),
   ),
 
-  archive: adminProcedure
+  archive: managerProcedure
     .input(archiveProductInputSchema)
     .mutation(({ ctx, input }) =>
       archiveProductMutation({
@@ -359,7 +359,7 @@ export const productsRouter = router({
       }),
     ),
 
-  restore: adminProcedure
+  restore: managerProcedure
     .input(archiveProductInputSchema)
     .mutation(({ ctx, input }) =>
       restoreProductMutation({

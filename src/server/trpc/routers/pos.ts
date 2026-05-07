@@ -143,7 +143,7 @@ export const posRouter = router({
         }
       }),
 
-    create: adminProcedure
+    create: managerProcedure
       .input(
         z.object({
           storeId: z.string().min(1),
@@ -159,6 +159,7 @@ export const posRouter = router({
             name: input.name.trim(),
             code: input.code.trim().toUpperCase(),
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -166,7 +167,7 @@ export const posRouter = router({
         }
       }),
 
-    update: adminProcedure
+    update: managerProcedure
       .input(
         z.object({
           registerId: z.string().min(1),
@@ -184,6 +185,7 @@ export const posRouter = router({
             code: input.code?.trim().toUpperCase(),
             isActive: input.isActive,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -270,7 +272,7 @@ export const posRouter = router({
         }
       }),
 
-    close: managerProcedure
+    close: cashierProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-shifts-close" }))
       .input(
         z.object({
@@ -288,6 +290,7 @@ export const posRouter = router({
             closingCashCountedKgs: input.closingCashCountedKgs,
             notes: input.notes,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
           });
