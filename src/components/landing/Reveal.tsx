@@ -37,7 +37,7 @@ export const Reveal = ({
   yOffset = 18,
 }: RevealProps) => {
   const prefersReducedMotion = usePrefersReducedMotion();
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
   const nodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,6 +49,11 @@ export const Reveal = ({
     const node = nodeRef.current;
     if (!node) {
       return;
+    }
+
+    const rect = node.getBoundingClientRect();
+    if (rect.top > window.innerHeight || rect.bottom < 0) {
+      setIsVisible(false);
     }
 
     const observer = new IntersectionObserver(
@@ -96,4 +101,3 @@ export const Reveal = ({
     </div>
   );
 };
-

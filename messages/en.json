@@ -130,183 +130,173 @@
   },
   "landing": {
     "meta": {
-      "title": "BAZAAR | Platform for retail teams",
-      "description": "Products, purchasing, sales, and reporting in one system for everyday store work."
+      "title": "BAZAAR | Commerce operations platform",
+      "description": "Store-scoped products, POS, inventory, purchasing, reports, labels, catalog, and integrations for retail and wholesale teams."
     },
     "nav": {
-      "features": "Features",
-      "modules": "Solutions",
+      "ariaLabel": "Landing navigation",
+      "platform": "Platform",
+      "workflows": "Workflows",
+      "integrations": "Integrations",
       "security": "Security",
       "faq": "FAQ"
     },
     "actions": {
       "signIn": "Sign in",
-      "bookDemo": "Try it",
       "startNow": "Start now",
       "signInWorkspace": "Sign in to workspace"
     },
     "hero": {
-      "badge": "For retail teams",
-      "title": "Manage products, purchasing, and sales in one place.",
-      "subtitle": "BAZAAR helps teams move faster, keep stock under control, and make decisions from reports.",
-      "trust": "Built for owners, managers, buyers, and store teams."
+      "badge": "Commerce operations without spreadsheet chaos",
+      "title": "BAZAAR for trade operations.",
+      "subtitle": "One workspace for the daily loop: product catalog, store stock, cashier shifts, sales orders, purchase orders, reports, labels, and integrations.",
+      "proof1": "Store-scoped access and data",
+      "proof2": "RU, KG, and EN interface"
     },
-    "preview": {
-      "title": "Why teams choose BAZAAR",
-      "currentBuild": "The platform helps you:",
-      "item1": "Reduce manual work and mistakes in daily operations.",
-      "item2": "Connect product accounting, purchasing, and sales in one workflow.",
-      "item3": "Get clear reports quickly for business control.",
-      "item4": "Organize teamwork with role-based access."
+    "console": {
+      "title": "Live commerce workspace",
+      "subtitle": "Products, stock, POS, and integrations stay connected.",
+      "storeScoped": "Store scoped",
+      "products": "Products",
+      "pos": "POS",
+      "shift": "Shift",
+      "open": "Open",
+      "inventory": "Inventory",
+      "stock": "Stock",
+      "low": "Low",
+      "transfer": "Transfer",
+      "integrations": "Channels",
+      "catalog": "Catalog",
+      "api": "API",
+      "market": "Market"
     },
-    "previewTabs": {
-      "operations": {
-        "label": "Operations",
-        "title": "Daily work without chaos",
-        "description": "Bring core store processes into one interface instead of scattered spreadsheets and chats.",
-        "point1": "Clear operating structure for the team",
-        "point2": "One workflow for products and purchasing",
-        "point3": "Less manual work and fewer repeated tasks"
+    "capabilities": {
+      "eyebrow": "What is inside",
+      "title": "A practical commerce system, not just a product table",
+      "subtitle": "The landing reflects the modules already present in Bazaar: store catalog, POS, stock operations, purchasing, reporting, labels, and integrations.",
+      "catalog": {
+        "title": "Product catalog",
+        "description": "Product cards, categories, units, variants, barcodes, images, store assignment, and readiness status."
       },
-      "sales": {
-        "label": "Sales",
-        "title": "Sales",
-        "description": "From register activity to shift results and management reporting, keep the trading day visible.",
-        "point1": "A complete view of sales and activity",
-        "point2": "Fast access to operation history",
-        "point3": "A reliable base for daily decisions"
+      "pos": {
+        "title": "POS and shifts",
+        "description": "Registers, cashier shifts, sales, receipts, payment flow, returns, and POS history."
       },
-      "visibility": {
-        "label": "Visibility",
-        "title": "Clear control for managers",
-        "description": "See what is happening across the business: where growth is strong and where action is needed.",
-        "point1": "Key metrics in one place",
-        "point2": "Daily and period-by-period dynamics",
-        "point3": "Quick control of operational discipline"
-      }
-    },
-    "stats": {
-      "ariaLabel": "Quick stats",
-      "features": "core features",
-      "workflows": "main workflow stages",
-      "languages": "interface languages",
-      "valueBlocks": "value areas"
-    },
-    "features": {
-      "title": "All core retail workflows in one platform",
-      "subtitle": "No scattered spreadsheets, no switching between disconnected systems.",
       "inventory": {
-        "title": "Accurate inventory",
-        "description": "Track stock, movements, and stock counts across stores."
+        "title": "Inventory by store",
+        "description": "Receive stock, adjust stock, count stock, transfer between stores, and track movements."
       },
-      "workflows": {
-        "title": "Managed purchasing",
-        "description": "Run supplier orders from creation through receiving."
+      "purchasing": {
+        "title": "Purchasing",
+        "description": "Suppliers, purchase orders, approvals, receiving, reorder work, and purchase order PDFs."
       },
-      "rbac": {
-        "title": "Team roles",
-        "description": "Separate access and responsibility across employees."
+      "labels": {
+        "title": "Barcodes and labels",
+        "description": "Save manufacturer barcodes, configure label profiles, and quick print product labels."
+      },
+      "reports": {
+        "title": "Reports and exports",
+        "description": "Dashboard, sales metrics, stock reports, receipts, export jobs, and period close."
       },
       "stores": {
-        "title": "Store management",
-        "description": "Keep standards and settings consistent for every location."
+        "title": "Stores and users",
+        "description": "Multi-store access, user roles, store assignments, permissions, profiles, and settings."
       },
-      "exports": {
-        "title": "Imports and exports",
-        "description": "Move data in and out with practical import tools and report exports."
-      },
-      "visibility": {
-        "title": "Clear analytics",
-        "description": "Watch sales dynamics and operational indicators as they change."
+      "imports": {
+        "title": "Imports and data",
+        "description": "Import products from spreadsheets, export CSV/XLSX, and keep product data structured."
       }
     },
-    "how": {
-      "title": "How it works",
-      "step1": {
-        "title": "Prepare the team",
-        "description": "Set up employee roles and access."
+    "workflows": {
+      "eyebrow": "Daily workflow",
+      "title": "From product setup to sale and control",
+      "subtitle": "Bazaar keeps operational screens connected, so the team works in the right store context.",
+      "assortment": {
+        "title": "Prepare assortment",
+        "description": "Build a clean store catalog before selling.",
+        "item1": "Create or import products into a selected store.",
+        "item2": "Capture existing manufacturer barcodes or print labels when needed.",
+        "item3": "Set categories, units, variants, images, price, and minimum stock."
       },
-      "step2": {
-        "title": "Run the workflows",
-        "description": "Manage products, purchasing, and sales in one environment."
+      "sell": {
+        "title": "Sell and record",
+        "description": "Cashier work stays focused on the open register and shift.",
+        "item1": "Scan barcode or search products in the current store.",
+        "item2": "Process sale, receipt, payment, return, and shift close.",
+        "item3": "Keep transaction currency and store context on historical records."
       },
-      "step3": {
-        "title": "Control the result",
-        "description": "Use reports and analytics for daily decisions."
+      "control": {
+        "title": "Review and improve",
+        "description": "Owners and managers see the parts that need action.",
+        "item1": "Use dashboard, reports, exports, and receipts.",
+        "item2": "Track low stock, missing data, purchase orders, and movements.",
+        "item3": "Sync catalog and product data through configured integrations."
       }
     },
-    "modules": {
-      "title": "How BAZAAR supports the business",
-      "subtitle": "Three value areas your team uses every day.",
-      "recommended": "Main workflow",
-      "operations": {
-        "title": "Operations and stock",
-        "description": "Daily product accounting and stock control.",
-        "point1": "Catalog, product cards, and units",
-        "point2": "Warehouse operations and stock counts",
-        "point3": "Supplier and purchase order work",
-        "cta": "Try it"
+    "integrations": {
+      "eyebrow": "Connected channels",
+      "title": "Integrations already built into the app",
+      "subtitle": "No generic promises: these are the actual integration areas present in Bazaar.",
+      "bazaarCatalog": {
+        "title": "Bazaar catalog",
+        "description": "Publish a public store catalog and manage product visibility per store."
       },
-      "sales": {
-        "title": "Sales and reports",
-        "description": "Tools for register work and management control.",
-        "point1": "Sales, shifts, and operation history",
-        "point2": "Dashboards and analytical reports",
-        "point3": "Period closing and data exports",
-        "cta": "Try it"
+      "bazaarApi": {
+        "title": "Bazaar API",
+        "description": "Store-scoped API keys for external websites to get products and post orders."
       },
-      "platform": {
-        "title": "Platform and administration",
-        "description": "Settings, documents, and stable operating support.",
-        "point1": "Users, roles, and profiles",
-        "point2": "Import, export, and document generation",
-        "point3": "Service diagnostics and monitoring",
-        "cta": "Try it"
+      "mMarket": {
+        "title": "M-Market export",
+        "description": "Prepare and export product catalog data for M-Market."
+      },
+      "bakaiStore": {
+        "title": "Bakai Store export",
+        "description": "Export products to Bakai Store templates and manage API sync settings."
+      },
+      "imageStudio": {
+        "title": "Product Image Studio",
+        "description": "Improve product photos into cleaner catalog-ready studio images."
+      },
+      "connectors": {
+        "title": "Printing and fiscal connectors",
+        "description": "Connector endpoints support label printing, receipt printing, and KKM queue workflows."
       }
     },
     "security": {
-      "title": "Security and reliability",
-      "authAndAccess": "Access control",
-      "authItem1": "Secure sign-in for employees.",
-      "authItem2": "Role-based access separation.",
-      "authItem3": "Activity control inside your organization.",
-      "authItem4": "Protection from repeated sign-in attempts.",
-      "operations": "Stable operations",
-      "opsItem1": "Service health and key metric monitoring.",
-      "opsItem2": "Background process and task control.",
-      "opsItem3": "Support for imports, exports, and document generation."
+      "title": "Store isolation and access control",
+      "subtitle": "Bazaar separates operational data by store and role, while admins can manage the organization context.",
+      "item1": "Cashiers can work only with assigned stores.",
+      "item2": "Product, inventory, POS, reports, and search respect store access.",
+      "item3": "Managers and admins get broader tools based on permissions.",
+      "item4": "Public catalog and API access are store-scoped."
     },
     "faq": {
       "title": "FAQ",
       "subtitle": "Short answers before you get started.",
       "q1": {
-        "question": "Which interface languages are available?",
-        "answer": "RU, KG, and EN are available."
+        "question": "Which languages are available?",
+        "answer": "The interface supports RU, KG, and EN."
       },
       "q2": {
-        "question": "Who is the platform for?",
-        "answer": "For owners, managers, buyers, and retail store teams."
+        "question": "Can Bazaar work with multiple stores?",
+        "answer": "Yes. Products, inventory, POS, reports, and user access are handled with store context."
       },
       "q3": {
-        "question": "Can I import and export data?",
-        "answer": "Yes. BAZAAR supports data imports and exports in common working formats."
+        "question": "Can I use existing product barcodes?",
+        "answer": "Yes. Product create and edit screens support barcode entry and scanner-style input."
       },
       "q4": {
-        "question": "Does it support documents?",
-        "answer": "Yes. The system can generate the working documents your team needs."
+        "question": "Do I have to print labels for every product?",
+        "answer": "No. Label printing is separate and useful when a product needs a custom label."
       },
       "q5": {
-        "question": "Can I manage employee permissions?",
-        "answer": "Yes. The platform supports roles and access boundaries."
-      },
-      "q6": {
-        "question": "Is it hard to start?",
-        "answer": "No. You can launch the basic workflows quickly and expand usage step by step."
+        "question": "Can external websites connect to Bazaar?",
+        "answer": "Yes. Bazaar API supports product reads and order creation with store-scoped keys."
       }
     },
     "finalCta": {
-      "title": "Ready to bring order to daily operations?",
-      "subtitle": "Start working in BAZAAR and connect your core processes in one system."
+      "title": "Ready to make daily commerce work cleaner?",
+      "subtitle": "Start with products and POS, then connect inventory, purchasing, reports, and integrations."
     },
     "footer": {
       "copyright": "© {year} BAZAAR. All rights reserved.",

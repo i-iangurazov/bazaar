@@ -169,50 +169,46 @@
   }
 }
 
-@keyframes landing-gradient-shift {
-  0% {
-    background-position: 0% 50%;
+@keyframes landing-console-card {
+  0%,
+  100% {
+    transform: translateY(0);
   }
   50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
+    transform: translateY(-4px);
   }
 }
 
-@keyframes landing-orb-float {
-  0%,
-  100% {
-    transform: translateY(0px) scale(1);
-    opacity: 0.85;
+@keyframes landing-console-scan {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0;
   }
-  50% {
-    transform: translateY(-10px) scale(1.04);
-    opacity: 1;
+  18%,
+  72% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(520%);
+    opacity: 0;
   }
 }
 
 @keyframes landing-cta-glow {
   0%,
   100% {
-    box-shadow: 0 8px 18px hsl(var(--primary) / 0.2), 0 2px 6px hsl(var(--primary) / 0.16);
+    box-shadow: 0 8px 18px hsl(var(--primary) / 0.16), 0 2px 6px hsl(var(--primary) / 0.12);
   }
   50% {
-    box-shadow: 0 10px 22px hsl(var(--primary) / 0.25), 0 4px 10px hsl(var(--primary) / 0.2);
+    box-shadow: 0 10px 22px hsl(var(--primary) / 0.22), 0 4px 10px hsl(var(--primary) / 0.16);
   }
 }
 
-.landing-hero-title {
-  animation: landing-gradient-shift 8s ease-in-out infinite;
-}
-
-.landing-orb {
-  animation: landing-orb-float 7s ease-in-out infinite;
-}
-
-.landing-orb-delay {
-  animation-delay: 2.4s;
+.landing-console {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.45) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 .landing-cta-shine {
@@ -234,6 +230,42 @@
     background-position 560ms ease,
     filter 280ms ease;
   animation: landing-cta-glow 6s ease-in-out infinite;
+}
+
+.landing-console-card {
+  animation: landing-console-card 8s ease-in-out infinite;
+}
+
+.landing-console-card-delay {
+  animation-delay: 0.9s;
+}
+
+.landing-console-card-delay-2 {
+  animation-delay: 1.8s;
+}
+
+.landing-console-card-delay-3 {
+  animation-delay: 2.7s;
+}
+
+.landing-console-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 86px;
+  height: 54px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    hsl(var(--primary) / 0.08),
+    transparent
+  );
+  animation: landing-console-scan 7s ease-in-out infinite;
+}
+
+.landing-feature-card {
+  background-image: linear-gradient(180deg, hsl(var(--card)), hsl(var(--secondary) / 0.28));
 }
 
 .landing-cta-shine::after {
@@ -266,8 +298,8 @@
     scroll-behavior: auto;
   }
 
-  .landing-hero-title,
-  .landing-orb,
+  .landing-console-card,
+  .landing-console-scan,
   .landing-cta-shine {
     animation: none !important;
   }

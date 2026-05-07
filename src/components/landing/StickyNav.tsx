@@ -63,7 +63,7 @@ export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNa
           : "border-transparent bg-background/75 backdrop-blur",
       )}
     >
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6 lg:px-8">
         <div className="shrink-0">{leftSlot}</div>
 
         <nav
@@ -78,10 +78,10 @@ export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNa
                 href={link.href}
                 onClick={() => setActiveHref(link.href)}
                 className={cn(
-                  "rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  "border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   isActive
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
                 )}
                 aria-current={isActive ? "location" : undefined}
               >
@@ -91,7 +91,7 @@ export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNa
           })}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2">{rightSlot}</div>
+        <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">{rightSlot}</div>
       </div>
     </header>
   );
