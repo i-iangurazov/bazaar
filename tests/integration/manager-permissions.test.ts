@@ -58,6 +58,49 @@ describeDb("manager operational permissions", () => {
     await caller.units.remove({ unitId: unit.id });
   });
 
+  it("allows managers to manage master products", async () => {
+    const { org, baseUnit, managerUser } = await seedBase();
+    const caller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+
+    const created = await caller.products.create({
+      sku: "MGR-PRODUCT-1",
+      name: "Manager Product",
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 1200,
+      avgCostKgs: 700,
+      categories: ["Shoes"],
+    });
+    expect(created.name).toBe("Manager Product");
+
+    const updated = await caller.products.update({
+      productId: created.id,
+      sku: "MGR-PRODUCT-1",
+      name: "Manager Product Updated",
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 1300,
+      avgCostKgs: 800,
+      categories: ["Shoes", "Sale"],
+      barcodes: ["1234567890123"],
+    });
+    expect(updated.name).toBe("Manager Product Updated");
+    expect(updated.categories).toEqual(["Shoes", "Sale"]);
+
+    await caller.products.archive({ productId: created.id });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: created.id } }),
+    ).resolves.toMatchObject({ isDeleted: true });
+
+    await caller.products.restore({ productId: created.id });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: created.id } }),
+    ).resolves.toMatchObject({ isDeleted: false });
+  });
+
   it("allows managers to create and update registers only in accessible stores", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.create({

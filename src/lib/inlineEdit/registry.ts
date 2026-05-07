@@ -450,7 +450,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
         route: "products.inlineUpdate",
         input: { productId: row.id, patch: { name: value } },
       }),
-      permissionCheck: (role) => isAdmin(role),
+      permissionCheck: (role) => isManagerOrAdmin(role),
     },
     category: {
       tableKey: "products",
@@ -462,7 +462,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
         route: "products.bulkUpdateCategory",
         input: { productIds: [row.id], category: value, mode: "setPrimary" },
       }),
-      permissionCheck: (role) => isAdmin(role),
+      permissionCheck: (role) => isManagerOrAdmin(role),
       selectOptions: (_row, context, display) => [
         { value: "__none", label: display.notAvailableLabel },
         ...context.categories.map((category) => ({ value: category, label: category })),
@@ -494,8 +494,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
           input: { productId: row.id, patch: { basePriceKgs: nextPrice } },
         };
       },
-      permissionCheck: (role, _row, context) =>
-        context.storeId ? isManagerOrAdmin(role) : isAdmin(role),
+      permissionCheck: (role) => isManagerOrAdmin(role),
       equals: moneyEquals,
     },
     avgCost: {
@@ -510,7 +509,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
         route: "products.inlineUpdate",
         input: { productId: row.id, patch: { avgCostKgs: value } },
       }),
-      permissionCheck: (role) => isAdmin(role),
+      permissionCheck: (role) => isManagerOrAdmin(role),
       equals: moneyEquals,
     },
     onHand: {

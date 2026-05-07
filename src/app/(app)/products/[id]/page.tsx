@@ -105,7 +105,7 @@ const ProductDetailPage = () => {
   const { data: session } = useSession();
   const trpcUtils = trpc.useUtils();
   const role = session?.user?.role;
-  const isAdmin = role === "ADMIN";
+  const canManageProducts = role === "ADMIN" || role === "MANAGER";
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
   const canManageStorePrices = role === "ADMIN" || role === "MANAGER";
   const canManageInventory = role === "ADMIN" || role === "MANAGER";
@@ -839,7 +839,7 @@ const ProductDetailPage = () => {
   }
 
   return (
-    <div className={isAdmin ? "pb-24" : undefined}>
+    <div className={canManageProducts ? "pb-24" : undefined}>
       <PageHeader
         title={t("editTitle")}
         subtitle={productQuery.data.name}
@@ -887,7 +887,7 @@ const ProductDetailPage = () => {
                   <ViewIcon className="h-4 w-4" aria-hidden />
                   {tInventory("viewMovements")}
                 </DropdownMenuItem>
-                {isAdmin ? (
+                {canManageProducts ? (
                   <DropdownMenuItem
                     disabled={duplicateMutation.isLoading}
                     onSelect={() => duplicateMutation.mutate({ productId })}
@@ -900,7 +900,7 @@ const ProductDetailPage = () => {
                     {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
                   </DropdownMenuItem>
                 ) : null}
-                {isAdmin ? (
+                {canManageProducts ? (
                   <DropdownMenuItem
                     className="text-danger focus:text-danger"
                     disabled={archiveMutation.isLoading}
@@ -1015,7 +1015,7 @@ const ProductDetailPage = () => {
           attributeDefinitions={attributesQuery.data ?? []}
           units={unitsQuery.data ?? []}
           isSubmitting={updateMutation.isLoading}
-          readOnly={!isAdmin}
+          readOnly={!canManageProducts}
           productId={productId}
           showBasePriceField={false}
           currencyCode={selectedPricingCurrencyCode}
@@ -1054,7 +1054,7 @@ const ProductDetailPage = () => {
                       </p>
                     ) : null}
                   </div>
-                  {isAdmin ? (
+                  {canManageProducts ? (
                     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                       <Input
                         type="number"
@@ -1493,7 +1493,7 @@ const ProductDetailPage = () => {
           )}
         </CardContent>
       </Card>
-      {isAdmin ? (
+      {canManageProducts ? (
         <div className="fixed bottom-4 right-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2 sm:bottom-6 sm:right-6">
           {updateMutation.error ? (
             <div className="max-w-sm border border-danger/30 bg-danger/10 px-3 py-2 text-right text-sm text-danger shadow-lg">

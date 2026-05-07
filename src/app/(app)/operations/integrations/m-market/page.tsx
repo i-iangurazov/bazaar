@@ -143,7 +143,6 @@ const MMarketSettingsPage = () => {
   const trpcUtils = trpc.useUtils();
 
   const role = session?.user?.role ?? "STAFF";
-  const isAdmin = role === "ADMIN";
   const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
   const canEdit = role === "ADMIN" || role === "MANAGER";
   const [bulkProgress, setBulkProgress] = useState<MMarketBulkProgressState | null>(null);
@@ -428,7 +427,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleGenerateShortDescriptions = async () => {
-    if (!isAdmin || shortDescriptionTargetIds.length <= 0 || bulkProgressRunning) {
+    if (!canEdit || shortDescriptionTargetIds.length <= 0 || bulkProgressRunning) {
       return;
     }
     if (
@@ -596,7 +595,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleAutofillSpecs = async () => {
-    if (!isAdmin || actionableMissingSpecsTargetIds.length <= 0 || bulkProgressRunning) {
+    if (!canEdit || actionableMissingSpecsTargetIds.length <= 0 || bulkProgressRunning) {
       return;
     }
     if (
@@ -799,7 +798,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleCreateBaseTemplates = async () => {
-    if (!isAdmin || actionableMissingSpecsCount <= 0) {
+    if (!canEdit || actionableMissingSpecsCount <= 0) {
       return;
     }
     if (
@@ -813,7 +812,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleAssignMissingCategory = async () => {
-    if (!isAdmin || missingCategoryCount <= 0) {
+    if (!canEdit || missingCategoryCount <= 0) {
       return;
     }
     if (
@@ -1639,7 +1638,7 @@ const MMarketSettingsPage = () => {
                   </div>
                 ) : null}
 
-                {isAdmin &&
+                {canEdit &&
                 (actionableMissingSpecsCount > 0 ||
                   missingCategoryCount > 0 ||
                   shortDescriptionCount > 0) ? (

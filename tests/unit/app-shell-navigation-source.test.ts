@@ -61,8 +61,22 @@ describe("conservative app shell navigation source", () => {
   it("keeps the sidebar CTA visual pattern and adds permission filtering in place", () => {
     expect(source).toContain('aria-label={tCommand("openButton")}');
     expect(source).toContain("<CirclePlusIcon");
-    expect(source).toContain('className="h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"');
+    expect(source).toContain(
+      'className="h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"',
+    );
     expect(source).toContain("requiredPermission?: AppPermission");
     expect(source).toContain("hasPermission(access, item.requiredPermission)");
+  });
+
+  it("keeps product support settings visible through product management permission", () => {
+    const attributesStart = source.indexOf('key: "attributes"');
+    const attributesSource = source.slice(attributesStart, attributesStart + 260);
+    const unitsStart = source.indexOf('key: "units"');
+    const unitsSource = source.slice(unitsStart, unitsStart + 260);
+
+    expect(attributesSource).toContain('requiredPermission: "manageProducts"');
+    expect(attributesSource).not.toContain("adminOnly: true");
+    expect(unitsSource).toContain('requiredPermission: "manageProducts"');
+    expect(unitsSource).not.toContain("adminOnly: true");
   });
 });

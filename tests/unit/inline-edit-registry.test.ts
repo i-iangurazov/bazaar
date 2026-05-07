@@ -58,7 +58,36 @@ describe("inline edit registry", () => {
 
     expect(inlineEditRegistry.products.onHand.permissionCheck("MANAGER", row, context)).toBe(false);
     expect(
-      inlineEditRegistry.products.onHand.permissionCheck("MANAGER", row, { ...context, storeId: "store-1" }),
+      inlineEditRegistry.products.onHand.permissionCheck("MANAGER", row, {
+        ...context,
+        storeId: "store-1",
+      }),
     ).toBe(true);
+  });
+
+  it("allows managers to inline edit master product fields", () => {
+    const row = {
+      id: "product-1",
+      name: "Product 1",
+      category: null,
+      unit: "шт",
+      baseUnitId: "unit-1",
+      basePriceKgs: 100,
+      onHandQty: 12,
+    };
+    const context = {
+      storeId: null,
+      categories: ["Shoes"],
+      stockAdjustReason: "inlineStockEdit",
+    };
+
+    expect(inlineEditRegistry.products.name.permissionCheck("MANAGER", row, context)).toBe(true);
+    expect(inlineEditRegistry.products.category.permissionCheck("MANAGER", row, context)).toBe(
+      true,
+    );
+    expect(inlineEditRegistry.products.salePrice.permissionCheck("MANAGER", row, context)).toBe(
+      true,
+    );
+    expect(inlineEditRegistry.products.avgCost.permissionCheck("MANAGER", row, context)).toBe(true);
   });
 });

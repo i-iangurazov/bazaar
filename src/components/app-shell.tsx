@@ -259,7 +259,6 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       {
         id: "admin",
         labelKey: "groups.admin",
-        adminOnly: true,
         items: [
           {
             key: "users",
@@ -279,15 +278,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             key: "attributes",
             href: "/settings/attributes",
             icon: AdjustIcon,
-            adminOnly: true,
-            requiredPermission: "manageSettings",
+            requiredPermission: "manageProducts",
           },
           {
             key: "units",
             href: "/settings/units",
             icon: UnitsIcon,
-            adminOnly: true,
-            requiredPermission: "manageSettings",
+            requiredPermission: "manageProducts",
           },
           {
             key: "adminJobs",

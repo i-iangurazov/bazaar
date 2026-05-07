@@ -8,11 +8,11 @@ const readSource = (relativePath: string) =>
 
 describe("index page source layout", () => {
   it.each([
-    ["products", "src/app/(app)/products/page.tsx", "<CardTitle>{t(\"title\")}</CardTitle>"],
+    ["products", "src/app/(app)/products/page.tsx", '<CardTitle>{t("title")}</CardTitle>'],
     [
       "inventory",
       "src/app/(app)/inventory/page.tsx",
-      "<CardTitle>{t(\"inventoryOverview\")}</CardTitle>",
+      '<CardTitle>{t("inventoryOverview")}</CardTitle>',
     ],
   ])(
     "keeps saved views, columns and table/grid controls in one desktop row on %s",
@@ -44,5 +44,25 @@ describe("index page source layout", () => {
     expect(serviceSource).toContain("index += BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE");
     expect(serviceSource).toContain("key: `${input.idempotencyKey}:${chunkIndex}`");
     expect(serviceSource).toContain("{ timeout: 10_000 }");
+  });
+
+  it("uses manager-or-admin product management gates on product create and edit screens", async () => {
+    const listSource = await readSource("src/app/(app)/products/page.tsx");
+    const createSource = await readSource("src/app/(app)/products/new/page.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+
+    expect(listSource).toContain(
+      'const canManageProducts = role === "ADMIN" || role === "MANAGER";',
+    );
+    expect(listSource).toContain("if (!canManageProducts || arrangeCategoriesRunning)");
+    expect(listSource).toContain("if (!selectedList.length || !canManageProducts)");
+    expect(createSource).toContain(
+      'const canManageProducts = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";',
+    );
+    expect(createSource).toContain('status === "authenticated" && canManageProducts');
+    expect(detailSource).toContain(
+      'const canManageProducts = role === "ADMIN" || role === "MANAGER";',
+    );
+    expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
 });

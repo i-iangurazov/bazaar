@@ -53,13 +53,13 @@ const UnitsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
-  const isForbidden = status === "authenticated" && !isAdmin;
+  const canManageUnits = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const isForbidden = status === "authenticated" && !canManageUnits;
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
   const inlineEditingEnabled = isInlineEditingEnabled();
 
-  const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: isAdmin });
+  const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: canManageUnits });
   type UnitRow = NonNullable<typeof unitsQuery.data>[number];
 
   const [dialogOpen, setDialogOpen] = useState(false);

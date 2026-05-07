@@ -25,15 +25,15 @@ const NewProductPage = () => {
   const pageTitle = isBundleDefault ? t("newBundle") : t("newTitle");
   const pageSubtitle = isBundleDefault ? t("newBundleSubtitle") : t("newSubtitle");
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const canManageProducts = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const { toast } = useToast();
   const attributesQuery = trpc.attributes.list.useQuery();
   const unitsQuery = trpc.units.list.useQuery();
   const storesQuery = trpc.stores.list.useQuery(undefined, {
-    enabled: status === "authenticated" && isAdmin,
+    enabled: status === "authenticated" && canManageProducts,
   });
   const suggestedSkuQuery = trpc.products.suggestSku.useQuery(undefined, {
-    enabled: status === "authenticated" && isAdmin,
+    enabled: status === "authenticated" && canManageProducts,
   });
 
   const createMutation = trpc.products.create.useMutation({
@@ -72,7 +72,7 @@ const NewProductPage = () => {
   const selectedCurrencyRate = Number(selectedStore?.currencyRateKgsPerUnit ?? 1);
   const storeSelectDisabled = storesQuery.isLoading || storeOptions.length <= 1;
 
-  if (session && !isAdmin) {
+  if (session && !canManageProducts) {
     return (
       <div>
         <PageHeader title={pageTitle} subtitle={pageSubtitle} />
@@ -90,7 +90,7 @@ const NewProductPage = () => {
     );
   }
 
-  if (isAdmin && (suggestedSkuQuery.isLoading || storesQuery.isLoading)) {
+  if (canManageProducts && (suggestedSkuQuery.isLoading || storesQuery.isLoading)) {
     return (
       <div>
         <PageHeader title={pageTitle} subtitle={pageSubtitle} />

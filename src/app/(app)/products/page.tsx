@@ -251,7 +251,8 @@ const ProductsPage = () => {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
-  const canManagePrices = role === "ADMIN" || role === "MANAGER";
+  const canManageProducts = role === "ADMIN" || role === "MANAGER";
+  const canManagePrices = canManageProducts;
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
@@ -481,7 +482,7 @@ const ProductsPage = () => {
       search: search || undefined,
       category: category || undefined,
       type: productType,
-      includeArchived: isAdmin ? showArchived : undefined,
+      includeArchived: canManageProducts ? showArchived : undefined,
       readiness: readiness === "all" ? undefined : readiness,
       storeId: rawStoreId || undefined,
       page: productsPage,
@@ -491,7 +492,7 @@ const ProductsPage = () => {
     }),
     [
       category,
-      isAdmin,
+      canManageProducts,
       productSort.direction,
       productSort.key,
       productType,
@@ -550,7 +551,7 @@ const ProductsPage = () => {
       sortDirection: "asc",
     },
     {
-      enabled: assignExistingOpen && isAdmin && Boolean(storeId),
+      enabled: assignExistingOpen && canManageProducts && Boolean(storeId),
       keepPreviousData: true,
     },
   );
@@ -1032,7 +1033,7 @@ const ProductsPage = () => {
       search: bulkValues.search || undefined,
       category: bulkValues.category || undefined,
       type: productType,
-      includeArchived: isAdmin ? showArchived : undefined,
+      includeArchived: canManageProducts ? showArchived : undefined,
       page: 1,
       pageSize: 1,
     },
@@ -1233,7 +1234,7 @@ const ProductsPage = () => {
         search: search || undefined,
         category: category || undefined,
         type: productType,
-        includeArchived: isAdmin ? showArchived : undefined,
+        includeArchived: canManageProducts ? showArchived : undefined,
         storeId: storeId || undefined,
       });
       setSelectedIds(new Set(ids));
@@ -1790,7 +1791,7 @@ const ProductsPage = () => {
     ],
   );
   const getProductActions = (product: ProductRow) => [
-    ...(isAdmin
+    ...(canManageProducts
       ? product.isDeleted
         ? [
             {
@@ -1973,7 +1974,7 @@ const ProductsPage = () => {
   };
 
   const handleArrangeCategoriesWithAi = async () => {
-    if (!isAdmin || arrangeCategoriesRunning) {
+    if (!canManageProducts || arrangeCategoriesRunning) {
       return;
     }
     const targetIds = selectedList.length ? selectedList : products.map((product) => product.id);
@@ -2139,7 +2140,7 @@ const ProductsPage = () => {
   };
 
   const handleBulkGenerateBarcodes = async () => {
-    if (!selectedList.length || !isAdmin) {
+    if (!selectedList.length || !canManageProducts) {
       return;
     }
     if (
@@ -2161,7 +2162,7 @@ const ProductsPage = () => {
   };
 
   const handleBulkGenerateDescriptions = async () => {
-    if (!selectedList.length || !isAdmin || bulkDescriptionRunning) {
+    if (!selectedList.length || !canManageProducts || bulkDescriptionRunning) {
       return;
     }
     const targetIds = [...selectedList];
@@ -2354,7 +2355,7 @@ const ProductsPage = () => {
         action={
           <TooltipProvider>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {isAdmin ? (
+              {canManageProducts ? (
                 <Link href={newProductHref} className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto" data-tour="products-create">
                     <AddIcon className="h-4 w-4" aria-hidden />
@@ -2375,7 +2376,7 @@ const ProductsPage = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[240px]">
-                  {isAdmin ? (
+                  {canManageProducts ? (
                     <>
                       <DropdownMenuItem asChild>
                         <Link href={newBundleHref}>
@@ -2383,12 +2384,14 @@ const ProductsPage = () => {
                           {t("newBundle")}
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href={importProductsHref}>
-                          <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
-                          {t("importProducts")}
-                        </Link>
-                      </DropdownMenuItem>
+                      {isAdmin ? (
+                        <DropdownMenuItem asChild>
+                          <Link href={importProductsHref}>
+                            <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
+                            {t("importProducts")}
+                          </Link>
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
                         <CopyIcon className="h-4 w-4" aria-hidden />
                         {t("addExistingProducts")}
@@ -2406,7 +2409,7 @@ const ProductsPage = () => {
                       {t("bulkPriceUpdate")}
                     </DropdownMenuItem>
                   ) : null}
-                  {isAdmin ? (
+                  {canManageProducts ? (
                     <DropdownMenuItem
                       disabled={!products.length || arrangeCategoriesRunning}
                       onSelect={() => void handleArrangeCategoriesWithAi()}
@@ -2514,7 +2517,7 @@ const ProductsPage = () => {
                   ))}
                 </SelectContent>
               </Select>
-              {isAdmin ? (
+              {canManageProducts ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -2561,7 +2564,7 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            {isAdmin ? (
+            {canManageProducts ? (
               <div className="flex items-center gap-2 rounded-none border border-border px-3 py-2">
                 <Switch
                   checked={showArchived}
@@ -2727,7 +2730,7 @@ const ProductsPage = () => {
                     )}
                     {t("exportCsv")}
                   </Button>
-                  {hasActiveSelected && isAdmin ? (
+                  {hasActiveSelected && canManageProducts ? (
                     <Button
                       type="button"
                       variant="secondary"
@@ -2739,7 +2742,7 @@ const ProductsPage = () => {
                       {t("bulkArchive")}
                     </Button>
                   ) : null}
-                  {hasArchivedSelected && isAdmin ? (
+                  {hasArchivedSelected && canManageProducts ? (
                     <Button
                       type="button"
                       variant="secondary"
@@ -2751,7 +2754,7 @@ const ProductsPage = () => {
                       {t("bulkRestore")}
                     </Button>
                   ) : null}
-                  {isAdmin ? (
+                  {canManageProducts ? (
                     <Button
                       type="button"
                       variant="secondary"
@@ -2763,7 +2766,7 @@ const ProductsPage = () => {
                       {t("bulkSetCategory")}
                     </Button>
                   ) : null}
-                  {isAdmin ? (
+                  {canManageProducts ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -3530,7 +3533,7 @@ const ProductsPage = () => {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    {isAdmin ? (
+                    {canManageProducts ? (
                       <>
                         <Link href={newProductHref} className="w-full sm:w-auto">
                           <Button className="w-full sm:w-auto">
@@ -3940,7 +3943,7 @@ const ProductsPage = () => {
                   search: values.search || undefined,
                   category: values.category || undefined,
                   type: productType,
-                  includeArchived: isAdmin ? showArchived : undefined,
+                  includeArchived: canManageProducts ? showArchived : undefined,
                 },
                 mode: values.mode,
                 value: values.value,

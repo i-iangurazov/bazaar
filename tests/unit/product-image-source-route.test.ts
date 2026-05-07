@@ -44,6 +44,30 @@ describe("product image source route", () => {
     expect(body.byteLength).toBe(3);
   });
 
+  it("allows managers to proxy managed product images", async () => {
+    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "MANAGER" });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: {
+          "content-type": "image/png",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { GET } = await import("../../src/app/api/product-images/source/route");
+    const request = new Request(
+      `http://localhost/api/product-images/source?url=${encodeURIComponent(
+        "/uploads/imported-products/org-1/products/prod-1/photo.png",
+      )}`,
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+  });
+
   it("rejects non-managed source urls", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

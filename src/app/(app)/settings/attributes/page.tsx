@@ -60,14 +60,14 @@ const AttributesPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
-  const isForbidden = status === "authenticated" && !isAdmin;
+  const canManageAttributes = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const isForbidden = status === "authenticated" && !canManageAttributes;
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
 
-  const attributesQuery = trpc.attributes.list.useQuery(undefined, { enabled: isAdmin });
-  const templatesQuery = trpc.categoryTemplates.list.useQuery(undefined, { enabled: isAdmin });
-  const categoriesQuery = trpc.categoryTemplates.categories.useQuery(undefined, { enabled: isAdmin });
+  const attributesQuery = trpc.attributes.list.useQuery(undefined, { enabled: canManageAttributes });
+  const templatesQuery = trpc.categoryTemplates.list.useQuery(undefined, { enabled: canManageAttributes });
+  const categoriesQuery = trpc.categoryTemplates.categories.useQuery(undefined, { enabled: canManageAttributes });
 
   type AttributeRow = NonNullable<typeof attributesQuery.data>[number];
   type TemplateRow = NonNullable<typeof templatesQuery.data>[number];
@@ -339,7 +339,7 @@ const AttributesPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <Button className="w-full sm:w-auto" onClick={openCreate} disabled={!isAdmin}>
+          <Button className="w-full sm:w-auto" onClick={openCreate} disabled={!canManageAttributes}>
             <AddIcon className="h-4 w-4" aria-hidden />
             {t("addAttribute")}
           </Button>
@@ -509,7 +509,7 @@ const AttributesPage = () => {
             type="button"
             className="w-full sm:w-auto"
             onClick={openTemplateCreate}
-            disabled={!isAdmin || !(attributesQuery.data ?? []).length}
+            disabled={!canManageAttributes || !(attributesQuery.data ?? []).length}
           >
             <AddIcon className="h-4 w-4" aria-hidden />
             {t("templateCreate")}

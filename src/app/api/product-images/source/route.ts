@@ -106,7 +106,7 @@ export const GET = async (request: Request) => {
   if (!token) {
     return Response.json({ message: "unauthorized" }, { status: 401 });
   }
-  if (!token.organizationId || token.role !== "ADMIN") {
+  if (!token.organizationId || (token.role !== "ADMIN" && token.role !== "MANAGER")) {
     return Response.json({ message: "forbidden" }, { status: 403 });
   }
 

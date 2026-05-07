@@ -22,13 +22,7 @@ import {
   validateMMarketLocally,
 } from "@/server/services/mMarket";
 import { toTRPCError } from "@/server/trpc/errors";
-import {
-  adminProcedure,
-  managerProcedure,
-  protectedProcedure,
-  rateLimit,
-  router,
-} from "@/server/trpc/trpc";
+import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 
 export const mMarketRouter = router({
   overview: protectedProcedure.query(async ({ ctx }) => {
@@ -190,7 +184,7 @@ export const mMarketRouter = router({
     }
   }),
 
-  bulkGenerateDescriptions: adminProcedure
+  bulkGenerateDescriptions: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "mmarket-descriptions-bulk" }))
     .input(
       z
@@ -215,7 +209,7 @@ export const mMarketRouter = router({
       }
     }),
 
-  bulkAutofillSpecs: adminProcedure
+  bulkAutofillSpecs: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "mmarket-specs-bulk" }))
     .input(
       z
@@ -238,7 +232,7 @@ export const mMarketRouter = router({
       }
     }),
 
-  bulkCreateBaseTemplates: adminProcedure
+  bulkCreateBaseTemplates: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-templates-bulk" }))
     .mutation(async ({ ctx }) => {
       try {
@@ -253,7 +247,7 @@ export const mMarketRouter = router({
       }
     }),
 
-  assignMissingCategory: adminProcedure
+  assignMissingCategory: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-category-bulk" }))
     .mutation(async ({ ctx }) => {
       try {

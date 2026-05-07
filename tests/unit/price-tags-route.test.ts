@@ -1,17 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetServerAuthToken, mockRecordFirstEvent, mockUploadProductImageBuffer, prisma } = vi.hoisted(() => ({
-  mockGetServerAuthToken: vi.fn(),
-  mockRecordFirstEvent: vi.fn(),
-  mockUploadProductImageBuffer: vi.fn(),
-  prisma: {
-    organization: { findUnique: vi.fn() },
-    store: { findUnique: vi.fn() },
-    product: { findMany: vi.fn() },
-    storePrice: { findMany: vi.fn() },
-    storePrinterSettings: { upsert: vi.fn() },
-  },
-}));
+const { mockGetServerAuthToken, mockRecordFirstEvent, mockUploadProductImageBuffer, prisma } =
+  vi.hoisted(() => ({
+    mockGetServerAuthToken: vi.fn(),
+    mockRecordFirstEvent: vi.fn(),
+    mockUploadProductImageBuffer: vi.fn(),
+    prisma: {
+      organization: { findUnique: vi.fn() },
+      store: { findUnique: vi.fn() },
+      product: { findMany: vi.fn() },
+      storePrice: { findMany: vi.fn() },
+      storePrinterSettings: { upsert: vi.fn() },
+    },
+  }));
 
 vi.mock("@/server/auth/token", () => ({
   getServerAuthToken: () => mockGetServerAuthToken(),
@@ -292,7 +293,9 @@ describe("product image upload route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "ADMIN" });
-    mockUploadProductImageBuffer.mockResolvedValue({ url: "/uploads/imported-products/org-1/test.jpg" });
+    mockUploadProductImageBuffer.mockResolvedValue({
+      url: "/uploads/imported-products/org-1/test.jpg",
+    });
   });
 
   it("rejects multipart requests that exceed max content length", async () => {
@@ -333,7 +336,10 @@ describe("product image upload route", () => {
   it("normalizes HEIC sequence uploads to HEIC mime type", async () => {
     const { POST } = await import("../../src/app/api/product-images/upload/route");
     const formData = new FormData();
-    formData.append("file", new File([new Uint8Array([1, 2, 3])], "camera-upload", { type: "image/heic-sequence" }));
+    formData.append(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "camera-upload", { type: "image/heic-sequence" }),
+    );
 
     const response = await POST(
       new Request("http://localhost/api/product-images/upload", {
@@ -346,6 +352,31 @@ describe("product image upload route", () => {
     expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
       expect.objectContaining({
         contentType: "image/heic",
+      }),
+    );
+  });
+
+  it("allows managers to upload product images", async () => {
+    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "MANAGER" });
+    const { POST } = await import("../../src/app/api/product-images/upload/route");
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([new Uint8Array([1, 2, 3])], "photo.png", { type: "image/png" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        contentType: "image/png",
       }),
     );
   });
