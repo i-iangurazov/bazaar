@@ -76,17 +76,31 @@ describe("role access model", () => {
     );
   });
 
-  it.each(["CASHIER", "STAFF"])(
-    "filters %s down to POS, sales, cash, help, and profile access",
-    (role) => {
-      const access = allowed({ role });
+  it("lets cashiers view products without product management access", () => {
+    expect(allowed({ role: "CASHIER" })).toEqual([
+      "usePos",
+      "viewSales",
+      "viewCash",
+      "viewProducts",
+      "viewHelp",
+      "viewProfile",
+    ]);
+    expect(hasPermission({ role: "CASHIER" }, "manageProducts")).toBe(false);
+  });
 
-      expect(access).toEqual(["usePos", "viewSales", "viewCash", "viewHelp", "viewProfile"]);
-    },
-  );
+  it("keeps staff limited to POS, sales, cash, help, and profile access", () => {
+    expect(allowed({ role: "STAFF" })).toEqual([
+      "usePos",
+      "viewSales",
+      "viewCash",
+      "viewHelp",
+      "viewProfile",
+    ]);
+  });
 
   it("redirects denied app routes to the role home path", () => {
-    expect(canAccessAppRoute("/products", { role: "CASHIER" })).toBe(false);
+    expect(canAccessAppRoute("/products", { role: "CASHIER" })).toBe(true);
+    expect(canAccessAppRoute("/products/new", { role: "CASHIER" })).toBe(false);
     expect(canAccessAppRoute("/pos", { role: "CASHIER" })).toBe(true);
     expect(canAccessAppRoute("/settings/attributes", { role: "MANAGER" })).toBe(true);
     expect(canAccessAppRoute("/settings/units", { role: "MANAGER" })).toBe(true);

@@ -4,6 +4,12 @@ import type { Logger } from "pino";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
 import { serializeProductPreview } from "@/server/services/products/serializers";
+import {
+  productStoreAssignmentInWhere,
+  resolveAccessibleStoreIds,
+  type StoreAccessUser,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
 
 export type SearchResult = {
   id: string;
@@ -132,11 +138,13 @@ export const resolveGlobalSearchPlan = ({
 export const searchGlobal = async ({
   prisma,
   organizationId,
+  user,
   rawQuery,
   logger,
 }: {
   prisma: PrismaClient;
   organizationId: string;
+  user?: StoreAccessUser;
   rawQuery: string;
   logger?: Logger;
 }) => {
@@ -147,6 +155,17 @@ export const searchGlobal = async ({
 
   const normalizedScanQuery = normalizeScanValue(query);
   const exactNeedle = normalizedScanQuery || query;
+  const accessibleStoreIds =
+    user && !userHasAllStoreAccess(user)
+      ? await resolveAccessibleStoreIds(prisma, user)
+      : undefined;
+  const productScopeWhere = productStoreAssignmentInWhere(accessibleStoreIds);
+  const storeScopeWhere = accessibleStoreIds
+    ? { id: { in: accessibleStoreIds } }
+    : {};
+  const orderStoreScopeWhere = accessibleStoreIds
+    ? { storeId: { in: accessibleStoreIds } }
+    : {};
   const planlessProductFilters = [
     { sku: { startsWith: query, mode: "insensitive" as const } },
     { name: buildNameSearchFilter(query) },
@@ -165,7 +184,7 @@ export const searchGlobal = async ({
           where: {
             organizationId,
             value: normalizedScanQuery,
-            product: { isDeleted: false },
+            product: { isDeleted: false, ...productScopeWhere },
           },
           select: {
             product: {
@@ -179,6 +198,7 @@ export const searchGlobal = async ({
       where: {
         organizationId,
         isDeleted: false,
+        ...productScopeWhere,
         sku: { equals: exactNeedle, mode: "insensitive" },
       },
       select: productSearchSelect,
@@ -187,6 +207,7 @@ export const searchGlobal = async ({
     prisma.store.findMany({
       where: {
         organizationId,
+        ...storeScopeWhere,
         code: { equals: exactNeedle, mode: "insensitive" },
       },
       select: {
@@ -267,6 +288,7 @@ export const searchGlobal = async ({
       where: {
         organizationId,
         isDeleted: false,
+        ...productScopeWhere,
         OR: fuzzyProductFilters,
       },
       select: {
@@ -275,7 +297,7 @@ export const searchGlobal = async ({
       orderBy: [{ sku: "asc" }, { name: "asc" }],
       take: plan.productOnlyFuzzy ? 8 : 6,
     }),
-    plan.includeGroupedEntities
+    plan.includeGroupedEntities && !accessibleStoreIds
       ? prisma.supplier.findMany({
           where: {
             organizationId,
@@ -297,6 +319,7 @@ export const searchGlobal = async ({
       ? prisma.store.findMany({
           where: {
             organizationId,
+            ...storeScopeWhere,
             OR: [
               { code: { startsWith: query, mode: "insensitive" } },
               { name: buildNameSearchFilter(query) },
@@ -315,6 +338,7 @@ export const searchGlobal = async ({
       ? prisma.purchaseOrder.findMany({
           where: {
             organizationId,
+            ...orderStoreScopeWhere,
             OR: [
               { id: { startsWith: query, mode: "insensitive" } },
               { supplier: { name: { contains: query, mode: "insensitive" } } },

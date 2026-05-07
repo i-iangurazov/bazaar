@@ -252,6 +252,7 @@ const ProductsPage = () => {
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
   const canManageProducts = role === "ADMIN" || role === "MANAGER";
+  const canSelectProducts = canManageProducts;
   const canManagePrices = canManageProducts;
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -2353,63 +2354,60 @@ const ProductsPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <TooltipProvider>
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {canManageProducts ? (
+          canManageProducts ? (
+            <TooltipProvider>
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                 <Link href={newProductHref} className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto" data-tour="products-create">
                     <AddIcon className="h-4 w-4" aria-hidden />
                     {t("newProduct")}
                   </Button>
                 </Link>
-              ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                    aria-label={tCommon("moreActions")}
-                  >
-                    <MoreIcon className="h-4 w-4" aria-hidden />
-                    {tCommon("actions")}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[240px]">
-                  {canManageProducts ? (
-                    <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      aria-label={tCommon("moreActions")}
+                    >
+                      <MoreIcon className="h-4 w-4" aria-hidden />
+                      {tCommon("actions")}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[240px]">
+                    <DropdownMenuItem asChild>
+                      <Link href={newBundleHref}>
+                        <AddIcon className="h-4 w-4" aria-hidden />
+                        {t("newBundle")}
+                      </Link>
+                    </DropdownMenuItem>
+                    {isAdmin ? (
                       <DropdownMenuItem asChild>
-                        <Link href={newBundleHref}>
-                          <AddIcon className="h-4 w-4" aria-hidden />
-                          {t("newBundle")}
+                        <Link href={importProductsHref}>
+                          <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
+                          {t("importProducts")}
                         </Link>
                       </DropdownMenuItem>
-                      {isAdmin ? (
-                        <DropdownMenuItem asChild>
-                          <Link href={importProductsHref}>
-                            <DownloadIcon className="h-4 w-4 rotate-180" aria-hidden />
-                            {t("importProducts")}
-                          </Link>
-                        </DropdownMenuItem>
-                      ) : null}
-                      <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
-                        <CopyIcon className="h-4 w-4" aria-hidden />
-                        {t("addExistingProducts")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                  <DropdownMenuItem onSelect={openPrintSettings}>
-                    <PrintIcon className="h-4 w-4" aria-hidden />
-                    {t("changePrintSettings")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {canManagePrices ? (
-                    <DropdownMenuItem disabled={!stores.length} onSelect={() => setBulkOpen(true)}>
-                      <EditIcon className="h-4 w-4" aria-hidden />
-                      {t("bulkPriceUpdate")}
+                    ) : null}
+                    <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
+                      <CopyIcon className="h-4 w-4" aria-hidden />
+                      {t("addExistingProducts")}
                     </DropdownMenuItem>
-                  ) : null}
-                  {canManageProducts ? (
+                    <DropdownMenuItem onSelect={openPrintSettings}>
+                      <PrintIcon className="h-4 w-4" aria-hidden />
+                      {t("changePrintSettings")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {canManagePrices ? (
+                      <DropdownMenuItem
+                        disabled={!stores.length}
+                        onSelect={() => setBulkOpen(true)}
+                      >
+                        <EditIcon className="h-4 w-4" aria-hidden />
+                        {t("bulkPriceUpdate")}
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem
                       disabled={!products.length || arrangeCategoriesRunning}
                       onSelect={() => void handleArrangeCategoriesWithAi()}
@@ -2421,57 +2419,57 @@ const ProductsPage = () => {
                       )}
                       {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
                     </DropdownMenuItem>
-                  ) : null}
-                  {selectedList.length ? (
-                    <>
-                      <DropdownMenuItem
-                        data-tour="products-print-tags"
-                        onSelect={() => void openPrintForProducts(selectedList)}
-                      >
-                        <PrintIcon className="h-4 w-4" aria-hidden />
-                        {t("printPriceTags")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          void openPrintForProducts(selectedList, undefined, { settings: true })
-                        }
-                      >
-                        <MoreIcon className="h-4 w-4" aria-hidden />
-                        {t("changePrintSettings")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={exportQuery.isFetching}
-                    onSelect={() => {
-                      void handleExport("csv");
-                    }}
-                  >
-                    {exportQuery.isFetching ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                    )}
-                    {t("exportCsv")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={exportQuery.isFetching}
-                    onSelect={() => {
-                      void handleExport("xlsx");
-                    }}
-                  >
-                    {exportQuery.isFetching ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                    )}
-                    {t("exportXlsx")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </TooltipProvider>
+                    {selectedList.length ? (
+                      <>
+                        <DropdownMenuItem
+                          data-tour="products-print-tags"
+                          onSelect={() => void openPrintForProducts(selectedList)}
+                        >
+                          <PrintIcon className="h-4 w-4" aria-hidden />
+                          {t("printPriceTags")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            void openPrintForProducts(selectedList, undefined, { settings: true })
+                          }
+                        >
+                          <MoreIcon className="h-4 w-4" aria-hidden />
+                          {t("changePrintSettings")}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={exportQuery.isFetching}
+                      onSelect={() => {
+                        void handleExport("csv");
+                      }}
+                    >
+                      {exportQuery.isFetching ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {t("exportCsv")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={exportQuery.isFetching}
+                      onSelect={() => {
+                        void handleExport("xlsx");
+                      }}
+                    >
+                      {exportQuery.isFetching ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {t("exportXlsx")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </TooltipProvider>
+          ) : undefined
         }
         filters={
           <>
@@ -2632,7 +2630,7 @@ const ProductsPage = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {products.length ? (
+          {products.length && canSelectProducts ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">
                 {!allSelected ? (
@@ -2664,7 +2662,7 @@ const ProductsPage = () => {
               </div>
             </div>
           ) : null}
-          {selectedList.length ? (
+          {selectedList.length && canSelectProducts ? (
             <div className="mb-3">
               <TooltipProvider>
                 <SelectionToolbar
@@ -2844,15 +2842,17 @@ const ProductsPage = () => {
                       <Table className="min-w-[720px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-10">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                checked={allSelected}
-                                onChange={toggleSelectAll}
-                                aria-label={t("selectAll")}
-                              />
-                            </TableHead>
+                            {canSelectProducts ? (
+                              <TableHead className="w-10">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  checked={allSelected}
+                                  onChange={toggleSelectAll}
+                                  aria-label={t("selectAll")}
+                                />
+                              </TableHead>
+                            ) : null}
                             {visibleProductColumnSet.has("sku")
                               ? renderSortableHead("sku", t("sku"))
                               : null}
@@ -2905,15 +2905,17 @@ const ProductsPage = () => {
                             const readinessSummary = getProductReadinessSummary(readinessState);
                             return (
                               <TableRow key={product.id}>
-                                <TableCell>
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                    checked={selectedIds.has(product.id)}
-                                    onChange={() => toggleSelect(product.id)}
-                                    aria-label={t("selectProduct", { name: product.name })}
-                                  />
-                                </TableCell>
+                                {canSelectProducts ? (
+                                  <TableCell>
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      checked={selectedIds.has(product.id)}
+                                      onChange={() => toggleSelect(product.id)}
+                                      aria-label={t("selectProduct", { name: product.name })}
+                                    />
+                                  </TableCell>
+                                ) : null}
                                 {visibleProductColumnSet.has("sku") ? (
                                   <TableCell className="text-xs text-muted-foreground">
                                     {product.sku}
@@ -3136,15 +3138,17 @@ const ProductsPage = () => {
                                 <EmptyIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
                               </div>
                             )}
-                            <label className="absolute right-2 top-2">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                checked={selectedIds.has(product.id)}
-                                onChange={() => toggleSelect(product.id)}
-                                aria-label={t("selectProduct", { name: product.name })}
-                              />
-                            </label>
+                            {canSelectProducts ? (
+                              <label className="absolute right-2 top-2">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  checked={selectedIds.has(product.id)}
+                                  onChange={() => toggleSelect(product.id)}
+                                  aria-label={t("selectProduct", { name: product.name })}
+                                />
+                              </label>
+                            ) : null}
                           </div>
                           <div className="space-y-3 p-3">
                             <div className="flex items-start justify-between gap-2">
@@ -3277,15 +3281,17 @@ const ProductsPage = () => {
                             <EmptyIcon className="h-6 w-6 text-muted-foreground" aria-hidden />
                           </div>
                         )}
-                        <label className="absolute left-2 top-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                            checked={selectedIds.has(product.id)}
-                            onChange={() => toggleSelect(product.id)}
-                            aria-label={t("selectProduct", { name: product.name })}
-                          />
-                        </label>
+                        {canSelectProducts ? (
+                          <label className="absolute left-2 top-2">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              checked={selectedIds.has(product.id)}
+                              onChange={() => toggleSelect(product.id)}
+                              aria-label={t("selectProduct", { name: product.name })}
+                            />
+                          </label>
+                        ) : null}
                       </div>
                       <div className="space-y-3 p-3">
                         <div className="flex items-start justify-between gap-2">
@@ -3384,14 +3390,16 @@ const ProductsPage = () => {
                 return (
                   <div className="rounded-none border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <label className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                          checked={selectedIds.has(product.id)}
-                          onChange={() => toggleSelect(product.id)}
-                          aria-label={t("selectProduct", { name: product.name })}
-                        />
+                      <div className="flex items-start gap-3">
+                        {canSelectProducts ? (
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            checked={selectedIds.has(product.id)}
+                            onChange={() => toggleSelect(product.id)}
+                            aria-label={t("selectProduct", { name: product.name })}
+                          />
+                        ) : null}
                         {previewImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -3423,7 +3431,7 @@ const ProductsPage = () => {
                             {t("sku")}: {product.sku}
                           </p>
                         </div>
-                      </label>
+                      </div>
                       <RowActions
                         actions={actions}
                         maxInline={1}

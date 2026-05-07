@@ -9,6 +9,7 @@ export const searchRouter = router({
       searchGlobal({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         rawQuery: input.q,
         logger: ctx.logger,
       }),

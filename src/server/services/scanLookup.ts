@@ -64,6 +64,10 @@ export const lookupScanProducts = async (
   client: ScanLookupClient,
   organizationId: string,
   query: string,
+  options?: {
+    productWhere?: Prisma.ProductWhereInput;
+    storeIds?: string[];
+  },
 ): Promise<ScanLookupResult> => {
   const normalized = normalizeScanValue(query);
   const trimmed = query.trim();
@@ -72,6 +76,8 @@ export const lookupScanProducts = async (
     return { exactMatch: false, items: [] };
   }
 
+  const visibleStoreIds = options?.storeIds ? new Set(options.storeIds) : null;
+  const productWhere = options?.productWhere ?? {};
   const toItem = (item: {
     id: string;
     sku: string;
@@ -101,14 +107,19 @@ export const lookupScanProducts = async (
     basePriceKgs: decimalToNumber(item.basePriceKgs),
     effectivePriceKgs: decimalToNumber(item.basePriceKgs),
     onHandQty:
-      item.inventorySnapshots?.reduce((sum, snapshot) => sum + snapshot.onHand, 0) ?? null,
+      item.inventorySnapshots?.reduce((sum, snapshot) => {
+        if (visibleStoreIds && !visibleStoreIds.has(snapshot.storeId)) {
+          return sum;
+        }
+        return sum + snapshot.onHand;
+      }, 0) ?? null,
   });
 
   const barcodeMatch = await client.productBarcode.findFirst({
     where: {
       organizationId,
       value: exactNeedle,
-      product: { isDeleted: false },
+      product: { isDeleted: false, ...productWhere },
     },
     select: {
       value: true,
@@ -135,7 +146,7 @@ export const lookupScanProducts = async (
     where: {
       organizationId,
       packBarcode: exactNeedle,
-      product: { isDeleted: false },
+      product: { isDeleted: false, ...productWhere },
     },
     select: {
       product: {
@@ -160,6 +171,7 @@ export const lookupScanProducts = async (
     where: {
       organizationId,
       isDeleted: false,
+      ...productWhere,
       sku: { equals: exactNeedle, mode: "insensitive" },
     },
     select: scanProductSelect,
@@ -185,6 +197,7 @@ export const lookupScanProducts = async (
     where: {
       organizationId,
       isDeleted: false,
+      ...productWhere,
       OR: [
         { name: { contains: fuzzyNeedle, mode: "insensitive" } },
         { sku: { contains: fuzzyNeedle, mode: "insensitive" } },

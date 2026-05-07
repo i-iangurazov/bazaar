@@ -16,6 +16,13 @@ import { adjustStock } from "@/server/services/inventory";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
+const grantStoreAccess = async (organizationId: string, userId: string, storeId: string) => {
+  await prisma.userStoreAccess.createMany({
+    data: [{ organizationId, userId, storeId }],
+    skipDuplicates: true,
+  });
+};
+
 describeDb("products", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -449,7 +456,8 @@ describeDb("products", () => {
   });
 
   it("saves scanned manufacturer barcodes on product edit and finds them through POS scan lookup", async () => {
-    const { org, adminUser, managerUser, baseUnit } = await seedBase();
+    const { org, store, adminUser, managerUser, baseUnit } = await seedBase();
+    await grantStoreAccess(org.id, managerUser.id, store.id);
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -464,6 +472,7 @@ describeDb("products", () => {
       sku: "SCAN-EDIT-1",
       name: "Scanned Edit Product",
       baseUnitId: baseUnit.id,
+      storeId: store.id,
     });
 
     await updateProduct({
@@ -535,7 +544,8 @@ describeDb("products", () => {
   });
 
   it("finds products by barcode within the organization", async () => {
-    const { org, adminUser, managerUser, baseUnit } = await seedBase();
+    const { org, store, adminUser, managerUser, baseUnit } = await seedBase();
+    await grantStoreAccess(org.id, managerUser.id, store.id);
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -551,6 +561,7 @@ describeDb("products", () => {
       name: "Barcode Product",
       baseUnitId: baseUnit.id,
       barcodes: ["BAR-001"],
+      storeId: store.id,
     });
 
     const found = await caller.products.findByBarcode({ value: "BAR-001" });
@@ -611,7 +622,8 @@ describeDb("products", () => {
   });
 
   it("normalizes scanned barcode input while keeping org scoping", async () => {
-    const { org, adminUser, managerUser, baseUnit } = await seedBase();
+    const { org, store, adminUser, managerUser, baseUnit } = await seedBase();
+    await grantStoreAccess(org.id, managerUser.id, store.id);
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -627,6 +639,7 @@ describeDb("products", () => {
       name: "Barcode Product Normalized",
       baseUnitId: baseUnit.id,
       barcodes: ["00001234"],
+      storeId: store.id,
     });
 
     const found = await caller.products.findByBarcode({ value: "  0000 1234  " });
@@ -654,7 +667,8 @@ describeDb("products", () => {
   });
 
   it("keeps paginated product list ordering stable for default sortable fields", async () => {
-    const { org, adminUser, managerUser, baseUnit } = await seedBase();
+    const { org, store, adminUser, managerUser, baseUnit } = await seedBase();
+    await grantStoreAccess(org.id, managerUser.id, store.id);
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -669,6 +683,7 @@ describeDb("products", () => {
       sku: "SKU-C",
       name: "Charlie Product",
       baseUnitId: baseUnit.id,
+      storeId: store.id,
     });
     await createProduct({
       organizationId: org.id,
@@ -677,6 +692,7 @@ describeDb("products", () => {
       sku: "SKU-A",
       name: "Alpha Product",
       baseUnitId: baseUnit.id,
+      storeId: store.id,
     });
     await createProduct({
       organizationId: org.id,
@@ -685,6 +701,7 @@ describeDb("products", () => {
       sku: "SKU-B",
       name: "Bravo Product",
       baseUnitId: baseUnit.id,
+      storeId: store.id,
     });
 
     const pageOne = await caller.products.list({
@@ -942,7 +959,8 @@ describeDb("products", () => {
   });
 
   it("reflects create, update, archive, and restore flows in subsequent product lists", async () => {
-    const { org, managerUser, baseUnit } = await seedBase();
+    const { org, store, managerUser, baseUnit } = await seedBase();
+    await grantStoreAccess(org.id, managerUser.id, store.id);
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -957,6 +975,7 @@ describeDb("products", () => {
       baseUnitId: baseUnit.id,
       basePriceKgs: 199,
       barcodes: ["LIST-FLOW-001"],
+      storeId: store.id,
     });
 
     const afterCreate = await caller.products.list({

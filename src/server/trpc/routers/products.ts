@@ -72,6 +72,7 @@ export const productsRouter = router({
       lookupProductScan({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         query: input.q,
       }),
     ),
@@ -82,6 +83,7 @@ export const productsRouter = router({
       findProductByBarcode({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         value: input.value,
       }),
     ),
@@ -149,6 +151,7 @@ export const productsRouter = router({
       getProductsByIds({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         ids: input.ids,
       }),
     ),
@@ -159,6 +162,7 @@ export const productsRouter = router({
       getProductById({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         productId: input.productId,
       }),
     ),

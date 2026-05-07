@@ -213,6 +213,7 @@ describeDb("store isolation", () => {
       sku: "HIDDEN-B",
       name: "Hidden Store B Product",
       baseUnitId: baseUnit.id,
+      barcodes: ["HIDDEN-B-BARCODE"],
       storeId: storeB.id,
     });
     const cashierCaller = createTestCaller({
@@ -224,13 +225,38 @@ describeDb("store isolation", () => {
     });
 
     const stores = await cashierCaller.stores.list();
+    const bootstrap = await cashierCaller.products.bootstrap({
+      storeId: storeB.id,
+      page: 1,
+      pageSize: 25,
+    });
+    const unscopedProducts = await cashierCaller.products.list({ page: 1, pageSize: 25 });
+    const unscopedIds = await cashierCaller.products.listIds({});
     const storeAProducts = await cashierCaller.products.list({ storeId: store.id });
+    const storeBDetail = await cashierCaller.products.getById({ productId: storeBProduct.id });
+    const storeBBarcode = await cashierCaller.products.findByBarcode({
+      value: "HIDDEN-B-BARCODE",
+    });
+    const storeBScan = await cashierCaller.products.lookupScan({ q: "HIDDEN-B-BARCODE" });
+    const productsByIds = await cashierCaller.products.byIds({
+      ids: [storeBProduct.id],
+    });
+    const searchResults = await cashierCaller.search.global({ q: "HIDDEN-B-BARCODE" });
     await expect(cashierCaller.products.list({ storeId: storeB.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
 
     expect(stores.map((item) => item.id)).toEqual([store.id]);
+    expect(bootstrap.selectedStoreId).toBe(store.id);
+    expect(bootstrap.list.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(unscopedProducts.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(unscopedIds).not.toContain(storeBProduct.id);
     expect(storeAProducts.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(storeBDetail).toBeNull();
+    expect(storeBBarcode).toBeNull();
+    expect(storeBScan.items).toHaveLength(0);
+    expect(productsByIds).toHaveLength(0);
+    expect(searchResults.results.some((item) => item.id === storeBProduct.id)).toBe(false);
   });
 
   it("scopes dashboard stores and sales orders to assigned stores", async () => {

@@ -844,50 +844,52 @@ const ProductDetailPage = () => {
         title={t("editTitle")}
         subtitle={productQuery.data.name}
         action={
-          <>
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => void handleProductLabelPdf("print")}
-              disabled={Boolean(labelAction)}
-            >
-              {labelAction === "print" ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <PrintIcon className="h-4 w-4" aria-hidden />
-              )}
-              {t("printLabels")}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="secondary" className="w-full sm:w-auto">
-                  <MoreIcon className="h-4 w-4" aria-hidden />
-                  {tCommon("actions")}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[240px]">
-                <DropdownMenuItem
-                  disabled={Boolean(labelAction)}
-                  onSelect={() => void handleProductLabelPdf("download")}
-                >
-                  {labelAction === "download" ? (
-                    <Spinner className="h-4 w-4" />
-                  ) : (
-                    <DownloadIcon className="h-4 w-4" aria-hidden />
-                  )}
-                  {t("printDownload")}
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href={labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"}>
-                    <PrintIcon className="h-4 w-4" aria-hidden />
-                    {t("changePrintSettings")}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setMovementsOpen(true)}>
-                  <ViewIcon className="h-4 w-4" aria-hidden />
-                  {tInventory("viewMovements")}
-                </DropdownMenuItem>
-                {canManageProducts ? (
+          canManageProducts ? (
+            <>
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => void handleProductLabelPdf("print")}
+                disabled={Boolean(labelAction)}
+              >
+                {labelAction === "print" ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <PrintIcon className="h-4 w-4" aria-hidden />
+                )}
+                {t("printLabels")}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="secondary" className="w-full sm:w-auto">
+                    <MoreIcon className="h-4 w-4" aria-hidden />
+                    {tCommon("actions")}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[240px]">
+                  <DropdownMenuItem
+                    disabled={Boolean(labelAction)}
+                    onSelect={() => void handleProductLabelPdf("download")}
+                  >
+                    {labelAction === "download" ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {t("printDownload")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href={labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"}
+                    >
+                      <PrintIcon className="h-4 w-4" aria-hidden />
+                      {t("changePrintSettings")}
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setMovementsOpen(true)}>
+                    <ViewIcon className="h-4 w-4" aria-hidden />
+                    {tInventory("viewMovements")}
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={duplicateMutation.isLoading}
                     onSelect={() => duplicateMutation.mutate({ productId })}
@@ -899,8 +901,6 @@ const ProductDetailPage = () => {
                     )}
                     {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
                   </DropdownMenuItem>
-                ) : null}
-                {canManageProducts ? (
                   <DropdownMenuItem
                     className="text-danger focus:text-danger"
                     disabled={archiveMutation.isLoading}
@@ -923,10 +923,10 @@ const ProductDetailPage = () => {
                     )}
                     {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
                   </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : undefined
         }
       />
 

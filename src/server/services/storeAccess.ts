@@ -153,3 +153,17 @@ export const productStoreAssignmentWhere = (storeId?: string | null): Prisma.Pro
         },
       }
     : {};
+
+export const productStoreAssignmentInWhere = (
+  storeIds?: string[] | null,
+): Prisma.ProductWhereInput =>
+  storeIds
+    ? {
+        storeProducts: {
+          some: {
+            storeId: { in: storeIds.length ? storeIds : ["__no_accessible_store__"] },
+            isActive: true,
+          },
+        },
+      }
+    : {};

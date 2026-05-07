@@ -54,6 +54,7 @@ describe("index page source layout", () => {
     expect(listSource).toContain(
       'const canManageProducts = role === "ADMIN" || role === "MANAGER";',
     );
+    expect(listSource).toContain("const canSelectProducts = canManageProducts;");
     expect(listSource).toContain("if (!canManageProducts || arrangeCategoriesRunning)");
     expect(listSource).toContain("if (!selectedList.length || !canManageProducts)");
     expect(createSource).toContain(
@@ -63,6 +64,7 @@ describe("index page source layout", () => {
     expect(detailSource).toContain(
       'const canManageProducts = role === "ADMIN" || role === "MANAGER";',
     );
+    expect(detailSource).toContain("action={\n          canManageProducts ? (");
     expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
 });

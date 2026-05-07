@@ -75,7 +75,7 @@ const rolePermissions: Record<AppRole, AppPermission[]> = {
     "viewProfile",
   ],
   STAFF: ["usePos", "viewSales", "viewCash", "viewHelp", "viewProfile"],
-  CASHIER: ["usePos", "viewSales", "viewCash", "viewHelp", "viewProfile"],
+  CASHIER: ["usePos", "viewSales", "viewCash", "viewProducts", "viewHelp", "viewProfile"],
 };
 
 export const hasPermission = (access: RoleAccess, permission?: AppPermission) => {
@@ -120,6 +120,7 @@ const routeAccessRules: Array<{ prefix: string; permission: AppPermission }> = [
   { prefix: "/suppliers", permission: "viewSuppliers" },
   { prefix: "/stores", permission: "viewStores" },
   { prefix: "/inventory", permission: "viewInventory" },
+  { prefix: "/products/new", permission: "manageProducts" },
   { prefix: "/products", permission: "viewProducts" },
   { prefix: "/sales/orders", permission: "viewSales" },
   { prefix: "/orders", permission: "viewSales" },

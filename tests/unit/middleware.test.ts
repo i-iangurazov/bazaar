@@ -49,10 +49,16 @@ describe("middleware route protection", () => {
 
   it.each([
     {
-      role: "CASHIER",
+      role: "STAFF",
       path: "/products",
       expectedPath: "/pos",
       expectedFrom: "/products",
+    },
+    {
+      role: "CASHIER",
+      path: "/products/new",
+      expectedPath: "/pos",
+      expectedFrom: "/products/new",
     },
     {
       role: "MANAGER",
@@ -96,6 +102,7 @@ describe("middleware route protection", () => {
 
   it.each([
     { role: "CASHIER", path: "/pos" },
+    { role: "CASHIER", path: "/products" },
     { role: "MANAGER", path: "/products" },
     { role: "ADMIN", path: "/dashboard" },
     { role: "ADMIN", path: "/platform", isPlatformOwner: true },
