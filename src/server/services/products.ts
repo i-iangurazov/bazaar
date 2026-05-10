@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AttributeType, Prisma } from "@prisma/client";
+import { StockMovementType, type AttributeType, type Prisma, type PrismaClient } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -27,6 +27,7 @@ import {
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore } from "@/server/services/storeAccess";
+import { getLogger } from "@/server/logging";
 
 export type CreateProductInput = {
   organizationId: string;
@@ -41,6 +42,8 @@ export type CreateProductInput = {
   basePriceKgs?: number | null;
   purchasePriceKgs?: number | null;
   avgCostKgs?: number | null;
+  initialOnHand?: number | null;
+  minStock?: number | null;
   description?: string | null;
   photoUrl?: string | null;
   images?: {
@@ -98,6 +101,10 @@ const CATEGORY_ARRANGEMENT_OPENAI_TIMEOUT_MS = (() => {
 const CATEGORY_ARRANGEMENT_MIN_AI_CONFIDENCE = 0.65;
 const CATEGORY_ARRANGEMENT_IMAGE_BATCH_SIZE = 8;
 const CATEGORY_ARRANGEMENT_MAX_IMAGE_DATA_URL_LENGTH = 900_000;
+const PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS = (() => {
+  const parsed = Number(process.env.PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed >= 5_000 ? parsed : 15_000;
+})();
 const MEN_CATEGORY_NAME = "Мужчины";
 const WOMEN_CATEGORY_NAME = "Женщины";
 
@@ -1382,15 +1389,131 @@ const ensureBaseSnapshots = async (
   });
 };
 
-const resolveProductCreateStores = async (
+const defaultReorderPolicy = {
+  leadTimeDays: 7,
+  reviewPeriodDays: 7,
+  safetyStockDays: 3,
+  minOrderQty: 0,
+};
+
+const applyInitialInventorySettings = async (
   tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    actorId: string;
+    requestId: string;
+    store?: { id: string; allowNegativeStock: boolean } | null;
+    productId: string;
+    initialOnHand?: number | null;
+    minStock?: number | null;
+  },
+) => {
+  const hasInitialOnHand = input.initialOnHand !== undefined && input.initialOnHand !== null;
+  const hasMinStock = input.minStock !== undefined && input.minStock !== null;
+  if (!hasInitialOnHand && !hasMinStock) {
+    return;
+  }
+  if (!input.store) {
+    throw new AppError("storeRequired", "BAD_REQUEST", 400);
+  }
+
+  const initialOnHand = hasInitialOnHand ? Math.trunc(input.initialOnHand ?? 0) : undefined;
+  const minStock = hasMinStock ? Math.trunc(input.minStock ?? 0) : undefined;
+  if (
+    (initialOnHand !== undefined && initialOnHand < 0) ||
+    (minStock !== undefined && minStock < 0)
+  ) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  if (initialOnHand && initialOnHand > 0) {
+    await tx.inventorySnapshot.update({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: input.store.id,
+          productId: input.productId,
+          variantKey: "BASE",
+        },
+      },
+      data: {
+        onHand: { increment: initialOnHand },
+        allowNegativeStock: input.store.allowNegativeStock,
+      },
+    });
+    await tx.stockMovement.create({
+      data: {
+        storeId: input.store.id,
+        productId: input.productId,
+        type: StockMovementType.ADJUSTMENT,
+        qtyDelta: initialOnHand,
+        referenceType: "Product",
+        referenceId: input.productId,
+        note: "Initial stock",
+        createdById: input.actorId,
+      },
+    });
+  }
+
+  if (minStock !== undefined) {
+    const before = await tx.reorderPolicy.findUnique({
+      where: { storeId_productId: { storeId: input.store.id, productId: input.productId } },
+    });
+    const policy = await tx.reorderPolicy.upsert({
+      where: { storeId_productId: { storeId: input.store.id, productId: input.productId } },
+      update: { minStock },
+      create: {
+        storeId: input.store.id,
+        productId: input.productId,
+        minStock,
+        ...defaultReorderPolicy,
+      },
+    });
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "REORDER_POLICY_UPDATE",
+      entity: "ReorderPolicy",
+      entityId: policy.id,
+      before: before ? toJson(before) : null,
+      after: toJson(policy),
+      requestId: input.requestId,
+    });
+  }
+};
+
+const createInitialStoreAssignments = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    actorId: string;
+    productId: string;
+    stores: { id: string }[];
+  },
+) => {
+  if (!input.stores.length) {
+    return;
+  }
+  await tx.storeProduct.createMany({
+    data: input.stores.map((store) => ({
+      organizationId: input.organizationId,
+      storeId: store.id,
+      productId: input.productId,
+      assignedById: input.actorId,
+      isActive: true,
+    })),
+    skipDuplicates: true,
+  });
+};
+
+const resolveProductCreateStores = async (
+  client: PrismaClient | Prisma.TransactionClient,
   input: {
     organizationId: string;
     storeId?: string | null;
   },
 ) => {
   if (input.storeId) {
-    const store = await tx.store.findFirst({
+    const store = await client.store.findFirst({
       where: { id: input.storeId, organizationId: input.organizationId },
       select: { id: true, allowNegativeStock: true },
     });
@@ -1400,7 +1523,7 @@ const resolveProductCreateStores = async (
     return [store];
   }
 
-  const stores = await tx.store.findMany({
+  const stores = await client.store.findMany({
     where: { organizationId: input.organizationId },
     select: { id: true, allowNegativeStock: true },
     orderBy: { createdAt: "asc" },
@@ -1477,6 +1600,11 @@ const resolveIncomingProductImages = async (input: {
 
 export const createProduct = async (input: CreateProductInput) => {
   const productId = randomUUID();
+  await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
+  const assignmentStores = await resolveProductCreateStores(prisma, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
   const resolvedMedia = await resolveIncomingProductImages({
     organizationId: input.organizationId,
     productId,
@@ -1496,7 +1624,6 @@ export const createProduct = async (input: CreateProductInput) => {
 
   const runCreateTransaction = () =>
     prisma.$transaction(async (tx) => {
-      await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
       await ensureSupplier(tx, input.organizationId, input.supplierId);
       const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
       const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
@@ -1594,19 +1721,22 @@ export const createProduct = async (input: CreateProductInput) => {
           mode: "create-only",
         });
       }
-      const assignmentStores = await resolveProductCreateStores(tx, {
+      await createInitialStoreAssignments(tx, {
         organizationId: input.organizationId,
-        storeId: input.storeId,
+        actorId: input.actorId,
+        productId: product.id,
+        stores: assignmentStores,
       });
-      for (const store of assignmentStores) {
-        await assignProductToStore(tx, {
-          organizationId: input.organizationId,
-          storeId: store.id,
-          productId: product.id,
-          actorId: input.actorId,
-        });
-      }
       await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
+      await applyInitialInventorySettings(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        requestId: input.requestId,
+        store: assignmentStores[0] ?? null,
+        productId: product.id,
+        initialOnHand: input.initialOnHand,
+        minStock: input.minStock,
+      });
       if (resolvedBaseCost !== undefined) {
         await upsertBaseProductCost(tx, {
           organizationId: input.organizationId,
@@ -1626,23 +1756,36 @@ export const createProduct = async (input: CreateProductInput) => {
         requestId: input.requestId,
       });
 
+      return product;
+    }, { maxWait: 10_000, timeout: PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS });
+
+  const recordFirstProductCreated = async (productIdForEvent: string) => {
+    try {
       await recordFirstEvent({
         organizationId: input.organizationId,
         actorId: input.actorId,
         type: "first_product_created",
-        metadata: { productId: product.id },
+        metadata: { productId: productIdForEvent },
       });
-
-      return product;
-    });
+    } catch (error) {
+      getLogger(input.requestId).warn(
+        { err: error, productId: productIdForEvent },
+        "failed to record first product event",
+      );
+    }
+  };
 
   if (!shouldGenerateSku) {
-    return runCreateTransaction();
+    const product = await runCreateTransaction();
+    void recordFirstProductCreated(product.id);
+    return product;
   }
 
   for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
     try {
-      return await runCreateTransaction();
+      const product = await runCreateTransaction();
+      void recordFirstProductCreated(product.id);
+      return product;
     } catch (error) {
       if (
         !isOrganizationSkuUniqueConstraintError(error) ||
@@ -1656,9 +1799,7 @@ export const createProduct = async (input: CreateProductInput) => {
   throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
 };
 
-export const assignExistingProductsToStore = async (
-  input: AssignExistingProductsToStoreInput,
-) => {
+export const assignExistingProductsToStore = async (input: AssignExistingProductsToStoreInput) => {
   const productIds = Array.from(
     new Set(input.productIds.map((value) => value.trim()).filter(Boolean)),
   );
@@ -2333,11 +2474,11 @@ export const bulkGenerateProductBarcodes = async (input: {
     } else if (input.filter?.type === "bundle") {
       filters.push({ isBundle: true });
     }
-	    if (input.filter?.storeId) {
-	      filters.push({
-	        storeProducts: { some: { storeId: input.filter.storeId, isActive: true } },
-	      });
-	    }
+    if (input.filter?.storeId) {
+      filters.push({
+        storeProducts: { some: { storeId: input.filter.storeId, isActive: true } },
+      });
+    }
 
     const where: Prisma.ProductWhereInput = {
       organizationId: input.organizationId,
@@ -2937,9 +3078,7 @@ const splitImportCategoryHierarchy = (value?: string | null) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-const normalizeImportRowCategories = (
-  row: Pick<ImportProductRow, "category" | "categories">,
-) => {
+const normalizeImportRowCategories = (row: Pick<ImportProductRow, "category" | "categories">) => {
   if (row.categories?.length) {
     return normalizeProductCategoryNames(row.categories.flatMap(splitImportCategoryHierarchy));
   }

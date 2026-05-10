@@ -302,6 +302,110 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("tracks discounted debt sales and settles debt into the active shift", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-debt",
+      idempotencyKey: "pos-seed-debt-1",
+      requestId: "pos-seed-debt-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-debt-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+    const discounted = await caller.pos.sales.updateDiscount({
+      saleId: sale.id,
+      discountKgs: 50,
+    });
+
+    expect(discounted.subtotalKgs).toBe(200);
+    expect(discounted.discountKgs).toBe(50);
+    expect(discounted.totalKgs).toBe(150);
+
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-debt-1",
+      debtCustomerName: "Debt Customer",
+      payments: [],
+    });
+
+    const openDebts = await caller.pos.debts.list({
+      storeId: store.id,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(openDebts.items).toHaveLength(1);
+    expect(openDebts.items[0]).toMatchObject({
+      id: sale.id,
+      debtCustomerName: "Debt Customer",
+      discountKgs: 50,
+      totalKgs: 150,
+    });
+
+    const paymentsBeforeSettlement = await prisma.salePayment.count({
+      where: { customerOrderId: sale.id },
+    });
+    expect(paymentsBeforeSettlement).toBe(0);
+
+    await caller.pos.debts.settle({
+      saleId: sale.id,
+      registerId: register.id,
+      idempotencyKey: "pos-debt-settle-1",
+    });
+    await caller.pos.debts.settle({
+      saleId: sale.id,
+      registerId: register.id,
+      idempotencyKey: "pos-debt-settle-1",
+    });
+
+    const dbSale = await prisma.customerOrder.findUnique({ where: { id: sale.id } });
+    const payments = await prisma.salePayment.findMany({ where: { customerOrderId: sale.id } });
+    const remainingDebts = await caller.pos.debts.list({
+      storeId: store.id,
+      page: 1,
+      pageSize: 25,
+    });
+
+    expect(dbSale?.isDebt).toBe(true);
+    expect(dbSale?.debtSettledAt).toBeTruthy();
+    expect(payments).toHaveLength(1);
+    expect(Number(payments[0]?.amountKgs ?? 0)).toBe(150);
+    expect(remainingDebts.items).toHaveLength(0);
+  });
+
   it("keeps POS sale, payment, shift and cash movement currency snapshots after store currency changes", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -555,8 +659,8 @@ describeDb("pos", () => {
     expect(captures[0]?.code).toBe("DM-001-ABC");
   });
 
-  it("completes return idempotently and restores inventory", async () => {
-    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+  it("lets cashier complete returns idempotently and restores inventory", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({
       plan: "BUSINESS",
     });
 
@@ -630,20 +734,12 @@ describeDb("pos", () => {
       qty: 1,
     });
 
-    const managerCaller = createTestCaller({
-      id: managerUser.id,
-      email: managerUser.email,
-      role: managerUser.role,
-      organizationId: org.id,
-      isOrgOwner: false,
-    });
-
-    await managerCaller.pos.returns.complete({
+    await cashierCaller.pos.returns.complete({
       saleReturnId: returnDraft.id,
       idempotencyKey: "pos-return-complete-1",
       payments: [{ method: "CASH", amountKgs: 100 }],
     });
-    await managerCaller.pos.returns.complete({
+    await cashierCaller.pos.returns.complete({
       saleReturnId: returnDraft.id,
       idempotencyKey: "pos-return-complete-1",
       payments: [{ method: "CASH", amountKgs: 100 }],

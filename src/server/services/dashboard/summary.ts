@@ -53,6 +53,18 @@ type RecentMovement = {
   createdBy: { name: string | null; email: string } | null;
 };
 
+type DashboardMetricRow = {
+  todaySalesKgs: Prisma.Decimal | number | string | null;
+  receiptsCount: bigint | number | string | null;
+  todayCostKgs: Prisma.Decimal | number | string | null;
+  openShiftsCount: bigint | number | string | null;
+  negativeStockCount: bigint | number | string | null;
+  missingBarcodeCount: bigint | number | string | null;
+  missingPriceCount: bigint | number | string | null;
+  pendingPurchaseOrdersCount: bigint | number | string | null;
+  failedReceiptsCount: bigint | number | string | null;
+};
+
 export type DashboardSummaryResult = {
   business: {
     todaySalesKgs: number;
@@ -280,6 +292,7 @@ export const getDashboardSummary = async ({
   storeId,
   includeRecentActivity,
   includeRecentMovements,
+  skipStoreAccessCheck,
 }: {
   prisma: PrismaClient | Prisma.TransactionClient;
   logger: Logger;
@@ -288,19 +301,22 @@ export const getDashboardSummary = async ({
   storeId: string;
   includeRecentActivity?: boolean;
   includeRecentMovements?: boolean;
+  skipStoreAccessCheck?: boolean;
 }): Promise<DashboardSummaryResult> => {
   const options = resolveDashboardSummaryOptions({
     includeRecentActivity,
     includeRecentMovements,
   });
-  await assertDashboardStoreAccess({
-    prisma,
-    logger,
-    user,
-    organizationId,
-    storeId,
-    scope: "dashboard.summary",
-  });
+  if (!skipStoreAccessCheck) {
+    await assertDashboardStoreAccess({
+      prisma,
+      logger,
+      user,
+      organizationId,
+      storeId,
+      scope: "dashboard.summary",
+    });
+  }
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const tomorrowStart = new Date(todayStart);
@@ -308,12 +324,13 @@ export const getDashboardSummary = async ({
 
   const lowStockCandidatesStartedAt = Date.now();
   const lowStockCandidates = await prisma.$queryRaw<
-    { snapshotId: string; productId: string; minStock: number }[]
+    { snapshotId: string; productId: string; minStock: number; totalCount: bigint }[]
   >`
     SELECT
       s.id AS "snapshotId",
       s."productId" AS "productId",
-      p."minStock" AS "minStock"
+      p."minStock" AS "minStock",
+      COUNT(*) OVER() AS "totalCount"
     FROM "InventorySnapshot" s
     INNER JOIN "ReorderPolicy" p
       ON p."storeId" = s."storeId"
@@ -348,14 +365,7 @@ export const getDashboardSummary = async ({
     forecasts,
     recentMovements,
     pendingPurchaseOrders,
-    todayOrders,
-    openShiftsCount,
-    negativeStockCount,
-    missingBarcodeCount,
-    missingPriceCount,
-    pendingPurchaseOrdersCount,
-    failedReceiptsCount,
-    lowStockCountRows,
+    dashboardMetricsRows,
   ] = await Promise.all([
     lowStockSnapshotIds.length
       ? prisma.inventorySnapshot.findMany({
@@ -450,83 +460,107 @@ export const getDashboardSummary = async ({
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
-    prisma.customerOrder.findMany({
-      where: {
-        organizationId,
-        storeId,
-        status: "COMPLETED",
-        completedAt: {
-          gte: todayStart,
-          lt: tomorrowStart,
-        },
-      },
-      select: {
-        id: true,
-        totalKgs: true,
-        lines: {
-          select: {
-            lineCostTotalKgs: true,
-          },
-        },
-      },
-    }),
-    prisma.registerShift.count({
-      where: {
-        organizationId,
-        storeId,
-        status: "OPEN",
-      },
-    }),
-    prisma.inventorySnapshot.count({
-      where: {
-        storeId,
-        onHand: { lt: 0 },
-        product: { organizationId, isDeleted: false },
-      },
-    }),
-    prisma.product.count({
-      where: {
-        organizationId,
-        isDeleted: false,
-        storeProducts: { some: { storeId, isActive: true } },
-        barcodes: { none: {} },
-      },
-    }),
-    prisma.product.count({
-      where: {
-        organizationId,
-        isDeleted: false,
-        storeProducts: { some: { storeId, isActive: true } },
-        basePriceKgs: null,
-        storePrices: { none: { storeId, variantKey: "BASE" } },
-      },
-    }),
-    prisma.purchaseOrder.count({
-      where: {
-        organizationId,
-        storeId,
-        status: { in: ["SUBMITTED", "APPROVED"] },
-      },
-    }),
-    prisma.fiscalReceipt.count({
-      where: {
-        organizationId,
-        storeId,
-        status: "FAILED",
-      },
-    }),
-    prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT COUNT(DISTINCT s.id) AS "count"
-      FROM "InventorySnapshot" s
-      INNER JOIN "ReorderPolicy" p
-        ON p."storeId" = s."storeId"
-       AND p."productId" = s."productId"
-      INNER JOIN "Product" pr
-        ON pr.id = s."productId"
-      WHERE s."storeId" = ${storeId}
-        AND pr."isDeleted" = false
-        AND p."minStock" > 0
-        AND s."onHand" <= p."minStock"
+    prisma.$queryRaw<DashboardMetricRow[]>`
+      SELECT
+        (
+          SELECT COALESCE(SUM(o."totalKgs"), 0)
+          FROM "CustomerOrder" o
+          WHERE o."organizationId" = ${organizationId}
+            AND o."storeId" = ${storeId}
+            AND o.status = 'COMPLETED'
+            AND o."completedAt" >= ${todayStart}
+            AND o."completedAt" < ${tomorrowStart}
+        ) AS "todaySalesKgs",
+        (
+          SELECT COUNT(*)
+          FROM "CustomerOrder" o
+          WHERE o."organizationId" = ${organizationId}
+            AND o."storeId" = ${storeId}
+            AND o.status = 'COMPLETED'
+            AND o."completedAt" >= ${todayStart}
+            AND o."completedAt" < ${tomorrowStart}
+        ) AS "receiptsCount",
+        (
+          SELECT COALESCE(SUM(l."lineCostTotalKgs"), 0)
+          FROM "CustomerOrderLine" l
+          INNER JOIN "CustomerOrder" o
+            ON o.id = l."customerOrderId"
+          WHERE o."organizationId" = ${organizationId}
+            AND o."storeId" = ${storeId}
+            AND o.status = 'COMPLETED'
+            AND o."completedAt" >= ${todayStart}
+            AND o."completedAt" < ${tomorrowStart}
+        ) AS "todayCostKgs",
+        (
+          SELECT COUNT(*)
+          FROM "RegisterShift" shift
+          WHERE shift."organizationId" = ${organizationId}
+            AND shift."storeId" = ${storeId}
+            AND shift.status = 'OPEN'
+        ) AS "openShiftsCount",
+        (
+          SELECT COUNT(*)
+          FROM "InventorySnapshot" s
+          INNER JOIN "Product" pr
+            ON pr.id = s."productId"
+          WHERE s."storeId" = ${storeId}
+            AND s."onHand" < 0
+            AND pr."organizationId" = ${organizationId}
+            AND pr."isDeleted" = false
+        ) AS "negativeStockCount",
+        (
+          SELECT COUNT(*)
+          FROM "Product" pr
+          WHERE pr."organizationId" = ${organizationId}
+            AND pr."isDeleted" = false
+            AND EXISTS (
+              SELECT 1
+              FROM "StoreProduct" sp
+              WHERE sp."productId" = pr.id
+                AND sp."storeId" = ${storeId}
+                AND sp."isActive" = true
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "ProductBarcode" barcode
+              WHERE barcode."productId" = pr.id
+            )
+        ) AS "missingBarcodeCount",
+        (
+          SELECT COUNT(*)
+          FROM "Product" pr
+          WHERE pr."organizationId" = ${organizationId}
+            AND pr."isDeleted" = false
+            AND pr."basePriceKgs" IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM "StoreProduct" sp
+              WHERE sp."productId" = pr.id
+                AND sp."storeId" = ${storeId}
+                AND sp."isActive" = true
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "StorePrice" price
+              WHERE price."productId" = pr.id
+                AND price."storeId" = ${storeId}
+                AND price."variantKey" = 'BASE'
+            )
+        ) AS "missingPriceCount",
+        (
+          SELECT COUNT(*)
+          FROM "PurchaseOrder" po
+          WHERE po."organizationId" = ${organizationId}
+            AND po."storeId" = ${storeId}
+            AND po.status IN ('SUBMITTED', 'APPROVED')
+        ) AS "pendingPurchaseOrdersCount",
+        (
+          SELECT COUNT(*)
+          FROM "FiscalReceipt" receipt
+          WHERE receipt."organizationId" = ${organizationId}
+            AND receipt."storeId" = ${storeId}
+            AND receipt.status = 'FAILED'
+        ) AS "failedReceiptsCount"
     `,
   ]);
   logProfileSection({
@@ -541,7 +575,7 @@ export const getDashboardSummary = async ({
       forecasts: forecasts.length,
       recentMovements: recentMovements.length,
       pendingPurchaseOrders: pendingPurchaseOrders.length,
-      receiptsCount: todayOrders.length,
+      receiptsCount: Number(dashboardMetricsRows[0]?.receiptsCount ?? 0),
       includeRecentActivity: options.includeRecentActivity,
       includeRecentMovements: options.includeRecentMovements,
     },
@@ -582,49 +616,28 @@ export const getDashboardSummary = async ({
         scope: "dashboard.summary",
       })
     : [];
+  const dashboardMetrics = dashboardMetricsRows[0];
+  const todaySalesKgs = Number(dashboardMetrics?.todaySalesKgs ?? 0);
+  const receiptsCount = Number(dashboardMetrics?.receiptsCount ?? 0);
+  const todayCostKgs = Number(dashboardMetrics?.todayCostKgs ?? 0);
+  const grossProfitKgs =
+    todaySalesKgs > 0 || todayCostKgs > 0 ? todaySalesKgs - todayCostKgs : null;
 
   return {
     business: {
-      todaySalesKgs: todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0),
-      receiptsCount: todayOrders.length,
-      averageReceiptKgs:
-        todayOrders.length > 0
-          ? todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0) /
-            todayOrders.length
-          : 0,
-      grossProfitKgs: (() => {
-        const revenue = todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0);
-        const cost = todayOrders.reduce(
-          (sum, order) =>
-            sum +
-            order.lines.reduce(
-              (lineSum, line) => lineSum + Number(line.lineCostTotalKgs ?? 0),
-              0,
-            ),
-          0,
-        );
-        return revenue > 0 || cost > 0 ? revenue - cost : null;
-      })(),
-      grossMarginPercent: (() => {
-        const revenue = todayOrders.reduce((sum, order) => sum + Number(order.totalKgs), 0);
-        const cost = todayOrders.reduce(
-          (sum, order) =>
-            sum +
-            order.lines.reduce(
-              (lineSum, line) => lineSum + Number(line.lineCostTotalKgs ?? 0),
-              0,
-            ),
-          0,
-        );
-        return revenue > 0 ? ((revenue - cost) / revenue) * 100 : null;
-      })(),
-      openShiftsCount,
-      lowStockCount: Number(lowStockCountRows[0]?.count ?? 0),
-      negativeStockCount,
-      missingBarcodeCount,
-      missingPriceCount,
-      pendingPurchaseOrdersCount,
-      failedReceiptsCount,
+      todaySalesKgs,
+      receiptsCount,
+      averageReceiptKgs: receiptsCount > 0 ? todaySalesKgs / receiptsCount : 0,
+      grossProfitKgs,
+      grossMarginPercent:
+        todaySalesKgs > 0 ? ((todaySalesKgs - todayCostKgs) / todaySalesKgs) * 100 : null,
+      openShiftsCount: Number(dashboardMetrics?.openShiftsCount ?? 0),
+      lowStockCount: Number(lowStockCandidates[0]?.totalCount ?? 0),
+      negativeStockCount: Number(dashboardMetrics?.negativeStockCount ?? 0),
+      missingBarcodeCount: Number(dashboardMetrics?.missingBarcodeCount ?? 0),
+      missingPriceCount: Number(dashboardMetrics?.missingPriceCount ?? 0),
+      pendingPurchaseOrdersCount: Number(dashboardMetrics?.pendingPurchaseOrdersCount ?? 0),
+      failedReceiptsCount: Number(dashboardMetrics?.failedReceiptsCount ?? 0),
     },
     lowStock,
     pendingPurchaseOrders,
@@ -715,6 +728,7 @@ export const getDashboardBootstrap = async ({
         storeId: selectedStoreId,
         includeRecentActivity,
         includeRecentMovements,
+        skipStoreAccessCheck: true,
       })
     : emptyDashboardSummary();
 

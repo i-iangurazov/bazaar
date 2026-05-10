@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import {
   currencySourceWithFallback,
@@ -37,6 +38,7 @@ import {
   reconcilePosPaymentDraftsForSaleTotal,
 } from "@/lib/posPaymentDrafts";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { useSse } from "@/lib/useSse";
 import {
   resolveScanResult,
   shouldSubmitFromKey,
@@ -84,6 +86,9 @@ const PosSellPage = () => {
   const [lineSearch, setLineSearch] = useState("");
   const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
   const [payments, setPayments] = useState<PosPaymentDraft[]>([createDefaultPosPaymentDraft()]);
+  const [discountDraft, setDiscountDraft] = useState("");
+  const [sellInDebt, setSellInDebt] = useState(false);
+  const [debtFullName, setDebtFullName] = useState("");
   const [lastCompletedSale, setLastCompletedSale] = useState<{
     id: string;
     number: string;
@@ -210,6 +215,12 @@ const PosSellPage = () => {
     },
   });
 
+  const updateDiscountMutation = trpc.pos.sales.updateDiscount.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   const upsertMarkingCodesMutation = trpc.pos.sales.upsertMarkingCodes.useMutation({
     onSuccess: (result) => {
       setMarkingInput((current) => ({
@@ -229,6 +240,9 @@ const PosSellPage = () => {
       setSaleId(null);
       setLineSearch("");
       setPayments([createDefaultPosPaymentDraft()]);
+      setDiscountDraft("");
+      setSellInDebt(false);
+      setDebtFullName("");
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
     },
@@ -251,6 +265,9 @@ const PosSellPage = () => {
       setAutoReceiptStatus("printing");
       setSaleId(null);
       setPayments([createDefaultPosPaymentDraft()]);
+      setDiscountDraft("");
+      setSellInDebt(false);
+      setDebtFullName("");
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([
         shiftQuery.refetch(),
@@ -277,8 +294,34 @@ const PosSellPage = () => {
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
 
+  useSse({
+    "shift.opened": () => {
+      void Promise.all([
+        shiftQuery.refetch(),
+        registersQuery.refetch(),
+        activeDraftQuery.refetch(),
+      ]);
+    },
+    "shift.closed": () => {
+      void Promise.all([
+        shiftQuery.refetch(),
+        registersQuery.refetch(),
+        activeDraftQuery.refetch(),
+      ]);
+    },
+    "sale.completed": () => {
+      void Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
+    },
+    "debt.settled": () => {
+      void Promise.all([shiftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
+    },
+  });
+
   useEffect(() => {
     if (!saleIdForPaymentInit || saleTotalForPaymentInit === undefined) {
+      return;
+    }
+    if (sellInDebt) {
       return;
     }
     const previousAutoFill = paymentAutoFillRef.current;
@@ -296,12 +339,23 @@ const PosSellPage = () => {
       saleId: saleIdForPaymentInit,
       totalKgs: saleTotalForPaymentInit,
     };
-  }, [currencySource, saleIdForPaymentInit, saleTotalForPaymentInit]);
+  }, [currencySource, saleIdForPaymentInit, saleTotalForPaymentInit, sellInDebt]);
+
+  useEffect(() => {
+    if (!sale) {
+      setDiscountDraft("");
+      return;
+    }
+    setDiscountDraft(String(displayMoneyFromKgs(sale.discountKgs ?? 0, currencySource)));
+  }, [currencySource, sale?.discountKgs, sale?.id, sale]);
 
   useEffect(() => {
     setSaleId(null);
     setLineSearch("");
     setPayments([createDefaultPosPaymentDraft()]);
+    setDiscountDraft("");
+    setSellInDebt(false);
+    setDebtFullName("");
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
@@ -340,6 +394,7 @@ const PosSellPage = () => {
     addLineMutation.isLoading ||
     updateLineMutation.isLoading ||
     removeLineMutation.isLoading ||
+    updateDiscountMutation.isLoading ||
     upsertMarkingCodesMutation.isLoading ||
     cancelDraftMutation.isLoading;
   const totalPayment = roundMoney(
@@ -559,6 +614,32 @@ const PosSellPage = () => {
     }
   };
 
+  const handleUpdateDiscount = async () => {
+    if (!saleId || !sale) {
+      return;
+    }
+    const raw = discountDraft.trim();
+    const amount = raw.length ? Number(raw.replace(/\s+/g, "").replace(",", ".")) : 0;
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast({ variant: "error", description: t("sell.discountInvalid") });
+      return;
+    }
+    const discountKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
+    if (discountKgs > sale.subtotalKgs) {
+      toast({ variant: "error", description: t("sell.discountTooLarge") });
+      return;
+    }
+    if (Math.abs(discountKgs - (sale.discountKgs ?? 0)) < 0.009) {
+      return;
+    }
+    try {
+      await updateDiscountMutation.mutateAsync({ saleId, discountKgs });
+      await trpcUtils.pos.sales.get.invalidate({ saleId });
+    } catch {
+      // handled by mutation onError
+    }
+  };
+
   const handleSaveMarkingCodes = async (lineId: string) => {
     if (!saleId) {
       return;
@@ -582,6 +663,25 @@ const PosSellPage = () => {
 
   const handleComplete = async () => {
     if (!saleId || !sale) {
+      return;
+    }
+
+    if (sellInDebt) {
+      const normalizedDebtName = debtFullName.trim().replace(/\s+/g, " ");
+      if (normalizedDebtName.length < 2) {
+        toast({ variant: "error", description: t("sell.debtNameRequired") });
+        return;
+      }
+      try {
+        await completeMutation.mutateAsync({
+          saleId,
+          idempotencyKey: createIdempotencyKey(),
+          debtCustomerName: normalizedDebtName,
+          payments: [],
+        });
+      } catch {
+        // handled by mutation onError
+      }
       return;
     }
 
@@ -609,6 +709,7 @@ const PosSellPage = () => {
       await completeMutation.mutateAsync({
         saleId,
         idempotencyKey: createIdempotencyKey(),
+        debtCustomerName: null,
         payments: normalized,
       });
     } catch {
@@ -626,6 +727,14 @@ const PosSellPage = () => {
     setPayments((current) =>
       current.length <= 1 ? current : current.filter((_, i) => i !== index),
     );
+  };
+
+  const handleSellInDebtChange = (checked: boolean) => {
+    setSellInDebt(checked);
+    if (checked) {
+      setPayments([createDefaultPosPaymentDraft()]);
+      paymentAutoFillRef.current = { saleId: saleIdForPaymentInit ?? null, totalKgs: null };
+    }
   };
 
   const handleDiscardSale = async () => {
@@ -1037,8 +1146,56 @@ const PosSellPage = () => {
                     ) : null}
                   </div>
 
-                  <div className="rounded-md border border-border bg-muted/20 p-3 text-sm font-semibold text-foreground">
-                    {t("sell.orderTotal")}: {formatSaleMoney(sale?.totalKgs ?? 0)}
+                  <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+                    <div className="grid gap-2 sm:grid-cols-[1fr_220px_auto] sm:items-end">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{t("sell.discount")}</p>
+                        <p className="text-xs text-muted-foreground">{t("sell.discountHint")}</p>
+                      </div>
+                      <Input
+                        value={discountDraft}
+                        onChange={(event) => setDiscountDraft(event.target.value)}
+                        onBlur={() => void handleUpdateDiscount()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        placeholder={t("sell.discountPlaceholder")}
+                        inputMode="decimal"
+                        disabled={isLineBusy || completeMutation.isLoading}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleUpdateDiscount()}
+                        disabled={isLineBusy || completeMutation.isLoading}
+                      >
+                        {updateDiscountMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                        {t("sell.applyDiscount")}
+                      </Button>
+                    </div>
+                    <div className="grid gap-1 text-sm text-foreground sm:grid-cols-3">
+                      <p>
+                        <span className="text-muted-foreground">{t("sell.subtotal")}: </span>
+                        <span className="font-semibold">
+                          {formatSaleMoney(sale?.subtotalKgs ?? 0)}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">{t("sell.discount")}: </span>
+                        <span className="font-semibold">
+                          {formatSaleMoney(sale?.discountKgs ?? 0)}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">{t("sell.orderTotal")}: </span>
+                        <span className="font-semibold">
+                          {formatSaleMoney(sale?.totalKgs ?? 0)}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                 </>
               ) : null}
@@ -1052,89 +1209,128 @@ const PosSellPage = () => {
                   <CardTitle>{t("sell.paymentsTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {payments.map((payment, index) => (
-                    <div
-                      key={`${index}-${payment.method}`}
-                      className="grid gap-2 sm:grid-cols-[180px_1fr_auto]"
-                    >
-                      <Select
-                        value={payment.method}
-                        onValueChange={(value) =>
-                          setPayments((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? { ...item, method: value as PosPaymentMethod }
-                                : item,
-                            ),
-                          )
-                        }
-                      >
-                        <SelectTrigger aria-label={t("sell.paymentMethod")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={PosPaymentMethod.CASH}>
-                            {t("payments.cash")}
-                          </SelectItem>
-                          <SelectItem value={PosPaymentMethod.CARD}>
-                            {t("payments.card")}
-                          </SelectItem>
-                          <SelectItem value={PosPaymentMethod.TRANSFER}>
-                            {t("payments.transfer")}
-                          </SelectItem>
-                          <SelectItem value={PosPaymentMethod.OTHER}>
-                            {t("payments.other")}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        ref={index === 0 ? firstPaymentAmountRef : undefined}
-                        value={payment.amount}
-                        onChange={(event) =>
-                          setPayments((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index ? { ...item, amount: event.target.value } : item,
-                            ),
-                          )
-                        }
-                        placeholder={t("sell.paymentAmount")}
-                        inputMode="decimal"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full sm:w-auto"
-                        onClick={() => removePaymentRow(index)}
-                        disabled={payments.length <= 1 || isLineBusy || completeMutation.isLoading}
-                      >
-                        {tCommon("delete")}
-                      </Button>
+                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {t("sell.sellInDebt")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{t("sell.sellInDebtHint")}</p>
+                      </div>
+                      <Switch checked={sellInDebt} onCheckedChange={handleSellInDebtChange} />
                     </div>
-                  ))}
+                    {sellInDebt ? (
+                      <div className="mt-3 space-y-2">
+                        <label className="text-sm font-medium text-foreground">
+                          {t("sell.debtFullName")}
+                        </label>
+                        <Input
+                          value={debtFullName}
+                          onChange={(event) => setDebtFullName(event.target.value)}
+                          placeholder={t("sell.debtFullNamePlaceholder")}
+                          disabled={isLineBusy || completeMutation.isLoading}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {!sellInDebt
+                    ? payments.map((payment, index) => (
+                        <div
+                          key={`${index}-${payment.method}`}
+                          className="grid gap-2 sm:grid-cols-[180px_1fr_auto]"
+                        >
+                          <Select
+                            value={payment.method}
+                            onValueChange={(value) =>
+                              setPayments((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, method: value as PosPaymentMethod }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger aria-label={t("sell.paymentMethod")}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={PosPaymentMethod.CASH}>
+                                {t("payments.cash")}
+                              </SelectItem>
+                              <SelectItem value={PosPaymentMethod.CARD}>
+                                {t("payments.card")}
+                              </SelectItem>
+                              <SelectItem value={PosPaymentMethod.TRANSFER}>
+                                {t("payments.transfer")}
+                              </SelectItem>
+                              <SelectItem value={PosPaymentMethod.OTHER}>
+                                {t("payments.other")}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            ref={index === 0 ? firstPaymentAmountRef : undefined}
+                            value={payment.amount}
+                            onChange={(event) =>
+                              setPayments((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, amount: event.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            placeholder={t("sell.paymentAmount")}
+                            inputMode="decimal"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="w-full sm:w-auto"
+                            onClick={() => removePaymentRow(index)}
+                            disabled={
+                              payments.length <= 1 || isLineBusy || completeMutation.isLoading
+                            }
+                          >
+                            {tCommon("delete")}
+                          </Button>
+                        </div>
+                      ))
+                    : null}
 
                   <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                    <Button
-                      variant="secondary"
-                      className="w-full sm:w-auto"
-                      onClick={addPaymentRow}
-                      disabled={isLineBusy || completeMutation.isLoading}
-                    >
-                      {t("sell.addPayment")}
-                    </Button>
+                    {!sellInDebt ? (
+                      <Button
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        onClick={addPaymentRow}
+                        disabled={isLineBusy || completeMutation.isLoading}
+                      >
+                        {t("sell.addPayment")}
+                      </Button>
+                    ) : null}
                     <Button
                       className="w-full sm:w-auto"
                       onClick={handleComplete}
                       disabled={completeMutation.isLoading || isLineBusy || !sale.lines.length}
                     >
                       {completeMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                      {t("sell.completeSale")}
+                      {sellInDebt ? t("sell.completeDebtSale") : t("sell.completeSale")}
                     </Button>
                   </div>
 
-                  <p className="text-sm text-muted-foreground">
-                    {t("sell.paymentTotal")}:{" "}
-                    {formatKgsMoney(totalPaymentKgs, locale, currencySource)}
-                  </p>
+                  {!sellInDebt ? (
+                    <p className="text-sm text-muted-foreground">
+                      {t("sell.paymentTotal")}:{" "}
+                      {formatKgsMoney(totalPaymentKgs, locale, currencySource)}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {t("sell.debtTotal")}: {formatSaleMoney(sale.totalKgs)}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>

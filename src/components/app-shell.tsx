@@ -15,6 +15,8 @@ import { SignOutButton } from "@/components/signout-button";
 import { ScanInput } from "@/components/ScanInput";
 import { CommandPalette } from "@/components/command-palette";
 import { Button } from "@/components/ui/button";
+import { Modal, ModalFooter } from "@/components/ui/modal";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import {
   CirclePlusIcon,
@@ -131,8 +133,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const normalizedPath = stripLocaleFromPath(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [customizeNavOpen, setCustomizeNavOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
+  const [hiddenNavItemKeys, setHiddenNavItemKeys] = useState<string[]>([]);
   const { toast } = useToast();
   const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
     enabled: Boolean(user.organizationId),
@@ -151,6 +155,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       `nav-groups:${user.organizationId ?? "org"}:${user.role}:${user.email ?? user.name ?? "user"}`,
     [user.organizationId, user.role, user.email, user.name],
   );
+  const hiddenNavStorageKey = useMemo(
+    () =>
+      `nav-hidden:${user.organizationId ?? "org"}:${user.role}:${user.email ?? user.name ?? "user"}`,
+    [user.organizationId, user.role, user.email, user.name],
+  );
+  const hiddenNavItemSet = useMemo(() => new Set(hiddenNavItemKeys), [hiddenNavItemKeys]);
   const guidanceRole: GuidanceRole =
     user.role === "ADMIN" || user.role === "MANAGER" || user.role === "STAFF" ? user.role : "STAFF";
 
@@ -375,6 +385,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   }, [storageKey]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(hiddenNavStorageKey);
+      setHiddenNavItemKeys(stored ? (JSON.parse(stored) as string[]) : []);
+    } catch {
+      setHiddenNavItemKeys([]);
+    }
+  }, [hiddenNavStorageKey]);
+
+  useEffect(() => {
     if (!mobileOpen) {
       return;
     }
@@ -461,7 +483,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     return true;
   };
 
-  const isItemVisible = (item: NavItem): boolean => {
+  const isItemAllowedByRole = (item: NavItem): boolean => {
     if (item.adminOnly && user.role !== "ADMIN") {
       return false;
     }
@@ -478,12 +500,41 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       return false;
     }
     if (item.children?.length) {
-      return item.children.some((child) => isItemVisible(child));
+      return item.children.some((child) => isItemAllowedByRole(child));
     }
     if (!item.href) {
       return false;
     }
     return true;
+  };
+
+  const isItemVisible = (item: NavItem): boolean => {
+    if (!isItemAllowedByRole(item)) {
+      return false;
+    }
+    if (item.children?.length) {
+      return item.children.some((child) => isItemVisible(child));
+    }
+    return !hiddenNavItemSet.has(item.key);
+  };
+
+  const isGroupAllowedByRole = (group: NavGroup) => {
+    if (group.adminOnly && user.role !== "ADMIN") {
+      return false;
+    }
+    if (group.managerOnly && user.role !== "ADMIN" && user.role !== "MANAGER") {
+      return false;
+    }
+    if (group.platformOwnerOnly && !user.isPlatformOwner) {
+      return false;
+    }
+    if (group.orgOwnerOnly && !isOrgOwner) {
+      return false;
+    }
+    if (!hasPermission(access, group.requiredPermission)) {
+      return false;
+    }
+    return group.items.some((item) => isItemAllowedByRole(item));
   };
 
   const isItemActive = (item: NavItem): boolean => {
@@ -506,26 +557,47 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     });
   };
 
+  const setNavItemVisible = (key: string, visible: boolean) => {
+    setHiddenNavItemKeys((prev) => {
+      const next = visible
+        ? prev.filter((itemKey) => itemKey !== key)
+        : Array.from(new Set([...prev, key]));
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(hiddenNavStorageKey, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const resetNavCustomization = () => {
+    setHiddenNavItemKeys([]);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(hiddenNavStorageKey);
+    }
+  };
+
+  const collectCustomizableItems = (items: NavItem[]): NavItem[] =>
+    items.flatMap((item) => {
+      if (item.children?.length) {
+        return collectCustomizableItems(item.children);
+      }
+      return isItemAllowedByRole(item) ? [item] : [];
+    });
+
+  const customizableNavGroups = navGroups
+    .filter((group) => isGroupAllowedByRole(group))
+    .map((group) => ({
+      id: group.id,
+      labelKey: group.labelKey,
+      items: collectCustomizableItems(group.items),
+    }))
+    .filter((group) => group.items.length > 0);
+
   const renderNavGroups = (onNavigate?: () => void) =>
     navGroups
-      .filter((group) => {
-        if (group.adminOnly && user.role !== "ADMIN") {
-          return false;
-        }
-        if (group.managerOnly && user.role !== "ADMIN" && user.role !== "MANAGER") {
-          return false;
-        }
-        if (group.platformOwnerOnly && !user.isPlatformOwner) {
-          return false;
-        }
-        if (group.orgOwnerOnly && !isOrgOwner) {
-          return false;
-        }
-        if (!hasPermission(access, group.requiredPermission)) {
-          return false;
-        }
-        return group.items.some((item) => isItemVisible(item));
-      })
+      .filter(
+        (group) => isGroupAllowedByRole(group) && group.items.some((item) => isItemVisible(item)),
+      )
       .map((group) => {
         const visibleItems = group.items.filter((item) => isItemVisible(item));
         if (!visibleItems.length) {
@@ -619,6 +691,21 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           </div>
         );
       });
+
+  const renderCustomizeNavButton = (onClick?: () => void) => (
+    <Button
+      type="button"
+      variant="ghost"
+      className="mt-4 w-full justify-start rounded-none px-3"
+      onClick={() => {
+        onClick?.();
+        setCustomizeNavOpen(true);
+      }}
+    >
+      <AdjustIcon className="h-4 w-4" aria-hidden />
+      {tNav("customize")}
+    </Button>
+  );
 
   const renderProfileShortcut = (onNavigate?: () => void) => (
     <Link
@@ -717,6 +804,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               </nav>
 
               <div className="mt-6 border-t border-border pt-6 text-sm">
+                {renderCustomizeNavButton()}
                 {renderProfileShortcut()}
                 <div className="mt-4">
                   <SignOutButton />
@@ -810,6 +898,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             <nav className="mt-6 space-y-4">{renderNavGroups(() => setMobileOpen(false))}</nav>
 
             <div className="mt-8 border-t border-border pt-6 text-sm">
+              {renderCustomizeNavButton(() => setMobileOpen(false))}
               {renderProfileShortcut(() => setMobileOpen(false))}
               <div className="mt-4">
                 <SignOutButton />
@@ -817,6 +906,55 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             </div>
           </div>
         </div>
+        <Modal
+          open={customizeNavOpen}
+          onOpenChange={setCustomizeNavOpen}
+          title={tNav("customizeTitle")}
+          subtitle={tNav("customizeSubtitle")}
+          className="max-w-2xl"
+          usePortal
+        >
+          <div className="space-y-5">
+            {customizableNavGroups.map((group) => (
+              <div key={group.id} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {tNav(group.labelKey)}
+                </p>
+                <div className="divide-y divide-border border border-border">
+                  {group.items.map((item) => {
+                    const visible = !hiddenNavItemSet.has(item.key);
+                    return (
+                      <div
+                        key={item.key}
+                        className="flex items-center justify-between gap-3 bg-card px-3 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {tNav(item.key)}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{item.href}</p>
+                        </div>
+                        <Switch
+                          checked={visible}
+                          onCheckedChange={(checked) => setNavItemVisible(item.key, checked)}
+                          aria-label={tNav("customizeToggle", { item: tNav(item.key) })}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <ModalFooter>
+              <Button type="button" variant="ghost" onClick={resetNavCustomization}>
+                {tNav("customizeReset")}
+              </Button>
+              <Button type="button" onClick={() => setCustomizeNavOpen(false)}>
+                {tCommon("close")}
+              </Button>
+            </ModalFooter>
+          </div>
+        </Modal>
         <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
         <GuidanceOverlay />
       </div>

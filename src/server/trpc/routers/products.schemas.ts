@@ -152,6 +152,8 @@ export const createProductInputSchema = z.object({
   basePriceKgs: z.number().min(0).optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
+  initialOnHand: z.number().int().min(0).optional(),
+  minStock: z.number().int().min(0).optional(),
   description: z.string().optional(),
   photoUrl: z.string().min(1).optional(),
   images: z.array(productImageInputSchema).optional(),
@@ -315,9 +317,7 @@ export type BulkGenerateProductDescriptionsInput = z.infer<
   typeof bulkGenerateProductDescriptionsInputSchema
 >;
 export type BulkUpdateProductCategoryInput = z.infer<typeof bulkUpdateProductCategoryInputSchema>;
-export type ArrangeClothingCategoriesInput = z.infer<
-  typeof arrangeClothingCategoriesInputSchema
->;
+export type ArrangeClothingCategoriesInput = z.infer<typeof arrangeClothingCategoriesInputSchema>;
 export type ImportProductsCsvInput = z.infer<typeof importProductsCsvInputSchema>;
 export type PreviewProductsImportCsvInput = z.infer<typeof previewProductsImportCsvInputSchema>;
 export type ImportCsvRowInput = z.infer<typeof importCsvRowSchema>;

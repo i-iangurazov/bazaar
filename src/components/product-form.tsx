@@ -86,6 +86,8 @@ export type ProductFormValues = {
   basePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
+  initialOnHand?: number;
+  minStock?: number;
   description?: string;
   photoUrl?: string;
   images?: {
@@ -284,6 +286,12 @@ const normalizeProductBarcodes = (values?: string[] | null) =>
   Array.from(
     new Set((values ?? []).map((value) => normalizeProductBarcodeInput(value)).filter(Boolean)),
   );
+const normalizeSkuToken = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 const resolveHeicLikeMimeType = (file: File) => {
   const normalizedType = normalizeImageMimeType(file.type);
@@ -395,6 +403,10 @@ export const ProductForm = ({
       (value) => (value === "" || value === null || value === undefined ? undefined : value),
       z.coerce.number().min(0, t("priceNonNegative")).optional(),
     );
+    const optionalStockQty = z.preprocess(
+      (value) => (value === "" || value === null || value === undefined ? undefined : value),
+      z.coerce.number().int().min(0, t("stockNonNegative")).optional(),
+    );
 
     return z
       .object({
@@ -406,6 +418,8 @@ export const ProductForm = ({
         basePriceKgs: optionalPrice,
         purchasePriceKgs: optionalPrice,
         avgCostKgs: optionalPrice,
+        initialOnHand: optionalStockQty,
+        minStock: optionalStockQty,
         description: z.string().optional(),
         photoUrl: z
           .string()
@@ -534,6 +548,8 @@ export const ProductForm = ({
       basePriceKgs: displayMoneyFromKgs(initialValues.basePriceKgs),
       purchasePriceKgs: displayMoneyFromKgs(initialValues.purchasePriceKgs),
       avgCostKgs: displayMoneyFromKgs(initialValues.avgCostKgs),
+      initialOnHand: initialValues.initialOnHand,
+      minStock: initialValues.minStock,
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
       images: initialValues.images ?? [],
@@ -657,6 +673,31 @@ export const ProductForm = ({
     control: form.control,
     name: "variants",
   });
+  const watchedVariantsValue = useWatch({ control: form.control, name: "variants" });
+  const watchedVariants = useMemo(() => watchedVariantsValue ?? [], [watchedVariantsValue]);
+
+  const collectUsedVariantSkus = (excludeIndex?: number) =>
+    new Set(
+      (form.getValues("variants") ?? [])
+        .map((variant, index) =>
+          index === excludeIndex ? "" : normalizeSkuToken(variant.sku),
+        )
+        .filter(Boolean),
+    );
+
+  const generateNextVariantSku = (usedSkus = collectUsedVariantSkus()) => {
+    const base = normalizeSkuToken(form.getValues("sku")) || normalizeSkuToken(form.getValues("name")) || "VAR";
+    for (let counter = 1; counter <= 9999; counter += 1) {
+      const candidate = `${base}-V${String(counter).padStart(2, "0")}`;
+      if (!usedSkus.has(candidate)) {
+        usedSkus.add(candidate);
+        return candidate;
+      }
+    }
+    const fallback = `${base}-V${Date.now().toString(36).toUpperCase()}`;
+    usedSkus.add(fallback);
+    return fallback;
+  };
 
   const {
     fields: imageFields,
@@ -711,6 +752,8 @@ export const ProductForm = ({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const quickFileInputRef = useRef<HTMLInputElement | null>(null);
+  const variantsEditorRef = useRef<HTMLDivElement | null>(null);
+  const pendingVariantsEditorScrollRef = useRef(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -771,11 +814,11 @@ export const ProductForm = ({
       ? deferredDuplicateDiagnosticsInput.barcodes.length > 0
       : Boolean(
           deferredDuplicateDiagnosticsInput.sku &&
-            deferredDuplicateDiagnosticsInput.sku.length >= 2,
+          deferredDuplicateDiagnosticsInput.sku.length >= 2,
         ) ||
         Boolean(
           deferredDuplicateDiagnosticsInput.name &&
-            deferredDuplicateDiagnosticsInput.name.length >= 4,
+          deferredDuplicateDiagnosticsInput.name.length >= 4,
         ) ||
         deferredDuplicateDiagnosticsInput.barcodes.length > 0);
   const duplicateDiagnosticsQuery = trpc.products.duplicateDiagnostics.useQuery(
@@ -824,6 +867,21 @@ export const ProductForm = ({
       });
     },
   });
+
+  const scrollToVariantsEditor = () => {
+    pendingVariantsEditorScrollRef.current = true;
+    setShowAdvanced(true);
+  };
+
+  useEffect(() => {
+    if (!showAdvanced || !pendingVariantsEditorScrollRef.current) {
+      return;
+    }
+    pendingVariantsEditorScrollRef.current = false;
+    window.requestAnimationFrame(() => {
+      variantsEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [showAdvanced, fields.length]);
 
   const addBarcodeFromDraft = () => {
     if (readOnly) {
@@ -1922,6 +1980,7 @@ export const ProductForm = ({
     const existingSignatures = new Set(
       existingVariants.map((variant) => buildAttributeSignature(variant.attributes ?? [])),
     );
+    const usedVariantSkus = collectUsedVariantSkus();
 
     const newVariants = combinations.reduce<VariantFormRow[]>((acc, combo) => {
       const attributes = generatorAttributes.map((attr) => ({
@@ -1937,7 +1996,7 @@ export const ProductForm = ({
       acc.push({
         id: undefined,
         name,
-        sku: "",
+        sku: generateNextVariantSku(usedVariantSkus),
         attributes,
         canDelete: true,
       });
@@ -2137,6 +2196,8 @@ export const ProductForm = ({
       basePriceKgs: submitMoneyToKgs(values.basePriceKgs),
       purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
       avgCostKgs: submitMoneyToKgs(values.avgCostKgs),
+      initialOnHand: values.initialOnHand,
+      minStock: values.minStock,
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,
@@ -2179,6 +2240,76 @@ export const ProductForm = ({
     }
     setVariantToRemove(null);
   };
+
+  const appendEmptyVariant = () => {
+    if (readOnly) {
+      return;
+    }
+    const existingEmptyDraftIndex = watchedVariants.findIndex((variant, index) => {
+      const hasSavedId = Boolean(fields[index]?.id && variant.id);
+      const attributes = Array.isArray(variant.attributes) ? variant.attributes : [];
+      const hasAttributeValue = attributes.some((entry) => {
+        const value = entry.value;
+        if (Array.isArray(value)) {
+          return value.length > 0;
+        }
+        return Boolean(String(value ?? "").trim());
+      });
+      return !hasSavedId && !variant.name?.trim() && !variant.sku?.trim() && !hasAttributeValue;
+    });
+    if (existingEmptyDraftIndex >= 0) {
+      form.setValue(`variants.${existingEmptyDraftIndex}.sku`, generateNextVariantSku(
+        collectUsedVariantSkus(existingEmptyDraftIndex),
+      ), {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      scrollToVariantsEditor();
+      return;
+    }
+    append({
+      id: undefined,
+      name: "",
+      sku: generateNextVariantSku(),
+      attributes: toAttributeEntries({}),
+      canDelete: true,
+    });
+    scrollToVariantsEditor();
+  };
+
+  const openVariantGenerator = () => {
+    if (readOnly) {
+      return;
+    }
+    scrollToVariantsEditor();
+    setGeneratorOpen(true);
+  };
+
+  const variantSummaries = watchedVariants
+    .map((variant, index) => {
+      const attributes = Array.isArray(variant.attributes) ? variant.attributes : [];
+      const hasAttributeValue = attributes.some((entry) => {
+        const value = entry.value;
+        if (Array.isArray(value)) {
+          return value.length > 0;
+        }
+        return Boolean(String(value ?? "").trim());
+      });
+      const hasContent =
+        Boolean(variant.id) ||
+        Boolean(variant.name?.trim()) ||
+        Boolean(variant.sku?.trim()) ||
+        hasAttributeValue;
+      return {
+        index,
+        key: fields[index]?.id ?? `${variant.name ?? variant.sku ?? "variant"}-${index}`,
+        name: variant.name?.trim() || variant.sku?.trim() || `#${index + 1}`,
+        attributeCount: attributes.length,
+        hasContent,
+      };
+    })
+    .filter((variant) => variant.hasContent);
 
   const imageManagementSection = (
     <FormSection title={t("imagesTitle")} description={t("imagesHint")}>
@@ -2403,6 +2534,173 @@ export const ProductForm = ({
           )}
         />
       ) : null}
+    </FormSection>
+  );
+
+  const barcodeManagementSection = (
+    <FormSection title={t("barcodes")}>
+      <FormField
+        control={form.control}
+        name="barcodes"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="sr-only">{t("barcodes")}</FormLabel>
+            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+              <FormControl>
+                <Input
+                  value={barcodeInput}
+                  onChange={(event) => setBarcodeInput(event.target.value)}
+                  onKeyDown={handleBarcodeInputKeyDown}
+                  placeholder={t("barcodePlaceholder")}
+                  className="flex-1"
+                  disabled={readOnly}
+                />
+              </FormControl>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={addBarcodeFromDraft}
+                disabled={readOnly}
+              >
+                <AddIcon className="h-4 w-4" aria-hidden />
+                {t("addBarcode")}
+              </Button>
+            </FormRow>
+            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+              <div className="w-full sm:w-[220px]">
+                <Select
+                  value={barcodeGenerateMode}
+                  onValueChange={(value) => setBarcodeGenerateMode(value as "EAN13" | "CODE128")}
+                  disabled={readOnly || !productId || generateBarcodeMutation.isLoading}
+                >
+                  <SelectTrigger aria-label={t("generateBarcodeMode")}>
+                    <SelectValue placeholder={t("generateBarcodeMode")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EAN13">{t("barcodeModeEan13")}</SelectItem>
+                    <SelectItem value="CODE128">{t("barcodeModeCode128")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  if (!productId || readOnly) {
+                    return;
+                  }
+                  const currentBarcodes =
+                    form
+                      .getValues("barcodes")
+                      ?.map((value) => value.trim())
+                      .filter(Boolean) ?? [];
+                  generateBarcodeMutation.mutate({
+                    productId,
+                    mode: barcodeGenerateMode,
+                    force: currentBarcodes.length === 0,
+                  });
+                }}
+                disabled={readOnly || !productId || generateBarcodeMutation.isLoading}
+              >
+                {generateBarcodeMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <AddIcon className="h-4 w-4" aria-hidden />
+                )}
+                {generateBarcodeMutation.isLoading ? tCommon("loading") : t("generateBarcode")}
+              </Button>
+            </FormRow>
+            <p className="text-xs text-muted-foreground">{t("barcodeScanHint")}</p>
+            {!productId ? (
+              <p className="text-xs text-muted-foreground">{t("barcodeGenerateRequiresSave")}</p>
+            ) : null}
+            <div className="flex min-h-[36px] flex-wrap gap-2">
+              {field.value?.length ? (
+                field.value.map((barcode, index) => (
+                  <Badge key={`${barcode}-${index}`} variant="muted" className="gap-1 pr-1">
+                    <span>{barcode}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 shadow-none"
+                          aria-label={t("removeBarcode")}
+                          onClick={() => {
+                            if (readOnly) {
+                              return;
+                            }
+                            const next = (field.value ?? []).filter((_, i) => i !== index);
+                            form.clearErrors("barcodes");
+                            form.setValue("barcodes", next, {
+                              shouldValidate: false,
+                              shouldDirty: true,
+                            });
+                          }}
+                          disabled={readOnly}
+                        >
+                          <CloseIcon className="h-3 w-3" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("removeBarcode")}</TooltipContent>
+                    </Tooltip>
+                  </Badge>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
+              )}
+            </div>
+            <FormDescription>{t("barcodeHint")}</FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </FormSection>
+  );
+
+  const variantSetupSection = (
+    <FormSection title={t("variantSetupTitle")} description={t("variantSetupHint")}>
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 rounded-none border border-border/70 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {t("variantSetupCount", { count: variantSummaries.length })}
+            </p>
+            <p className="text-xs text-muted-foreground">{t("variantSetupAdvancedHint")}</p>
+          </div>
+          {!readOnly ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {generatorDefinitions.length ? (
+                <Button type="button" variant="secondary" onClick={openVariantGenerator}>
+                  {t("generateVariants")}
+                </Button>
+              ) : null}
+              <Button type="button" variant="secondary" onClick={appendEmptyVariant}>
+                <AddIcon className="h-4 w-4" aria-hidden />
+                {t("addVariant")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        {variantSummaries.length ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            {variantSummaries.map((variant) => (
+              <div key={variant.key} className="rounded-none border border-border/70 bg-card p-3">
+                <p className="truncate text-sm font-semibold text-foreground">{variant.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("variantSetupAttributes", { count: variant.attributeCount })}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t("variantsEmpty")}</p>
+        )}
+      </div>
     </FormSection>
   );
 
@@ -2714,6 +3012,54 @@ export const ProductForm = ({
                       />
                     ) : null}
                     {compactCreate ? (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="initialOnHand"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t("initialOnHand")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={0}
+                                  step={1}
+                                  placeholder={t("initialOnHandPlaceholder")}
+                                  disabled={readOnly}
+                                />
+                              </FormControl>
+                              <FormDescription>{t("initialOnHandHint")}</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="minStock"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t("quickMinStock")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={0}
+                                  step={1}
+                                  placeholder={t("minStockPlaceholder")}
+                                  disabled={readOnly}
+                                />
+                              </FormControl>
+                              <FormDescription>{t("quickMinStockHint")}</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    ) : null}
+                    {compactCreate ? (
                       <FormField
                         control={form.control}
                         name="barcodes"
@@ -2964,6 +3310,8 @@ export const ProductForm = ({
                 </div>
               </FormSection>
 
+              {!compactCreate ? barcodeManagementSection : null}
+
               {isBundle ? (
                 <FormSection
                   title={t("bundleComponentsTitle")}
@@ -3068,6 +3416,8 @@ export const ProductForm = ({
                 </FormSection>
               ) : null}
 
+              {variantSetupSection}
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-foreground">{t("advancedTitle")}</h3>
                 <Button
@@ -3153,152 +3503,6 @@ export const ProductForm = ({
                       <Separator />
                     </>
                   ) : null}
-                  {!compactCreate ? (
-                    <FormSection title={t("barcodes")}>
-                      <FormField
-                        control={form.control}
-                        name="barcodes"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="sr-only">{t("barcodes")}</FormLabel>
-                            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
-                              <FormControl>
-                                <Input
-                                  value={barcodeInput}
-                                  onChange={(event) => setBarcodeInput(event.target.value)}
-                                  onKeyDown={handleBarcodeInputKeyDown}
-                                  placeholder={t("barcodePlaceholder")}
-                                  className="flex-1"
-                                  disabled={readOnly}
-                                />
-                              </FormControl>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                className="w-full sm:w-auto"
-                                onClick={addBarcodeFromDraft}
-                                disabled={readOnly}
-                              >
-                                <AddIcon className="h-4 w-4" aria-hidden />
-                                {t("addBarcode")}
-                              </Button>
-                            </FormRow>
-                            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
-                              <div className="w-full sm:w-[220px]">
-                                <Select
-                                  value={barcodeGenerateMode}
-                                  onValueChange={(value) =>
-                                    setBarcodeGenerateMode(value as "EAN13" | "CODE128")
-                                  }
-                                  disabled={
-                                    readOnly || !productId || generateBarcodeMutation.isLoading
-                                  }
-                                >
-                                  <SelectTrigger aria-label={t("generateBarcodeMode")}>
-                                    <SelectValue placeholder={t("generateBarcodeMode")} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="EAN13">{t("barcodeModeEan13")}</SelectItem>
-                                    <SelectItem value="CODE128">
-                                      {t("barcodeModeCode128")}
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                className="w-full sm:w-auto"
-                                onClick={() => {
-                                  if (!productId || readOnly) {
-                                    return;
-                                  }
-                                  const currentBarcodes =
-                                    form
-                                      .getValues("barcodes")
-                                      ?.map((value) => value.trim())
-                                      .filter(Boolean) ?? [];
-                                  generateBarcodeMutation.mutate({
-                                    productId,
-                                    mode: barcodeGenerateMode,
-                                    force: currentBarcodes.length === 0,
-                                  });
-                                }}
-                                disabled={
-                                  readOnly || !productId || generateBarcodeMutation.isLoading
-                                }
-                              >
-                                {generateBarcodeMutation.isLoading ? (
-                                  <Spinner className="h-4 w-4" />
-                                ) : (
-                                  <AddIcon className="h-4 w-4" aria-hidden />
-                                )}
-                                {generateBarcodeMutation.isLoading
-                                  ? tCommon("loading")
-                                  : t("generateBarcode")}
-                              </Button>
-                            </FormRow>
-                            <p className="text-xs text-muted-foreground">
-                              {t("barcodeScanHint")}
-                            </p>
-                            {!productId ? (
-                              <p className="text-xs text-muted-foreground">
-                                {t("barcodeGenerateRequiresSave")}
-                              </p>
-                            ) : null}
-                            <div className="flex min-h-[36px] flex-wrap gap-2">
-                              {field.value?.length ? (
-                                field.value.map((barcode, index) => (
-                                  <Badge
-                                    key={`${barcode}-${index}`}
-                                    variant="muted"
-                                    className="gap-1 pr-1"
-                                  >
-                                    <span>{barcode}</span>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          size="icon"
-                                          variant="ghost"
-                                          className="h-6 w-6 shadow-none"
-                                          aria-label={t("removeBarcode")}
-                                          onClick={() => {
-                                            if (readOnly) {
-                                              return;
-                                            }
-                                            const next = (field.value ?? []).filter(
-                                              (_, i) => i !== index,
-                                            );
-                                            form.clearErrors("barcodes");
-                                            form.setValue("barcodes", next, {
-                                              shouldValidate: false,
-                                              shouldDirty: true,
-                                            });
-                                          }}
-                                          disabled={readOnly}
-                                        >
-                                          <CloseIcon className="h-3 w-3" aria-hidden />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{t("removeBarcode")}</TooltipContent>
-                                    </Tooltip>
-                                  </Badge>
-                                ))
-                              ) : (
-                                <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
-                              )}
-                            </div>
-                            <FormDescription>{t("barcodeHint")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </FormSection>
-                  ) : null}
-
-                  <Separator />
-
                   <FormSection title={t("packsTitle")}>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <Button
@@ -3451,60 +3655,55 @@ export const ProductForm = ({
 
                   <Separator />
 
-                  <FormSection title={t("variants")}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {!readOnly && templateKeys.length ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-9 px-3"
-                            onClick={applyTemplateToVariants}
-                          >
-                            {t("applyTemplate")}
-                          </Button>
-                        ) : null}
-                        {!readOnly && generatorDefinitions.length ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-9 px-3"
-                            onClick={() => setGeneratorOpen(true)}
-                          >
-                            {t("generateVariants")}
-                          </Button>
-                        ) : null}
+                  <div ref={variantsEditorRef} className="scroll-mt-24">
+                    <FormSection title={t("variants")}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {!readOnly && templateKeys.length ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-9 px-3"
+                              onClick={applyTemplateToVariants}
+                            >
+                              {t("applyTemplate")}
+                            </Button>
+                          ) : null}
+                          {!readOnly && generatorDefinitions.length ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-9 px-3"
+                              onClick={openVariantGenerator}
+                            >
+                              {t("generateVariants")}
+                            </Button>
+                          ) : null}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full sm:w-auto"
+                          onClick={appendEmptyVariant}
+                          disabled={readOnly}
+                        >
+                          <AddIcon className="h-4 w-4" aria-hidden />
+                          {t("addVariant")}
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full sm:w-auto"
-                        onClick={() =>
-                          append({
-                            id: undefined,
-                            name: "",
-                            sku: "",
-                            attributes: toAttributeEntries({}),
-                            canDelete: true,
-                          })
-                        }
-                        disabled={readOnly}
-                      >
-                        <AddIcon className="h-4 w-4" aria-hidden />
-                        {t("addVariant")}
-                      </Button>
-                    </div>
-                    {fields.map((field, index) => {
-                      const canDelete = field.canDelete ?? true;
-                      const isBlocked = Boolean(field.id) && !canDelete;
-                      const tooltipLabel = isBlocked ? tErrors("variantInUse") : t("removeVariant");
-                      const variantAttributes = form.watch(`variants.${index}.attributes`) ?? [];
-                      const availableDefinitions = definitions.filter(
-                        (definition) =>
-                          !variantAttributes.some((entry) => entry.key === definition.key),
-                      );
-                      const selectedAttributeKey = attributeDrafts[field.id] ?? "";
-                      return (
+                      {fields.map((field, index) => {
+                        const canDelete = field.canDelete ?? true;
+                        const isBlocked = Boolean(field.id) && !canDelete;
+                        const tooltipLabel = isBlocked
+                          ? tErrors("variantInUse")
+                          : t("removeVariant");
+                        const variantAttributes = form.watch(`variants.${index}.attributes`) ?? [];
+                        const availableDefinitions = definitions.filter(
+                          (definition) =>
+                            !variantAttributes.some((entry) => entry.key === definition.key),
+                        );
+                        const selectedAttributeKey = attributeDrafts[field.id] ?? "";
+                        return (
                         <div
                           key={field.id}
                           className="space-y-4 rounded-none border border-border/70 bg-card p-4"
@@ -3815,8 +4014,9 @@ export const ProductForm = ({
                           </div>
                         </div>
                       );
-                    })}
-                  </FormSection>
+                      })}
+                    </FormSection>
+                  </div>
                 </>
               ) : null}
             </CardContent>

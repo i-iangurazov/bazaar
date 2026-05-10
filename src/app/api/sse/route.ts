@@ -84,6 +84,7 @@ const canReceiveEvent = async (
     event.type === "lowStock.triggered" ||
     event.type === "sale.completed" ||
     event.type === "sale.refunded" ||
+    event.type === "debt.settled" ||
     event.type === "shift.opened" ||
     event.type === "shift.closed" ||
     event.type === "customerOrder.created"

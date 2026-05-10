@@ -34,6 +34,7 @@ import {
   getShiftXReport,
   listPosRegisters,
   listPosReceipts,
+  listPosDebts,
   listPosSales,
   listRegisterShifts,
   listSaleReturns,
@@ -42,8 +43,10 @@ import {
   retryPosSaleKkm,
   removePosSaleLine,
   removeSaleReturnLine,
+  settlePosDebt,
   upsertSaleLineMarkingCodes,
   updatePosRegister,
+  updatePosSaleDiscount,
   updatePosSaleLine,
   updateSaleReturnLine,
 } from "@/server/services/pos";
@@ -118,11 +121,11 @@ export const posRouter = router({
     .input(z.object({ registerId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-          return await getPosEntry({
-            organizationId: ctx.user.organizationId,
-            registerId: input?.registerId,
-            user: ctx.user,
-          });
+        return await getPosEntry({
+          organizationId: ctx.user.organizationId,
+          registerId: input?.registerId,
+          user: ctx.user,
+        });
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -457,6 +460,27 @@ export const posRouter = router({
         }
       }),
 
+    updateDiscount: cashierProcedure
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          discountKgs: z.number().min(0),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await updatePosSaleDiscount({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            discountKgs: input.discountKgs,
+            actorId: ctx.user.id,
+            requestId: ctx.requestId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
     upsertMarkingCodes: cashierProcedure
       .input(
         z.object({
@@ -498,11 +522,22 @@ export const posRouter = router({
     complete: cashierProcedure
       .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "pos-sales-complete" }))
       .input(
-        z.object({
-          saleId: z.string().min(1),
-          idempotencyKey: z.string().min(8),
-          payments: z.array(paymentSchema).min(1),
-        }),
+        z
+          .object({
+            saleId: z.string().min(1),
+            idempotencyKey: z.string().min(8),
+            debtCustomerName: z.string().max(160).optional().nullable(),
+            payments: z.array(paymentSchema),
+          })
+          .superRefine((value, ctx) => {
+            if (!value.debtCustomerName?.trim() && value.payments.length < 1) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "posPaymentMissing",
+                path: ["payments"],
+              });
+            }
+          }),
       )
       .mutation(async ({ ctx, input }) => {
         try {
@@ -512,6 +547,7 @@ export const posRouter = router({
             actorId: ctx.user.id,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
+            debtCustomerName: input.debtCustomerName,
             payments: input.payments,
           });
         } catch (error) {
@@ -663,7 +699,7 @@ export const posRouter = router({
         }
       }),
 
-    complete: managerProcedure
+    complete: cashierProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-returns-complete" }))
       .input(
         z.object({
@@ -681,6 +717,61 @@ export const posRouter = router({
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
             payments: input.payments,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+  }),
+
+  debts: router({
+    list: protectedProcedure
+      .input(
+        z
+          .object({
+            storeId: z.string().optional(),
+            registerId: z.string().optional(),
+            search: z.string().trim().max(160).optional(),
+            page: z.number().int().min(1).optional(),
+            pageSize: z.number().int().min(1).max(100).optional(),
+          })
+          .optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        try {
+          return await listPosDebts({
+            organizationId: ctx.user.organizationId,
+            storeId: input?.storeId,
+            registerId: input?.registerId,
+            search: input?.search,
+            page: input?.page ?? 1,
+            pageSize: input?.pageSize ?? 20,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    settle: cashierProcedure
+      .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "pos-debts-settle" }))
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          registerId: z.string().min(1),
+          method: z.nativeEnum(PosPaymentMethod).optional(),
+          idempotencyKey: z.string().min(8),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await settlePosDebt({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            registerId: input.registerId,
+            method: input.method ?? PosPaymentMethod.CASH,
+            actorId: ctx.user.id,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
           });
         } catch (error) {
           throw toTRPCError(error);

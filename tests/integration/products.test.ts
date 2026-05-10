@@ -58,6 +58,47 @@ describeDb("products", () => {
     expect(Number(second.sku.slice(4))).toBeGreaterThan(Number(first.sku.slice(4)));
   });
 
+  it("applies optional initial on-hand and minimum stock on store product creation", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-initial-stock-create",
+      sku: "INITIAL-STOCK-1",
+      name: "Initial Stock Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      initialOnHand: 7,
+      minStock: 3,
+    });
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const movement = await prisma.stockMovement.findFirst({
+      where: {
+        storeId: store.id,
+        productId: product.id,
+        type: "ADJUSTMENT",
+        referenceId: product.id,
+      },
+    });
+    const policy = await prisma.reorderPolicy.findUnique({
+      where: { storeId_productId: { storeId: store.id, productId: product.id } },
+    });
+
+    expect(snapshot?.onHand).toBe(7);
+    expect(movement?.qtyDelta).toBe(7);
+    expect(policy?.minStock).toBe(3);
+  });
+
   it("stores multiple categories and keeps the first one as primary", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
 
@@ -1339,9 +1380,9 @@ describeDb("products", () => {
           unit: baseUnit.code,
           barcodes: ["IMP-001"],
         },
-	      ],
-	      storeId: storeB.id,
-	    });
+      ],
+      storeId: storeB.id,
+    });
 
     const imported = await prisma.product.findUnique({
       where: { organizationId_sku: { organizationId: org.id, sku: "SKU-SNAP-2" } },
@@ -1350,9 +1391,9 @@ describeDb("products", () => {
     const importSnapshots = await prisma.inventorySnapshot.findMany({
       where: { productId: imported!.id },
     });
-	    expect(importSnapshots).toHaveLength(1);
-	    expect(importSnapshots[0]?.storeId).toBe(storeB.id);
-	  });
+    expect(importSnapshots).toHaveLength(1);
+    expect(importSnapshots[0]?.storeId).toBe(storeB.id);
+  });
 
   it("blocks variant removal when movements exist", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();

@@ -30,6 +30,7 @@ import {
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { useSse } from "@/lib/useSse";
 
 const selectedRegisterKey = "pos:selected-register";
 
@@ -116,6 +117,18 @@ const PosEntryPage = () => {
       locale,
       currencySourceWithFallback(openShift, selectedRegister?.store ?? null),
     );
+
+  useSse({
+    "shift.opened": () => {
+      void entryQuery.refetch();
+    },
+    "shift.closed": () => {
+      void entryQuery.refetch();
+    },
+    "debt.settled": () => {
+      void entryQuery.refetch();
+    },
+  });
 
   const handleOpenShift = async () => {
     if (!selectedRegister) {
@@ -218,16 +231,12 @@ const PosEntryPage = () => {
                   </div>
                   <div className="border border-border bg-muted/30 p-3">
                     <p className="text-xs text-muted-foreground">{t("entry.openedBy")}</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {openShift.openedBy.name}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{openShift.openedBy.name}</p>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button className="h-11 w-full sm:w-auto" asChild>
-                    <Link href={`/pos/sell?registerId=${activeRegisterId}`}>
-                      {t("entry.sell")}
-                    </Link>
+                    <Link href={`/pos/sell?registerId=${activeRegisterId}`}>{t("entry.sell")}</Link>
                   </Button>
                   <Button variant="secondary" className="h-11 w-full sm:w-auto" asChild>
                     <Link href={`/pos/shifts?registerId=${activeRegisterId}`}>
@@ -261,6 +270,13 @@ const PosEntryPage = () => {
                 <Link href="/pos/registers">{t("entry.registers")}</Link>
               </Button>
             ) : null}
+            <Button
+              variant="secondary"
+              className="border-danger/20 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger"
+              asChild
+            >
+              <Link href={`/pos/debts?registerId=${activeRegisterId}`}>{t("debts.title")}</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

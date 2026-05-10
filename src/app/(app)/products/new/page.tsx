@@ -7,7 +7,13 @@ import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
 import { ProductForm } from "@/components/product-form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -108,7 +114,11 @@ const NewProductPage = () => {
           <h2 className="text-sm font-semibold text-foreground">{t("createStoreTitle")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("createStoreHint")}</p>
         </div>
-        <Select value={selectedStoreId} onValueChange={setSelectedStoreId} disabled={storeSelectDisabled}>
+        <Select
+          value={selectedStoreId}
+          onValueChange={setSelectedStoreId}
+          disabled={storeSelectDisabled}
+        >
           <SelectTrigger aria-label={t("createStoreTitle")}>
             <SelectValue placeholder={t("createStorePlaceholder")} />
           </SelectTrigger>
@@ -144,6 +154,8 @@ const NewProductPage = () => {
             basePriceKgs: undefined,
             purchasePriceKgs: undefined,
             avgCostKgs: undefined,
+            initialOnHand: undefined,
+            minStock: undefined,
             description: "",
             photoUrl: "",
             images: [],

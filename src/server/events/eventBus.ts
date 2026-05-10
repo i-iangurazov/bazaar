@@ -47,6 +47,16 @@ export type EventPayload =
       };
     }
   | {
+      type: "debt.settled";
+      payload: {
+        saleId: string;
+        storeId: string;
+        registerId?: string | null;
+        shiftId?: string | null;
+        number: string;
+      };
+    }
+  | {
       type: "shift.opened";
       payload: { shiftId: string; storeId: string; registerId: string };
     }

@@ -473,6 +473,8 @@ model User {
   storeAccesses                 UserStoreAccess[]
   storeProductsAssigned         StoreProduct[]            @relation("storeProductsAssignedBy")
   guideState                    UserGuideState?
+
+  @@index([organizationId, isActive])
 }
 
 model UserStoreAccess {
@@ -574,6 +576,7 @@ model Store {
 
   @@unique([organizationId, code])
   @@index([organizationId])
+  @@index([organizationId, name])
 }
 
 model StoreComplianceProfile {
@@ -931,6 +934,7 @@ model PlanUpgradeRequest {
   reviewedBy   User?        @relation("planUpgradeReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@index([requestedById, createdAt])
 }
@@ -1194,6 +1198,7 @@ model InventorySnapshot {
   @@unique([storeId, productId, variantKey])
   @@index([storeId, productId, variantKey])
   @@index([storeId, updatedAt])
+  @@index([storeId, onHand])
   @@index([updatedAt])
 }
 
@@ -1218,6 +1223,7 @@ model StockMovement {
   stockLot  StockLot?       @relation(fields: [stockLotId], references: [id])
 
   @@index([storeId, productId, variantId, createdAt])
+  @@index([storeId, createdAt])
   @@index([type, createdAt])
 }
 
@@ -1249,6 +1255,7 @@ model PurchaseOrder {
   @@index([storeId])
   @@index([organizationId, createdAt])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, storeId, status, createdAt])
 }
 
 model PurchaseOrderLine {
@@ -1285,10 +1292,15 @@ model CustomerOrder {
   customerEmail          String?
   customerPhone          String?
   subtotalKgs            Decimal             @default(0) @db.Decimal(12, 2)
+  discountKgs            Decimal             @default(0) @db.Decimal(12, 2)
   totalKgs               Decimal             @default(0) @db.Decimal(12, 2)
   currencyCode           String?
   currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
   notes                  String?
+  isDebt                 Boolean             @default(false)
+  debtCustomerName       String?
+  debtSettledAt          DateTime?
+  debtSettledById        String?
   kkmStatus              PosKkmStatus        @default(NOT_SENT)
   kkmReceiptId           String?
   kkmRawJson             Json?
@@ -1320,6 +1332,10 @@ model CustomerOrder {
   @@index([organizationId, status, createdAt])
   @@index([organizationId, createdAt])
   @@index([organizationId, isPosSale, createdAt])
+  @@index([organizationId, isDebt, debtSettledAt])
+  @@index([organizationId, storeId, isDebt, debtSettledAt])
+  @@index([organizationId, storeId, isDebt, debtSettledAt, status, completedAt])
+  @@index([organizationId, storeId, status, completedAt])
   @@index([organizationId, source, createdAt])
   @@index([shiftId, status, createdAt])
 }
@@ -1814,6 +1830,7 @@ model ReorderPolicy {
 
   @@unique([storeId, productId])
   @@index([storeId, productId])
+  @@index([storeId, minStock])
 }
 
 model ForecastSnapshot {
@@ -1847,6 +1864,7 @@ model AuditLog {
   actor        User?        @relation(fields: [actorId], references: [id])
 
   @@index([createdAt])
+  @@index([organizationId, createdAt])
   @@index([entity, entityId])
 }
 

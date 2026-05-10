@@ -247,11 +247,17 @@ const recomputeSaleTotals = async (
     _sum: { lineTotalKgs: true },
   });
   const subtotal = toMoney(aggregate._sum.lineTotalKgs);
+  const sale = await tx.customerOrder.findUnique({
+    where: { id: customerOrderId },
+    select: { discountKgs: true },
+  });
+  const discount = Math.min(subtotal, Math.max(0, toMoney(sale?.discountKgs)));
   return tx.customerOrder.update({
     where: { id: customerOrderId },
     data: {
       subtotalKgs: subtotal,
-      totalKgs: subtotal,
+      discountKgs: discount,
+      totalKgs: roundMoney(Math.max(0, subtotal - discount)),
       updatedById,
     },
   });
@@ -671,7 +677,10 @@ export const getPosEntry = async (input: {
   registerId?: string;
   user?: StoreAccessUser;
 }) => {
-  const registers = await listPosRegisters({ organizationId: input.organizationId, user: input.user });
+  const registers = await listPosRegisters({
+    organizationId: input.organizationId,
+    user: input.user,
+  });
   if (!registers.length) {
     return {
       registers: [],
@@ -1387,6 +1396,7 @@ export const listPosSales = async (input: {
       ),
       ...item,
       subtotalKgs: toMoney(item.subtotalKgs),
+      discountKgs: toMoney(item.discountKgs),
       totalKgs: toMoney(item.totalKgs),
       payments: item.payments.map((payment) => ({
         ...payment,
@@ -1397,6 +1407,228 @@ export const listPosSales = async (input: {
     page: input.page,
     pageSize: input.pageSize,
   };
+};
+
+export const listPosDebts = async (input: {
+  organizationId: string;
+  storeId?: string;
+  registerId?: string;
+  search?: string;
+  page: number;
+  pageSize: number;
+}) => {
+  const search = input.search?.trim().replace(/\s+/g, " ");
+  const where: Prisma.CustomerOrderWhereInput = {
+    organizationId: input.organizationId,
+    isPosSale: true,
+    isDebt: true,
+    debtSettledAt: null,
+    status: CustomerOrderStatus.COMPLETED,
+    ...(input.storeId ? { storeId: input.storeId } : {}),
+    ...(input.registerId ? { registerId: input.registerId } : {}),
+    ...(search
+      ? {
+          OR: [
+            { debtCustomerName: { contains: search, mode: "insensitive" } },
+            { customerName: { contains: search, mode: "insensitive" } },
+            { number: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, items] = await Promise.all([
+    prisma.customerOrder.count({ where }),
+    prisma.customerOrder.findMany({
+      where,
+      include: {
+        store: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+          },
+        },
+        register: { select: { id: true, name: true, code: true } },
+        lines: {
+          include: {
+            product: { select: { id: true, name: true, sku: true } },
+            variant: { select: { id: true, name: true } },
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+      orderBy: { completedAt: "desc" },
+      skip: (input.page - 1) * input.pageSize,
+      take: input.pageSize,
+    }),
+  ]);
+
+  return {
+    items: items.map((item) => ({
+      id: item.id,
+      number: item.number,
+      completedAt: item.completedAt,
+      createdAt: item.createdAt,
+      customerName: item.debtCustomerName ?? item.customerName,
+      debtCustomerName: item.debtCustomerName,
+      subtotalKgs: toMoney(item.subtotalKgs),
+      discountKgs: toMoney(item.discountKgs),
+      totalKgs: toMoney(item.totalKgs),
+      currencyCode: item.currencyCode,
+      currencyRateKgsPerUnit: item.currencyRateKgsPerUnit,
+      store: item.store,
+      register: item.register,
+      lines: item.lines.map((line) => ({
+        id: line.id,
+        qty: line.qty,
+        unitPriceKgs: toMoney(line.unitPriceKgs),
+        lineTotalKgs: toMoney(line.lineTotalKgs),
+        product: line.product,
+        variant: line.variant,
+      })),
+    })),
+    total,
+    page: input.page,
+    pageSize: input.pageSize,
+  };
+};
+
+export const settlePosDebt = async (input: {
+  organizationId: string;
+  saleId: string;
+  registerId: string;
+  method: PosPaymentMethod;
+  actorId: string;
+  requestId: string;
+  idempotencyKey: string;
+}) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: settlement, replayed } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "pos.debts.settle",
+        userId: input.actorId,
+      },
+      async () => {
+        await tx.$queryRaw`
+          SELECT id FROM "CustomerOrder" WHERE id = ${input.saleId} FOR UPDATE
+        `;
+        const sale = await tx.customerOrder.findFirst({
+          where: {
+            id: input.saleId,
+            organizationId: input.organizationId,
+            isPosSale: true,
+          },
+          include: {
+            store: {
+              select: {
+                id: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+          },
+        });
+        if (!sale) {
+          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        if (sale.status !== CustomerOrderStatus.COMPLETED || !sale.isDebt) {
+          throw new AppError("posDebtNotFound", "NOT_FOUND", 404);
+        }
+        if (sale.debtSettledAt) {
+          return {
+            id: sale.id,
+            number: sale.number,
+            storeId: sale.storeId,
+            registerId: sale.registerId,
+            shiftId: sale.shiftId,
+            alreadySettled: true,
+          };
+        }
+
+        const shift = await requireOpenShift(tx, {
+          organizationId: input.organizationId,
+          registerId: input.registerId,
+        });
+        if (shift.storeId !== sale.storeId) {
+          throw new AppError("posDebtStoreMismatch", "CONFLICT", 409);
+        }
+
+        const transactionCurrency = resolveCurrencySnapshot(
+          currencySourceWithFallback(sale, currencySourceWithFallback(shift, sale.store)),
+        );
+        const amountKgs = roundMoney(toMoney(sale.totalKgs));
+        if (amountKgs <= 0) {
+          throw new AppError("posDebtAmountInvalid", "BAD_REQUEST", 400);
+        }
+
+        await tx.salePayment.create({
+          data: {
+            organizationId: input.organizationId,
+            storeId: sale.storeId,
+            shiftId: shift.id,
+            customerOrderId: sale.id,
+            method: input.method,
+            amountKgs,
+            ...transactionCurrency,
+            providerRef: `debt:${sale.number}`,
+            isRefund: false,
+            createdById: input.actorId,
+          },
+        });
+
+        const updated = await tx.customerOrder.update({
+          where: { id: sale.id },
+          data: {
+            debtSettledAt: new Date(),
+            debtSettledById: input.actorId,
+            updatedById: input.actorId,
+          },
+        });
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "POS_DEBT_SETTLE",
+          entity: "CustomerOrder",
+          entityId: sale.id,
+          before: toJson({ debtSettledAt: sale.debtSettledAt }),
+          after: toJson({ debtSettledAt: updated.debtSettledAt, amountKgs }),
+          requestId: input.requestId,
+        });
+
+        return {
+          id: updated.id,
+          number: updated.number,
+          storeId: updated.storeId,
+          registerId: shift.registerId,
+          shiftId: shift.id,
+          alreadySettled: false,
+        };
+      },
+    );
+
+    return { ...settlement, replayed };
+  });
+
+  if (!result.replayed && !result.alreadySettled) {
+    eventBus.publish({
+      type: "debt.settled",
+      payload: {
+        saleId: result.id,
+        storeId: result.storeId,
+        registerId: result.registerId ?? null,
+        shiftId: result.shiftId ?? null,
+        number: result.number,
+      },
+    });
+  }
+
+  return result;
 };
 
 export const getPosSale = async (input: { organizationId: string; saleId: string }) => {
@@ -1476,6 +1708,7 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
   return {
     ...sale,
     subtotalKgs: toMoney(sale.subtotalKgs),
+    discountKgs: toMoney(sale.discountKgs),
     totalKgs: toMoney(sale.totalKgs),
     lines: sale.lines.map((line) => ({
       ...line,
@@ -1725,6 +1958,80 @@ export const removePosSaleLine = async (input: {
     });
 
     return { saleId: line.customerOrderId };
+  });
+};
+
+export const updatePosSaleDiscount = async (input: {
+  organizationId: string;
+  saleId: string;
+  discountKgs: number;
+  actorId: string;
+  requestId: string;
+}) => {
+  const discountKgs = roundMoney(input.discountKgs);
+  if (!Number.isFinite(discountKgs) || discountKgs < 0) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: {
+        id: true,
+        status: true,
+        subtotalKgs: true,
+        discountKgs: true,
+        totalKgs: true,
+      },
+    });
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (sale.status !== CustomerOrderStatus.DRAFT) {
+      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+    }
+
+    const subtotal = toMoney(sale.subtotalKgs);
+    if (discountKgs > subtotal) {
+      throw new AppError("posDiscountExceedsSubtotal", "BAD_REQUEST", 400);
+    }
+
+    const updated = await tx.customerOrder.update({
+      where: { id: sale.id },
+      data: {
+        discountKgs,
+        totalKgs: roundMoney(Math.max(0, subtotal - discountKgs)),
+        updatedById: input.actorId,
+      },
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_SALE_DISCOUNT_UPDATE",
+      entity: "CustomerOrder",
+      entityId: sale.id,
+      before: toJson({
+        discountKgs: toMoney(sale.discountKgs),
+        totalKgs: toMoney(sale.totalKgs),
+      }),
+      after: toJson({
+        discountKgs: toMoney(updated.discountKgs),
+        totalKgs: toMoney(updated.totalKgs),
+      }),
+      requestId: input.requestId,
+    });
+
+    return {
+      id: updated.id,
+      subtotalKgs: toMoney(updated.subtotalKgs),
+      discountKgs: toMoney(updated.discountKgs),
+      totalKgs: toMoney(updated.totalKgs),
+    };
   });
 };
 
@@ -1983,10 +2290,12 @@ export const completePosSale = async (input: {
   actorId: string;
   requestId: string;
   idempotencyKey: string;
+  debtCustomerName?: string | null;
   payments: Array<{ method: PosPaymentMethod; amountKgs: number; providerRef?: string | null }>;
 }) => {
   const logger = getLogger(input.requestId);
-  const normalizedPayments = normalizePayments(input.payments);
+  const debtCustomerName = input.debtCustomerName?.trim() || null;
+  const normalizedPayments = debtCustomerName ? [] : normalizePayments(input.payments);
 
   const result = await prisma.$transaction(async (tx) => {
     const { result: completion, replayed } = await withIdempotency(
@@ -2085,7 +2394,7 @@ export const completePosSale = async (input: {
 
         const orderTotal = roundMoney(toMoney(sale.totalKgs));
         const paymentsTotal = sumPayments(normalizedPayments);
-        if (Math.abs(paymentsTotal - orderTotal) > 0.009) {
+        if (!debtCustomerName && Math.abs(paymentsTotal - orderTotal) > 0.009) {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }
         const transactionCurrency = resolveCurrencySnapshot(
@@ -2152,20 +2461,22 @@ export const completePosSale = async (input: {
           });
         }
 
-        await tx.salePayment.createMany({
-          data: normalizedPayments.map((payment) => ({
-            organizationId: input.organizationId,
-            storeId: sale.storeId,
-            shiftId: shift.id,
-            customerOrderId: sale.id,
-            method: payment.method,
-            amountKgs: payment.amountKgs,
-            ...transactionCurrency,
-            providerRef: payment.providerRef,
-            isRefund: false,
-            createdById: input.actorId,
-          })),
-        });
+        if (normalizedPayments.length) {
+          await tx.salePayment.createMany({
+            data: normalizedPayments.map((payment) => ({
+              organizationId: input.organizationId,
+              storeId: sale.storeId,
+              shiftId: shift.id,
+              customerOrderId: sale.id,
+              method: payment.method,
+              amountKgs: payment.amountKgs,
+              ...transactionCurrency,
+              providerRef: payment.providerRef,
+              isRefund: false,
+              createdById: input.actorId,
+            })),
+          });
+        }
 
         const updated = await tx.customerOrder.update({
           where: { id: sale.id },
@@ -2173,6 +2484,9 @@ export const completePosSale = async (input: {
             status: CustomerOrderStatus.COMPLETED,
             completedAt: new Date(),
             completedEventId: input.idempotencyKey,
+            isDebt: Boolean(debtCustomerName),
+            debtCustomerName,
+            customerName: debtCustomerName ?? sale.customerName,
             ...transactionCurrency,
             updatedById: input.actorId,
           },
@@ -2190,7 +2504,9 @@ export const completePosSale = async (input: {
         });
 
         const kkmMode =
-          compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF ? compliance.kkmMode : null;
+          !debtCustomerName && compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF
+            ? compliance.kkmMode
+            : null;
         const kkmCandidate: FiscalReceiptDraft | null = kkmMode
           ? {
               storeId: sale.storeId,
@@ -2401,6 +2717,8 @@ export const createSaleReturnDraft = async (input: {
       select: {
         id: true,
         storeId: true,
+        isDebt: true,
+        debtSettledAt: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
         store: {
@@ -2416,6 +2734,9 @@ export const createSaleReturnDraft = async (input: {
     }
     if (originalSale.storeId !== shift.storeId) {
       throw new AppError("posReturnStoreMismatch", "CONFLICT", 409);
+    }
+    if (originalSale.isDebt && !originalSale.debtSettledAt) {
+      throw new AppError("posDebtReturnUnsettled", "CONFLICT", 409);
     }
 
     const number = await nextPosReturnNumber(tx, input.organizationId);
@@ -2894,6 +3215,8 @@ export const completeSaleReturn = async (input: {
           select: {
             id: true,
             shiftId: true,
+            isDebt: true,
+            debtSettledAt: true,
             currencyCode: true,
             currencyRateKgsPerUnit: true,
             store: {
@@ -2910,6 +3233,9 @@ export const completeSaleReturn = async (input: {
         });
         if (!originalSale) {
           throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        if (originalSale.isDebt && !originalSale.debtSettledAt) {
+          throw new AppError("posDebtReturnUnsettled", "CONFLICT", 409);
         }
 
         const refundHasCard = normalizedPayments.some(
