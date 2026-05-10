@@ -21,6 +21,7 @@ const permissions: AppPermission[] = [
   "viewSuppliers",
   "viewStores",
   "viewReports",
+  "manageCustomers",
   "manageIntegrations",
   "manageImports",
   "manageSettings",
@@ -60,7 +61,9 @@ describe("role access model", () => {
         "viewSuppliers",
         "viewStores",
         "viewReports",
+        "manageCustomers",
         "manageIntegrations",
+        "manageImports",
         "viewHelp",
         "viewProfile",
       ]),
@@ -100,11 +103,15 @@ describe("role access model", () => {
 
   it("redirects denied app routes to the role home path", () => {
     expect(canAccessAppRoute("/products", { role: "CASHIER" })).toBe(true);
+    expect(canAccessAppRoute("/customers", { role: "CASHIER" })).toBe(false);
+    expect(canAccessAppRoute("/customers", { role: "STAFF" })).toBe(false);
+    expect(canAccessAppRoute("/customers", { role: "MANAGER" })).toBe(true);
     expect(canAccessAppRoute("/products/new", { role: "CASHIER" })).toBe(false);
     expect(canAccessAppRoute("/pos", { role: "CASHIER" })).toBe(true);
     expect(canAccessAppRoute("/settings/attributes", { role: "MANAGER" })).toBe(true);
     expect(canAccessAppRoute("/settings/units", { role: "MANAGER" })).toBe(true);
     expect(canAccessAppRoute("/settings/users", { role: "MANAGER" })).toBe(false);
+    expect(canAccessAppRoute("/settings/import", { role: "MANAGER" })).toBe(true);
     expect(canAccessAppRoute("/settings/printing", { role: "MANAGER" })).toBe(false);
     expect(canAccessAppRoute("/platform", { role: "ADMIN" })).toBe(false);
     expect(canAccessAppRoute("/platform", { role: "ADMIN", isPlatformOwner: true })).toBe(true);

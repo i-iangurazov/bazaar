@@ -5,6 +5,7 @@ import {
   ShoppingCart,
   Truck,
   Package,
+  BookUser,
   Store,
   Ruler,
   Users,
@@ -64,6 +65,7 @@ export const DashboardIcon = LayoutDashboard;
 export const InventoryIcon = Boxes;
 export const OrdersIcon = ClipboardList;
 export const SalesOrdersIcon = User;
+export const CustomerDatabaseIcon = BookUser;
 export const PurchaseOrdersIcon = ShoppingCart;
 export const PosIcon = CreditCard;
 export const SuppliersIcon = Truck;

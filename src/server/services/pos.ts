@@ -33,6 +33,7 @@ import { resolveFiscalMetadataFromResult } from "@/server/services/fiscalReceipt
 import { applyStockMovement } from "@/server/services/inventory";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
+import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import {
   calculateCashDiscrepancyKgs,
   calculateExpectedCashKgs,
@@ -1117,6 +1118,14 @@ export const createPosSaleDraft = async (input: {
           createdById: input.actorId,
           updatedById: input.actorId,
         },
+      });
+
+      await upsertCustomerFromOrderTx(tx, {
+        organizationId: input.organizationId,
+        storeId: shift.storeId,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        countOrder: false,
       });
 
       if (input.lines?.length) {

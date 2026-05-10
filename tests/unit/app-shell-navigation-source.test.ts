@@ -37,6 +37,7 @@ describe("conservative app shell navigation source", () => {
       'key: "orders"',
       'key: "salesOrders"',
       'key: "purchaseOrders"',
+      'key: "customers"',
       'key: "suppliers"',
       'key: "stores"',
       'key: "integrations"',
@@ -66,6 +67,8 @@ describe("conservative app shell navigation source", () => {
     );
     expect(source).toContain("requiredPermission?: AppPermission");
     expect(source).toContain("hasPermission(access, item.requiredPermission)");
+    expect(source).toContain('requiredPermission: "manageCustomers"');
+    expect(source).toContain("CustomerDatabaseIcon");
   });
 
   it("keeps product support settings visible through product management permission", () => {

@@ -10,6 +10,7 @@ import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import { writeAuditLog } from "@/server/services/audit";
+import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 
@@ -82,7 +83,7 @@ export const createBazaarApiKey = async (input: {
   name: string;
 }) => {
   await ensureStoreAccess(input.organizationId, input.storeId);
-  const name = input.name.trim() || "Bazaar API";
+  const name = input.name.trim() || "bazaar API";
   const token = createRawToken();
   const created = await prisma.$transaction(async (tx) => {
     const apiKey = await tx.bazaarApiKey.create({
@@ -480,6 +481,9 @@ export const createBazaarApiOrder = async (input: {
           organizationId: input.organizationId,
           isDeleted: false,
           id: { in: productIds },
+          storeProducts: {
+            some: { storeId: input.storeId, isActive: true },
+          },
           hiddenInBazaarCatalogs: { none: { storeId: input.storeId } },
         },
         select: { id: true, basePriceKgs: true },
@@ -576,6 +580,13 @@ export const createBazaarApiOrder = async (input: {
         lines: { create: lines },
       },
       select: { id: true, number: true, storeId: true, status: true, totalKgs: true },
+    });
+    await upsertCustomerFromOrderTx(tx, {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      customerName: input.customerName,
+      customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone,
     });
     return order;
   });

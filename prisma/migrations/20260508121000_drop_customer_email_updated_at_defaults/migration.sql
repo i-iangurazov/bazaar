@@ -1,0 +1,3 @@
+ALTER TABLE "Customer" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "EmailCampaign" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "EmailCampaignRecipient" ALTER COLUMN "updatedAt" DROP DEFAULT;

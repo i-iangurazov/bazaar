@@ -26,6 +26,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BillingIcon,
+  CustomerDatabaseIcon,
   InventoryIcon,
   PurchaseOrdersIcon,
   ProductsIcon,
@@ -36,7 +37,6 @@ import {
   SuppliersIcon,
   TagIcon,
   TransferIcon,
-  UserIcon,
   UsersIcon,
 } from "@/components/icons";
 import { filterCommandPaletteActions, type CommandPaletteCategory } from "@/lib/command-palette";
@@ -269,11 +269,11 @@ export const CommandPalette = ({
         label: t("actions.customer"),
         keywords: [t("keywords.customer"), t("keywords.other"), t("keywords.create")],
         sublabel: null,
-        href: "/customers/new",
-        icon: UserIcon,
+        href: "/customers?add=1",
+        icon: CustomerDatabaseIcon,
         group: "actions",
         category: "other",
-        permission: "viewSales",
+        permission: "manageCustomers",
       },
       {
         id: "new-supplier",

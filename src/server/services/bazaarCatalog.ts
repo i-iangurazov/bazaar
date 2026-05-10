@@ -11,6 +11,7 @@ import {
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
+import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { toJson } from "@/server/services/json";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
@@ -186,10 +187,13 @@ const resolveCatalogStatus = (status?: BazaarCatalogStatus | null) =>
 
 type CatalogCardStatus = "NOT_CONFIGURED" | "DRAFT" | "PUBLISHED";
 
-export const listBazaarCatalogStores = async (organizationId: string) => {
+export const listBazaarCatalogStores = async (organizationId: string, storeIds?: string[]) => {
   const [stores, catalogs] = await Promise.all([
     prisma.store.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(storeIds ? { id: { in: storeIds.length ? storeIds : ["__no_accessible_store__"] } } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -223,7 +227,7 @@ export const listBazaarCatalogStores = async (organizationId: string) => {
   });
 };
 
-const ensureProductAccess = async (organizationId: string, productIds: string[]) => {
+const ensureProductAccess = async (organizationId: string, storeId: string, productIds: string[]) => {
   const uniqueIds = Array.from(new Set(productIds.map((id) => id.trim()).filter(Boolean)));
   if (!uniqueIds.length) {
     return [];
@@ -233,6 +237,8 @@ const ensureProductAccess = async (organizationId: string, productIds: string[])
     where: {
       organizationId,
       id: { in: uniqueIds },
+      isDeleted: false,
+      storeProducts: { some: { storeId, isActive: true } },
     },
     select: { id: true },
   });
@@ -496,7 +502,11 @@ export const updateBazaarCatalogProductVisibility = async (input: {
   hidden: boolean;
 }) => {
   await ensureStoreAccess(input.organizationId, input.storeId);
-  const productIds = await ensureProductAccess(input.organizationId, input.productIds);
+  const productIds = await ensureProductAccess(
+    input.organizationId,
+    input.storeId,
+    input.productIds,
+  );
   if (!productIds.length) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
@@ -1090,6 +1100,14 @@ export const createCatalogCheckoutOrder = async (input: {
         number: true,
         storeId: true,
       },
+    });
+
+    await upsertCustomerFromOrderTx(tx, {
+      organizationId: catalog.organizationId,
+      storeId: catalog.storeId,
+      customerName,
+      customerEmail,
+      customerPhone,
     });
 
     return order;

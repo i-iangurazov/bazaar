@@ -31,6 +31,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -783,7 +784,8 @@ const ProductImageStudioPage = () => {
             <p className="text-sm text-muted-foreground">{t("history.subtitle")}</p>
           </CardHeader>
           <CardContent>
-            <Table>
+            <TableContainer>
+              <Table className="min-w-[860px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("history.columns.status")}</TableHead>
@@ -850,7 +852,8 @@ const ProductImageStudioPage = () => {
                   </TableRow>
                 ) : null}
               </TableBody>
-            </Table>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
       </div>

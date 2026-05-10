@@ -242,7 +242,7 @@
         "description": "Дүкөндүн ачык каталогун жарыялап, товар көрүнүшүн дүкөн боюнча башкарыңыз."
       },
       "bazaarApi": {
-        "title": "Bazaar API",
+        "title": "bazaar API",
         "description": "Тышкы сайттар үчүн дүкөн боюнча API ачкычтары: товар алуу жана заказ түзүү."
       },
       "mMarket": {
@@ -291,7 +291,7 @@
       },
       "q5": {
         "question": "Тышкы сайтты туташтырса болобу?",
-        "answer": "Ооба. Bazaar API дүкөн боюнча ачкычтар менен товар алуу жана заказ түзүүнү колдойт."
+        "answer": "Ооба. bazaar API дүкөн боюнча ачкычтар менен товар алуу жана заказ түзүүнү колдойт."
       }
     },
     "finalCta": {
@@ -594,6 +594,7 @@
     "inventory": "Запастар",
     "orders": "Заказдар",
     "salesOrders": "Кардарлар",
+    "customers": "Кардар базасы",
     "purchaseOrders": "Жеткирүүлөр",
     "suppliers": "Жеткирүүчүлөр",
     "products": "Буюмдар",
@@ -664,7 +665,7 @@
       "publishedStore": "Бул дүкөн үчүн жарыяланды: {store}"
     },
     "bazaarApi": {
-      "title": "Bazaar API",
+      "title": "bazaar API",
       "description": "Тышкы сайттар үчүн дүкөнгө байланган API ачкычтар: товарларды алуу жана заказ түзүү.",
       "productsEndpoint": "GET товарлар",
       "productsEndpointValue": "GET /api/bazaar/v1/products",
@@ -672,6 +673,16 @@
       "ordersEndpointValue": "POST /api/bazaar/v1/orders",
       "manageKeys": "Ачкычтарды башкаруу",
       "activeKeys": "Активдүү ачкычтар: {count}"
+    },
+    "emailMarketing": {
+      "title": "Email Marketing",
+      "description": "Email бар тандалган дүкөндүн кардарларына бренддүү кат жөнөтүү.",
+      "status": {
+        "ready": "Даяр",
+        "notConfigured": "Жөндөлгөн эмес"
+      },
+      "reachable": "Жетүүгө мүмкүн кардарлар: {count}",
+      "open": "Ачуу"
     },
     "mMarket": {
       "title": "bazaar + MMarket",
@@ -706,6 +717,193 @@
         "ready": "Даяр",
         "error": "Ката"
       }
+    }
+  },
+  "customers": {
+    "title": "Кардар базасы",
+    "subtitle": "Тандалган дүкөндүн кардарлары: кол менен, импорттон же заказдардан түзүлөт.",
+    "empty": "Бул дүкөндө азырынча кардарлар жок. Кол менен кошуңуз, бар базаны импорттоңуз же заказ түзүп базаны автоматтык толтуруңуз.",
+    "noStores": "Кардарларды башкаруу үчүн дүкөн түзүңүз же ага доступ алыңыз.",
+    "deleteConfirm": "{name} кардарын бул дүкөндүн базасынан өчүрөсүзбү?",
+    "actions": {
+      "add": "Кардар кошуу",
+      "create": "Кардар түзүү",
+      "save": "Өзгөртүүлөрдү сактоо"
+    },
+    "columns": {
+      "name": "Аты",
+      "email": "Email",
+      "phone": "Телефон",
+      "address": "Дарек",
+      "source": "Булак",
+      "createdAt": "Түзүлгөн",
+      "actions": "Аракеттер"
+    },
+    "fields": {
+      "name": "Аты",
+      "email": "Email",
+      "phone": "Телефон",
+      "address": "Дарек"
+    },
+    "filters": {
+      "store": "Дүкөн",
+      "storePlaceholder": "Дүкөндү тандаңыз",
+      "search": "Издөө",
+      "searchPlaceholder": "Аты, email, телефон же дарек",
+      "source": "Булак",
+      "allSources": "Бардык булактар"
+    },
+    "sources": {
+      "manual": "Кол менен",
+      "import": "Импорт",
+      "order": "Заказ",
+      "integration": "Интеграция"
+    },
+    "modal": {
+      "addTitle": "Кардар кошуу",
+      "editTitle": "Кардарды өзгөртүү",
+      "subtitle": "Кардар тандалган дүкөнгө гана сакталат."
+    },
+    "validation": {
+      "nameRequired": "Аты милдеттүү.",
+      "contactRequired": "Email же телефон киргизиңиз."
+    },
+    "messages": {
+      "created": "Кардар түзүлдү.",
+      "updated": "Кардар жаңыртылды.",
+      "deleted": "Кардар өчүрүлдү."
+    }
+  },
+  "bazaarApiSettings": {
+    "title": "bazaar API",
+    "subtitle": "Дүкөнгө байланган API ачкычтарды ачык каталогдон өзүнчө башкарыңыз.",
+    "storeTitle": "Дүкөн",
+    "storePlaceholder": "Дүкөндү тандаңыз",
+    "storeHint": "API ачкычтар жана суроо-талаптар {store} дүкөнүнө байланган.",
+    "storeMissing": "Доступ бар дүкөн жок.",
+    "statusTitle": "API статусу",
+    "status": {
+      "ready": "Даяр",
+      "notConfigured": "Жөндөлгөн эмес",
+      "active": "Активдүү",
+      "revoked": "Чакырылды"
+    },
+    "productsEndpoint": "Товарлар эндпоинти",
+    "ordersEndpoint": "Заказдар эндпоинти",
+    "keysTitle": "API ачкычтар",
+    "keyNamePlaceholder": "Ачкыч аты, мисалы сайт",
+    "createKey": "Ачкыч түзүү",
+    "revoke": "Чакыруу",
+    "empty": "Бул дүкөн үчүн API ачкычтар жок.",
+    "columns": {
+      "name": "Аты",
+      "prefix": "Префикс",
+      "created": "Түзүлгөн",
+      "lastUsed": "Акыркы колдонуу",
+      "status": "Статус"
+    },
+    "tokenTitle": "Жаңы API токен",
+    "tokenSubtitle": "Бул токенди азыр алыңыз. Кийин кайра көрсөтүлбөйт.",
+    "messages": {
+      "created": "API ачкыч түзүлдү.",
+      "revoked": "API ачкыч чакырылды."
+    }
+  },
+  "emailMarketingSettings": {
+    "title": "Email Marketing",
+    "subtitle": "Тандалган дүкөндүн кардарлары үчүн бренддүү email-кампания түзүңүз.",
+    "status": {
+      "ready": "Даяр",
+      "notConfigured": "EMAIL_FROM же почта провайдеринин жөндөөлөрү жетишсиз.",
+      "requiredFrom": "Кампаниялар {from} дарегинен жөнөтүлөт."
+    },
+    "audience": {
+      "title": "Аудитория",
+      "store": "Дүкөн",
+      "storePlaceholder": "Дүкөндү тандаңыз",
+      "source": "Кардар булагы",
+      "allSources": "Email бар бардык кардарлар",
+      "reachable": "Email бар кардарлар: {count}"
+    },
+    "composer": {
+      "title": "Кат",
+      "template": "Шаблон",
+      "subject": "Тема",
+      "preheader": "Прехедер",
+      "heading": "Негизги аталыш",
+      "body": "Текст",
+      "ctaLabel": "Баскыч тексти",
+      "ctaUrl": "Баскыч URL",
+      "footer": "Футер тексти"
+    },
+    "branding": {
+      "title": "Брендинг",
+      "senderName": "Жөнөтүүчү аты",
+      "replyTo": "Жооп email",
+      "brandColor": "Бренд түсү",
+      "buttonColor": "Баскыч түсү",
+      "font": "Шрифт",
+      "fontJost": "Jost",
+      "fontInter": "Inter",
+      "fontSystem": "Системалык",
+      "bannerUrl": "Баннер URL",
+      "logoGallery": "Дүкөн логотиптери",
+      "logoGalleryHelp": "Ар бир дүкөнгө бир email-логотип сакталат. Кайра жүктөө ошол дүкөндүн логотибин алмаштырат.",
+      "storeLogo": "Дүкөн логотиби",
+      "logoReady": "Логотип жүктөлдү",
+      "noLogo": "Логотип жүктөлгөн жок",
+      "selectLogo": "Колдонуу",
+      "selectedLogo": "Тандалды",
+      "uploadLogo": "Логотип жүктөө",
+      "reuploadLogo": "Логотипти алмаштыруу",
+      "uploadingLogo": "Жүктөлүүдө..."
+    },
+    "preview": {
+      "title": "Алдын ала көрүү",
+      "empty": "Алдын ала көрүү үчүн тема жана текст киргизиңиз."
+    },
+    "send": {
+      "openConfirm": "Кампанияны жөнөтүү",
+      "confirmTitle": "Жөнөтүүнү ырастоо",
+      "confirmSubtitle": "Жөнөтүүдөн мурун дүкөндү, аудиторияны, жөнөтүүчүнү жана теманы текшериңиз.",
+      "subject": "Тема: {subject}",
+      "audience": "Алуучулар: {count}",
+      "from": "Кимден: {from}",
+      "confirm": "Жөнөтүү"
+    },
+    "history": {
+      "title": "Кампания тарыхы",
+      "subject": "Тема",
+      "status": "Статус",
+      "recipients": "Алуучулар",
+      "createdAt": "Түзүлгөн",
+      "empty": "Азырынча кампаниялар жок."
+    },
+    "templates": {
+      "announcement": "Жарыя",
+      "promotion": "Промо",
+      "new_arrivals": "Жаңылар",
+      "sale": "Арзандатуу",
+      "custom": "Өзүмдүкү"
+    },
+    "sources": {
+      "manual": "Кол менен",
+      "import": "Импорт",
+      "order": "Заказ",
+      "integration": "Интеграция"
+    },
+    "campaignStatus": {
+      "draft": "Каралама",
+      "sending": "Жөнөтүлүүдө",
+      "sent": "Жөнөтүлдү",
+      "failed": "Ката"
+    },
+    "messages": {
+      "sent": "Кампания {count} кардарга жөнөтүлдү.",
+      "queued": "Кампания {count} кардар үчүн кезекке коюлду.",
+      "partial": "Жөнөтүлдү: {sent}; каталар: {failed}.",
+      "logoSaved": "{store} үчүн логотип сакталды.",
+      "logoUploadFailed": "Логотипти жүктөө мүмкүн болгон жок."
     }
   },
   "bazaarCatalogSettings": {
@@ -797,7 +995,7 @@
     "publishLabel": "Каталогду жарыялоо",
     "publishHint": "Жарыялангандан кийин каталог ачык шилтеме менен жеткиликтүү болот.",
     "api": {
-      "title": "Bazaar API",
+      "title": "bazaar API",
       "description": "Тышкы сайттар үчүн тандалган дүкөндүн товарларын алуу жана заказ түзүү ачкычтары.",
       "keyName": "Ачкыч аталышы",
       "keyNamePlaceholder": "Мисалы, сайт",
@@ -2869,7 +3067,7 @@
     "source": {
       "manual": "Кол менен",
       "catalog": "Каталог",
-      "api": "Bazaar API"
+      "api": "bazaar API"
     },
     "status": {
       "draft": "Черновик",
@@ -3097,6 +3295,21 @@
     "serviceUnavailable": "Кызмат убактылуу жеткиликсиз. База жана Redis туташууларын текшериңиз.",
     "tryAgain": "Кайталоо",
     "invalidInput": "Маалымат туура эмес. Талааларды текшерип кайра аракет кылыңыз.",
+    "customerNameRequired": "Кардардын аты милдеттүү.",
+    "customerContactRequired": "Кардардын email же телефонун киргизиңиз.",
+    "customerEmailInvalid": "Кардардын email туура эмес.",
+    "customerDuplicate": "Бул дүкөндө ушундай email же телефон менен кардар бар.",
+    "customerNotFound": "Кардар табылган жок.",
+    "customerDuplicateInFile": "Жүктөлгөн файлда кардар дубликаты бар.",
+    "importTooManyRows": "Бул импортто бир суроо-талап үчүн сап өтө көп.",
+    "emailCampaignSubjectRequired": "Кампания темасы милдеттүү.",
+    "emailCampaignBodyRequired": "Кампания тексти милдеттүү.",
+    "emailCampaignCtaUrlInvalid": "Баскыч URL туура болушу керек.",
+    "emailCampaignReplyToInvalid": "Жооп email туура эмес.",
+    "emailMarketingNotConfigured": "Email Marketing жөндөлгөн эмес.",
+    "emailMarketingPublicUrlRequired": "Кампания жөнөтүүдөн мурун ачык NEXTAUTH_URL же NEXT_PUBLIC_APP_URL көрсөтүңүз.",
+    "emailMarketingUnsubscribeSecretMissing": "Кампания жөнөтүүдөн мурун EMAIL_UNSUBSCRIBE_SECRET, NEXTAUTH_SECRET же JOBS_SECRET көрсөтүңүз.",
+    "emailCampaignAudienceEmpty": "Тандалган аудиторияда email бар кардар жок.",
     "invalidCurrencyRate": "Тандалган валюта үчүн сомго карата туура курс киргизиңиз.",
     "apiUnauthorized": "API токен туура эмес же жокко чыгарылган.",
     "apiKeyNotFound": "API ачкыч табылган жок.",
@@ -3581,11 +3794,71 @@
       "onec": "1C CSV",
       "csv": "CSV"
     },
+    "importType": {
+      "title": "Импорт түрү",
+      "products": "Товарлар",
+      "customers": "Кардарлар",
+      "hint": "Файл товарлардыбы же кардар жазууларынбы түзөрүн тандаңыз.",
+      "managerHint": "Менеджерлер доступ бар дүкөндөргө кардарларды импорттой алат."
+    },
     "templateDownload": "1C шаблонун жүктөө",
     "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
     "templateExample": "SKU-001,Буюм,шт,\"Women, Shoes\",Black,Сыпаттама,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "customerImport": {
+      "uploadTitle": "Кардар файлы",
+      "uploadHint": "Кардар контакттары бар CSV же Excel файлын жүктөңүз.",
+      "mappingTitle": "Кардар талааларын дал келтирүү",
+      "mappingRequired": "Аты жана жок дегенде Email же Телефон талаасын дал келтириңиз.",
+      "previewTitle": "Кардарларды алдын ала көрүү",
+      "previewEmpty": "Алдын ала көрүү үчүн файл жүктөп, талааларды дал келтириңиз.",
+      "apply": "Кардарларды импорттоо",
+      "hasErrors": "Туура эмес кардар саптары өткөрүлөт.",
+      "success": "{count} туура сап үчүн кардар импорту аяктады.",
+      "partialImportHint": "{valid} туура сапты импорттоого болот. {skipped} туура эмес сап өткөрүлөт.",
+      "parsingFile": "{file} файлы окулуп жатат...",
+      "previewInProgress": "Кардарларды алдын ала текшерүү: {count} сап, өткөнү {elapsed} сек.",
+      "previewInProgressHint": "Милдеттүү талаалар, дубликаттар жана тандалган дүкөндөгү учурдагы кардарлар текшерилүүдө.",
+      "importInProgress": "Кардарларды импорттоо: {count} сап, өткөнү {elapsed} сек.",
+      "importInProgressHint": "Кардарлар тандалган дүкөнгө жазылып жатат. Аяктаганга чейин баракты жаппаңыз.",
+      "templateHeaders": "name,email,phone,address",
+      "templateExample": "Jane Customer,jane@example.com,+996555123456,\"Бишкек, Чүй 1\"",
+      "fields": {
+        "name": "Аты",
+        "email": "Email",
+        "phone": "Телефон",
+        "address": "Дарек",
+        "action": "Аракет",
+        "errors": "Каталар"
+      },
+      "summary": {
+        "created": "Жаңы",
+        "updated": "Жаңыртуу",
+        "skipped": "Өткөрүлдү",
+        "errors": "Каталар"
+      },
+      "actions": {
+        "create": "Түзүү",
+        "update": "Жаңыртуу",
+        "skip": "Өткөрүү",
+        "created": "Түзүү",
+        "updated": "Жаңыртуу",
+        "skipped": "Өткөрүү"
+      },
+      "errors": {
+        "nameRequired": "Аты милдеттүү.",
+        "contactRequired": "Email же телефон милдеттүү.",
+        "invalidEmail": "Email туура эмес.",
+        "duplicateInFile": "Файлдагы дубликат.",
+        "customerNameRequired": "Аты милдеттүү.",
+        "customerContactRequired": "Email же телефон милдеттүү.",
+        "customerEmailInvalid": "Email туура эмес.",
+        "customerDuplicateInFile": "Файлдагы дубликат."
+      }
+    },
     "mappingTitle": "Тилкелерди дал келтирүү",
     "mappingPlaceholder": "Тилкени тандаңыз",
+    "mappingSelectPlaceholder": "Тилкени тандаңыз",
+    "mappingIgnore": "Колдонбоо",
     "mappingEmpty": "Дал келтирүү үчүн тилкелер жок.",
     "mappingRequired": "Милдеттүү дал келтирүүлөрдү толтуруңуз.",
     "required": "Милдеттүү",

@@ -242,7 +242,7 @@
         "description": "Публикуйте публичный каталог магазина и управляйте видимостью товаров по магазину."
       },
       "bazaarApi": {
-        "title": "Bazaar API",
+        "title": "bazaar API",
         "description": "Ключи API по магазину для внешних сайтов: получение товаров и создание заказов."
       },
       "mMarket": {
@@ -291,7 +291,7 @@
       },
       "q5": {
         "question": "Можно подключить внешний сайт?",
-        "answer": "Да. Bazaar API поддерживает получение товаров и создание заказов с ключами по магазину."
+        "answer": "Да. bazaar API поддерживает получение товаров и создание заказов с ключами по магазину."
       }
     },
     "finalCta": {
@@ -594,6 +594,7 @@
     "inventory": "Запасы",
     "orders": "Заказы",
     "salesOrders": "Клиенты",
+    "customers": "Клиентская база",
     "purchaseOrders": "Поставки",
     "suppliers": "Поставщики",
     "products": "Товары",
@@ -664,7 +665,7 @@
       "publishedStore": "Опубликовано для магазина: {store}"
     },
     "bazaarApi": {
-      "title": "Bazaar API",
+      "title": "bazaar API",
       "description": "Store-scoped API ключи для внешних сайтов: получение товаров и создание заказов.",
       "productsEndpoint": "GET товары",
       "productsEndpointValue": "GET /api/bazaar/v1/products",
@@ -672,6 +673,16 @@
       "ordersEndpointValue": "POST /api/bazaar/v1/orders",
       "manageKeys": "Управлять ключами",
       "activeKeys": "Активных ключей: {count}"
+    },
+    "emailMarketing": {
+      "title": "Email Marketing",
+      "description": "Брендированные рассылки по клиентам выбранного магазина с email.",
+      "status": {
+        "ready": "Готово",
+        "notConfigured": "Не настроено"
+      },
+      "reachable": "Доступных клиентов: {count}",
+      "open": "Открыть"
     },
     "mMarket": {
       "title": "bazaar + MMarket",
@@ -706,6 +717,193 @@
         "ready": "Готово",
         "error": "Ошибка"
       }
+    }
+  },
+  "customers": {
+    "title": "Клиентская база",
+    "subtitle": "Клиенты выбранного магазина: ручное добавление, импорт и заказы.",
+    "empty": "В этом магазине пока нет клиентов. Добавьте клиентов вручную, импортируйте существующую базу или создавайте заказы, чтобы база заполнялась автоматически.",
+    "noStores": "Создайте магазин или получите к нему доступ, чтобы управлять клиентами.",
+    "deleteConfirm": "Удалить {name} из клиентской базы этого магазина?",
+    "actions": {
+      "add": "Добавить клиента",
+      "create": "Создать клиента",
+      "save": "Сохранить изменения"
+    },
+    "columns": {
+      "name": "Имя",
+      "email": "Email",
+      "phone": "Телефон",
+      "address": "Адрес",
+      "source": "Источник",
+      "createdAt": "Создан",
+      "actions": "Действия"
+    },
+    "fields": {
+      "name": "Имя",
+      "email": "Email",
+      "phone": "Телефон",
+      "address": "Адрес"
+    },
+    "filters": {
+      "store": "Магазин",
+      "storePlaceholder": "Выберите магазин",
+      "search": "Поиск",
+      "searchPlaceholder": "Имя, email, телефон или адрес",
+      "source": "Источник",
+      "allSources": "Все источники"
+    },
+    "sources": {
+      "manual": "Вручную",
+      "import": "Импорт",
+      "order": "Заказ",
+      "integration": "Интеграция"
+    },
+    "modal": {
+      "addTitle": "Добавить клиента",
+      "editTitle": "Редактировать клиента",
+      "subtitle": "Клиент сохраняется только в выбранный магазин."
+    },
+    "validation": {
+      "nameRequired": "Имя обязательно.",
+      "contactRequired": "Укажите email или телефон."
+    },
+    "messages": {
+      "created": "Клиент создан.",
+      "updated": "Клиент обновлен.",
+      "deleted": "Клиент удален."
+    }
+  },
+  "bazaarApiSettings": {
+    "title": "bazaar API",
+    "subtitle": "Управляйте API ключами магазина отдельно от публичного каталога.",
+    "storeTitle": "Магазин",
+    "storePlaceholder": "Выберите магазин",
+    "storeHint": "API ключи и запросы относятся к магазину {store}.",
+    "storeMissing": "Нет доступного магазина.",
+    "statusTitle": "Статус API",
+    "status": {
+      "ready": "Готово",
+      "notConfigured": "Не настроено",
+      "active": "Активен",
+      "revoked": "Отозван"
+    },
+    "productsEndpoint": "Эндпоинт товаров",
+    "ordersEndpoint": "Эндпоинт заказов",
+    "keysTitle": "API ключи",
+    "keyNamePlaceholder": "Название ключа, например сайт",
+    "createKey": "Создать ключ",
+    "revoke": "Отозвать",
+    "empty": "Для этого магазина пока нет API ключей.",
+    "columns": {
+      "name": "Название",
+      "prefix": "Префикс",
+      "created": "Создан",
+      "lastUsed": "Последнее использование",
+      "status": "Статус"
+    },
+    "tokenTitle": "Новый API токен",
+    "tokenSubtitle": "Скопируйте токен сейчас. Повторно он показан не будет.",
+    "messages": {
+      "created": "API ключ создан.",
+      "revoked": "API ключ отозван."
+    }
+  },
+  "emailMarketingSettings": {
+    "title": "Email Marketing",
+    "subtitle": "Создавайте брендированные email-кампании для клиентов выбранного магазина.",
+    "status": {
+      "ready": "Готово",
+      "notConfigured": "Не хватает EMAIL_FROM или настроек почтового провайдера.",
+      "requiredFrom": "Кампании отправляются с адреса {from}."
+    },
+    "audience": {
+      "title": "Аудитория",
+      "store": "Магазин",
+      "storePlaceholder": "Выберите магазин",
+      "source": "Источник клиента",
+      "allSources": "Все клиенты с email",
+      "reachable": "Клиентов с email: {count}"
+    },
+    "composer": {
+      "title": "Письмо",
+      "template": "Шаблон",
+      "subject": "Тема",
+      "preheader": "Прехедер",
+      "heading": "Главный заголовок",
+      "body": "Текст",
+      "ctaLabel": "Текст кнопки",
+      "ctaUrl": "URL кнопки",
+      "footer": "Текст футера"
+    },
+    "branding": {
+      "title": "Брендинг",
+      "senderName": "Имя отправителя",
+      "replyTo": "Email для ответа",
+      "brandColor": "Цвет бренда",
+      "buttonColor": "Цвет кнопки",
+      "font": "Шрифт",
+      "fontJost": "Jost",
+      "fontInter": "Inter",
+      "fontSystem": "Системный",
+      "bannerUrl": "URL баннера",
+      "logoGallery": "Логотипы магазинов",
+      "logoGalleryHelp": "Для каждого магазина хранится один email-логотип. Повторная загрузка заменяет логотип этого магазина.",
+      "storeLogo": "Логотип магазина",
+      "logoReady": "Логотип загружен",
+      "noLogo": "Логотип не загружен",
+      "selectLogo": "Использовать",
+      "selectedLogo": "Выбран",
+      "uploadLogo": "Загрузить логотип",
+      "reuploadLogo": "Заменить логотип",
+      "uploadingLogo": "Загрузка..."
+    },
+    "preview": {
+      "title": "Предпросмотр",
+      "empty": "Введите тему и текст, чтобы увидеть предпросмотр."
+    },
+    "send": {
+      "openConfirm": "Отправить кампанию",
+      "confirmTitle": "Подтвердите отправку",
+      "confirmSubtitle": "Проверьте магазин, аудиторию, отправителя и тему перед отправкой.",
+      "subject": "Тема: {subject}",
+      "audience": "Получателей: {count}",
+      "from": "От: {from}",
+      "confirm": "Отправить"
+    },
+    "history": {
+      "title": "История кампаний",
+      "subject": "Тема",
+      "status": "Статус",
+      "recipients": "Получатели",
+      "createdAt": "Создана",
+      "empty": "Кампаний пока нет."
+    },
+    "templates": {
+      "announcement": "Объявление",
+      "promotion": "Промо",
+      "new_arrivals": "Новинки",
+      "sale": "Скидка",
+      "custom": "Своя"
+    },
+    "sources": {
+      "manual": "Вручную",
+      "import": "Импорт",
+      "order": "Заказ",
+      "integration": "Интеграция"
+    },
+    "campaignStatus": {
+      "draft": "Черновик",
+      "sending": "Отправляется",
+      "sent": "Отправлена",
+      "failed": "Ошибка"
+    },
+    "messages": {
+      "sent": "Кампания отправлена {count} клиентам.",
+      "queued": "Кампания поставлена в очередь для {count} клиентов.",
+      "partial": "Отправлено: {sent}; ошибок: {failed}.",
+      "logoSaved": "Логотип сохранен для {store}.",
+      "logoUploadFailed": "Не удалось загрузить логотип."
     }
   },
   "bazaarCatalogSettings": {
@@ -797,7 +995,7 @@
     "publishLabel": "Опубликовать каталог",
     "publishHint": "После публикации каталог будет доступен по публичной ссылке.",
     "api": {
-      "title": "Bazaar API",
+      "title": "bazaar API",
       "description": "Ключи для внешних сайтов: получение товаров выбранного магазина и создание заказов.",
       "keyName": "Название ключа",
       "keyNamePlaceholder": "Например, сайт",
@@ -2870,7 +3068,7 @@
     "source": {
       "manual": "Вручную",
       "catalog": "Каталог",
-      "api": "Bazaar API"
+      "api": "bazaar API"
     },
     "status": {
       "draft": "Черновик",
@@ -3098,6 +3296,21 @@
     "serviceUnavailable": "Сервис временно недоступен. Проверьте подключение к базе данных и Redis.",
     "tryAgain": "Повторить",
     "invalidInput": "Некорректные данные. Проверьте поля и повторите попытку.",
+    "customerNameRequired": "Имя клиента обязательно.",
+    "customerContactRequired": "Укажите email или телефон клиента.",
+    "customerEmailInvalid": "Некорректный email клиента.",
+    "customerDuplicate": "Клиент с таким email или телефоном уже есть в этом магазине.",
+    "customerNotFound": "Клиент не найден.",
+    "customerDuplicateInFile": "Дубликат клиента в загруженном файле.",
+    "importTooManyRows": "В этом импорте слишком много строк для одного запроса.",
+    "emailCampaignSubjectRequired": "Тема кампании обязательна.",
+    "emailCampaignBodyRequired": "Текст кампании обязателен.",
+    "emailCampaignCtaUrlInvalid": "URL кнопки должен быть корректным.",
+    "emailCampaignReplyToInvalid": "Некорректный email для ответа.",
+    "emailMarketingNotConfigured": "Email Marketing не настроен.",
+    "emailMarketingPublicUrlRequired": "Укажите публичный NEXTAUTH_URL или NEXT_PUBLIC_APP_URL перед отправкой кампаний.",
+    "emailMarketingUnsubscribeSecretMissing": "Укажите EMAIL_UNSUBSCRIBE_SECRET, NEXTAUTH_SECRET или JOBS_SECRET перед отправкой кампаний.",
+    "emailCampaignAudienceEmpty": "В выбранной аудитории нет клиентов с email.",
     "invalidCurrencyRate": "Для выбранной валюты укажите корректный курс к сому.",
     "apiUnauthorized": "API токен недействителен или отозван.",
     "apiKeyNotFound": "API ключ не найден.",
@@ -3582,11 +3795,71 @@
       "onec": "1C CSV",
       "csv": "CSV"
     },
+    "importType": {
+      "title": "Тип импорта",
+      "products": "Товары",
+      "customers": "Клиенты",
+      "hint": "Выберите, что создаст файл: товары или клиентские записи.",
+      "managerHint": "Менеджеры могут импортировать клиентов в доступные им магазины."
+    },
     "templateDownload": "Скачать шаблон 1С",
     "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
     "templateExample": "SKU-001,Товар,шт,\"Women, Shoes\",Black,Описание,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "customerImport": {
+      "uploadTitle": "Файл клиентов",
+      "uploadHint": "Загрузите CSV или Excel с контактами клиентов.",
+      "mappingTitle": "Сопоставление полей клиента",
+      "mappingRequired": "Сопоставьте Имя и хотя бы Email или Телефон.",
+      "previewTitle": "Предпросмотр клиентов",
+      "previewEmpty": "Загрузите файл и сопоставьте поля, чтобы увидеть предпросмотр.",
+      "apply": "Импортировать клиентов",
+      "hasErrors": "Некорректные строки клиентов будут пропущены.",
+      "success": "Импорт клиентов завершен для {count} корректных строк.",
+      "partialImportHint": "Можно импортировать {valid} корректных строк. {skipped} некорректных строк будут пропущены.",
+      "parsingFile": "Читаем файл {file}...",
+      "previewInProgress": "Предпросмотр клиентов: {count} строк, прошло {elapsed} сек.",
+      "previewInProgressHint": "Проверяем обязательные поля, дубликаты и существующих клиентов выбранного магазина.",
+      "importInProgress": "Импорт клиентов: {count} строк, прошло {elapsed} сек.",
+      "importInProgressHint": "Записываем клиентов в выбранный магазин. Не закрывайте страницу до завершения.",
+      "templateHeaders": "name,email,phone,address",
+      "templateExample": "Jane Customer,jane@example.com,+996555123456,\"Бишкек, Чуй 1\"",
+      "fields": {
+        "name": "Имя",
+        "email": "Email",
+        "phone": "Телефон",
+        "address": "Адрес",
+        "action": "Действие",
+        "errors": "Ошибки"
+      },
+      "summary": {
+        "created": "Новые",
+        "updated": "Обновления",
+        "skipped": "Пропущено",
+        "errors": "Ошибки"
+      },
+      "actions": {
+        "create": "Создать",
+        "update": "Обновить",
+        "skip": "Пропустить",
+        "created": "Создать",
+        "updated": "Обновить",
+        "skipped": "Пропустить"
+      },
+      "errors": {
+        "nameRequired": "Имя обязательно.",
+        "contactRequired": "Email или телефон обязателен.",
+        "invalidEmail": "Некорректный email.",
+        "duplicateInFile": "Дубликат в файле.",
+        "customerNameRequired": "Имя обязательно.",
+        "customerContactRequired": "Email или телефон обязателен.",
+        "customerEmailInvalid": "Некорректный email.",
+        "customerDuplicateInFile": "Дубликат в файле."
+      }
+    },
     "mappingTitle": "Сопоставление колонок",
     "mappingPlaceholder": "Выберите колонку",
+    "mappingSelectPlaceholder": "Выберите колонку",
+    "mappingIgnore": "Игнорировать",
     "mappingEmpty": "Нет колонок для сопоставления.",
     "mappingRequired": "Заполните обязательные сопоставления.",
     "required": "Обязательно",

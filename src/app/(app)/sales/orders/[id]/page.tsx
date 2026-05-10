@@ -5,6 +5,7 @@ import { CustomerOrderStatus } from "@prisma/client";
 import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
+import Image from "next/image";
 
 import { FormGrid } from "@/components/form-layout";
 import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
@@ -75,6 +76,29 @@ const statusVariant = (
 
 const sourceVariant = (source?: string | null): "warning" | "success" | "muted" =>
   source === "API" ? "success" : source === "CATALOG" ? "warning" : "muted";
+
+const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name: string }) => {
+  const fallbackLabel = name.trim().charAt(0).toUpperCase() || "#";
+
+  if (imageUrl) {
+    return (
+      <Image
+        src={imageUrl}
+        alt={name}
+        width={40}
+        height={40}
+        unoptimized
+        className="h-10 w-10 shrink-0 rounded-none border border-border object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+      {fallbackLabel}
+    </div>
+  );
+};
 
 const SalesOrderDetailPage = () => {
   const params = useParams();
@@ -637,10 +661,20 @@ const SalesOrderDetailPage = () => {
                         {lines.map((line) => (
                           <TableRow key={line.id}>
                             <TableCell>
-                              <p className="text-sm font-medium text-foreground">
-                                {line.product.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{line.product.sku}</p>
+                              <div className="flex min-w-[220px] items-center gap-3">
+                                <ProductImageThumb
+                                  imageUrl={line.product.photoUrl ?? line.product.images?.[0]?.url ?? null}
+                                  name={line.product.name}
+                                />
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    {line.product.name}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {line.product.sku}
+                                  </p>
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell>{line.variant?.name ?? t("variantBase")}</TableCell>
                             <TableCell>{line.qty}</TableCell>
@@ -701,11 +735,19 @@ const SalesOrderDetailPage = () => {
                       <Card key={line.id} className="border-border">
                         <CardContent className="space-y-3 p-4">
                           <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {line.product.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{line.product.sku}</p>
+                            <div className="flex min-w-0 items-center gap-3">
+                              <ProductImageThumb
+                                imageUrl={line.product.photoUrl ?? line.product.images?.[0]?.url ?? null}
+                                name={line.product.name}
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {line.product.name}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {line.product.sku}
+                                </p>
+                              </div>
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {line.variant?.name ?? t("variantBase")}

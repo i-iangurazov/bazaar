@@ -1,19 +1,75 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
+import { CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 
 type SummaryStatus = "NOT_CONFIGURED" | "DRAFT" | "PUBLISHED";
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
+
+const IntegrationTile = ({
+  title,
+  description,
+  status,
+  statusVariant,
+  detail,
+  actions,
+}: {
+  title: string;
+  description: string;
+  status: string;
+  statusVariant: BadgeVariant;
+  detail?: ReactNode;
+  actions: ReactNode;
+}) => (
+  <Card className="flex min-h-[220px] flex-col">
+    <CardHeader className="px-5 py-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-border bg-muted/30 text-primary">
+            <IntegrationsIcon className="h-5 w-5" aria-hidden />
+          </div>
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="truncate text-lg leading-tight">{title}</CardTitle>
+            <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{description}</p>
+          </div>
+        </div>
+        <Badge variant={statusVariant} className="shrink-0">
+          {status}
+        </Badge>
+      </div>
+    </CardHeader>
+    <CardContent className="flex flex-1 flex-col justify-between gap-4 px-5 py-4">
+      <div className="min-h-6 text-sm leading-6 text-muted-foreground">{detail}</div>
+      <div className="flex flex-wrap gap-2 [&>a]:w-full sm:[&>a]:w-auto [&_button]:w-full sm:[&_button]:w-auto">
+        {actions}
+      </div>
+    </CardContent>
+  </Card>
+);
+
+const ActionLink = ({
+  href,
+  children,
+  external = false,
+}: {
+  href: string;
+  children: ReactNode;
+  external?: boolean;
+}) => (
+  <Link href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+    {children}
+  </Link>
+);
 
 const resolveAbsoluteCatalogUrl = (publicUrlPath: string) => {
   const configuredBase = process.env.NEXT_PUBLIC_BAZAAR_CATALOG_BASE_URL?.trim();
@@ -38,6 +94,9 @@ const IntegrationsPage = () => {
   const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
   const bakaiStoreOverviewQuery = trpc.bakaiStore.overview.useQuery();
   const productImageStudioOverviewQuery = trpc.productImageStudio.overview.useQuery();
+  const emailMarketingOverviewQuery = trpc.emailMarketing.overview.useQuery(undefined, {
+    enabled: canManageApiKeys,
+  });
 
   const { summaryStatus, publishedEntry, defaultStoreId } = useMemo(() => {
     const stores = storesQuery.data ?? [];
@@ -59,8 +118,10 @@ const IntegrationsPage = () => {
   const settingsHref = defaultStoreId
     ? `/operations/integrations/bazaar-catalog?storeId=${encodeURIComponent(defaultStoreId)}`
     : "/operations/integrations/bazaar-catalog";
-  const apiSettingsHref = `${settingsHref}#bazaar-api`;
-  const apiKeysQuery = trpc.bazaarCatalog.apiKeys.useQuery(
+  const apiSettingsHref = defaultStoreId
+    ? `/operations/integrations/bazaar-api?storeId=${encodeURIComponent(defaultStoreId)}`
+    : "/operations/integrations/bazaar-api";
+  const apiKeysQuery = trpc.bazaarApi.apiKeys.useQuery(
     { storeId: defaultStoreId },
     { enabled: canManageApiKeys && Boolean(defaultStoreId) },
   );
@@ -88,240 +149,183 @@ const IntegrationsPage = () => {
     }
   };
 
+  const mMarketStatus =
+    mMarketOverviewQuery.data?.status === "READY"
+      ? t("mMarket.status.ready")
+      : mMarketOverviewQuery.data?.status === "ERROR"
+        ? t("mMarket.status.error")
+        : t("mMarket.status.notConfigured");
+  const mMarketStatusVariant: BadgeVariant =
+    mMarketOverviewQuery.data?.status === "READY"
+      ? "success"
+      : mMarketOverviewQuery.data?.status === "ERROR"
+        ? "danger"
+        : "muted";
+
+  const bakaiStoreStatus =
+    bakaiStoreOverviewQuery.data?.status === "READY"
+      ? t("bakaiStore.status.ready")
+      : bakaiStoreOverviewQuery.data?.status === "ERROR"
+        ? t("bakaiStore.status.error")
+        : bakaiStoreOverviewQuery.data?.status === "DRAFT"
+          ? t("bakaiStore.status.draft")
+          : t("bakaiStore.status.notConfigured");
+  const bakaiStoreStatusVariant: BadgeVariant =
+    bakaiStoreOverviewQuery.data?.status === "READY"
+      ? "success"
+      : bakaiStoreOverviewQuery.data?.status === "ERROR"
+        ? "danger"
+        : bakaiStoreOverviewQuery.data?.status === "DRAFT"
+          ? "warning"
+          : "muted";
+
+  const imageStudioStatus =
+    productImageStudioOverviewQuery.data?.status === "READY"
+      ? t("productImageStudio.status.ready")
+      : productImageStudioOverviewQuery.data?.status === "ERROR"
+        ? t("productImageStudio.status.error")
+        : t("productImageStudio.status.notConfigured");
+  const imageStudioStatusVariant: BadgeVariant =
+    productImageStudioOverviewQuery.data?.status === "READY"
+      ? "success"
+      : productImageStudioOverviewQuery.data?.status === "ERROR"
+        ? "danger"
+        : "muted";
+
   return (
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
-                  {t("bazaarCatalog.title")}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{t("bazaarCatalog.description")}</p>
-              </div>
-              <Badge
-                variant={
-                  summaryStatus === "PUBLISHED"
-                    ? "success"
-                    : summaryStatus === "DRAFT"
-                      ? "warning"
-                      : "muted"
-                }
-              >
-                {t(`status.${statusLabelKey}`)}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {publishedEntry?.storeName ? (
-              <p className="text-xs text-muted-foreground">
-                {t("bazaarCatalog.publishedStore", { store: publishedEntry.storeName })}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Link href={settingsHref}>
+      <div className="grid max-w-[1500px] gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <IntegrationTile
+          title={t("bazaarCatalog.title")}
+          description={t("bazaarCatalog.description")}
+          status={t(`status.${statusLabelKey}`)}
+          statusVariant={
+            summaryStatus === "PUBLISHED"
+              ? "success"
+              : summaryStatus === "DRAFT"
+                ? "warning"
+                : "muted"
+          }
+          detail={
+            publishedEntry?.storeName
+              ? t("bazaarCatalog.publishedStore", { store: publishedEntry.storeName })
+              : null
+          }
+          actions={
+            <>
+              <ActionLink href={settingsHref}>
                 <Button>{t("bazaarCatalog.openSettings")}</Button>
-              </Link>
+              </ActionLink>
               {catalogUrl ? (
                 <>
-                  <Link href={catalogUrl} target="_blank" rel="noopener noreferrer">
+                  <ActionLink href={catalogUrl} external>
                     <Button variant="secondary">
                       <ViewIcon className="h-4 w-4" aria-hidden />
                       {t("bazaarCatalog.openCatalog")}
                     </Button>
-                  </Link>
+                  </ActionLink>
                   <Button type="button" variant="outline" onClick={handleCopyLink}>
                     <CopyIcon className="h-4 w-4" aria-hidden />
                     {tCommon("tooltips.copyLink")}
                   </Button>
                 </>
               ) : null}
-            </div>
-          </CardContent>
-        </Card>
+            </>
+          }
+        />
 
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
-                  {t("bazaarApi.title")}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{t("bazaarApi.description")}</p>
-              </div>
-              <Badge variant={activeApiKeyCount > 0 ? "success" : "muted"}>
-                {activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {activeApiKeyCount > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {t("bazaarApi.activeKeys", { count: activeApiKeyCount })}
-              </p>
-            ) : null}
-            <div className="grid gap-2 rounded-none border border-border p-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">{t("bazaarApi.productsEndpoint")}</p>
-                <p className="break-all font-mono text-xs">
-                  {t("bazaarApi.productsEndpointValue")}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{t("bazaarApi.ordersEndpoint")}</p>
-                <p className="break-all font-mono text-xs">{t("bazaarApi.ordersEndpointValue")}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link href={apiSettingsHref}>
-                <Button>{t("bazaarApi.manageKeys")}</Button>
-              </Link>
-              <Link href={settingsHref}>
-                <Button variant="secondary">{t("bazaarCatalog.openSettings")}</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+        <IntegrationTile
+          title={t("bazaarApi.title")}
+          description={t("bazaarApi.description")}
+          status={activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
+          statusVariant={activeApiKeyCount > 0 ? "success" : "muted"}
+          detail={t("bazaarApi.activeKeys", { count: activeApiKeyCount })}
+          actions={
+            <ActionLink href={apiSettingsHref}>
+              <Button>{t("bazaarApi.manageKeys")}</Button>
+            </ActionLink>
+          }
+        />
 
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
-                  {t("mMarket.title")}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{t("mMarket.description")}</p>
-              </div>
-              <Badge
-                variant={
-                  mMarketOverviewQuery.data?.status === "READY"
-                    ? "success"
-                    : mMarketOverviewQuery.data?.status === "ERROR"
-                      ? "danger"
-                      : "muted"
-                }
-              >
-                {mMarketOverviewQuery.data?.status === "READY"
-                  ? t("mMarket.status.ready")
-                  : mMarketOverviewQuery.data?.status === "ERROR"
-                    ? t("mMarket.status.error")
-                    : t("mMarket.status.notConfigured")}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Link href="/operations/integrations/m-market">
+        {canManageApiKeys ? (
+          <IntegrationTile
+            title={t("emailMarketing.title")}
+            description={t("emailMarketing.description")}
+            status={
+              emailMarketingOverviewQuery.data?.status === "READY"
+                ? t("emailMarketing.status.ready")
+                : t("emailMarketing.status.notConfigured")
+            }
+            statusVariant={
+              emailMarketingOverviewQuery.data?.status === "READY" ? "success" : "muted"
+            }
+            detail={t("emailMarketing.reachable", {
+              count: emailMarketingOverviewQuery.data?.reachableCustomers ?? 0,
+            })}
+            actions={
+              <ActionLink href="/operations/integrations/email-marketing">
+                <Button>{t("emailMarketing.open")}</Button>
+              </ActionLink>
+            }
+          />
+        ) : null}
+
+        <IntegrationTile
+          title={t("mMarket.title")}
+          description={t("mMarket.description")}
+          status={mMarketStatus}
+          statusVariant={mMarketStatusVariant}
+          actions={
+            <>
+              <ActionLink href="/operations/integrations/m-market">
                 <Button>{t("mMarket.openSettings")}</Button>
-              </Link>
+              </ActionLink>
               {mMarketOverviewQuery.data?.configured ? (
-                <Link href="/operations/integrations/m-market">
+                <ActionLink href="/operations/integrations/m-market">
                   <Button variant="secondary">{t("mMarket.openExport")}</Button>
-                </Link>
-              ) : (
-                <Button variant="secondary" disabled>
-                  {t("mMarket.openExport")}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                </ActionLink>
+              ) : null}
+            </>
+          }
+        />
 
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
-                  {t("bakaiStore.title")}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{t("bakaiStore.description")}</p>
-              </div>
-              <Badge
-                variant={
-                  bakaiStoreOverviewQuery.data?.status === "READY"
-                    ? "success"
-                    : bakaiStoreOverviewQuery.data?.status === "ERROR"
-                      ? "danger"
-                      : bakaiStoreOverviewQuery.data?.status === "DRAFT"
-                        ? "warning"
-                        : "muted"
-                }
-              >
-                {bakaiStoreOverviewQuery.data?.status === "READY"
-                  ? t("bakaiStore.status.ready")
-                  : bakaiStoreOverviewQuery.data?.status === "ERROR"
-                    ? t("bakaiStore.status.error")
-                    : bakaiStoreOverviewQuery.data?.status === "DRAFT"
-                      ? t("bakaiStore.status.draft")
-                      : t("bakaiStore.status.notConfigured")}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Link href="/operations/integrations/bakai-store">
+        <IntegrationTile
+          title={t("bakaiStore.title")}
+          description={t("bakaiStore.description")}
+          status={bakaiStoreStatus}
+          statusVariant={bakaiStoreStatusVariant}
+          actions={
+            <>
+              <ActionLink href="/operations/integrations/bakai-store">
                 <Button>{t("bakaiStore.openSettings")}</Button>
-              </Link>
+              </ActionLink>
               {bakaiStoreOverviewQuery.data?.configured ? (
-                <Link href="/operations/integrations/bakai-store">
+                <ActionLink href="/operations/integrations/bakai-store">
                   <Button variant="secondary">{t("bakaiStore.openExport")}</Button>
-                </Link>
-              ) : (
-                <Button variant="secondary" disabled>
-                  {t("bakaiStore.openExport")}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                </ActionLink>
+              ) : null}
+            </>
+          }
+        />
 
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
-                  {t("productImageStudio.title")}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {t("productImageStudio.description")}
-                </p>
-              </div>
-              <Badge
-                variant={
-                  productImageStudioOverviewQuery.data?.status === "READY"
-                    ? "success"
-                    : productImageStudioOverviewQuery.data?.status === "ERROR"
-                      ? "danger"
-                      : "muted"
-                }
-              >
-                {productImageStudioOverviewQuery.data?.status === "READY"
-                  ? t("productImageStudio.status.ready")
-                  : productImageStudioOverviewQuery.data?.status === "ERROR"
-                    ? t("productImageStudio.status.error")
-                    : t("productImageStudio.status.notConfigured")}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Link href="/operations/integrations/product-image-studio">
+        <IntegrationTile
+          title={t("productImageStudio.title")}
+          description={t("productImageStudio.description")}
+          status={imageStudioStatus}
+          statusVariant={imageStudioStatusVariant}
+          actions={
+            <>
+              <ActionLink href="/operations/integrations/product-image-studio">
                 <Button>{t("productImageStudio.openStudio")}</Button>
-              </Link>
-              <Link href="/operations/integrations/product-image-studio">
+              </ActionLink>
+              <ActionLink href="/operations/integrations/product-image-studio">
                 <Button variant="secondary">{t("productImageStudio.openHistory")}</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+              </ActionLink>
+            </>
+          }
+        />
       </div>
     </div>
   );

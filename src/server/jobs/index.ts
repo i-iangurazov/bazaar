@@ -20,6 +20,10 @@ import {
   redisOperationDurationMs,
   redisOperationsTotal,
 } from "@/server/metrics/metrics";
+import {
+  EMAIL_CAMPAIGN_SEND_JOB_NAME,
+  runEmailCampaignSendJob,
+} from "@/server/jobs/emailMarketing";
 
 type InMemoryLock = {
   ownerToken: string;
@@ -187,6 +191,11 @@ const cleanupIdempotencyKeys = async (): Promise<JobResult> => {
 const jobs: Record<string, JobDefinition> = {
   "cleanup-idempotency-keys": {
     handler: cleanupIdempotencyKeys,
+    maxAttempts: 3,
+    baseDelayMs: 1000,
+  },
+  [EMAIL_CAMPAIGN_SEND_JOB_NAME]: {
+    handler: runEmailCampaignSendJob,
     maxAttempts: 3,
     baseDelayMs: 1000,
   },

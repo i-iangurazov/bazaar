@@ -4,6 +4,7 @@ import { productsRouter } from "@/server/trpc/routers/products";
 import { storesRouter } from "@/server/trpc/routers/stores";
 import { purchaseOrdersRouter } from "@/server/trpc/routers/purchaseOrders";
 import { salesOrdersRouter } from "@/server/trpc/routers/salesOrders";
+import { customersRouter } from "@/server/trpc/routers/customers";
 import { dashboardRouter } from "@/server/trpc/routers/dashboard";
 import { forecastRouter } from "@/server/trpc/routers/forecast";
 import { usersRouter } from "@/server/trpc/routers/users";
@@ -39,9 +40,11 @@ import { posRouter } from "@/server/trpc/routers/pos";
 import { taxReferencesRouter } from "@/server/trpc/routers/taxReferences";
 import { productCategoriesRouter } from "@/server/trpc/routers/productCategories";
 import { bazaarCatalogRouter } from "@/server/trpc/routers/bazaarCatalog";
+import { bazaarApiRouter } from "@/server/trpc/routers/bazaarApi";
 import { mMarketRouter } from "@/server/trpc/routers/mMarket";
 import { bakaiStoreRouter } from "@/server/trpc/routers/bakaiStore";
 import { productImageStudioRouter } from "@/server/trpc/routers/productImageStudio";
+import { emailMarketingRouter } from "@/server/trpc/routers/emailMarketing";
 
 export const appRouter = router({
   inventory: inventoryRouter,
@@ -49,6 +52,7 @@ export const appRouter = router({
   stores: storesRouter,
   purchaseOrders: purchaseOrdersRouter,
   salesOrders: salesOrdersRouter,
+  customers: customersRouter,
   dashboard: dashboardRouter,
   forecast: forecastRouter,
   users: usersRouter,
@@ -84,9 +88,11 @@ export const appRouter = router({
   pos: posRouter,
   taxReferences: taxReferencesRouter,
   bazaarCatalog: bazaarCatalogRouter,
+  bazaarApi: bazaarApiRouter,
   mMarket: mMarketRouter,
   bakaiStore: bakaiStoreRouter,
   productImageStudio: productImageStudioRouter,
+  emailMarketing: emailMarketingRouter,
 });
 
 export type AppRouter = typeof appRouter;

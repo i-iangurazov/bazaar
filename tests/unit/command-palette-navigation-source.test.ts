@@ -43,6 +43,8 @@ describe("conservative command palette role filtering source", () => {
     expect(source).toContain("hasPermission(access, action.permission)");
     expect(source).toContain("permissionForSearchResultType(item.type)");
     expect(source).toContain('permission: "manageProducts"');
+    expect(source).toContain('permission: "manageCustomers"');
+    expect(source).toContain("CustomerDatabaseIcon");
     expect(source).toContain('permission: "manageUsers"');
     expect(source).toContain('permission: "viewInventory"');
   });

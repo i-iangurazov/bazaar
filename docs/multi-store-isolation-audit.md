@@ -33,7 +33,7 @@ Date: 2026-05-06
 - Sales order list/detail/mutation endpoints enforce store access; an unfiltered list for a restricted user resolves to accessible stores, not the whole organization.
 - Reports, analytics, and core export job endpoints enforce store access; unfiltered reads for restricted users resolve to assigned stores instead of organization-wide data.
 - Explicit inaccessible store filters in reports, analytics, and export creation return `FORBIDDEN`.
-- Product list, quick search, product ids, CSV export, Bazaar API products, and public catalog products require active `StoreProduct` assignment when a store context exists.
+- Product list, quick search, product ids, CSV export, bazaar API products, and public catalog products require active `StoreProduct` assignment when a store context exists.
 - Product import from `/settings/import` requires a target store and applies imported products/store prices/minimum-stock settings only to that selected store.
 - Creating a product requires an explicit target store in the create form and assigns it only to that store.
 - Creating/importing products without a store in a multi-store organization no longer assigns the product to all stores.

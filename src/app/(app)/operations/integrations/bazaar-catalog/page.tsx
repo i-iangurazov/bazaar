@@ -39,7 +39,7 @@ import {
 import { ChevronDownIcon, CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrency, formatDateTime } from "@/lib/i18nFormat";
+import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultCurrencyCode, type SupportedCurrencyCode } from "@/lib/currency";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -223,9 +223,6 @@ const BazaarCatalogSettingsPage = () => {
   const [productsPage, setProductsPage] = useState(1);
   const [productsPageSize, setProductsPageSize] = useState(10);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
-  const [apiKeyName, setApiKeyName] = useState("Website");
-  const [createdApiToken, setCreatedApiToken] = useState<string | null>(null);
-  const [apiOrigin, setApiOrigin] = useState("");
   const productsQuery = trpc.bazaarCatalog.products.useQuery(
     {
       storeId: selectedStoreId,
@@ -239,13 +236,6 @@ const BazaarCatalogSettingsPage = () => {
       keepPreviousData: true,
     },
   );
-  const apiKeysQuery = trpc.bazaarCatalog.apiKeys.useQuery(
-    { storeId: selectedStoreId },
-    {
-      enabled: canEdit && Boolean(selectedStoreId),
-    },
-  );
-
   const upsertMutation = trpc.bazaarCatalog.upsert.useMutation({
     onSuccess: async () => {
       await Promise.all([settingsQuery.refetch(), storesQuery.refetch()]);
@@ -270,27 +260,6 @@ const BazaarCatalogSettingsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const createApiKeyMutation = trpc.bazaarCatalog.createApiKey.useMutation({
-    onSuccess: async (result) => {
-      setCreatedApiToken(result.token);
-      setApiKeyName("Website");
-      await apiKeysQuery.refetch();
-      toast({ variant: "success", description: t("api.keyCreated") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-  const revokeApiKeyMutation = trpc.bazaarCatalog.revokeApiKey.useMutation({
-    onSuccess: async () => {
-      await apiKeysQuery.refetch();
-      toast({ variant: "success", description: t("api.keyRevoked") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-
   const [formState, setFormState] = useState<CatalogFormState | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -320,10 +289,6 @@ const BazaarCatalogSettingsPage = () => {
     setProductsPage(1);
   }, [selectedStoreId]);
 
-  useEffect(() => {
-    setApiOrigin(window.location.origin);
-  }, []);
-
   const publicLink = useMemo(() => {
     if (
       settingsQuery.data?.catalog.status !== BazaarCatalogStatus.PUBLISHED ||
@@ -336,7 +301,6 @@ const BazaarCatalogSettingsPage = () => {
   const productItems = productsQuery.data?.items ?? [];
   const productSummary = productsQuery.data?.summary;
   const catalogCurrencyCode = productsQuery.data?.currencyCode ?? defaultCurrencyCode;
-  const apiBaseUrl = `${apiOrigin}/api/bazaar/v1`;
   const allProductsSelectedOnPage =
     productItems.length > 0 && productItems.every((product) => selectedProductIds.has(product.id));
 
@@ -406,26 +370,6 @@ const BazaarCatalogSettingsPage = () => {
       toast({ variant: "success", description: t("copySuccess") });
     } catch {
       toast({ variant: "error", description: t("copyFailed") });
-    }
-  };
-
-  const handleCreateApiKey = () => {
-    const name = apiKeyName.trim();
-    if (!canEdit || !selectedStoreId || !name) {
-      return;
-    }
-    createApiKeyMutation.mutate({ storeId: selectedStoreId, name });
-  };
-
-  const handleCopyCreatedApiToken = async () => {
-    if (!createdApiToken) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(createdApiToken);
-      toast({ variant: "success", description: t("api.copySuccess") });
-    } catch {
-      toast({ variant: "error", description: t("api.copyFailed") });
     }
   };
 
@@ -1175,121 +1119,6 @@ const BazaarCatalogSettingsPage = () => {
             </CardContent>
           </Card>
 
-          <Card id="bazaar-api" className="scroll-mt-24">
-            <CardHeader>
-              <CardTitle>{t("api.title")}</CardTitle>
-              <p className="text-sm text-muted-foreground">{t("api.description")}</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                <div className="space-y-2">
-                  <Label htmlFor="bazaar-api-key-name">{t("api.keyName")}</Label>
-                  <Input
-                    id="bazaar-api-key-name"
-                    value={apiKeyName}
-                    onChange={(event) => setApiKeyName(event.target.value)}
-                    placeholder={t("api.keyNamePlaceholder")}
-                    disabled={!canEdit || createApiKeyMutation.isLoading}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    className="w-full md:w-auto"
-                    onClick={handleCreateApiKey}
-                    disabled={!canEdit || !apiKeyName.trim() || createApiKeyMutation.isLoading}
-                  >
-                    {createApiKeyMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                    {t("api.createKey")}
-                  </Button>
-                </div>
-              </div>
-
-              {createdApiToken ? (
-                <div className="rounded-none border border-warning/30 bg-warning/10 p-3">
-                  <Label htmlFor="bazaar-api-token">{t("api.createdToken")}</Label>
-                  <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto]">
-                    <Input id="bazaar-api-token" value={createdApiToken} readOnly />
-                    <Button type="button" variant="secondary" onClick={handleCopyCreatedApiToken}>
-                      <CopyIcon className="h-4 w-4" aria-hidden />
-                      {t("api.copyToken")}
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{t("api.createdTokenHint")}</p>
-                </div>
-              ) : null}
-
-              <div className="grid gap-2 rounded-none border border-border p-3 text-sm md:grid-cols-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("api.productsEndpoint")}</p>
-                  <p className="break-all font-mono text-xs">{apiBaseUrl}/products</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("api.ordersEndpoint")}</p>
-                  <p className="break-all font-mono text-xs">{apiBaseUrl}/orders</p>
-                </div>
-              </div>
-
-              {apiKeysQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Spinner className="h-4 w-4" />
-                  {tCommon("loading")}
-                </div>
-              ) : apiKeysQuery.data?.length ? (
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[700px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("api.keyName")}</TableHead>
-                        <TableHead>{t("api.prefix")}</TableHead>
-                        <TableHead>{t("api.createdAt")}</TableHead>
-                        <TableHead>{t("api.lastUsedAt")}</TableHead>
-                        <TableHead>{t("api.status")}</TableHead>
-                        <TableHead>{tCommon("actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {apiKeysQuery.data.map((apiKey) => (
-                        <TableRow key={apiKey.id}>
-                          <TableCell className="font-medium">{apiKey.name}</TableCell>
-                          <TableCell className="font-mono text-xs">{apiKey.tokenPrefix}...</TableCell>
-                          <TableCell>{formatDateTime(apiKey.createdAt, locale)}</TableCell>
-                          <TableCell>
-                            {apiKey.lastUsedAt
-                              ? formatDateTime(apiKey.lastUsedAt, locale)
-                              : tCommon("notAvailable")}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={apiKey.revokedAt ? "muted" : "success"}>
-                              {apiKey.revokedAt ? t("api.revoked") : t("api.active")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              disabled={Boolean(apiKey.revokedAt) || revokeApiKeyMutation.isLoading}
-                              onClick={() =>
-                                revokeApiKeyMutation.mutate({
-                                  storeId: selectedStoreId,
-                                  apiKeyId: apiKey.id,
-                                })
-                              }
-                            >
-                              {t("api.revoke")}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t("api.empty")}</p>
-              )}
-            </CardContent>
-          </Card>
         </>
       )}
     </div>

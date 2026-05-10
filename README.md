@@ -34,7 +34,8 @@ cp .env.example .env
 
 ### 4) Environment variables
 - `DATABASE_URL` (required)
-- `NEXTAUTH_SECRET` + `NEXTAUTH_URL` (required for auth)
+- `NEXTAUTH_SECRET` + `NEXTAUTH_URL` (required for auth; `NEXTAUTH_URL` should be public in production for email links/assets)
+- `NEXT_PUBLIC_APP_URL` or `APP_URL` (optional fallback public app URL for Email Marketing assets and unsubscribe links)
 - `REDIS_URL` (required in production; enables multi-instance realtime, rate limiting, and job locks)
 - `JOBS_SECRET` (required to run `/api/jobs/run` via `x-job-secret`)
 - `METRICS_SECRET` (recommended; protects `/api/metrics` via `x-metrics-secret`)
@@ -48,7 +49,8 @@ cp .env.example .env
 - `PLATFORM_OWNER_EMAILS` (comma-separated emails allowed to access `/platform`)
 - `EMAIL_PROVIDER` (`log` for local/test, `resend` for production delivery)
 - `ALLOW_LOG_EMAIL_IN_PRODUCTION` (`0` by default; set to `1` only for temporary production fallback before SMTP/Resend is configured)
-- `EMAIL_FROM` (required when `EMAIL_PROVIDER=resend`)
+- `EMAIL_FROM` (required when `EMAIL_PROVIDER=resend`; Email Marketing requires `no-reply@bazaar.kg`)
+- `EMAIL_UNSUBSCRIBE_SECRET` (recommended for signing Email Marketing unsubscribe links; falls back to `NEXTAUTH_SECRET` or `JOBS_SECRET`)
 - `RESEND_API_KEY` (required when `EMAIL_PROVIDER=resend`)
 - `SEED_PLATFORM_OWNER_EMAIL` (optional, local seed only)
 - `SEED_PLATFORM_OWNER_PASSWORD` (optional, local seed only)
@@ -150,6 +152,14 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Store profiles include legal entity details (type, legal name, INN, address, phone).
 - Stores are operationally isolated: products are organization master records, but a store only shows products assigned to that store through `StoreProduct`, inventory actions, imports, or explicit copy/setup flows.
 
+## Customer Database
+- `/customers` is a store-scoped customer database for ADMIN and MANAGER roles only.
+- Customers belong to both organization and store; Store A customers do not appear in Store B unless created/imported there too.
+- Fields: name, email, phone, address, source, created/updated timestamps, last order timestamp, and order count.
+- Manual and import flows require a name and at least one of email or phone. Email is normalized to lowercase; phone is trimmed conservatively.
+- Same-store dedupe checks email first, then phone. Dedupe never merges across stores.
+- Customer orders, POS draft sales, public catalogue checkout, and bazaar API orders auto-create/update the selected-store customer when email or phone is present.
+
 ## Dashboard
 - Store selector with low-stock alerts, pending purchase orders, recent movements, and recent activity summaries (from audit logs).
 - Real-time refresh via SSE events (dashboard, inventory, and purchase orders).
@@ -218,6 +228,9 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 
 ## Migration Importers
 - `/settings/import` for Excel/CSV imports with column mapping, preview, and validation.
+- Import type selector supports Products and Customers.
+- Product import remains admin-only and preserves the existing product preview/apply/rollback behavior.
+- Customer import is admin/manager-only, targets the selected store, and maps Name, Email, Phone, and Address from CSV/XLS/XLSX.
 - Error CSV download for invalid rows and localized feedback.
 - 1C-friendly CSV template download.
 - Import history includes per-batch summaries and safe rollback (admin-only).
@@ -232,6 +245,18 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Images uploaded before product creation are auto-rehomed from `unassigned` to the concrete product folder on save when possible.
 - In development, if `r2` variables are incomplete, storage falls back to local with warning.
 - In production, missing required `r2` variables fail fast.
+
+## Integrations
+- `/operations/integrations/bazaar-catalog` manages the public store catalogue.
+- `/operations/integrations/bazaar-api` manages separate store-scoped API keys for external product reads and order creation.
+- bazaar API product responses are store-scoped and include `currencyCode`; callers should not assume KGS for display.
+- bazaar API orders create orders and customers for the API token store only.
+- M-Market and Bakai Store keep explicit branch/store mappings; included-product selection remains organization-level pending a dedicated per-store export migration.
+- `/operations/integrations/email-marketing` queues branded campaigns to selected-store customers with email addresses. Campaign email is always sent from `no-reply@bazaar.kg` through `EMAIL_FROM=no-reply@bazaar.kg`.
+- Email Marketing stores one reusable logo per store. Reuploading replaces that store logo, and campaign preview/send use the selected logo from the store-logo gallery.
+- Email Marketing requires a public app URL (`NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`, or `APP_URL`) so uploaded logos and unsubscribe links render correctly in email clients.
+- Email unsubscribe links update the customer opt-out flag and future audiences exclude unsubscribed customers.
+- Image Studio history uses responsive table wrapping so thumbnails/status/actions remain accessible on small screens.
 
 ## Operational Analytics
 - `/reports` includes stockouts, slow movers, and shrinkage summaries.
@@ -289,6 +314,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Line snapshots store both `unitPriceKgs` and `unitCostKgs` for stable historical profit analytics.
 - Completing an order creates immutable `SALE` stock movements and updates inventory snapshots through the ledger.
 - Completion is idempotent via request key to prevent double stock deduction.
+- Order line item tables show compact product images with a fallback initial when no image is available.
 - RBAC: ADMIN/MANAGER can complete/cancel; staff can work with non-final steps.
 - Sales metrics page at `/sales/orders/metrics` provides revenue/cost/profit trends and top products/bundles.
 

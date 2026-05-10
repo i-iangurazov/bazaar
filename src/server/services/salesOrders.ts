@@ -14,6 +14,7 @@ import { toJson } from "@/server/services/json";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 
 const allowedTransitions: Record<CustomerOrderStatus, CustomerOrderStatus[]> = {
   DRAFT: [CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.CANCELED],
@@ -320,6 +321,15 @@ export const getCustomerOrder = async (input: {
               id: true,
               sku: true,
               name: true,
+              photoUrl: true,
+              images: {
+                where: {
+                  AND: [{ url: { not: "" } }, { NOT: { url: { startsWith: "data:image/" } } }],
+                },
+                select: { url: true },
+                orderBy: { position: "asc" },
+                take: 1,
+              },
               isBundle: true,
               baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
             },
@@ -541,6 +551,14 @@ export const createCustomerOrderDraft = async (input: {
       },
     });
 
+    await upsertCustomerFromOrderTx(tx, {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      customerName: input.customerName,
+      customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone,
+    });
+
     if (input.lines?.length) {
       const existingKeys = new Set<string>();
 
@@ -631,6 +649,16 @@ export const setCustomerOrderCustomer = async (input: {
         notes: input.notes ?? null,
         updatedById: input.actorId,
       },
+    });
+
+    await upsertCustomerFromOrderTx(tx, {
+      organizationId: input.organizationId,
+      storeId: updated.storeId,
+      customerName: updated.customerName,
+      customerEmail: updated.customerEmail,
+      customerPhone: updated.customerPhone,
+      orderedAt: updated.updatedAt,
+      countOrder: false,
     });
 
     await writeAuditLog(tx, {

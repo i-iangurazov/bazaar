@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertUserCanAccessStore, listAccessibleStores } from "@/server/services/storeAccess";
 import {
   createBazaarApiKey,
   listBazaarApiKeys,
@@ -23,7 +24,11 @@ import {
 export const bazaarCatalogRouter = router({
   listStores: protectedProcedure.query(async ({ ctx }) => {
     try {
-      return await listBazaarCatalogStores(ctx.user.organizationId);
+      const stores = await listAccessibleStores(ctx.prisma, ctx.user);
+      return await listBazaarCatalogStores(
+        ctx.user.organizationId,
+        stores.map((store) => store.id),
+      );
     } catch (error) {
       throw toTRPCError(error);
     }
@@ -37,6 +42,7 @@ export const bazaarCatalogRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await getBazaarCatalogSettings({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -58,6 +64,7 @@ export const bazaarCatalogRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await listBazaarCatalogProducts({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -81,6 +88,7 @@ export const bazaarCatalogRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await updateBazaarCatalogProductVisibility({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -102,6 +110,7 @@ export const bazaarCatalogRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await listBazaarApiKeys({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -120,6 +129,7 @@ export const bazaarCatalogRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await createBazaarApiKey({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -141,6 +151,7 @@ export const bazaarCatalogRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await revokeBazaarApiKey({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -167,6 +178,7 @@ export const bazaarCatalogRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await upsertBazaarCatalogSettings({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,

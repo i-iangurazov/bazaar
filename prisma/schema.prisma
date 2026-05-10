@@ -58,6 +58,13 @@ enum CustomerOrderSource {
   API
 }
 
+enum CustomerSource {
+  MANUAL
+  IMPORT
+  ORDER
+  INTEGRATION
+}
+
 enum RegisterShiftStatus {
   OPEN
   CLOSED
@@ -290,6 +297,34 @@ enum ProductImageStudioOutputFormat {
   SQUARE
 }
 
+enum EmailCampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
+}
+
+enum EmailCampaignTemplate {
+  ANNOUNCEMENT
+  PROMOTION
+  NEW_ARRIVALS
+  SALE
+  CUSTOM
+}
+
+enum EmailCampaignFontFamily {
+  JOST
+  INTER
+  SYSTEM
+}
+
+enum EmailCampaignRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model Organization {
   id                  String                         @id @default(cuid())
   name                String
@@ -300,69 +335,73 @@ model Organization {
   createdAt           DateTime                       @default(now())
   updatedAt           DateTime                       @updatedAt
 
-  users                    User[]
-  userStoreAccesses        UserStoreAccess[]
-  stores                   Store[]
-  storeProducts            StoreProduct[]
-  suppliers                Supplier[]
-  products                 Product[]
-  units                    Unit[]
-  productCategories        ProductCategory[]
-  productBarcodes          ProductBarcode[]
-  productImages            ProductImage[]
-  productPacks             ProductPack[]
-  purchaseOrders           PurchaseOrder[]
-  customerOrders           CustomerOrder[]
-  auditLogs                AuditLog[]
-  importBatches            ImportBatch[]
-  stockCounts              StockCount[]
-  storePrices              StorePrice[]
-  bazaarCatalogs           BazaarCatalog[]
-  bazaarCatalogImages      BazaarCatalogImage[]
-  bazaarApiKeys            BazaarApiKey[]
-  mMarketIntegrations      MMarketIntegration[]
-  mMarketBranchMappings    MMarketBranchMapping[]
-  mMarketExportJobs        MMarketExportJob[]
-  mMarketIncludedProducts  MMarketIncludedProduct[]
-  bakaiStoreIntegrations   BakaiStoreIntegration[]
-  bakaiStoreMappings       BakaiStoreStockMapping[]
-  bakaiStoreBranchMappings BakaiStoreBranchMapping[]
-  bakaiStoreExportJobs     BakaiStoreExportJob[]
-  bakaiStoreIncludedProducts BakaiStoreIncludedProduct[]
+  users                       User[]
+  userStoreAccesses           UserStoreAccess[]
+  stores                      Store[]
+  storeProducts               StoreProduct[]
+  suppliers                   Supplier[]
+  products                    Product[]
+  units                       Unit[]
+  productCategories           ProductCategory[]
+  productBarcodes             ProductBarcode[]
+  productImages               ProductImage[]
+  productPacks                ProductPack[]
+  purchaseOrders              PurchaseOrder[]
+  customerOrders              CustomerOrder[]
+  customers                   Customer[]
+  emailCampaigns              EmailCampaign[]
+  emailCampaignRecipients     EmailCampaignRecipient[]
+  emailMarketingLogos         EmailMarketingLogo[]
+  auditLogs                   AuditLog[]
+  importBatches               ImportBatch[]
+  stockCounts                 StockCount[]
+  storePrices                 StorePrice[]
+  bazaarCatalogs              BazaarCatalog[]
+  bazaarCatalogImages         BazaarCatalogImage[]
+  bazaarApiKeys               BazaarApiKey[]
+  mMarketIntegrations         MMarketIntegration[]
+  mMarketBranchMappings       MMarketBranchMapping[]
+  mMarketExportJobs           MMarketExportJob[]
+  mMarketIncludedProducts     MMarketIncludedProduct[]
+  bakaiStoreIntegrations      BakaiStoreIntegration[]
+  bakaiStoreMappings          BakaiStoreStockMapping[]
+  bakaiStoreBranchMappings    BakaiStoreBranchMapping[]
+  bakaiStoreExportJobs        BakaiStoreExportJob[]
+  bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
   bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
-  productImageStudioJobs   ProductImageStudioJob[]
-  productCosts             ProductCost[]
-  productBundleComponents  ProductBundleComponent[]
-  stockLots                StockLot[]
-  attributeDefinitions     AttributeDefinition[]
-  categoryTemplates        CategoryAttributeTemplate[]
-  variantAttributeValues   VariantAttributeValue[]
-  onboardingProgress       OnboardingProgress?
-  productEvents            ProductEvent[]
-  deadLetterJobs           DeadLetterJob[]
-  impersonationSessions    ImpersonationSession[]
-  inviteTokens             InviteToken[]
-  accessRequests           AccessRequest[]
-  complianceProfiles       StoreComplianceProfile[]
-  productComplianceFlags   ProductComplianceFlags[]
-  exportJobs               ExportJob[]
-  periodCloses             PeriodClose[]
-  diagnosticsReports       DiagnosticsReport[]
-  planUpgradeRequests      PlanUpgradeRequest[]
-  counters                 OrganizationCounter?
-  posRegisters             PosRegister[]
-  registerShifts           RegisterShift[]
-  salePayments             SalePayment[]
-  cashDrawerMovements      CashDrawerMovement[]
-  saleReturns              SaleReturn[]
-  fiscalReceipts           FiscalReceipt[]
-  kkmConnectorDevices      KkmConnectorDevice[]
-  kkmConnectorPairingCodes KkmConnectorPairingCode[]
-  refundRequests           RefundRequest[]
-  markingCodeCaptures      MarkingCodeCapture[]
-  ettnReferences           EttnReference[]
-  esfReferences            EsfReference[]
-  printerSettings          StorePrinterSettings[]
+  productImageStudioJobs      ProductImageStudioJob[]
+  productCosts                ProductCost[]
+  productBundleComponents     ProductBundleComponent[]
+  stockLots                   StockLot[]
+  attributeDefinitions        AttributeDefinition[]
+  categoryTemplates           CategoryAttributeTemplate[]
+  variantAttributeValues      VariantAttributeValue[]
+  onboardingProgress          OnboardingProgress?
+  productEvents               ProductEvent[]
+  deadLetterJobs              DeadLetterJob[]
+  impersonationSessions       ImpersonationSession[]
+  inviteTokens                InviteToken[]
+  accessRequests              AccessRequest[]
+  complianceProfiles          StoreComplianceProfile[]
+  productComplianceFlags      ProductComplianceFlags[]
+  exportJobs                  ExportJob[]
+  periodCloses                PeriodClose[]
+  diagnosticsReports          DiagnosticsReport[]
+  planUpgradeRequests         PlanUpgradeRequest[]
+  counters                    OrganizationCounter?
+  posRegisters                PosRegister[]
+  registerShifts              RegisterShift[]
+  salePayments                SalePayment[]
+  cashDrawerMovements         CashDrawerMovement[]
+  saleReturns                 SaleReturn[]
+  fiscalReceipts              FiscalReceipt[]
+  kkmConnectorDevices         KkmConnectorDevice[]
+  kkmConnectorPairingCodes    KkmConnectorPairingCode[]
+  refundRequests              RefundRequest[]
+  markingCodeCaptures         MarkingCodeCapture[]
+  ettnReferences              EttnReference[]
+  esfReferences               EsfReference[]
+  printerSettings             StorePrinterSettings[]
   bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
 }
 
@@ -390,6 +429,9 @@ model User {
   purchaseOrdersUpdated         PurchaseOrder[]           @relation("purchaseOrdersUpdated")
   customerOrdersCreated         CustomerOrder[]           @relation("customerOrdersCreated")
   customerOrdersUpdated         CustomerOrder[]           @relation("customerOrdersUpdated")
+  customersCreated              Customer[]                @relation("customersCreated")
+  emailCampaignsCreated         EmailCampaign[]           @relation("emailCampaignsCreated")
+  emailMarketingLogosUpdated    EmailMarketingLogo[]      @relation("emailMarketingLogoUpdatedBy")
   stockCountsCreated            StockCount[]              @relation("stockCountCreatedBy")
   stockCountsApplied            StockCount[]              @relation("stockCountAppliedBy")
   storePricesUpdated            StorePrice[]              @relation("storePricesUpdated")
@@ -474,58 +516,61 @@ model UserGuideState {
 }
 
 model Store {
-  id                 String           @id @default(cuid())
-  organizationId     String
-  name               String
-  code               String
-  allowNegativeStock Boolean          @default(false)
-  trackExpiryLots    Boolean          @default(false)
-  legalEntityType    LegalEntityType?
-  legalName          String?
-  inn                String?
-  address            String?
-  phone              String?
-  currencyCode       String           @default("KGS")
-  currencyRateKgsPerUnit Decimal      @default(1.00) @db.Decimal(18, 6)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  id                     String           @id @default(cuid())
+  organizationId         String
+  name                   String
+  code                   String
+  allowNegativeStock     Boolean          @default(false)
+  trackExpiryLots        Boolean          @default(false)
+  legalEntityType        LegalEntityType?
+  legalName              String?
+  inn                    String?
+  address                String?
+  phone                  String?
+  currencyCode           String           @default("KGS")
+  currencyRateKgsPerUnit Decimal          @default(1.00) @db.Decimal(18, 6)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
-  organization             Organization              @relation(fields: [organizationId], references: [id])
-  inventorySnapshots       InventorySnapshot[]
-  stockMovements           StockMovement[]
-  reorderPolicies          ReorderPolicy[]
-  forecastSnapshots        ForecastSnapshot[]
-  purchaseOrders           PurchaseOrder[]
-  customerOrders           CustomerOrder[]
-  stockCounts              StockCount[]
-  stockCountLines          StockCountLine[]
-  stockLots                StockLot[]
-  storePrices              StorePrice[]
-  bazaarCatalog            BazaarCatalog?
-  bazaarApiKeys            BazaarApiKey[]
-  mMarketBranchMappings    MMarketBranchMapping[]
-  bakaiStoreMappings       BakaiStoreStockMapping[]
-  bakaiStoreBranchMappings BakaiStoreBranchMapping[]
-  featureFlags             StoreFeatureFlag[]
-  complianceProfile        StoreComplianceProfile?
-  exportJobs               ExportJob[]
-  periodCloses             PeriodClose[]
-  posRegisters             PosRegister[]
-  registerShifts           RegisterShift[]
-  salePayments             SalePayment[]
-  cashDrawerMovements      CashDrawerMovement[]
-  saleReturns              SaleReturn[]
-  fiscalReceipts           FiscalReceipt[]
-  kkmConnectorDevices      KkmConnectorDevice[]
-  kkmConnectorPairingCodes KkmConnectorPairingCode[]
-  printerSettings          StorePrinterSettings?
-  refundRequests           RefundRequest[]
-  markingCodeCaptures      MarkingCodeCapture[]
-  ettnReferences           EttnReference[]
-  esfReferences            EsfReference[]
+  organization                Organization                 @relation(fields: [organizationId], references: [id])
+  inventorySnapshots          InventorySnapshot[]
+  stockMovements              StockMovement[]
+  reorderPolicies             ReorderPolicy[]
+  forecastSnapshots           ForecastSnapshot[]
+  purchaseOrders              PurchaseOrder[]
+  customerOrders              CustomerOrder[]
+  customers                   Customer[]
+  emailCampaigns              EmailCampaign[]
+  emailMarketingLogo          EmailMarketingLogo?
+  stockCounts                 StockCount[]
+  stockCountLines             StockCountLine[]
+  stockLots                   StockLot[]
+  storePrices                 StorePrice[]
+  bazaarCatalog               BazaarCatalog?
+  bazaarApiKeys               BazaarApiKey[]
+  mMarketBranchMappings       MMarketBranchMapping[]
+  bakaiStoreMappings          BakaiStoreStockMapping[]
+  bakaiStoreBranchMappings    BakaiStoreBranchMapping[]
+  featureFlags                StoreFeatureFlag[]
+  complianceProfile           StoreComplianceProfile?
+  exportJobs                  ExportJob[]
+  periodCloses                PeriodClose[]
+  posRegisters                PosRegister[]
+  registerShifts              RegisterShift[]
+  salePayments                SalePayment[]
+  cashDrawerMovements         CashDrawerMovement[]
+  saleReturns                 SaleReturn[]
+  fiscalReceipts              FiscalReceipt[]
+  kkmConnectorDevices         KkmConnectorDevice[]
+  kkmConnectorPairingCodes    KkmConnectorPairingCode[]
+  printerSettings             StorePrinterSettings?
+  refundRequests              RefundRequest[]
+  markingCodeCaptures         MarkingCodeCapture[]
+  ettnReferences              EttnReference[]
+  esfReferences               EsfReference[]
   bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
-  userAccesses             UserStoreAccess[]
-  storeProducts            StoreProduct[]
+  userAccesses                UserStoreAccess[]
+  storeProducts               StoreProduct[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -557,13 +602,13 @@ model StoreComplianceProfile {
 }
 
 model StorePrinterSettings {
-  id                  String           @id @default(cuid())
-  organizationId      String
-  storeId             String           @unique
-  receiptPrintMode    PrinterPrintMode @default(PDF)
-  labelPrintMode      PrinterPrintMode @default(PDF)
-  receiptPrinterModel String?          @default("XP-P501A")
-  labelPrinterModel   String?          @default("XP-365B")
+  id                   String           @id @default(cuid())
+  organizationId       String
+  storeId              String           @unique
+  receiptPrintMode     PrinterPrintMode @default(PDF)
+  labelPrintMode       PrinterPrintMode @default(PDF)
+  receiptPrinterModel  String?          @default("XP-P501A")
+  labelPrinterModel    String?          @default("XP-365B")
   labelTemplate        String           @default("xp365b-roll-58x40")
   labelPaperMode       String           @default("ROLL")
   labelBarcodeType     String           @default("auto")
@@ -572,25 +617,25 @@ model StorePrinterSettings {
   labelShowPrice       Boolean          @default(true)
   labelShowSku         Boolean          @default(true)
   labelShowStoreName   Boolean          @default(false)
-  labelRollGapMm      Float            @default(3.5)
-  labelRollXOffsetMm  Float            @default(0)
-  labelRollYOffsetMm  Float            @default(0)
-  labelWidthMm        Float            @default(58)
-  labelHeightMm       Float            @default(40)
-  labelMarginTopMm    Float            @default(0)
-  labelMarginRightMm  Float            @default(0)
-  labelMarginBottomMm Float            @default(0)
-  labelMarginLeftMm   Float            @default(0)
-  labelLastPrintedAt  DateTime?
-  connectorDeviceId   String?
-  updatedById         String?
-  updatedAt           DateTime         @updatedAt
-  createdAt           DateTime         @default(now())
+  labelRollGapMm       Float            @default(3.5)
+  labelRollXOffsetMm   Float            @default(0)
+  labelRollYOffsetMm   Float            @default(0)
+  labelWidthMm         Float            @default(58)
+  labelHeightMm        Float            @default(40)
+  labelMarginTopMm     Float            @default(0)
+  labelMarginRightMm   Float            @default(0)
+  labelMarginBottomMm  Float            @default(0)
+  labelMarginLeftMm    Float            @default(0)
+  labelLastPrintedAt   DateTime?
+  connectorDeviceId    String?
+  updatedById          String?
+  updatedAt            DateTime         @updatedAt
+  createdAt            DateTime         @default(now())
 
-  organization    Organization       @relation(fields: [organizationId], references: [id])
-  store           Store              @relation(fields: [storeId], references: [id])
+  organization    Organization        @relation(fields: [organizationId], references: [id])
+  store           Store               @relation(fields: [storeId], references: [id])
   connectorDevice KkmConnectorDevice? @relation(fields: [connectorDeviceId], references: [id])
-  updatedBy       User?              @relation("storePrinterSettingsUpdatedBy", fields: [updatedById], references: [id])
+  updatedBy       User?               @relation("storePrinterSettingsUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([organizationId, storeId])
   @@index([connectorDeviceId])
@@ -641,16 +686,16 @@ model ExportJob {
 }
 
 model MMarketIntegration {
-  id                String                    @id @default(cuid())
+  id                String                   @id @default(cuid())
   orgId             String
-  status            MMarketIntegrationStatus  @default(DISABLED)
-  environment       MMarketEnvironment        @default(DEV)
+  status            MMarketIntegrationStatus @default(DISABLED)
+  environment       MMarketEnvironment       @default(DEV)
   apiTokenEncrypted String?
   lastSyncAt        DateTime?
   lastSyncStatus    MMarketLastSyncStatus?
-  lastErrorSummary  String?                   @db.Text
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  lastErrorSummary  String?                  @db.Text
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
 
@@ -674,7 +719,7 @@ model MMarketBranchMapping {
 }
 
 model MMarketExportJob {
-  id                    String                @id @default(cuid())
+  id                    String                 @id @default(cuid())
   orgId                 String
   environment           MMarketEnvironment
   status                MMarketExportJobStatus @default(QUEUED)
@@ -685,7 +730,7 @@ model MMarketExportJob {
   errorReportJson       Json?
   requestIdempotencyKey String
   responseJson          Json?
-  createdAt             DateTime              @default(now())
+  createdAt             DateTime               @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])
   requestedBy  User         @relation("mMarketExportRequestedBy", fields: [requestedById], references: [id])
@@ -696,12 +741,12 @@ model MMarketExportJob {
 }
 
 model MMarketIncludedProduct {
-  id        String   @id @default(cuid())
-  orgId     String
-  productId String
-  createdAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  orgId          String
+  productId      String
+  createdAt      DateTime  @default(now())
   lastExportedAt DateTime?
-  updatedAt DateTime @updatedAt
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
   product      Product      @relation(fields: [productId], references: [id])
@@ -712,23 +757,23 @@ model MMarketIncludedProduct {
 }
 
 model BakaiStoreIntegration {
-  id                  String                       @id @default(cuid())
-  orgId               String
-  status              BakaiStoreIntegrationStatus @default(DISABLED)
-  connectionMode      BakaiStoreConnectionMode    @default(TEMPLATE)
-  templateFileName    String?
-  templateMimeType    String?
-  templateFileSize    Int?
-  templateStoragePath String?
-  templateSchemaJson  Json?
-  apiTokenEncrypted   String?
-  lastSyncAt          DateTime?
-  lastSyncStatus      BakaiStoreLastSyncStatus?
-  lastConnectionCheckAt DateTime?
-  lastConnectionCheckSummary String?              @db.Text
-  lastErrorSummary    String?                     @db.Text
-  createdAt           DateTime                    @default(now())
-  updatedAt           DateTime                    @updatedAt
+  id                         String                      @id @default(cuid())
+  orgId                      String
+  status                     BakaiStoreIntegrationStatus @default(DISABLED)
+  connectionMode             BakaiStoreConnectionMode    @default(TEMPLATE)
+  templateFileName           String?
+  templateMimeType           String?
+  templateFileSize           Int?
+  templateStoragePath        String?
+  templateSchemaJson         Json?
+  apiTokenEncrypted          String?
+  lastSyncAt                 DateTime?
+  lastSyncStatus             BakaiStoreLastSyncStatus?
+  lastConnectionCheckAt      DateTime?
+  lastConnectionCheckSummary String?                     @db.Text
+  lastErrorSummary           String?                     @db.Text
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
 
@@ -754,12 +799,12 @@ model BakaiStoreStockMapping {
 }
 
 model BakaiStoreBranchMapping {
-  id           String   @id @default(cuid())
-  orgId        String
-  storeId      String
+  id            String   @id @default(cuid())
+  orgId         String
+  storeId       String
   bakaiBranchId String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
   store        Store        @relation(fields: [storeId], references: [id])
@@ -771,7 +816,7 @@ model BakaiStoreBranchMapping {
 model BakaiStoreExportJob {
   id                    String                    @id @default(cuid())
   orgId                 String
-  jobType               BakaiStoreJobType        @default(TEMPLATE_EXPORT)
+  jobType               BakaiStoreJobType         @default(TEMPLATE_EXPORT)
   status                BakaiStoreExportJobStatus @default(QUEUED)
   requestedById         String
   startedAt             DateTime?
@@ -799,14 +844,14 @@ model BakaiStoreExportJob {
 }
 
 model BakaiStoreIncludedProduct {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   orgId           String
   productId       String
-  discountPercent Decimal? @db.Decimal(5, 2)
-  discountAmount  Decimal? @db.Decimal(12, 2)
-  createdAt       DateTime @default(now())
+  discountPercent Decimal?  @db.Decimal(5, 2)
+  discountAmount  Decimal?  @db.Decimal(12, 2)
+  createdAt       DateTime  @default(now())
   lastExportedAt  DateTime?
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime  @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
   product      Product      @relation(fields: [productId], references: [id])
@@ -817,15 +862,15 @@ model BakaiStoreIncludedProduct {
 }
 
 model BakaiStoreProductSyncState {
-  id                  String                   @id @default(cuid())
+  id                  String                    @id @default(cuid())
   orgId               String
   productId           String
   bakaiExternalRef    String?
   lastSyncedAt        DateTime?
   lastSyncStatus      BakaiStoreLastSyncStatus?
   lastPayloadChecksum String?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
   product      Product      @relation(fields: [productId], references: [id])
@@ -954,34 +999,34 @@ model Product {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization       Organization             @relation(fields: [organizationId], references: [id])
-  supplier           Supplier?                @relation(fields: [supplierId], references: [id])
-  baseUnit           Unit                     @relation(fields: [baseUnitId], references: [id])
-  barcodes           ProductBarcode[]
-  packs              ProductPack[]
-  variants           ProductVariant[]
-  inventorySnapshots InventorySnapshot[]
-  stockMovements     StockMovement[]
-  reorderPolicies    ReorderPolicy[]
-  forecastSnapshots  ForecastSnapshot[]
-  purchaseOrderLines PurchaseOrderLine[]
-  bundleComponents   ProductBundleComponent[] @relation("bundleComponents")
-  bundleParents      ProductBundleComponent[] @relation("bundleParents")
-  stockCounts        StockCountLine[]
-  stockLots          StockLot[]
-  storePrices        StorePrice[]
-  productCosts       ProductCost[]
-  attributeValues    VariantAttributeValue[]
-  images             ProductImage[]
-  complianceFlags    ProductComplianceFlags?
-  mMarketInclusions  MMarketIncludedProduct[]
-  bakaiStoreInclusions BakaiStoreIncludedProduct[]
-  bakaiStoreSyncStates BakaiStoreProductSyncState[]
+  organization           Organization                 @relation(fields: [organizationId], references: [id])
+  supplier               Supplier?                    @relation(fields: [supplierId], references: [id])
+  baseUnit               Unit                         @relation(fields: [baseUnitId], references: [id])
+  barcodes               ProductBarcode[]
+  packs                  ProductPack[]
+  variants               ProductVariant[]
+  inventorySnapshots     InventorySnapshot[]
+  stockMovements         StockMovement[]
+  reorderPolicies        ReorderPolicy[]
+  forecastSnapshots      ForecastSnapshot[]
+  purchaseOrderLines     PurchaseOrderLine[]
+  bundleComponents       ProductBundleComponent[]     @relation("bundleComponents")
+  bundleParents          ProductBundleComponent[]     @relation("bundleParents")
+  stockCounts            StockCountLine[]
+  stockLots              StockLot[]
+  storePrices            StorePrice[]
+  productCosts           ProductCost[]
+  attributeValues        VariantAttributeValue[]
+  images                 ProductImage[]
+  complianceFlags        ProductComplianceFlags?
+  mMarketInclusions      MMarketIncludedProduct[]
+  bakaiStoreInclusions   BakaiStoreIncludedProduct[]
+  bakaiStoreSyncStates   BakaiStoreProductSyncState[]
   productImageStudioJobs ProductImageStudioJob[]
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
-  customerOrderLines CustomerOrderLine[]
-  saleReturnLines    SaleReturnLine[]
-  storeProducts      StoreProduct[]
+  customerOrderLines     CustomerOrderLine[]
+  saleReturnLines        SaleReturnLine[]
+  storeProducts          StoreProduct[]
 
   @@unique([organizationId, sku])
   @@index([organizationId])
@@ -1027,7 +1072,7 @@ model ProductImage {
 }
 
 model ProductImageStudioJob {
-  id                   String                          @id @default(cuid())
+  id                   String                         @id @default(cuid())
   organizationId       String
   productId            String?
   createdById          String
@@ -1177,21 +1222,21 @@ model StockMovement {
 }
 
 model PurchaseOrder {
-  id              String              @id @default(cuid())
-  organizationId  String
-  storeId         String
-  supplierId      String?
-  status          PurchaseOrderStatus @default(DRAFT)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  submittedAt     DateTime?
-  approvedAt      DateTime?
-  receivedAt      DateTime?
-  receivedEventId String?             @unique
-  currencyCode    String?
-  currencyRateKgsPerUnit Decimal?     @db.Decimal(18, 6)
-  createdById     String?
-  updatedById     String?
+  id                     String              @id @default(cuid())
+  organizationId         String
+  storeId                String
+  supplierId             String?
+  status                 PurchaseOrderStatus @default(DRAFT)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  submittedAt            DateTime?
+  approvedAt             DateTime?
+  receivedAt             DateTime?
+  receivedEventId        String?             @unique
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
+  createdById            String?
+  updatedById            String?
 
   organization Organization        @relation(fields: [organizationId], references: [id])
   store        Store               @relation(fields: [storeId], references: [id])
@@ -1227,35 +1272,35 @@ model PurchaseOrderLine {
 }
 
 model CustomerOrder {
-  id               String              @id @default(cuid())
-  organizationId   String
-  storeId          String
-  registerId       String?
-  shiftId          String?
-  number           String
-  status           CustomerOrderStatus @default(DRAFT)
-  source           CustomerOrderSource @default(MANUAL)
-  isPosSale        Boolean             @default(false)
-  customerName     String?
-  customerEmail    String?
-  customerPhone    String?
-  subtotalKgs      Decimal             @default(0) @db.Decimal(12, 2)
-  totalKgs         Decimal             @default(0) @db.Decimal(12, 2)
-  currencyCode     String?
-  currencyRateKgsPerUnit Decimal?      @db.Decimal(18, 6)
-  notes            String?
-  kkmStatus        PosKkmStatus        @default(NOT_SENT)
-  kkmReceiptId     String?
-  kkmRawJson       Json?
-  confirmedAt      DateTime?
-  readyAt          DateTime?
-  completedAt      DateTime?
-  canceledAt       DateTime?
-  completedEventId String?             @unique
-  createdById      String?
-  updatedById      String?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  organizationId         String
+  storeId                String
+  registerId             String?
+  shiftId                String?
+  number                 String
+  status                 CustomerOrderStatus @default(DRAFT)
+  source                 CustomerOrderSource @default(MANUAL)
+  isPosSale              Boolean             @default(false)
+  customerName           String?
+  customerEmail          String?
+  customerPhone          String?
+  subtotalKgs            Decimal             @default(0) @db.Decimal(12, 2)
+  totalKgs               Decimal             @default(0) @db.Decimal(12, 2)
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
+  notes                  String?
+  kkmStatus              PosKkmStatus        @default(NOT_SENT)
+  kkmReceiptId           String?
+  kkmRawJson             Json?
+  confirmedAt            DateTime?
+  readyAt                DateTime?
+  completedAt            DateTime?
+  canceledAt             DateTime?
+  completedEventId       String?             @unique
+  createdById            String?
+  updatedById            String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   organization        Organization         @relation(fields: [organizationId], references: [id])
   store               Store                @relation(fields: [storeId], references: [id])
@@ -1277,6 +1322,117 @@ model CustomerOrder {
   @@index([organizationId, isPosSale, createdAt])
   @@index([organizationId, source, createdAt])
   @@index([shiftId, status, createdAt])
+}
+
+model Customer {
+  id                           String         @id @default(cuid())
+  organizationId               String
+  storeId                      String
+  name                         String
+  email                        String?
+  phone                        String?
+  address                      String?
+  source                       CustomerSource @default(MANUAL)
+  metadata                     Json?
+  lastOrderAt                  DateTime?
+  orderCount                   Int            @default(0)
+  deletedAt                    DateTime?
+  emailMarketingUnsubscribedAt DateTime?
+  createdById                  String?
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime       @updatedAt
+
+  organization    Organization             @relation(fields: [organizationId], references: [id])
+  store           Store                    @relation(fields: [storeId], references: [id])
+  createdBy       User?                    @relation("customersCreated", fields: [createdById], references: [id])
+  emailRecipients EmailCampaignRecipient[]
+
+  @@index([organizationId, storeId])
+  @@index([storeId, email])
+  @@index([storeId, phone])
+  @@index([storeId, emailMarketingUnsubscribedAt])
+  @@index([createdAt])
+}
+
+model EmailCampaign {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  storeId           String
+  createdById       String?
+  status            EmailCampaignStatus     @default(DRAFT)
+  template          EmailCampaignTemplate   @default(CUSTOM)
+  subject           String
+  preheader         String?
+  heading           String?
+  body              String                  @db.Text
+  ctaLabel          String?
+  ctaUrl            String?
+  footerText        String?
+  senderDisplayName String?
+  replyToEmail      String?
+  brandColor        String?
+  buttonColor       String?
+  fontFamily        EmailCampaignFontFamily @default(INTER)
+  bannerImageUrl    String?
+  logoImageId       String?
+  recipientCount    Int                     @default(0)
+  sentAt            DateTime?
+  errorMessage      String?                 @db.Text
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  organization Organization             @relation(fields: [organizationId], references: [id])
+  store        Store                    @relation(fields: [storeId], references: [id])
+  createdBy    User?                    @relation("emailCampaignsCreated", fields: [createdById], references: [id])
+  logoImage    BazaarCatalogImage?      @relation("emailCampaignLogoImage", fields: [logoImageId], references: [id])
+  recipients   EmailCampaignRecipient[]
+
+  @@index([organizationId, storeId, createdAt])
+  @@index([storeId, status, createdAt])
+  @@index([logoImageId])
+  @@index([createdAt])
+}
+
+model EmailMarketingLogo {
+  id             String   @id @default(cuid())
+  organizationId String
+  storeId        String   @unique
+  imageId        String
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  store        Store              @relation(fields: [storeId], references: [id])
+  image        BazaarCatalogImage @relation("emailMarketingLogoImage", fields: [imageId], references: [id])
+  updatedBy    User?              @relation("emailMarketingLogoUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, storeId])
+  @@index([organizationId, updatedAt])
+  @@index([imageId])
+  @@index([updatedById])
+}
+
+model EmailCampaignRecipient {
+  id             String                       @id @default(cuid())
+  organizationId String
+  campaignId     String
+  customerId     String
+  email          String
+  status         EmailCampaignRecipientStatus @default(PENDING)
+  errorMessage   String?                      @db.Text
+  sentAt         DateTime?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  campaign     EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id])
+
+  @@unique([campaignId, customerId])
+  @@index([organizationId, campaignId])
+  @@index([customerId])
+  @@index([email])
 }
 
 model CustomerOrderLine {
@@ -1324,23 +1480,23 @@ model PosRegister {
 }
 
 model RegisterShift {
-  id                    String              @id @default(cuid())
-  organizationId        String
-  storeId               String
-  registerId            String
-  status                RegisterShiftStatus @default(OPEN)
-  openedAt              DateTime            @default(now())
-  openedById            String
-  closedAt              DateTime?
-  closedById            String?
-  openingCashKgs        Decimal             @default(0) @db.Decimal(12, 2)
-  closingCashCountedKgs Decimal?            @db.Decimal(12, 2)
-  expectedCashKgs       Decimal?            @db.Decimal(12, 2)
-  currencyCode          String?
-  currencyRateKgsPerUnit Decimal?           @db.Decimal(18, 6)
-  notes                 String?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  organizationId         String
+  storeId                String
+  registerId             String
+  status                 RegisterShiftStatus @default(OPEN)
+  openedAt               DateTime            @default(now())
+  openedById             String
+  closedAt               DateTime?
+  closedById             String?
+  openingCashKgs         Decimal             @default(0) @db.Decimal(12, 2)
+  closingCashCountedKgs  Decimal?            @db.Decimal(12, 2)
+  expectedCashKgs        Decimal?            @db.Decimal(12, 2)
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
+  notes                  String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   organization  Organization         @relation(fields: [organizationId], references: [id])
   store         Store                @relation(fields: [storeId], references: [id])
@@ -1357,20 +1513,20 @@ model RegisterShift {
 }
 
 model SalePayment {
-  id              String           @id @default(cuid())
-  organizationId  String
-  storeId         String
-  shiftId         String
-  customerOrderId String
-  saleReturnId    String?
-  method          PosPaymentMethod
-  amountKgs       Decimal          @db.Decimal(12, 2)
-  currencyCode    String?
-  currencyRateKgsPerUnit Decimal?  @db.Decimal(18, 6)
-  providerRef     String?
-  isRefund        Boolean          @default(false)
-  createdAt       DateTime         @default(now())
-  createdById     String?
+  id                     String           @id @default(cuid())
+  organizationId         String
+  storeId                String
+  shiftId                String
+  customerOrderId        String
+  saleReturnId           String?
+  method                 PosPaymentMethod
+  amountKgs              Decimal          @db.Decimal(12, 2)
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?         @db.Decimal(18, 6)
+  providerRef            String?
+  isRefund               Boolean          @default(false)
+  createdAt              DateTime         @default(now())
+  createdById            String?
 
   organization  Organization  @relation(fields: [organizationId], references: [id])
   store         Store         @relation(fields: [storeId], references: [id])
@@ -1385,17 +1541,17 @@ model SalePayment {
 }
 
 model CashDrawerMovement {
-  id             String                 @id @default(cuid())
-  organizationId String
-  storeId        String
-  shiftId        String
-  type           CashDrawerMovementType
-  amountKgs      Decimal                @db.Decimal(12, 2)
-  currencyCode   String?
-  currencyRateKgsPerUnit Decimal?       @db.Decimal(18, 6)
-  reason         String
-  createdAt      DateTime               @default(now())
-  createdById    String?
+  id                     String                 @id @default(cuid())
+  organizationId         String
+  storeId                String
+  shiftId                String
+  type                   CashDrawerMovementType
+  amountKgs              Decimal                @db.Decimal(12, 2)
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?               @db.Decimal(18, 6)
+  reason                 String
+  createdAt              DateTime               @default(now())
+  createdById            String?
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   store        Store         @relation(fields: [storeId], references: [id])
@@ -1407,26 +1563,26 @@ model CashDrawerMovement {
 }
 
 model SaleReturn {
-  id               String          @id @default(cuid())
-  organizationId   String
-  storeId          String
-  registerId       String
-  shiftId          String
-  originalSaleId   String
-  number           String
-  status           PosReturnStatus @default(DRAFT)
-  subtotalKgs      Decimal         @default(0) @db.Decimal(12, 2)
-  totalKgs         Decimal         @default(0) @db.Decimal(12, 2)
-  currencyCode     String?
-  currencyRateKgsPerUnit Decimal?  @db.Decimal(18, 6)
-  notes            String?
-  completedAt      DateTime?
-  canceledAt       DateTime?
-  completedEventId String?         @unique
-  createdById      String
-  completedById    String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                     String          @id @default(cuid())
+  organizationId         String
+  storeId                String
+  registerId             String
+  shiftId                String
+  originalSaleId         String
+  number                 String
+  status                 PosReturnStatus @default(DRAFT)
+  subtotalKgs            Decimal         @default(0) @db.Decimal(12, 2)
+  totalKgs               Decimal         @default(0) @db.Decimal(12, 2)
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?        @db.Decimal(18, 6)
+  notes                  String?
+  completedAt            DateTime?
+  canceledAt             DateTime?
+  completedEventId       String?         @unique
+  createdById            String
+  completedById          String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 
   organization   Organization     @relation(fields: [organizationId], references: [id])
   store          Store            @relation(fields: [storeId], references: [id])
@@ -1468,33 +1624,33 @@ model SaleReturnLine {
 }
 
 model FiscalReceipt {
-  id                String              @id @default(cuid())
-  organizationId    String
-  storeId           String
-  customerOrderId   String
-  status            FiscalReceiptStatus @default(QUEUED)
-  mode              KkmMode             @default(EXPORT_ONLY)
-  providerKey       String?
-  idempotencyKey    String              @unique
-  payloadJson       Json
-  attemptCount      Int                 @default(0)
-  lastError         String?
-  nextAttemptAt     DateTime?
-  providerReceiptId String?
-  currencyCode      String?
-  currencyRateKgsPerUnit Decimal?       @db.Decimal(18, 6)
-  fiscalNumber      String?
-  kkmFactoryNumber  String?
-  kkmRegistrationNumber String?
-  fiscalModeStatus  PosKkmStatus?
-  upfdOrFiscalMemory String?
-  qrPayload         String?
-  qr                String?
-  fiscalizedAt      DateTime?
-  connectorDeviceId String?
-  sentAt            DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  organizationId         String
+  storeId                String
+  customerOrderId        String
+  status                 FiscalReceiptStatus @default(QUEUED)
+  mode                   KkmMode             @default(EXPORT_ONLY)
+  providerKey            String?
+  idempotencyKey         String              @unique
+  payloadJson            Json
+  attemptCount           Int                 @default(0)
+  lastError              String?
+  nextAttemptAt          DateTime?
+  providerReceiptId      String?
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
+  fiscalNumber           String?
+  kkmFactoryNumber       String?
+  kkmRegistrationNumber  String?
+  fiscalModeStatus       PosKkmStatus?
+  upfdOrFiscalMemory     String?
+  qrPayload              String?
+  qr                     String?
+  fiscalizedAt           DateTime?
+  connectorDeviceId      String?
+  sentAt                 DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   organization    Organization        @relation(fields: [organizationId], references: [id])
   store           Store               @relation(fields: [storeId], references: [id])
@@ -1518,9 +1674,9 @@ model KkmConnectorDevice {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  store          Store           @relation(fields: [storeId], references: [id])
-  fiscalReceipts FiscalReceipt[]
+  organization    Organization           @relation(fields: [organizationId], references: [id])
+  store           Store                  @relation(fields: [storeId], references: [id])
+  fiscalReceipts  FiscalReceipt[]
   printerSettings StorePrinterSettings[]
 
   @@index([organizationId, storeId, isActive])
@@ -1544,22 +1700,22 @@ model KkmConnectorPairingCode {
 }
 
 model RefundRequest {
-  id             String              @id @default(cuid())
-  organizationId String
-  storeId        String
-  saleReturnId   String              @unique
-  originalSaleId String
-  status         RefundRequestStatus @default(OPEN)
-  paymentMethod  PosPaymentMethod
-  currencyCode   String?
-  currencyRateKgsPerUnit Decimal?    @db.Decimal(18, 6)
-  reasonCode     String
-  notes          String?
-  createdById    String
-  reviewedById   String?
-  reviewedAt     DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  organizationId         String
+  storeId                String
+  saleReturnId           String              @unique
+  originalSaleId         String
+  status                 RefundRequestStatus @default(OPEN)
+  paymentMethod          PosPaymentMethod
+  currencyCode           String?
+  currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
+  reasonCode             String
+  notes                  String?
+  createdById            String
+  reviewedById           String?
+  reviewedAt             DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   store        Store         @relation(fields: [storeId], references: [id])
@@ -1787,8 +1943,10 @@ model BazaarCatalogImage {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization    @relation(fields: [organizationId], references: [id])
-  catalogs     BazaarCatalog[] @relation("bazaarCatalogLogoImage")
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  catalogs            BazaarCatalog[]      @relation("bazaarCatalogLogoImage")
+  emailMarketingLogos EmailMarketingLogo[] @relation("emailMarketingLogoImage")
+  emailCampaigns      EmailCampaign[]      @relation("emailCampaignLogoImage")
 
   @@index([organizationId, createdAt])
 }
@@ -1853,7 +2011,7 @@ model BazaarApiKey {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   store        Store        @relation(fields: [storeId], references: [id])
-  createdBy    User?       @relation("bazaarApiKeyCreatedBy", fields: [createdById], references: [id])
+  createdBy    User?        @relation("bazaarApiKeyCreatedBy", fields: [createdById], references: [id])
 
   @@index([organizationId, storeId, revokedAt])
   @@index([tokenPrefix])

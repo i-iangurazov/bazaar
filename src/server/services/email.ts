@@ -7,11 +7,14 @@ type EmailPayload = {
   subject: string;
   text: string;
   html: string;
+  from?: string;
+  replyTo?: string | null;
 };
 
 type EmailLocale = Locale;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export const MARKETING_EMAIL_FROM = "no-reply@bazaar.kg";
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
@@ -59,7 +62,7 @@ export const assertEmailConfigured = () => {
 
 const sendWithResend = async (payload: EmailPayload) => {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const from = payload.from ?? process.env.EMAIL_FROM;
   if (!apiKey || !from) {
     throw new Error("emailProviderNotConfigured");
   }
@@ -78,6 +81,7 @@ const sendWithResend = async (payload: EmailPayload) => {
         subject: payload.subject,
         html: payload.html,
         text: payload.text,
+        ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
       }),
     });
 
@@ -112,9 +116,48 @@ const sendEmail = async (payload: EmailPayload) => {
   }
 
   logger.info(
-    { email: payload.to, subject: payload.subject, text: payload.text, html: payload.html, provider: "log" },
+    {
+      email: payload.to,
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
+      from: payload.from ?? process.env.EMAIL_FROM ?? null,
+      replyTo: payload.replyTo ?? null,
+      provider: "log",
+    },
     "email delivery fallback"
   );
+};
+
+export const getMarketingEmailConfiguration = () => {
+  const provider = getEmailProvider();
+  const from = (process.env.EMAIL_FROM ?? "").trim();
+  const hasRequiredFrom = from === MARKETING_EMAIL_FROM;
+  const hasProvider =
+    provider === "log"
+      ? !isProductionRuntime() || allowLogEmailInProduction()
+      : provider === "resend"
+        ? Boolean(process.env.RESEND_API_KEY)
+        : false;
+  return {
+    provider,
+    from,
+    requiredFrom: MARKETING_EMAIL_FROM,
+    hasRequiredFrom,
+    hasProvider,
+    ready: hasRequiredFrom && hasProvider,
+  };
+};
+
+export const sendMarketingEmail = async (payload: Omit<EmailPayload, "from">) => {
+  const config = getMarketingEmailConfiguration();
+  if (!config.ready) {
+    throw new Error("emailMarketingNotConfigured");
+  }
+  await sendEmail({
+    ...payload,
+    from: MARKETING_EMAIL_FROM,
+  });
 };
 
 export const sendVerificationEmail = async (input: {

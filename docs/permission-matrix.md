@@ -4,7 +4,7 @@
 
 - `CASHIER`: POS selling, open shifts, payment capture, receipt flows.
 - `STAFF`: basic authenticated access where enabled; no product/admin mutations.
-- `MANAGER`: inventory, purchase orders, reports, suppliers, store operations, POS supervision.
+- `MANAGER`: inventory, purchase orders, reports, suppliers, store operations, POS supervision, customer database, customer import, and integrations.
 - `ADMIN`: full organization admin, users, product mutations, imports, billing, technical admin pages.
 - `ORG_OWNER`: owner-only diagnostics/profile actions where explicitly checked.
 - `PLATFORM_OWNER`: cross-organization platform area only.
@@ -30,7 +30,11 @@
 | Purchase orders | authenticated read, manager/admin changes |
 | Suppliers | authenticated read, manager/admin changes |
 | Reports | manager/admin |
-| Settings/users/import/attributes/units | admin |
+| Customer database | manager/admin |
+| Customer import | manager/admin |
+| Product import | admin |
+| Settings/users/attributes/units | admin |
+| Email marketing | manager/admin |
 | Diagnostics | org owner |
 | Admin jobs/metrics/support | admin plus feature gate where applicable |
 | Platform | platform owner |
@@ -41,6 +45,6 @@
 Navigation keeps the existing app shell groups, labels, item order, and sidebar CTA. Role work should filter the existing model in place rather than creating a new IA:
 
 - Cashier/staff: POS, sales/order history where allowed, cash/shift flows where allowed, Help/Profile.
-- Manager: the existing operational nav items that match permissions: Dashboard, POS, Products, Inventory, Sales/orders, Purchase orders, Suppliers, Stores, Reports, and Integrations.
+- Manager: the existing operational nav items that match permissions: Dashboard, POS, Products, Inventory, Sales/orders, Customer Database, Purchase orders, Suppliers, Stores, Reports, Integrations, and Customer Import.
 - Admin/owner: the previous full business/admin nav, filtered only for explicit platform/org-owner gates.
 - Platform/support/system routes stay in their previous placement but are hidden and middleware-denied unless the matching permission is present.

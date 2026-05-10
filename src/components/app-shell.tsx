@@ -23,6 +23,7 @@ import {
   OrdersIcon,
   PosIcon,
   ActivityIcon,
+  CustomerDatabaseIcon,
   SalesOrdersIcon,
   PurchaseOrdersIcon,
   SuppliersIcon,
@@ -197,6 +198,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             ],
           },
           {
+            key: "customers",
+            href: "/customers",
+            icon: CustomerDatabaseIcon,
+            requiredPermission: "manageCustomers",
+          },
+          {
             key: "suppliers",
             href: "/suppliers",
             icon: SuppliersIcon,
@@ -224,7 +231,6 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             key: "imports",
             href: "/settings/import",
             icon: UploadIcon,
-            adminOnly: true,
             requiredPermission: "manageImports",
           },
           {

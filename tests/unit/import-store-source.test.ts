@@ -19,4 +19,30 @@ describe("import store selection source", () => {
     expect(schemaSource).toContain("storeId: z.string().min(1)");
     expect(routerSource).toContain("assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId)");
   });
+
+  it("keeps customer import as a mapped CSV/XLSX, store-scoped flow", async () => {
+    const pageSource = await readSource("src/app/(app)/settings/import/page.tsx");
+    const customerRouterSource = await readSource("src/server/trpc/routers/customers.ts");
+    const customerServiceSource = await readSource("src/server/services/customers.ts");
+
+    expect(pageSource).toContain('type ImportType = "products" | "customers"');
+    expect(pageSource).toContain("CustomerImportPanel");
+    expect(pageSource).toContain('accept=".csv,text/csv,.xlsx,.xls"');
+    expect(pageSource).toContain('(["name", "email", "phone", "address"] as CustomerMappingKey[])');
+    expect(pageSource).toContain("storeId: targetStoreId");
+    expect(customerRouterSource).toContain("managerProcedure");
+    expect(customerRouterSource).toContain("previewImport");
+    expect(customerRouterSource).toContain("importRows");
+    expect(customerServiceSource).toContain(
+      "assertUserCanAccessStore(prisma, input.user, input.storeId)",
+    );
+    expect(customerServiceSource).toContain("customerDuplicateInFile");
+    expect(customerServiceSource).toContain("loadCustomerLookup");
+    expect(customerServiceSource).toContain("findMatchingCustomerInLookup");
+    expect(pageSource).toContain("previewStartedAt");
+    expect(pageSource).toContain("customerImport.previewInProgress");
+    expect(pageSource).toContain("customerImport.importInProgress");
+    expect(pageSource).toContain("importableCustomerRows");
+    expect(pageSource).toContain("customerImport.partialImportHint");
+  });
 });

@@ -242,7 +242,7 @@
         "description": "Publish a public store catalog and manage product visibility per store."
       },
       "bazaarApi": {
-        "title": "Bazaar API",
+        "title": "bazaar API",
         "description": "Store-scoped API keys for external websites to get products and post orders."
       },
       "mMarket": {
@@ -291,7 +291,7 @@
       },
       "q5": {
         "question": "Can external websites connect to Bazaar?",
-        "answer": "Yes. Bazaar API supports product reads and order creation with store-scoped keys."
+        "answer": "Yes. bazaar API supports product reads and order creation with store-scoped keys."
       }
     },
     "finalCta": {
@@ -594,6 +594,7 @@
     "inventory": "Inventory",
     "orders": "Orders",
     "salesOrders": "Customers",
+    "customers": "Customer Database",
     "purchaseOrders": "Purchasing",
     "suppliers": "Suppliers",
     "products": "Products",
@@ -664,7 +665,7 @@
       "publishedStore": "Published for store: {store}"
     },
     "bazaarApi": {
-      "title": "Bazaar API",
+      "title": "bazaar API",
       "description": "Store-scoped API keys for external websites to read products and create orders.",
       "productsEndpoint": "GET products",
       "productsEndpointValue": "GET /api/bazaar/v1/products",
@@ -672,6 +673,16 @@
       "ordersEndpointValue": "POST /api/bazaar/v1/orders",
       "manageKeys": "Manage keys",
       "activeKeys": "Active keys: {count}"
+    },
+    "emailMarketing": {
+      "title": "Email Marketing",
+      "description": "Send branded campaigns to store customers with email addresses.",
+      "status": {
+        "ready": "Ready",
+        "notConfigured": "Not configured"
+      },
+      "reachable": "Reachable customers: {count}",
+      "open": "Open"
     },
     "mMarket": {
       "title": "bazaar + MMarket",
@@ -706,6 +717,193 @@
         "ready": "Ready",
         "error": "Error"
       }
+    }
+  },
+  "customers": {
+    "title": "Customer Database",
+    "subtitle": "Store-scoped customers created manually, imported, or captured from orders.",
+    "empty": "This store has no customers yet. Add customers manually, import an existing customer base, or create orders to build the database automatically.",
+    "noStores": "Create or get access to a store before managing customers.",
+    "deleteConfirm": "Delete {name} from this store customer database?",
+    "actions": {
+      "add": "Add Customer",
+      "create": "Create customer",
+      "save": "Save changes"
+    },
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address",
+      "source": "Source",
+      "createdAt": "Created",
+      "actions": "Actions"
+    },
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address"
+    },
+    "filters": {
+      "store": "Store",
+      "storePlaceholder": "Select store",
+      "search": "Search",
+      "searchPlaceholder": "Name, email, phone, or address",
+      "source": "Source",
+      "allSources": "All sources"
+    },
+    "sources": {
+      "manual": "Manual",
+      "import": "Import",
+      "order": "Order",
+      "integration": "Integration"
+    },
+    "modal": {
+      "addTitle": "Add customer",
+      "editTitle": "Edit customer",
+      "subtitle": "Customers are saved only to the selected store."
+    },
+    "validation": {
+      "nameRequired": "Name is required.",
+      "contactRequired": "Enter at least an email or phone."
+    },
+    "messages": {
+      "created": "Customer created.",
+      "updated": "Customer updated.",
+      "deleted": "Customer removed."
+    }
+  },
+  "bazaarApiSettings": {
+    "title": "bazaar API",
+    "subtitle": "Manage store-scoped API keys separately from the public catalogue.",
+    "storeTitle": "Store",
+    "storePlaceholder": "Select store",
+    "storeHint": "API keys and requests are scoped to {store}.",
+    "storeMissing": "No accessible store is available.",
+    "statusTitle": "API status",
+    "status": {
+      "ready": "Ready",
+      "notConfigured": "Not configured",
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "productsEndpoint": "Products endpoint",
+    "ordersEndpoint": "Orders endpoint",
+    "keysTitle": "API keys",
+    "keyNamePlaceholder": "Key name, for example website",
+    "createKey": "Create key",
+    "revoke": "Revoke",
+    "empty": "No API keys for this store yet.",
+    "columns": {
+      "name": "Name",
+      "prefix": "Prefix",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "status": "Status"
+    },
+    "tokenTitle": "New API token",
+    "tokenSubtitle": "Copy this token now. It will not be shown again.",
+    "messages": {
+      "created": "API key created.",
+      "revoked": "API key revoked."
+    }
+  },
+  "emailMarketingSettings": {
+    "title": "Email Marketing",
+    "subtitle": "Compose branded email campaigns for customers in the selected store.",
+    "status": {
+      "ready": "Ready",
+      "notConfigured": "Missing EMAIL_FROM or mail provider configuration.",
+      "requiredFrom": "Campaigns must be sent from {from}."
+    },
+    "audience": {
+      "title": "Audience",
+      "store": "Store",
+      "storePlaceholder": "Select store",
+      "source": "Customer source",
+      "allSources": "All customers with email",
+      "reachable": "Reachable customers with email: {count}"
+    },
+    "composer": {
+      "title": "Composer",
+      "template": "Template",
+      "subject": "Subject",
+      "preheader": "Preheader",
+      "heading": "Main heading",
+      "body": "Body",
+      "ctaLabel": "CTA label",
+      "ctaUrl": "CTA URL",
+      "footer": "Footer text"
+    },
+    "branding": {
+      "title": "Branding",
+      "senderName": "Sender display name",
+      "replyTo": "Reply-to email",
+      "brandColor": "Brand color",
+      "buttonColor": "Button color",
+      "font": "Font family",
+      "fontJost": "Jost",
+      "fontInter": "Inter",
+      "fontSystem": "System",
+      "bannerUrl": "Banner image URL",
+      "logoGallery": "Store logos",
+      "logoGalleryHelp": "Each store keeps one saved email logo. Reuploading replaces that store logo.",
+      "storeLogo": "Store logo",
+      "logoReady": "Logo uploaded",
+      "noLogo": "No logo uploaded",
+      "selectLogo": "Use logo",
+      "selectedLogo": "Selected",
+      "uploadLogo": "Upload logo",
+      "reuploadLogo": "Reupload logo",
+      "uploadingLogo": "Uploading..."
+    },
+    "preview": {
+      "title": "Preview",
+      "empty": "Enter a subject and body to preview the email."
+    },
+    "send": {
+      "openConfirm": "Send campaign",
+      "confirmTitle": "Confirm campaign send",
+      "confirmSubtitle": "Review the selected store, audience, sender, and subject before sending.",
+      "subject": "Subject: {subject}",
+      "audience": "Recipients: {count}",
+      "from": "From: {from}",
+      "confirm": "Send"
+    },
+    "history": {
+      "title": "Campaign history",
+      "subject": "Subject",
+      "status": "Status",
+      "recipients": "Recipients",
+      "createdAt": "Created",
+      "empty": "No campaigns yet."
+    },
+    "templates": {
+      "announcement": "Announcement",
+      "promotion": "Promotion",
+      "new_arrivals": "New arrivals",
+      "sale": "Sale",
+      "custom": "Custom"
+    },
+    "sources": {
+      "manual": "Manual",
+      "import": "Import",
+      "order": "Order",
+      "integration": "Integration"
+    },
+    "campaignStatus": {
+      "draft": "Draft",
+      "sending": "Sending",
+      "sent": "Sent",
+      "failed": "Failed"
+    },
+    "messages": {
+      "sent": "Campaign sent to {count} customers.",
+      "queued": "Campaign queued for {count} customers.",
+      "partial": "Campaign sent to {sent}; {failed} failed.",
+      "logoSaved": "Logo saved for {store}.",
+      "logoUploadFailed": "Logo upload failed."
     }
   },
   "bazaarCatalogSettings": {
@@ -797,7 +995,7 @@
     "publishLabel": "Publish label",
     "publishHint": "Publish hint",
     "api": {
-      "title": "Bazaar API",
+      "title": "bazaar API",
       "description": "Store-scoped keys for external websites to read products and create orders.",
       "keyName": "Key name",
       "keyNamePlaceholder": "For example, website",
@@ -2870,7 +3068,7 @@
     "source": {
       "manual": "Manual",
       "catalog": "Catalogue",
-      "api": "Bazaar API"
+      "api": "bazaar API"
     },
     "status": {
       "draft": "Draft",
@@ -3098,6 +3296,21 @@
     "serviceUnavailable": "Service unavailable",
     "tryAgain": "Try again.",
     "invalidInput": "Invalid input.",
+    "customerNameRequired": "Customer name is required.",
+    "customerContactRequired": "Enter at least a customer email or phone.",
+    "customerEmailInvalid": "Customer email is invalid.",
+    "customerDuplicate": "A customer with this email or phone already exists in this store.",
+    "customerNotFound": "Customer not found.",
+    "customerDuplicateInFile": "Duplicate customer row in the uploaded file.",
+    "importTooManyRows": "This import has too many rows for one request.",
+    "emailCampaignSubjectRequired": "Campaign subject is required.",
+    "emailCampaignBodyRequired": "Campaign body is required.",
+    "emailCampaignCtaUrlInvalid": "CTA URL must be a valid URL.",
+    "emailCampaignReplyToInvalid": "Reply-to email is invalid.",
+    "emailMarketingNotConfigured": "Email marketing is not configured.",
+    "emailMarketingPublicUrlRequired": "Set NEXTAUTH_URL or NEXT_PUBLIC_APP_URL to a public app URL before sending campaigns.",
+    "emailMarketingUnsubscribeSecretMissing": "Set EMAIL_UNSUBSCRIBE_SECRET, NEXTAUTH_SECRET, or JOBS_SECRET before sending campaigns.",
+    "emailCampaignAudienceEmpty": "No customers with email match this audience.",
     "invalidCurrencyRate": "Enter a valid KGS exchange rate for the selected currency.",
     "apiUnauthorized": "API token is invalid or revoked.",
     "apiKeyNotFound": "API key was not found.",
@@ -3584,11 +3797,71 @@
       "onec": "1C CSV",
       "csv": "CSV"
     },
+    "importType": {
+      "title": "Import type",
+      "products": "Products",
+      "customers": "Customers",
+      "hint": "Choose whether this file creates products or customer records.",
+      "managerHint": "Managers can import customers for stores they can access."
+    },
     "templateDownload": "Download 1C template",
     "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
     "templateExample": "SKU-001,Product,pcs,\"Women, Shoes\",Black,Description,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "customerImport": {
+      "uploadTitle": "Customer file",
+      "uploadHint": "Upload a CSV or Excel file with customer contacts.",
+      "mappingTitle": "Customer field mapping",
+      "mappingRequired": "Map Name and at least Email or Phone.",
+      "previewTitle": "Customer preview",
+      "previewEmpty": "Upload a file and map fields to preview customer import.",
+      "apply": "Import customers",
+      "hasErrors": "Invalid customer rows will be skipped.",
+      "success": "Customer import completed for {count} valid rows.",
+      "partialImportHint": "{valid} valid rows can be imported. {skipped} invalid rows will be skipped.",
+      "parsingFile": "Reading {file}...",
+      "previewInProgress": "Previewing {count} customer rows. Elapsed: {elapsed} sec.",
+      "previewInProgressHint": "Checking required fields, duplicates, and existing customers in the selected store.",
+      "importInProgress": "Importing {count} customer rows. Elapsed: {elapsed} sec.",
+      "importInProgressHint": "Writing customers to the selected store. Keep this page open until it finishes.",
+      "templateHeaders": "name,email,phone,address",
+      "templateExample": "Jane Customer,jane@example.com,+996555123456,\"Bishkek, Chuy 1\"",
+      "fields": {
+        "name": "Name",
+        "email": "Email",
+        "phone": "Phone",
+        "address": "Address",
+        "action": "Action",
+        "errors": "Errors"
+      },
+      "summary": {
+        "created": "New",
+        "updated": "Updates",
+        "skipped": "Skipped",
+        "errors": "Errors"
+      },
+      "actions": {
+        "create": "Create",
+        "update": "Update",
+        "skip": "Skip",
+        "created": "Create",
+        "updated": "Update",
+        "skipped": "Skip"
+      },
+      "errors": {
+        "nameRequired": "Name is required.",
+        "contactRequired": "Email or phone is required.",
+        "invalidEmail": "Email is invalid.",
+        "duplicateInFile": "Duplicate in file.",
+        "customerNameRequired": "Name is required.",
+        "customerContactRequired": "Email or phone is required.",
+        "customerEmailInvalid": "Email is invalid.",
+        "customerDuplicateInFile": "Duplicate in file."
+      }
+    },
     "mappingTitle": "Mapping",
     "mappingPlaceholder": "Enter mapping",
+    "mappingSelectPlaceholder": "Select column",
+    "mappingIgnore": "Ignore",
     "mappingEmpty": "No mapping.",
     "mappingRequired": "Mapping is required.",
     "required": "Imports is required.",

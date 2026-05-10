@@ -97,6 +97,7 @@ type ValidationError = {
 };
 
 type ImportSource = "cloudshop" | "onec" | "csv";
+type ImportType = "products" | "customers";
 type ImportMode = "full" | "update_selected";
 type ImportUpdateField =
   | "name"
@@ -126,6 +127,36 @@ type ImportRunSummary = {
     downloaded?: number;
     fallback?: number;
     missing?: number;
+  };
+};
+
+type CustomerMappingKey = "name" | "email" | "phone" | "address";
+type CustomerMappingState = Record<CustomerMappingKey, string>;
+type CustomerImportRunSummary = {
+  rows?: number;
+  created?: number;
+  updated?: number;
+  skipped?: number;
+  targetStoreName?: string;
+  errors?: number;
+};
+type CustomerImportPreviewData = {
+  rows: Array<{
+    rowNumber: number;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    action: "created" | "updated" | "skipped";
+    errors: string[];
+    warnings: string[];
+  }>;
+  summary: {
+    total: number;
+    creatable: number;
+    updatable: number;
+    skipped: number;
+    errors: number;
   };
 };
 
@@ -239,10 +270,7 @@ const parseCategoryHierarchy = (value: string) =>
     .filter((item) => item.length > 0)
     .filter((item, index, list) => list.indexOf(item) === index);
 
-const applyColorToVariants = (
-  variants: NonNullable<ImportRow["variants"]>,
-  color: string,
-) => {
+const applyColorToVariants = (variants: NonNullable<ImportRow["variants"]>, color: string) => {
   if (!color || !variants.length) {
     return variants;
   }
@@ -525,6 +553,13 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
   barcodes: detectColumn(headers, ["barcode", "barcodes", "штрихкод", "штрихкоды"]),
 });
 
+const buildDefaultCustomerMapping = (headers: string[]): CustomerMappingState => ({
+  name: detectColumn(headers, ["name", "customer", "client", "клиент", "имя", "фио", "аты"]),
+  email: detectColumn(headers, ["email", "e-mail", "почта", "элпочта"]),
+  phone: detectColumn(headers, ["phone", "телефон", "номер", "тел", "байланыш"]),
+  address: detectColumn(headers, ["address", "адрес", "дарек"]),
+});
+
 const DRY_RUN_PREVIEW_ROW_LIMIT = 100;
 const MAX_IMPORT_TRANSPORT_ROWS = 500;
 const MAX_IMPORT_TRANSPORT_IMAGES = 200;
@@ -683,6 +718,463 @@ const resetImportFormState = (setters: {
   setters.setSkippedRows([]);
 };
 
+const CustomerImportPanel = ({
+  targetStoreId,
+  selectedStoreName,
+}: {
+  targetStoreId: string;
+  selectedStoreName?: string | null;
+}) => {
+  const t = useTranslations("imports");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
+  const locale = useLocale();
+  const { toast } = useToast();
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [rawRows, setRawRows] = useState<RawRow[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<CustomerMappingState>({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+  });
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<CustomerImportPreviewData | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [lastSummary, setLastSummary] = useState<CustomerImportRunSummary | null>(null);
+  const [isParsingFile, setIsParsingFile] = useState(false);
+  const [previewStartedAt, setPreviewStartedAt] = useState<number | null>(null);
+  const [previewElapsedSeconds, setPreviewElapsedSeconds] = useState(0);
+  const [importStartedAt, setImportStartedAt] = useState<number | null>(null);
+  const [importElapsedSeconds, setImportElapsedSeconds] = useState(0);
+  const previewMutation = trpc.customers.previewImport.useMutation();
+  const importMutation = trpc.customers.importRows.useMutation();
+  const previewMutationRef = useRef(previewMutation.mutateAsync);
+  const previewRequestRef = useRef(0);
+
+  useEffect(() => {
+    previewMutationRef.current = previewMutation.mutateAsync;
+  }, [previewMutation.mutateAsync]);
+
+  const mappedRows = useMemo(
+    () =>
+      rawRows.map((row, index) => ({
+        rowNumber: index + 2,
+        name: mapping.name ? normalizeValue(row[mapping.name]) : "",
+        email: mapping.email ? normalizeValue(row[mapping.email]) : "",
+        phone: mapping.phone ? normalizeValue(row[mapping.phone]) : "",
+        address: mapping.address ? normalizeValue(row[mapping.address]) : "",
+      })),
+    [mapping.address, mapping.email, mapping.name, mapping.phone, rawRows],
+  );
+
+  const missingMapping = !mapping.name || (!mapping.email && !mapping.phone);
+  const canPreview = Boolean(targetStoreId && mappedRows.length && !missingMapping);
+  const isPreviewing =
+    canPreview &&
+    (previewStartedAt !== null || previewMutation.isLoading || (!preview && !previewError));
+  const isImporting = importStartedAt !== null || importMutation.isLoading;
+  const importableCustomerRows = preview
+    ? preview.summary.creatable + preview.summary.updatable
+    : 0;
+
+  useEffect(() => {
+    const runId = previewRequestRef.current + 1;
+    previewRequestRef.current = runId;
+    setPreview(null);
+    setPreviewError(null);
+    setPreviewStartedAt(null);
+    if (!canPreview) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setPreviewElapsedSeconds(0);
+      setPreviewStartedAt(Date.now());
+      previewMutationRef
+        .current({ storeId: targetStoreId, rows: mappedRows })
+        .then((result) => {
+          if (previewRequestRef.current === runId) {
+            setPreview(result);
+          }
+        })
+        .catch((error) => {
+          if (previewRequestRef.current === runId) {
+            setPreviewError(translateError(tErrors, error));
+          }
+        })
+        .finally(() => {
+          if (previewRequestRef.current === runId) {
+            setPreviewStartedAt(null);
+          }
+        });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [canPreview, mappedRows, targetStoreId, tErrors]);
+
+  useEffect(() => {
+    if (!previewStartedAt) {
+      setPreviewElapsedSeconds(0);
+      return;
+    }
+    const updateElapsed = () =>
+      setPreviewElapsedSeconds(Math.max(0, Math.floor((Date.now() - previewStartedAt) / 1000)));
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [previewStartedAt]);
+
+  useEffect(() => {
+    if (!importStartedAt) {
+      setImportElapsedSeconds(0);
+      return;
+    }
+    const updateElapsed = () =>
+      setImportElapsedSeconds(Math.max(0, Math.floor((Date.now() - importStartedAt) / 1000)));
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [importStartedAt]);
+
+  const handleFile = async (file: File) => {
+    setIsParsingFile(true);
+    setFileError(null);
+    setFileName(file.name);
+    setRawRows([]);
+    setHeaders([]);
+    setMapping({ name: "", email: "", phone: "", address: "" });
+    setPreview(null);
+    setPreviewError(null);
+    setLastSummary(null);
+
+    try {
+      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        const xlsx = await loadXlsx();
+        const buffer = await file.arrayBuffer();
+        const workbook = xlsx.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const parsed = parseSpreadsheetRows(sheet, xlsx);
+        setRawRows(parsed.rows);
+        setHeaders(parsed.headers);
+        setMapping(buildDefaultCustomerMapping(parsed.headers));
+        setIsParsingFile(false);
+        return;
+      }
+
+      const papa = await loadPapa();
+      papa.parse<RawRow>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results: { data: RawRow[] }) => {
+          const nextHeaders = Object.keys(results.data[0] ?? {});
+          setRawRows(results.data);
+          setHeaders(nextHeaders);
+          setMapping(buildDefaultCustomerMapping(nextHeaders));
+          setIsParsingFile(false);
+        },
+        error: () => {
+          setFileError(t("fileParseError"));
+          setIsParsingFile(false);
+        },
+      });
+    } catch {
+      setFileError(t("fileParseError"));
+      setIsParsingFile(false);
+    }
+  };
+
+  const handleDownloadErrors = () => {
+    const rows = preview?.rows.filter((row) => row.errors.length) ?? [];
+    if (!rows.length) {
+      return;
+    }
+    const lines = [
+      [t("errorCsvRowHeader"), t("errorCsvMessageHeader")].map(escapeCsv).join(","),
+      ...rows.map((row) =>
+        [String(row.rowNumber), row.errors.join(" | ")].map(escapeCsv).join(","),
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `customer-import-errors-${locale}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async () => {
+    if (!targetStoreId) {
+      toast({ variant: "error", description: tErrors("storeRequired") });
+      return;
+    }
+    if (!mappedRows.length || missingMapping) {
+      toast({ variant: "error", description: tErrors("invalidInput") });
+      return;
+    }
+    if (!preview || importableCustomerRows <= 0) {
+      toast({ variant: "error", description: t("importEmpty") });
+      return;
+    }
+    setImportElapsedSeconds(0);
+    setImportStartedAt(Date.now());
+    try {
+      const result = await importMutation.mutateAsync({
+        storeId: targetStoreId,
+        rows: mappedRows,
+        source: fileName?.endsWith(".xlsx") || fileName?.endsWith(".xls") ? "xlsx" : "csv",
+      });
+      setLastSummary(result.summary as CustomerImportRunSummary);
+      const importedCount = (result.summary.created ?? 0) + (result.summary.updated ?? 0);
+      toast({
+        variant: "success",
+        description: t("customerImport.success", { count: importedCount }),
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setImportStartedAt(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("customerImport.uploadTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            type="file"
+            accept=".csv,text/csv,.xlsx,.xls"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void handleFile(file);
+              }
+            }}
+          />
+          {fileName ? (
+            <Badge variant="muted">{fileName}</Badge>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <EmptyIcon className="h-4 w-4" aria-hidden />
+              {t("customerImport.uploadHint")}
+            </div>
+          )}
+          {isParsingFile ? (
+            <div className="flex items-center gap-2 border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {t("customerImport.parsingFile", { file: fileName ?? "" })}
+            </div>
+          ) : null}
+          {fileError ? <p className="text-sm text-danger">{fileError}</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("customerImport.mappingTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {headers.length ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {(["name", "email", "phone", "address"] as CustomerMappingKey[]).map((field) => (
+                <div key={field} className="space-y-1.5">
+                  <p className="text-sm font-medium">{t(`customerImport.fields.${field}`)}</p>
+                  <Select
+                    value={mapping[field] || "__none"}
+                    onValueChange={(value) =>
+                      setMapping((current) => ({
+                        ...current,
+                        [field]: value === "__none" ? "" : value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("mappingSelectPlaceholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">{t("mappingIgnore")}</SelectItem>
+                      {headers.map((header) => (
+                        <SelectItem key={header} value={header}>
+                          {header}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("mappingEmpty")}</p>
+          )}
+          {missingMapping && headers.length ? (
+            <p className="text-sm text-danger">{t("customerImport.mappingRequired")}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("customerImport.previewTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isPreviewing ? (
+            <div className="flex items-start gap-3 border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">
+                  {t("customerImport.previewInProgress", {
+                    count: mappedRows.length,
+                    elapsed: previewElapsedSeconds,
+                  })}
+                </p>
+                <p>{t("customerImport.previewInProgressHint")}</p>
+              </div>
+            </div>
+          ) : null}
+          {previewError ? <p className="text-sm text-danger">{previewError}</p> : null}
+          {preview ? (
+            <>
+              {preview.summary.errors > 0 ? (
+                <div className="border border-warning/30 bg-warning/10 p-3 text-sm text-muted-foreground">
+                  {t("customerImport.partialImportHint", {
+                    valid: importableCustomerRows,
+                    skipped: preview.summary.skipped,
+                  })}
+                </div>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+                <div className="border border-border p-3">
+                  <p className="text-muted-foreground">{t("customerImport.summary.created")}</p>
+                  <p className="text-lg font-semibold">{preview.summary.creatable}</p>
+                </div>
+                <div className="border border-border p-3">
+                  <p className="text-muted-foreground">{t("customerImport.summary.updated")}</p>
+                  <p className="text-lg font-semibold">{preview.summary.updatable}</p>
+                </div>
+                <div className="border border-border p-3">
+                  <p className="text-muted-foreground">{t("customerImport.summary.skipped")}</p>
+                  <p className="text-lg font-semibold">{preview.summary.skipped}</p>
+                </div>
+                <div className="border border-border p-3">
+                  <p className="text-muted-foreground">{t("customerImport.summary.errors")}</p>
+                  <p className="text-lg font-semibold">{preview.summary.errors}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-none border border-border">
+                <Table className="min-w-[760px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("errorCsvRowHeader")}</TableHead>
+                      <TableHead>{t("customerImport.fields.name")}</TableHead>
+                      <TableHead>{t("customerImport.fields.email")}</TableHead>
+                      <TableHead>{t("customerImport.fields.phone")}</TableHead>
+                      <TableHead>{t("customerImport.fields.address")}</TableHead>
+                      <TableHead>{t("customerImport.fields.action")}</TableHead>
+                      <TableHead>{t("customerImport.fields.errors")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {preview.rows.slice(0, 50).map((row) => (
+                      <TableRow key={row.rowNumber}>
+                        <TableCell>{row.rowNumber}</TableCell>
+                        <TableCell>{row.name || "-"}</TableCell>
+                        <TableCell>{row.email ?? "-"}</TableCell>
+                        <TableCell>{row.phone ?? "-"}</TableCell>
+                        <TableCell>{row.address ?? "-"}</TableCell>
+                        <TableCell>{t(`customerImport.actions.${row.action}`)}</TableCell>
+                        <TableCell className={row.errors.length ? "text-danger" : undefined}>
+                          {row.errors.length
+                            ? row.errors
+                                .map((error) => t(`customerImport.errors.${error}`))
+                                .join(", ")
+                            : "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {preview.rows.some((row) => row.errors.length) ? (
+                <Button type="button" variant="secondary" onClick={handleDownloadErrors}>
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                  {t("downloadErrors")}
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("customerImport.previewEmpty")}</p>
+          )}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              onClick={() => void handleImport()}
+              disabled={
+                !targetStoreId ||
+                !mappedRows.length ||
+                missingMapping ||
+                isParsingFile ||
+                isImporting ||
+                isPreviewing ||
+                Boolean(previewError) ||
+                !preview ||
+                importableCustomerRows <= 0
+              }
+            >
+              {isImporting ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <UploadIcon className="h-4 w-4" aria-hidden />
+              )}
+              {isImporting ? tCommon("loading") : t("customerImport.apply")}
+            </Button>
+          </div>
+          {isImporting ? (
+            <div className="flex items-start gap-3 border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">
+                  {t("customerImport.importInProgress", {
+                    count: mappedRows.length,
+                    elapsed: importElapsedSeconds,
+                  })}
+                </p>
+                <p>{t("customerImport.importInProgressHint")}</p>
+              </div>
+            </div>
+          ) : null}
+          {lastSummary ? (
+            <div className="rounded-none border border-success/40 bg-success/10 p-3 text-sm">
+              <p className="font-medium">{t("importResultTitle")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("targetStoreApplied", {
+                  store: lastSummary.targetStoreName ?? selectedStoreName ?? "",
+                })}
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div className="border border-success/40 bg-card p-2">
+                  {t("historyColumns.created")}: {lastSummary.created ?? 0}
+                </div>
+                <div className="border border-success/40 bg-card p-2">
+                  {t("historyColumns.updated")}: {lastSummary.updated ?? 0}
+                </div>
+                <div className="border border-success/40 bg-card p-2">
+                  {t("historyColumns.skipped")}: {lastSummary.skipped ?? 0}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 const ImportPage = () => {
   const t = useTranslations("imports");
   const tCommon = useTranslations("common");
@@ -690,8 +1182,10 @@ const ImportPage = () => {
   const locale = useLocale();
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const isForbidden = status === "authenticated" && !isAdmin;
+  const canUseImports = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const isForbidden = status === "authenticated" && !canUseImports;
   const { toast } = useToast();
+  const [importType, setImportType] = useState<ImportType>("products");
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<RawRow[]>([]);
@@ -733,8 +1227,10 @@ const ImportPage = () => {
   const dryRunRequestVersionRef = useRef(0);
 
   const batchesQuery = trpc.imports.list.useQuery(undefined, { enabled: isAdmin });
-  const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: isAdmin });
-  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: isAdmin });
+  const unitsQuery = trpc.units.list.useQuery(undefined, {
+    enabled: isAdmin && importType === "products",
+  });
+  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: Boolean(canUseImports) });
   const rollbackDetailsQuery = trpc.imports.get.useQuery(
     { batchId: rollbackBatchId ?? "" },
     { enabled: Boolean(rollbackBatchId) },
@@ -752,6 +1248,12 @@ const ImportPage = () => {
   useEffect(() => {
     importCsvRef.current = importMutation.mutateAsync;
   }, [importMutation.mutateAsync]);
+
+  useEffect(() => {
+    if (status === "authenticated" && !isAdmin) {
+      setImportType("customers");
+    }
+  }, [isAdmin, status]);
 
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const selectedTargetStore = stores.find((store) => store.id === targetStoreId) ?? null;
@@ -779,7 +1281,7 @@ const ImportPage = () => {
     },
   });
 
-  const batches = batchesQuery.data ?? [];
+  const batches = (batchesQuery.data ?? []).filter((batch) => batch.type === "products");
   const rollbackBatch = batches.find((batch) => batch.id === rollbackBatchId) ?? null;
   const resolveEntityLabel = (entityType: string) => {
     switch (entityType) {
@@ -963,8 +1465,7 @@ const ImportPage = () => {
         shouldApply("category") && mapping.category
           ? parseCategoryHierarchy(normalizeValue(row[mapping.category]))
           : [];
-      const color =
-        shouldApply("color") && mapping.color ? normalizeValue(row[mapping.color]) : "";
+      const color = shouldApply("color") && mapping.color ? normalizeValue(row[mapping.color]) : "";
       const imageValue =
         shouldApply("photoUrl") && mapping.photoUrl ? normalizeValue(row[mapping.photoUrl]) : "";
       const imageUrls = imageValue ? parseImageLinks(imageValue) : [];
@@ -1269,6 +1770,21 @@ const ImportPage = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadCustomerTemplate = () => {
+    const blob = new Blob(
+      [`${t("customerImport.templateHeaders")}\n${t("customerImport.templateExample")}`],
+      {
+        type: "text/csv;charset=utf-8",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `customers-template-${locale}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleToggleSkipRow = (rowNumber: number) => {
     setSkippedRows((prev) =>
       prev.includes(rowNumber)
@@ -1543,11 +2059,99 @@ const ImportPage = () => {
   }, [importElapsedSeconds, t]);
   const isImporting = importStartedAt !== null || importMutation.isLoading;
 
+  const importTypeCard = (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>{t("importType.title")}</CardTitle>
+      </CardHeader>
+      <CardContent className="max-w-sm space-y-2">
+        <Select
+          value={importType}
+          onValueChange={(value) => setImportType(value as ImportType)}
+          disabled={!isAdmin}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {isAdmin ? <SelectItem value="products">{t("importType.products")}</SelectItem> : null}
+            <SelectItem value="customers">{t("importType.customers")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {isAdmin ? t("importType.hint") : t("importType.managerHint")}
+        </p>
+      </CardContent>
+    </Card>
+  );
+
+  const targetStoreCard = (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>{t("targetStoreTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="max-w-sm space-y-2">
+          <Select
+            value={targetStoreId}
+            onValueChange={setTargetStoreId}
+            disabled={storesQuery.isLoading || !stores.length}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t("targetStorePlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {stores.map((store) => (
+                <SelectItem key={store.id} value={store.id}>
+                  {store.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {storesQuery.isLoading
+              ? tCommon("loading")
+              : selectedTargetStore
+                ? t("targetStoreHint")
+                : tErrors("storeRequired")}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+      </div>
+    );
+  }
+
+  if (importType === "customers") {
+    return (
+      <div>
+        <PageHeader
+          title={t("title")}
+          subtitle={t("subtitle")}
+          action={
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={handleDownloadCustomerTemplate}
+            >
+              <DownloadIcon className="h-4 w-4" aria-hidden />
+              {t("templateDownload")}
+            </Button>
+          }
+        />
+        {importTypeCard}
+        {targetStoreCard}
+        <CustomerImportPanel
+          targetStoreId={targetStoreId}
+          selectedStoreName={selectedTargetStore?.name}
+        />
       </div>
     );
   }
@@ -1565,38 +2169,8 @@ const ImportPage = () => {
         }
       />
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>{t("targetStoreTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="max-w-sm space-y-2">
-            <Select
-              value={targetStoreId}
-              onValueChange={setTargetStoreId}
-              disabled={storesQuery.isLoading || !stores.length}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("targetStorePlaceholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                {stores.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {storesQuery.isLoading
-                ? tCommon("loading")
-                : selectedTargetStore
-                  ? t("targetStoreHint")
-                  : tErrors("storeRequired")}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {importTypeCard}
+      {targetStoreCard}
 
       <Card className="mb-6">
         <CardHeader>

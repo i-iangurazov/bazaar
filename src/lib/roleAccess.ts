@@ -18,6 +18,7 @@ export type AppPermission =
   | "viewSuppliers"
   | "viewStores"
   | "viewReports"
+  | "manageCustomers"
   | "manageIntegrations"
   | "manageImports"
   | "manageSettings"
@@ -48,6 +49,7 @@ const rolePermissions: Record<AppRole, AppPermission[]> = {
     "viewSuppliers",
     "viewStores",
     "viewReports",
+    "manageCustomers",
     "manageIntegrations",
     "manageImports",
     "manageSettings",
@@ -70,7 +72,9 @@ const rolePermissions: Record<AppRole, AppPermission[]> = {
     "viewSuppliers",
     "viewStores",
     "viewReports",
+    "manageCustomers",
     "manageIntegrations",
+    "manageImports",
     "viewHelp",
     "viewProfile",
   ],
@@ -124,7 +128,7 @@ const routeAccessRules: Array<{ prefix: string; permission: AppPermission }> = [
   { prefix: "/products", permission: "viewProducts" },
   { prefix: "/sales/orders", permission: "viewSales" },
   { prefix: "/orders", permission: "viewSales" },
-  { prefix: "/customers", permission: "viewSales" },
+  { prefix: "/customers", permission: "manageCustomers" },
   { prefix: "/pos", permission: "usePos" },
   { prefix: "/cash", permission: "viewCash" },
   { prefix: "/finance", permission: "viewCash" },

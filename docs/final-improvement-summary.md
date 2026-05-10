@@ -1,12 +1,63 @@
 # Final Improvement Summary
 
+## Customer Database, Customer Import, Email Marketing, And Integration Scope - 2026-05-08
+
+### Changed
+
+- Added store-scoped customer database infrastructure with `Customer`, `EmailCampaign`, and `EmailCampaignRecipient` models plus non-destructive migrations.
+- Added `/customers` under Core navigation for admin/manager roles only, with store selector, search, source filter, server pagination, add/edit modal, and soft delete.
+- Changed `/customers/new` quick action to redirect into the real customer database add modal.
+- Added a `customers` tRPC router and customer service for validation, normalization, same-store dedupe, import preview/apply, list/search, and order-based upsert.
+- Extended `/settings/import` with an import type selector. Product import behavior remains admin-only; customer import is admin/manager-only and supports CSV/XLS/XLSX mapping for Name, Email, Phone, and Address.
+- Auto-upserted customers from manual sales orders, POS draft sales, public catalogue checkout, and bazaar API orders, always scoped to the order store.
+- Added Email Marketing as an admin/manager integration with store-scoped audience counts, composer, templates, branding controls, preview, campaign history, and persisted recipient statuses.
+- Added store-scoped Email Marketing logo records: one saved logo per store, reupload replaces that store logo, and campaigns can select one saved store logo from the gallery.
+- Added signed Email Marketing unsubscribe links and `Customer.emailMarketingUnsubscribedAt`; future campaign audiences exclude unsubscribed customers.
+- Moved Email Marketing delivery to the existing jobs framework. Sending now queues a campaign and the `email-campaign-send` job drains queued campaigns with per-recipient sent/failed/skipped status.
+- Hardened Email Marketing assets so uploaded logos and unsubscribe links require a public app URL (`NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`, or `APP_URL`) before sending.
+- Enforced campaign sender as `EMAIL_FROM=no-reply@bazaar.kg`; arbitrary From addresses are not accepted.
+- Split bazaar API into its own integration router/page at `/operations/integrations/bazaar-api`; Bazaar Catalogue remains separate at `/operations/integrations/bazaar-catalog`.
+- Strengthened Bazaar Catalogue selected-store access checks and bazaar API order product lookup so products must be active in the token store.
+- Fixed Image Studio history responsiveness with a horizontal table container.
+- Added product thumbnails/fallbacks to customer order item rows.
+- Added English, Russian, and Kyrgyz translations for all new UI and error messages.
+
+### Tests Added Or Updated
+
+- Added `tests/integration/customers.test.ts` for customer RBAC/store scope, customer import same-store merge/cross-store isolation, order auto-create, API order customer creation, email audience filtering, and fixed sender send behavior.
+- Added source/unit regression tests for customer import wiring, integration separation, Image Studio responsive history, customer order item images, and Email Marketing logo fallback/URL handling.
+- Added tests for queued Email Marketing delivery and signed unsubscribe behavior.
+- Updated role, command palette, and AppShell source tests for the new customer permission/nav behavior.
+
+### Validation
+
+- `git diff --check` passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with no warnings/errors.
+- `pnpm i18n:check` passed.
+- `CI=1 pnpm test` passed with local PostgreSQL enabled: 112 files passed, 503 tests passed.
+- `rm -rf .next` passed.
+- `pnpm build` passed after a clean `.next` rebuild.
+- `pnpm prisma migrate dev` is blocked by Prisma in this non-interactive shell; `pnpm prisma migrate deploy` applied the existing unsubscribe migration successfully.
+- `pnpm prisma migrate status` passed after applying migrations: 62 migrations found and the database schema is up to date.
+- `pnpm prisma generate` passed.
+- Authenticated HTTP smoke checks passed for `/customers`, `/settings/import`, `/operations/integrations`, and `/operations/integrations/email-marketing` on the local dev server.
+
+### Remaining Risks
+
+- M-Market and Bakai Store still have organization-level included-product selection tables. Branch/store mappings are explicit, but a full per-store inclusion migration is deferred because it changes historical export semantics.
+- Email Marketing now queues through the in-process jobs framework. Very high-volume production sends should still move to a dedicated external worker/queue.
+- The unsubscribe flow is one-click opt-out only, not a full topic-based preference center.
+- Image Studio standalone jobs remain organization-scoped; adding `storeId` to image jobs is deferred.
+- Playwright screenshot QA was not run because Playwright is not installed in this repo. Authenticated HTTP route smoke checks were run instead.
+
 ## Multi-Store Isolation And Store-Scoped Access - 2026-05-06
 
 ### Changed
 
 - Added explicit store access and store product availability tables: `UserStoreAccess` and `StoreProduct`.
 - Added `src/server/services/storeAccess.ts` for central store-access checks, accessible-store lists, default-store resolution, and product-to-store assignment.
-- Changed operational product list/search/export, Bazaar API products, public catalog products, POS lookup, inventory actions, and store pricing so they respect selected store availability instead of showing every organization product.
+- Changed operational product list/search/export, bazaar API products, public catalog products, POS lookup, inventory actions, and store pricing so they respect selected store availability instead of showing every organization product.
 - Product creation now asks for the target store explicitly and assigns the new product only to that store; imports still use the selected store target.
 - New stores no longer copy inventory by default; clone/copy behavior remains explicit.
 - User create/edit now supports assigning non-admin users to one or more stores.
@@ -60,7 +111,7 @@
 - Tuned the shared Switch component so the off state remains visibly switch-like and the on state is less aggressive.
 - Kept the public catalog and integration page UI aligned with the sharp/no-radius direction.
 - Fixed public catalog image presentation so product cards are square and transparent PNG padding is only applied when transparency actually exists.
-- Expanded Bazaar API product payloads for external integrations while keeping private accounting/cost fields out of the public API response.
+- Expanded bazaar API product payloads for external integrations while keeping private accounting/cost fields out of the public API response.
 
 ### Validation
 
@@ -77,7 +128,7 @@
 
 ### Changed
 
-- Checked the integration surfaces for Bazaar Catalog, Bazaar API, Bakai Store, M-Market, and Product Image Studio.
+- Checked the integration surfaces for Bazaar Catalog, bazaar API, Bakai Store, M-Market, and Product Image Studio.
 - Removed page-level rounded styling from `/operations/integrations`, individual integration pages, Bazaar Catalog settings, and the public catalog shell/cart/product UI so those routes follow the sharp UI direction instead of bypassing shared radius tokens.
 - Changed public catalog product media to render as square `1:1` images.
 - Fixed catalog image processing so only images with actual transparent pixels receive padded framing; opaque JPEG/WebP/PNG product photos are square-cropped without added whitespace.
@@ -87,9 +138,9 @@
 
 ### Tests Added Or Updated
 
-- Added `tests/integration/bazaar-api.test.ts` for rich Bazaar API product payloads and API order creation.
+- Added `tests/integration/bazaar-api.test.ts` for rich bazaar API product payloads and API order creation.
 - Updated catalog image transform tests for square output, transparent-only framing, and opaque photo square output.
-- Focused integration test set passed for Bazaar API, Bazaar Catalog, Bakai Store, M-Market, Product Image Studio, and related payload/unit tests.
+- Focused integration test set passed for bazaar API, Bazaar Catalog, Bakai Store, M-Market, Product Image Studio, and related payload/unit tests.
 
 ### Validation
 
@@ -105,7 +156,7 @@
 ### Remaining Risks
 
 - I did not run a browser screenshot pass for the public catalog; validation is code/test/build based.
-- The expanded Bazaar API product payload intentionally omits private cost/accounting fields.
+- The expanded bazaar API product payload intentionally omits private cost/accounting fields.
 
 ## Real Retail Workflow QA Bug-Fix Pass - 2026-05-05
 

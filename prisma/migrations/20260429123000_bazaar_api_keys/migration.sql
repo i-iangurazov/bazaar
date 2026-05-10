@@ -1,7 +1,7 @@
--- Add API source for retailer-created Bazaar API orders.
+-- Add API source for retailer-created bazaar API orders.
 ALTER TYPE "CustomerOrderSource" ADD VALUE IF NOT EXISTS 'API';
 
--- Store-scoped Bazaar API keys. Only token hashes are persisted.
+-- Store-scoped bazaar API keys. Only token hashes are persisted.
 CREATE TABLE "BazaarApiKey" (
   "id" TEXT NOT NULL,
   "organizationId" TEXT NOT NULL,
