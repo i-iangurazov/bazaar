@@ -68,6 +68,16 @@ const defaultTabSubmitMinLengthByContext: Record<ScanContext, number> = {
   linePicker: 1,
 };
 
+const hasTouchKeyboard = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return (
+    (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches) ||
+    (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0)
+  );
+};
+
 export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
   (
     {
@@ -185,6 +195,10 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     };
 
     const focusAndSelect = () => {
+      if (hasTouchKeyboard()) {
+        innerRef.current?.blur();
+        return;
+      }
       innerRef.current?.focus();
       innerRef.current?.select();
     };
@@ -270,6 +284,9 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         item,
       };
       await handleResolved(resolved);
+      if (hasTouchKeyboard()) {
+        innerRef.current?.blur();
+      }
     };
 
     useEffect(() => {
@@ -338,6 +355,9 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
 
       event.preventDefault();
       void handleSubmit(trigger);
+      if (event.key === "Enter" && hasTouchKeyboard()) {
+        event.currentTarget.blur();
+      }
     };
 
     return (
@@ -388,6 +408,8 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           autoFocus={autoFocus}
           disabled={disabled}
           inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
           className={cn(
             "pr-9",
             feedback === "error" ? "border-danger focus-visible:ring-danger/30" : undefined,

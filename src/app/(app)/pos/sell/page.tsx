@@ -72,6 +72,16 @@ const createIdempotencyKey = () => {
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const hasTouchKeyboard = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return (
+    (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches) ||
+    (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0)
+  );
+};
+
 const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
@@ -156,8 +166,21 @@ const PosSellPage = () => {
       return;
     }
     window.requestAnimationFrame(() => {
+      if (hasTouchKeyboard()) {
+        lineSearchInputRef.current?.blur();
+        return;
+      }
       lineSearchInputRef.current?.focus();
       lineSearchInputRef.current?.select();
+    });
+  }, []);
+
+  const blurLineSearchInput = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      lineSearchInputRef.current?.blur();
     });
   }, []);
 
@@ -1049,7 +1072,10 @@ const PosSellPage = () => {
                         <AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                       )
                     }
-                    onClick={() => handleAddLine(product.id)}
+                    onClick={() => {
+                      blurLineSearchInput();
+                      void handleAddLine(product.id);
+                    }}
                     disabled={isLineBusy || completeMutation.isLoading}
                     className="rounded-md border border-border bg-card"
                   />

@@ -16,6 +16,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSync } from "@/components/theme-sync";
 import { PwaServiceWorkerRegister } from "@/components/pwa-service-worker-register";
+import { PwaViewportLock } from "@/components/pwa-viewport-lock";
 
 type IntlMessages = ComponentProps<typeof NextIntlClientProvider>["messages"];
 
@@ -76,6 +77,7 @@ export const Providers = ({
           >
             <ThemeSync />
             <PwaServiceWorkerRegister />
+            <PwaViewportLock />
             <TooltipProvider>
               <ToastProvider>{children}</ToastProvider>
             </TooltipProvider>

@@ -116,6 +116,9 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    touch-action: pan-x pan-y;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
   }
 
   * {
@@ -125,6 +128,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "liga" 1, "kern" 1;
+    overscroll-behavior-x: none;
+    touch-action: pan-x pan-y;
   }
 
   a {
@@ -147,7 +152,8 @@
   input,
   select,
   textarea {
-    @apply w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm;
+    @apply w-full rounded-md border border-input bg-background px-3 py-2 text-base text-foreground shadow-sm sm:text-sm;
+    touch-action: manipulation;
   }
 
   table {
@@ -160,6 +166,14 @@
 
   td {
     @apply text-sm text-foreground;
+  }
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 
