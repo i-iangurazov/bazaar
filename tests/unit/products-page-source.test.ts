@@ -68,17 +68,20 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
 
-  it("defaults products to latest changes first and exposes permanent delete only through the admin path", async () => {
+  it("defaults products to latest changes first and keeps permanent delete out of product screens", async () => {
     const listSource = await readSource("src/app/(app)/products/page.tsx");
     const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
-    const routerSource = await readSource("src/server/trpc/routers/products.ts");
     const readServiceSource = await readSource("src/server/services/products/read.ts");
 
+    expect(listSource).toContain("const productsDefaultSortVersion = 3;");
+    expect(listSource).toContain("migrateProductsTableState");
     expect(listSource).toContain('key: "updatedAt"');
     expect(listSource).toContain('direction: "desc"');
-    expect(listSource).toContain("trpc.products.deletePermanent.useMutation");
-    expect(detailSource).toContain("trpc.products.deletePermanent.useMutation");
-    expect(routerSource).toContain("deletePermanent: adminProcedure");
+    expect(listSource).toContain("const createdAtResult =");
+    expect(listSource).not.toContain("trpc.products.deletePermanent.useMutation");
+    expect(listSource).not.toContain('key: "delete-permanent"');
+    expect(detailSource).not.toContain("trpc.products.deletePermanent.useMutation");
+    expect(detailSource).not.toContain("confirmDeletePermanent");
     expect(readServiceSource).toContain('const sortKey = input?.sortKey ?? "updatedAt";');
     expect(readServiceSource).toContain('const sortDirection = input?.sortDirection ?? "desc";');
   });

@@ -172,6 +172,7 @@ const defaultProductVisibleColumns = [
   "salePrice",
   "readiness",
 ] as const;
+const productsDefaultSortVersion = 3;
 const productsTableStateSchema = z.object({
   search: z.string(),
   category: z.string(),
@@ -181,7 +182,7 @@ const productsTableStateSchema = z.object({
   showArchived: z.boolean(),
   viewMode: productViewModeSchema,
   pageSize: z.number().int().min(1).max(200),
-  defaultSortVersion: z.number().int().optional().default(2),
+  defaultSortVersion: z.number().int().optional().default(productsDefaultSortVersion),
   sort: z.object({
     key: productSortKeySchema,
     direction: productSortDirectionSchema,
@@ -244,6 +245,27 @@ type BulkDescriptionProgressState = {
 type ProductsTableState = z.infer<typeof productsTableStateSchema>;
 type ProductVisibleColumnKey = z.infer<typeof productVisibleColumnSchema>;
 
+const migrateProductsTableState = (
+  state: ProductsTableState,
+  rawDefaultSortVersion?: unknown,
+): ProductsTableState => {
+  const version =
+    typeof rawDefaultSortVersion === "number" && Number.isFinite(rawDefaultSortVersion)
+      ? rawDefaultSortVersion
+      : 0;
+  if (version >= productsDefaultSortVersion) {
+    return state;
+  }
+  return {
+    ...state,
+    defaultSortVersion: productsDefaultSortVersion,
+    sort: {
+      key: "updatedAt",
+      direction: "desc",
+    },
+  };
+};
+
 const ProductsPage = () => {
   const t = useTranslations("products");
   const tInventory = useTranslations("inventory");
@@ -304,7 +326,7 @@ const ProductsPage = () => {
       showArchived: false,
       viewMode: "table",
       pageSize: 25,
-      defaultSortVersion: 2,
+      defaultSortVersion: productsDefaultSortVersion,
       sort: {
         key: "updatedAt",
         direction: "desc",
@@ -329,19 +351,12 @@ const ProductsPage = () => {
       if (!parsed.success) {
         return null;
       }
-      const shouldMigrateDefaultSort =
-        typeof parsedJson === "object" &&
-        parsedJson !== null &&
-        !("defaultSortVersion" in parsedJson) &&
-        parsed.data.sort.key === "name" &&
-        parsed.data.sort.direction === "asc";
-      return shouldMigrateDefaultSort
-        ? {
-            ...parsed.data,
-            defaultSortVersion: 2,
-            sort: { key: "updatedAt" as const, direction: "desc" as const },
-          }
-        : parsed.data;
+      return migrateProductsTableState(
+        parsed.data,
+        typeof parsedJson === "object" && parsedJson !== null
+          ? (parsedJson as { defaultSortVersion?: unknown }).defaultSortVersion
+          : undefined,
+      );
     } catch {
       return null;
     }
@@ -370,7 +385,14 @@ const ProductsPage = () => {
     (raw: string) =>
       parseSavedTableViews(raw, (value) => {
         const parsed = productsTableStateSchema.safeParse(value);
-        return parsed.success ? parsed.data : null;
+        return parsed.success
+          ? migrateProductsTableState(
+              parsed.data,
+              typeof value === "object" && value !== null
+                ? (value as { defaultSortVersion?: unknown }).defaultSortVersion
+                : undefined,
+            )
+          : null;
       }),
     [],
   );
@@ -621,18 +643,6 @@ const ProductsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const deleteProductMutation = trpc.products.deletePermanent.useMutation({
-    onSuccess: () => {
-      productsBootstrapQuery.refetch();
-      trpcUtils.products.bootstrap.invalidate();
-      trpcUtils.products.list.invalidate();
-      toast({ variant: "success", description: t("deletePermanentSuccess") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-
   const bulkArchiveMutation = trpc.products.archive.useMutation();
   const bulkRestoreMutation = trpc.products.restore.useMutation();
   const inlineProductMutation = trpc.products.inlineUpdate.useMutation();
@@ -1540,13 +1550,30 @@ const ProductsPage = () => {
     const directionMultiplier = productSort.direction === "asc" ? 1 : -1;
     const sorted = [...products];
     sorted.sort((left, right) => {
+      if (productSort.key === "updatedAt") {
+        const updatedAtResult = left.updatedAt.getTime() - right.updatedAt.getTime();
+        if (updatedAtResult !== 0) {
+          return updatedAtResult * directionMultiplier;
+        }
+        const createdAtResult = left.createdAt.getTime() - right.createdAt.getTime();
+        if (createdAtResult !== 0) {
+          return createdAtResult * directionMultiplier;
+        }
+        const nameResult = sortCollator.compare(left.name, right.name);
+        if (nameResult !== 0) {
+          return nameResult;
+        }
+        const skuResult = sortCollator.compare(left.sku, right.sku);
+        if (skuResult !== 0) {
+          return skuResult;
+        }
+        return left.id.localeCompare(right.id);
+      }
+
       let result = 0;
       switch (productSort.key) {
         case "sku":
           result = sortCollator.compare(left.sku, right.sku);
-          break;
-        case "updatedAt":
-          result = left.updatedAt.getTime() - right.updatedAt.getTime();
           break;
         case "name":
           result = sortCollator.compare(left.name, right.name);
@@ -1827,28 +1854,6 @@ const ProductsPage = () => {
     ],
   );
   const getProductActions = (product: ProductRow) => {
-    const productDeleteAction = isAdmin
-      ? [
-          {
-            key: "delete-permanent",
-            label: t("deletePermanently"),
-            icon: DeleteIcon,
-            variant: "danger" as const,
-            onSelect: async () => {
-              if (
-                !(await confirm({
-                  description: t("confirmDeletePermanent"),
-                  confirmVariant: "danger",
-                }))
-              ) {
-                return;
-              }
-              deleteProductMutation.mutate({ productId: product.id });
-            },
-          },
-        ]
-      : [];
-
     if (!canManageProducts) {
       return [
         {
@@ -1922,7 +1927,7 @@ const ProductsPage = () => {
           },
         ];
 
-    return [...managementActions, ...productDeleteAction];
+    return managementActions;
   };
 
   const handleExport = async (format: DownloadFormat) => {
