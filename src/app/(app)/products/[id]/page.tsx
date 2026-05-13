@@ -105,6 +105,7 @@ const ProductDetailPage = () => {
   const { data: session } = useSession();
   const trpcUtils = trpc.useUtils();
   const role = session?.user?.role;
+  const isAdmin = role === "ADMIN";
   const canManageProducts = role === "ADMIN" || role === "MANAGER";
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
   const canAssembleBundles = role === "ADMIN";
@@ -353,6 +354,15 @@ const ProductDetailPage = () => {
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: () => {
       toast({ variant: "success", description: t("archiveSuccess") });
+      router.push("/products");
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const deleteProductMutation = trpc.products.deletePermanent.useMutation({
+    onSuccess: () => {
+      toast({ variant: "success", description: t("deletePermanentSuccess") });
       router.push("/products");
     },
     onError: (error) => {
@@ -926,6 +936,32 @@ const ProductDetailPage = () => {
                     )}
                     {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
                   </DropdownMenuItem>
+                  {isAdmin ? (
+                    <DropdownMenuItem
+                      className="text-danger focus:text-danger"
+                      disabled={deleteProductMutation.isLoading}
+                      onSelect={async () => {
+                        if (
+                          !(await confirm({
+                            description: t("confirmDeletePermanent"),
+                            confirmVariant: "danger",
+                          }))
+                        ) {
+                          return;
+                        }
+                        deleteProductMutation.mutate({ productId });
+                      }}
+                    >
+                      {deleteProductMutation.isLoading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {deleteProductMutation.isLoading
+                        ? tCommon("loading")
+                        : t("deletePermanently")}
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </>

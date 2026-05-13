@@ -3866,3 +3866,123 @@ export const restoreProduct = async (input: RestoreProductInput) =>
 
     return product;
   });
+
+export type DeleteProductInput = {
+  productId: string;
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+};
+
+export const deleteProduct = async (input: DeleteProductInput) =>
+  prisma.$transaction(async (tx) => {
+    const before = await tx.product.findUnique({ where: { id: input.productId } });
+    if (!before || before.organizationId !== input.organizationId) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+
+    const [
+      stockMovementsCount,
+      purchaseOrderLinesCount,
+      customerOrderLinesCount,
+      saleReturnLinesCount,
+      stockCountLinesCount,
+      stockLotsCount,
+      nonZeroSnapshotsCount,
+      bundleParentsCount,
+    ] = await Promise.all([
+      tx.stockMovement.count({ where: { productId: input.productId } }),
+      tx.purchaseOrderLine.count({ where: { productId: input.productId } }),
+      tx.customerOrderLine.count({ where: { productId: input.productId } }),
+      tx.saleReturnLine.count({ where: { productId: input.productId } }),
+      tx.stockCountLine.count({ where: { productId: input.productId } }),
+      tx.stockLot.count({ where: { productId: input.productId } }),
+      tx.inventorySnapshot.count({
+        where: {
+          productId: input.productId,
+          OR: [{ onHand: { not: 0 } }, { onOrder: { not: 0 } }],
+        },
+      }),
+      tx.productBundleComponent.count({
+        where: {
+          organizationId: input.organizationId,
+          componentProductId: input.productId,
+        },
+      }),
+    ]);
+
+    if (
+      stockMovementsCount > 0 ||
+      purchaseOrderLinesCount > 0 ||
+      customerOrderLinesCount > 0 ||
+      saleReturnLinesCount > 0 ||
+      stockCountLinesCount > 0 ||
+      stockLotsCount > 0 ||
+      nonZeroSnapshotsCount > 0 ||
+      bundleParentsCount > 0
+    ) {
+      throw new AppError("productDeleteBlockedByHistory", "CONFLICT", 409);
+    }
+
+    await tx.productImageStudioJob.updateMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+      data: { productId: null },
+    });
+    await tx.productBundleComponent.deleteMany({
+      where: { organizationId: input.organizationId, bundleProductId: input.productId },
+    });
+    await tx.variantAttributeValue.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.storePrice.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.productCost.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.reorderPolicy.deleteMany({ where: { productId: input.productId } });
+    await tx.forecastSnapshot.deleteMany({ where: { productId: input.productId } });
+    await tx.inventorySnapshot.deleteMany({ where: { productId: input.productId } });
+    await tx.storeProduct.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.productComplianceFlags.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.mMarketIncludedProduct.deleteMany({
+      where: { orgId: input.organizationId, productId: input.productId },
+    });
+    await tx.bakaiStoreIncludedProduct.deleteMany({
+      where: { orgId: input.organizationId, productId: input.productId },
+    });
+    await tx.bakaiStoreProductSyncState.deleteMany({
+      where: { orgId: input.organizationId, productId: input.productId },
+    });
+    await tx.bazaarCatalogHiddenProduct.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.productImage.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.productBarcode.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.productPack.deleteMany({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    });
+    await tx.productVariant.deleteMany({ where: { productId: input.productId } });
+    await tx.product.delete({ where: { id: input.productId } });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "PRODUCT_DELETE",
+      entity: "Product",
+      entityId: input.productId,
+      before: toJson(before),
+      after: null,
+      requestId: input.requestId,
+    });
+
+    return { id: input.productId };
+  });

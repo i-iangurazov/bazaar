@@ -37,7 +37,7 @@ import {
 
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
-const dbSortableProductListKeys = new Set<ProductSortKey>(["name", "sku"]);
+const dbSortableProductListKeys = new Set<ProductSortKey>(["updatedAt", "name", "sku"]);
 
 const buildProductCategoryWhere = (category?: string) =>
   category
@@ -192,6 +192,16 @@ const getDbProductOrderBy = (
     return null;
   }
 
+  if (sortKey === "updatedAt") {
+    return [
+      { updatedAt: sortDirection },
+      { createdAt: sortDirection },
+      { name: "asc" },
+      { sku: "asc" },
+      { id: "asc" },
+    ];
+  }
+
   if (sortKey === "sku") {
     return [{ sku: sortDirection }, { name: sortDirection }, { id: sortDirection }];
   }
@@ -277,6 +287,8 @@ const productListSelect = {
   isDeleted: true,
   photoUrl: true,
   basePriceKgs: true,
+  createdAt: true,
+  updatedAt: true,
   barcodes: { select: { value: true } },
   inventorySnapshots: { select: { storeId: true, onHand: true } },
   images: {
@@ -604,6 +616,9 @@ const sortProductListItems = ({
       case "sku":
         result = sortCollator.compare(left.sku, right.sku);
         break;
+      case "updatedAt":
+        result = left.updatedAt.getTime() - right.updatedAt.getTime();
+        break;
       case "name":
         result = sortCollator.compare(left.name, right.name);
         break;
@@ -697,8 +712,8 @@ export const listProducts = async ({
 
   const page = input?.page ?? 1;
   const pageSize = input?.pageSize ?? 25;
-  const sortKey = input?.sortKey ?? "name";
-  const sortDirection = input?.sortDirection ?? "asc";
+  const sortKey = input?.sortKey ?? "updatedAt";
+  const sortDirection = input?.sortDirection ?? "desc";
   const readinessProductIds = await resolveReadinessProductIds({
     prisma,
     organizationId,

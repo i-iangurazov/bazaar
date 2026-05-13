@@ -10,6 +10,7 @@ export const productReadinessFilterEnum = z.enum([
   "negativeStock",
 ]);
 export const productSortKeyEnum = z.enum([
+  "updatedAt",
   "sku",
   "name",
   "category",
@@ -297,6 +298,10 @@ export const productDuplicateDiagnosticsInputSchema = z.object({
 });
 
 export const archiveProductInputSchema = z.object({
+  productId: z.string(),
+});
+
+export const deleteProductInputSchema = z.object({
   productId: z.string(),
 });
 

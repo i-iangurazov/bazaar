@@ -9,6 +9,7 @@ import {
   bulkGenerateProductDescriptionsMutation,
   bulkUpdateProductCategoryMutation,
   createProductMutation,
+  deleteProductMutation,
   duplicateProductMutation,
   generateProductBarcodeMutation,
   generateProductDescriptionMutation,
@@ -41,6 +42,7 @@ import {
   bulkGenerateProductDescriptionsInputSchema,
   bulkUpdateProductCategoryInputSchema,
   createProductInputSchema,
+  deleteProductInputSchema,
   duplicateProductInputSchema,
   exportProductsInputSchema,
   findProductByBarcodeInputSchema,
@@ -372,6 +374,17 @@ export const productsRouter = router({
     .input(archiveProductInputSchema)
     .mutation(({ ctx, input }) =>
       restoreProductMutation({
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        requestId: ctx.requestId,
+        productId: input.productId,
+      }),
+    ),
+
+  deletePermanent: adminProcedure
+    .input(deleteProductInputSchema)
+    .mutation(({ ctx, input }) =>
+      deleteProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,

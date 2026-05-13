@@ -116,6 +116,7 @@ import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 type ProductSortKey =
+  | "updatedAt"
   | "sku"
   | "name"
   | "category"
@@ -139,6 +140,7 @@ const productReadinessFilterSchema = z.enum([
 ]);
 const productViewModeSchema = z.enum(["table", "grid"]);
 const productSortKeySchema = z.enum([
+  "updatedAt",
   "sku",
   "name",
   "category",
@@ -179,6 +181,7 @@ const productsTableStateSchema = z.object({
   showArchived: z.boolean(),
   viewMode: productViewModeSchema,
   pageSize: z.number().int().min(1).max(200),
+  defaultSortVersion: z.number().int().optional().default(2),
   sort: z.object({
     key: productSortKeySchema,
     direction: productSortDirectionSchema,
@@ -192,6 +195,7 @@ const productsTableStateSchema = z.object({
 const legacyProductsPrintModalEnabled = process.env.NODE_ENV !== "production";
 
 const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = {
+  updatedAt: "desc",
   sku: "asc",
   name: "asc",
   category: "asc",
@@ -300,9 +304,10 @@ const ProductsPage = () => {
       showArchived: false,
       viewMode: "table",
       pageSize: 25,
+      defaultSortVersion: 2,
       sort: {
-        key: "name",
-        direction: "asc",
+        key: "updatedAt",
+        direction: "desc",
       },
       visibleColumns: [...defaultProductVisibleColumns],
     }),
@@ -317,10 +322,26 @@ const ProductsPage = () => {
       }),
     [session?.user?.id, session?.user?.organizationId],
   );
-  const parseProductsTableState = useCallback((raw: string) => {
+  const parseProductsTableState = useCallback((raw: string): ProductsTableState | null => {
     try {
-      const parsed = productsTableStateSchema.safeParse(JSON.parse(raw));
-      return parsed.success ? parsed.data : null;
+      const parsedJson = JSON.parse(raw);
+      const parsed = productsTableStateSchema.safeParse(parsedJson);
+      if (!parsed.success) {
+        return null;
+      }
+      const shouldMigrateDefaultSort =
+        typeof parsedJson === "object" &&
+        parsedJson !== null &&
+        !("defaultSortVersion" in parsedJson) &&
+        parsed.data.sort.key === "name" &&
+        parsed.data.sort.direction === "asc";
+      return shouldMigrateDefaultSort
+        ? {
+            ...parsed.data,
+            defaultSortVersion: 2,
+            sort: { key: "updatedAt" as const, direction: "desc" as const },
+          }
+        : parsed.data;
     } catch {
       return null;
     }
@@ -595,6 +616,17 @@ const ProductsPage = () => {
     onSuccess: () => {
       productsBootstrapQuery.refetch();
       toast({ variant: "success", description: t("restoreSuccess") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const deleteProductMutation = trpc.products.deletePermanent.useMutation({
+    onSuccess: () => {
+      productsBootstrapQuery.refetch();
+      trpcUtils.products.bootstrap.invalidate();
+      trpcUtils.products.list.invalidate();
+      toast({ variant: "success", description: t("deletePermanentSuccess") });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1513,6 +1545,9 @@ const ProductsPage = () => {
         case "sku":
           result = sortCollator.compare(left.sku, right.sku);
           break;
+        case "updatedAt":
+          result = left.updatedAt.getTime() - right.updatedAt.getTime();
+          break;
         case "name":
           result = sortCollator.compare(left.name, right.name);
           break;
@@ -1791,78 +1826,104 @@ const ProductsPage = () => {
       trpcUtils.products.byIds,
     ],
   );
-  const getProductActions = (product: ProductRow) => [
-    ...(canManageProducts
-      ? product.isDeleted
-        ? [
-            {
-              key: "restore",
-              label: t("restore"),
-              icon: RestoreIcon,
-              onSelect: async () => {
-                if (
-                  !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
-                ) {
-                  return;
-                }
-                restoreMutation.mutate({ productId: product.id });
-              },
+  const getProductActions = (product: ProductRow) => {
+    const productDeleteAction = isAdmin
+      ? [
+          {
+            key: "delete-permanent",
+            label: t("deletePermanently"),
+            icon: DeleteIcon,
+            variant: "danger" as const,
+            onSelect: async () => {
+              if (
+                !(await confirm({
+                  description: t("confirmDeletePermanent"),
+                  confirmVariant: "danger",
+                }))
+              ) {
+                return;
+              }
+              deleteProductMutation.mutate({ productId: product.id });
             },
-          ]
-        : [
-            {
-              key: "edit",
-              label: tCommon("edit"),
-              icon: EditIcon,
-              href: `/products/${product.id}`,
-              openInNewTab: true,
+          },
+        ]
+      : [];
+
+    if (!canManageProducts) {
+      return [
+        {
+          key: "view",
+          label: tCommon("view"),
+          icon: ViewIcon,
+          href: `/products/${product.id}`,
+          openInNewTab: false,
+        },
+      ];
+    }
+
+    const managementActions = product.isDeleted
+      ? [
+          {
+            key: "restore",
+            label: t("restore"),
+            icon: RestoreIcon,
+            onSelect: async () => {
+              if (
+                !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
+              ) {
+                return;
+              }
+              restoreMutation.mutate({ productId: product.id });
             },
-            {
-              key: "print-labels",
-              label: t("printLabels"),
-              icon: PrintIcon,
-              onSelect: () => {
-                if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
-                  toast({ variant: "error", description: t("printMissingBarcode") });
-                  return;
-                }
-                void openPrintForProducts([product.id]);
-              },
-            },
-            {
-              key: "duplicate",
-              label: t("duplicate"),
-              icon: CopyIcon,
-              onSelect: () =>
-                duplicateMutation.mutate({
-                  productId: product.id,
-                }),
-            },
-            {
-              key: "archive",
-              label: tCommon("archive"),
-              icon: ArchiveIcon,
-              variant: "danger",
-              onSelect: async () => {
-                if (
-                  !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
-                ) {
-                  return;
-                }
-                archiveMutation.mutate({ productId: product.id });
-              },
-            },
-          ]
+          },
+        ]
       : [
           {
-            key: "view",
-            label: tCommon("view"),
-            icon: ViewIcon,
+            key: "edit",
+            label: tCommon("edit"),
+            icon: EditIcon,
             href: `/products/${product.id}`,
-            openInNewTab: false,
+            openInNewTab: true,
           },
-        ]),
-  ];
+          {
+            key: "print-labels",
+            label: t("printLabels"),
+            icon: PrintIcon,
+            onSelect: () => {
+              if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
+                toast({ variant: "error", description: t("printMissingBarcode") });
+                return;
+              }
+              void openPrintForProducts([product.id]);
+            },
+          },
+          {
+            key: "duplicate",
+            label: t("duplicate"),
+            icon: CopyIcon,
+            onSelect: () =>
+              duplicateMutation.mutate({
+                productId: product.id,
+              }),
+          },
+          {
+            key: "archive",
+            label: tCommon("archive"),
+            icon: ArchiveIcon,
+            variant: "danger" as const,
+            onSelect: async () => {
+              if (
+                !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
+              ) {
+                return;
+              }
+              archiveMutation.mutate({ productId: product.id });
+            },
+          },
+        ];
+
+    return [...managementActions, ...productDeleteAction];
+  };
 
   const handleExport = async (format: DownloadFormat) => {
     const { data, error } = await exportQuery.refetch();

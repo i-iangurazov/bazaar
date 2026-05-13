@@ -67,4 +67,19 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("action={\n          canManageProducts ? (");
     expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
+
+  it("defaults products to latest changes first and exposes permanent delete only through the admin path", async () => {
+    const listSource = await readSource("src/app/(app)/products/page.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+    const routerSource = await readSource("src/server/trpc/routers/products.ts");
+    const readServiceSource = await readSource("src/server/services/products/read.ts");
+
+    expect(listSource).toContain('key: "updatedAt"');
+    expect(listSource).toContain('direction: "desc"');
+    expect(listSource).toContain("trpc.products.deletePermanent.useMutation");
+    expect(detailSource).toContain("trpc.products.deletePermanent.useMutation");
+    expect(routerSource).toContain("deletePermanent: adminProcedure");
+    expect(readServiceSource).toContain('const sortKey = input?.sortKey ?? "updatedAt";');
+    expect(readServiceSource).toContain('const sortDirection = input?.sortDirection ?? "desc";');
+  });
 });

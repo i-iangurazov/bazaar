@@ -1087,6 +1087,106 @@ describeDb("products", () => {
     });
   });
 
+  it("orders product lists by the most recently edited products by default", async () => {
+    const { org, adminUser, baseUnit, product } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const older = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-products-sort-older",
+      sku: "SORT-OLDER",
+      name: "Older Sort Product",
+      baseUnitId: baseUnit.id,
+    });
+    const newer = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-products-sort-newer",
+      sku: "SORT-NEWER",
+      name: "Newer Sort Product",
+      baseUnitId: baseUnit.id,
+    });
+    await prisma.$executeRaw`
+      UPDATE "Product"
+      SET "updatedAt" = CASE
+        WHEN id = ${product.id} THEN ${new Date("2024-01-01T00:00:00.000Z")}
+        WHEN id = ${older.id} THEN ${new Date("2024-02-01T00:00:00.000Z")}
+        WHEN id = ${newer.id} THEN ${new Date("2024-03-01T00:00:00.000Z")}
+        ELSE "updatedAt"
+      END
+      WHERE id IN (${product.id}, ${older.id}, ${newer.id})
+    `;
+
+    const initialList = await caller.products.list({ page: 1, pageSize: 3 });
+    expect(initialList.items.map((item) => item.id)).toEqual([newer.id, older.id, product.id]);
+
+    await caller.products.update({
+      productId: older.id,
+      sku: older.sku,
+      name: "Older Sort Product Edited",
+      baseUnitId: baseUnit.id,
+    });
+
+    const afterEdit = await caller.products.list({ page: 1, pageSize: 3 });
+    expect(afterEdit.items[0]?.id).toBe(older.id);
+  });
+
+  it("allows admins to permanently delete unused products and blocks products with history", async () => {
+    const { org, store, adminUser, managerUser, baseUnit } = await seedBase();
+    await grantStoreAccess(org.id, managerUser.id, store.id);
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+
+    const unused = await adminCaller.products.create({
+      sku: "DELETE-UNUSED",
+      name: "Delete Unused Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      barcodes: ["DELETE-UNUSED-BC"],
+    });
+
+    await expect(
+      managerCaller.products.deletePermanent({ productId: unused.id }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+
+    await adminCaller.products.deletePermanent({ productId: unused.id });
+    await expect(prisma.product.findUnique({ where: { id: unused.id } })).resolves.toBeNull();
+    await expect(prisma.productBarcode.count({ where: { productId: unused.id } })).resolves.toBe(0);
+
+    const withHistory = await adminCaller.products.create({
+      sku: "DELETE-HISTORY",
+      name: "Delete History Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      initialOnHand: 1,
+    });
+
+    await expect(
+      adminCaller.products.deletePermanent({ productId: withHistory.id }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "productDeleteBlockedByHistory",
+    });
+  });
+
   it("returns duplicate diagnostics for exact sku, barcode, and normalized-name matches", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
     const caller = createTestCaller({

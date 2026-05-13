@@ -11,6 +11,7 @@ import {
   bulkGenerateProductDescriptions,
   bulkUpdateProductCategory,
   createProduct,
+  deleteProduct,
   duplicateProduct,
   generateProductBarcode,
   restoreProduct,
@@ -455,6 +456,22 @@ export const restoreProductMutation = async ({
 }: ProductMutationContext & { productId: string }) => {
   try {
     return await restoreProduct({
+      productId,
+      organizationId: ctx.organizationId,
+      actorId: ctx.actorId,
+      requestId: ctx.requestId,
+    });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+};
+
+export const deleteProductMutation = async ({
+  productId,
+  ...ctx
+}: ProductMutationContext & { productId: string }) => {
+  try {
+    return await deleteProduct({
       productId,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,

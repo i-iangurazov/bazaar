@@ -29,6 +29,8 @@ type ProductListRecord = {
   isDeleted: boolean;
   photoUrl: string | null;
   basePriceKgs: Prisma.Decimal | null;
+  createdAt: Date;
+  updatedAt: Date;
   barcodes: Array<{ value: string }>;
   inventorySnapshots: Array<{ storeId: string; onHand: number }>;
   images: Array<{ id: string; url: string; position: number }>;
