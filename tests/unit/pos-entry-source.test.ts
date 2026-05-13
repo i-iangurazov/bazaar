@@ -33,4 +33,19 @@ describe("pos entry navigation", () => {
     expect(source).toContain('t("shifts.differenceNoteRequired")');
     expect(source).toContain("!closeNoteValid");
   });
+
+  it("keeps the cashier POS screen on theme tokens for dark mode support", async () => {
+    const source = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(source).toContain("bg-card");
+    expect(source).toContain("bg-muted/40");
+    expect(source).toContain("text-success-foreground");
+    expect(source).toContain("dark:hover:bg-accent/40");
+    expect(source).not.toContain("bg-white");
+    expect(source).not.toContain("bg-slate-50");
+    expect(source).not.toContain("border-slate-200");
+    expect(source).not.toContain("bg-[#fffdf4]");
+    expect(source).not.toContain("bg-emerald-");
+    expect(source).not.toContain("text-emerald-");
+  });
 });

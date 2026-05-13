@@ -895,7 +895,7 @@ const PosSellPage = () => {
   const paymentTotalLabel = formatKgsMoney(totalPaymentKgs, locale, currencySource);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-foreground">
+    <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
         <Button
           asChild
@@ -907,7 +907,7 @@ const PosSellPage = () => {
           </Link>
         </Button>
 
-        <div className="flex min-h-16 flex-1 items-center gap-3 bg-white px-4">
+        <div className="flex min-h-16 flex-1 items-center gap-3 bg-card px-4">
           <SearchIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <ScanInput
             ref={lineSearchInputRef}
@@ -955,7 +955,7 @@ const PosSellPage = () => {
 
       {!hasOpenShift ? (
         <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
-          <section className="w-full max-w-xl rounded-md border border-border bg-white p-6 shadow-sm">
+          <section className="w-full max-w-xl rounded-md border border-border bg-card p-6 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">{t("entry.shiftClosed")}</p>
@@ -971,8 +971,8 @@ const PosSellPage = () => {
         </main>
       ) : (
         <main className="grid min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] lg:grid-cols-[minmax(0,1fr)_600px] 2xl:grid-cols-[minmax(0,1fr)_680px]">
-          <section className="flex min-h-0 flex-col bg-slate-50">
-            <div className="min-h-14 overflow-x-auto border-b border-border/70 bg-white px-4 py-3 shadow-sm">
+          <section className="flex min-h-0 flex-col bg-muted/40">
+            <div className="min-h-14 overflow-x-auto border-b border-border/70 bg-card px-4 py-3 shadow-sm">
               <div className="flex w-max min-w-full items-center justify-center gap-2">
                 <Button
                   type="button"
@@ -1038,7 +1038,7 @@ const PosSellPage = () => {
               ) : null}
 
               {!productGridLoading && !visibleProducts.length ? (
-                <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed border-border bg-white p-6 text-center text-sm text-muted-foreground">
+                <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
                   <div>
                     <SearchIcon className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden />
                     <p className="mt-3">
@@ -1067,14 +1067,14 @@ const PosSellPage = () => {
                           void handleAddLine(product.id);
                         }}
                         disabled={isLineBusy || completeMutation.isLoading}
-                        className="group relative flex min-h-[270px] flex-col rounded-md border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                        className="group relative flex min-h-[270px] flex-col rounded-md border border-border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/60 hover:bg-accent/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none dark:hover:bg-accent/40"
                       >
-                        <div className="absolute right-3 top-3 z-10 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
+                        <div className="absolute right-3 top-3 z-10 rounded-full border border-border bg-card/95 px-2.5 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
                           {stockQty === null
                             ? tCommon("notAvailable")
                             : `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`}
                         </div>
-                        <div className="flex h-36 items-center justify-center rounded-t-md bg-slate-50 px-4 py-4">
+                        <div className="flex h-36 items-center justify-center rounded-t-md bg-muted/40 px-4 py-4">
                           {primaryImage ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -1112,23 +1112,23 @@ const PosSellPage = () => {
               ) : null}
             </div>
 
-            <footer className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center border-t border-border bg-white px-4 py-2 text-sm text-muted-foreground">
+            <footer className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground">
               <span aria-hidden />
               <div className="max-w-full truncate text-center">
                 {selectedRegisterLabel}
                 {shiftOpenedLabel ? ` / ${shiftOpenedLabel}` : ""}
               </div>
-              <span className="h-3 w-3 justify-self-end rounded-full bg-emerald-500" aria-hidden />
+              <span className="h-3 w-3 justify-self-end rounded-full bg-success" aria-hidden />
             </footer>
           </section>
 
-          <aside className="flex min-h-[620px] flex-col border-l border-border bg-white lg:min-h-0">
+          <aside className="flex min-h-[620px] flex-col border-l border-border bg-card lg:min-h-0">
             {lastCompletedSale ? (
-              <div className="border-b border-border bg-emerald-50 px-4 py-3">
-                <p className="text-sm font-semibold text-emerald-950">
+              <div className="border-b border-border bg-success/10 px-4 py-3">
+                <p className="text-sm font-semibold text-foreground">
                   {t("sell.lastReceiptTitle", { number: lastCompletedSale.number })}
                 </p>
-                <p className="mt-1 text-xs text-emerald-800">
+                <p className="mt-1 text-xs text-success">
                   {autoReceiptStatus === "printing"
                     ? t("sell.receiptAutoPrinting")
                     : autoReceiptStatus === "ready"
@@ -1341,7 +1341,7 @@ const PosSellPage = () => {
                         key={`${line.id}:${line.qty}`}
                         defaultValue={String(line.qty)}
                         onBlur={(event) => handleUpdateQty(line.id, event.target.value)}
-                        className="ml-auto h-8 w-14 bg-[#fffdf4] text-right 2xl:w-16"
+                        className="ml-auto h-8 w-14 bg-warning/10 text-right 2xl:w-16"
                         inputMode="numeric"
                         disabled={isLineBusy || completeMutation.isLoading}
                       />
@@ -1367,7 +1367,7 @@ const PosSellPage = () => {
               )}
             </div>
 
-            <div ref={paymentsSectionRef} className="border-t border-border bg-white">
+            <div ref={paymentsSectionRef} className="border-t border-border bg-card">
               {saleId && sale ? (
                 <div className="space-y-3 px-4 py-3">
                   <div className="space-y-1 text-sm">
@@ -1545,7 +1545,7 @@ const PosSellPage = () => {
                   )}
                 </Button>
                 <Button
-                  className="h-16 justify-between rounded-none bg-emerald-600 px-5 text-lg font-bold uppercase text-white hover:bg-emerald-700"
+                  className="h-16 justify-between rounded-none bg-success px-5 text-lg font-bold uppercase text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
                   onClick={handleComplete}
                   disabled={!sale || completeMutation.isLoading || isLineBusy || !sale.lines.length}
                 >
