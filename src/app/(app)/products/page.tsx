@@ -172,7 +172,7 @@ const defaultProductVisibleColumns = [
   "salePrice",
   "readiness",
 ] as const;
-const productsDefaultSortVersion = 3;
+const productsDefaultSortVersion = 4;
 const productsTableStateSchema = z.object({
   search: z.string(),
   category: z.string(),

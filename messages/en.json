@@ -2479,6 +2479,7 @@
     "imageTooLargeInput": "Image too large input {size}",
     "imageTooLargeAfterCompression": "Image too large after compression {size}",
     "imageCompressionFailed": "Image compression failed.",
+    "imageUploadTimedOut": "Image upload took too long. Try again or choose a smaller file.",
     "imageReadFailed": "Image read failed.",
     "imagePreview": "Image preview",
     "imagePreviewEdit": "Image preview edit",

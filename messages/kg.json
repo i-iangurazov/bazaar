@@ -2478,6 +2478,7 @@
     "imageTooLargeInput": "Файл иштетүү үчүн өтө чоң (макс. {size} МБ).",
     "imageTooLargeAfterCompression": "Автоматтык оптимизациядан кийин да файл {size} МБ дан чоң бойдон калды.",
     "imageCompressionFailed": "Сүрөттү жүктөөгө даярдоо мүмкүн болбоду.",
+    "imageUploadTimedOut": "Сүрөт жүктөө өтө узакка созулду. Кайра аракет кылыңыз же кичирээк файл тандаңыз.",
     "imageReadFailed": "Сүрөттү жүктөө мүмкүн эмес.",
     "imagePreview": "Ачуу",
     "imagePreviewEdit": "Ачып түзөтүү",

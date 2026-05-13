@@ -52,9 +52,39 @@ describeDb("billing", () => {
     }
   });
 
+  it("lets platform owners read subscription control data", async () => {
+    const { org, adminUser } = await seedBase({ plan: "ENTERPRISE" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isPlatformOwner: true,
+    });
+
+    await expect(caller.platformOwner.summary()).resolves.toMatchObject({
+      organizationsTotal: expect.any(Number),
+      activeByTier: expect.objectContaining({
+        STARTER: expect.any(Number),
+        BUSINESS: expect.any(Number),
+        ENTERPRISE: expect.any(Number),
+      }),
+    });
+    await expect(caller.platformOwner.listOrganizations()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: org.id,
+          plan: "ENTERPRISE",
+          subscriptionStatus: "ACTIVE",
+        }),
+      ]),
+    );
+  });
+
   it("does not let an expired trial block an active paid or approved subscription", async () => {
     const { org, adminUser, baseUnit } = await seedBase({ plan: "ENTERPRISE" });
     const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     await prisma.organization.update({
       where: { id: org.id },
@@ -62,7 +92,7 @@ describeDb("billing", () => {
         plan: "ENTERPRISE",
         subscriptionStatus: "ACTIVE",
         trialEndsAt: past,
-        currentPeriodEndsAt: past,
+        currentPeriodEndsAt: future,
       },
     });
 
@@ -189,6 +219,28 @@ describeDb("billing", () => {
         categories: [],
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "subscriptionInactive" });
+
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        subscriptionStatus: "ACTIVE",
+        trialEndsAt: past,
+        currentPeriodEndsAt: past,
+      },
+    });
+
+    const expiredPaidSummary = await caller.billing.get();
+    expect(expiredPaidSummary?.subscriptionActive).toBe(false);
+    expect(expiredPaidSummary?.trialExpired).toBe(true);
+    await expect(
+      caller.products.create({
+        sku: "EXPIRED-ACTIVE-PAID-1",
+        name: "Expired Active Paid Product",
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 100,
+        categories: [],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "trialExpired" });
 
     await prisma.organization.update({
       where: { id: org.id },

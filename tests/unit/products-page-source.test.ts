@@ -73,7 +73,7 @@ describe("index page source layout", () => {
     const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
     const readServiceSource = await readSource("src/server/services/products/read.ts");
 
-    expect(listSource).toContain("const productsDefaultSortVersion = 3;");
+    expect(listSource).toContain("const productsDefaultSortVersion = 4;");
     expect(listSource).toContain("migrateProductsTableState");
     expect(listSource).toContain('key: "updatedAt"');
     expect(listSource).toContain('direction: "desc"');

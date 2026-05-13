@@ -66,6 +66,61 @@ export const resolvePrimaryImageUrl = (images: Array<{ url?: string | null }>) =
   return "";
 };
 
+const defaultProductImageUploadTimeoutMs = 45_000;
+
+export class ProductImageUploadTimeoutError extends Error {
+  constructor() {
+    super("imageUploadTimedOut");
+    this.name = "ProductImageUploadTimeoutError";
+  }
+}
+
+export const resolveProductImageUploadTimeoutMs = (value?: string | null) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 1_000 ? parsed : defaultProductImageUploadTimeoutMs;
+};
+
+export const fetchProductImageUpload = async ({
+  url,
+  formData,
+  timeoutMs = resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
+  fetchImpl = fetch,
+}: {
+  url: string;
+  formData: FormData;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}) => {
+  const controller = new AbortController();
+  let timedOut = false;
+  let timeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+  const timeoutPromise = new Promise<Response>((_, reject) => {
+    timeout = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new ProductImageUploadTimeoutError());
+    }, timeoutMs);
+  });
+  const request = fetchImpl(url, {
+    method: "POST",
+    body: formData,
+    signal: controller.signal,
+  });
+
+  try {
+    return await Promise.race([request, timeoutPromise]);
+  } catch (error) {
+    if (timedOut || controller.signal.aborted) {
+      throw new ProductImageUploadTimeoutError();
+    }
+    throw error;
+  } finally {
+    if (timeout) {
+      globalThis.clearTimeout(timeout);
+    }
+  }
+};
+
 type PrepareProductImageFileInput = {
   file: File;
   maxImageBytes: number;
@@ -88,6 +143,14 @@ export const prepareProductImageFileForUpload = async (
   input: PrepareProductImageFileInput,
 ): Promise<PrepareProductImageFileResult> => {
   const { maxImageBytes, maxInputImageBytes } = input;
+  if (input.file.size < 1) {
+    return {
+      ok: false,
+      code: "imageInvalidType",
+      reason: "empty-file",
+    };
+  }
+
   if (input.file.size > maxInputImageBytes) {
     return {
       ok: false,

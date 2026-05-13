@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  ProductImageUploadTimeoutError,
+  fetchProductImageUpload,
   prepareProductImageFileForUpload,
   resolvePrimaryImageUrl,
 } from "../../src/lib/productImageUpload";
@@ -124,5 +126,46 @@ describe("product image upload preprocessing", () => {
     );
     expect(convertHeicToJpeg).toHaveBeenCalledTimes(1);
     expect(optimizeImageToLimit).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty image files before upload", async () => {
+    const source = new File([], "empty.png", { type: "image/png" });
+
+    const result = await prepareProductImageFileForUpload({
+      file: source,
+      maxImageBytes: 5 * 1024 * 1024,
+      maxInputImageBytes: 10 * 1024 * 1024,
+      convertHeicToJpeg: vi.fn().mockResolvedValue(null),
+      optimizeImageToLimit: vi.fn().mockResolvedValue(null),
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        code: "imageInvalidType",
+      }),
+    );
+  });
+
+  it("aborts upload requests that never resolve", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+      const formData = new FormData();
+      formData.set("file", new File([jpegBytes], "photo.jpg", { type: "image/jpeg" }));
+
+      const request = fetchProductImageUpload({
+        url: "/api/product-images/upload",
+        formData,
+        timeoutMs: 1_000,
+        fetchImpl,
+      });
+      const assertion = expect(request).rejects.toBeInstanceOf(ProductImageUploadTimeoutError);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

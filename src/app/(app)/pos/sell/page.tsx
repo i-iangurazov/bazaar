@@ -1030,6 +1030,12 @@ const PosSellPage = () => {
             ) : null}
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+              {catalogProductsQuery.error ? (
+                <div className="mb-4 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                  {translateError(tErrors, catalogProductsQuery.error)}
+                </div>
+              ) : null}
+
               {productGridLoading ? (
                 <div className="flex min-h-[180px] items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -1241,6 +1247,12 @@ const PosSellPage = () => {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              {saleId && saleQuery.error ? (
+                <div className="m-4 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                  {translateError(tErrors, saleQuery.error)}
+                </div>
+              ) : null}
+
               {saleId && saleQuery.isLoading ? (
                 <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -1254,7 +1266,7 @@ const PosSellPage = () => {
                 </div>
               ) : null}
 
-              {saleId && !(sale?.lines ?? []).length && !saleQuery.isLoading ? (
+              {saleId && !(sale?.lines ?? []).length && !saleQuery.isLoading && !saleQuery.error ? (
                 <div className="grid min-h-[260px] place-items-center p-6 text-center text-sm text-muted-foreground">
                   {t("sell.noLinesYet")}
                 </div>

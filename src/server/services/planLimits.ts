@@ -39,12 +39,14 @@ export const hasActivePaidOrApprovedSubscription = (
     return false;
   }
 
+  const currentPeriodActive = !org.currentPeriodEndsAt || org.currentPeriodEndsAt >= now;
+
   if (org.plan !== "STARTER") {
-    return true;
+    return currentPeriodActive;
   }
 
   if (!org.trialEndsAt) {
-    return true;
+    return currentPeriodActive;
   }
 
   if (!org.currentPeriodEndsAt) {
@@ -113,6 +115,9 @@ export const assertTrialActive = async (organizationId: string) => {
   }
   if (accessState.trialExpired) {
     throw new AppError("trialExpired", "FORBIDDEN", 403);
+  }
+  if (!accessState.hasAccess) {
+    throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   }
   return org;
 };

@@ -98,6 +98,9 @@ export const POST = async (request: Request) => {
   if (!(file instanceof File)) {
     return Response.json({ message: "invalidInput" }, { status: 400 });
   }
+  if (file.size < 1) {
+    return Response.json({ message: "imageInvalidType" }, { status: 400 });
+  }
   if (file.size > MAX_IMAGE_BYTES) {
     return Response.json({ message: "imageTooLarge" }, { status: 413 });
   }

@@ -65,6 +65,16 @@ const subscriptionStatusTranslationKey = (status?: string | null) => {
   return "unknown";
 };
 
+const isValidDateValue = (value: unknown): value is Date | string | number => {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime());
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return Number.isFinite(new Date(value).getTime());
+  }
+  return false;
+};
+
 const PlatformPage = () => {
   const { data: session, status } = useSession();
   const t = useTranslations("platformOwner");
@@ -133,6 +143,16 @@ const PlatformPage = () => {
     () => upgradeRequestsQuery.data ?? [],
     [upgradeRequestsQuery.data],
   );
+  const formatSafeDateTime = (value: unknown) => {
+    if (!isValidDateValue(value)) {
+      return tCommon("notAvailable");
+    }
+    try {
+      return formatDateTime(value, locale);
+    } catch {
+      return tCommon("notAvailable");
+    }
+  };
 
   if (isForbidden) {
     return (
@@ -284,7 +304,7 @@ const PlatformPage = () => {
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell>{formatDateTime(request.createdAt, locale)}</TableCell>
+                      <TableCell>{formatSafeDateTime(request.createdAt)}</TableCell>
                       <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground">
                         {request.message || tCommon("notAvailable")}
                       </TableCell>
@@ -399,15 +419,15 @@ const PlatformPage = () => {
                       <TableCell>{org._count?.products ?? 0}</TableCell>
                       <TableCell>
                         {org.trialEndsAt
-                          ? formatDateTime(org.trialEndsAt, locale)
+                          ? formatSafeDateTime(org.trialEndsAt)
                           : tCommon("notAvailable")}
                       </TableCell>
                       <TableCell>
                         {org.currentPeriodEndsAt
-                          ? formatDateTime(org.currentPeriodEndsAt, locale)
+                          ? formatSafeDateTime(org.currentPeriodEndsAt)
                           : tCommon("notAvailable")}
                       </TableCell>
-                      <TableCell>{formatDateTime(org.createdAt, locale)}</TableCell>
+                      <TableCell>{formatSafeDateTime(org.createdAt)}</TableCell>
                       <TableCell>
                         <Button
                           type="button"

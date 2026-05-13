@@ -69,6 +69,8 @@ import {
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
 import {
+  ProductImageUploadTimeoutError,
+  fetchProductImageUpload,
   normalizeImageMimeType,
   prepareProductImageFileForUpload,
   resolvePrimaryImageUrl,
@@ -1362,10 +1364,33 @@ export const ProductForm = ({
       formData.set("productId", productId);
     }
 
-    const response = await fetch("/api/product-images/upload", {
-      method: "POST",
-      body: formData,
-    });
+    let response: Response;
+    try {
+      response = await fetchProductImageUpload({
+        url: "/api/product-images/upload",
+        formData,
+      });
+    } catch (error) {
+      logImagePrepDebug(
+        "upload-request-error",
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          code: error instanceof ProductImageUploadTimeoutError ? "imageUploadTimedOut" : "fetch",
+        },
+        error,
+      );
+      toast({
+        variant: "error",
+        description:
+          error instanceof ProductImageUploadTimeoutError
+            ? t("imageUploadTimedOut")
+            : t("imageReadFailed"),
+      });
+      return null;
+    }
+
     const body = (await response.json().catch(() => null)) as {
       message?: string;
       url?: string;

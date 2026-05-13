@@ -333,6 +333,23 @@ describe("product image upload route", () => {
     expect(mockUploadProductImageBuffer).not.toHaveBeenCalled();
   });
 
+  it("rejects empty image files", async () => {
+    const { POST } = await import("../../src/app/api/product-images/upload/route");
+    const formData = new FormData();
+    formData.append("file", new File([], "empty.png", { type: "image/png" }));
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ message: "imageInvalidType" });
+    expect(mockUploadProductImageBuffer).not.toHaveBeenCalled();
+  });
+
   it("normalizes HEIC sequence uploads to HEIC mime type", async () => {
     const { POST } = await import("../../src/app/api/product-images/upload/route");
     const formData = new FormData();

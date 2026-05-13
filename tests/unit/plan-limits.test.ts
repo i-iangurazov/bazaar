@@ -14,7 +14,7 @@ describe("organization access state", () => {
           plan: "ENTERPRISE",
           subscriptionStatus: "ACTIVE",
           trialEndsAt: past,
-          currentPeriodEndsAt: past,
+          currentPeriodEndsAt: future,
         },
         now,
       ),
@@ -25,6 +25,28 @@ describe("organization access state", () => {
       hasAccess: true,
     });
   });
+
+  it.each(["STARTER", "BUSINESS", "ENTERPRISE"] as const)(
+    "allows active paid %s access after trial expiry",
+    (plan) => {
+      expect(
+        resolveOrganizationAccessState(
+          {
+            plan,
+            subscriptionStatus: "ACTIVE",
+            trialEndsAt: past,
+            currentPeriodEndsAt: future,
+          },
+          now,
+        ),
+      ).toMatchObject({
+        subscriptionActive: true,
+        trialActive: false,
+        trialExpired: false,
+        hasAccess: true,
+      });
+    },
+  );
 
   it("blocks a trial-only starter account after trial and period end", () => {
     expect(
@@ -97,6 +119,44 @@ describe("organization access state", () => {
       subscriptionActive: false,
       trialActive: false,
       trialExpired: true,
+      hasAccess: false,
+    });
+  });
+
+  it("blocks an active paid plan when its paid period is expired", () => {
+    expect(
+      resolveOrganizationAccessState(
+        {
+          plan: "BUSINESS",
+          subscriptionStatus: "ACTIVE",
+          trialEndsAt: past,
+          currentPeriodEndsAt: past,
+        },
+        now,
+      ),
+    ).toMatchObject({
+      subscriptionActive: false,
+      trialActive: false,
+      trialExpired: true,
+      hasAccess: false,
+    });
+  });
+
+  it("does not treat an active status alone as access when the paid period expired", () => {
+    expect(
+      resolveOrganizationAccessState(
+        {
+          plan: "ENTERPRISE",
+          subscriptionStatus: "ACTIVE",
+          trialEndsAt: null,
+          currentPeriodEndsAt: past,
+        },
+        now,
+      ),
+    ).toMatchObject({
+      subscriptionActive: false,
+      trialActive: false,
+      trialExpired: false,
       hasAccess: false,
     });
   });
