@@ -445,6 +445,7 @@
     "currentPeriodEndsAt": "Текущий период до {date}",
     "trialExpired": "Пробный период завершен. Доступ только для чтения.",
     "trialActive": "Пробный период активен.",
+    "subscriptionActive": "Подписка активна.",
     "subscriptionStatus": "Статус подписки",
     "subscriptionStatuses": {
       "active": "Активна",

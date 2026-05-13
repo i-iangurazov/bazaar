@@ -445,6 +445,7 @@
     "currentPeriodEndsAt": "Current period ends at {date}",
     "trialExpired": "Trial expired",
     "trialActive": "Trial active",
+    "subscriptionActive": "Subscription active.",
     "subscriptionStatus": "Subscription status",
     "subscriptionStatuses": {
       "active": "Active",

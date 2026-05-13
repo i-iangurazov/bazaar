@@ -445,6 +445,7 @@
     "currentPeriodEndsAt": "Учурдагы мөөнөт {date} чейин",
     "trialExpired": "Сынак мөөнөтү аяктады. Окуу гана.",
     "trialActive": "Сынак мөөнөтү активдүү.",
+    "subscriptionActive": "Жазылуу активдүү.",
     "subscriptionStatus": "Жазылуу макамы",
     "subscriptionStatuses": {
       "active": "Активдүү",

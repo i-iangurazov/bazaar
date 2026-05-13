@@ -25,6 +25,7 @@ export type { PlanFeature } from "@/server/billing/planCatalog";
 export const toPlanTier = (plan: OrganizationPlan): PlanTier => toPlanCode(plan);
 
 type OrganizationAccessPlan = {
+  plan: OrganizationPlan;
   subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED" | string;
   trialEndsAt: Date | null;
   currentPeriodEndsAt: Date | null;
@@ -37,7 +38,20 @@ export const hasActivePaidOrApprovedSubscription = (
   if (org.subscriptionStatus !== "ACTIVE") {
     return false;
   }
-  return !org.currentPeriodEndsAt || org.currentPeriodEndsAt >= now;
+
+  if (org.plan !== "STARTER") {
+    return true;
+  }
+
+  if (!org.trialEndsAt) {
+    return true;
+  }
+
+  if (!org.currentPeriodEndsAt) {
+    return org.trialEndsAt < now;
+  }
+
+  return org.trialEndsAt < now && org.currentPeriodEndsAt >= now;
 };
 
 export const isTrialExpiredWithoutSubscription = (org: OrganizationAccessPlan, now = new Date()) =>

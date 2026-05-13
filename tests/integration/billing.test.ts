@@ -62,7 +62,7 @@ describeDb("billing", () => {
         plan: "ENTERPRISE",
         subscriptionStatus: "ACTIVE",
         trialEndsAt: past,
-        currentPeriodEndsAt: null,
+        currentPeriodEndsAt: past,
       },
     });
 
@@ -158,7 +158,7 @@ describeDb("billing", () => {
     ).resolves.toMatchObject({ name: "Active Trial Product" });
   });
 
-  it("blocks inactive or expired paid subscriptions", async () => {
+  it("blocks inactive paid subscription statuses", async () => {
     const { org, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
     const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
 
@@ -193,7 +193,7 @@ describeDb("billing", () => {
     await prisma.organization.update({
       where: { id: org.id },
       data: {
-        subscriptionStatus: "ACTIVE",
+        subscriptionStatus: "CANCELED",
         trialEndsAt: past,
         currentPeriodEndsAt: past,
       },
@@ -207,6 +207,6 @@ describeDb("billing", () => {
         basePriceKgs: 100,
         categories: [],
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "trialExpired" });
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "subscriptionInactive" });
   });
 });
