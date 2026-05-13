@@ -1,7 +1,4 @@
-import {
-  OrganizationSubscriptionStatus,
-  PlanUpgradeRequestStatus,
-} from "@prisma/client";
+import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prisma/client";
 import type { OrganizationPlan } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -13,12 +10,10 @@ import {
   type PlanTier,
   getPlanFeatures,
   getPlanMonthlyPrice,
+  resolveOrganizationAccessState,
   toPlanTier,
 } from "@/server/services/planLimits";
-import {
-  getPlanFeatureMap,
-  getPlanMonthlyPriceKgsOverride,
-} from "@/server/billing/planCatalog";
+import { getPlanFeatureMap, getPlanMonthlyPriceKgsOverride } from "@/server/billing/planCatalog";
 
 const PLAN_RANK: Record<PlanTier, number> = {
   STARTER: 1,
@@ -87,8 +82,8 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
 
   const limits = getLimitsForPlan(org.plan);
   const now = new Date();
-  const trialExpired =
-    Boolean(org.trialEndsAt && org.trialEndsAt < now && (!org.currentPeriodEndsAt || org.currentPeriodEndsAt < now));
+  const accessState = resolveOrganizationAccessState(org, now);
+  const trialExpired = accessState.trialExpired;
   const limitExceeded = {
     stores: stores > limits.maxStores,
     users: users > limits.maxUsers,
@@ -104,6 +99,9 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     trialEndsAt: org.trialEndsAt,
     currentPeriodEndsAt: org.currentPeriodEndsAt,
     trialExpired,
+    subscriptionActive: accessState.subscriptionActive,
+    trialActive: accessState.trialActive,
+    hasAccess: accessState.hasAccess,
     usage: { stores, users, products },
     limits,
     features: getPlanFeatures(org.plan),
@@ -115,7 +113,8 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     planCatalog: getPlanCatalog(),
     upgradeRequests,
     pendingUpgradeRequest:
-      upgradeRequests.find((request) => request.status === PlanUpgradeRequestStatus.PENDING) ?? null,
+      upgradeRequests.find((request) => request.status === PlanUpgradeRequestStatus.PENDING) ??
+      null,
   };
 };
 

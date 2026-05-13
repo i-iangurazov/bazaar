@@ -260,6 +260,7 @@ const InventoryPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
+  const canManageStock = isAdmin;
   const router = useRouter();
   const pathname = usePathname() ?? "/inventory";
   const searchParams = useSearchParams();
@@ -1353,6 +1354,12 @@ const InventoryPage = () => {
 
   const openActionDialog = useCallback(
     (type: "receive" | "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
+      if ((type === "receive" || type === "adjust" || type === "transfer") && !canManageStock) {
+        return;
+      }
+      if (type === "minStock" && !canManage) {
+        return;
+      }
       setActiveDialog(type);
       if (type === "minStock") {
         minStockForm.setValue("applyToAll", false, { shouldValidate: false });
@@ -1380,7 +1387,7 @@ const InventoryPage = () => {
         minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
       }
     },
-    [adjustForm, minStockForm, receiveForm, transferForm],
+    [adjustForm, canManage, canManageStock, minStockForm, receiveForm, transferForm],
   );
 
   useEffect(() => {
@@ -1389,7 +1396,9 @@ const InventoryPage = () => {
       return;
     }
 
-    if (!canManage) {
+    const isStockAction = action === "receive" || action === "adjust" || action === "transfer";
+    const isManagedAction = isStockAction || action === "minStock";
+    if ((isStockAction && !canManageStock) || (isManagedAction && !canManage)) {
       const nextParams = new URLSearchParams(searchParams.toString());
       nextParams.delete("action");
       const nextQuery = nextParams.toString();
@@ -1401,7 +1410,12 @@ const InventoryPage = () => {
       return;
     }
 
-    if (action === "receive" || action === "adjust" || action === "transfer") {
+    if (
+      action === "receive" ||
+      action === "adjust" ||
+      action === "transfer" ||
+      action === "minStock"
+    ) {
       openActionDialog(action);
     }
 
@@ -1409,7 +1423,16 @@ const InventoryPage = () => {
     nextParams.delete("action");
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [canManage, openActionDialog, pathname, router, searchParams, storeId, storesQuery.data]);
+  }, [
+    canManage,
+    canManageStock,
+    openActionDialog,
+    pathname,
+    router,
+    searchParams,
+    storeId,
+    storesQuery.data,
+  ]);
 
   const openMovements = (item: InventoryRow) => {
     const label = item.variant?.name
@@ -1423,40 +1446,49 @@ const InventoryPage = () => {
     setActiveDialog("movements");
   };
 
-  const getInventoryActions = (item: InventoryRow) =>
-    canManage
-      ? [
-          {
-            key: "receive",
-            label: t("receiveStock"),
-            icon: ReceiveIcon,
-            onSelect: () => openActionDialog("receive", item),
-          },
-          {
-            key: "adjust",
-            label: t("stockAdjustment"),
-            icon: AdjustIcon,
-            onSelect: () => openActionDialog("adjust", item),
-          },
-          {
-            key: "transfer",
-            label: t("transferStock"),
-            icon: TransferIcon,
-            onSelect: () => openActionDialog("transfer", item),
-          },
-          {
-            key: "minStock",
-            label: t("minStockTitle"),
-            icon: AddIcon,
-            onSelect: () => openActionDialog("minStock", item),
-          },
-          {
-            key: "movements",
-            label: t("viewMovements"),
-            icon: ViewIcon,
-            onSelect: () => openMovements(item),
-          },
-        ]
+  const getInventoryActions = (item: InventoryRow) => {
+    const actions = [
+      ...(canManageStock
+        ? [
+            {
+              key: "receive",
+              label: t("receiveStock"),
+              icon: ReceiveIcon,
+              onSelect: () => openActionDialog("receive", item),
+            },
+            {
+              key: "adjust",
+              label: t("stockAdjustment"),
+              icon: AdjustIcon,
+              onSelect: () => openActionDialog("adjust", item),
+            },
+            {
+              key: "transfer",
+              label: t("transferStock"),
+              icon: TransferIcon,
+              onSelect: () => openActionDialog("transfer", item),
+            },
+          ]
+        : []),
+      ...(canManage
+        ? [
+            {
+              key: "minStock",
+              label: t("minStockTitle"),
+              icon: AddIcon,
+              onSelect: () => openActionDialog("minStock", item),
+            },
+          ]
+        : []),
+      {
+        key: "movements",
+        label: t("viewMovements"),
+        icon: ViewIcon,
+        onSelect: () => openMovements(item),
+      },
+    ];
+    return actions.length
+      ? actions
       : [
           {
             key: "view",
@@ -1465,6 +1497,7 @@ const InventoryPage = () => {
             onSelect: () => openMovements(item),
           },
         ];
+  };
 
   const adjustMutation = trpc.inventory.adjust.useMutation({
     onSuccess: () => {
@@ -1736,17 +1769,19 @@ const InventoryPage = () => {
         subtitle={t("subtitle")}
         action={
           <>
-            {canManage ? (
+            {canManage || canManageStock ? (
               <>
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => openActionDialog("receive")}
-                  disabled={!storeId}
-                  data-tour="inventory-receive"
-                >
-                  <ReceiveIcon className="h-4 w-4" aria-hidden />
-                  {t("receiveStock")}
-                </Button>
+                {canManageStock ? (
+                  <Button
+                    className="w-full sm:w-auto"
+                    onClick={() => openActionDialog("receive")}
+                    disabled={!storeId}
+                    data-tour="inventory-receive"
+                  >
+                    <ReceiveIcon className="h-4 w-4" aria-hidden />
+                    {t("receiveStock")}
+                  </Button>
+                ) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="secondary" className="w-full sm:w-auto">
@@ -1763,7 +1798,7 @@ const InventoryPage = () => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      disabled={!storeId}
+                      disabled={!storeId || !canManageStock}
                       onSelect={() => openActionDialog("adjust")}
                       data-tour="inventory-adjust"
                     >
@@ -1771,7 +1806,7 @@ const InventoryPage = () => {
                       {t("stockAdjustment")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={!storeId}
+                      disabled={!storeId || !canManageStock}
                       onSelect={() => openActionDialog("transfer")}
                       data-tour="inventory-transfer"
                     >
@@ -1779,7 +1814,7 @@ const InventoryPage = () => {
                       {t("transferStock")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={!storeId}
+                      disabled={!storeId || !canManage}
                       onSelect={() => openActionDialog("minStock")}
                     >
                       <StatusSuccessIcon className="h-4 w-4" aria-hidden />
@@ -2056,7 +2091,7 @@ const InventoryPage = () => {
                     )}
                     {inventoryQuickPrintLoading ? tCommon("loading") : t("printSelected")}
                   </Button>
-                  {canManage ? (
+                  {canManageStock ? (
                     <Button
                       type="button"
                       variant="secondary"

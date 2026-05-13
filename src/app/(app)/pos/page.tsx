@@ -110,12 +110,22 @@ const PosEntryPage = () => {
   }, [entryQuery.data?.registers, registerId]);
 
   const openShift = entryQuery.data?.currentShift;
+  const previousClosedShift = entryQuery.data?.previousClosedShift ?? null;
   const activeRegisterId = openShift?.registerId ?? selectedRegister?.id ?? registerId;
   const formatStoreMoney = (amountKgs: number | string) =>
     formatKgsMoney(
       Number(amountKgs),
       locale,
       currencySourceWithFallback(openShift, selectedRegister?.store ?? null),
+    );
+  const formatPreviousShiftMoney = (amountKgs: number | string) =>
+    formatKgsMoney(
+      Number(amountKgs),
+      locale,
+      currencySourceWithFallback(
+        previousClosedShift?.store ?? null,
+        selectedRegister?.store ?? null,
+      ),
     );
 
   useSse({
@@ -202,6 +212,64 @@ const PosEntryPage = () => {
               <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner className="h-4 w-4" />
                 {t("loading")}
+              </div>
+            ) : null}
+
+            {selectedRegister ? (
+              <div className="border border-border bg-muted/20 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("entry.previousClosedShiftTitle")}
+                    </p>
+                    {previousClosedShift ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDateTime(
+                          previousClosedShift.closedAt ?? previousClosedShift.openedAt,
+                          locale,
+                        )}
+                        {" · "}
+                        {previousClosedShift.register.name} ({previousClosedShift.register.code})
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("entry.previousClosedShiftEmpty")}
+                      </p>
+                    )}
+                  </div>
+                  {previousClosedShift ? (
+                    <div className="grid gap-2 text-sm sm:grid-cols-3 sm:text-right">
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          {t("entry.previousClosedShiftCounted")}
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {previousClosedShift.closingCashCountedKgs === null
+                            ? tCommon("notAvailable")
+                            : formatPreviousShiftMoney(previousClosedShift.closingCashCountedKgs)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          {t("entry.previousClosedShiftExpected")}
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {previousClosedShift.expectedCashKgs === null
+                            ? tCommon("notAvailable")
+                            : formatPreviousShiftMoney(previousClosedShift.expectedCashKgs)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          {t("entry.previousClosedShiftClosedBy")}
+                        </p>
+                        <p className="font-semibold text-foreground">
+                          {previousClosedShift.closedBy?.name ?? tCommon("notAvailable")}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -309,6 +377,46 @@ const PosEntryPage = () => {
               inputMode="decimal"
               autoFocus
             />
+          </div>
+          <div className="border border-border bg-muted/20 p-3 text-sm">
+            <p className="font-medium text-foreground">{t("entry.previousClosedShiftTitle")}</p>
+            {previousClosedShift ? (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <p className="text-muted-foreground">
+                  {t("entry.previousClosedShiftClosedAt")}:{" "}
+                  <span className="text-foreground">
+                    {formatDateTime(
+                      previousClosedShift.closedAt ?? previousClosedShift.openedAt,
+                      locale,
+                    )}
+                  </span>
+                </p>
+                <p className="text-muted-foreground">
+                  {t("entry.previousClosedShiftCounted")}:{" "}
+                  <span className="text-foreground">
+                    {previousClosedShift.closingCashCountedKgs === null
+                      ? tCommon("notAvailable")
+                      : formatPreviousShiftMoney(previousClosedShift.closingCashCountedKgs)}
+                  </span>
+                </p>
+                <p className="text-muted-foreground">
+                  {t("entry.previousClosedShiftExpected")}:{" "}
+                  <span className="text-foreground">
+                    {previousClosedShift.expectedCashKgs === null
+                      ? tCommon("notAvailable")
+                      : formatPreviousShiftMoney(previousClosedShift.expectedCashKgs)}
+                  </span>
+                </p>
+                <p className="text-muted-foreground">
+                  {t("entry.previousClosedShiftClosedBy")}:{" "}
+                  <span className="text-foreground">
+                    {previousClosedShift.closedBy?.name ?? tCommon("notAvailable")}
+                  </span>
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1 text-muted-foreground">{t("entry.previousClosedShiftEmpty")}</p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{t("entry.openingNote")}</label>

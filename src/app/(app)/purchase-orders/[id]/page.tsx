@@ -87,6 +87,7 @@ const PurchaseOrderDetailPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const role = session?.user?.role ?? "STAFF";
   const canManage = role === "ADMIN" || role === "MANAGER";
+  const canReceiveInventory = role === "ADMIN";
   const [pdfActionPending, setPdfActionPending] = useState<null | "download" | "print">(null);
 
   const poQuery = trpc.purchaseOrders.getById.useQuery({ id: poId }, { enabled: Boolean(poId) });
@@ -579,21 +580,23 @@ const PurchaseOrderDetailPage = () => {
                   )}
                   {approveMutation.isLoading ? tCommon("loading") : t("approveOrder")}
                 </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => setReceiveDialogOpen(true)}
-                  disabled={
-                    (po.status !== "APPROVED" && po.status !== "PARTIALLY_RECEIVED") ||
-                    receiveMutation.isLoading
-                  }
-                >
-                  {receiveMutation.isLoading ? (
-                    <Spinner className="h-4 w-4" />
-                  ) : (
-                    <ReceiveIcon className="h-4 w-4" aria-hidden />
-                  )}
-                  {receiveMutation.isLoading ? tCommon("loading") : t("receiveItems")}
-                </Button>
+                {canReceiveInventory ? (
+                  <Button
+                    className="w-full sm:w-auto"
+                    onClick={() => setReceiveDialogOpen(true)}
+                    disabled={
+                      (po.status !== "APPROVED" && po.status !== "PARTIALLY_RECEIVED") ||
+                      receiveMutation.isLoading
+                    }
+                  >
+                    {receiveMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <ReceiveIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {receiveMutation.isLoading ? tCommon("loading") : t("receiveItems")}
+                  </Button>
+                ) : null}
                 <Button
                   variant="danger"
                   className="w-full sm:w-auto"

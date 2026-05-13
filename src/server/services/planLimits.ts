@@ -24,6 +24,39 @@ export type { PlanFeature } from "@/server/billing/planCatalog";
 
 export const toPlanTier = (plan: OrganizationPlan): PlanTier => toPlanCode(plan);
 
+type OrganizationAccessPlan = {
+  subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED" | string;
+  trialEndsAt: Date | null;
+  currentPeriodEndsAt: Date | null;
+};
+
+export const hasActivePaidOrApprovedSubscription = (
+  org: OrganizationAccessPlan,
+  now = new Date(),
+) => {
+  if (org.subscriptionStatus !== "ACTIVE") {
+    return false;
+  }
+  return !org.currentPeriodEndsAt || org.currentPeriodEndsAt >= now;
+};
+
+export const isTrialExpiredWithoutSubscription = (org: OrganizationAccessPlan, now = new Date()) =>
+  Boolean(
+    org.trialEndsAt && org.trialEndsAt < now && !hasActivePaidOrApprovedSubscription(org, now),
+  );
+
+export const resolveOrganizationAccessState = (org: OrganizationAccessPlan, now = new Date()) => {
+  const subscriptionActive = hasActivePaidOrApprovedSubscription(org, now);
+  const trialActive = Boolean(org.trialEndsAt && org.trialEndsAt >= now);
+  const trialExpired = isTrialExpiredWithoutSubscription(org, now);
+  return {
+    subscriptionActive,
+    trialActive,
+    trialExpired,
+    hasAccess: subscriptionActive || trialActive,
+  };
+};
+
 export const getLimitsForPlan = (plan: OrganizationPlan): PlanLimits => {
   const limits = getCatalogLimits(plan);
   return {
@@ -33,7 +66,8 @@ export const getLimitsForPlan = (plan: OrganizationPlan): PlanLimits => {
   };
 };
 
-export const getPlanFeatures = (plan: OrganizationPlan): readonly PlanFeature[] => getCatalogFeatures(plan);
+export const getPlanFeatures = (plan: OrganizationPlan): readonly PlanFeature[] =>
+  getCatalogFeatures(plan);
 
 export const hasPlanFeature = (plan: OrganizationPlan, feature: PlanFeature) =>
   hasFeature(plan, feature);
@@ -43,7 +77,13 @@ export const getPlanMonthlyPrice = (plan: OrganizationPlan) => getPlanMonthlyPri
 export const getOrganizationPlan = async (organizationId: string) => {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
-    select: { id: true, plan: true, trialEndsAt: true, subscriptionStatus: true, currentPeriodEndsAt: true },
+    select: {
+      id: true,
+      plan: true,
+      trialEndsAt: true,
+      subscriptionStatus: true,
+      currentPeriodEndsAt: true,
+    },
   });
   if (!org) {
     throw new AppError("orgNotFound", "NOT_FOUND", 404);
@@ -53,11 +93,11 @@ export const getOrganizationPlan = async (organizationId: string) => {
 
 export const assertTrialActive = async (organizationId: string) => {
   const org = await getOrganizationPlan(organizationId);
+  const accessState = resolveOrganizationAccessState(org);
   if (org.subscriptionStatus !== "ACTIVE") {
     throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   }
-  const now = new Date();
-  if (org.trialEndsAt && org.trialEndsAt < now && (!org.currentPeriodEndsAt || org.currentPeriodEndsAt < now)) {
+  if (accessState.trialExpired) {
     throw new AppError("trialExpired", "FORBIDDEN", 403);
   }
   return org;
@@ -81,7 +121,9 @@ export const assertCapacity = async (input: {
   if (input.kind === "stores") {
     count = await prisma.store.count({ where: { organizationId: input.organizationId } });
   } else if (input.kind === "users") {
-    count = await prisma.user.count({ where: { organizationId: input.organizationId, isActive: true } });
+    count = await prisma.user.count({
+      where: { organizationId: input.organizationId, isActive: true },
+    });
   } else {
     count = await prisma.product.count({ where: { organizationId: input.organizationId } });
   }

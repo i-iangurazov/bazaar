@@ -33,6 +33,7 @@ import { resolveFiscalMetadataFromResult } from "@/server/services/fiscalReceipt
 import { applyStockMovement } from "@/server/services/inventory";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
+import { sanitizeListImageUrl } from "@/server/services/products/serializers";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import {
   calculateCashDiscrepancyKgs,
@@ -40,7 +41,11 @@ import {
   resolveCashDifferenceStatus,
   roundCashAmount,
 } from "@/server/services/posCashAccounting";
-import { resolveAccessibleStoreIds, type StoreAccessUser } from "@/server/services/storeAccess";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
   typeof value === "number" ? value : value ? Number(value) : 0;
@@ -672,6 +677,64 @@ export const updatePosRegister = async (input: {
   });
 };
 
+const getPreviousClosedRegisterShift = async (input: {
+  organizationId: string;
+  storeId: string;
+  registerId?: string;
+}) => {
+  const shift = await prisma.registerShift.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      status: RegisterShiftStatus.CLOSED,
+      ...(input.registerId ? { registerId: input.registerId } : {}),
+    },
+    include: {
+      register: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
+        },
+      },
+      openedBy: { select: { id: true, name: true } },
+      closedBy: { select: { id: true, name: true } },
+    },
+    orderBy: [{ closedAt: "desc" }, { openedAt: "desc" }],
+  });
+
+  if (!shift) {
+    return null;
+  }
+
+  const countedCashKgs =
+    shift.closingCashCountedKgs === null ? null : toMoney(shift.closingCashCountedKgs);
+  const expectedCashKgs = shift.expectedCashKgs === null ? null : toMoney(shift.expectedCashKgs);
+  const discrepancyKgs =
+    countedCashKgs === null || expectedCashKgs === null
+      ? null
+      : calculateCashDiscrepancyKgs({ countedCashKgs, expectedCashKgs });
+
+  return {
+    id: shift.id,
+    status: shift.status,
+    openedAt: shift.openedAt,
+    closedAt: shift.closedAt,
+    openingCashKgs: toMoney(shift.openingCashKgs),
+    closingCashCountedKgs: countedCashKgs,
+    expectedCashKgs,
+    discrepancyKgs,
+    differenceStatus: discrepancyKgs === null ? null : resolveCashDifferenceStatus(discrepancyKgs),
+    register: shift.register,
+    store: shift.store,
+    openedBy: shift.openedBy,
+    closedBy: shift.closedBy,
+  };
+};
+
 export const getPosEntry = async (input: {
   organizationId: string;
   registerId?: string;
@@ -686,6 +749,7 @@ export const getPosEntry = async (input: {
       registers: [],
       selectedRegister: null,
       currentShift: null,
+      previousClosedShift: null,
     };
   }
 
@@ -696,6 +760,14 @@ export const getPosEntry = async (input: {
     ? await getCurrentRegisterShift({
         organizationId: input.organizationId,
         registerId: selectedRegister.id,
+        user: input.user,
+      })
+    : null;
+  const previousClosedShift = selectedRegister
+    ? await getPreviousClosedRegisterShift({
+        organizationId: input.organizationId,
+        storeId: selectedRegister.storeId,
+        registerId: selectedRegister.id,
       })
     : null;
 
@@ -703,6 +775,7 @@ export const getPosEntry = async (input: {
     registers,
     selectedRegister,
     currentShift,
+    previousClosedShift,
   };
 };
 
@@ -712,6 +785,7 @@ export const openRegisterShift = async (input: {
   openingCashKgs: number;
   notes?: string | null;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
   idempotencyKey: string;
 }) => {
@@ -744,6 +818,9 @@ export const openRegisterShift = async (input: {
         }
         if (!register.isActive) {
           throw new AppError("posRegisterInactive", "CONFLICT", 409);
+        }
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, register.storeId);
         }
 
         const current = await tx.registerShift.findFirst({
@@ -807,6 +884,7 @@ export const openRegisterShift = async (input: {
 export const getCurrentRegisterShift = async (input: {
   organizationId: string;
   registerId: string;
+  user?: StoreAccessUser;
 }) => {
   const shift = await prisma.registerShift.findFirst({
     where: {
@@ -838,6 +916,9 @@ export const getCurrentRegisterShift = async (input: {
 
   if (!shift) {
     return null;
+  }
+  if (input.user) {
+    await assertUserCanAccessStore(prisma, input.user, shift.store.id);
   }
 
   return {
@@ -1051,6 +1132,7 @@ export const createPosSaleDraft = async (input: {
   customerPhone?: string | null;
   notes?: string | null;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
   lines?: Array<{ productId: string; variantId?: string | null; qty: number }>;
 }) => {
@@ -1060,6 +1142,9 @@ export const createPosSaleDraft = async (input: {
         organizationId: input.organizationId,
         registerId: input.registerId,
       });
+      if (input.user) {
+        await assertUserCanAccessStore(tx, input.user, shift.storeId);
+      }
 
       const existingDraft = await tx.customerOrder.findFirst({
         where: {
@@ -1231,7 +1316,19 @@ export const getActivePosSaleDraft = async (input: {
   organizationId: string;
   registerId: string;
   actorId: string;
+  user?: StoreAccessUser;
 }) => {
+  if (input.user) {
+    const register = await prisma.posRegister.findFirst({
+      where: { id: input.registerId, organizationId: input.organizationId },
+      select: { storeId: true },
+    });
+    if (!register) {
+      throw new AppError("posRegisterNotFound", "NOT_FOUND", 404);
+    }
+    await assertUserCanAccessStore(prisma, input.user, register.storeId);
+  }
+
   const draft = await prisma.customerOrder.findFirst({
     where: {
       organizationId: input.organizationId,
@@ -1262,6 +1359,7 @@ export const cancelPosSaleDraft = async (input: {
   organizationId: string;
   saleId: string;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -1279,6 +1377,9 @@ export const cancelPosSaleDraft = async (input: {
     });
     if (!sale) {
       throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
     }
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
@@ -1670,7 +1771,18 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
               id: true,
               sku: true,
               name: true,
+              photoUrl: true,
               isBundle: true,
+              images: {
+                where: {
+                  url: {
+                    not: { startsWith: "data:image/" },
+                  },
+                },
+                select: { url: true },
+                orderBy: { position: "asc" },
+                take: 1,
+              },
               complianceFlags: {
                 select: {
                   requiresMarking: true,
@@ -1710,14 +1822,22 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
     subtotalKgs: toMoney(sale.subtotalKgs),
     discountKgs: toMoney(sale.discountKgs),
     totalKgs: toMoney(sale.totalKgs),
-    lines: sale.lines.map((line) => ({
-      ...line,
-      unitPriceKgs: toMoney(line.unitPriceKgs),
-      lineTotalKgs: toMoney(line.lineTotalKgs),
-      unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
-      lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
-      markingCodes: line.markingCodeCaptures.map((capture) => capture.code),
-    })),
+    lines: sale.lines.map((line) => {
+      const { images, photoUrl, ...product } = line.product;
+      return {
+        ...line,
+        product: {
+          ...product,
+          primaryImage:
+            sanitizeListImageUrl(images[0]?.url) ?? sanitizeListImageUrl(photoUrl) ?? null,
+        },
+        unitPriceKgs: toMoney(line.unitPriceKgs),
+        lineTotalKgs: toMoney(line.lineTotalKgs),
+        unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
+        lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
+        markingCodes: line.markingCodeCaptures.map((capture) => capture.code),
+      };
+    }),
     payments: sale.payments.map((payment) => ({
       ...payment,
       amountKgs: toMoney(payment.amountKgs),
@@ -1744,6 +1864,7 @@ export const addPosSaleLine = async (input: {
   variantId?: string | null;
   qty: number;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -1761,6 +1882,9 @@ export const addPosSaleLine = async (input: {
     });
     if (!sale) {
       throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
     }
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
@@ -1872,6 +1996,7 @@ export const updatePosSaleLine = async (input: {
   lineId: string;
   qty: number;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -1884,6 +2009,9 @@ export const updatePosSaleLine = async (input: {
     }
     if (line.customerOrder.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, line.customerOrder.storeId);
     }
     if (line.customerOrder.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
@@ -1926,6 +2054,7 @@ export const removePosSaleLine = async (input: {
   organizationId: string;
   lineId: string;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -1938,6 +2067,9 @@ export const removePosSaleLine = async (input: {
     }
     if (line.customerOrder.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, line.customerOrder.storeId);
     }
     if (line.customerOrder.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
@@ -1966,6 +2098,7 @@ export const updatePosSaleDiscount = async (input: {
   saleId: string;
   discountKgs: number;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
 }) => {
   const discountKgs = roundMoney(input.discountKgs);
@@ -1983,6 +2116,7 @@ export const updatePosSaleDiscount = async (input: {
       select: {
         id: true,
         status: true,
+        storeId: true,
         subtotalKgs: true,
         discountKgs: true,
         totalKgs: true,
@@ -1990,6 +2124,9 @@ export const updatePosSaleDiscount = async (input: {
     });
     if (!sale) {
       throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
     }
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
@@ -2288,6 +2425,7 @@ export const completePosSale = async (input: {
   organizationId: string;
   saleId: string;
   actorId: string;
+  user?: StoreAccessUser;
   requestId: string;
   idempotencyKey: string;
   debtCustomerName?: string | null;
@@ -2342,6 +2480,9 @@ export const completePosSale = async (input: {
 
         if (!sale) {
           throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, sale.storeId);
         }
         if (!sale.shiftId || !sale.registerId) {
           throw new AppError("posSaleMissingShift", "CONFLICT", 409);

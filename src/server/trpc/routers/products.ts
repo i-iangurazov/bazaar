@@ -1,3 +1,5 @@
+import { TRPCError } from "@trpc/server";
+
 import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import {
   archiveProductMutation,
@@ -192,14 +194,17 @@ export const productsRouter = router({
 
   create: managerProcedure
     .input(createProductInputSchema)
-    .mutation(({ ctx, input }) =>
-      createProductMutation({
+    .mutation(({ ctx, input }) => {
+      if ((input.initialOnHand ?? 0) > 0 && ctx.user.role !== "ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
+      }
+      return createProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   update: managerProcedure
     .input(updateProductInputSchema)

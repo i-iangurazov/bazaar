@@ -1,7 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import {
+  adminProcedure,
+  managerProcedure,
+  protectedProcedure,
+  rateLimit,
+  router,
+} from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   addPurchaseOrderLine,
@@ -21,14 +27,7 @@ export const purchaseOrdersRouter = router({
       z
         .object({
           status: z
-            .enum([
-              "DRAFT",
-              "SUBMITTED",
-              "APPROVED",
-              "PARTIALLY_RECEIVED",
-              "RECEIVED",
-              "CANCELLED",
-            ])
+            .enum(["DRAFT", "SUBMITTED", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"])
             .optional(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(200).optional(),
@@ -60,7 +59,9 @@ export const purchaseOrdersRouter = router({
       const orderIds = orders.map((order) => order.id);
       const totalsByOrderId =
         orderIds.length > 0
-          ? await ctx.prisma.$queryRaw<Array<{ purchaseOrderId: string; total: Prisma.Decimal | null; hasCost: boolean }>>(
+          ? await ctx.prisma.$queryRaw<
+              Array<{ purchaseOrderId: string; total: Prisma.Decimal | null; hasCost: boolean }>
+            >(
               Prisma.sql`
                 SELECT
                   "purchaseOrderId",
@@ -97,14 +98,7 @@ export const purchaseOrdersRouter = router({
       z
         .object({
           status: z
-            .enum([
-              "DRAFT",
-              "SUBMITTED",
-              "APPROVED",
-              "PARTIALLY_RECEIVED",
-              "RECEIVED",
-              "CANCELLED",
-            ])
+            .enum(["DRAFT", "SUBMITTED", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"])
             .optional(),
         })
         .optional(),
@@ -122,32 +116,30 @@ export const purchaseOrdersRouter = router({
       return rows.map((row) => row.id);
     }),
 
-  getById: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const po = await ctx.prisma.purchaseOrder.findFirst({
-        where: { id: input.id, organizationId: ctx.user.organizationId },
-        include: {
-          supplier: true,
-          store: true,
-          lines: {
-            include: { product: { include: { baseUnit: true, packs: true } }, variant: true },
-          },
+  getById: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const po = await ctx.prisma.purchaseOrder.findFirst({
+      where: { id: input.id, organizationId: ctx.user.organizationId },
+      include: {
+        supplier: true,
+        store: true,
+        lines: {
+          include: { product: { include: { baseUnit: true, packs: true } }, variant: true },
         },
-      });
+      },
+    });
 
-      if (!po) {
-        return null;
-      }
+    if (!po) {
+      return null;
+    }
 
-      return {
-        ...po,
-        lines: po.lines.map((line) => ({
-          ...line,
-          unitCost: line.unitCost ? Number(line.unitCost) : null,
-        })),
-      };
-    }),
+    return {
+      ...po,
+      lines: po.lines.map((line) => ({
+        ...line,
+        unitCost: line.unitCost ? Number(line.unitCost) : null,
+      })),
+    };
+  }),
 
   create: managerProcedure
     .input(
@@ -249,14 +241,14 @@ export const purchaseOrdersRouter = router({
       }
     }),
 
-  receive: managerProcedure
+  receive: adminProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "po-receive" }))
     .input(
       z.object({
         purchaseOrderId: z.string(),
         idempotencyKey: z.string().min(8),
         allowOverReceive: z.boolean().optional(),
-          lines: z
+        lines: z
           .array(
             z.object({
               lineId: z.string(),

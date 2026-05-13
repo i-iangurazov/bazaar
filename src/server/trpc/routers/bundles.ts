@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import {
+  adminProcedure,
+  managerProcedure,
+  protectedProcedure,
+  rateLimit,
+  router,
+} from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
@@ -20,6 +26,15 @@ const bundlesProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) =
 });
 
 const bundlesManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
+  try {
+    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "bundles" });
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+  return next();
+});
+
+const bundlesAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {
   try {
     await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "bundles" });
   } catch (error) {
@@ -82,7 +97,7 @@ export const bundlesRouter = router({
       }
     }),
 
-  assemble: bundlesManagerProcedure
+  assemble: bundlesAdminProcedure
     .use(rateLimit({ windowMs: 10_000, max: 10, prefix: "bundles-assemble" }))
     .input(
       z.object({

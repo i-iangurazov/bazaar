@@ -32,6 +32,7 @@ const NewProductPage = () => {
   const pageSubtitle = isBundleDefault ? t("newBundleSubtitle") : t("newSubtitle");
   const { data: session, status } = useSession();
   const canManageProducts = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const canEditInitialStock = session?.user?.role === "ADMIN";
   const { toast } = useToast();
   const attributesQuery = trpc.attributes.list.useQuery();
   const unitsQuery = trpc.units.list.useQuery();
@@ -177,6 +178,7 @@ const NewProductPage = () => {
           currencyCode={selectedStore.currencyCode ?? null}
           currencyRateKgsPerUnit={selectedCurrencyRate}
           quickCreateMode
+          canEditInitialStock={canEditInitialStock}
         />
       )}
       {createMutation.error ? (

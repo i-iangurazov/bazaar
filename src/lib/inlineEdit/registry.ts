@@ -534,7 +534,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
           idempotencyKey: createInlineIdempotencyKey(),
         },
       }),
-      permissionCheck: (role, _row, context) => Boolean(context.storeId) && isManagerOrAdmin(role),
+      permissionCheck: (role, _row, context) => Boolean(context.storeId) && isAdmin(role),
     },
   },
   inventory: {

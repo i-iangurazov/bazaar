@@ -80,6 +80,7 @@ const StockCountDetailPage = () => {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
+  const canApplyStockCount = role === "ADMIN";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
 
@@ -96,14 +97,11 @@ const StockCountDetailPage = () => {
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
-  const [movementTarget, setMovementTarget] = useState<
-    | {
-        productId: string;
-        variantId?: string | null;
-        label: string;
-      }
-    | null
-  >(null);
+  const [movementTarget, setMovementTarget] = useState<{
+    productId: string;
+    variantId?: string | null;
+    label: string;
+  } | null>(null);
 
   useEffect(() => {
     if (scanMode) {
@@ -134,8 +132,7 @@ const StockCountDetailPage = () => {
       return true;
     }
 
-    const barcodeOrQuery =
-      result.item.matchType === "barcode" ? result.input : result.item.sku;
+    const barcodeOrQuery = result.item.matchType === "barcode" ? result.input : result.item.sku;
 
     try {
       await addLineMutation.mutateAsync({
@@ -294,7 +291,9 @@ const StockCountDetailPage = () => {
                   if (!count) {
                     return;
                   }
-                  if (!(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))) {
+                  if (
+                    !(await confirm({ description: t("confirmCancel"), confirmVariant: "danger" }))
+                  ) {
                     return;
                   }
                   cancelMutation.mutate({ stockCountId: count.id });
@@ -305,42 +304,42 @@ const StockCountDetailPage = () => {
               </Button>
             ) : null}
             <HelpLink articleId="stockCounts" />
-            <Button
-              className="w-full sm:w-auto"
-              disabled={!count || isLocked || !canManage || applyMutation.isLoading}
-              onClick={async () => {
-                if (!count) {
-                  return;
-                }
-                if (
-                  !(await confirm({
-                    description: t("confirmApply", { count: summary.varianceLines }),
-                    confirmVariant: "danger",
-                  }))
-                ) {
-                  return;
-                }
-                applyMutation.mutate({
-                  stockCountId: count.id,
-                  idempotencyKey: crypto.randomUUID(),
-                });
-              }}
-            >
-              {applyMutation.isLoading ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <AddIcon className="h-4 w-4" aria-hidden />
-              )}
-              {applyMutation.isLoading ? tCommon("loading") : t("apply")}
-            </Button>
+            {canApplyStockCount ? (
+              <Button
+                className="w-full sm:w-auto"
+                disabled={!count || isLocked || applyMutation.isLoading}
+                onClick={async () => {
+                  if (!count) {
+                    return;
+                  }
+                  if (
+                    !(await confirm({
+                      description: t("confirmApply", { count: summary.varianceLines }),
+                      confirmVariant: "danger",
+                    }))
+                  ) {
+                    return;
+                  }
+                  applyMutation.mutate({
+                    stockCountId: count.id,
+                    idempotencyKey: crypto.randomUUID(),
+                  });
+                }}
+              >
+                {applyMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <AddIcon className="h-4 w-4" aria-hidden />
+                )}
+                {applyMutation.isLoading ? tCommon("loading") : t("apply")}
+              </Button>
+            ) : null}
           </div>
         }
       />
 
       {countQuery.error ? (
-        <p className="mb-4 text-sm text-danger">
-          {translateError(tErrors, countQuery.error)}
-        </p>
+        <p className="mb-4 text-sm text-danger">{translateError(tErrors, countQuery.error)}</p>
       ) : null}
 
       <Card className="mb-6">
@@ -460,7 +459,12 @@ const StockCountDetailPage = () => {
                                 aria-label={t("removeLine")}
                                 disabled={isLocked || removeLineMutation.isLoading}
                                 onClick={async () => {
-                                  if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                                  if (
+                                    !(await confirm({
+                                      description: t("confirmRemoveLine"),
+                                      confirmVariant: "danger",
+                                    }))
+                                  ) {
                                     return;
                                   }
                                   removeLineMutation.mutate({ lineId: line.id });
@@ -511,7 +515,12 @@ const StockCountDetailPage = () => {
                     variant: "danger",
                     disabled: isLocked || removeLineMutation.isLoading,
                     onSelect: async () => {
-                      if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                      if (
+                        !(await confirm({
+                          description: t("confirmRemoveLine"),
+                          confirmVariant: "danger",
+                        }))
+                      ) {
                         return;
                       }
                       removeLineMutation.mutate({ lineId: line.id });
@@ -523,7 +532,9 @@ const StockCountDetailPage = () => {
                   <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{line.product.name}</p>
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {line.product.name}
+                        </p>
                         <p className="text-xs text-muted-foreground">{line.product.sku}</p>
                         <p className="text-xs text-muted-foreground">
                           {line.variant?.name ?? tCommon("notAvailable")}
@@ -706,7 +717,11 @@ const StockCountDetailPage = () => {
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" className="w-full sm:w-auto" disabled={setQtyMutation.isLoading}>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={setQtyMutation.isLoading}
+              >
                 {setQtyMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
                 ) : (

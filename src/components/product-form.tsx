@@ -293,6 +293,12 @@ const normalizeSkuToken = (value?: string | null) =>
     .replace(/[^A-Z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+const preventInvalidIntegerInput = (event: KeyboardEvent<HTMLInputElement>) => {
+  if (["-", "+", "e", "E", ".", ","].includes(event.key)) {
+    event.preventDefault();
+  }
+};
+
 const resolveHeicLikeMimeType = (file: File) => {
   const normalizedType = normalizeImageMimeType(file.type);
   if (normalizedType === "image/heic" || normalizedType === "image/heif") {
@@ -338,6 +344,7 @@ export const ProductForm = ({
   quickCreateMode = false,
   formId,
   hideActions = false,
+  canEditInitialStock = true,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -352,6 +359,7 @@ export const ProductForm = ({
   quickCreateMode?: boolean;
   formId?: string;
   hideActions?: boolean;
+  canEditInitialStock?: boolean;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -405,7 +413,7 @@ export const ProductForm = ({
     );
     const optionalStockQty = z.preprocess(
       (value) => (value === "" || value === null || value === undefined ? undefined : value),
-      z.coerce.number().int().min(0, t("stockNonNegative")).optional(),
+      z.coerce.number().int(t("stockNonNegative")).min(0, t("stockNonNegative")).optional(),
     );
 
     return z
@@ -3013,28 +3021,31 @@ export const ProductForm = ({
                     ) : null}
                     {compactCreate ? (
                       <>
-                        <FormField
-                          control={form.control}
-                          name="initialOnHand"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{t("initialOnHand")}</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  type="number"
-                                  inputMode="numeric"
-                                  min={0}
-                                  step={1}
-                                  placeholder={t("initialOnHandPlaceholder")}
-                                  disabled={readOnly}
-                                />
-                              </FormControl>
-                              <FormDescription>{t("initialOnHandHint")}</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {canEditInitialStock ? (
+                          <FormField
+                            control={form.control}
+                            name="initialOnHand"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t("initialOnHand")}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    step={1}
+                                    placeholder={t("initialOnHandPlaceholder")}
+                                    onKeyDown={preventInvalidIntegerInput}
+                                    disabled={readOnly}
+                                  />
+                                </FormControl>
+                                <FormDescription>{t("initialOnHandHint")}</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        ) : null}
                         <FormField
                           control={form.control}
                           name="minStock"
@@ -3049,6 +3060,7 @@ export const ProductForm = ({
                                   min={0}
                                   step={1}
                                   placeholder={t("minStockPlaceholder")}
+                                  onKeyDown={preventInvalidIntegerInput}
                                   disabled={readOnly}
                                 />
                               </FormControl>

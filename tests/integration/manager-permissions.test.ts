@@ -101,6 +101,37 @@ describeDb("manager operational permissions", () => {
     ).resolves.toMatchObject({ isDeleted: false });
   });
 
+  it("blocks managers from manually changing inventory", async () => {
+    const { org, store, product, baseUnit, managerUser } = await seedBase();
+    const caller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+
+    await expect(
+      caller.products.create({
+        sku: "MGR-STOCK-1",
+        name: "Manager Stock Product",
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 100,
+        initialOnHand: 5,
+        categories: [],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
+
+    await expect(
+      caller.inventory.adjust({
+        storeId: store.id,
+        productId: product.id,
+        qtyDelta: 1,
+        reason: "manual test adjustment",
+        idempotencyKey: "manager-stock-adjust",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   it("allows managers to create and update registers only in accessible stores", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.create({

@@ -1015,7 +1015,7 @@ const StoresPage = () => {
                             <Switch
                               checked={field.value}
                               onCheckedChange={field.onChange}
-                              disabled={!cloneSourceSelected}
+                              disabled={!cloneSourceSelected || !isAdmin}
                             />
                           </FormControl>
                         </div>
@@ -1034,7 +1034,7 @@ const StoresPage = () => {
                             {...field}
                             type="number"
                             step="1"
-                            disabled={!cloneSourceSelected || !copyInventoryEnabled}
+                            disabled={!cloneSourceSelected || !copyInventoryEnabled || !isAdmin}
                           />
                         </FormControl>
                         <FormDescription>{t("stockQuantityDeltaHint")}</FormDescription>

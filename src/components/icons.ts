@@ -14,6 +14,7 @@ import {
   CirclePlus,
   Upload,
   Download,
+  ArrowLeft,
   ArrowDownToLine,
   ArrowRightLeft,
   ArrowUp,
@@ -80,6 +81,7 @@ export const CirclePlusIcon = CirclePlus;
 export const UploadIcon = Upload;
 export const IntegrationsIcon = Plug;
 export const DownloadIcon = Download;
+export const BackIcon = ArrowLeft;
 export const ReceiveIcon = ArrowDownToLine;
 export const TransferIcon = ArrowRightLeft;
 export const ArrowUpIcon = ArrowUp;

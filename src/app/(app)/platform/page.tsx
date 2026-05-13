@@ -52,6 +52,19 @@ const normalizePlanForEditor = (plan: string): BillingModalState["plan"] => {
   return "STARTER";
 };
 
+const subscriptionStatusTranslationKey = (status?: string | null) => {
+  if (status === "ACTIVE") {
+    return "active";
+  }
+  if (status === "PAST_DUE") {
+    return "past_due";
+  }
+  if (status === "CANCELED") {
+    return "canceled";
+  }
+  return "unknown";
+};
+
 const PlatformPage = () => {
   const { data: session, status } = useSession();
   const t = useTranslations("platformOwner");
@@ -91,7 +104,11 @@ const PlatformPage = () => {
 
   const updateBillingMutation = trpc.platformOwner.updateOrganizationBilling.useMutation({
     onSuccess: () => {
-      orgsQuery.refetch();
+      void Promise.all([
+        summaryQuery.refetch(),
+        orgsQuery.refetch(),
+        upgradeRequestsQuery.refetch(),
+      ]);
       setBillingModal(null);
       toast({ variant: "success", description: t("billingSaved") });
     },
@@ -133,6 +150,14 @@ const PlatformPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
+
+      {summaryQuery.error ? (
+        <Card>
+          <CardContent className="py-4 text-sm text-danger">
+            {translateError(tErrors, summaryQuery.error)}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {summaryQuery.data ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -209,7 +234,11 @@ const PlatformPage = () => {
           <CardTitle>{t("upgradeRequestsTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {upgradeRequestsQuery.isLoading ? (
+          {upgradeRequestsQuery.error ? (
+            <p className="text-sm text-danger">
+              {translateError(tErrors, upgradeRequestsQuery.error)}
+            </p>
+          ) : upgradeRequestsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />
             </div>
@@ -232,7 +261,9 @@ const PlatformPage = () => {
                 <TableBody>
                   {pendingUpgradeRequests.map((request) => (
                     <TableRow key={request.id}>
-                      <TableCell className="font-medium">{request.organization.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {request.organization?.name ?? tCommon("notAvailable")}
+                      </TableCell>
                       <TableCell>
                         {t(
                           `plans.${normalizePlanForEditor(request.currentPlan).toLowerCase()}.name`,
@@ -246,10 +277,10 @@ const PlatformPage = () => {
                       <TableCell>
                         <div className="text-sm">
                           <p className="font-medium text-foreground">
-                            {request.requestedBy.name || tCommon("notAvailable")}
+                            {request.requestedBy?.name || tCommon("notAvailable")}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {request.requestedBy.email}
+                            {request.requestedBy?.email ?? tCommon("notAvailable")}
                           </p>
                         </div>
                       </TableCell>
@@ -302,7 +333,9 @@ const PlatformPage = () => {
           <CardTitle>{t("organizationsTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {orgsQuery.isLoading ? (
+          {orgsQuery.error ? (
+            <p className="text-sm text-danger">{translateError(tErrors, orgsQuery.error)}</p>
+          ) : orgsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />
             </div>
@@ -328,7 +361,19 @@ const PlatformPage = () => {
                 <TableBody>
                   {sortedOrgs.map((org) => (
                     <TableRow key={org.id}>
-                      <TableCell className="font-medium">{org.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>
+                          <p>{org.name || tCommon("notAvailable")}</p>
+                          {org.stores?.length ? (
+                            <p className="mt-1 text-xs font-normal text-muted-foreground">
+                              {org.stores
+                                .map((store) => `${store.name} (${store.code})`)
+                                .join(", ")}
+                              {(org._count?.stores ?? 0) > org.stores.length ? "…" : ""}
+                            </p>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant={
@@ -342,12 +387,16 @@ const PlatformPage = () => {
                       </TableCell>
                       <TableCell>
                         <Badge variant={org.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}>
-                          {t(`subscriptionStatuses.${org.subscriptionStatus.toLowerCase()}`)}
+                          {t(
+                            `subscriptionStatuses.${subscriptionStatusTranslationKey(
+                              org.subscriptionStatus,
+                            )}`,
+                          )}
                         </Badge>
                       </TableCell>
-                      <TableCell>{org._count.stores}</TableCell>
-                      <TableCell>{org._count.users}</TableCell>
-                      <TableCell>{org._count.products}</TableCell>
+                      <TableCell>{org._count?.stores ?? 0}</TableCell>
+                      <TableCell>{org._count?.users ?? 0}</TableCell>
+                      <TableCell>{org._count?.products ?? 0}</TableCell>
                       <TableCell>
                         {org.trialEndsAt
                           ? formatDateTime(org.trialEndsAt, locale)
@@ -367,7 +416,7 @@ const PlatformPage = () => {
                           onClick={() =>
                             setBillingModal({
                               organizationId: org.id,
-                              organizationName: org.name,
+                              organizationName: org.name || tCommon("notAvailable"),
                               plan: normalizePlanForEditor(org.plan),
                               subscriptionStatus: org.subscriptionStatus,
                               trialDays: 14,

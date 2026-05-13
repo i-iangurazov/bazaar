@@ -205,6 +205,7 @@ export const posRouter = router({
           return await getCurrentRegisterShift({
             organizationId: ctx.user.organizationId,
             registerId: input.registerId,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -254,6 +255,7 @@ export const posRouter = router({
             openingCashKgs: input.openingCashKgs,
             notes: input.notes,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
           });
@@ -358,6 +360,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             registerId: input.registerId,
             actorId: ctx.user.id,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -391,6 +394,7 @@ export const posRouter = router({
             customerPhone: input.customerPhone,
             notes: input.notes,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             lines: input.lines,
           });
@@ -417,6 +421,7 @@ export const posRouter = router({
             variantId: input.variantId,
             qty: input.qty,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -438,6 +443,7 @@ export const posRouter = router({
             lineId: input.lineId,
             qty: input.qty,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -453,6 +459,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             lineId: input.lineId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -474,6 +481,7 @@ export const posRouter = router({
             saleId: input.saleId,
             discountKgs: input.discountKgs,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -512,6 +520,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -545,6 +554,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
             debtCustomerName: input.debtCustomerName,

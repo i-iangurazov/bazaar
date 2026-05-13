@@ -48,10 +48,12 @@ export const platformOwnerRouter = router({
       organizationsTotal: organizations.length,
       organizationsPaid: paidCount,
       organizationsPastDue: organizations.filter(
-        (organization) => organization.subscriptionStatus === OrganizationSubscriptionStatus.PAST_DUE,
+        (organization) =>
+          organization.subscriptionStatus === OrganizationSubscriptionStatus.PAST_DUE,
       ).length,
       organizationsCanceled: organizations.filter(
-        (organization) => organization.subscriptionStatus === OrganizationSubscriptionStatus.CANCELED,
+        (organization) =>
+          organization.subscriptionStatus === OrganizationSubscriptionStatus.CANCELED,
       ).length,
       pendingUpgradeRequests,
       activeByTier,
@@ -91,6 +93,15 @@ export const platformOwnerRouter = router({
         subscriptionStatus: true,
         trialEndsAt: true,
         currentPeriodEndsAt: true,
+        stores: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+          orderBy: { name: "asc" },
+          take: 3,
+        },
         _count: {
           select: {
             stores: true,

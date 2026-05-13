@@ -732,6 +732,31 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     </Link>
   );
 
+  if (normalizedPath === "/pos/sell") {
+    return (
+      <div className="min-h-screen bg-background">
+        {impersonation ? (
+          <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+              <span>
+                {tSupport("impersonationActive", {
+                  user:
+                    impersonation.targetName ??
+                    impersonation.targetEmail ??
+                    tCommon("userFallback"),
+                })}
+              </span>
+              <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
+                {tSupport("exitImpersonation")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {children}
+      </div>
+    );
+  }
+
   return (
     <GuidanceProvider role={guidanceRole}>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">

@@ -1,9 +1,15 @@
 import { z } from "zod";
 import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 
 import { adminProcedure, managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { createStore, updateStore, updateStoreLegalDetails, updateStorePolicy } from "@/server/services/stores";
+import {
+  createStore,
+  updateStore,
+  updateStoreLegalDetails,
+  updateStorePolicy,
+} from "@/server/services/stores";
 import {
   PRICE_TAG_ROLL_LIMITS,
   PRICE_TAG_TEMPLATES,
@@ -105,6 +111,9 @@ export const storesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        if ((input.copyInventory || input.stockQuantityDelta) && ctx.user.role !== "ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
+        }
         return await createStore({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
@@ -204,11 +213,31 @@ export const storesRouter = router({
         labelShowPrice: z.boolean().default(true),
         labelShowSku: z.boolean().default(true),
         labelShowStoreName: z.boolean().default(false),
-        labelRollGapMm: z.number().min(PRICE_TAG_ROLL_LIMITS.gapMm.min).max(PRICE_TAG_ROLL_LIMITS.gapMm.max).optional(),
-        labelRollXOffsetMm: z.number().min(PRICE_TAG_ROLL_LIMITS.offsetMm.min).max(PRICE_TAG_ROLL_LIMITS.offsetMm.max).optional(),
-        labelRollYOffsetMm: z.number().min(PRICE_TAG_ROLL_LIMITS.offsetMm.min).max(PRICE_TAG_ROLL_LIMITS.offsetMm.max).optional(),
-        labelWidthMm: z.number().min(PRICE_TAG_ROLL_LIMITS.widthMm.min).max(PRICE_TAG_ROLL_LIMITS.widthMm.max).optional(),
-        labelHeightMm: z.number().min(PRICE_TAG_ROLL_LIMITS.heightMm.min).max(PRICE_TAG_ROLL_LIMITS.heightMm.max).optional(),
+        labelRollGapMm: z
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.gapMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.gapMm.max)
+          .optional(),
+        labelRollXOffsetMm: z
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.offsetMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.offsetMm.max)
+          .optional(),
+        labelRollYOffsetMm: z
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.offsetMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.offsetMm.max)
+          .optional(),
+        labelWidthMm: z
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.widthMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.widthMm.max)
+          .optional(),
+        labelHeightMm: z
+          .number()
+          .min(PRICE_TAG_ROLL_LIMITS.heightMm.min)
+          .max(PRICE_TAG_ROLL_LIMITS.heightMm.max)
+          .optional(),
         labelMarginTopMm: z.number().min(0).max(20).optional(),
         labelMarginRightMm: z.number().min(0).max(20).optional(),
         labelMarginBottomMm: z.number().min(0).max(20).optional(),

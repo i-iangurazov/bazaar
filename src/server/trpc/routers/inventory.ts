@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -14,6 +13,7 @@ import {
 } from "@/server/services/inventory";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 const inventoryListInputSchema = z.object({
   storeId: z.string(),
@@ -26,26 +26,6 @@ const inventoryListIdsInputSchema = z.object({
   storeId: z.string(),
   search: z.string().optional(),
 });
-
-type PrismaClientLike = Pick<Prisma.TransactionClient, "store">;
-
-const assertStoreAccess = async ({
-  prisma,
-  storeId,
-  organizationId,
-}: {
-  prisma: PrismaClientLike;
-  storeId: string;
-  organizationId: string;
-}) => {
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { id: true, organizationId: true },
-  });
-  if (!store || store.organizationId !== organizationId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
-  }
-};
 
 const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInputSchema>) => ({
   storeId: input.storeId,
@@ -69,11 +49,7 @@ export const inventoryRouter = router({
       const page = input.page ?? 1;
       const pageSize = input.pageSize ?? 25;
       const storeAccessStartedAt = Date.now();
-      await assertStoreAccess({
-        prisma: ctx.prisma,
-        storeId: input.storeId,
-        organizationId: ctx.user.organizationId,
-      });
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       logProfileSection({
         logger: ctx.logger,
         scope: "inventory.list",
@@ -215,11 +191,7 @@ export const inventoryRouter = router({
   listIds: protectedProcedure
     .input(inventoryListIdsInputSchema)
     .query(async ({ ctx, input }) => {
-      await assertStoreAccess({
-        prisma: ctx.prisma,
-        storeId: input.storeId,
-        organizationId: ctx.user.organizationId,
-      });
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
 
       const where = buildInventorySnapshotWhere(input);
 
@@ -258,10 +230,7 @@ export const inventoryRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
-      }
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
 
       const product = await ctx.prisma.product.findUnique({ where: { id: input.productId } });
       if (!product || product.organizationId !== ctx.user.organizationId) {
@@ -283,7 +252,7 @@ export const inventoryRouter = router({
       });
     }),
 
-  adjust: managerProcedure
+  adjust: adminProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-adjust" }))
     .input(
       z.object({
@@ -319,7 +288,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  bulkSetOnHand: managerProcedure
+  bulkSetOnHand: adminProcedure
     .use(rateLimit({ windowMs: 600_000, max: 250, prefix: "inventory-bulk-on-hand" }))
     .input(
       z.object({
@@ -347,7 +316,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  receive: managerProcedure
+  receive: adminProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-receive" }))
     .input(
       z.object({
@@ -385,7 +354,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  transfer: managerProcedure
+  transfer: adminProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-transfer" }))
     .input(
       z.object({

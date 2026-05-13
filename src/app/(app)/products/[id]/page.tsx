@@ -107,8 +107,9 @@ const ProductDetailPage = () => {
   const role = session?.user?.role;
   const canManageProducts = role === "ADMIN" || role === "MANAGER";
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
+  const canAssembleBundles = role === "ADMIN";
   const canManageStorePrices = role === "ADMIN" || role === "MANAGER";
-  const canManageInventory = role === "ADMIN" || role === "MANAGER";
+  const canManageInventory = role === "ADMIN";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const [movementsOpen, setMovementsOpen] = useState(false);
@@ -879,7 +880,9 @@ const ProductDetailPage = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link
-                      href={labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"}
+                      href={
+                        labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"
+                      }
                     >
                       <PrintIcon className="h-4 w-4" aria-hidden />
                       {t("changePrintSettings")}
@@ -1096,7 +1099,10 @@ const ProductDetailPage = () => {
                 </div>
               </div>
               {storePricingQuery.data.stores.map((storeRow) => (
-                <div key={storeRow.storeId} className="rounded-none border border-border bg-card p-3">
+                <div
+                  key={storeRow.storeId}
+                  className="rounded-none border border-border bg-card p-3"
+                >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -1202,10 +1208,7 @@ const ProductDetailPage = () => {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("profitabilityTitle")}</CardTitle>
           <div className="w-full sm:max-w-xs">
-            <Select
-              value={pricingStoreId}
-              onValueChange={(value) => setPricingStoreId(value)}
-            >
+            <Select value={pricingStoreId} onValueChange={(value) => setPricingStoreId(value)}>
               <SelectTrigger>
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
@@ -1265,7 +1268,7 @@ const ProductDetailPage = () => {
                 {t("bundleAddComponent")}
               </Button>
             ) : null}
-            {canManageBundles && bundleComponentsQuery.data?.length ? (
+            {canAssembleBundles && bundleComponentsQuery.data?.length ? (
               <Button className="w-full sm:w-auto" onClick={() => setAssembleOpen(true)}>
                 <AddIcon className="h-4 w-4" aria-hidden />
                 {t("bundleAssemble")}
@@ -1885,9 +1888,7 @@ const ProductDetailPage = () => {
       >
         <div className="space-y-4">
           <div className="border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">
-              {t("printSetupSelected", { count: 1 })}
-            </p>
+            <p className="font-medium text-foreground">{t("printSetupSelected", { count: 1 })}</p>
             <p className="mt-1">{t("printSetupBody")}</p>
           </div>
           <FormActions>
