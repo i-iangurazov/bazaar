@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetServerAuthToken, mockRecordFirstEvent, mockUploadProductImageBuffer, prisma } =
-  vi.hoisted(() => ({
+const {
+  mockCreateProductImageDirectUploadTarget,
+  mockGetServerAuthToken,
+  mockRecordFirstEvent,
+  mockUploadProductImageBuffer,
+  prisma,
+} = vi.hoisted(() => ({
+    mockCreateProductImageDirectUploadTarget: vi.fn(),
     mockGetServerAuthToken: vi.fn(),
     mockRecordFirstEvent: vi.fn(),
     mockUploadProductImageBuffer: vi.fn(),
     prisma: {
       organization: { findUnique: vi.fn() },
       store: { findUnique: vi.fn() },
-      product: { findMany: vi.fn() },
+      product: { findMany: vi.fn(), findUnique: vi.fn() },
       storePrice: { findMany: vi.fn() },
       storePrinterSettings: { upsert: vi.fn() },
     },
@@ -22,6 +28,8 @@ vi.mock("@/server/services/productEvents", () => ({
   recordFirstEvent: (...args: unknown[]) => mockRecordFirstEvent(...args),
 }));
 vi.mock("@/server/services/productImageStorage", () => ({
+  createProductImageDirectUploadTarget: (...args: unknown[]) =>
+    mockCreateProductImageDirectUploadTarget(...args),
   uploadProductImageBuffer: (...args: unknown[]) =>
     (globalThis as { __uploadMock?: (...args: unknown[]) => unknown }).__uploadMock?.(...args),
 }));
@@ -419,6 +427,95 @@ describe("product image upload route", () => {
         contentType: "image/heif",
       }),
     );
+  });
+});
+
+describe("product image direct upload target route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "ADMIN" });
+    prisma.product.findUnique.mockResolvedValue({ organizationId: "org-1" });
+    mockCreateProductImageDirectUploadTarget.mockResolvedValue({
+      method: "PUT",
+      uploadUrl: "https://r2.example.test/signed",
+      url: "https://cdn.example.test/retails/org-1/products/prod-1/photo.jpg",
+      headers: { "Content-Type": "image/jpeg" },
+      expiresIn: 300,
+    });
+  });
+
+  it("returns a signed upload target for an organization product", async () => {
+    const { POST } = await import("../../src/app/api/product-images/upload-url/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload-url", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: "photo.jpg",
+          contentType: "image/jpeg",
+          fileSize: 1234,
+          productId: "prod-1",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      method: "PUT",
+      uploadUrl: "https://r2.example.test/signed",
+      url: "https://cdn.example.test/retails/org-1/products/prod-1/photo.jpg",
+    });
+    expect(mockCreateProductImageDirectUploadTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        productId: "prod-1",
+        contentType: "image/jpeg",
+        fileSize: 1234,
+        sourceFileName: "photo.jpg",
+      }),
+    );
+  });
+
+  it("does not issue signed URLs for products outside the organization", async () => {
+    prisma.product.findUnique.mockResolvedValue({ organizationId: "other-org" });
+    const { POST } = await import("../../src/app/api/product-images/upload-url/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload-url", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: "photo.jpg",
+          contentType: "image/jpeg",
+          fileSize: 1234,
+          productId: "prod-1",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockCreateProductImageDirectUploadTarget).not.toHaveBeenCalled();
+  });
+
+  it("falls back cleanly when direct R2 upload is unavailable", async () => {
+    prisma.product.findUnique.mockResolvedValue(null);
+    mockCreateProductImageDirectUploadTarget.mockResolvedValue(null);
+    const { POST } = await import("../../src/app/api/product-images/upload-url/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/product-images/upload-url", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: "photo.jpg",
+          contentType: "image/jpeg",
+          fileSize: 1234,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      message: "directUploadUnavailable",
+    });
   });
 });
 

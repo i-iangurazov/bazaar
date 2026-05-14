@@ -133,9 +133,11 @@ For Vercel runtime incidents (`ETIMEDOUT`, `Command timed out`, random 500 on al
 - `REDIS_URL` must use `redis://` or `rediss://` (REST endpoint is invalid for ioredis here).
 - Provider must allow connections from Vercel regions used by the project.
 
-2.1 Product image payload size (Vercel)
-- Keep client upload target below serverless body limits; set `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES=4000000` for Vercel deployments.
-- Align `PRODUCT_IMAGE_MAX_BYTES` with your operational limit (same or slightly higher than client target).
+2.1 Product image uploads
+- Production should use `IMAGE_STORAGE_PROVIDER=r2` so product images upload through short-lived direct R2 signed URLs instead of long backend proxy requests.
+- Configure R2 bucket CORS to allow authenticated app origins to `PUT` with the `Content-Type` header.
+- Keep `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES` aligned with `PRODUCT_IMAGE_MAX_BYTES`; the default operational limit is 5 MB after client-side optimization.
+- `NEXT_PUBLIC_PRODUCT_IMAGE_DIRECT_UPLOAD_TIMEOUT_MS` controls the browser-to-R2 upload timeout for slow/remote clients.
 
 3. Runtime preflight
 - Call `GET /api/preflight` with `x-health-secret`.

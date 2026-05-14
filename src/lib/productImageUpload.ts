@@ -16,6 +16,19 @@ export const supportedImageExtensions = new Set([
   "hif",
 ]);
 
+export const supportedProductImageUploadMimeTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const supportedProductImageMimeByExtension: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
 export const normalizeImageMimeType = (value: string) => {
   const normalized = value.toLowerCase().split(";")[0]?.trim() ?? "";
   if (normalized === "image/jpg" || normalized === "image/pjpeg") {
@@ -39,6 +52,16 @@ export const normalizeImageMimeType = (value: string) => {
 const hasSupportedImageExtension = (fileName: string) => {
   const ext = fileName.split(".").pop()?.toLowerCase();
   return Boolean(ext && supportedImageExtensions.has(ext));
+};
+
+export const resolveProductImageUploadMimeType = (file: File) => {
+  const normalizedType = normalizeImageMimeType(file.type);
+  if (supportedProductImageUploadMimeTypes.has(normalizedType)) {
+    return normalizedType;
+  }
+
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return ext ? (supportedProductImageMimeByExtension[ext] ?? "") : "";
 };
 
 export const isHeicLikeFile = (file: File) => {
@@ -67,6 +90,7 @@ export const resolvePrimaryImageUrl = (images: Array<{ url?: string | null }>) =
 };
 
 const defaultProductImageUploadTimeoutMs = 45_000;
+const defaultProductImageDirectUploadTimeoutMs = 120_000;
 
 export class ProductImageUploadTimeoutError extends Error {
   constructor() {
@@ -80,16 +104,23 @@ export const resolveProductImageUploadTimeoutMs = (value?: string | null) => {
   return Number.isFinite(parsed) && parsed >= 1_000 ? parsed : defaultProductImageUploadTimeoutMs;
 };
 
-export const fetchProductImageUpload = async ({
+export const resolveProductImageDirectUploadTimeoutMs = (value?: string | null) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 1_000
+    ? parsed
+    : defaultProductImageDirectUploadTimeoutMs;
+};
+
+const fetchWithTimeout = async ({
   url,
-  formData,
-  timeoutMs = resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
+  timeoutMs,
   fetchImpl = fetch,
+  init,
 }: {
   url: string;
-  formData: FormData;
-  timeoutMs?: number;
+  timeoutMs: number;
   fetchImpl?: typeof fetch;
+  init: RequestInit;
 }) => {
   const controller = new AbortController();
   let timedOut = false;
@@ -102,8 +133,7 @@ export const fetchProductImageUpload = async ({
     }, timeoutMs);
   });
   const request = fetchImpl(url, {
-    method: "POST",
-    body: formData,
+    ...init,
     signal: controller.signal,
   });
 
@@ -120,6 +150,89 @@ export const fetchProductImageUpload = async ({
     }
   }
 };
+
+export const fetchProductImageUpload = async ({
+  url,
+  formData,
+  timeoutMs = resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
+  fetchImpl = fetch,
+}: {
+  url: string;
+  formData: FormData;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}) =>
+  fetchWithTimeout({
+    url,
+    timeoutMs,
+    fetchImpl,
+    init: {
+      method: "POST",
+      body: formData,
+    },
+  });
+
+export type ProductImageDirectUploadTarget = {
+  method: "PUT";
+  uploadUrl: string;
+  url: string;
+  headers?: Record<string, string>;
+  expiresIn?: number;
+};
+
+export const fetchProductImageDirectUploadTarget = async ({
+  file,
+  productId,
+  timeoutMs = resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
+  fetchImpl = fetch,
+}: {
+  file: File;
+  productId?: string | null;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}) =>
+  fetchWithTimeout({
+    url: "/api/product-images/upload-url",
+    timeoutMs,
+    fetchImpl,
+    init: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: resolveProductImageUploadMimeType(file) || normalizeImageMimeType(file.type),
+        fileSize: file.size,
+        productId: productId || undefined,
+      }),
+    },
+  });
+
+export const putProductImageDirectUpload = async ({
+  target,
+  file,
+  timeoutMs = resolveProductImageDirectUploadTimeoutMs(
+    process.env.NEXT_PUBLIC_PRODUCT_IMAGE_DIRECT_UPLOAD_TIMEOUT_MS ??
+      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
+  ),
+  fetchImpl = fetch,
+}: {
+  target: ProductImageDirectUploadTarget;
+  file: File;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}) =>
+  fetchWithTimeout({
+    url: target.uploadUrl,
+    timeoutMs,
+    fetchImpl,
+    init: {
+      method: target.method,
+      headers: target.headers,
+      body: file,
+    },
+  });
 
 type PrepareProductImageFileInput = {
   file: File;
@@ -172,12 +285,19 @@ export const prepareProductImageFileForUpload = async (
     file = converted;
   }
 
-  if (!isImageLikeFile(file)) {
+  const uploadMimeType = resolveProductImageUploadMimeType(file);
+  if (!uploadMimeType) {
     return {
       ok: false,
       code: "imageInvalidType",
       reason: `invalid-type:${normalizeImageMimeType(file.type) || "unknown"}`,
     };
+  }
+  if (normalizeImageMimeType(file.type) !== uploadMimeType) {
+    file = new File([file], file.name, {
+      type: uploadMimeType,
+      lastModified: file.lastModified || Date.now(),
+    });
   }
 
   if (file.size <= maxImageBytes) {

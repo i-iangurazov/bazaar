@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type DragEvent,
   type KeyboardEvent,
 } from "react";
@@ -70,10 +71,13 @@ import {
 } from "@/lib/currency";
 import {
   ProductImageUploadTimeoutError,
+  fetchProductImageDirectUploadTarget,
   fetchProductImageUpload,
   normalizeImageMimeType,
   prepareProductImageFileForUpload,
+  putProductImageDirectUpload,
   resolvePrimaryImageUrl,
+  type ProductImageDirectUploadTarget,
 } from "@/lib/productImageUpload";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
@@ -142,6 +146,24 @@ type AttributeDefinition = {
 
 const defaultProductImageMaxBytes = 5 * 1024 * 1024;
 const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
+const productImageAccept = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".heic",
+  ".heics",
+  ".heif",
+  ".heifs",
+  ".hif",
+].join(",");
 
 const resolveClientImageMaxBytes = () => {
   const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES);
@@ -1357,7 +1379,28 @@ export const ProductForm = ({
     }
   };
 
-  const uploadImageFile = async (file: File) => {
+  const showUploadFailureToast = (code?: string | null) => {
+    if (code === "forbidden") {
+      toast({ variant: "error", description: tErrors("forbidden") });
+      return;
+    }
+    if (code === "imageInvalidType") {
+      toast({ variant: "error", description: t("imageInvalidType") });
+      return;
+    }
+    if (code === "imageTooLarge") {
+      toast({
+        variant: "error",
+        description: t("imageTooLargeAfterCompression", {
+          size: Math.round(maxImageBytes / (1024 * 1024)),
+        }),
+      });
+      return;
+    }
+    toast({ variant: "error", description: t("imageReadFailed") });
+  };
+
+  const uploadImageFileViaProxy = async (file: File) => {
     const formData = new FormData();
     formData.set("file", file);
     if (productId) {
@@ -1404,20 +1447,7 @@ export const ProductForm = ({
         fileSize: file.size,
         fileType: file.type,
       });
-      if (code === "forbidden") {
-        toast({ variant: "error", description: tErrors("forbidden") });
-      } else if (code === "imageInvalidType") {
-        toast({ variant: "error", description: t("imageInvalidType") });
-      } else if (code === "imageTooLarge") {
-        toast({
-          variant: "error",
-          description: t("imageTooLargeAfterCompression", {
-            size: Math.round(maxImageBytes / (1024 * 1024)),
-          }),
-        });
-      } else {
-        toast({ variant: "error", description: t("imageReadFailed") });
-      }
+      showUploadFailureToast(code);
       return null;
     }
 
@@ -1433,6 +1463,130 @@ export const ProductForm = ({
       return null;
     }
     return uploadedUrl;
+  };
+
+  const uploadImageFileDirectly = async (file: File) => {
+    let targetResponse: Response;
+    try {
+      targetResponse = await fetchProductImageDirectUploadTarget({
+        file,
+        productId,
+      });
+    } catch (error) {
+      logImagePrepDebug(
+        "direct-upload-target-error",
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          code: error instanceof ProductImageUploadTimeoutError ? "imageUploadTimedOut" : "fetch",
+        },
+        error,
+      );
+      toast({
+        variant: "error",
+        description:
+          error instanceof ProductImageUploadTimeoutError
+            ? t("imageUploadTimedOut")
+            : t("imageReadFailed"),
+      });
+      return { attempted: true, url: null };
+    }
+
+    const targetBody = (await targetResponse.json().catch(() => null)) as
+      | (Partial<ProductImageDirectUploadTarget> & { message?: string })
+      | null;
+
+    if (!targetResponse.ok) {
+      const code = targetBody?.message;
+      if (code === "directUploadUnavailable") {
+        logImagePrepDebug("direct-upload-unavailable", {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+        });
+        return { attempted: false, url: null };
+      }
+      logImagePrepDebug("direct-upload-target-failed", {
+        status: targetResponse.status,
+        code,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+      showUploadFailureToast(code);
+      return { attempted: true, url: null };
+    }
+
+    if (
+      targetBody?.method !== "PUT" ||
+      !targetBody.uploadUrl ||
+      !targetBody.url ||
+      typeof targetBody.uploadUrl !== "string" ||
+      typeof targetBody.url !== "string"
+    ) {
+      logImagePrepDebug("direct-upload-target-invalid", {
+        status: targetResponse.status,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+      toast({ variant: "error", description: t("imageReadFailed") });
+      return { attempted: true, url: null };
+    }
+
+    const target: ProductImageDirectUploadTarget = {
+      method: "PUT",
+      uploadUrl: targetBody.uploadUrl,
+      url: targetBody.url,
+      headers: targetBody.headers,
+      expiresIn: targetBody.expiresIn,
+    };
+
+    let uploadResponse: Response;
+    try {
+      uploadResponse = await putProductImageDirectUpload({ target, file });
+    } catch (error) {
+      logImagePrepDebug(
+        "direct-upload-put-error",
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          code: error instanceof ProductImageUploadTimeoutError ? "imageUploadTimedOut" : "fetch",
+        },
+        error,
+      );
+      toast({
+        variant: "error",
+        description:
+          error instanceof ProductImageUploadTimeoutError
+            ? t("imageUploadTimedOut")
+            : t("imageReadFailed"),
+      });
+      return { attempted: true, url: null };
+    }
+
+    if (!uploadResponse.ok) {
+      logImagePrepDebug("direct-upload-put-failed", {
+        status: uploadResponse.status,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+      toast({ variant: "error", description: t("imageReadFailed") });
+      return { attempted: true, url: null };
+    }
+
+    return { attempted: true, url: target.url.trim() || null };
+  };
+
+  const uploadImageFile = async (file: File) => {
+    const directResult = await uploadImageFileDirectly(file);
+    if (directResult.url || directResult.attempted) {
+      return directResult.url;
+    }
+    return uploadImageFileViaProxy(file);
   };
 
   const closeImageEditor = () => {
@@ -1869,13 +2023,25 @@ export const ProductForm = ({
 
       await Promise.all(workers);
       const nextImages = results.filter((result): result is { url: string } => Boolean(result));
+      const failedCount = list.length - nextImages.length;
 
       if (nextImages.length) {
         handleAppendImageEntries(nextImages);
+        if (failedCount > 0) {
+          toast({ variant: "error", description: t("imageSomeFailed") });
+        }
       }
     } finally {
       setIsUploadingImages(false);
     }
+  };
+
+  const handleImageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length) {
+      void handleImageFiles(files);
+    }
+    event.target.value = "";
   };
 
   const handleImageDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -2350,17 +2516,11 @@ export const ProductForm = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.heic,.heics,.heif,.heifs,.hif,image/heic,image/heif,image/heic-sequence,image/heif-sequence"
+          accept={productImageAccept}
           multiple
           className="hidden"
           disabled={readOnly || isUploadingImages}
-          onChange={(event) => {
-            const files = event.target.files;
-            if (files && files.length) {
-              void handleImageFiles(files);
-            }
-            event.target.value = "";
-          }}
+          onChange={handleImageInputChange}
         />
         <Button
           type="button"
@@ -2757,16 +2917,11 @@ export const ProductForm = ({
           <input
             ref={quickFileInputRef}
             type="file"
-            accept="image/*,.heic,.heics,.heif,.heifs,.hif,image/heic,image/heif,image/heic-sequence,image/heif-sequence"
+            accept={productImageAccept}
+            multiple
             className="hidden"
             disabled={readOnly || isUploadingImages}
-            onChange={(event) => {
-              const files = event.target.files;
-              if (files && files.length) {
-                void handleImageFiles(files);
-              }
-              event.target.value = "";
-            }}
+            onChange={handleImageInputChange}
           />
           <Button
             type="button"
@@ -2782,6 +2937,36 @@ export const ProductForm = ({
             )}
             {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
           </Button>
+          {orderedImageUrls.length ? (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {orderedImageUrls.map((image, index) => (
+                <div
+                  key={image.id ?? `${image.url}-${index}`}
+                  className="relative h-20 w-20 shrink-0 overflow-hidden border border-border bg-muted/30"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={withPreviewVersion(image.url, image.id)}
+                    alt={t("imageAlt", { index: index + 1 })}
+                    className="h-full w-full object-cover"
+                  />
+                  {!readOnly ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="absolute right-1 top-1 h-6 w-6 shadow-none"
+                      aria-label={t("imageRemove")}
+                      onClick={() => handleRemoveImageAt(index)}
+                      disabled={isUploadingImages}
+                    >
+                      <CloseIcon className="h-3 w-3" aria-hidden />
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
           <FormField
             control={form.control}
             name="photoUrl"

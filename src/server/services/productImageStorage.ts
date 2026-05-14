@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { mkdir, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { isProductionRuntime } from "@/server/config/runtime";
 
@@ -95,6 +96,10 @@ const remoteImageFetchTimeoutMs = resolveRemoteImageFetchTimeoutMs();
 const remoteImageUploadTimeoutMs = parsePositiveIntEnv(
   process.env.PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
   45_000,
+);
+const directImageUploadExpiresSeconds = parsePositiveIntEnv(
+  process.env.PRODUCT_IMAGE_DIRECT_UPLOAD_EXPIRES_SECONDS,
+  300,
 );
 const remoteImageRetryCount = parseNonNegativeIntEnv(process.env.PRODUCT_IMAGE_RETRIES, 2);
 const fastRemoteImageCopyEnabled = parseForcedEnv(
@@ -355,6 +360,16 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
     }
   }
   return "jpg";
+};
+
+const directUploadContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const assertDirectUploadContentType = (contentType: string) => {
+  const normalizedType = normalizeImageMimeType(contentType);
+  if (!directUploadContentTypes.has(normalizedType)) {
+    throw new Error("imageInvalidType");
+  }
+  return normalizedType;
 };
 
 const toManagedLocalUrl = (organizationId: string, fileName: string, productId?: string | null) =>
@@ -998,6 +1013,53 @@ export const uploadProductImageBuffer = async (input: {
     contentType: input.contentType,
     sourceUrl: input.sourceFileName ? `https://upload.local/${input.sourceFileName}` : undefined,
   });
+};
+
+export const createProductImageDirectUploadTarget = async (input: {
+  organizationId: string;
+  productId?: string | null;
+  contentType: string;
+  fileSize: number;
+  sourceFileName?: string | null;
+}) => {
+  if (!input.organizationId) {
+    throw new Error("forbidden");
+  }
+  if (!Number.isFinite(input.fileSize) || input.fileSize < 1) {
+    throw new Error("imageInvalidType");
+  }
+  if (input.fileSize > maxImageBytes) {
+    throw new Error("imageTooLarge");
+  }
+
+  const contentType = assertDirectUploadContentType(input.contentType);
+  const storage = resolveStorageProvider();
+  if (storage.provider !== "r2" || !storage.config) {
+    return null;
+  }
+
+  const extension = detectImageExtension(contentType, input.sourceFileName ?? undefined);
+  const fileName = `${randomUUID()}.${extension}`;
+  const objectKey = getObjectKey(input.organizationId, fileName, input.productId);
+  const client = getR2Client(storage.config);
+  const command = new PutObjectCommand({
+    Bucket: storage.config.bucketName,
+    Key: objectKey,
+    ContentType: contentType,
+    CacheControl: "public, max-age=31536000, immutable",
+  });
+
+  return {
+    method: "PUT" as const,
+    uploadUrl: await getSignedUrl(client, command, {
+      expiresIn: directImageUploadExpiresSeconds,
+    }),
+    url: toManagedR2Url(storage.config, objectKey),
+    headers: {
+      "Content-Type": contentType,
+    },
+    expiresIn: directImageUploadExpiresSeconds,
+  };
 };
 
 export const assertProductImageStorageConfigured = () => {

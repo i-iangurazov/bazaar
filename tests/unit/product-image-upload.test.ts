@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   ProductImageUploadTimeoutError,
+  fetchProductImageDirectUploadTarget,
   fetchProductImageUpload,
   prepareProductImageFileForUpload,
+  putProductImageDirectUpload,
   resolvePrimaryImageUrl,
 } from "../../src/lib/productImageUpload";
 
@@ -147,6 +149,27 @@ describe("product image upload preprocessing", () => {
     );
   });
 
+  it("rejects unsupported image formats before upload", async () => {
+    const source = new File([new Uint8Array([1, 2, 3])], "animation.gif", {
+      type: "image/gif",
+    });
+
+    const result = await prepareProductImageFileForUpload({
+      file: source,
+      maxImageBytes: 5 * 1024 * 1024,
+      maxInputImageBytes: 10 * 1024 * 1024,
+      convertHeicToJpeg: vi.fn().mockResolvedValue(null),
+      optimizeImageToLimit: vi.fn().mockResolvedValue(null),
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        code: "imageInvalidType",
+      }),
+    );
+  });
+
   it("aborts upload requests that never resolve", async () => {
     vi.useFakeTimers();
     try {
@@ -157,6 +180,58 @@ describe("product image upload preprocessing", () => {
       const request = fetchProductImageUpload({
         url: "/api/product-images/upload",
         formData,
+        timeoutMs: 1_000,
+        fetchImpl,
+      });
+      const assertion = expect(request).rejects.toBeInstanceOf(ProductImageUploadTimeoutError);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("requests direct upload targets with normalized file metadata", async () => {
+    const response = new Response(JSON.stringify({ message: "directUploadUnavailable" }), {
+      status: 409,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    const fetchImpl = fetchMock as unknown as typeof fetch;
+    const file = new File([jpegBytes], "photo.jpeg", { type: "image/jpg" });
+
+    await fetchProductImageDirectUploadTarget({
+      file,
+      productId: "prod-1",
+      fetchImpl,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/product-images/upload-url");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({ "Content-Type": "application/json" });
+    expect(JSON.parse(String(init.body))).toEqual({
+      fileName: "photo.jpeg",
+      contentType: "image/jpeg",
+      fileSize: 4,
+      productId: "prod-1",
+    });
+  });
+
+  it("aborts direct storage uploads that never resolve", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+      const file = new File([jpegBytes], "photo.jpg", { type: "image/jpeg" });
+      const request = putProductImageDirectUpload({
+        file,
+        target: {
+          method: "PUT",
+          uploadUrl: "https://uploads.example.test/photo.jpg",
+          url: "https://cdn.example.test/photo.jpg",
+          headers: { "Content-Type": "image/jpeg" },
+        },
         timeoutMs: 1_000,
         fetchImpl,
       });
