@@ -229,18 +229,18 @@ describeDb("billing", () => {
       },
     });
 
-    const expiredPaidSummary = await caller.billing.get();
-    expect(expiredPaidSummary?.subscriptionActive).toBe(false);
-    expect(expiredPaidSummary?.trialExpired).toBe(true);
+    const ownerApprovedSummary = await caller.billing.get();
+    expect(ownerApprovedSummary?.subscriptionActive).toBe(true);
+    expect(ownerApprovedSummary?.trialExpired).toBe(false);
     await expect(
       caller.products.create({
-        sku: "EXPIRED-ACTIVE-PAID-1",
-        name: "Expired Active Paid Product",
+        sku: "OWNER-APPROVED-PAID-1",
+        name: "Owner Approved Paid Product",
         baseUnitId: baseUnit.id,
         basePriceKgs: 100,
         categories: [],
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "trialExpired" });
+    ).resolves.toMatchObject({ name: "Owner Approved Paid Product" });
 
     await prisma.organization.update({
       where: { id: org.id },

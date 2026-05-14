@@ -104,6 +104,25 @@ describe("organization access state", () => {
     });
   });
 
+  it("keeps active trial access even when there is no active paid status", () => {
+    expect(
+      resolveOrganizationAccessState(
+        {
+          plan: "STARTER",
+          subscriptionStatus: "PAST_DUE",
+          trialEndsAt: future,
+          currentPeriodEndsAt: past,
+        },
+        now,
+      ),
+    ).toMatchObject({
+      subscriptionActive: false,
+      trialActive: true,
+      trialExpired: false,
+      hasAccess: true,
+    });
+  });
+
   it("blocks inactive paid statuses even when plan is upgraded", () => {
     expect(
       resolveOrganizationAccessState(
@@ -123,7 +142,7 @@ describe("organization access state", () => {
     });
   });
 
-  it("blocks an active paid plan when its paid period is expired", () => {
+  it("keeps manually active paid plans accessible even if period date is stale", () => {
     expect(
       resolveOrganizationAccessState(
         {
@@ -135,14 +154,14 @@ describe("organization access state", () => {
         now,
       ),
     ).toMatchObject({
-      subscriptionActive: false,
+      subscriptionActive: true,
       trialActive: false,
-      trialExpired: true,
-      hasAccess: false,
+      trialExpired: false,
+      hasAccess: true,
     });
   });
 
-  it("does not treat an active status alone as access when the paid period expired", () => {
+  it("treats active non-starter status as owner-approved paid access", () => {
     expect(
       resolveOrganizationAccessState(
         {
@@ -154,10 +173,10 @@ describe("organization access state", () => {
         now,
       ),
     ).toMatchObject({
-      subscriptionActive: false,
+      subscriptionActive: true,
       trialActive: false,
       trialExpired: false,
-      hasAccess: false,
+      hasAccess: true,
     });
   });
 });

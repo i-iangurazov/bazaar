@@ -39,14 +39,12 @@ export const hasActivePaidOrApprovedSubscription = (
     return false;
   }
 
-  const currentPeriodActive = !org.currentPeriodEndsAt || org.currentPeriodEndsAt >= now;
-
   if (org.plan !== "STARTER") {
-    return currentPeriodActive;
+    return true;
   }
 
   if (!org.trialEndsAt) {
-    return currentPeriodActive;
+    return true;
   }
 
   if (!org.currentPeriodEndsAt) {
@@ -110,16 +108,16 @@ export const getOrganizationPlan = async (organizationId: string) => {
 export const assertTrialActive = async (organizationId: string) => {
   const org = await getOrganizationPlan(organizationId);
   const accessState = resolveOrganizationAccessState(org);
+  if (accessState.hasAccess) {
+    return org;
+  }
   if (org.subscriptionStatus !== "ACTIVE") {
     throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   }
   if (accessState.trialExpired) {
     throw new AppError("trialExpired", "FORBIDDEN", 403);
   }
-  if (!accessState.hasAccess) {
-    throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
-  }
-  return org;
+  throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
 };
 
 export const assertCapacity = async (input: {
