@@ -1483,14 +1483,7 @@ export const ProductForm = ({
         },
         error,
       );
-      toast({
-        variant: "error",
-        description:
-          error instanceof ProductImageUploadTimeoutError
-            ? t("imageUploadTimedOut")
-            : t("imageReadFailed"),
-      });
-      return { attempted: true, url: null };
+      return { attempted: false, url: null };
     }
 
     const targetBody = (await targetResponse.json().catch(() => null)) as
@@ -1501,6 +1494,16 @@ export const ProductForm = ({
       const code = targetBody?.message;
       if (code === "directUploadUnavailable") {
         logImagePrepDebug("direct-upload-unavailable", {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+        });
+        return { attempted: false, url: null };
+      }
+      if (targetResponse.status >= 500 || targetResponse.status === 404) {
+        logImagePrepDebug("direct-upload-target-fallback", {
+          status: targetResponse.status,
+          code,
           fileName: file.name,
           fileSize: file.size,
           fileType: file.type,
@@ -1531,8 +1534,7 @@ export const ProductForm = ({
         fileSize: file.size,
         fileType: file.type,
       });
-      toast({ variant: "error", description: t("imageReadFailed") });
-      return { attempted: true, url: null };
+      return { attempted: false, url: null };
     }
 
     const target: ProductImageDirectUploadTarget = {
@@ -1557,14 +1559,7 @@ export const ProductForm = ({
         },
         error,
       );
-      toast({
-        variant: "error",
-        description:
-          error instanceof ProductImageUploadTimeoutError
-            ? t("imageUploadTimedOut")
-            : t("imageReadFailed"),
-      });
-      return { attempted: true, url: null };
+      return { attempted: false, url: null };
     }
 
     if (!uploadResponse.ok) {
@@ -1574,8 +1569,7 @@ export const ProductForm = ({
         fileSize: file.size,
         fileType: file.type,
       });
-      toast({ variant: "error", description: t("imageReadFailed") });
-      return { attempted: true, url: null };
+      return { attempted: false, url: null };
     }
 
     return { attempted: true, url: target.url.trim() || null };
