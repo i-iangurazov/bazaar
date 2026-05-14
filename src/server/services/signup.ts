@@ -76,17 +76,34 @@ export const createSignup = async (input: {
 
   const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
   if (existingUser) {
+    const hasStore = existingUser.organizationId
+      ? await prisma.store.count({ where: { organizationId: existingUser.organizationId } })
+      : 0;
+
+    if (existingUser.organizationId && hasStore > 0) {
+      throw new AppError("accountAlreadyExists", "CONFLICT", 409);
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 10);
     const updatedUser =
       !verificationRequired && !existingUser.emailVerifiedAt
         ? await prisma.user.update({
             where: { id: existingUser.id },
-            data: { emailVerifiedAt: new Date() },
+            data: {
+              passwordHash,
+              name: input.name,
+              preferredLocale: input.preferredLocale,
+              emailVerifiedAt: new Date(),
+            },
           })
-        : existingUser;
-
-    const hasStore = updatedUser.organizationId
-      ? await prisma.store.count({ where: { organizationId: updatedUser.organizationId } })
-      : 0;
+        : await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              passwordHash,
+              name: input.name,
+              preferredLocale: input.preferredLocale,
+            },
+          });
 
     if (!updatedUser.organizationId || hasStore === 0) {
       const nextPath = await createRegistrationNextPath(updatedUser.id, updatedUser.email, updatedUser.organizationId);

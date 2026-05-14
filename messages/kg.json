@@ -3543,6 +3543,7 @@
     "impersonationNotFound": "Көрүү сессиясы табылган жок.",
     "userInactive": "Колдонуучу өчүрүлгөн.",
     "emailInUse": "Email колдонулуп жатат.",
+    "accountAlreadyExists": "Бул email менен аккаунт мурунтан бар. Кирип же сырсөздү калыбына келтириңиз.",
     "emailVerificationDeliveryFailed": "Email тастыктоо катын жөнөтүү мүмкүн эмес.",
     "multiOrganizationInviteUnsupported": "Бул email башка уюмга байланган. Учурда бир аккаунтту бир нече уюмга кошуу колдоого алынбайт.",
     "signupInviteOnly": "Катталуу чакыруу аркылуу гана.",

@@ -3544,6 +3544,7 @@
     "impersonationNotFound": "Сессия просмотра не найдена.",
     "userInactive": "Пользователь отключен.",
     "emailInUse": "Email уже используется.",
+    "accountAlreadyExists": "Аккаунт с таким email уже существует. Войдите или восстановите пароль.",
     "emailVerificationDeliveryFailed": "Не удалось отправить письмо подтверждения email.",
     "multiOrganizationInviteUnsupported": "Этот email уже привязан к другой организации. Текущая версия не поддерживает подключение одного аккаунта к нескольким организациям.",
     "signupInviteOnly": "Регистрация доступна только по приглашению.",

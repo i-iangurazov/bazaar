@@ -3544,6 +3544,7 @@
     "impersonationNotFound": "Impersonation not found",
     "userInactive": "User inactive",
     "emailInUse": "Email in use",
+    "accountAlreadyExists": "An account with this email already exists. Sign in or reset your password.",
     "emailVerificationDeliveryFailed": "Could not send the email confirmation message.",
     "multiOrganizationInviteUnsupported": "This email is already attached to another organization. This version does not yet support one account joining multiple organizations.",
     "signupInviteOnly": "Signup invite only",

@@ -82,16 +82,48 @@ describeDb("tenant isolation and signup", () => {
     expect(user?.emailVerifiedAt).toBeNull();
 
     const anotherCaller = createTestCaller();
-    const duplicate = await anotherCaller.publicAuth.signup({
-      email: "owner@test.local",
-      password: "Password123!",
-      name: "Owner",
-      preferredLocale: "ru",
-    });
-    expect(duplicate.sent).toBe(true);
+    await expect(
+      anotherCaller.publicAuth.signup({
+        email: "owner@test.local",
+        password: "Password123!",
+        name: "Owner",
+        preferredLocale: "ru",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "accountAlreadyExists" });
 
     const usersWithEmail = await prisma.user.count({ where: { email: "owner@test.local" } });
     expect(usersWithEmail).toBe(1);
+  });
+
+  it("updates password and returns business registration for an incomplete existing signup", async () => {
+    vi.stubEnv("SIGNUP_MODE", "open");
+    const caller = createTestCaller();
+    const passwordHash = await bcrypt.hash("OldPassword123!", 10);
+    const existing = await prisma.user.create({
+      data: {
+        organizationId: null,
+        email: "incomplete@test.local",
+        name: "Incomplete",
+        passwordHash,
+        role: "ADMIN",
+        preferredLocale: "ru",
+      },
+    });
+
+    const signup = await caller.publicAuth.signup({
+      email: "incomplete@test.local",
+      password: "NewPassword123!",
+      name: "Completed Name",
+      preferredLocale: "en",
+    });
+
+    expect(signup.sent).toBe(true);
+    expect(signup.nextPath).toBeTruthy();
+
+    const updated = await prisma.user.findUnique({ where: { id: existing.id } });
+    expect(updated?.name).toBe("Completed Name");
+    expect(updated?.preferredLocale).toBe("en");
+    await expect(bcrypt.compare("NewPassword123!", updated?.passwordHash ?? "")).resolves.toBe(true);
   });
 
   it("accepts invite within the correct organization", async () => {
