@@ -5,6 +5,7 @@ import { publicProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   createSignup,
+  EmailVerificationDeliveryError,
   registerBusinessFromToken,
   requestAccess,
   sendEmailVerificationToken,
@@ -18,6 +19,7 @@ import bcrypt from "bcryptjs";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { isEmailVerificationRequired } from "@/server/config/auth";
+import { isProductionRuntime } from "@/server/config/runtime";
 import { locales } from "@/lib/locales";
 
 const emailSchema = z.string().email();
@@ -159,20 +161,45 @@ export const publicAuthRouter = router({
           requestId: ctx.requestId,
         });
         if (!isEmailVerificationRequired()) {
-          return { ...registration, requiresEmailVerification: false };
+          return {
+            ...registration,
+            requiresEmailVerification: false,
+            verificationEmailSent: true,
+          };
         }
         const user = await prisma.user.findUnique({ where: { id: registration.userId } });
         if (user && !user.emailVerifiedAt) {
-          await sendEmailVerificationToken({
-            userId: user.id,
-            email: user.email,
-            organizationId: user.organizationId,
-            preferredLocale: user.preferredLocale,
-            requestId: ctx.requestId,
-          });
-          return { ...registration, requiresEmailVerification: true };
+          try {
+            const verifyLink = await sendEmailVerificationToken({
+              userId: user.id,
+              email: user.email,
+              organizationId: user.organizationId,
+              preferredLocale: user.preferredLocale,
+              requestId: ctx.requestId,
+            });
+            return {
+              ...registration,
+              requiresEmailVerification: true,
+              verificationEmailSent: true,
+              verifyLink: isProductionRuntime() ? null : verifyLink,
+            };
+          } catch (error) {
+            if (error instanceof EmailVerificationDeliveryError) {
+              ctx.logger.warn(
+                { error, email: user.email, userId: user.id },
+                "registration email verification delivery failed"
+              );
+              return {
+                ...registration,
+                requiresEmailVerification: true,
+                verificationEmailSent: false,
+                verifyLink: isProductionRuntime() ? null : error.verifyLink,
+              };
+            }
+            throw error;
+          }
         }
-        return { ...registration, requiresEmailVerification: false };
+        return { ...registration, requiresEmailVerification: false, verificationEmailSent: true };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -281,18 +308,37 @@ export const publicAuthRouter = router({
           preferredLocale: input.preferredLocale,
           requestId: ctx.requestId,
         });
-        if (!isEmailVerificationRequired()) {
-          return { user, verifyLink: null };
+        if (!isEmailVerificationRequired() || user.emailVerifiedAt) {
+          return { user, verifyLink: null, verificationEmailSent: true };
         }
 
-        const verifyLink = await sendEmailVerificationToken({
-          userId: user.id,
-          email: user.email,
-          organizationId: user.organizationId,
-          preferredLocale: input.preferredLocale,
-          requestId: ctx.requestId,
-        });
-        return { user, verifyLink };
+        try {
+          const verifyLink = await sendEmailVerificationToken({
+            userId: user.id,
+            email: user.email,
+            organizationId: user.organizationId,
+            preferredLocale: input.preferredLocale,
+            requestId: ctx.requestId,
+          });
+          return {
+            user,
+            verifyLink: isProductionRuntime() ? null : verifyLink,
+            verificationEmailSent: true,
+          };
+        } catch (error) {
+          if (error instanceof EmailVerificationDeliveryError) {
+            ctx.logger.warn(
+              { error, email: user.email, userId: user.id },
+              "invite email verification delivery failed"
+            );
+            return {
+              user,
+              verifyLink: isProductionRuntime() ? null : error.verifyLink,
+              verificationEmailSent: false,
+            };
+          }
+          throw error;
+        }
       } catch (error) {
         throw toTRPCError(error);
       }

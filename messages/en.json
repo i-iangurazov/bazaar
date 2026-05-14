@@ -334,8 +334,10 @@
     "requestSuccess": "Request sent.",
     "signupSuccess": "Account created.",
     "verifyHint": "We sent an email confirmation link.",
+    "verificationEmailFailed": "Account created, but the confirmation email was not sent. Try resending it or contact an administrator.",
     "submittedTitle": "Done",
     "submittedVerify": "Check your inbox to confirm your email.",
+    "submittedVerifyEmailFailed": "Account created, but the confirmation email was not sent. You can sign in after confirming your email.",
     "submittedRequest": "We received your request and will contact you.",
     "backToLogin": "Back to sign in"
   },
@@ -361,8 +363,10 @@
     "inviteRole": "Role: {role}",
     "accept": "Accept invite",
     "accepted": "Invite accepted.",
+    "verificationEmailFailed": "Invite accepted, but the confirmation email was not sent. Try resending it or contact an administrator.",
     "acceptedTitle": "Welcome!",
     "acceptedHint": "Check your email and confirm it before signing in.",
+    "acceptedEmailFailedHint": "Invite accepted, but the confirmation email was not sent. You can sign in after confirming your email.",
     "goToLogin": "Go to sign in",
     "invalidInvite": "The invite is invalid or expired."
   },
@@ -402,8 +406,10 @@
     "submit": "Create business",
     "success": "Business registered.",
     "verifyHintAfterRegistration": "Business registered. We sent an email confirmation message.",
+    "verificationEmailFailed": "Business created, but the confirmation email was not sent. Try resending it or contact an administrator.",
     "submitted": "Business created. You can sign in now.",
     "submittedVerify": "Business created. Confirm your email from the link, then sign in.",
+    "submittedVerifyEmailFailed": "Business created, but the confirmation email was not sent. You can sign in after confirming your email.",
     "goToLogin": "Go to sign in"
   },
   "reset": {
@@ -3533,6 +3539,8 @@
     "impersonationNotFound": "Impersonation not found",
     "userInactive": "User inactive",
     "emailInUse": "Email in use",
+    "emailVerificationDeliveryFailed": "Could not send the email confirmation message.",
+    "multiOrganizationInviteUnsupported": "This email is already attached to another organization. This version does not yet support one account joining multiple organizations.",
     "signupInviteOnly": "Signup invite only",
     "tokenInvalid": "Invalid token.",
     "tokenExpired": "Token expired",

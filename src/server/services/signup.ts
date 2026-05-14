@@ -10,9 +10,21 @@ import { sendVerificationEmail } from "@/server/services/email";
 import { consumeAuthToken } from "@/server/services/authTokens";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import { isEmailVerificationRequired } from "@/server/config/auth";
+import { isProductionRuntime } from "@/server/config/runtime";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 const DEFAULT_TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? "14");
+
+export class EmailVerificationDeliveryError extends Error {
+  verifyLink: string;
+
+  constructor(verifyLink: string, cause: unknown) {
+    super("emailVerificationDeliveryFailed");
+    this.name = "EmailVerificationDeliveryError";
+    this.verifyLink = verifyLink;
+    this.cause = cause;
+  }
+}
 
 const ensureSignupOpen = () => {
   const mode = process.env.SIGNUP_MODE ?? "invite_only";
@@ -82,14 +94,25 @@ export const createSignup = async (input: {
     }
 
     if (verificationRequired && !updatedUser.emailVerifiedAt) {
-      const verifyLink = await sendEmailVerificationToken({
-        userId: updatedUser.id,
-        email: updatedUser.email,
-        organizationId: updatedUser.organizationId,
-        preferredLocale: updatedUser.preferredLocale ?? input.preferredLocale,
-        requestId: input.requestId,
-      });
-      return { sent: true, verifyLink };
+      try {
+        const verifyLink = await sendEmailVerificationToken({
+          userId: updatedUser.id,
+          email: updatedUser.email,
+          organizationId: updatedUser.organizationId,
+          preferredLocale: updatedUser.preferredLocale ?? input.preferredLocale,
+          requestId: input.requestId,
+        });
+        return { sent: true, verifyLink, verificationEmailSent: true };
+      } catch (error) {
+        if (error instanceof EmailVerificationDeliveryError) {
+          return {
+            sent: true,
+            verifyLink: isProductionRuntime() ? null : error.verifyLink,
+            verificationEmailSent: false,
+          };
+        }
+        throw error;
+      }
     }
 
     return { sent: true };
@@ -261,11 +284,15 @@ export const sendEmailVerificationToken = async (input: {
   });
 
   const verifyLink = `${process.env.NEXTAUTH_URL ?? ""}/verify/${raw}`;
-  await sendVerificationEmail({
-    email: input.email,
-    verifyLink,
-    locale: normalizeLocale(input.preferredLocale) ?? defaultLocale,
-    expiresInMinutes,
-  });
+  try {
+    await sendVerificationEmail({
+      email: input.email,
+      verifyLink,
+      locale: normalizeLocale(input.preferredLocale) ?? defaultLocale,
+      expiresInMinutes,
+    });
+  } catch (error) {
+    throw new EmailVerificationDeliveryError(verifyLink, error);
+  }
   return verifyLink;
 };

@@ -56,13 +56,18 @@ export const createInvite = async (input: {
   role: InviteRole;
   storeIds?: string[];
 }) => {
-  await assertWithinLimits({ organizationId: input.organizationId, kind: "users" });
-  return prisma.$transaction(async (tx) => {
-    const existingUser = await tx.user.findUnique({ where: { email: input.email } });
-    if (existingUser) {
-      throw new AppError("emailInUse", "CONFLICT", 409);
-    }
+  const existingUser = await prisma.user.findUnique({
+    where: { email: input.email },
+    select: { organizationId: true },
+  });
+  if (existingUser?.organizationId && existingUser.organizationId !== input.organizationId) {
+    throw new AppError("multiOrganizationInviteUnsupported", "CONFLICT", 409);
+  }
+  if (existingUser?.organizationId !== input.organizationId) {
+    await assertWithinLimits({ organizationId: input.organizationId, kind: "users" });
+  }
 
+  return prisma.$transaction(async (tx) => {
     const rawToken = createRawToken();
     const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -98,6 +103,49 @@ export const createInvite = async (input: {
   });
 };
 
+const applyStoreAccessFromInvite = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    userId: string;
+    role: InviteRole;
+    storeIds: string[];
+  },
+) => {
+  if (!roleUsesStoreAssignments(input.role)) {
+    await tx.userStoreAccess.deleteMany({
+      where: { organizationId: input.organizationId, userId: input.userId },
+    });
+    return;
+  }
+
+  const storeIds = await resolveInviteStoreIds(tx, {
+    organizationId: input.organizationId,
+    role: input.role,
+    storeIds: input.storeIds,
+  });
+
+  await tx.userStoreAccess.deleteMany({
+    where: {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      ...(storeIds.length ? { storeId: { notIn: storeIds } } : {}),
+    },
+  });
+  if (!storeIds.length) {
+    return;
+  }
+
+  await tx.userStoreAccess.createMany({
+    data: storeIds.map((storeId) => ({
+      organizationId: input.organizationId,
+      userId: input.userId,
+      storeId,
+    })),
+    skipDuplicates: true,
+  });
+};
+
 export const getInviteByToken = async (token: string) => {
   const tokenHash = hashToken(token);
   const invite = await prisma.inviteToken.findUnique({
@@ -130,40 +178,56 @@ export const acceptInvite = async (input: {
     }
 
     const existingUser = await tx.user.findUnique({ where: { email: invite.email } });
+    let user;
     if (existingUser) {
-      throw new AppError("emailInUse", "CONFLICT", 409);
-    }
+      if (!existingUser.isActive) {
+        throw new AppError("userInactive", "FORBIDDEN", 403);
+      }
+      const passwordMatches = await bcrypt.compare(input.password, existingUser.passwordHash);
+      if (!passwordMatches) {
+        throw new AppError("invalidCredentials", "UNAUTHORIZED", 401);
+      }
+      if (existingUser.organizationId && existingUser.organizationId !== invite.organizationId) {
+        throw new AppError("multiOrganizationInviteUnsupported", "CONFLICT", 409);
+      }
+      if (!existingUser.organizationId) {
+        await assertWithinLimits({ organizationId: invite.organizationId, kind: "users" });
+      }
 
-    await assertWithinLimits({ organizationId: invite.organizationId, kind: "users" });
-
-    const passwordHash = await bcrypt.hash(input.password, 10);
-    const emailVerifiedAt = isEmailVerificationRequired() ? null : new Date();
-    const user = await tx.user.create({
-      data: {
-        organizationId: invite.organizationId,
-        email: invite.email,
-        name: input.name,
-        role: invite.role,
-        passwordHash,
-        preferredLocale: input.preferredLocale,
-        emailVerifiedAt,
-      },
-    });
-    if (roleUsesStoreAssignments(invite.role) && invite.storeIds.length) {
-      const storeIds = await resolveInviteStoreIds(tx, {
-        organizationId: invite.organizationId,
-        role: invite.role,
-        storeIds: invite.storeIds,
-      });
-      await tx.userStoreAccess.createMany({
-        data: storeIds.map((storeId) => ({
+      user = await tx.user.update({
+        where: { id: existingUser.id },
+        data: {
           organizationId: invite.organizationId,
-          userId: user.id,
-          storeId,
-        })),
-        skipDuplicates: true,
+          name: existingUser.name || input.name,
+          role: invite.role,
+          preferredLocale: input.preferredLocale,
+          emailVerifiedAt:
+            existingUser.emailVerifiedAt ?? (isEmailVerificationRequired() ? null : new Date()),
+        },
+      });
+    } else {
+      await assertWithinLimits({ organizationId: invite.organizationId, kind: "users" });
+      const passwordHash = await bcrypt.hash(input.password, 10);
+      const emailVerifiedAt = isEmailVerificationRequired() ? null : new Date();
+      user = await tx.user.create({
+        data: {
+          organizationId: invite.organizationId,
+          email: invite.email,
+          name: input.name,
+          role: invite.role,
+          passwordHash,
+          preferredLocale: input.preferredLocale,
+          emailVerifiedAt,
+        },
       });
     }
+
+    await applyStoreAccessFromInvite(tx, {
+      organizationId: invite.organizationId,
+      userId: user.id,
+      role: invite.role,
+      storeIds: invite.storeIds,
+    });
 
     const updatedInvite = await tx.inviteToken.update({
       where: { id: invite.id },

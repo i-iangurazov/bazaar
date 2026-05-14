@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import bcrypt from "bcryptjs";
 
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -137,6 +138,118 @@ describeDb("tenant isolation and signup", () => {
     } else {
       expect(created?.emailVerifiedAt).not.toBeNull();
     }
+  });
+
+  it("lets a signed-up user without a business accept a pending invite", async () => {
+    vi.stubEnv("SIGNUP_MODE", "open");
+    const { org, adminUser, store } = await seedBase({ plan: "BUSINESS" });
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    const publicCaller = createTestCaller();
+
+    const invite = await adminCaller.invites.create({
+      email: "pending.signup@test.local",
+      role: "CASHIER",
+      storeIds: [store.id],
+    });
+
+    await publicCaller.publicAuth.signup({
+      email: "pending.signup@test.local",
+      password: "Password123!",
+      name: "Pending Signup",
+      preferredLocale: "ru",
+    });
+
+    const accepted = await publicCaller.publicAuth.acceptInvite({
+      token: invite.token,
+      name: "Pending Signup",
+      password: "Password123!",
+      preferredLocale: "ru",
+    });
+
+    expect(accepted.user.organizationId).toBe(org.id);
+    expect(accepted.user.role).toBe("CASHIER");
+    const storeAccess = await prisma.userStoreAccess.findMany({
+      where: { organizationId: org.id, userId: accepted.user.id },
+      select: { storeId: true },
+    });
+    expect(storeAccess.map((access) => access.storeId)).toEqual([store.id]);
+  });
+
+  it("lets an existing user in the same organization accept a store invite", async () => {
+    const { org, adminUser, store } = await seedBase({ plan: "BUSINESS" });
+    const passwordHash = await bcrypt.hash("Password123!", 10);
+    const existingUser = await prisma.user.create({
+      data: {
+        organizationId: org.id,
+        email: "existing.same-org@test.local",
+        name: "Existing Same Org",
+        passwordHash,
+        role: "STAFF",
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const invite = await adminCaller.invites.create({
+      email: existingUser.email,
+      role: "MANAGER",
+      storeIds: [store.id],
+    });
+    const accepted = await createTestCaller().publicAuth.acceptInvite({
+      token: invite.token,
+      name: existingUser.name,
+      password: "Password123!",
+      preferredLocale: "ru",
+    });
+
+    expect(accepted.user.id).toBe(existingUser.id);
+    expect(accepted.user.role).toBe("MANAGER");
+    const storeAccess = await prisma.userStoreAccess.findMany({
+      where: { organizationId: org.id, userId: existingUser.id },
+      select: { storeId: true },
+    });
+    expect(storeAccess.map((access) => access.storeId)).toEqual([store.id]);
+  });
+
+  it("rejects inviting an existing user from another organization under the current single-organization user model", async () => {
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const otherOrg = await prisma.organization.create({ data: { name: "Existing User Org" } });
+    const passwordHash = await bcrypt.hash("Password123!", 10);
+    await prisma.user.create({
+      data: {
+        organizationId: otherOrg.id,
+        email: "existing.other-org@test.local",
+        name: "Existing Other Org",
+        passwordHash,
+        role: "ADMIN",
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    await expect(
+      adminCaller.invites.create({
+        email: "existing.other-org@test.local",
+        role: "CASHIER",
+        storeIds: [],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "multiOrganizationInviteUnsupported" });
   });
 
   it("rejects invites with store access outside the organization", async () => {

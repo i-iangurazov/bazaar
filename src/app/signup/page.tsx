@@ -47,6 +47,8 @@ const SignupPage = () => {
     name: "",
     preferredLocale: "ru",
   });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
   const [requestFieldErrors, setRequestFieldErrors] = useState<Partial<Record<keyof RequestValues, string>>>({});
   const [signupFieldErrors, setSignupFieldErrors] = useState<Partial<Record<keyof SignupValues, string>>>({});
 
@@ -86,16 +88,20 @@ const SignupPage = () => {
 
   const requestMutation = trpc.publicAuth.requestAccess.useMutation({
     onSuccess: () => {
+      setFormError(null);
       setSubmitted(true);
       toast({ variant: "success", description: t("requestSuccess") });
     },
     onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
+      const message = translateError(tErrors, error);
+      setFormError(message);
+      toast({ variant: "error", description: message });
     },
   });
 
   const signupMutation = trpc.publicAuth.signup.useMutation({
     onSuccess: async (result, variables) => {
+      setFormError(null);
       if (result.nextPath) {
         setRedirectingToBusiness(true);
         try {
@@ -114,7 +120,16 @@ const SignupPage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale: variables.preferredLocale }),
       });
-      toast({ variant: "success", description: t("signupSuccess") });
+      const deliveryFailed = result.verificationEmailSent === false;
+      setEmailDeliveryFailed(deliveryFailed);
+      toast({
+        variant: deliveryFailed ? "error" : "success",
+        description: deliveryFailed ? t("verificationEmailFailed") : t("signupSuccess"),
+      });
+      if (deliveryFailed) {
+        setSubmitted(true);
+        return;
+      }
       if (result.verifyLink) {
         setSubmitted(true);
         toast({ variant: "info", description: t("verifyHint") });
@@ -124,7 +139,9 @@ const SignupPage = () => {
     },
     onError: (error) => {
       setRedirectingToBusiness(false);
-      toast({ variant: "error", description: translateError(tErrors, error) });
+      const message = translateError(tErrors, error);
+      setFormError(message);
+      toast({ variant: "error", description: message });
     },
   });
 
@@ -136,6 +153,7 @@ const SignupPage = () => {
       return;
     }
     setRequestFieldErrors({});
+    setFormError(null);
     requestMutation.mutate(parsed.data);
   };
 
@@ -147,6 +165,8 @@ const SignupPage = () => {
       return;
     }
     setSignupFieldErrors({});
+    setFormError(null);
+    setEmailDeliveryFailed(false);
     signupMutation.mutate(parsed.data);
   };
 
@@ -186,7 +206,13 @@ const SignupPage = () => {
             <CardTitle>{t("submittedTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>{mode === "open" ? t("submittedVerify") : t("submittedRequest")}</p>
+            <p>
+              {mode === "open"
+                ? emailDeliveryFailed
+                  ? t("submittedVerifyEmailFailed")
+                  : t("submittedVerify")
+                : t("submittedRequest")}
+            </p>
             <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
               {t("backToLogin")}
             </Link>
@@ -209,6 +235,7 @@ const SignupPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
           {mode === "invite_only" ? (
             <form onSubmit={handleRequestSubmit}>
               <FormStack>

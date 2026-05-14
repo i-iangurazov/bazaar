@@ -26,6 +26,8 @@ const InvitePage = () => {
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
   const [accepted, setAccepted] = useState(false);
+  const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [values, setValues] = useState<{ name: string; password: string; preferredLocale: Locale }>({
     name: "",
     password: "",
@@ -42,17 +44,25 @@ const InvitePage = () => {
   });
 
   const acceptMutation = trpc.publicAuth.acceptInvite.useMutation({
-    onSuccess: async (_, variables) => {
+    onSuccess: async (result, variables) => {
       await fetch("/api/locale", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale: variables.preferredLocale }),
       });
-      toast({ variant: "success", description: t("accepted") });
+      const deliveryFailed = result.verificationEmailSent === false;
+      setEmailDeliveryFailed(deliveryFailed);
+      setFormError(null);
+      toast({
+        variant: deliveryFailed ? "error" : "success",
+        description: deliveryFailed ? t("verificationEmailFailed") : t("accepted"),
+      });
       setAccepted(true);
     },
     onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
+      const message = translateError(tErrors, error);
+      setFormError(message);
+      toast({ variant: "error", description: message });
     },
   });
 
@@ -71,6 +81,8 @@ const InvitePage = () => {
       return;
     }
     setFieldErrors({});
+    setFormError(null);
+    setEmailDeliveryFailed(false);
     acceptMutation.mutate({ token, ...parsed.data });
   };
 
@@ -85,7 +97,7 @@ const InvitePage = () => {
             <CardTitle>{t("acceptedTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>{t("acceptedHint")}</p>
+            <p>{emailDeliveryFailed ? t("acceptedEmailFailedHint") : t("acceptedHint")}</p>
             <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
               {t("goToLogin")}
             </Link>
@@ -112,6 +124,7 @@ const InvitePage = () => {
             </div>
           ) : inviteQuery.data ? (
             <>
+              {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
                 <p>{t("inviteFor", { org: inviteQuery.data.organizationName })}</p>
                 <p>{t("inviteEmail", { email: inviteQuery.data.email })}</p>

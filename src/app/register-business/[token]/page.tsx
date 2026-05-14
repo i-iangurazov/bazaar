@@ -27,6 +27,8 @@ const RegisterBusinessPage = () => {
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
+  const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [values, setValues] = useState<{
     orgName: string;
     storeName: string;
@@ -64,14 +66,23 @@ const RegisterBusinessPage = () => {
   const mutation = trpc.publicAuth.registerBusiness.useMutation({
     onSuccess: (result) => {
       setNeedsEmailVerification(Boolean(result.requiresEmailVerification));
+      setEmailDeliveryFailed(result.verificationEmailSent === false);
+      setFormError(null);
       setSubmitted(true);
       toast({
-        variant: "success",
-        description: result.requiresEmailVerification ? t("verifyHintAfterRegistration") : t("success"),
+        variant: result.verificationEmailSent === false ? "error" : "success",
+        description:
+          result.verificationEmailSent === false
+            ? t("verificationEmailFailed")
+            : result.requiresEmailVerification
+              ? t("verifyHintAfterRegistration")
+              : t("success"),
       });
     },
     onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
+      const message = translateError(tErrors, error);
+      setFormError(message);
+      toast({ variant: "error", description: message });
     },
   });
 
@@ -102,6 +113,8 @@ const RegisterBusinessPage = () => {
       return;
     }
     setFieldErrors({});
+    setFormError(null);
+    setEmailDeliveryFailed(false);
     mutation.mutate({ token, ...parsed.data });
   };
 
@@ -120,7 +133,13 @@ const RegisterBusinessPage = () => {
         <CardContent className="space-y-3">
           {submitted ? (
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>{needsEmailVerification ? t("submittedVerify") : t("submitted")}</p>
+              <p>
+                {needsEmailVerification
+                  ? emailDeliveryFailed
+                    ? t("submittedVerifyEmailFailed")
+                    : t("submittedVerify")
+                  : t("submitted")}
+              </p>
               <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
                 {t("goToLogin")}
               </Link>
@@ -128,6 +147,7 @@ const RegisterBusinessPage = () => {
           ) : (
             <form onSubmit={handleSubmit}>
               <FormStack>
+                {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="register-org-name">
                     {t("orgName")}
