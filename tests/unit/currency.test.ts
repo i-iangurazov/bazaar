@@ -23,6 +23,19 @@ describe("currency helpers", () => {
     expect(formatCurrencyAmount(12.5, "en", "GBP")).toContain("£");
   });
 
+  it("normalizes fractional digit options before passing them to Intl", () => {
+    expect(() =>
+      formatCurrencyAmount(8750, "ru", "KGS", {
+        maximumFractionDigits: 0,
+      }),
+    ).not.toThrow();
+    expect(
+      formatCurrencyAmount(8750, "ru", "KGS", {
+        maximumFractionDigits: 0,
+      }),
+    ).not.toMatch(/[,.]00/);
+  });
+
   it("converts prices between KGS storage values and selected currencies", () => {
     expect(convertFromKgs(895, 89.5, "USD")).toBe(10);
     expect(convertToKgs(10, 89.5, "USD")).toBe(895);

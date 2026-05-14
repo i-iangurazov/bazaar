@@ -66,11 +66,32 @@ export const formatCurrencyAmount = (
   locale: string,
   currencyCode: SupportedCurrencyCode = defaultCurrencyCode,
   options?: Intl.NumberFormatOptions,
-) =>
-  new Intl.NumberFormat(toIntlLocale(locale), {
+) => {
+  const defaultFractionDigits = 2;
+  let minimumFractionDigits =
+    options?.minimumFractionDigits ??
+    (options?.maximumFractionDigits !== undefined
+      ? Math.min(options.maximumFractionDigits, defaultFractionDigits)
+      : defaultFractionDigits);
+  let maximumFractionDigits =
+    options?.maximumFractionDigits ??
+    (options?.minimumFractionDigits !== undefined
+      ? Math.max(options.minimumFractionDigits, defaultFractionDigits)
+      : defaultFractionDigits);
+
+  if (minimumFractionDigits > maximumFractionDigits) {
+    if (options?.maximumFractionDigits !== undefined && options.minimumFractionDigits === undefined) {
+      minimumFractionDigits = maximumFractionDigits;
+    } else {
+      maximumFractionDigits = minimumFractionDigits;
+    }
+  }
+
+  return new Intl.NumberFormat(toIntlLocale(locale), {
     style: "currency",
     currency: currencyCode,
-    minimumFractionDigits: currencyCode === "KGS" ? 2 : 2,
-    maximumFractionDigits: currencyCode === "KGS" ? 2 : 2,
     ...options,
+    minimumFractionDigits,
+    maximumFractionDigits,
   }).format(amount);
+};
