@@ -628,6 +628,11 @@
     "help": "Help",
     "billing": "Billing",
     "profile": "Profile",
+    "emailUnverifiedTitle": "Email is not verified",
+    "emailUnverifiedDescription": "Confirm your email to protect your account and receive important notifications.",
+    "emailVerificationResend": "Resend verification email",
+    "emailVerificationSending": "Sending...",
+    "emailVerificationSent": "Email sent",
     "diagnostics": "Diagnostics",
     "posKkm": "KKM queue",
     "posReceipts": "Receipt register"

@@ -628,6 +628,11 @@
     "help": "Жардам",
     "billing": "Тарифтер",
     "profile": "Профиль",
+    "emailUnverifiedTitle": "Email тастыкталган эмес",
+    "emailUnverifiedDescription": "Аккаунтту коргоо жана маанилүү билдирүүлөрдү алуу үчүн email'ди тастыктаңыз.",
+    "emailVerificationResend": "Катты кайра жөнөтүү",
+    "emailVerificationSending": "Жөнөтүлүүдө...",
+    "emailVerificationSent": "Кат жөнөтүлдү",
     "diagnostics": "Диагностика",
     "posKkm": "ККМ кезеги",
     "posReceipts": "Чектер реестри"

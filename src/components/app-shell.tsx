@@ -51,6 +51,7 @@ import {
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { normalizeLocale } from "@/lib/locales";
+import { translateError } from "@/lib/translateError";
 import {
   canCreateProductForRole,
   hasPermission,
@@ -103,6 +104,7 @@ type AppShellProps = {
     organizationId?: string | null;
     isPlatformOwner?: boolean;
     isOrgOwner?: boolean;
+    emailVerified?: boolean;
   };
   impersonation?: {
     targetName?: string | null;
@@ -134,6 +136,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [customizeNavOpen, setCustomizeNavOpen] = useState(false);
+  const [verificationResent, setVerificationResent] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
   const [hiddenNavItemKeys, setHiddenNavItemKeys] = useState<string[]>([]);
@@ -141,7 +144,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
     enabled: Boolean(user.organizationId),
   });
+  const resendVerificationMutation = trpc.publicAuth.resendVerification.useMutation({
+    onSuccess: () => {
+      setVerificationResent(true);
+      toast({ variant: "success", description: tNav("emailVerificationSent") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
   const isOrgOwner = Boolean(profileQuery.data?.isOrgOwner ?? user.isOrgOwner);
+  const emailVerified = profileQuery.data ? Boolean(profileQuery.data.emailVerifiedAt) : user.emailVerified !== false;
+  const showEmailVerificationNotice = Boolean(user.email && !emailVerified && !impersonation);
   const access: RoleAccess = useMemo(
     () => ({
       role: user.role,
@@ -707,6 +721,41 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     </Button>
   );
 
+  const handleResendVerification = () => {
+    if (!user.email) {
+      return;
+    }
+    setVerificationResent(false);
+    resendVerificationMutation.mutate({ email: user.email });
+  };
+
+  const renderEmailVerificationNotice = () => {
+    if (!showEmailVerificationNotice) {
+      return null;
+    }
+
+    return (
+      <div className="mt-3 border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-foreground">
+        <p className="font-semibold text-foreground">{tNav("emailUnverifiedTitle")}</p>
+        <p className="mt-1 leading-relaxed text-muted-foreground">{tNav("emailUnverifiedDescription")}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="mt-3 h-8 rounded-none px-2 text-xs"
+          onClick={handleResendVerification}
+          disabled={resendVerificationMutation.isLoading || verificationResent}
+        >
+          {resendVerificationMutation.isLoading
+            ? tNav("emailVerificationSending")
+            : verificationResent
+              ? tNav("emailVerificationSent")
+              : tNav("emailVerificationResend")}
+        </Button>
+      </div>
+    );
+  };
+
   const renderProfileShortcut = (onNavigate?: () => void) => (
     <Link
       href="/settings/profile"
@@ -830,6 +879,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
               <div className="mt-6 border-t border-border pt-6 text-sm">
                 {renderCustomizeNavButton()}
+                {renderEmailVerificationNotice()}
                 {renderProfileShortcut()}
                 <div className="mt-4">
                   <SignOutButton />
@@ -924,6 +974,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
             <div className="mt-8 border-t border-border pt-6 text-sm">
               {renderCustomizeNavButton(() => setMobileOpen(false))}
+              {renderEmailVerificationNotice()}
               {renderProfileShortcut(() => setMobileOpen(false))}
               <div className="mt-4">
                 <SignOutButton />

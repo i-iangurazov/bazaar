@@ -628,6 +628,11 @@
     "help": "Справка",
     "billing": "Тарифы",
     "profile": "Профиль",
+    "emailUnverifiedTitle": "Email не подтверждён",
+    "emailUnverifiedDescription": "Подтвердите email, чтобы защитить аккаунт и получать важные уведомления.",
+    "emailVerificationResend": "Отправить письмо повторно",
+    "emailVerificationSending": "Отправляем...",
+    "emailVerificationSent": "Письмо отправлено",
     "diagnostics": "Диагностика",
     "posKkm": "Очередь ККМ",
     "posReceipts": "Реестр чеков"

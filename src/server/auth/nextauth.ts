@@ -16,7 +16,6 @@ import {
 import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { getLogger } from "@/server/logging";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
-import { isEmailVerificationRequired } from "@/server/config/auth";
 import { ThemePreference } from "@prisma/client";
 import { getRuntimeEnv } from "@/server/config/runtime";
 
@@ -132,6 +131,7 @@ const extractUserClaims = (
   themePreference?: ThemePreference;
   isPlatformOwner?: boolean;
   isOrgOwner?: boolean;
+  emailVerified?: boolean;
 } | null => {
   if (!user || typeof user !== "object") {
     return null;
@@ -143,12 +143,14 @@ const extractUserClaims = (
     themePreference?: ThemePreference;
     isPlatformOwner?: boolean;
     isOrgOwner?: boolean;
+    emailVerified?: boolean;
   };
-  const { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner } = candidate;
+  const { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner, emailVerified } =
+    candidate;
   if (!role || !organizationId) {
     return null;
   }
-  return { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner };
+  return { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner, emailVerified };
 };
 
 export const authOptions: NextAuthOptions = {
@@ -234,10 +236,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        if (isEmailVerificationRequired() && !user.emailVerifiedAt) {
-          throw new Error("emailNotVerified");
-        }
-
         const storeCount = user.organizationId
           ? await prisma.store.count({
               where: { organizationId: user.organizationId },
@@ -272,6 +270,7 @@ export const authOptions: NextAuthOptions = {
           themePreference: user.themePreference,
           isPlatformOwner: isPlatformOwnerEmail(user.email),
           isOrgOwner: Boolean(user.isOrgOwner),
+          emailVerified: Boolean(user.emailVerifiedAt),
         };
       },
     }),
@@ -301,6 +300,7 @@ export const authOptions: NextAuthOptions = {
         token.themePreference = claims.themePreference ?? ThemePreference.LIGHT;
         token.isPlatformOwner = claims.isPlatformOwner ?? false;
         token.isOrgOwner = claims.isOrgOwner ?? false;
+        token.emailVerified = claims.emailVerified ?? false;
       }
       if (trigger === "update" && session && typeof session === "object") {
         const updatePayload = session as {
@@ -308,6 +308,7 @@ export const authOptions: NextAuthOptions = {
           themePreference?: string;
           isPlatformOwner?: boolean;
           isOrgOwner?: boolean;
+          emailVerified?: boolean;
         };
         if (updatePayload.preferredLocale) {
           token.preferredLocale = resolvePreferredLocale(updatePayload.preferredLocale) ?? defaultLocale;
@@ -324,6 +325,9 @@ export const authOptions: NextAuthOptions = {
         if (typeof updatePayload.isOrgOwner === "boolean") {
           token.isOrgOwner = updatePayload.isOrgOwner;
         }
+        if (typeof updatePayload.emailVerified === "boolean") {
+          token.emailVerified = updatePayload.emailVerified;
+        }
       }
       return token;
     },
@@ -336,6 +340,8 @@ export const authOptions: NextAuthOptions = {
         session.user.themePreference = (token.themePreference as string) ?? ThemePreference.LIGHT;
         session.user.isPlatformOwner = Boolean(token.isPlatformOwner);
         session.user.isOrgOwner = Boolean(token.isOrgOwner);
+        session.user.emailVerified =
+          typeof token.emailVerified === "boolean" ? token.emailVerified : true;
       }
       return session;
     },

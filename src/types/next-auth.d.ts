@@ -10,6 +10,7 @@ declare module "next-auth" {
       themePreference?: string;
       isPlatformOwner?: boolean;
       isOrgOwner?: boolean;
+      emailVerified?: boolean;
       name?: string | null;
       email?: string | null;
     };
@@ -24,5 +25,6 @@ declare module "next-auth/jwt" {
     themePreference?: string;
     isPlatformOwner?: boolean;
     isOrgOwner?: boolean;
+    emailVerified?: boolean;
   }
 }

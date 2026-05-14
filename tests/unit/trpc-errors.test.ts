@@ -138,8 +138,8 @@ describe("nextauth credentials authorize", () => {
     });
   });
 
-  it("throws emailNotVerified only after valid credentials", async () => {
-    const { authorize, findUnique, count } = await createHarness();
+  it("allows unverified users with completed registration after valid credentials", async () => {
+    const { authorize, findUnique, count, clearLoginFailures } = await createHarness();
     const passwordHash = await bcrypt.hash("CorrectPass123", 10);
     findUnique.mockResolvedValue({
       id: "user-2",
@@ -156,17 +156,20 @@ describe("nextauth credentials authorize", () => {
     });
     count.mockResolvedValue(1);
 
-    let thrown: unknown = null;
-    try {
-      await authorize(
-        { email: "verify@test.local", password: "CorrectPass123" },
-        { headers: new Headers([["x-forwarded-for", "127.0.0.1"]]) },
-      );
-    } catch (error) {
-      thrown = error;
-    }
+    const result = await authorize(
+      { email: "verify@test.local", password: "CorrectPass123" },
+      { headers: new Headers([["x-forwarded-for", "127.0.0.1"]]) },
+    );
 
-    expect(thrown).toMatchObject({ message: "emailNotVerified" });
+    expect(result).toMatchObject({
+      email: "verify@test.local",
+      organizationId: "org-1",
+      emailVerified: false,
+    });
+    expect(clearLoginFailures).toHaveBeenCalledWith({
+      email: "verify@test.local",
+      ip: "127.0.0.1",
+    });
   });
 
   it("returns registrationNotCompleted without embedding token details", async () => {
