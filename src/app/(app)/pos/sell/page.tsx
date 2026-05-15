@@ -842,11 +842,11 @@ const PosSellPage = () => {
 
       if (provider === "QZ_TRAY") {
         const binding = getQzTrayBinding(activeStoreId);
-        await printPdfBlobViaQzTray({
+        const result = await printPdfBlobViaQzTray({
           blob,
           printerName: binding.receiptPrinterName,
         });
-        return "qz" as const;
+        return result.trustStatus === "trusted" ? ("qz" as const) : ("qz_untrusted" as const);
       }
 
       if (provider === "KIOSK_SILENT_PRINT") {
@@ -876,6 +876,8 @@ const PosSellPage = () => {
         });
         if (result === "blocked" || result === "manual") {
           toast({ variant: "info", description: t("sell.receiptPrintFallback") });
+        } else if (result === "qz_untrusted") {
+          toast({ variant: "info", description: t("sell.qzTrustMissing") });
         } else {
           toast({ variant: "success", description: t("sell.receiptReprintSent") });
         }
@@ -923,7 +925,9 @@ const PosSellPage = () => {
           return;
         }
         setAutoReceiptStatus(result === "blocked" ? "blocked" : "ready");
-        if (result !== "blocked") {
+        if (result === "qz_untrusted") {
+          toast({ variant: "info", description: t("sell.qzTrustMissing") });
+        } else if (result !== "blocked") {
           toast({ variant: "success", description: t("sell.receiptAutoReady") });
         }
       } catch (error) {
