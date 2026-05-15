@@ -91,9 +91,10 @@ import {
 } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
-  getLocalPrintAgentBinding,
-  printPdfBlobViaLocalPrintAgent,
-} from "@/lib/localPrintAgent";
+  getQzTrayBinding,
+  printPdfBlobViaQzTray,
+  qzTrayErrorMessageKey,
+} from "@/lib/qzTrayPrint";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
   PRICE_TAG_ROLL_LIMITS,
@@ -312,6 +313,7 @@ const InventoryPage = () => {
   const t = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tPrinting = useTranslations("printingSettings");
   const locale = useLocale();
   const { data: session } = useSession();
   const role = session?.user?.role;
@@ -1401,18 +1403,11 @@ const InventoryPage = () => {
         },
       });
       const printStoreId = printValues.storeId || storeId || "";
-      if (printProfileSettings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && printStoreId) {
-        const binding = getLocalPrintAgentBinding(printStoreId);
-        await printPdfBlobViaLocalPrintAgent({
-          storeId: printStoreId,
+      if (printProfileSettings?.labelPrintProvider === "QZ_TRAY" && printStoreId) {
+        const binding = getQzTrayBinding(printStoreId);
+        await printPdfBlobViaQzTray({
           blob,
-          binding,
           printerName: binding.labelPrinterName,
-          jobType: "BARCODE_LABEL",
-          options: {
-            template: printValues.template,
-            count: snapshotProductIds.length * printValues.quantity,
-          },
         });
       } else {
         const result = await printPdfBlob(blob);
@@ -1433,6 +1428,11 @@ const InventoryPage = () => {
       const message = error instanceof Error ? error.message : "";
       if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
         toast({ variant: "error", description: t("printMissingBarcode") });
+        return;
+      }
+      const qzErrorKey = qzTrayErrorMessageKey(error);
+      if (message.startsWith("qz") || qzErrorKey !== "qzPrintFailed") {
+        toast({ variant: "error", description: tPrinting(qzErrorKey) });
         return;
       }
       if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
@@ -1498,15 +1498,11 @@ const InventoryPage = () => {
         },
       });
       if (mode === "print") {
-        if (legacySettings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && values.storeId) {
-          const binding = getLocalPrintAgentBinding(values.storeId);
-          await printPdfBlobViaLocalPrintAgent({
-            storeId: values.storeId,
+        if (legacySettings?.labelPrintProvider === "QZ_TRAY" && values.storeId) {
+          const binding = getQzTrayBinding(values.storeId);
+          await printPdfBlobViaQzTray({
             blob,
-            binding,
             printerName: binding.labelPrinterName,
-            jobType: "BARCODE_LABEL",
-            options: { template: values.template, count: snapshotProductIds.length * values.quantity },
           });
         } else {
           await printPdfBlob(blob);
@@ -1520,6 +1516,11 @@ const InventoryPage = () => {
       const message = error instanceof Error ? error.message : "";
       if (message === tErrors("priceTagsBarcodeConfirmationRequired")) {
         toast({ variant: "error", description: t("printWithoutBarcodeConfirmRequired") });
+        return;
+      }
+      const qzErrorKey = qzTrayErrorMessageKey(error);
+      if (message.startsWith("qz") || qzErrorKey !== "qzPrintFailed") {
+        toast({ variant: "error", description: tPrinting(qzErrorKey) });
         return;
       }
       toast({ variant: "error", description: t("priceTagsFailed") });

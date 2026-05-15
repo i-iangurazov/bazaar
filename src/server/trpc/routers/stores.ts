@@ -206,20 +206,22 @@ export const storesRouter = router({
         labelPrintMode: z.nativeEnum(PrinterPrintMode),
         receiptPrintProvider: z
           .enum([
-            "LOCAL_PRINT_AGENT",
+            "DISABLED",
+            "QZ_TRAY",
             "KIOSK_SILENT_PRINT",
             "NETWORK_ESC_POS",
             "MANUAL_BROWSER_PRINT",
           ])
-          .default("LOCAL_PRINT_AGENT"),
+          .default("DISABLED"),
         labelPrintProvider: z
           .enum([
-            "LOCAL_PRINT_AGENT",
+            "DISABLED",
+            "QZ_TRAY",
             "KIOSK_SILENT_PRINT",
             "NETWORK_ESC_POS",
             "MANUAL_BROWSER_PRINT",
           ])
-          .default("LOCAL_PRINT_AGENT"),
+          .default("DISABLED"),
         receiptAutoPrintEnabled: z.boolean().default(false),
         receiptFallbackMode: z.enum(["NONE", "MANUAL_BROWSER_PRINT"]).default("MANUAL_BROWSER_PRINT"),
         receiptTemplateUsage: z.enum(["PRINT", "EXPORT", "BOTH"]).default("BOTH"),

@@ -84,9 +84,10 @@ import {
 } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
-  getLocalPrintAgentBinding,
-  printPdfBlobViaLocalPrintAgent,
-} from "@/lib/localPrintAgent";
+  getQzTrayBinding,
+  printPdfBlobViaQzTray,
+  qzTrayErrorMessageKey,
+} from "@/lib/qzTrayPrint";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
   PRICE_TAG_ROLL_LIMITS,
@@ -275,6 +276,7 @@ const ProductsPage = () => {
   const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tPrinting = useTranslations("printingSettings");
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1745,15 +1747,11 @@ const ProductsPage = () => {
         const fileName = `price-tags-${values.template}.pdf`;
         if (mode === "print") {
           const printStoreId = values.storeId || defaultPrintStoreId;
-          if (settings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && printStoreId) {
-            const binding = getLocalPrintAgentBinding(printStoreId);
-            await printPdfBlobViaLocalPrintAgent({
-              storeId: printStoreId,
+          if (settings?.labelPrintProvider === "QZ_TRAY" && printStoreId) {
+            const binding = getQzTrayBinding(printStoreId);
+            await printPdfBlobViaQzTray({
               blob,
-              binding,
               printerName: binding.labelPrinterName,
-              jobType: "BARCODE_LABEL",
-              options: { template: values.template, count: queue.length * values.quantity },
             });
           } else {
             const result = await printPdfBlob(blob);
@@ -1771,6 +1769,11 @@ const ProductsPage = () => {
           toast({ variant: "error", description: t("printMissingBarcode") });
           return false;
         }
+        const qzErrorKey = qzTrayErrorMessageKey(error);
+        if (message.startsWith("qz") || qzErrorKey !== "qzPrintFailed") {
+          toast({ variant: "error", description: tPrinting(qzErrorKey) });
+          return false;
+        }
         if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
           toast({ variant: "error", description: message });
           return false;
@@ -1779,7 +1782,7 @@ const ProductsPage = () => {
         return false;
       }
     },
-    [defaultPrintStoreId, printProfileSettings, t, tErrors, toast],
+    [defaultPrintStoreId, printProfileSettings, t, tErrors, tPrinting, toast],
   );
 
   const openPrintForProducts = useCallback(

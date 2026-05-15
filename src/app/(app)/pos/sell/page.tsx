@@ -37,9 +37,10 @@ import {
 } from "@/lib/currencyDisplay";
 import { formatNumber } from "@/lib/i18nFormat";
 import {
-  getLocalPrintAgentBinding,
-  printPdfBlobViaLocalPrintAgent,
-} from "@/lib/localPrintAgent";
+  getQzTrayBinding,
+  printPdfBlobViaQzTray,
+  qzTrayErrorMessageKey,
+} from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   createDefaultPosPaymentDraft,
@@ -827,28 +828,25 @@ const PosSellPage = () => {
       if (!lastCompletedSale || !activeStoreId) {
         throw new Error("receiptPrintNotReady");
       }
-      const provider = receiptPrintSettings?.receiptPrintProvider ?? "LOCAL_PRINT_AGENT";
+      const provider = receiptPrintSettings?.receiptPrintProvider ?? "DISABLED";
+      if (
+        provider !== "QZ_TRAY" &&
+        provider !== "KIOSK_SILENT_PRINT" &&
+        !(options.allowManualFallback && receiptPrintSettings?.receiptFallbackMode === "MANUAL_BROWSER_PRINT")
+      ) {
+        throw new Error("receiptAutoPrintSetupRequired");
+      }
       const blob = await fetchPdfBlob({
         url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}&action=${action}`,
       });
 
-      if (provider === "LOCAL_PRINT_AGENT") {
-        const binding = getLocalPrintAgentBinding(activeStoreId);
-        await printPdfBlobViaLocalPrintAgent({
-          storeId: activeStoreId,
+      if (provider === "QZ_TRAY") {
+        const binding = getQzTrayBinding(activeStoreId);
+        await printPdfBlobViaQzTray({
           blob,
-          binding,
           printerName: binding.receiptPrinterName,
-          jobType: "RECEIPT",
-          options: {
-            saleId: lastCompletedSale.id,
-            saleNumber: lastCompletedSale.number,
-            kind,
-            action,
-          },
-          timeoutMs: 10_000,
         });
-        return "agent" as const;
+        return "qz" as const;
       }
 
       if (provider === "KIOSK_SILENT_PRINT") {
@@ -861,7 +859,7 @@ const PosSellPage = () => {
         return result.autoPrintAttempted ? ("manual" as const) : ("blocked" as const);
       }
 
-      throw new Error("receiptAutoPrintUnsupported");
+      throw new Error("receiptAutoPrintSetupRequired");
     },
     [activeStoreId, lastCompletedSale, receiptPrintSettings],
   );
@@ -887,8 +885,13 @@ const PosSellPage = () => {
         });
         downloadPdfBlob(blob, `pos-receipt-${lastCompletedSale.number}-${kind}.pdf`);
       }
-    } catch {
-      toast({ variant: "error", description: t("sell.receiptPdfFailed") });
+    } catch (error) {
+      const key = qzTrayErrorMessageKey(error);
+      toast({
+        variant: "error",
+        description:
+          key === "qzPrintFailed" ? t("sell.receiptPdfFailed") : t(`sell.${key}`),
+      });
     } finally {
       setReceiptAction(null);
     }
@@ -923,10 +926,21 @@ const PosSellPage = () => {
         if (result !== "blocked") {
           toast({ variant: "success", description: t("sell.receiptAutoReady") });
         }
-      } catch {
+      } catch (error) {
         if (active) {
+          const message = error instanceof Error ? error.message : "";
+          if (message === "receiptAutoPrintSetupRequired") {
+            setAutoReceiptStatus("blocked");
+            toast({ variant: "info", description: t("sell.receiptAutoSetupRequired") });
+            return;
+          }
           setAutoReceiptStatus("failed");
-          toast({ variant: "error", description: t("sell.receiptAutoFailed") });
+          const key = qzTrayErrorMessageKey(error);
+          toast({
+            variant: "error",
+            description:
+              key === "qzPrintFailed" ? t("sell.receiptAutoFailed") : t(`sell.${key}`),
+          });
         }
       }
     })();

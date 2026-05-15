@@ -7,7 +7,7 @@ import { toJson } from "@/server/services/json";
 
 export const defaultReceiptPrinterModel = "XP-P501A";
 export const defaultLabelPrinterModel = "XP-365B";
-export const defaultPrintProvider = "LOCAL_PRINT_AGENT";
+export const defaultPrintProvider = "DISABLED";
 export const defaultManualFallbackProvider = "MANUAL_BROWSER_PRINT";
 export const defaultReceiptTemplateUsage = "BOTH";
 export const defaultReceiptPaperSize = "58MM";
@@ -40,6 +40,11 @@ const normalizePrinterModel = (value: string | null | undefined, fallback: strin
 const normalizeTextSetting = (value: string | null | undefined, fallback: string) => {
   const next = value?.trim();
   return next ? next : fallback;
+};
+
+const normalizePrintProvider = (value: string | null | undefined) => {
+  const next = normalizeTextSetting(value, defaultPrintProvider);
+  return next === "LOCAL_PRINT_AGENT" ? defaultPrintProvider : next;
 };
 
 export const getStorePrinterSettings = async (input: {
@@ -161,8 +166,8 @@ export const getStorePrinterSettings = async (input: {
     settings: settings
       ? {
           ...settings,
-          receiptPrintProvider: settings.receiptPrintProvider ?? defaultPrintProvider,
-          labelPrintProvider: settings.labelPrintProvider ?? defaultPrintProvider,
+          receiptPrintProvider: normalizePrintProvider(settings.receiptPrintProvider),
+          labelPrintProvider: normalizePrintProvider(settings.labelPrintProvider),
           receiptAutoPrintEnabled: settings.receiptAutoPrintEnabled,
           receiptFallbackMode: settings.receiptFallbackMode ?? defaultManualFallbackProvider,
           receiptTemplateUsage: settings.receiptTemplateUsage ?? defaultReceiptTemplateUsage,
@@ -394,8 +399,8 @@ export const updateStorePrinterSettings = async (input: {
         storeId: input.storeId,
         receiptPrintMode: input.receiptPrintMode,
         labelPrintMode: input.labelPrintMode,
-        receiptPrintProvider: normalizeTextSetting(input.receiptPrintProvider, defaultPrintProvider),
-        labelPrintProvider: normalizeTextSetting(input.labelPrintProvider, defaultPrintProvider),
+        receiptPrintProvider: normalizePrintProvider(input.receiptPrintProvider),
+        labelPrintProvider: normalizePrintProvider(input.labelPrintProvider),
         receiptAutoPrintEnabled: input.receiptAutoPrintEnabled ?? false,
         receiptFallbackMode: normalizeTextSetting(
           input.receiptFallbackMode,
@@ -464,8 +469,8 @@ export const updateStorePrinterSettings = async (input: {
       update: {
         receiptPrintMode: input.receiptPrintMode,
         labelPrintMode: input.labelPrintMode,
-        receiptPrintProvider: normalizeTextSetting(input.receiptPrintProvider, defaultPrintProvider),
-        labelPrintProvider: normalizeTextSetting(input.labelPrintProvider, defaultPrintProvider),
+        receiptPrintProvider: normalizePrintProvider(input.receiptPrintProvider),
+        labelPrintProvider: normalizePrintProvider(input.labelPrintProvider),
         receiptAutoPrintEnabled: input.receiptAutoPrintEnabled,
         receiptFallbackMode: normalizeTextSetting(
           input.receiptFallbackMode,
@@ -611,8 +616,8 @@ export const updateStorePrinterSettings = async (input: {
 
     return {
       ...updated,
-      receiptPrintProvider: updated.receiptPrintProvider ?? defaultPrintProvider,
-      labelPrintProvider: updated.labelPrintProvider ?? defaultPrintProvider,
+      receiptPrintProvider: normalizePrintProvider(updated.receiptPrintProvider),
+      labelPrintProvider: normalizePrintProvider(updated.labelPrintProvider),
       receiptFallbackMode: updated.receiptFallbackMode ?? defaultManualFallbackProvider,
       receiptTemplateUsage: updated.receiptTemplateUsage ?? defaultReceiptTemplateUsage,
       receiptPaperSize: updated.receiptPaperSize ?? defaultReceiptPaperSize,

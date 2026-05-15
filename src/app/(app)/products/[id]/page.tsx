@@ -74,9 +74,10 @@ import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
-  getLocalPrintAgentBinding,
-  printPdfBlobViaLocalPrintAgent,
-} from "@/lib/localPrintAgent";
+  getQzTrayBinding,
+  printPdfBlobViaQzTray,
+  qzTrayErrorMessageKey,
+} from "@/lib/qzTrayPrint";
 import {
   buildSavedLabelPrintValues,
   resolveLabelPrintFlowAction,
@@ -104,6 +105,7 @@ const ProductDetailPage = () => {
   const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tPrinting = useTranslations("printingSettings");
   const router = useRouter();
   const locale = useLocale();
   const { data: session } = useSession();
@@ -798,15 +800,11 @@ const ProductDetailPage = () => {
       });
       if (mode === "print") {
         const printStoreId = printValues.storeId || labelStoreId;
-        if (settings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && printStoreId) {
-          const binding = getLocalPrintAgentBinding(printStoreId);
-          await printPdfBlobViaLocalPrintAgent({
-            storeId: printStoreId,
+        if (settings?.labelPrintProvider === "QZ_TRAY" && printStoreId) {
+          const binding = getQzTrayBinding(printStoreId);
+          await printPdfBlobViaQzTray({
             blob,
-            binding,
             printerName: binding.labelPrinterName,
-            jobType: "BARCODE_LABEL",
-            options: { template, count: quantity },
           });
         } else {
           const result = await printPdfBlob(blob);
@@ -821,6 +819,11 @@ const ProductDetailPage = () => {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
+      const qzErrorKey = qzTrayErrorMessageKey(error);
+      if (message.startsWith("qz") || qzErrorKey !== "qzPrintFailed") {
+        toast({ variant: "error", description: tPrinting(qzErrorKey) });
+        return;
+      }
       if (message && message !== "pdfRequestFailed" && message !== "pdfContentTypeInvalid") {
         toast({ variant: "error", description: message });
         return;

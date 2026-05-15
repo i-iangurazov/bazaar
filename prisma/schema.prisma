@@ -610,8 +610,8 @@ model StorePrinterSettings {
   storeId              String           @unique
   receiptPrintMode     PrinterPrintMode @default(PDF)
   labelPrintMode       PrinterPrintMode @default(PDF)
-  receiptPrintProvider String           @default("LOCAL_PRINT_AGENT")
-  labelPrintProvider   String           @default("LOCAL_PRINT_AGENT")
+  receiptPrintProvider String           @default("DISABLED")
+  labelPrintProvider   String           @default("DISABLED")
   receiptAutoPrintEnabled Boolean       @default(false)
   receiptFallbackMode  String           @default("MANUAL_BROWSER_PRINT")
   receiptTemplateUsage String           @default("BOTH")
