@@ -245,6 +245,25 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Images uploaded before product creation are auto-rehomed from `unassigned` to the concrete product folder on save when possible.
 - In development, if `r2` variables are incomplete, storage falls back to local with warning.
 - In production, missing required `r2` variables fail fast.
+- Direct browser uploads to R2 require bucket CORS. Without it, production uploads from `https://www.bazaar.kg` fail at the browser preflight with `No 'Access-Control-Allow-Origin' header`.
+- Minimum R2 CORS for product image uploads:
+  ```json
+  [
+    {
+      "AllowedOrigins": ["https://www.bazaar.kg", "https://bazaar.kg", "http://localhost:3000"],
+      "AllowedMethods": ["GET", "PUT", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+  ```
+- Apply with Wrangler, replacing the bucket name if needed:
+  ```bash
+  wrangler r2 bucket cors put bazaar --file r2-cors.json
+  wrangler r2 bucket cors get bazaar
+  ```
+- The app falls back to the backend upload endpoint when the direct R2 PUT fails before a readable response, but that fallback is only a safety net; correct production performance still requires the R2 CORS policy above.
 
 ## Integrations
 - `/operations/integrations/bazaar-catalog` manages the public store catalogue.

@@ -1733,8 +1733,10 @@ export const ProductForm = ({
       );
       if (error instanceof ProductImageUploadTimeoutError) {
         toast({ variant: "error", description: t("imageUploadTimedOut") });
+        return { attempted: true, url: null };
       }
-      return { attempted: true, url: null };
+      onProgress?.(null);
+      return { attempted: false, url: null };
     }
 
     if (!uploadResponse.ok) {
@@ -1744,6 +1746,14 @@ export const ProductForm = ({
         fileSize: file.size,
         fileType: file.type,
       });
+      if (
+        uploadResponse.status >= 500 ||
+        uploadResponse.status === 408 ||
+        uploadResponse.status === 429
+      ) {
+        onProgress?.(null);
+        return { attempted: false, url: null };
+      }
       return { attempted: true, url: null };
     }
 

@@ -24,4 +24,12 @@ describe("product image uploader source", () => {
     expect(source).not.toContain("event.target.files?.[0]");
     expect(source).not.toContain("event.target.files[0]");
   });
+
+  it("falls back to the backend upload endpoint when direct storage PUT fails before a response", async () => {
+    const source = await readSource("src/components/product-form.tsx");
+
+    expect(source).toContain('"direct-upload-put-error"');
+    expect(source).toContain("return { attempted: false, url: null };");
+    expect(source).toContain("return uploadImageFileViaProxy(file);");
+  });
 });
