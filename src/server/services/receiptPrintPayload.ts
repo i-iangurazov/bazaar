@@ -72,6 +72,10 @@ export const buildReceiptPrintPayload = async (input: {
               id: true,
               name: true,
               sku: true,
+              barcodes: {
+                select: { value: true },
+                take: 1,
+              },
             },
           },
         },
@@ -146,6 +150,7 @@ export const buildReceiptPrintPayload = async (input: {
       productId: line.productId,
       name: line.product.name,
       sku: line.product.sku,
+      barcode: line.product.barcodes?.[0]?.value ?? null,
       qty: line.qty,
       unitPriceKgs: toMoney(line.unitPriceKgs),
       lineTotalKgs: toMoney(line.lineTotalKgs),

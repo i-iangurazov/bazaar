@@ -19,7 +19,7 @@ import {
   getStorePrinterSettings,
   updateStorePrinterSettings,
 } from "@/server/services/storePrinterSettings";
-import { userHasAllStoreAccess } from "@/server/services/storeAccess";
+import { assertUserCanAccessStore, userHasAllStoreAccess } from "@/server/services/storeAccess";
 
 export const storesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -188,6 +188,7 @@ export const storesRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await getStorePrinterSettings({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -203,16 +204,74 @@ export const storesRouter = router({
         storeId: z.string().min(1),
         receiptPrintMode: z.nativeEnum(PrinterPrintMode),
         labelPrintMode: z.nativeEnum(PrinterPrintMode),
+        receiptPrintProvider: z
+          .enum([
+            "LOCAL_PRINT_AGENT",
+            "KIOSK_SILENT_PRINT",
+            "NETWORK_ESC_POS",
+            "MANUAL_BROWSER_PRINT",
+          ])
+          .default("LOCAL_PRINT_AGENT"),
+        labelPrintProvider: z
+          .enum([
+            "LOCAL_PRINT_AGENT",
+            "KIOSK_SILENT_PRINT",
+            "NETWORK_ESC_POS",
+            "MANUAL_BROWSER_PRINT",
+          ])
+          .default("LOCAL_PRINT_AGENT"),
+        receiptAutoPrintEnabled: z.boolean().default(false),
+        receiptFallbackMode: z.enum(["NONE", "MANUAL_BROWSER_PRINT"]).default("MANUAL_BROWSER_PRINT"),
+        receiptTemplateUsage: z.enum(["PRINT", "EXPORT", "BOTH"]).default("BOTH"),
+        receiptPaperSize: z.enum(["58MM", "80MM", "A4", "CUSTOM"]).default("58MM"),
+        receiptCustomWidthMm: z.number().min(40).max(210).default(58),
+        receiptCustomHeightMm: z.number().min(0).max(500).default(0),
+        receiptMarginTopMm: z.number().min(0).max(20).default(3),
+        receiptMarginRightMm: z.number().min(0).max(20).default(2),
+        receiptMarginBottomMm: z.number().min(0).max(20).default(3),
+        receiptMarginLeftMm: z.number().min(0).max(20).default(2),
+        receiptFontSize: z.number().min(6).max(14).default(8.4),
+        receiptShowStoreName: z.boolean().default(true),
+        receiptShowStoreAddress: z.boolean().default(true),
+        receiptShowStorePhone: z.boolean().default(true),
+        receiptShowLogo: z.boolean().default(false),
+        receiptShowCashierName: z.boolean().default(true),
+        receiptShowSaleNumber: z.boolean().default(true),
+        receiptShowDateTime: z.boolean().default(true),
+        receiptShowProductName: z.boolean().default(true),
+        receiptShowProductSku: z.boolean().default(true),
+        receiptShowProductBarcode: z.boolean().default(false),
+        receiptShowProductUnitPrice: z.boolean().default(true),
+        receiptShowProductQuantity: z.boolean().default(true),
+        receiptShowDiscount: z.boolean().default(true),
+        receiptShowSubtotal: z.boolean().default(true),
+        receiptShowPaymentMethod: z.boolean().default(true),
+        receiptShowTotal: z.boolean().default(true),
+        receiptShowChange: z.boolean().default(true),
+        receiptFooterText: z.string().max(300).optional().default(""),
         receiptPrinterModel: z.string().max(120).nullable().optional(),
         labelPrinterModel: z.string().max(120).nullable().optional(),
         labelTemplate: z.enum(PRICE_TAG_TEMPLATES).default(ROLL_PRICE_TAG_TEMPLATE),
         labelPaperMode: z.enum(["A4", "ROLL", "LABEL_PRINTER", "THERMAL"]).default("ROLL"),
         labelBarcodeType: z.enum(["auto", "ean13", "code128"]).default("auto"),
+        labelLayoutOrder: z
+          .enum([
+            "PRICE_NAME_BARCODE",
+            "NAME_BARCODE_PRICE",
+            "BARCODE_ONLY",
+            "NAME_BARCODE",
+            "PRICE_BARCODE",
+          ])
+          .default("NAME_BARCODE_PRICE"),
         labelDefaultCopies: z.number().int().min(1).max(100).default(1),
         labelShowProductName: z.boolean().default(true),
         labelShowPrice: z.boolean().default(true),
         labelShowSku: z.boolean().default(true),
+        labelShowBarcodeText: z.boolean().default(true),
+        labelShowCurrency: z.boolean().default(true),
         labelShowStoreName: z.boolean().default(false),
+        labelBarcodeHeightMm: z.number().min(6).max(40).default(12),
+        labelFontSize: z.number().min(6).max(14).default(8),
         labelRollGapMm: z
           .number()
           .min(PRICE_TAG_ROLL_LIMITS.gapMm.min)
@@ -247,6 +306,7 @@ export const storesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await updateStorePrinterSettings({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -254,16 +314,52 @@ export const storesRouter = router({
           requestId: ctx.requestId,
           receiptPrintMode: input.receiptPrintMode,
           labelPrintMode: input.labelPrintMode,
+          receiptPrintProvider: input.receiptPrintProvider,
+          labelPrintProvider: input.labelPrintProvider,
+          receiptAutoPrintEnabled: input.receiptAutoPrintEnabled,
+          receiptFallbackMode: input.receiptFallbackMode,
+          receiptTemplateUsage: input.receiptTemplateUsage,
+          receiptPaperSize: input.receiptPaperSize,
+          receiptCustomWidthMm: input.receiptCustomWidthMm,
+          receiptCustomHeightMm: input.receiptCustomHeightMm,
+          receiptMarginTopMm: input.receiptMarginTopMm,
+          receiptMarginRightMm: input.receiptMarginRightMm,
+          receiptMarginBottomMm: input.receiptMarginBottomMm,
+          receiptMarginLeftMm: input.receiptMarginLeftMm,
+          receiptFontSize: input.receiptFontSize,
+          receiptShowStoreName: input.receiptShowStoreName,
+          receiptShowStoreAddress: input.receiptShowStoreAddress,
+          receiptShowStorePhone: input.receiptShowStorePhone,
+          receiptShowLogo: input.receiptShowLogo,
+          receiptShowCashierName: input.receiptShowCashierName,
+          receiptShowSaleNumber: input.receiptShowSaleNumber,
+          receiptShowDateTime: input.receiptShowDateTime,
+          receiptShowProductName: input.receiptShowProductName,
+          receiptShowProductSku: input.receiptShowProductSku,
+          receiptShowProductBarcode: input.receiptShowProductBarcode,
+          receiptShowProductUnitPrice: input.receiptShowProductUnitPrice,
+          receiptShowProductQuantity: input.receiptShowProductQuantity,
+          receiptShowDiscount: input.receiptShowDiscount,
+          receiptShowSubtotal: input.receiptShowSubtotal,
+          receiptShowPaymentMethod: input.receiptShowPaymentMethod,
+          receiptShowTotal: input.receiptShowTotal,
+          receiptShowChange: input.receiptShowChange,
+          receiptFooterText: input.receiptFooterText,
           receiptPrinterModel: input.receiptPrinterModel ?? null,
           labelPrinterModel: input.labelPrinterModel ?? null,
           labelTemplate: input.labelTemplate,
           labelPaperMode: input.labelPaperMode,
           labelBarcodeType: input.labelBarcodeType,
+          labelLayoutOrder: input.labelLayoutOrder,
           labelDefaultCopies: input.labelDefaultCopies,
           labelShowProductName: input.labelShowProductName,
           labelShowPrice: input.labelShowPrice,
           labelShowSku: input.labelShowSku,
+          labelShowBarcodeText: input.labelShowBarcodeText,
+          labelShowCurrency: input.labelShowCurrency,
           labelShowStoreName: input.labelShowStoreName,
+          labelBarcodeHeightMm: input.labelBarcodeHeightMm,
+          labelFontSize: input.labelFontSize,
           labelRollGapMm: input.labelRollGapMm,
           labelRollXOffsetMm: input.labelRollXOffsetMm,
           labelRollYOffsetMm: input.labelRollYOffsetMm,

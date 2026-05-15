@@ -145,9 +145,13 @@ export const POST = async (request: Request) => {
         address: tPos("receiptPdf.address"),
         phone: tPos("receiptPdf.phone"),
         qty: tPos("receiptPdf.qty"),
+        barcode: tPos("receiptPdf.barcode"),
         subtotal: tPos("receiptPdf.subtotal"),
+        discount: tPos("receiptPdf.discount"),
         total: tPos("receiptPdf.total"),
         payments: tPos("receiptPdf.payments"),
+        change: tPos("receiptPdf.change"),
+        footer: tPos("receiptPdf.footer"),
       },
     });
 

@@ -93,9 +93,13 @@ describe("printing adapter", () => {
         address: "address",
         phone: "phone",
         qty: "qty",
+        barcode: "barcode",
         subtotal: "subtotal",
+        discount: "discount",
         total: "total",
         payments: "payments",
+        change: "change",
+        footer: "footer",
       },
     });
 
@@ -168,9 +172,13 @@ describe("printing adapter", () => {
           address: "address",
           phone: "phone",
           qty: "qty",
+          barcode: "barcode",
           subtotal: "subtotal",
+          discount: "discount",
           total: "total",
           payments: "payments",
+          change: "change",
+          footer: "footer",
         },
       }),
     ).rejects.toMatchObject({ message: "printerConnectorNotPaired" });

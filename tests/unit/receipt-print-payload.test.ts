@@ -84,6 +84,7 @@ describe("receipt print payload", () => {
         productId: "prod-1",
         name: "Сүт",
         sku: "SKU-1",
+        barcode: null,
         qty: 1,
         unitPriceKgs: 240,
         lineTotalKgs: 240,

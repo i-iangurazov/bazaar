@@ -91,6 +91,10 @@ import {
 } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
+  getLocalPrintAgentBinding,
+  printPdfBlobViaLocalPrintAgent,
+} from "@/lib/localPrintAgent";
+import {
   PRICE_TAG_ROLL_DEFAULTS,
   PRICE_TAG_ROLL_LIMITS,
   PRICE_TAG_TEMPLATES,
@@ -1301,12 +1305,8 @@ const InventoryPage = () => {
   }, [minStockProductId, inventoryItems, minStockForm]);
 
   const openPrintSettings = useCallback(() => {
-    if (storeId) {
-      router.push(`/stores/${storeId}/hardware`);
-      return;
-    }
     router.push("/settings/printing");
-  }, [router, storeId]);
+  }, [router]);
 
   const handleInventoryQuickPrint = async () => {
     if (!selectedSnapshotIds.length || inventoryQuickPrintLoading) {
@@ -1384,7 +1384,13 @@ const InventoryPage = () => {
                   showProductName: printProfileSettings.labelShowProductName,
                   showPrice: printProfileSettings.labelShowPrice,
                   showSku: printProfileSettings.labelShowSku,
+                  showBarcodeText: printProfileSettings.labelShowBarcodeText,
+                  showCurrency: printProfileSettings.labelShowCurrency,
                   showStoreName: printProfileSettings.labelShowStoreName,
+                  barcodeType: printProfileSettings.labelBarcodeType,
+                  labelLayoutOrder: printProfileSettings.labelLayoutOrder,
+                  barcodeHeightMm: printProfileSettings.labelBarcodeHeightMm,
+                  labelFontSize: printProfileSettings.labelFontSize,
                 }
               : undefined,
             items: buildBarcodeLabelPrintItems({
@@ -1394,9 +1400,25 @@ const InventoryPage = () => {
           }),
         },
       });
-      const result = await printPdfBlob(blob);
-      if (!result.autoPrintAttempted) {
-        toast({ variant: "info", description: t("printFallback") });
+      const printStoreId = printValues.storeId || storeId || "";
+      if (printProfileSettings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && printStoreId) {
+        const binding = getLocalPrintAgentBinding(printStoreId);
+        await printPdfBlobViaLocalPrintAgent({
+          storeId: printStoreId,
+          blob,
+          binding,
+          printerName: binding.labelPrinterName,
+          jobType: "BARCODE_LABEL",
+          options: {
+            template: printValues.template,
+            count: snapshotProductIds.length * printValues.quantity,
+          },
+        });
+      } else {
+        const result = await printPdfBlob(blob);
+        if (!result.autoPrintAttempted) {
+          toast({ variant: "info", description: t("printFallback") });
+        }
       }
       toast({
         variant: "success",
@@ -1404,7 +1426,7 @@ const InventoryPage = () => {
           count: snapshotProductIds.length * printValues.quantity,
         }),
         actionLabel: t("changePrintSettings"),
-        actionHref: storeId ? `/stores/${storeId}/hardware` : "/settings/printing",
+        actionHref: "/settings/printing",
       });
       setSelectedIds(new Set());
     } catch (error) {
@@ -1437,6 +1459,7 @@ const InventoryPage = () => {
       if (!snapshotProductIds.length) {
         return;
       }
+      const legacySettings = legacyPrintHardwareQuery.data?.settings;
       const blob = await fetchPdfBlob({
         url: "/api/price-tags/pdf",
         init: {
@@ -1453,6 +1476,20 @@ const InventoryPage = () => {
                   yOffsetMm: values.yOffsetMm,
                 }
               : undefined,
+            display: legacySettings
+              ? {
+                  showProductName: legacySettings.labelShowProductName,
+                  showPrice: legacySettings.labelShowPrice,
+                  showSku: legacySettings.labelShowSku,
+                  showBarcodeText: legacySettings.labelShowBarcodeText,
+                  showCurrency: legacySettings.labelShowCurrency,
+                  showStoreName: legacySettings.labelShowStoreName,
+                  barcodeType: legacySettings.labelBarcodeType,
+                  labelLayoutOrder: legacySettings.labelLayoutOrder,
+                  barcodeHeightMm: legacySettings.labelBarcodeHeightMm,
+                  labelFontSize: legacySettings.labelFontSize,
+                }
+              : undefined,
             items: snapshotProductIds.map((productId) => ({
               productId,
               quantity: values.quantity,
@@ -1461,7 +1498,19 @@ const InventoryPage = () => {
         },
       });
       if (mode === "print") {
-        await printPdfBlob(blob);
+        if (legacySettings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && values.storeId) {
+          const binding = getLocalPrintAgentBinding(values.storeId);
+          await printPdfBlobViaLocalPrintAgent({
+            storeId: values.storeId,
+            blob,
+            binding,
+            printerName: binding.labelPrinterName,
+            jobType: "BARCODE_LABEL",
+            options: { template: values.template, count: snapshotProductIds.length * values.quantity },
+          });
+        } else {
+          await printPdfBlob(blob);
+        }
       } else {
         downloadPdfBlob(blob, `price-tags-${values.template}.pdf`);
       }

@@ -74,6 +74,10 @@ import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
+  getLocalPrintAgentBinding,
+  printPdfBlobViaLocalPrintAgent,
+} from "@/lib/localPrintAgent";
+import {
   buildSavedLabelPrintValues,
   resolveLabelPrintFlowAction,
   resolveSavedLabelCopies,
@@ -776,7 +780,13 @@ const ProductDetailPage = () => {
                   showProductName: settings.labelShowProductName,
                   showPrice: settings.labelShowPrice,
                   showSku: settings.labelShowSku,
+                  showBarcodeText: settings.labelShowBarcodeText,
+                  showCurrency: settings.labelShowCurrency,
                   showStoreName: settings.labelShowStoreName,
+                  barcodeType: settings.labelBarcodeType,
+                  labelLayoutOrder: settings.labelLayoutOrder,
+                  barcodeHeightMm: settings.labelBarcodeHeightMm,
+                  labelFontSize: settings.labelFontSize,
                 }
               : undefined,
             items: buildBarcodeLabelPrintItems({
@@ -787,9 +797,22 @@ const ProductDetailPage = () => {
         },
       });
       if (mode === "print") {
-        const result = await printPdfBlob(blob);
-        if (!result.autoPrintAttempted) {
-          toast({ variant: "info", description: t("printFallback") });
+        const printStoreId = printValues.storeId || labelStoreId;
+        if (settings?.labelPrintProvider === "LOCAL_PRINT_AGENT" && printStoreId) {
+          const binding = getLocalPrintAgentBinding(printStoreId);
+          await printPdfBlobViaLocalPrintAgent({
+            storeId: printStoreId,
+            blob,
+            binding,
+            printerName: binding.labelPrinterName,
+            jobType: "BARCODE_LABEL",
+            options: { template, count: quantity },
+          });
+        } else {
+          const result = await printPdfBlob(blob);
+          if (!result.autoPrintAttempted) {
+            toast({ variant: "info", description: t("printFallback") });
+          }
         }
         toast({ variant: "success", description: t("printQueued", { count: quantity }) });
       } else {
@@ -878,11 +901,7 @@ const ProductDetailPage = () => {
                     {t("printDownload")}
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link
-                      href={
-                        labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"
-                      }
-                    >
+                    <Link href="/settings/printing">
                       <PrintIcon className="h-4 w-4" aria-hidden />
                       {t("changePrintSettings")}
                     </Link>
@@ -1900,7 +1919,7 @@ const ProductDetailPage = () => {
               {tCommon("cancel")}
             </Button>
             <Button asChild className="w-full sm:w-auto">
-              <Link href={labelStoreId ? `/stores/${labelStoreId}/hardware` : "/settings/printing"}>
+              <Link href="/settings/printing">
                 <PrintIcon className="h-4 w-4" aria-hidden />
                 {t("openPrintSettings")}
               </Link>

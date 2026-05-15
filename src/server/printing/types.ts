@@ -4,6 +4,47 @@ import type { PosKkmStatus, PosPaymentMethod } from "@prisma/client";
 
 export type ReceiptPrintVariant = "PRECHECK" | "FISCAL";
 
+export type ReceiptTemplateSettings = {
+  receiptPaperSize: string;
+  receiptCustomWidthMm: number;
+  receiptCustomHeightMm: number;
+  receiptMarginTopMm: number;
+  receiptMarginRightMm: number;
+  receiptMarginBottomMm: number;
+  receiptMarginLeftMm: number;
+  receiptFontSize: number;
+  receiptShowStoreName: boolean;
+  receiptShowStoreAddress: boolean;
+  receiptShowStorePhone: boolean;
+  receiptShowLogo: boolean;
+  receiptShowCashierName: boolean;
+  receiptShowSaleNumber: boolean;
+  receiptShowDateTime: boolean;
+  receiptShowProductName: boolean;
+  receiptShowProductSku: boolean;
+  receiptShowProductBarcode: boolean;
+  receiptShowProductUnitPrice: boolean;
+  receiptShowProductQuantity: boolean;
+  receiptShowDiscount: boolean;
+  receiptShowSubtotal: boolean;
+  receiptShowPaymentMethod: boolean;
+  receiptShowTotal: boolean;
+  receiptShowChange: boolean;
+  receiptFooterText: string;
+};
+
+export type BarcodeTemplateSettings = {
+  labelLayoutOrder: string;
+  labelShowProductName: boolean;
+  labelShowPrice: boolean;
+  labelShowSku: boolean;
+  labelShowBarcodeText: boolean;
+  labelShowCurrency: boolean;
+  labelShowStoreName: boolean;
+  labelBarcodeHeightMm: number;
+  labelFontSize: number;
+};
+
 export type ReceiptPrintJob = {
   saleId: string;
   storeId: string;
@@ -25,6 +66,7 @@ export type ReceiptPrintJob = {
     productId: string;
     name: string;
     sku: string;
+    barcode?: string | null;
     qty: number;
     unitPriceKgs: number;
     lineTotalKgs: number;

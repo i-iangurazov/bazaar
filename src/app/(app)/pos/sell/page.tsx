@@ -36,6 +36,10 @@ import {
   formatKgsMoney,
 } from "@/lib/currencyDisplay";
 import { formatNumber } from "@/lib/i18nFormat";
+import {
+  getLocalPrintAgentBinding,
+  printPdfBlobViaLocalPrintAgent,
+} from "@/lib/localPrintAgent";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   createDefaultPosPaymentDraft,
@@ -205,6 +209,11 @@ const PosSellPage = () => {
   const searchTerm = lineSearch.trim();
   const hasSearchTerm = searchTerm.length >= 1;
   const activeStoreId = shiftQuery.data?.store.id;
+  const receiptPrintSettingsQuery = trpc.stores.hardware.useQuery(
+    { storeId: activeStoreId ?? "" },
+    { enabled: Boolean(activeStoreId), staleTime: 60_000 },
+  );
+  const receiptPrintSettings = receiptPrintSettingsQuery.data?.settings;
   const productsBootstrapQuery = trpc.products.bootstrap.useQuery(
     { storeId: activeStoreId, page: 1, pageSize: 1 },
     { enabled: Boolean(activeStoreId), staleTime: 60_000 },
@@ -305,7 +314,7 @@ const PosSellPage = () => {
         number: result.number,
         kkmStatus: result.kkmStatus,
       });
-      setAutoReceiptStatus("printing");
+      setAutoReceiptStatus("idle");
       setSaleId(null);
       setPayments([createDefaultPosPaymentDraft()]);
       setDiscountDraft("");
@@ -809,21 +818,73 @@ const PosSellPage = () => {
     }
   };
 
+  const printReceiptWithConfiguredProvider = useCallback(
+    async (
+      kind: "precheck" | "fiscal",
+      action: "auto_print" | "reprint",
+      options: { allowManualFallback: boolean },
+    ) => {
+      if (!lastCompletedSale || !activeStoreId) {
+        throw new Error("receiptPrintNotReady");
+      }
+      const provider = receiptPrintSettings?.receiptPrintProvider ?? "LOCAL_PRINT_AGENT";
+      const blob = await fetchPdfBlob({
+        url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}&action=${action}`,
+      });
+
+      if (provider === "LOCAL_PRINT_AGENT") {
+        const binding = getLocalPrintAgentBinding(activeStoreId);
+        await printPdfBlobViaLocalPrintAgent({
+          storeId: activeStoreId,
+          blob,
+          binding,
+          printerName: binding.receiptPrinterName,
+          jobType: "RECEIPT",
+          options: {
+            saleId: lastCompletedSale.id,
+            saleNumber: lastCompletedSale.number,
+            kind,
+            action,
+          },
+          timeoutMs: 10_000,
+        });
+        return "agent" as const;
+      }
+
+      if (provider === "KIOSK_SILENT_PRINT") {
+        const result = await printPdfBlob(blob);
+        return result.autoPrintAttempted ? ("kiosk" as const) : ("blocked" as const);
+      }
+
+      if (options.allowManualFallback && receiptPrintSettings?.receiptFallbackMode === "MANUAL_BROWSER_PRINT") {
+        const result = await printPdfBlob(blob);
+        return result.autoPrintAttempted ? ("manual" as const) : ("blocked" as const);
+      }
+
+      throw new Error("receiptAutoPrintUnsupported");
+    },
+    [activeStoreId, lastCompletedSale, receiptPrintSettings],
+  );
+
   const handleReceiptPdf = async (mode: "download" | "print", kind: "precheck" | "fiscal") => {
     if (!lastCompletedSale || receiptAction) {
       return;
     }
     setReceiptAction({ mode, kind });
     try {
-      const blob = await fetchPdfBlob({
-        url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}&action=${mode === "print" ? "reprint" : "download"}`,
-      });
       if (mode === "print") {
-        const result = await printPdfBlob(blob);
-        if (!result.autoPrintAttempted) {
+        const result = await printReceiptWithConfiguredProvider(kind, "reprint", {
+          allowManualFallback: true,
+        });
+        if (result === "blocked" || result === "manual") {
           toast({ variant: "info", description: t("sell.receiptPrintFallback") });
+        } else {
+          toast({ variant: "success", description: t("sell.receiptReprintSent") });
         }
       } else {
+        const blob = await fetchPdfBlob({
+          url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=${kind}&action=download`,
+        });
         downloadPdfBlob(blob, `pos-receipt-${lastCompletedSale.number}-${kind}.pdf`);
       }
     } catch {
@@ -837,24 +898,35 @@ const PosSellPage = () => {
     if (!lastCompletedSale || autoPrintedSaleIdRef.current === lastCompletedSale.id) {
       return;
     }
+    if (receiptPrintSettingsQuery.isLoading) {
+      return;
+    }
 
     let active = true;
     autoPrintedSaleIdRef.current = lastCompletedSale.id;
-    setAutoReceiptStatus("printing");
+
+    if (!receiptPrintSettings?.receiptAutoPrintEnabled) {
+      setAutoReceiptStatus("idle");
+      return;
+    }
 
     void (async () => {
+      setAutoReceiptStatus("printing");
       try {
-        const blob = await fetchPdfBlob({
-          url: `/api/pos/receipts/${lastCompletedSale.id}/pdf?kind=precheck&action=auto_print`,
+        const result = await printReceiptWithConfiguredProvider("precheck", "auto_print", {
+          allowManualFallback: false,
         });
-        const result = await printPdfBlob(blob);
         if (!active) {
           return;
         }
-        setAutoReceiptStatus(result.autoPrintAttempted ? "ready" : "blocked");
+        setAutoReceiptStatus(result === "blocked" ? "blocked" : "ready");
+        if (result !== "blocked") {
+          toast({ variant: "success", description: t("sell.receiptAutoReady") });
+        }
       } catch {
         if (active) {
           setAutoReceiptStatus("failed");
+          toast({ variant: "error", description: t("sell.receiptAutoFailed") });
         }
       }
     })();
@@ -862,7 +934,14 @@ const PosSellPage = () => {
     return () => {
       active = false;
     };
-  }, [lastCompletedSale]);
+  }, [
+    lastCompletedSale,
+    printReceiptWithConfiguredProvider,
+    receiptPrintSettings?.receiptAutoPrintEnabled,
+    receiptPrintSettingsQuery.isLoading,
+    t,
+    toast,
+  ]);
 
   const productResults = activeStoreId ? (catalogProductsQuery.data?.items ?? []) : [];
   const visibleProducts = productResults;

@@ -67,7 +67,21 @@ const priceTagRequestSchema = z
         showProductName: z.boolean().optional(),
         showPrice: z.boolean().optional(),
         showSku: z.boolean().optional(),
+        showBarcodeText: z.boolean().optional(),
+        showCurrency: z.boolean().optional(),
         showStoreName: z.boolean().optional(),
+        barcodeType: z.enum(["auto", "ean13", "code128"]).optional(),
+        labelLayoutOrder: z
+          .enum([
+            "PRICE_NAME_BARCODE",
+            "NAME_BARCODE_PRICE",
+            "BARCODE_ONLY",
+            "NAME_BARCODE",
+            "PRICE_BARCODE",
+          ])
+          .optional(),
+        barcodeHeightMm: z.coerce.number().min(6).max(40).optional(),
+        labelFontSize: z.coerce.number().min(6).max(14).optional(),
       })
       .optional(),
     items: z
@@ -181,7 +195,13 @@ export const POST = async (request: Request) => {
         labelShowProductName: boolean;
         labelShowPrice: boolean;
         labelShowSku: boolean;
+        labelShowBarcodeText: boolean;
+        labelShowCurrency: boolean;
         labelShowStoreName: boolean;
+        labelBarcodeType: string;
+        labelLayoutOrder: string;
+        labelBarcodeHeightMm: number;
+        labelFontSize: number;
       }
     | null = null;
   if (storeId) {
@@ -198,7 +218,13 @@ export const POST = async (request: Request) => {
             labelShowProductName: true,
             labelShowPrice: true,
             labelShowSku: true,
+            labelShowBarcodeText: true,
+            labelShowCurrency: true,
             labelShowStoreName: true,
+            labelBarcodeType: true,
+            labelLayoutOrder: true,
+            labelBarcodeHeightMm: true,
+            labelFontSize: true,
           },
         },
       },
@@ -336,8 +362,25 @@ export const POST = async (request: Request) => {
       parsed.data.display?.showProductName ?? savedPrintProfile?.labelShowProductName ?? true,
     showPrice: parsed.data.display?.showPrice ?? savedPrintProfile?.labelShowPrice ?? true,
     showSku: parsed.data.display?.showSku ?? savedPrintProfile?.labelShowSku ?? true,
+    showBarcodeText:
+      parsed.data.display?.showBarcodeText ?? savedPrintProfile?.labelShowBarcodeText ?? true,
+    showCurrency: parsed.data.display?.showCurrency ?? savedPrintProfile?.labelShowCurrency ?? true,
     showStoreName:
       parsed.data.display?.showStoreName ?? savedPrintProfile?.labelShowStoreName ?? true,
+    barcodeType:
+      parsed.data.display?.barcodeType ??
+      (savedPrintProfile?.labelBarcodeType === "ean13" ||
+      savedPrintProfile?.labelBarcodeType === "code128"
+        ? savedPrintProfile.labelBarcodeType
+        : "auto"),
+    labelLayoutOrder:
+      parsed.data.display?.labelLayoutOrder ??
+      savedPrintProfile?.labelLayoutOrder ??
+      "NAME_BARCODE_PRICE",
+    barcodeHeightMm:
+      parsed.data.display?.barcodeHeightMm ?? savedPrintProfile?.labelBarcodeHeightMm ?? undefined,
+    labelFontSize:
+      parsed.data.display?.labelFontSize ?? savedPrintProfile?.labelFontSize ?? undefined,
   });
   const response = new Response(pdf, {
     headers: {

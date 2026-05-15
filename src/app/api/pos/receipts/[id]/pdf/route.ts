@@ -109,6 +109,38 @@ export const GET = async (request: Request, { params }: { params: { id: string }
       },
     });
 
+    const receiptSettings = await prisma.storePrinterSettings.findUnique({
+      where: { storeId: job.storeId },
+      select: {
+        receiptPaperSize: true,
+        receiptCustomWidthMm: true,
+        receiptCustomHeightMm: true,
+        receiptMarginTopMm: true,
+        receiptMarginRightMm: true,
+        receiptMarginBottomMm: true,
+        receiptMarginLeftMm: true,
+        receiptFontSize: true,
+        receiptShowStoreName: true,
+        receiptShowStoreAddress: true,
+        receiptShowStorePhone: true,
+        receiptShowLogo: true,
+        receiptShowCashierName: true,
+        receiptShowSaleNumber: true,
+        receiptShowDateTime: true,
+        receiptShowProductName: true,
+        receiptShowProductSku: true,
+        receiptShowProductBarcode: true,
+        receiptShowProductUnitPrice: true,
+        receiptShowProductQuantity: true,
+        receiptShowDiscount: true,
+        receiptShowSubtotal: true,
+        receiptShowPaymentMethod: true,
+        receiptShowTotal: true,
+        receiptShowChange: true,
+        receiptFooterText: true,
+      },
+    });
+
     const pdf = await buildPosReceiptPdf({
       job,
       labels: {
@@ -136,10 +168,15 @@ export const GET = async (request: Request, { params }: { params: { id: string }
         address: tPos("receiptPdf.address"),
         phone: tPos("receiptPdf.phone"),
         qty: tPos("receiptPdf.qty"),
+        barcode: tPos("receiptPdf.barcode"),
         subtotal: tPos("receiptPdf.subtotal"),
+        discount: tPos("receiptPdf.discount"),
         total: tPos("receiptPdf.total"),
         payments: tPos("receiptPdf.payments"),
+        change: tPos("receiptPdf.change"),
+        footer: tPos("receiptPdf.footer"),
       },
+      settings: receiptSettings,
     });
 
     try {

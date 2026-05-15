@@ -4,6 +4,7 @@ import {
   __buildReceiptMetaLinesForTests,
   __formatReceiptCurrencyForTests,
   buildPosReceiptPdf,
+  defaultReceiptTemplateSettings,
   type PosReceiptPdfLabels,
 } from "@/server/services/posReceiptPdf";
 import type { ReceiptPrintJob } from "@/server/printing/types";
@@ -33,9 +34,13 @@ const labels: PosReceiptPdfLabels = {
   address: "Address",
   phone: "Phone",
   qty: "Qty",
+  barcode: "Barcode",
   subtotal: "Subtotal",
+  discount: "Discount",
   total: "Total",
   payments: "Payments",
+  change: "Change",
+  footer: "Footer",
 };
 
 const baseJob: Omit<ReceiptPrintJob, "variant" | "fiscal"> = {
@@ -96,7 +101,7 @@ describe("pos receipt pdf", () => {
     expect(formatted).not.toContain("KGS");
   });
 
-  it("omits INN, phone, and shift from payment receipt meta lines", () => {
+  it("omits INN and shift from payment receipt meta lines", () => {
     const meta = __buildReceiptMetaLinesForTests({
       job: {
         ...baseJob,
@@ -114,15 +119,15 @@ describe("pos receipt pdf", () => {
         },
       },
       labels,
+      settings: defaultReceiptTemplateSettings,
     });
 
-    expect(meta.businessLines).toEqual(["Address: Bishkek"]);
+    expect(meta.businessLines).toEqual(["Address: Bishkek", "Phone: +996700000000"]);
     expect(meta.saleLines[0]).toBe("Sale no: S-000001");
     expect(meta.saleLines[1]?.startsWith("Date: ")).toBe(true);
     expect(meta.saleLines[2]).toBe("Register: Front (F1)");
     expect(meta.saleLines[3]).toBe("Cashier: Cashier");
     expect([...meta.businessLines, ...meta.saleLines].join(" ")).not.toContain("INN");
-    expect([...meta.businessLines, ...meta.saleLines].join(" ")).not.toContain("Phone");
     expect([...meta.businessLines, ...meta.saleLines].join(" ")).not.toContain("Shift");
   });
 

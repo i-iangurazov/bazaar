@@ -6,6 +6,9 @@ const { mockGetServerAuthToken, prisma } = vi.hoisted(() => ({
     customerOrder: {
       findFirst: vi.fn(),
     },
+    storePrinterSettings: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -67,6 +70,7 @@ const saleFixture = {
         id: "prod-1",
         name: "Молоко 3.2%",
         sku: "SKU-1",
+        barcodes: [],
       },
     },
   ],
@@ -99,6 +103,7 @@ describe("pos receipt pdf route", () => {
     vi.clearAllMocks();
     mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
     prisma.customerOrder.findFirst.mockResolvedValue(saleFixture);
+    prisma.storePrinterSettings.findUnique.mockResolvedValue(null);
   });
 
   it("returns application/pdf", async () => {
