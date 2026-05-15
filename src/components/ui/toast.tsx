@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -38,13 +39,14 @@ const getToastIcon = (variant?: ToastVariant) => {
   return null;
 };
 
-const generateId = () =>
-  (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+const generateId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const tCommon = useTranslations("common");
+  const pathname = usePathname();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef(new Map<string, number>());
+  const isPosCashierRoute = pathname === "/pos/sell" || pathname.endsWith("/pos/sell");
 
   const remove = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -71,7 +73,14 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     <ToastContext.Provider value={value}>
       {children}
       {toasts.length ? (
-        <div className="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-3 sm:left-auto sm:right-6 sm:w-96">
+        <div
+          className={cn(
+            "fixed left-4 right-4 z-50 flex flex-col gap-3 sm:w-96",
+            isPosCashierRoute
+              ? "top-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+              : "bottom-4 sm:left-auto sm:right-6",
+          )}
+        >
           {toasts.map((toast) => {
             const Icon = getToastIcon(toast.variant);
             return (

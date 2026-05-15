@@ -45,11 +45,13 @@ import {
   removeSaleReturnLine,
   settlePosDebt,
   upsertSaleLineMarkingCodes,
+  updatePosSaleCustomer,
   updatePosRegister,
   updatePosSaleDiscount,
   updatePosSaleLine,
   updateSaleReturnLine,
 } from "@/server/services/pos";
+import { listCustomers } from "@/server/services/customers";
 import {
   createConnectorPairingCode,
   listFiscalReceipts,
@@ -305,6 +307,30 @@ export const posRouter = router({
       }),
   }),
 
+  customers: router({
+    search: cashierProcedure
+      .input(
+        z.object({
+          storeId: z.string().min(1),
+          search: z.string().max(200).optional().nullable(),
+          pageSize: z.number().int().min(1).max(30).optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        try {
+          return await listCustomers({
+            user: ctx.user,
+            storeId: input.storeId,
+            search: input.search,
+            page: 1,
+            pageSize: input.pageSize ?? 20,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+  }),
+
   sales: router({
     list: protectedProcedure
       .input(
@@ -371,7 +397,9 @@ export const posRouter = router({
       .input(
         z.object({
           registerId: z.string().min(1),
+          customerId: z.string().min(1).optional().nullable(),
           customerName: z.string().max(160).optional().nullable(),
+          customerEmail: z.string().max(254).optional().nullable(),
           customerPhone: z.string().max(64).optional().nullable(),
           notes: z.string().max(2_000).optional().nullable(),
           lines: z
@@ -390,13 +418,37 @@ export const posRouter = router({
           return await createPosSaleDraft({
             organizationId: ctx.user.organizationId,
             registerId: input.registerId,
+            customerId: input.customerId,
             customerName: input.customerName,
+            customerEmail: input.customerEmail,
             customerPhone: input.customerPhone,
             notes: input.notes,
             actorId: ctx.user.id,
             user: ctx.user,
             requestId: ctx.requestId,
             lines: input.lines,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    updateCustomer: cashierProcedure
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          customerId: z.string().min(1).optional().nullable(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await updatePosSaleCustomer({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            customerId: input.customerId,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
           });
         } catch (error) {
           throw toTRPCError(error);

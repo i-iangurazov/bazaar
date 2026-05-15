@@ -55,6 +55,48 @@ const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 const sumPayments = (payments: Array<{ amountKgs: number }>) =>
   roundMoney(payments.reduce((total, payment) => total + payment.amountKgs, 0));
 
+const resolvePosCustomerSelectionTx = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    storeId: string;
+    customerId?: string | null;
+    customerName?: string | null;
+    customerEmail?: string | null;
+    customerPhone?: string | null;
+  },
+) => {
+  if (input.customerId) {
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: input.customerId,
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        deletedAt: null,
+      },
+      select: {
+        name: true,
+        email: true,
+        phone: true,
+      },
+    });
+    if (!customer) {
+      throw new AppError("customerNotFound", "NOT_FOUND", 404);
+    }
+    return {
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+    };
+  }
+
+  return {
+    customerName: input.customerName?.trim() || null,
+    customerEmail: input.customerEmail?.trim().toLowerCase() || null,
+    customerPhone: input.customerPhone?.trim() || null,
+  };
+};
+
 const nextPosSaleNumber = async (tx: Prisma.TransactionClient, organizationId: string) => {
   const rows = await tx.$queryRaw<Array<{ posSaleNumber: number }>>(Prisma.sql`
     INSERT INTO "OrganizationCounter" ("organizationId", "salesOrderNumber", "posSaleNumber", "posReturnNumber", "updatedAt")
@@ -370,6 +412,7 @@ const loadShiftReport = async (
           id: true,
           name: true,
           code: true,
+          allowNegativeStock: true,
           currencyCode: true,
           currencyRateKgsPerUnit: true,
           complianceProfile: {
@@ -548,6 +591,7 @@ export const listPosRegisters = async (input: {
           id: true,
           name: true,
           code: true,
+          allowNegativeStock: true,
           currencyCode: true,
           currencyRateKgsPerUnit: true,
           complianceProfile: {
@@ -899,6 +943,7 @@ export const getCurrentRegisterShift = async (input: {
           id: true,
           name: true,
           code: true,
+          allowNegativeStock: true,
           currencyCode: true,
           currencyRateKgsPerUnit: true,
           complianceProfile: {
@@ -1128,7 +1173,9 @@ export const closeRegisterShift = async (input: {
 export const createPosSaleDraft = async (input: {
   organizationId: string;
   registerId: string;
+  customerId?: string | null;
   customerName?: string | null;
+  customerEmail?: string | null;
   customerPhone?: string | null;
   notes?: string | null;
   actorId: string;
@@ -1145,6 +1192,21 @@ export const createPosSaleDraft = async (input: {
       if (input.user) {
         await assertUserCanAccessStore(tx, input.user, shift.storeId);
       }
+      const hasCustomerInput =
+        input.customerId !== undefined ||
+        input.customerName !== undefined ||
+        input.customerEmail !== undefined ||
+        input.customerPhone !== undefined;
+      const selectedCustomer = hasCustomerInput
+        ? await resolvePosCustomerSelectionTx(tx, {
+            organizationId: input.organizationId,
+            storeId: shift.storeId,
+            customerId: input.customerId,
+            customerName: input.customerName,
+            customerEmail: input.customerEmail,
+            customerPhone: input.customerPhone,
+          })
+        : null;
 
       const existingDraft = await tx.customerOrder.findFirst({
         where: {
@@ -1162,6 +1224,9 @@ export const createPosSaleDraft = async (input: {
           storeId: true,
           registerId: true,
           shiftId: true,
+          customerName: true,
+          customerEmail: true,
+          customerPhone: true,
           shift: {
             select: {
               status: true,
@@ -1181,6 +1246,29 @@ export const createPosSaleDraft = async (input: {
             },
           });
         } else {
+          if (selectedCustomer) {
+            const updated = await tx.customerOrder.update({
+              where: { id: existingDraft.id },
+              data: {
+                customerName: selectedCustomer.customerName,
+                customerEmail: selectedCustomer.customerEmail,
+                customerPhone: selectedCustomer.customerPhone,
+                updatedById: input.actorId,
+              },
+              select: {
+                id: true,
+                number: true,
+                status: true,
+                storeId: true,
+                registerId: true,
+                shiftId: true,
+                customerName: true,
+                customerEmail: true,
+                customerPhone: true,
+              },
+            });
+            return updated;
+          }
           return {
             id: existingDraft.id,
             number: existingDraft.number,
@@ -1188,6 +1276,9 @@ export const createPosSaleDraft = async (input: {
             storeId: existingDraft.storeId,
             registerId: existingDraft.registerId,
             shiftId: existingDraft.shiftId,
+            customerName: existingDraft.customerName,
+            customerEmail: existingDraft.customerEmail,
+            customerPhone: existingDraft.customerPhone,
           };
         }
       }
@@ -1205,8 +1296,9 @@ export const createPosSaleDraft = async (input: {
           number,
           isPosSale: true,
           status: CustomerOrderStatus.DRAFT,
-          customerName: input.customerName ?? null,
-          customerPhone: input.customerPhone ?? null,
+          customerName: selectedCustomer?.customerName ?? null,
+          customerEmail: selectedCustomer?.customerEmail ?? null,
+          customerPhone: selectedCustomer?.customerPhone ?? null,
           notes: input.notes ?? null,
           ...transactionCurrency,
           createdById: input.actorId,
@@ -1217,8 +1309,9 @@ export const createPosSaleDraft = async (input: {
       await upsertCustomerFromOrderTx(tx, {
         organizationId: input.organizationId,
         storeId: shift.storeId,
-        customerName: input.customerName,
-        customerPhone: input.customerPhone,
+        customerName: selectedCustomer?.customerName,
+        customerEmail: selectedCustomer?.customerEmail,
+        customerPhone: selectedCustomer?.customerPhone,
         countOrder: false,
       });
 
@@ -1274,6 +1367,9 @@ export const createPosSaleDraft = async (input: {
         storeId: order.storeId,
         registerId: order.registerId,
         shiftId: order.shiftId,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        customerPhone: order.customerPhone,
       };
     });
 
@@ -1301,6 +1397,9 @@ export const createPosSaleDraft = async (input: {
           storeId: true,
           registerId: true,
           shiftId: true,
+          customerName: true,
+          customerEmail: true,
+          customerPhone: true,
         },
       });
       if (concurrentDraft) {
@@ -1350,9 +1449,97 @@ export const getActivePosSaleDraft = async (input: {
       shiftId: true,
       createdAt: true,
       updatedAt: true,
+      customerName: true,
+      customerEmail: true,
+      customerPhone: true,
     },
   });
   return draft;
+};
+
+export const updatePosSaleCustomer = async (input: {
+  organizationId: string;
+  saleId: string;
+  customerId?: string | null;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: {
+        id: true,
+        status: true,
+        storeId: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+      },
+    });
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
+    }
+    if (sale.status !== CustomerOrderStatus.DRAFT) {
+      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+    }
+
+    const selectedCustomer = input.customerId
+      ? await resolvePosCustomerSelectionTx(tx, {
+          organizationId: input.organizationId,
+          storeId: sale.storeId,
+          customerId: input.customerId,
+        })
+      : {
+          customerName: null,
+          customerEmail: null,
+          customerPhone: null,
+        };
+
+    const updated = await tx.customerOrder.update({
+      where: { id: sale.id },
+      data: {
+        customerName: selectedCustomer.customerName,
+        customerEmail: selectedCustomer.customerEmail,
+        customerPhone: selectedCustomer.customerPhone,
+        updatedById: input.actorId,
+      },
+      select: {
+        id: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+      },
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_SALE_CUSTOMER_UPDATE",
+      entity: "CustomerOrder",
+      entityId: sale.id,
+      before: toJson({
+        customerName: sale.customerName,
+        customerEmail: sale.customerEmail,
+        customerPhone: sale.customerPhone,
+      }),
+      after: toJson({
+        customerName: updated.customerName,
+        customerEmail: updated.customerEmail,
+        customerPhone: updated.customerPhone,
+      }),
+      requestId: input.requestId,
+    });
+
+    return updated;
+  });
 };
 
 export const cancelPosSaleDraft = async (input: {
@@ -2631,6 +2818,16 @@ export const completePosSale = async (input: {
             ...transactionCurrency,
             updatedById: input.actorId,
           },
+        });
+
+        await upsertCustomerFromOrderTx(tx, {
+          organizationId: input.organizationId,
+          storeId: sale.storeId,
+          customerName: updated.customerName,
+          customerEmail: updated.customerEmail,
+          customerPhone: updated.customerPhone,
+          orderedAt: updated.completedAt,
+          countOrder: true,
         });
 
         await writeAuditLog(tx, {
