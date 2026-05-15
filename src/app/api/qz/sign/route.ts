@@ -22,6 +22,9 @@ export const POST = async (request: Request) => {
   if (!status.signingConfigured) {
     return NextResponse.json({ error: "qzSigningNotConfigured" }, { status: 503 });
   }
+  if (status.keyPairMatches === false) {
+    return NextResponse.json({ error: "qzCertificateKeyMismatch" }, { status: 503 });
+  }
 
   try {
     return NextResponse.json({ signature: signQzTrayRequest(payload) });

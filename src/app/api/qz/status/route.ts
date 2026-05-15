@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getServerAuthToken } from "@/server/auth/token";
-import { getQzTrayCertificate } from "@/server/services/qzSigning";
+import { getQzSigningStatus } from "@/server/services/qzSigning";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,14 +12,8 @@ export const GET = async () => {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const certificate = getQzTrayCertificate();
-  if (!certificate) {
-    return new Response(null, { status: 204 });
-  }
-
-  return new Response(certificate, {
+  return NextResponse.json(getQzSigningStatus(), {
     headers: {
-      "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
     },
   });

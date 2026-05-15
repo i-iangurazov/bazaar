@@ -28,6 +28,8 @@ import {
 } from "@/lib/priceTags";
 import {
   connectQzTray,
+  fetchQzSigningStatus,
+  getQzSigningStatusSnapshot,
   getQzTrayBinding,
   getQzTrustStatus,
   listQzPrinters,
@@ -36,6 +38,7 @@ import {
   saveQzTrayBinding,
   type QzTrayBinding,
   type QzTrayStatus,
+  type QzSigningStatus,
   type QzTrustStatus,
 } from "@/lib/qzTrayPrint";
 import {
@@ -324,6 +327,23 @@ const ToggleRow = ({
   </label>
 );
 
+const qzTrustMessageKeyFor = (status: QzTrustStatus) => {
+  if (status === "trusted") return "qzTrustTrusted";
+  if (status === "certificate-missing") return "qzCertificateMissing";
+  if (status === "signature-missing" || status === "unsigned") return "qzSignatureMissing";
+  if (status === "certificate-mismatch") return "qzCertificateMismatch";
+  if (status === "error") return "qzSigningEndpointFailed";
+  return "qzTrustMissing";
+};
+
+const qzTrustNoticeKeyFor = (status: QzTrustStatus) => {
+  if (status === "certificate-missing") return "qzCertificateMissingNotice";
+  if (status === "signature-missing" || status === "unsigned") return "qzSignatureMissingNotice";
+  if (status === "certificate-mismatch") return "qzCertificateMismatchNotice";
+  if (status === "error") return "qzSigningEndpointFailed";
+  return "qzCertificateNotice";
+};
+
 const PrintingSettingsPage = () => {
   const t = useTranslations("printingSettings");
   const tCommon = useTranslations("common");
@@ -339,10 +359,12 @@ const PrintingSettingsPage = () => {
   const [binding, setBinding] = useState<QzTrayBinding>({
     receiptPrinterName: "",
     labelPrinterName: "",
+    certificateProvisioned: false,
   });
   const [qzStatus, setQzStatus] = useState<QzTrayStatus>("idle");
   const [qzErrorKey, setQzErrorKey] = useState<string | null>(null);
   const [qzTrustStatus, setQzTrustStatus] = useState<QzTrustStatus>("unknown");
+  const [qzSigningStatus, setQzSigningStatus] = useState<QzSigningStatus | null>(null);
   const [printers, setPrinters] = useState<string[]>([]);
   const [testAction, setTestAction] = useState<"receipt" | "barcode" | null>(null);
 
@@ -366,6 +388,7 @@ const PrintingSettingsPage = () => {
     setQzStatus("idle");
     setQzErrorKey(null);
     setQzTrustStatus("unknown");
+    setQzSigningStatus(null);
     setPrinters([]);
   }, [storeId]);
 
@@ -512,9 +535,11 @@ const PrintingSettingsPage = () => {
     setQzStatus("checking");
     setQzErrorKey(null);
     try {
+      setQzSigningStatus(await fetchQzSigningStatus());
       await connectQzTray();
       const printerRows = await listQzPrinters();
       setPrinters(printerRows);
+      setQzSigningStatus(getQzSigningStatusSnapshot());
       setQzTrustStatus(getQzTrustStatus());
       setQzStatus("connected");
       if (!options?.silent) {
@@ -523,6 +548,7 @@ const PrintingSettingsPage = () => {
     } catch (error) {
       const key = qzTrayErrorMessageKey(error);
       setQzErrorKey(key);
+      setQzSigningStatus(getQzSigningStatusSnapshot());
       setQzTrustStatus(getQzTrustStatus());
       setQzStatus("error");
       setPrinters([]);
@@ -531,6 +557,15 @@ const PrintingSettingsPage = () => {
       }
     }
   }, [t, toast]);
+
+  useEffect(() => {
+    if (!storeId || values.receiptPrintProvider !== "QZ_TRAY") {
+      return;
+    }
+    void fetchQzSigningStatus()
+      .then(setQzSigningStatus)
+      .catch(() => setQzSigningStatus(null));
+  }, [storeId, values.receiptPrintProvider]);
 
   useEffect(() => {
     if (!storeId || settingsQuery.isLoading || values.receiptPrintProvider !== "QZ_TRAY") {
@@ -561,7 +596,10 @@ const PrintingSettingsPage = () => {
       setQzTrustStatus(result.trustStatus);
       toast({
         variant: result.trustStatus === "trusted" ? "success" : "info",
-        description: result.trustStatus === "trusted" ? t("testPrintSent") : t("qzTrustMissing"),
+        description:
+          result.trustStatus === "trusted"
+            ? t("testPrintSent")
+            : t(qzTrustMessageKeyFor(result.trustStatus)),
       });
     } catch (error) {
       const key = qzTrayErrorMessageKey(error);
@@ -678,7 +716,23 @@ const PrintingSettingsPage = () => {
     qzStatus === "connected" &&
     Boolean(binding.receiptPrinterName.trim()) &&
     receiptPrinterAvailable;
-  const qzFullyReady = qzConfigured && qzTrustStatus === "trusted";
+  const qzServerSigningReady = qzTrustStatus === "trusted";
+  const qzTerminalProvisioned = binding.certificateProvisioned;
+  const qzNeedsClientProvision =
+    qzConfigured && qzServerSigningReady && !qzTerminalProvisioned;
+  const qzFullyReady = qzConfigured && qzServerSigningReady && qzTerminalProvisioned;
+  const qzTrustMessageKey = qzTrustMessageKeyFor(qzTrustStatus);
+  const qzTrustNoticeKey = qzTrustNoticeKeyFor(qzTrustStatus);
+  const qzCertificateLoaded = qzSigningStatus?.certificateConfigured === true;
+  const qzSignatureConfigured = qzSigningStatus?.signingConfigured === true;
+  const qzRequestValidityKey =
+    qzSigningStatus?.keyPairMatches === true
+      ? "qzValidityValid"
+      : qzSigningStatus?.keyPairMatches === false
+        ? "qzValidityInvalid"
+        : "qzValidityUnknown";
+  const qzLocalTrustKey = qzTerminalProvisioned ? "qzLocalTrustTrusted" : "qzLocalTrustUntrusted";
+  const qzFingerprint = qzSigningStatus?.certificateFingerprintSha256 ?? "";
 
   return (
     <div className="space-y-6">
@@ -758,6 +812,8 @@ const PrintingSettingsPage = () => {
                         ? t("autoPrintReady")
                         : values.receiptPrintProvider === "DISABLED"
                           ? t("autoPrintDisabled")
+                          : qzNeedsClientProvision
+                            ? t("autoPrintNeedsClientTrust")
                           : qzConfigured
                             ? t("autoPrintNeedsTrust")
                             : t("autoPrintNeedsSetup")}
@@ -767,8 +823,10 @@ const PrintingSettingsPage = () => {
                         ? t("autoPrintReadyHint")
                         : values.receiptPrintProvider === "DISABLED"
                           ? t("providerDisabledHint")
+                          : qzNeedsClientProvision
+                            ? t("qzClientProvisionMissing")
                           : qzConfigured
-                            ? t(qzTrustStatus === "error" ? "qzCertificateError" : "qzTrustMissing")
+                            ? t(qzTrustMessageKey)
                             : t("autoPrintSetupRequired")}
                     </p>
                   </div>
@@ -822,16 +880,10 @@ const PrintingSettingsPage = () => {
                   </button>
                 ))}
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 <div className="border border-border bg-secondary/30 p-3 text-sm">
                   <p className="font-medium text-foreground">{t("connectionStatus")}</p>
                   <p className="mt-1 text-muted-foreground">{qzStatusLabel}</p>
-                </div>
-                <div className="border border-border bg-secondary/30 p-3 text-sm">
-                  <p className="font-medium text-foreground">{t("printerStatus")}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {hasSavedPrinters ? t("printersSaved") : t("printersNotSelected")}
-                  </p>
                 </div>
                 <div
                   className={`border p-3 text-sm ${
@@ -840,11 +892,57 @@ const PrintingSettingsPage = () => {
                       : "border-warning/40 bg-warning/10"
                   }`}
                 >
-                  <p className="font-medium text-foreground">{t("trustStatus")}</p>
+                  <p className="font-medium text-foreground">{t("signingStatus")}</p>
                   <p className="mt-1 text-muted-foreground">
-                    {qzTrustStatus === "trusted"
-                      ? t("qzTrustTrusted")
-                      : t(qzTrustStatus === "error" ? "qzCertificateError" : "qzTrustMissing")}
+                    {t(qzTrustMessageKey)}
+                  </p>
+                </div>
+                <div
+                  className={`border p-3 text-sm ${
+                    qzTerminalProvisioned
+                      ? "border-success/30 bg-success/10"
+                      : "border-warning/40 bg-warning/10"
+                  }`}
+                >
+                  <p className="font-medium text-foreground">{t("clientTrustStatus")}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {qzTerminalProvisioned
+                      ? t("qzClientProvisioned")
+                      : t("qzClientProvisionMissing")}
+                  </p>
+                </div>
+                <div className="border border-border bg-secondary/30 p-3 text-sm">
+                  <p className="font-medium text-foreground">{t("printerStatus")}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {hasSavedPrinters ? t("printersSaved") : t("printersNotSelected")}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="border border-border bg-card p-3 text-sm">
+                  <p className="font-medium text-foreground">{t("qzCertificateLoadedLabel")}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {qzCertificateLoaded ? t("yes") : t("no")}
+                  </p>
+                </div>
+                <div className="border border-border bg-card p-3 text-sm">
+                  <p className="font-medium text-foreground">{t("qzSignatureConfiguredLabel")}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {qzSignatureConfigured ? t("yes") : t("no")}
+                  </p>
+                </div>
+                <div className="border border-border bg-card p-3 text-sm">
+                  <p className="font-medium text-foreground">{t("qzRequestValidityLabel")}</p>
+                  <p className="mt-1 text-muted-foreground">{t(qzRequestValidityKey)}</p>
+                </div>
+                <div className="border border-border bg-card p-3 text-sm">
+                  <p className="font-medium text-foreground">{t("qzLocalTrustLabel")}</p>
+                  <p className="mt-1 text-muted-foreground">{t(qzLocalTrustKey)}</p>
+                </div>
+                <div className="border border-border bg-card p-3 text-sm md:col-span-2 xl:col-span-1">
+                  <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
+                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                    {qzFingerprint || t("qzCertificateFingerprintUnavailable")}
                   </p>
                 </div>
               </div>
@@ -877,18 +975,60 @@ const PrintingSettingsPage = () => {
               </div>
               {values.receiptPrintProvider === "QZ_TRAY" && qzTrustStatus !== "trusted" ? (
                 <div className="border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
-                  {t("qzCertificateNotice")}
+                  {t(qzTrustNoticeKey)}
+                </div>
+              ) : null}
+              {values.receiptPrintProvider === "QZ_TRAY" &&
+              qzTrustStatus === "trusted" &&
+              !qzTerminalProvisioned ? (
+                <div className="border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+                  {t("qzClientProvisionNotice")}
                 </div>
               ) : null}
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>{t("qzSetupIntro")}</p>
                 <ol className="list-decimal space-y-1 pl-5">
                   <li>{t("qzStepInstall")}</li>
-                  <li>{t("qzStepRun")}</li>
-                  <li>{t("qzStepTray")}</li>
+                  <li>{t("qzStepInstallCertificate")}</li>
+                  <li>{t("qzStepRestart")}</li>
                   <li>{t("qzStepCheck")}</li>
+                  <li>{t("qzStepTestPrint")}</li>
                 </ol>
               </div>
+              {values.receiptPrintProvider === "QZ_TRAY" ? (
+                <div className="space-y-3 border border-border bg-secondary/20 p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {qzTrustStatus !== "certificate-missing" ? (
+                      <Button asChild type="button" variant="secondary">
+                        <a href="/api/qz/certificate" download="bazaar-qz-certificate.txt">
+                          {t("downloadQzCertificate")}
+                        </a>
+                      </Button>
+                    ) : null}
+                    <span className="text-xs text-muted-foreground">
+                      {t("downloadQzCertificateHint")}
+                    </span>
+                  </div>
+                  <label className="flex items-center justify-between gap-3 border border-border bg-card p-3 text-sm">
+                    <span className="space-y-1">
+                      <span className="block font-medium text-foreground">
+                        {t("qzClientProvisionConfirm")}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t("qzClientProvisionHint")}
+                      </span>
+                    </span>
+                    <Switch
+                      checked={binding.certificateProvisioned}
+                      onCheckedChange={(checked) =>
+                        updateBinding({ certificateProvisioned: checked })
+                      }
+                      disabled={!canEdit}
+                      aria-label={t("qzClientProvisionConfirm")}
+                    />
+                  </label>
+                </div>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">{t("receiptPrinter")}</label>

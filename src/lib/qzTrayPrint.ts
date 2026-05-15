@@ -3,9 +3,25 @@ import qzTray from "qz-tray";
 export type QzTrayBinding = {
   receiptPrinterName: string;
   labelPrinterName: string;
+  certificateProvisioned: boolean;
 };
 
-export type QzTrustStatus = "unknown" | "trusted" | "unsigned" | "error";
+export type QzTrustStatus =
+  | "unknown"
+  | "trusted"
+  | "unsigned"
+  | "certificate-missing"
+  | "signature-missing"
+  | "certificate-mismatch"
+  | "error";
+
+export type QzSigningStatus = {
+  certificateConfigured: boolean;
+  privateKeyConfigured: boolean;
+  signingConfigured: boolean;
+  keyPairMatches: boolean | null;
+  certificateFingerprintSha256: string | null;
+};
 
 type QzTray = {
   security?: {
@@ -40,25 +56,27 @@ export type QzTrayStatus = "idle" | "checking" | "connected" | "error";
 
 let securityInitialized = false;
 let trustStatus: QzTrustStatus = "unknown";
+let signingStatusSnapshot: QzSigningStatus | null = null;
 
 export const qzTrayBindingKey = (storeId: string) => `bazaar:printing:qz-tray:${storeId}`;
 
 export const getQzTrayBinding = (storeId: string): QzTrayBinding => {
   if (typeof window === "undefined") {
-    return { receiptPrinterName: "", labelPrinterName: "" };
+    return { receiptPrinterName: "", labelPrinterName: "", certificateProvisioned: false };
   }
   const raw = window.localStorage.getItem(qzTrayBindingKey(storeId));
   if (!raw) {
-    return { receiptPrinterName: "", labelPrinterName: "" };
+    return { receiptPrinterName: "", labelPrinterName: "", certificateProvisioned: false };
   }
   try {
     const parsed = JSON.parse(raw) as Partial<QzTrayBinding>;
     return {
       receiptPrinterName: parsed.receiptPrinterName?.trim() ?? "",
       labelPrinterName: parsed.labelPrinterName?.trim() ?? "",
+      certificateProvisioned: parsed.certificateProvisioned === true,
     };
   } catch {
-    return { receiptPrinterName: "", labelPrinterName: "" };
+    return { receiptPrinterName: "", labelPrinterName: "", certificateProvisioned: false };
   }
 };
 
@@ -71,6 +89,7 @@ export const saveQzTrayBinding = (storeId: string, binding: QzTrayBinding) => {
     JSON.stringify({
       receiptPrinterName: binding.receiptPrinterName.trim(),
       labelPrinterName: binding.labelPrinterName.trim(),
+      certificateProvisioned: binding.certificateProvisioned,
     }),
   );
 };
@@ -81,6 +100,20 @@ export const getQzTray = () => {
   }
   return qzTray as QzTray;
 };
+
+export const fetchQzSigningStatus = async () => {
+  const response = await fetch("/api/qz/status", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw new Error("qzSigningStatusUnavailable");
+  }
+  signingStatusSnapshot = (await response.json()) as QzSigningStatus;
+  return signingStatusSnapshot;
+};
+
+export const getQzSigningStatusSnapshot = () => signingStatusSnapshot;
 
 export const initializeQzSecurity = async (): Promise<QzTrustStatus> => {
   if (securityInitialized) {
@@ -97,13 +130,30 @@ export const initializeQzSecurity = async (): Promise<QzTrustStatus> => {
   }
 
   try {
+    const signingStatus = await fetchQzSigningStatus();
+    if (!signingStatus.certificateConfigured) {
+      securityInitialized = true;
+      trustStatus = "certificate-missing";
+      return trustStatus;
+    }
+    if (!signingStatus.privateKeyConfigured) {
+      securityInitialized = true;
+      trustStatus = "signature-missing";
+      return trustStatus;
+    }
+    if (signingStatus.keyPairMatches === false) {
+      securityInitialized = true;
+      trustStatus = "certificate-mismatch";
+      return trustStatus;
+    }
+
     const certificateResponse = await fetch("/api/qz/certificate", {
       cache: "no-store",
       credentials: "same-origin",
     });
     if (certificateResponse.status === 204) {
       securityInitialized = true;
-      trustStatus = "unsigned";
+      trustStatus = "certificate-missing";
       return trustStatus;
     }
     if (!certificateResponse.ok) {
@@ -115,7 +165,7 @@ export const initializeQzSecurity = async (): Promise<QzTrustStatus> => {
     const certificate = (await certificateResponse.text()).trim();
     if (!certificate) {
       securityInitialized = true;
-      trustStatus = "unsigned";
+      trustStatus = "certificate-missing";
       return trustStatus;
     }
 
@@ -244,7 +294,11 @@ export const qzTrayErrorMessageKey = (error: unknown) => {
   if (message === "qzPrinterMissing") return "qzPrinterMissing";
   if (message === "qzNotInstalled") return "qzNotInstalled";
   if (message === "qzNotConnected" || normalized.includes("connect")) return "qzNotConnected";
-  if (normalized.includes("qzsigningnotconfigured")) return "qzTrustMissing";
+  if (normalized.includes("qzsignaturemissing")) return "qzSignatureMissing";
+  if (normalized.includes("qzsigningnotconfigured")) return "qzSignatureMissing";
+  if (normalized.includes("qzcertificatekeymismatch")) return "qzCertificateMismatch";
+  if (normalized.includes("qzcertificatemismatch")) return "qzCertificateMismatch";
+  if (normalized.includes("qzcertificatemissing")) return "qzCertificateMissing";
   if (normalized.includes("certificate") || normalized.includes("sign")) return "qzCertificateError";
   if (normalized.includes("printer") && normalized.includes("not")) return "qzPrinterNotFound";
   if (normalized.includes("timeout")) return "qzTimeout";
