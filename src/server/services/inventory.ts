@@ -162,6 +162,9 @@ export const applyStockMovement = async (
 };
 
 export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdjustmentResult> => {
+  if (input.qtyDelta === 0) {
+    throw new AppError("nonZeroAdjustment", "BAD_REQUEST", 400);
+  }
   const logger = getLogger(input.requestId);
   const result = await prisma.$transaction(async (tx) => {
     const { result: adjustment } = await withIdempotency(

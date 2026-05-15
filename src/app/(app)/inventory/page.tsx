@@ -82,6 +82,7 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
+import { formatStoreMoney } from "@/lib/currencyDisplay";
 import { parseNumberInput, resolveNumberInputOnBlur, toNumberInputValue } from "@/lib/numberInput";
 import {
   buildBarcodeLabelPrintItems,
@@ -160,6 +161,12 @@ type InventoryProductOption = {
   productId: string;
   variantId: string | null;
   label: string;
+  sku: string;
+  barcode: string | null;
+  imageUrl: string | null;
+  onHand: number;
+  unitCostKgs: number | null;
+  priceKgs: number | null;
 };
 
 type ProductSearchSelectProps = HTMLAttributes<HTMLDivElement> & {
@@ -171,7 +178,13 @@ type ProductSearchSelectProps = HTMLAttributes<HTMLDivElement> & {
   placeholder: string;
   selectedLabel: string;
   noResultsLabel: string;
+  loadingLabel: string;
+  stockLabel: string;
+  costLabel: string;
+  priceLabel: string;
+  formatMoney: (value: number) => string;
   disabled?: boolean;
+  loading?: boolean;
 };
 
 const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>(
@@ -185,7 +198,13 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
       placeholder,
       selectedLabel,
       noResultsLabel,
+      loadingLabel,
+      stockLabel,
+      costLabel,
+      priceLabel,
+      formatMoney,
       disabled,
+      loading,
       ...props
     },
     ref,
@@ -194,9 +213,18 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
     const normalizedSearch = search.trim().toLowerCase();
     const visibleOptions = options
       .filter((option) =>
-        normalizedSearch ? option.label.toLowerCase().includes(normalizedSearch) : true,
+        normalizedSearch
+          ? [
+              option.label,
+              option.sku,
+              option.barcode ?? "",
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(normalizedSearch)
+          : true,
       )
-      .slice(0, 8);
+      .slice(0, 25);
 
     return (
       <div ref={ref} className="space-y-2" {...props}>
@@ -215,21 +243,46 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
           />
         </div>
         <div className="max-h-56 overflow-y-auto border border-border bg-background">
-          {visibleOptions.length ? (
+          {loading ? (
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {loadingLabel}
+            </div>
+          ) : visibleOptions.length ? (
             visibleOptions.map((option) => {
               const selected = option.key === value;
               return (
                 <button
                   key={option.key}
                   type="button"
-                  className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => {
                     onProductSelect(option);
-                    onSearchChange("");
                   }}
                   disabled={disabled}
                 >
-                  <span className="min-w-0 truncate">{option.label}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden bg-muted/30">
+                    {option.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={option.imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-foreground">
+                      {option.label}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[option.sku, option.barcode].filter(Boolean).join(" • ") ||
+                        selectedLabel}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {stockLabel}: {option.onHand}
+                      {option.unitCostKgs !== null ? ` • ${costLabel}: ${formatMoney(option.unitCostKgs)}` : ""}
+                      {option.priceKgs !== null ? ` • ${priceLabel}: ${formatMoney(option.priceKgs)}` : ""}
+                    </span>
+                  </span>
                   {selected ? (
                     <CheckIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                   ) : null}
@@ -307,7 +360,9 @@ const InventoryPage = () => {
   // saved-profile quick print and must not open this settings form.
   const [legacyInventoryPrintModalOpen, setLegacyInventoryPrintModalOpen] = useState(false);
   const [calibrationLoadedStoreKey, setCalibrationLoadedStoreKey] = useState("");
+  const [receiveProductSearch, setReceiveProductSearch] = useState("");
   const [adjustProductSearch, setAdjustProductSearch] = useState("");
+  const [transferProductSearch, setTransferProductSearch] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
   const suppliersQuery = trpc.suppliers.list.useQuery(undefined, {
     enabled: canManage && poDraftOpen,
@@ -434,6 +489,11 @@ const InventoryPage = () => {
     [setInventoryTableState],
   );
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
+  const selectedStore = stores.find((store) => store.id === storeId) ?? null;
+  const formatSelectedStoreMoney = useCallback(
+    (value: number) => formatStoreMoney(value, locale, selectedStore),
+    [locale, selectedStore],
+  );
   const matchingInventorySavedView = useMemo(
     () => findMatchingSavedTableView(inventorySavedViewsState.views, inventoryTableState),
     [inventorySavedViewsState.views, inventoryTableState],
@@ -475,7 +535,7 @@ const InventoryPage = () => {
       z.object({
         productId: z.string().min(1, t("productRequired")),
         variantId: z.string().optional().nullable(),
-        qtyDelta: z.coerce.number().int(),
+        qtyDelta: z.coerce.number().int().refine((value) => value !== 0, t("qtyNonZero")),
         unitSelection: z.string().min(1, t("unitRequired")),
         reason: z.string().trim().min(3, t("reasonRequired")),
         expiryDate: z.string().optional(),
@@ -696,6 +756,27 @@ const InventoryPage = () => {
     enabled: Boolean(storeId) && inventoryTableStateReady,
     keepPreviousData: true,
   });
+  const receiveProductSearchQuery = trpc.inventory.searchProducts.useQuery(
+    { storeId: storeId ?? "", search: receiveProductSearch || undefined, limit: 25 },
+    {
+      enabled: activeDialog === "receive" && Boolean(storeId),
+      keepPreviousData: true,
+    },
+  );
+  const adjustProductSearchQuery = trpc.inventory.searchProducts.useQuery(
+    { storeId: storeId ?? "", search: adjustProductSearch || undefined, limit: 25 },
+    {
+      enabled: activeDialog === "adjust" && Boolean(storeId),
+      keepPreviousData: true,
+    },
+  );
+  const transferProductSearchQuery = trpc.inventory.searchProducts.useQuery(
+    { storeId: storeId ?? "", search: transferProductSearch || undefined, limit: 25 },
+    {
+      enabled: activeDialog === "transfer" && Boolean(storeId),
+      keepPreviousData: true,
+    },
+  );
   const inventoryItems = useMemo(
     () => inventoryQuery.data?.items ?? [],
     [inventoryQuery.data?.items],
@@ -744,7 +825,20 @@ const InventoryPage = () => {
   );
 
   type InventoryRow = NonNullable<typeof inventoryItems>[number];
-  const getInventoryPreviewUrl = (item: InventoryRow) => {
+  type InventorySelectorItem = {
+    snapshot: InventoryRow["snapshot"];
+    product: InventoryRow["product"];
+    variant: InventoryRow["variant"];
+    primaryBarcode?: string | null;
+    unitCostKgs?: number | null;
+    priceKgs?: number | null;
+  };
+  const getInventoryPreviewUrl = (item: {
+    product: {
+      images?: Array<{ url?: string | null }>;
+      photoUrl?: string | null;
+    };
+  }) => {
     const imageUrl = item.product.images?.[0]?.url ?? item.product.photoUrl ?? null;
     if (!imageUrl || imageUrl.startsWith("data:image/")) {
       return null;
@@ -752,8 +846,25 @@ const InventoryPage = () => {
     return imageUrl;
   };
 
+  const selectorItems = useMemo(() => {
+    const byKey = new Map<string, InventorySelectorItem>();
+    const addItem = (item: InventorySelectorItem) => {
+      byKey.set(`${item.product.id}:${item.snapshot.variantId ?? "BASE"}`, item);
+    };
+    inventoryItems.forEach(addItem);
+    (receiveProductSearchQuery.data ?? []).forEach(addItem);
+    (adjustProductSearchQuery.data ?? []).forEach(addItem);
+    (transferProductSearchQuery.data ?? []).forEach(addItem);
+    return Array.from(byKey.values());
+  }, [
+    adjustProductSearchQuery.data,
+    inventoryItems,
+    receiveProductSearchQuery.data,
+    transferProductSearchQuery.data,
+  ]);
+
   const productOptions = useMemo<InventoryProductOption[]>(() => {
-    return inventoryItems.map((item) => {
+    return selectorItems.map((item) => {
       const label = item.variant?.name
         ? `${item.product.name} • ${item.variant.name}`
         : item.product.name;
@@ -763,13 +874,26 @@ const InventoryPage = () => {
         productId: item.product.id,
         variantId: item.snapshot.variantId ?? null,
         label: skuLabel,
+        sku: item.product.sku,
+        barcode:
+          ("primaryBarcode" in item ? item.primaryBarcode : item.product.barcodes?.[0]?.value) ??
+          null,
+        imageUrl: getInventoryPreviewUrl(item),
+        onHand: item.snapshot.onHand,
+        unitCostKgs: ("unitCostKgs" in item ? item.unitCostKgs : null) ?? null,
+        priceKgs:
+          ("priceKgs" in item
+            ? item.priceKgs
+            : item.product.basePriceKgs !== null && item.product.basePriceKgs !== undefined
+              ? Number(item.product.basePriceKgs)
+              : null) ?? null,
       };
     });
-  }, [inventoryItems]);
+  }, [selectorItems]);
 
   const productMap = useMemo(
-    () => new Map(inventoryItems.map((item) => [item.product.id, item.product])),
-    [inventoryItems],
+    () => new Map(selectorItems.map((item) => [item.product.id, item.product])),
+    [selectorItems],
   );
 
   const resolveUnitLabel = (unit?: { labelRu: string; labelKg: string }) => {
@@ -1099,6 +1223,7 @@ const InventoryPage = () => {
   const receiveVariantId = receiveForm.watch("variantId");
   const receiveUnitSelection = receiveForm.watch("unitSelection");
   const receiveQty = receiveForm.watch("qtyReceived");
+  const receiveUnitCost = receiveForm.watch("unitCost");
   const adjustProductId = adjustForm.watch("productId");
   const adjustVariantId = adjustForm.watch("variantId");
   const adjustUnitSelection = adjustForm.watch("unitSelection");
@@ -1502,6 +1627,7 @@ const InventoryPage = () => {
   const adjustMutation = trpc.inventory.adjust.useMutation({
     onSuccess: () => {
       inventoryQuery.refetch();
+      void trpcUtils.inventory.searchProducts.invalidate();
       adjustForm.setValue("qtyDelta", 0);
       adjustForm.setValue("reason", "");
       toast({ variant: "success", description: t("adjustSuccess") });
@@ -1542,6 +1668,7 @@ const InventoryPage = () => {
       }
 
       await inventoryQuery.refetch();
+      await trpcUtils.inventory.searchProducts.invalidate();
       bulkOnHandForm.setValue("targetOnHand", 0);
       bulkOnHandForm.setValue("reason", "");
       toast({
@@ -1563,6 +1690,7 @@ const InventoryPage = () => {
   const receiveMutation = trpc.inventory.receive.useMutation({
     onSuccess: () => {
       inventoryQuery.refetch();
+      void trpcUtils.inventory.searchProducts.invalidate();
       receiveForm.setValue("qtyReceived", 0);
       receiveForm.setValue("note", "");
       toast({ variant: "success", description: t("receiveSuccess") });
@@ -1576,6 +1704,7 @@ const InventoryPage = () => {
   const transferMutation = trpc.inventory.transfer.useMutation({
     onSuccess: () => {
       inventoryQuery.refetch();
+      void trpcUtils.inventory.searchProducts.invalidate();
       transferForm.setValue("qty", 0);
       transferForm.setValue("note", "");
       toast({ variant: "success", description: t("transferSuccess") });
@@ -3200,34 +3329,31 @@ const InventoryPage = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{tCommon("product")}</FormLabel>
-                    <Select
-                      value={receiveSelectionKey}
-                      onValueChange={(value) => {
-                        const option = productOptions.find((item) => item.key === value);
-                        if (!option) {
-                          return;
-                        }
-                        field.onChange(option.productId);
-                        receiveForm.setValue("variantId", option.variantId, {
-                          shouldValidate: true,
-                        });
-                        receiveForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                      }}
-                      disabled={!productOptions.length}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={tCommon("selectProduct")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {productOptions.map((option) => (
-                          <SelectItem key={option.key} value={option.key}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <ProductSearchSelect
+                        value={receiveSelectionKey}
+                        options={productOptions}
+                        search={receiveProductSearch}
+                        onSearchChange={setReceiveProductSearch}
+                        placeholder={t("productSearchPlaceholder")}
+                        selectedLabel={t("selectedProduct")}
+                        noResultsLabel={t("productSearchEmpty")}
+                        loadingLabel={tCommon("loading")}
+                        stockLabel={t("onHand")}
+                        costLabel={t("unitCost")}
+                        priceLabel={t("price")}
+                        formatMoney={formatSelectedStoreMoney}
+                        disabled={!storeId}
+                        loading={receiveProductSearchQuery.isFetching}
+                        onProductSelect={(option) => {
+                          field.onChange(option.productId);
+                          receiveForm.setValue("variantId", option.variantId, {
+                            shouldValidate: true,
+                          });
+                          receiveForm.setValue("unitSelection", "BASE", { shouldValidate: true });
+                        }}
+                      />
+                    </FormControl>
                     {!productOptions.length ? (
                       <FormDescription>{t("noInventory")}</FormDescription>
                     ) : null}
@@ -3314,6 +3440,25 @@ const InventoryPage = () => {
                         placeholder={t("unitCostPlaceholder")}
                       />
                     </FormControl>
+                    {receiveProduct &&
+                    Number.isFinite(Number(receiveUnitCost)) &&
+                    Number(receiveUnitCost) >= 0 ? (
+                      <FormDescription>
+                        {(() => {
+                          const baseQty = resolveBasePreview(
+                            receiveProduct,
+                            receiveUnitSelection,
+                            receiveQty,
+                          );
+                          if (baseQty === null) {
+                            return null;
+                          }
+                          return t("lineTotalPreview", {
+                            total: formatSelectedStoreMoney(baseQty * Number(receiveUnitCost)),
+                          });
+                        })()}
+                      </FormDescription>
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -3360,7 +3505,7 @@ const InventoryPage = () => {
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={receiveMutation.isLoading || !storeId || !productOptions.length}
+                disabled={receiveMutation.isLoading || !storeId || !receiveProductId}
               >
                 {receiveMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -3509,7 +3654,13 @@ const InventoryPage = () => {
                         placeholder={t("productSearchPlaceholder")}
                         selectedLabel={t("selectedProduct")}
                         noResultsLabel={t("productSearchEmpty")}
-                        disabled={!productOptions.length}
+                        loadingLabel={tCommon("loading")}
+                        stockLabel={t("onHand")}
+                        costLabel={t("unitCost")}
+                        priceLabel={t("price")}
+                        formatMoney={formatSelectedStoreMoney}
+                        disabled={!storeId}
+                        loading={adjustProductSearchQuery.isFetching}
                         onProductSelect={(option) => {
                           field.onChange(option.productId);
                           adjustForm.setValue("variantId", option.variantId, {
@@ -3632,7 +3783,7 @@ const InventoryPage = () => {
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={adjustMutation.isLoading || !storeId || !productOptions.length}
+                disabled={adjustMutation.isLoading || !storeId || !adjustProductId}
               >
                 {adjustMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -3729,34 +3880,31 @@ const InventoryPage = () => {
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
                     <FormLabel>{tCommon("product")}</FormLabel>
-                    <Select
-                      value={transferSelectionKey}
-                      onValueChange={(value) => {
-                        const option = productOptions.find((item) => item.key === value);
-                        if (!option) {
-                          return;
-                        }
-                        field.onChange(option.productId);
-                        transferForm.setValue("variantId", option.variantId, {
-                          shouldValidate: true,
-                        });
-                        transferForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                      }}
-                      disabled={!productOptions.length}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={tCommon("selectProduct")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {productOptions.map((option) => (
-                          <SelectItem key={option.key} value={option.key}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <ProductSearchSelect
+                        value={transferSelectionKey}
+                        options={productOptions}
+                        search={transferProductSearch}
+                        onSearchChange={setTransferProductSearch}
+                        placeholder={t("productSearchPlaceholder")}
+                        selectedLabel={t("selectedProduct")}
+                        noResultsLabel={t("productSearchEmpty")}
+                        loadingLabel={tCommon("loading")}
+                        stockLabel={t("onHand")}
+                        costLabel={t("unitCost")}
+                        priceLabel={t("price")}
+                        formatMoney={formatSelectedStoreMoney}
+                        disabled={!storeId}
+                        loading={transferProductSearchQuery.isFetching}
+                        onProductSelect={(option) => {
+                          field.onChange(option.productId);
+                          transferForm.setValue("variantId", option.variantId, {
+                            shouldValidate: true,
+                          });
+                          transferForm.setValue("unitSelection", "BASE", { shouldValidate: true });
+                        }}
+                      />
+                    </FormControl>
                     {!productOptions.length ? (
                       <FormDescription>{t("noInventory")}</FormDescription>
                     ) : null}
@@ -3870,7 +4018,7 @@ const InventoryPage = () => {
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={transferMutation.isLoading || !productOptions.length}
+                disabled={transferMutation.isLoading || !transferProductId}
               >
                 {transferMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />

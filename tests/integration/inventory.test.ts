@@ -76,6 +76,23 @@ describeDb("inventory service", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
+  it("rejects zero manual adjustments", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await expect(
+      adjustStock({
+        storeId: store.id,
+        productId: product.id,
+        qtyDelta: 0,
+        reason: "No-op",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-zero-adjust",
+        idempotencyKey: "idem-zero-adjust",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("records receive movements and updates snapshots", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
@@ -302,6 +319,54 @@ describeDb("inventory service", () => {
     });
 
     expect(movements).toHaveLength(2);
+  });
+
+  it("rejects transfer quantity above available stock when negative stock is disabled", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const storeB = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Backup Store",
+        code: "BCK",
+        allowNegativeStock: false,
+      },
+    });
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 3,
+      reason: "Seed",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-over-seed",
+      idempotencyKey: "idem-transfer-over-seed",
+    });
+
+    await expect(
+      transferStock({
+        fromStoreId: store.id,
+        toStoreId: storeB.id,
+        productId: product.id,
+        qty: 4,
+        note: "Too much",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-transfer-over",
+        idempotencyKey: "idem-transfer-over",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(3);
   });
 
   it("treats transfer idempotency keys as replay safe", async () => {

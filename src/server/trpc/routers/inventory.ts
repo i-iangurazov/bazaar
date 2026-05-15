@@ -27,6 +27,12 @@ const inventoryListIdsInputSchema = z.object({
   search: z.string().optional(),
 });
 
+const inventoryProductSearchInputSchema = z.object({
+  storeId: z.string(),
+  search: z.string().optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
 const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInputSchema>) => ({
   storeId: input.storeId,
   product: {
@@ -36,11 +42,56 @@ const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInput
           OR: [
             { name: { contains: input.search, mode: "insensitive" as const } },
             { sku: { contains: input.search, mode: "insensitive" as const } },
+            { barcodes: { some: { value: { contains: input.search, mode: "insensitive" as const } } } },
+            { packs: { some: { packBarcode: { contains: input.search, mode: "insensitive" as const } } } },
           ],
         }
       : {}),
   },
 });
+
+const inventoryProductSelect = (storeId: string, organizationId: string) =>
+  ({
+    id: true,
+    supplierId: true,
+    sku: true,
+    name: true,
+    basePriceKgs: true,
+    baseUnitId: true,
+    photoUrl: true,
+    baseUnit: true,
+    packs: {
+      select: {
+        id: true,
+        packName: true,
+        multiplierToBase: true,
+        allowInPurchasing: true,
+        allowInReceiving: true,
+      },
+    },
+    images: {
+      where: {
+        url: {
+          not: { startsWith: "data:image/" },
+        },
+      },
+      select: { id: true, url: true, position: true },
+      orderBy: { position: "asc" as const },
+      take: 1,
+    },
+    barcodes: {
+      select: { value: true },
+      take: 5,
+    },
+    productCosts: {
+      where: { organizationId },
+      select: { variantKey: true, avgCostKgs: true },
+    },
+    storePrices: {
+      where: { organizationId, storeId },
+      select: { variantKey: true, priceKgs: true },
+    },
+  }) as const;
 
 export const inventoryRouter = router({
   list: protectedProcedure
@@ -82,6 +133,7 @@ export const inventoryRouter = router({
                 supplierId: true,
                 sku: true,
                 name: true,
+                basePriceKgs: true,
                 baseUnitId: true,
                 photoUrl: true,
                 baseUnit: true,
@@ -203,6 +255,92 @@ export const inventoryRouter = router({
       return rows.map((row) => row.id);
     }),
 
+  searchProducts: protectedProcedure
+    .input(inventoryProductSearchInputSchema)
+    .query(async ({ ctx, input }) => {
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+
+      const search = input.search?.trim() ?? "";
+      const limit = input.limit ?? 25;
+      const where = {
+        storeId: input.storeId,
+        product: {
+          organizationId: ctx.user.organizationId,
+          isDeleted: false,
+          ...(search
+            ? {
+                OR: [
+                  { name: { contains: search, mode: "insensitive" as const } },
+                  { sku: { contains: search, mode: "insensitive" as const } },
+                  {
+                    barcodes: {
+                      some: { value: { contains: search, mode: "insensitive" as const } },
+                    },
+                  },
+                  {
+                    packs: {
+                      some: { packBarcode: { contains: search, mode: "insensitive" as const } },
+                    },
+                  },
+                ],
+              }
+            : {}),
+        },
+      };
+
+      const snapshots = await ctx.prisma.inventorySnapshot.findMany({
+        where,
+        select: {
+          id: true,
+          storeId: true,
+          productId: true,
+          variantId: true,
+          variantKey: true,
+          onHand: true,
+          onOrder: true,
+          allowNegativeStock: true,
+          updatedAt: true,
+          product: { select: inventoryProductSelect(input.storeId, ctx.user.organizationId) },
+          variant: { select: { id: true, name: true } },
+        },
+        orderBy: [{ product: { name: "asc" } }, { variantKey: "asc" }],
+        take: limit,
+      });
+
+      return snapshots.map((snapshot) => {
+        const variantKey = snapshot.variantKey;
+        const cost =
+          snapshot.product.productCosts.find((item) => item.variantKey === variantKey) ??
+          snapshot.product.productCosts.find((item) => item.variantKey === "BASE") ??
+          null;
+        const price =
+          snapshot.product.storePrices.find((item) => item.variantKey === variantKey) ??
+          snapshot.product.storePrices.find((item) => item.variantKey === "BASE") ??
+          null;
+        const product = {
+          id: snapshot.product.id,
+          supplierId: snapshot.product.supplierId,
+          sku: snapshot.product.sku,
+          name: snapshot.product.name,
+          basePriceKgs: snapshot.product.basePriceKgs,
+          baseUnitId: snapshot.product.baseUnitId,
+          photoUrl: snapshot.product.photoUrl,
+          baseUnit: snapshot.product.baseUnit,
+          packs: snapshot.product.packs,
+          images: snapshot.product.images,
+          barcodes: snapshot.product.barcodes,
+        };
+        return {
+          snapshot,
+          product,
+          variant: snapshot.variant,
+          primaryBarcode: product.barcodes[0]?.value ?? null,
+          unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
+          priceKgs: price ? Number(price.priceKgs) : product.basePriceKgs ? Number(product.basePriceKgs) : null,
+        };
+      });
+    }),
+
   productIdsBySnapshotIds: protectedProcedure
     .input(z.object({ snapshotIds: z.array(z.string()).min(1).max(10_000) }))
     .query(async ({ ctx, input }) => {
@@ -259,7 +397,7 @@ export const inventoryRouter = router({
         storeId: z.string(),
         productId: z.string(),
         variantId: z.string().optional(),
-        qtyDelta: z.number().int(),
+        qtyDelta: z.number().int().refine((value) => value !== 0, "nonZeroAdjustment"),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         reason: z.string().min(3),
@@ -269,6 +407,7 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await adjustStock({
           storeId: input.storeId,
           productId: input.productId,
@@ -301,6 +440,7 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await bulkSetOnHand({
           storeId: input.storeId,
           snapshotIds: input.snapshotIds,
@@ -334,6 +474,7 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await receiveStock({
           storeId: input.storeId,
           productId: input.productId,
@@ -372,6 +513,10 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await Promise.all([
+          assertUserCanAccessStore(ctx.prisma, ctx.user, input.fromStoreId),
+          assertUserCanAccessStore(ctx.prisma, ctx.user, input.toStoreId),
+        ]);
         return await transferStock({
           fromStoreId: input.fromStoreId,
           toStoreId: input.toStoreId,
@@ -396,6 +541,7 @@ export const inventoryRouter = router({
     .input(z.object({ storeId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await recomputeInventorySnapshots({
           storeId: input.storeId,
           organizationId: ctx.user.organizationId,
@@ -417,6 +563,7 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await setMinStock({
           storeId: input.storeId,
           productId: input.productId,
@@ -439,6 +586,7 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await setDefaultMinStock({
           storeId: input.storeId,
           minStock: input.minStock,

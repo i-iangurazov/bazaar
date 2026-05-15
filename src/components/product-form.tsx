@@ -76,6 +76,7 @@ import {
   normalizeImageMimeType,
   prepareProductImageFileForUpload,
   putProductImageDirectUpload,
+  resolveProductImageDirectUploadTimeoutMs,
   resolvePrimaryImageUrl,
   type ProductImageDirectUploadTarget,
 } from "@/lib/productImageUpload";
@@ -144,6 +145,25 @@ type AttributeDefinition = {
   required?: boolean | null;
 };
 
+type PendingImageUploadStatus =
+  | "selected"
+  | "validating"
+  | "optimizing"
+  | "uploading"
+  | "uploaded"
+  | "failed";
+
+type PendingImageUpload = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  fileName: string;
+  status: PendingImageUploadStatus;
+  progress: number | null;
+  error: string | null;
+  uploadedUrl?: string;
+};
+
 const defaultProductImageMaxBytes = 5 * 1024 * 1024;
 const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
 const productImageAccept = [
@@ -187,6 +207,13 @@ const resolveClientImageUploadConcurrency = () => {
     return Math.min(6, Math.max(1, Math.trunc(parsed)));
   }
   return 2;
+};
+
+const createPendingImageUploadId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `upload-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
 const isPhotoUrlValid = (value?: string | null) => {
@@ -804,6 +831,8 @@ export const ProductForm = ({
   const [bundleSearch, setBundleSearch] = useState("");
   const [showBundleResults, setShowBundleResults] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [pendingImageUploads, setPendingImageUploads] = useState<PendingImageUpload[]>([]);
+  const pendingImageUploadsRef = useRef<PendingImageUpload[]>([]);
   const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
   const [imageEditorIndex, setImageEditorIndex] = useState<number | null>(null);
   const [imageEditorSourceUrl, setImageEditorSourceUrl] = useState<string | null>(null);
@@ -965,6 +994,84 @@ export const ProductForm = ({
     }
     // eslint-disable-next-line no-console
     console.warn(`[product-image] ${step}`, details ?? {});
+  };
+
+  useEffect(() => {
+    pendingImageUploadsRef.current = pendingImageUploads;
+  }, [pendingImageUploads]);
+
+  useEffect(
+    () => () => {
+      pendingImageUploadsRef.current.forEach((upload) => {
+        URL.revokeObjectURL(upload.previewUrl);
+      });
+    },
+    [],
+  );
+
+  const updatePendingImageUpload = (
+    id: string,
+    patch:
+      | Partial<PendingImageUpload>
+      | ((current: PendingImageUpload) => Partial<PendingImageUpload>),
+  ) => {
+    setPendingImageUploads((current) =>
+      current.map((upload) => {
+        if (upload.id !== id) {
+          return upload;
+        }
+        const nextPatch = typeof patch === "function" ? patch(upload) : patch;
+        return { ...upload, ...nextPatch };
+      }),
+    );
+  };
+
+  const removePendingImageUpload = (id: string) => {
+    setPendingImageUploads((current) => {
+      const upload = current.find((item) => item.id === id);
+      if (upload) {
+        URL.revokeObjectURL(upload.previewUrl);
+      }
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  const clearUploadedPendingImageUploads = (ids: string[]) => {
+    if (!ids.length) {
+      return;
+    }
+    const idSet = new Set(ids);
+    setPendingImageUploads((current) => {
+      current.forEach((upload) => {
+        if (idSet.has(upload.id)) {
+          URL.revokeObjectURL(upload.previewUrl);
+        }
+      });
+      return current.filter((upload) => !idSet.has(upload.id));
+    });
+  };
+
+  const imagePrepareErrorMessage = (code?: string | null) => {
+    if (code === "imageTooLargeInput") {
+      return t("imageTooLargeInput", {
+        size: Math.round(maxInputImageBytes / (1024 * 1024)),
+      });
+    }
+    if (code === "imageTooLarge" || code === "imageTooLargeAfterCompression") {
+      return t("imageTooLargeAfterCompression", {
+        size: Math.round(maxImageBytes / (1024 * 1024)),
+      });
+    }
+    if (code === "imageInvalidType") {
+      return t("imageInvalidType");
+    }
+    if (code === "imageUploadTimedOut") {
+      return t("imageUploadTimedOut");
+    }
+    if (code === "imageCompressionFailed") {
+      return t("imageCompressionFailed");
+    }
+    return t("imageReadFailed");
   };
 
   const encodeCanvasToFile = async (input: {
@@ -1400,6 +1507,68 @@ export const ProductForm = ({
     toast({ variant: "error", description: t("imageReadFailed") });
   };
 
+  const putProductImageDirectUploadWithProgress = async (
+    target: ProductImageDirectUploadTarget,
+    file: File,
+    onProgress?: (progress: number | null) => void,
+  ) => {
+    if (!onProgress || typeof XMLHttpRequest === "undefined") {
+      return putProductImageDirectUpload({ target, file });
+    }
+
+    return new Promise<Response>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let settled = false;
+      const timeout = window.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        xhr.abort();
+        reject(new ProductImageUploadTimeoutError());
+      }, resolveProductImageDirectUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_DIRECT_UPLOAD_TIMEOUT_MS ?? process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS));
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable || event.total <= 0) {
+          onProgress(null);
+          return;
+        }
+        onProgress(Math.min(99, Math.max(1, Math.round((event.loaded / event.total) * 100))));
+      };
+      xhr.onload = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        onProgress(100);
+        resolve(new Response(null, { status: xhr.status, statusText: xhr.statusText }));
+      };
+      xhr.onerror = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        reject(new Error("imageUploadFailed"));
+      };
+      xhr.onabort = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        reject(new ProductImageUploadTimeoutError());
+      };
+
+      xhr.open(target.method, target.uploadUrl);
+      Object.entries(target.headers ?? {}).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
+      });
+      xhr.send(file);
+    });
+  };
+
   const uploadImageFileViaProxy = async (file: File) => {
     const formData = new FormData();
     formData.set("file", file);
@@ -1465,7 +1634,10 @@ export const ProductForm = ({
     return uploadedUrl;
   };
 
-  const uploadImageFileDirectly = async (file: File) => {
+  const uploadImageFileDirectly = async (
+    file: File,
+    onProgress?: (progress: number | null) => void,
+  ) => {
     let targetResponse: Response;
     try {
       targetResponse = await fetchProductImageDirectUploadTarget({
@@ -1547,7 +1719,7 @@ export const ProductForm = ({
 
     let uploadResponse: Response;
     try {
-      uploadResponse = await putProductImageDirectUpload({ target, file });
+      uploadResponse = await putProductImageDirectUploadWithProgress(target, file, onProgress);
     } catch (error) {
       logImagePrepDebug(
         "direct-upload-put-error",
@@ -1559,7 +1731,10 @@ export const ProductForm = ({
         },
         error,
       );
-      return { attempted: false, url: null };
+      if (error instanceof ProductImageUploadTimeoutError) {
+        toast({ variant: "error", description: t("imageUploadTimedOut") });
+      }
+      return { attempted: true, url: null };
     }
 
     if (!uploadResponse.ok) {
@@ -1569,14 +1744,14 @@ export const ProductForm = ({
         fileSize: file.size,
         fileType: file.type,
       });
-      return { attempted: false, url: null };
+      return { attempted: true, url: null };
     }
 
     return { attempted: true, url: target.url.trim() || null };
   };
 
-  const uploadImageFile = async (file: File) => {
-    const directResult = await uploadImageFileDirectly(file);
+  const uploadImageFile = async (file: File, onProgress?: (progress: number | null) => void) => {
+    const directResult = await uploadImageFileDirectly(file, onProgress);
     if (directResult.url || directResult.attempted) {
       return directResult.url;
     }
@@ -1943,87 +2118,128 @@ export const ProductForm = ({
     syncPhotoUrlWithImages(nextImages);
   };
 
+  const processPendingImageUpload = async (upload: PendingImageUpload) => {
+    updatePendingImageUpload(upload.id, {
+      status: upload.file.size > maxImageBytes ? "optimizing" : "validating",
+      progress: null,
+      error: null,
+      uploadedUrl: undefined,
+    });
+
+    const prepared = await prepareProductImageFileForUpload({
+      file: upload.file,
+      maxImageBytes,
+      maxInputImageBytes,
+      convertHeicToJpeg,
+      optimizeImageToLimit,
+    });
+    if (!prepared.ok) {
+      logImagePrepDebug("prepare-failed", {
+        fileName: upload.file.name,
+        fileSize: upload.file.size,
+        fileType: upload.file.type,
+        code: prepared.code,
+        reason: prepared.reason,
+      });
+      const error = imagePrepareErrorMessage(prepared.code);
+      updatePendingImageUpload(upload.id, { status: "failed", progress: null, error });
+      toast({ variant: "error", description: error });
+      return null;
+    }
+
+    updatePendingImageUpload(upload.id, { status: "uploading", progress: null, error: null });
+    const uploadedUrl = await uploadImageFile(prepared.file, (progress) => {
+      updatePendingImageUpload(upload.id, { progress });
+    });
+    if (!uploadedUrl) {
+      const error = t("imageReadFailed");
+      updatePendingImageUpload(upload.id, { status: "failed", progress: null, error });
+      return null;
+    }
+
+    updatePendingImageUpload(upload.id, {
+      status: "uploaded",
+      progress: 100,
+      error: null,
+      uploadedUrl,
+    });
+    return { url: uploadedUrl, uploadId: upload.id };
+  };
+
   const handleImageFiles = async (files: FileList | File[]) => {
-    if (readOnly || isUploadingImages) {
+    if (readOnly) {
       return;
     }
     const list = Array.from(files);
     if (!list.length) {
       return;
     }
+    const uploads = list.map((file) => ({
+      id: createPendingImageUploadId(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      fileName: file.name,
+      status: "selected" as PendingImageUploadStatus,
+      progress: null,
+      error: null,
+    }));
+    setPendingImageUploads((current) => [...current, ...uploads]);
     setIsUploadingImages(true);
     try {
-      const results: Array<{ url: string } | null> = new Array(list.length).fill(null);
+      const results: Array<{ url: string; uploadId: string } | null> = new Array(uploads.length).fill(
+        null,
+      );
       let cursor = 0;
       const workers = Array.from(
-        { length: Math.min(maxImageUploadConcurrency, list.length) },
+        { length: Math.min(maxImageUploadConcurrency, uploads.length) },
         async () => {
           while (true) {
             const nextIndex = cursor;
             cursor += 1;
-            if (nextIndex >= list.length) {
+            if (nextIndex >= uploads.length) {
               return;
             }
 
-            const originalFile = list[nextIndex];
-            const prepared = await prepareProductImageFileForUpload({
-              file: originalFile,
-              maxImageBytes,
-              maxInputImageBytes,
-              convertHeicToJpeg,
-              optimizeImageToLimit,
-            });
-            if (!prepared.ok) {
-              logImagePrepDebug("prepare-failed", {
-                fileName: originalFile.name,
-                fileSize: originalFile.size,
-                fileType: originalFile.type,
-                code: prepared.code,
-                reason: prepared.reason,
-              });
-              if (prepared.code === "imageTooLargeInput") {
-                toast({
-                  variant: "error",
-                  description: t("imageTooLargeInput", {
-                    size: Math.round(maxInputImageBytes / (1024 * 1024)),
-                  }),
-                });
-                continue;
-              }
-              if (prepared.code === "imageTooLargeAfterCompression") {
-                toast({
-                  variant: "error",
-                  description: t("imageTooLargeAfterCompression", {
-                    size: Math.round(maxImageBytes / (1024 * 1024)),
-                  }),
-                });
-                continue;
-              }
-              if (prepared.code === "imageInvalidType") {
-                toast({ variant: "error", description: t("imageInvalidType") });
-                continue;
-              }
-              toast({ variant: "error", description: t("imageCompressionFailed") });
-              continue;
-            }
-
-            const uploadedUrl = await uploadImageFile(prepared.file);
-            if (uploadedUrl) {
-              results[nextIndex] = { url: uploadedUrl };
-            }
+            results[nextIndex] = await processPendingImageUpload(uploads[nextIndex]);
           }
         },
       );
 
       await Promise.all(workers);
-      const nextImages = results.filter((result): result is { url: string } => Boolean(result));
-      const failedCount = list.length - nextImages.length;
+      const uploadedImages = results.filter(
+        (result): result is { url: string; uploadId: string } => Boolean(result),
+      );
+      const failedCount = uploads.length - uploadedImages.length;
 
-      if (nextImages.length) {
-        handleAppendImageEntries(nextImages);
-        if (failedCount > 0) {
-          toast({ variant: "error", description: t("imageSomeFailed") });
-        }
+      if (uploadedImages.length) {
+        handleAppendImageEntries(uploadedImages.map((result) => ({ url: result.url })));
+        window.setTimeout(
+          () => clearUploadedPendingImageUploads(uploadedImages.map((result) => result.uploadId)),
+          1600,
+        );
+      }
+      if (failedCount > 0) {
+        toast({ variant: "error", description: t("imageSomeFailed") });
+      }
+    } finally {
+      setIsUploadingImages(false);
+    }
+  };
+
+  const handleRetryPendingImageUpload = async (uploadId: string) => {
+    if (readOnly || isUploadingImages) {
+      return;
+    }
+    const upload = pendingImageUploadsRef.current.find((item) => item.id === uploadId);
+    if (!upload) {
+      return;
+    }
+    setIsUploadingImages(true);
+    try {
+      const result = await processPendingImageUpload(upload);
+      if (result) {
+        handleAppendImageEntries([{ url: result.url }]);
+        window.setTimeout(() => clearUploadedPendingImageUploads([result.uploadId]), 1600);
       }
     } finally {
       setIsUploadingImages(false);
@@ -2504,6 +2720,104 @@ export const ProductForm = ({
     })
     .filter((variant) => variant.hasContent);
 
+  const pendingImageUploadStatusLabel = (status: PendingImageUploadStatus) => {
+    switch (status) {
+      case "validating":
+        return t("imageUploadStatusValidating");
+      case "optimizing":
+        return t("imageUploadStatusOptimizing");
+      case "uploading":
+        return t("imageUploadStatusUploading");
+      case "uploaded":
+        return t("imageUploadStatusUploaded");
+      case "failed":
+        return t("imageUploadStatusFailed");
+      case "selected":
+      default:
+        return t("imageUploadStatusSelected");
+    }
+  };
+
+  const pendingImageUploadCards = pendingImageUploads.length ? (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {pendingImageUploads.map((upload) => {
+        const isBusy =
+          upload.status === "selected" ||
+          upload.status === "validating" ||
+          upload.status === "optimizing" ||
+          upload.status === "uploading";
+        const showProgress = upload.status === "uploading" && upload.progress !== null;
+        return (
+          <div
+            key={upload.id}
+            className="grid min-w-0 grid-cols-[88px_minmax(0,1fr)] gap-3 border border-border bg-card p-3 sm:grid-cols-[104px_minmax(0,1fr)]"
+          >
+            <div className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden bg-muted/30 sm:h-[104px] sm:w-[104px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={upload.previewUrl}
+                alt={upload.fileName}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <div className="flex min-w-0 items-center gap-2">
+                {isBusy ? <Spinner className="h-4 w-4 shrink-0" /> : null}
+                {upload.status === "uploaded" ? (
+                  <StatusSuccessIcon className="h-4 w-4 shrink-0 text-success" aria-hidden />
+                ) : null}
+                <span className="truncate text-sm font-medium text-foreground">
+                  {upload.fileName}
+                </span>
+              </div>
+              <p
+                className={`text-xs ${
+                  upload.status === "failed" ? "text-danger" : "text-muted-foreground"
+                }`}
+              >
+                {upload.error ?? pendingImageUploadStatusLabel(upload.status)}
+              </p>
+              {showProgress ? (
+                <div className="h-2 overflow-hidden bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${upload.progress ?? 0}%` }}
+                  />
+                </div>
+              ) : null}
+              {upload.status === "failed" ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleRetryPendingImageUpload(upload.id)}
+                    disabled={isUploadingImages || readOnly}
+                  >
+                    <RestoreIcon className="h-3.5 w-3.5" aria-hidden />
+                    {t("imageRetry")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => removePendingImageUpload(upload.id)}
+                    disabled={readOnly}
+                  >
+                    <CloseIcon className="h-3.5 w-3.5" aria-hidden />
+                    {t("imageRemove")}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+
   const imageManagementSection = (
     <FormSection title={t("imagesTitle")} description={t("imagesHint")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2542,6 +2856,7 @@ export const ProductForm = ({
       >
         {t("imagesDrop")}
       </div>
+      {pendingImageUploadCards}
       {imageFields.length ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {imageFields.map((image, index) => {
@@ -2551,7 +2866,7 @@ export const ProductForm = ({
             return (
               <div
                 key={image.id}
-                className={`flex items-start gap-3 rounded-none border border-border bg-card p-3 ${
+                className={`grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-none border border-border bg-card p-3 sm:flex sm:items-start ${
                   draggedImageIndex === index ? "opacity-60" : ""
                 }`}
                 draggable={!readOnly}
@@ -2577,7 +2892,7 @@ export const ProductForm = ({
                   setDraggedImageIndex(null);
                 }}
               >
-                <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-none bg-muted/30">
+                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-none bg-muted/30 sm:h-36 sm:w-36 sm:shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={withPreviewVersion(imageUrl, image.id)}
@@ -2617,7 +2932,7 @@ export const ProductForm = ({
                     </Button>
                   </div>
                 </div>
-                <div className="flex flex-col items-center gap-2">
+                <div className="col-span-2 flex items-center justify-end gap-2 sm:col-auto sm:flex-col">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -2931,8 +3246,9 @@ export const ProductForm = ({
             )}
             {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
           </Button>
+          {pendingImageUploadCards}
           {orderedImageUrls.length ? (
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-2 pb-1">
               {orderedImageUrls.map((image, index) => (
                 <div
                   key={image.id ?? `${image.url}-${index}`}

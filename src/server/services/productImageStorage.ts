@@ -850,8 +850,6 @@ export const isManagedProductImageUrl = (url: string) => {
   return prefixes.some((prefix) => value.startsWith(prefix));
 };
 
-const isUnassignedManagedProductImageUrl = (url: string) => url.includes("/products/unassigned/");
-
 export const normalizeProductImageUrl = (value?: string | null) => {
   const normalized = value?.trim();
   if (!normalized) {
@@ -905,10 +903,7 @@ export const resolveProductImageUrl = async (input: {
     return cached;
   }
 
-  const shouldRehomeUnassignedManagedImage =
-    Boolean(input.productId) && isUnassignedManagedProductImageUrl(normalized);
-
-  if (isManagedProductImageUrl(normalized) && !shouldRehomeUnassignedManagedImage) {
+  if (isManagedProductImageUrl(normalized)) {
     const result = { url: normalized, managed: true } as ResolveProductImageUrlResult;
     input.cache?.set(normalized, result);
     return result;

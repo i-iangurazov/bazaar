@@ -134,6 +134,25 @@ describe("product image storage", () => {
     });
   });
 
+  it("keeps already-managed unassigned upload URLs without synchronous re-copying", async () => {
+    const { resolveProductImageUrl } =
+      await import("../../src/server/services/productImageStorage");
+    const managedUrl = "/uploads/imported-products/org-1/products/unassigned/photo.jpg";
+
+    await expect(
+      resolveProductImageUrl({
+        value: managedUrl,
+        organizationId: "org-1",
+        productId: "prod-1",
+      }),
+    ).resolves.toEqual({
+      url: managedUrl,
+      managed: true,
+    });
+
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
   it("falls back to heic-convert when sharp cannot decode HEIF", async () => {
     const convertedBytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9, 0x00, 0x11]);
     mockSharpToBuffer.mockRejectedValue(

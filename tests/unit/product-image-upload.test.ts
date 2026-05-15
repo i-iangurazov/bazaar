@@ -170,6 +170,27 @@ describe("product image upload preprocessing", () => {
     );
   });
 
+  it("rejects files that exceed the explicit input size limit", async () => {
+    const source = new File([new Uint8Array(11)], "large.jpg", {
+      type: "image/jpeg",
+    });
+
+    const result = await prepareProductImageFileForUpload({
+      file: source,
+      maxImageBytes: 5,
+      maxInputImageBytes: 10,
+      convertHeicToJpeg: vi.fn().mockResolvedValue(null),
+      optimizeImageToLimit: vi.fn().mockResolvedValue(null),
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        code: "imageTooLargeInput",
+      }),
+    );
+  });
+
   it("aborts upload requests that never resolve", async () => {
     vi.useFakeTimers();
     try {
