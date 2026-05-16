@@ -20,7 +20,7 @@ describe("pos entry navigation", () => {
     const source = await readSource("src/app/(app)/pos/page.tsx");
 
     expect(source).toContain("const activeRegisterId =");
-    expect(source).toContain('href={`/pos/shifts?registerId=${activeRegisterId}`}');
+    expect(source).toContain("href={`/pos/shifts?registerId=${activeRegisterId}`}");
     expect(source).toContain('t("shifts.closeShift")');
     expect(source).toContain("{!openShift ? (");
   });
@@ -55,5 +55,18 @@ describe("pos entry navigation", () => {
     expect(source).toContain("const productBlocked = priceMissing;");
     expect(source).not.toContain("stockBlocked");
     expect(source).not.toContain('t("sell.insufficientStock")');
+  });
+
+  it("lets cashiers edit POS sale line unit prices inline", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const routerSource = await readSource("src/server/trpc/routers/pos.ts");
+    const serviceSource = await readSource("src/server/services/pos.ts");
+
+    expect(pageSource).toContain("handleUpdateLinePrice");
+    expect(pageSource).toContain("formatSaleMoneyDraft(line.unitPriceKgs)");
+    expect(pageSource).toContain("await updateLineMutation.mutateAsync({ lineId, unitPriceKgs })");
+    expect(routerSource).toContain("unitPriceKgs: z.number().min(0).optional()");
+    expect(serviceSource).toContain("unitPriceKgs: nextUnitPriceKgs");
+    expect(serviceSource).toContain("lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty)");
   });
 });

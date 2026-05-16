@@ -618,6 +618,58 @@ describeDb("pos", () => {
     expect(fetched?.totalKgs).toBe(300);
   });
 
+  it("updates POS sale line unit price without changing catalog price", async () => {
+    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-edit-line-price-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    const line = await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    await caller.pos.sales.updateLine({ lineId: line.id, unitPriceKgs: 125 });
+
+    const fetched = await caller.pos.sales.get({ saleId: sale.id });
+    expect(fetched?.lines[0]).toMatchObject({
+      qty: 2,
+      unitPriceKgs: 125,
+      lineTotalKgs: 250,
+    });
+    expect(fetched?.subtotalKgs).toBe(250);
+    expect(fetched?.totalKgs).toBe(250);
+
+    const productAfterEdit = await prisma.product.findUnique({
+      where: { id: product.id },
+      select: { basePriceKgs: true },
+    });
+    expect(Number(productAfterEdit?.basePriceKgs)).toBe(100);
+  });
+
   it("requires marking codes when store marking mode is REQUIRED_ON_SALE", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 

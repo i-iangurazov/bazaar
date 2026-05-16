@@ -739,6 +739,46 @@ const PosSellPage = () => {
     }
   };
 
+  const formatSaleMoneyDraft = (amountKgs: number) => {
+    const amount = displayMoneyFromKgs(amountKgs, currencySource);
+    return Number.isFinite(amount) ? Number(amount.toFixed(6)).toString() : "";
+  };
+
+  const parseSaleMoneyDraft = (raw: string) => {
+    const normalized = raw.replace(/\s+/g, "").replace(",", ".");
+    if (!normalized.length) {
+      return null;
+    }
+    const amount = Number(normalized);
+    return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  };
+
+  const handleUpdateLinePrice = async (
+    lineId: string,
+    raw: string,
+    currentUnitPriceKgs: number,
+  ) => {
+    const amount = parseSaleMoneyDraft(raw);
+    if (amount === null) {
+      toast({ variant: "error", description: t("sell.invalidAmount") });
+      return;
+    }
+
+    const unitPriceKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
+    if (unitPriceKgs === roundMoney(currentUnitPriceKgs)) {
+      return;
+    }
+
+    try {
+      await updateLineMutation.mutateAsync({ lineId, unitPriceKgs });
+      if (saleId) {
+        await trpcUtils.pos.sales.get.invalidate({ saleId });
+      }
+    } catch {
+      // handled by mutation onError
+    }
+  };
+
   const handleRemoveLine = async (lineId: string) => {
     try {
       await removeLineMutation.mutateAsync({ lineId });
@@ -1828,12 +1868,41 @@ const PosSellPage = () => {
                                 </div>
                                 <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-2">
                                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                    <p className="min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
-                                      {formatSaleMoney(line.unitPriceKgs)}
-                                      {lineDiscountKgs > 0
-                                        ? ` · ${t("sell.discount")} ${formatSaleMoney(lineDiscountKgs)}`
-                                        : ""}
-                                    </p>
+                                    <div className="flex min-w-0 items-center gap-1.5">
+                                      <Input
+                                        key={`${line.id}:price:${line.unitPriceKgs}`}
+                                        defaultValue={formatSaleMoneyDraft(line.unitPriceKgs)}
+                                        aria-label={t("sell.unitPrice")}
+                                        title={t("sell.unitPrice")}
+                                        inputMode="decimal"
+                                        className="h-8 w-24 rounded-sm px-2 text-[12px] font-medium text-foreground shadow-none focus-visible:ring-1"
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        onBlur={(event) =>
+                                          handleUpdateLinePrice(
+                                            line.id,
+                                            event.currentTarget.value,
+                                            line.unitPriceKgs,
+                                          )
+                                        }
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") {
+                                            event.currentTarget.blur();
+                                          }
+                                          if (event.key === "Escape") {
+                                            event.currentTarget.value = formatSaleMoneyDraft(
+                                              line.unitPriceKgs,
+                                            );
+                                            event.currentTarget.blur();
+                                          }
+                                        }}
+                                        disabled={isLineBusy || completeMutation.isLoading}
+                                      />
+                                      {lineDiscountKgs > 0 ? (
+                                        <span className="truncate text-[11px] leading-4 text-muted-foreground">
+                                          {t("sell.discount")} {formatSaleMoney(lineDiscountKgs)}
+                                        </span>
+                                      ) : null}
+                                    </div>
                                     <div className="inline-flex items-center overflow-hidden rounded-sm border border-border bg-background">
                                       <Button
                                         type="button"

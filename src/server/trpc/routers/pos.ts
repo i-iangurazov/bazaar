@@ -483,10 +483,15 @@ export const posRouter = router({
 
     updateLine: cashierProcedure
       .input(
-        z.object({
-          lineId: z.string().min(1),
-          qty: z.number().int().positive(),
-        }),
+        z
+          .object({
+            lineId: z.string().min(1),
+            qty: z.number().int().positive().optional(),
+            unitPriceKgs: z.number().min(0).optional(),
+          })
+          .refine((input) => input.qty !== undefined || input.unitPriceKgs !== undefined, {
+            message: "invalidInput",
+          }),
       )
       .mutation(async ({ ctx, input }) => {
         try {
@@ -494,6 +499,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             lineId: input.lineId,
             qty: input.qty,
+            unitPriceKgs: input.unitPriceKgs,
             actorId: ctx.user.id,
             user: ctx.user,
             requestId: ctx.requestId,

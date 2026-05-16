@@ -2181,7 +2181,8 @@ export const addPosSaleLine = async (input: {
 export const updatePosSaleLine = async (input: {
   organizationId: string;
   lineId: string;
-  qty: number;
+  qty?: number;
+  unitPriceKgs?: number;
   actorId: string;
   user?: StoreAccessUser;
   requestId: string;
@@ -2203,14 +2204,29 @@ export const updatePosSaleLine = async (input: {
     if (line.customerOrder.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
+    if (input.qty === undefined && input.unitPriceKgs === undefined) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+    if (input.qty !== undefined && (!Number.isInteger(input.qty) || input.qty <= 0)) {
+      throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
+    }
+    if (
+      input.unitPriceKgs !== undefined &&
+      (!Number.isFinite(input.unitPriceKgs) || input.unitPriceKgs < 0)
+    ) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
 
+    const nextQty = input.qty ?? line.qty;
+    const nextUnitPriceKgs = roundMoney(input.unitPriceKgs ?? toMoney(line.unitPriceKgs));
     const updated = await tx.customerOrderLine.update({
       where: { id: line.id },
       data: {
-        qty: input.qty,
-        lineTotalKgs: roundMoney(toMoney(line.unitPriceKgs) * input.qty),
+        qty: nextQty,
+        unitPriceKgs: nextUnitPriceKgs,
+        lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty),
         lineCostTotalKgs:
-          line.unitCostKgs === null ? null : roundMoney(toMoney(line.unitCostKgs) * input.qty),
+          line.unitCostKgs === null ? null : roundMoney(toMoney(line.unitCostKgs) * nextQty),
       },
     });
 
