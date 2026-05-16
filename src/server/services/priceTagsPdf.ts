@@ -15,7 +15,14 @@ import {
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
 import { resolveBarcodeRenderSpec } from "@/server/services/barcodes";
-import { buildPriceTagLayout, clampPriceTagTextLines, mmToPoints } from "@/server/services/priceTagsLayout";
+import {
+  buildPriceTagLayout,
+  clampPriceTagTextLines,
+  mmToPoints,
+} from "@/server/services/priceTagsLayout";
+
+const PRINT_BLACK = "#000000";
+const PRINT_WHITE = "#FFFFFF";
 
 export type PriceTagLabel = {
   name: string;
@@ -72,7 +79,12 @@ const formatPriceTagAmount = (
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(displayAmount);
 };
 
-const truncateLine = (doc: InstanceType<typeof PDFDocument>, text: string, maxWidth: number, fontSize: number) => {
+const truncateLine = (
+  doc: InstanceType<typeof PDFDocument>,
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+) => {
   doc.fontSize(fontSize);
   if (doc.widthOfString(text) <= maxWidth) {
     return text;
@@ -101,6 +113,8 @@ const createBarcodePng = async (spec: { bcid: "ean13" | "code128"; text: string 
     scale: 2,
     height: 10,
     includetext: false,
+    barcolor: PRINT_BLACK.replace("#", ""),
+    backgroundcolor: PRINT_WHITE.replace("#", ""),
   });
 };
 
@@ -112,10 +126,7 @@ const toRollCalibration = (input?: PriceTagRollCalibration): PriceTagRollCalibra
   heightMm: input?.heightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
 });
 
-const resolveBarcodeSpec = (
-  value: string,
-  barcodeType: "auto" | "ean13" | "code128",
-) => {
+const resolveBarcodeSpec = (value: string, barcodeType: "auto" | "ean13" | "code128") => {
   const text = value.trim();
   if (!text) {
     return null;
@@ -176,7 +187,11 @@ export const buildPriceTagsPdf = async ({
   );
   const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
   const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
-  const resolvedFont = existsSync(fontPath) ? fontPath : existsSync(fallbackPath) ? fallbackPath : null;
+  const resolvedFont = existsSync(fontPath)
+    ? fontPath
+    : existsSync(fallbackPath)
+      ? fallbackPath
+      : null;
   if (resolvedFont) {
     doc.registerFont("Body", resolvedFont);
     doc.font("Body");
@@ -212,7 +227,11 @@ export const buildPriceTagsPdf = async ({
     const y = isRollTemplate ? 0 : doc.page.margins.top + row * layout.labelHeight;
 
     if (!isRollTemplate) {
-      doc.rect(x, y, layout.labelWidth, layout.labelHeight).strokeColor("#EEEEEE").stroke();
+      doc
+        .rect(x, y, layout.labelWidth, layout.labelHeight)
+        .strokeColor(PRINT_BLACK)
+        .lineWidth(0.5)
+        .stroke();
     }
 
     const contentX = x + layout.name.x;
@@ -222,7 +241,7 @@ export const buildPriceTagsPdf = async ({
     const barcodeHeight = barcodeHeightMm ? mmToPoints(barcodeHeightMm) : layout.barcode.height;
     const drawNoBarcode = () => {
       const fallback = truncateLine(doc, noBarcodeLabel, contentWidth, metaFont);
-      doc.fontSize(metaFont).fillColor("#666666");
+      doc.fontSize(metaFont).fillColor(PRINT_BLACK);
       doc.text(fallback, contentX, y + layout.barcodeValue.y, {
         width: contentWidth,
         align: "center",
@@ -241,7 +260,7 @@ export const buildPriceTagsPdf = async ({
       }
       const priceFont = label.price !== null ? fontSize : Math.max(fontSize - 2, 9);
       const priceLine = truncateLine(doc, priceText, contentWidth, priceFont);
-      doc.fontSize(priceFont).fillColor("#000000");
+      doc.fontSize(priceFont).fillColor(PRINT_BLACK);
       doc.text(priceLine, contentX, targetY, {
         width: contentWidth,
         lineBreak: false,
@@ -258,7 +277,7 @@ export const buildPriceTagsPdf = async ({
         maxLines: layout.config.nameLines,
         canFit: (candidate) => doc.widthOfString(candidate) <= contentWidth,
       });
-      doc.fillColor("#111111");
+      doc.fillColor(PRINT_BLACK);
       nameLines.forEach((line, lineIndex) => {
         doc.text(line, contentX, targetY + lineIndex * layout.config.nameLineHeight, {
           width: contentWidth,
@@ -295,7 +314,7 @@ export const buildPriceTagsPdf = async ({
         });
         if (showBarcodeText) {
           const valueLine = truncateLine(doc, barcodeEntry.text, contentWidth, metaFont);
-          doc.fontSize(metaFont).fillColor("#000000");
+          doc.fontSize(metaFont).fillColor(PRINT_BLACK);
           doc.text(valueLine, contentX, targetY + barcodeHeight + 2, {
             width: contentWidth,
             align: "center",
@@ -334,7 +353,7 @@ export const buildPriceTagsPdf = async ({
       }
       if (showSku && label.sku.trim()) {
         const skuText = truncateLine(doc, `${skuLabel}: ${label.sku}`, contentWidth, metaFont);
-        doc.fontSize(metaFont).fillColor("#444444");
+        doc.fontSize(metaFont).fillColor(PRINT_BLACK);
         doc.text(skuText, contentX, Math.min(cursor, y + layout.labelHeight - metaFont - 2), {
           width: contentWidth,
           align: "center",
@@ -351,7 +370,7 @@ export const buildPriceTagsPdf = async ({
         maxLines: layout.config.nameLines,
         canFit: (candidate) => doc.widthOfString(candidate) <= contentWidth,
       });
-      doc.fillColor("#111111");
+      doc.fillColor(PRINT_BLACK);
       nameLines.forEach((line, lineIndex) => {
         doc.text(line, contentX, y + layout.name.y + lineIndex * layout.config.nameLineHeight, {
           width: contentWidth,
@@ -364,14 +383,14 @@ export const buildPriceTagsPdf = async ({
       const priceFont =
         label.price !== null ? layout.config.priceFont : Math.max(layout.config.priceFont - 2, 9);
       const priceLine = truncateLine(doc, priceText, contentWidth, priceFont);
-      doc.fontSize(priceFont).fillColor("#000000");
+      doc.fontSize(priceFont).fillColor(PRINT_BLACK);
       doc.text(priceLine, contentX, y + layout.price.y, {
         width: contentWidth,
         lineBreak: false,
       });
     }
 
-    doc.fontSize(metaFont).fillColor("#444444");
+    doc.fontSize(metaFont).fillColor(PRINT_BLACK);
     if (showSku && label.sku.trim()) {
       const skuText = truncateLine(doc, `${skuLabel}: ${label.sku}`, contentWidth, metaFont);
       doc.text(skuText, contentX, y + layout.meta.y, {
@@ -412,7 +431,7 @@ export const buildPriceTagsPdf = async ({
 
         if (showBarcodeText) {
           const valueLine = truncateLine(doc, barcodeEntry.text, contentWidth, metaFont);
-          doc.fontSize(metaFont).fillColor("#000000");
+          doc.fontSize(metaFont).fillColor(PRINT_BLACK);
           doc.text(valueLine, contentX, y + layout.barcodeValue.y, {
             width: contentWidth,
             align: "center",

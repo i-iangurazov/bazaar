@@ -45,6 +45,7 @@ const RECEIPT_MIN_HEIGHT_MM = 62;
 const RECEIPT_HEIGHT_BUFFER_MM = 4;
 const RECEIPT_MARGIN_X_MM = 2;
 const RECEIPT_MARGIN_Y_MM = 3;
+const PRINT_BLACK = "#000000";
 
 export const defaultReceiptTemplateSettings: ReceiptTemplateSettings = {
   receiptPaperSize: "58MM",
@@ -144,7 +145,9 @@ const buildReceiptMetaLines = (input: {
     saleLines.push(`${input.labels.saleNumber}: ${input.job.number}`);
   }
   if (input.settings.receiptShowDateTime) {
-    saleLines.push(`${input.labels.createdAt}: ${formatDateTime(input.job.createdAt, input.job.locale)}`);
+    saleLines.push(
+      `${input.labels.createdAt}: ${formatDateTime(input.job.createdAt, input.job.locale)}`,
+    );
   }
   if (input.settings.receiptShowCashierName && input.job.registerName) {
     saleLines.push(`${input.labels.register}: ${input.job.registerName}`);
@@ -278,7 +281,11 @@ export const buildPosReceiptPdf = async (input: {
   const baseFont = settings.receiptFontSize;
   const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
   const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
-  const resolvedFont = existsSync(fontPath) ? fontPath : existsSync(fallbackPath) ? fallbackPath : null;
+  const resolvedFont = existsSync(fontPath)
+    ? fontPath
+    : existsSync(fallbackPath)
+      ? fallbackPath
+      : null;
   const left = marginLeft;
   const rightEdge = receiptWidth - marginRight;
   const contentWidth = rightEdge - left;
@@ -290,7 +297,10 @@ export const buildPosReceiptPdf = async (input: {
     settings.receiptShowDiscount &&
     !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
   const showLineTotalPerItem = input.job.items.length > 1;
-  const paymentsTotal = input.job.totals.payments.reduce((sum, payment) => sum + payment.amountKgs, 0);
+  const paymentsTotal = input.job.totals.payments.reduce(
+    (sum, payment) => sum + payment.amountKgs,
+    0,
+  );
   const change = Math.max(0, paymentsTotal - input.job.totals.totalKgs);
   const metaLines = buildReceiptMetaLines({
     job: input.job,
@@ -341,12 +351,12 @@ export const buildPosReceiptPdf = async (input: {
   let y = marginTop;
 
   const drawSeparator = () => {
-    doc.moveTo(left, y).lineTo(rightEdge, y).strokeColor("#CFCFCF").lineWidth(0.7).stroke();
+    doc.moveTo(left, y).lineTo(rightEdge, y).strokeColor(PRINT_BLACK).lineWidth(0.9).stroke();
     y += 4;
   };
 
   const drawMetaLine = (text: string, fontSize = 7.5, gap = 2) => {
-    doc.fontSize(fontSize).fillColor("#444444");
+    doc.fontSize(fontSize).fillColor(PRINT_BLACK);
     const height = doc.heightOfString(text, { width: contentWidth });
     doc.text(text, left, y, { width: contentWidth });
     y += height + gap;
@@ -355,12 +365,12 @@ export const buildPosReceiptPdf = async (input: {
   const drawAmountRow = (label: string, value: string, emphasized = false) => {
     const labelFont = emphasized ? 9 : 8;
     const valueFont = emphasized ? 9.5 : 8;
-    doc.fontSize(labelFont).fillColor(emphasized ? "#111111" : "#333333");
+    doc.fontSize(labelFont).fillColor(PRINT_BLACK);
     doc.text(label, left, y, {
       width: contentWidth - amountColumnWidth - 4,
       lineBreak: false,
     });
-    doc.fontSize(valueFont).fillColor("#111111");
+    doc.fontSize(valueFont).fillColor(PRINT_BLACK);
     doc.text(value, rightEdge - amountColumnWidth, y, {
       width: amountColumnWidth,
       align: "right",
@@ -369,15 +379,18 @@ export const buildPosReceiptPdf = async (input: {
     y += emphasized ? 13 : 12;
   };
 
-  doc.fontSize(baseFont + 1.6).fillColor("#111111").text(input.labels.title, left, y, {
-    width: contentWidth,
-    align: "center",
-    lineBreak: false,
-  });
+  doc
+    .fontSize(baseFont + 1.6)
+    .fillColor(PRINT_BLACK)
+    .text(input.labels.title, left, y, {
+      width: contentWidth,
+      align: "center",
+      lineBreak: false,
+    });
   y += baseFont + 5;
 
   if (settings.receiptShowStoreName) {
-    doc.fontSize(baseFont + 0.4).fillColor("#111111");
+    doc.fontSize(baseFont + 0.4).fillColor(PRINT_BLACK);
     const businessHeight = doc.heightOfString(metaLines.businessName, { width: contentWidth });
     doc.text(metaLines.businessName, left, y, { width: contentWidth, align: "left" });
     y += businessHeight + 2;
@@ -401,7 +414,7 @@ export const buildPosReceiptPdf = async (input: {
       settings.receiptShowProductSku && item.sku ? `(${item.sku})` : "",
     ].filter(Boolean);
     if (nameParts.length) {
-      doc.fontSize(baseFont).fillColor("#111111");
+      doc.fontSize(baseFont).fillColor(PRINT_BLACK);
       const name = nameParts.join(" ");
       const nameHeight = doc.heightOfString(name, { width: contentWidth });
       doc.text(name, left, y, {
@@ -411,7 +424,7 @@ export const buildPosReceiptPdf = async (input: {
     }
 
     if (settings.receiptShowProductBarcode && item.barcode) {
-      doc.fontSize(baseFont - 1).fillColor("#555555");
+      doc.fontSize(baseFont - 1).fillColor(PRINT_BLACK);
       doc.text(`${input.labels.barcode}: ${item.barcode}`, left, y, {
         width: contentWidth,
         lineBreak: false,
@@ -420,23 +433,32 @@ export const buildPosReceiptPdf = async (input: {
     }
 
     if (settings.receiptShowProductQuantity || settings.receiptShowProductUnitPrice) {
-      const detailWidth = showLineTotalPerItem ? contentWidth - amountColumnWidth - 4 : contentWidth;
+      const detailWidth = showLineTotalPerItem
+        ? contentWidth - amountColumnWidth - 4
+        : contentWidth;
       const detailParts = [
         settings.receiptShowProductQuantity ? `${input.labels.qty}: ${item.qty}` : "",
-        settings.receiptShowProductUnitPrice ? formatReceiptCurrency(item.unitPriceKgs, input.job) : "",
+        settings.receiptShowProductUnitPrice
+          ? formatReceiptCurrency(item.unitPriceKgs, input.job)
+          : "",
       ].filter(Boolean);
       const qtyLine = truncateSingleLine(doc, detailParts.join(" × "), detailWidth, baseFont - 0.9);
-      doc.fontSize(baseFont - 0.9).fillColor("#555555");
+      doc.fontSize(baseFont - 0.9).fillColor(PRINT_BLACK);
       doc.text(qtyLine, left, y, {
         width: detailWidth,
         lineBreak: false,
       });
       if (showLineTotalPerItem) {
-        doc.text(formatReceiptCurrency(item.lineTotalKgs, input.job), rightEdge - amountColumnWidth, y, {
-          width: amountColumnWidth,
-          align: "right",
-          lineBreak: false,
-        });
+        doc.text(
+          formatReceiptCurrency(item.lineTotalKgs, input.job),
+          rightEdge - amountColumnWidth,
+          y,
+          {
+            width: amountColumnWidth,
+            align: "right",
+            lineBreak: false,
+          },
+        );
       }
       y += 11;
     }
@@ -444,7 +466,10 @@ export const buildPosReceiptPdf = async (input: {
   }
 
   if (showSubtotal) {
-    drawAmountRow(input.labels.subtotal, formatReceiptCurrency(input.job.totals.subtotalKgs, input.job));
+    drawAmountRow(
+      input.labels.subtotal,
+      formatReceiptCurrency(input.job.totals.subtotalKgs, input.job),
+    );
   }
   if (showDiscount) {
     drawAmountRow(
@@ -453,28 +478,37 @@ export const buildPosReceiptPdf = async (input: {
     );
   }
   if (settings.receiptShowTotal) {
-    drawAmountRow(input.labels.total, formatReceiptCurrency(input.job.totals.totalKgs, input.job), true);
+    drawAmountRow(
+      input.labels.total,
+      formatReceiptCurrency(input.job.totals.totalKgs, input.job),
+      true,
+    );
   }
 
   if (settings.receiptShowPaymentMethod && input.job.totals.payments.length) {
     y += 2;
     drawSeparator();
-    doc.fontSize(8).fillColor("#111111").text(input.labels.payments, left, y, {
+    doc.fontSize(8).fillColor(PRINT_BLACK).text(input.labels.payments, left, y, {
       width: contentWidth,
       lineBreak: false,
     });
     y += 11;
     for (const payment of input.job.totals.payments) {
-      doc.fontSize(7.5).fillColor("#444444");
+      doc.fontSize(7.5).fillColor(PRINT_BLACK);
       doc.text(payment.methodLabel, left, y, {
         width: contentWidth - amountColumnWidth - 4,
         lineBreak: false,
       });
-      doc.text(formatReceiptCurrency(payment.amountKgs, input.job), rightEdge - amountColumnWidth, y, {
-        width: amountColumnWidth,
-        align: "right",
-        lineBreak: false,
-      });
+      doc.text(
+        formatReceiptCurrency(payment.amountKgs, input.job),
+        rightEdge - amountColumnWidth,
+        y,
+        {
+          width: amountColumnWidth,
+          align: "right",
+          lineBreak: false,
+        },
+      );
       y += 11;
     }
   }
@@ -486,7 +520,7 @@ export const buildPosReceiptPdf = async (input: {
   drawSeparator();
 
   if (settings.receiptFooterText) {
-    doc.fontSize(baseFont - 0.7).fillColor("#444444");
+    doc.fontSize(baseFont - 0.7).fillColor(PRINT_BLACK);
     doc.text(settings.receiptFooterText, left, y, {
       width: contentWidth,
       align: "center",
