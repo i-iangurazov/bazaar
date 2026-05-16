@@ -82,6 +82,7 @@ const StoresPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
+  const canManageProductSettings = isAdmin || Boolean(session?.user?.isOrgOwner);
   const router = useRouter();
   const pathname = usePathname() ?? "/stores";
   const searchParams = useSearchParams();
@@ -152,6 +153,9 @@ const StoresPage = () => {
         stockQuantityDelta: z.coerce.number().int().min(-1_000_000).max(1_000_000),
         priceAdjustmentMode: z.enum(["none", "percentage", "amount"]),
         priceAdjustmentValue: z.coerce.number().min(-1_000_000).max(1_000_000),
+        enableSku: z.boolean(),
+        enableBarcode: z.boolean(),
+        enableSimilarProductCheck: z.boolean(),
       }),
     [t],
   );
@@ -173,6 +177,9 @@ const StoresPage = () => {
       stockQuantityDelta: 0,
       priceAdjustmentMode: "none",
       priceAdjustmentValue: 0,
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
     },
   });
 
@@ -232,6 +239,15 @@ const StoresPage = () => {
     onSuccess: () => {
       storesQuery.refetch();
       toast({ variant: "success", description: t("policyUpdateSuccess") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const updateProductSettingsMutation = trpc.stores.updateProductSettings.useMutation({
+    onSuccess: () => {
+      storesQuery.refetch();
+      toast({ variant: "success", description: t("productSettingsUpdateSuccess") });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -342,6 +358,9 @@ const StoresPage = () => {
       stockQuantityDelta: 0,
       priceAdjustmentMode: "none",
       priceAdjustmentValue: 0,
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
     });
     setStoreDialogOpen(true);
   }, [storeForm]);
@@ -378,6 +397,9 @@ const StoresPage = () => {
       stockQuantityDelta: 0,
       priceAdjustmentMode: "none",
       priceAdjustmentValue: 0,
+      enableSku: store.enableSku ?? true,
+      enableBarcode: store.enableBarcode ?? true,
+      enableSimilarProductCheck: store.enableSimilarProductCheck ?? true,
     });
     setStoreDialogOpen(true);
   };
@@ -387,7 +409,8 @@ const StoresPage = () => {
     createMutation.isLoading ||
     updateMutation.isLoading ||
     updatePolicyMutation.isLoading ||
-    updateLegalMutation.isLoading;
+    updateLegalMutation.isLoading ||
+    updateProductSettingsMutation.isLoading;
   const selectedCloneFromStoreId = storeForm.watch("cloneFromStoreId");
   const copyInventoryEnabled = storeForm.watch("copyInventory");
   const selectedPriceAdjustmentMode = storeForm.watch("priceAdjustmentMode");
@@ -802,6 +825,9 @@ const StoresPage = () => {
                 stockQuantityDelta: values.stockQuantityDelta,
                 priceAdjustmentMode: values.priceAdjustmentMode,
                 priceAdjustmentValue: values.priceAdjustmentValue,
+                enableSku: values.enableSku,
+                enableBarcode: values.enableBarcode,
+                enableSimilarProductCheck: values.enableSimilarProductCheck,
               };
 
               if (editingStore) {
@@ -819,6 +845,12 @@ const StoresPage = () => {
                     (normalized.inn ?? "") !== (editingStore.inn ?? "") ||
                     (normalized.address ?? "") !== (editingStore.address ?? "") ||
                     (normalized.phone ?? "") !== (editingStore.phone ?? ""));
+                const productSettingsChanged =
+                  canManageProductSettings &&
+                  (normalized.enableSku !== (editingStore.enableSku ?? true) ||
+                    normalized.enableBarcode !== (editingStore.enableBarcode ?? true) ||
+                    normalized.enableSimilarProductCheck !==
+                      (editingStore.enableSimilarProductCheck ?? true));
 
                 if (nameChanged || codeChanged) {
                   tasks.push(
@@ -847,6 +879,16 @@ const StoresPage = () => {
                       inn: normalized.inn,
                       address: normalized.address,
                       phone: normalized.phone,
+                    }),
+                  );
+                }
+                if (productSettingsChanged) {
+                  tasks.push(
+                    updateProductSettingsMutation.mutateAsync({
+                      storeId: editingStore.id,
+                      enableSku: normalized.enableSku,
+                      enableBarcode: normalized.enableBarcode,
+                      enableSimilarProductCheck: normalized.enableSimilarProductCheck,
                     }),
                   );
                 }
@@ -882,6 +924,13 @@ const StoresPage = () => {
                 stockQuantityDelta: normalized.stockQuantityDelta,
                 priceAdjustmentMode: normalized.priceAdjustmentMode,
                 priceAdjustmentValue: normalized.priceAdjustmentValue,
+                ...(canManageProductSettings
+                  ? {
+                      enableSku: normalized.enableSku,
+                      enableBarcode: normalized.enableBarcode,
+                      enableSimilarProductCheck: normalized.enableSimilarProductCheck,
+                    }
+                  : {}),
               });
             })}
           >
@@ -959,6 +1008,80 @@ const StoresPage = () => {
                       </div>
                       <FormControl>
                         <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormSection>
+
+            <FormSection
+              title={t("productSettingsTitle")}
+              description={
+                canManageProductSettings ? t("productSettingsHint") : t("productSettingsAdminOnly")
+              }
+            >
+              <FormField
+                control={storeForm.control}
+                name="enableSku"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                      <div className="space-y-1">
+                        <FormLabel>{t("enableSku")}</FormLabel>
+                        <FormDescription>{t("enableSkuHint")}</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canManageProductSettings}
+                        />
+                      </FormControl>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={storeForm.control}
+                name="enableBarcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                      <div className="space-y-1">
+                        <FormLabel>{t("enableBarcode")}</FormLabel>
+                        <FormDescription>{t("enableBarcodeHint")}</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canManageProductSettings}
+                        />
+                      </FormControl>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={storeForm.control}
+                name="enableSimilarProductCheck"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                      <div className="space-y-1">
+                        <FormLabel>{t("enableSimilarProductCheck")}</FormLabel>
+                        <FormDescription>{t("enableSimilarProductCheckHint")}</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canManageProductSettings}
+                        />
                       </FormControl>
                     </div>
                     <FormMessage />
@@ -1254,6 +1377,24 @@ const StoresPage = () => {
             <p className="text-xs text-muted-foreground">{t("trackExpiryLots")}</p>
             <Badge variant={viewingStore?.trackExpiryLots ? "success" : "warning"}>
               {viewingStore?.trackExpiryLots ? tCommon("yes") : tCommon("no")}
+            </Badge>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{t("enableSku")}</p>
+            <Badge variant={viewingStore?.enableSku ? "success" : "warning"}>
+              {viewingStore?.enableSku ? tCommon("yes") : tCommon("no")}
+            </Badge>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{t("enableBarcode")}</p>
+            <Badge variant={viewingStore?.enableBarcode ? "success" : "warning"}>
+              {viewingStore?.enableBarcode ? tCommon("yes") : tCommon("no")}
+            </Badge>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{t("enableSimilarProductCheck")}</p>
+            <Badge variant={viewingStore?.enableSimilarProductCheck ? "success" : "warning"}>
+              {viewingStore?.enableSimilarProductCheck ? tCommon("yes") : tCommon("no")}
             </Badge>
           </div>
           <div>

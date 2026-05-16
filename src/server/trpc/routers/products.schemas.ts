@@ -69,6 +69,7 @@ export const productVariantInputSchema = z.object({
   name: z.string().optional(),
   sku: z.string().optional(),
   attributes: z.record(z.unknown()).optional(),
+  initialOnHand: z.number().int().min(0).optional(),
 });
 
 export const productListInputSchema = z
@@ -211,6 +212,8 @@ export const inlineUpdateProductInputSchema = z.object({
 export const duplicateProductInputSchema = z.object({
   productId: z.string(),
   sku: z.string().min(2).optional(),
+  copyImages: z.boolean().optional(),
+  storeId: z.string().optional(),
 });
 
 export const generateProductBarcodeInputSchema = z.object({

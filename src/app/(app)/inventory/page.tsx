@@ -90,11 +90,7 @@ import {
   type BarcodePrintProduct,
 } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
-import {
-  getQzTrayBinding,
-  printPdfBlobViaQzTray,
-  qzTrayErrorMessageKey,
-} from "@/lib/qzTrayPrint";
+import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
   PRICE_TAG_ROLL_LIMITS,
@@ -219,11 +215,7 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
     const visibleOptions = options
       .filter((option) =>
         normalizedSearch
-          ? [
-              option.label,
-              option.sku,
-              option.barcode ?? "",
-            ]
+          ? [option.label, option.sku, option.barcode ?? ""]
               .join(" ")
               .toLowerCase()
               .includes(normalizedSearch)
@@ -279,13 +271,16 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
                       {option.label}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {[option.sku, option.barcode].filter(Boolean).join(" • ") ||
-                        selectedLabel}
+                      {[option.sku, option.barcode].filter(Boolean).join(" • ") || selectedLabel}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {stockLabel}: {option.onHand}
-                      {option.unitCostKgs !== null ? ` • ${costLabel}: ${formatMoney(option.unitCostKgs)}` : ""}
-                      {option.priceKgs !== null ? ` • ${priceLabel}: ${formatMoney(option.priceKgs)}` : ""}
+                      {option.unitCostKgs !== null
+                        ? ` • ${costLabel}: ${formatMoney(option.unitCostKgs)}`
+                        : ""}
+                      {option.priceKgs !== null
+                        ? ` • ${priceLabel}: ${formatMoney(option.priceKgs)}`
+                        : ""}
                     </span>
                   </span>
                   {selected ? (
@@ -332,7 +327,7 @@ const InventoryPage = () => {
   const [expandedReorderId, setExpandedReorderId] = useState<string | null>(null);
   const [expiryWindow, setExpiryWindow] = useState<30 | 60 | 90>(30);
   const [activeDialog, setActiveDialog] = useState<
-    "receive" | "adjust" | "transfer" | "minStock" | "bulkOnHand" | "movements" | null
+    "adjust" | "transfer" | "minStock" | "bulkOnHand" | "movements" | null
   >(null);
   const [bulkOnHandProgress, setBulkOnHandProgress] = useState<{
     processed: number;
@@ -366,7 +361,6 @@ const InventoryPage = () => {
   // saved-profile quick print and must not open this settings form.
   const [legacyInventoryPrintModalOpen, setLegacyInventoryPrintModalOpen] = useState(false);
   const [calibrationLoadedStoreKey, setCalibrationLoadedStoreKey] = useState("");
-  const [receiveProductSearch, setReceiveProductSearch] = useState("");
   const [adjustProductSearch, setAdjustProductSearch] = useState("");
   const [transferProductSearch, setTransferProductSearch] = useState("");
   const inlineEditingEnabled = isInlineEditingEnabled();
@@ -496,6 +490,8 @@ const InventoryPage = () => {
   );
   const trackExpiryLots = stores.find((store) => store.id === storeId)?.trackExpiryLots ?? false;
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
+  const enableSku = selectedStore?.enableSku ?? true;
+  const enableBarcode = selectedStore?.enableBarcode ?? true;
   const formatSelectedStoreMoney = useCallback(
     (value: number) => formatStoreMoney(value, locale, selectedStore),
     [locale, selectedStore],
@@ -504,7 +500,7 @@ const InventoryPage = () => {
     () => findMatchingSavedTableView(inventorySavedViewsState.views, inventoryTableState),
     [inventorySavedViewsState.views, inventoryTableState],
   );
-  const inventoryColumnOptions = useMemo(
+  const baseInventoryColumnOptions = useMemo(
     () => [
       { key: "sku", label: t("sku") },
       { key: "image", label: t("imageLabel") },
@@ -517,23 +513,22 @@ const InventoryPage = () => {
     ],
     [t, tCommon],
   );
-  const visibleInventoryColumnSet = useMemo(
-    () => new Set<InventoryVisibleColumnKey>(visibleInventoryColumns),
-    [visibleInventoryColumns],
-  );
-
-  const receiveSchema = useMemo(
+  const inventoryColumnOptions = useMemo(
     () =>
-      z.object({
-        productId: z.string().min(1, t("productRequired")),
-        variantId: z.string().optional().nullable(),
-        qtyReceived: z.coerce.number().int().positive(t("qtyPositive")),
-        unitSelection: z.string().min(1, t("unitRequired")),
-        unitCost: z.coerce.number().min(0, t("unitCostNonNegative")).optional(),
-        expiryDate: z.string().optional(),
-        note: z.string().optional(),
+      baseInventoryColumnOptions.filter((column) => {
+        if (column.key === "sku") {
+          return enableSku;
+        }
+        return true;
       }),
-    [t],
+    [baseInventoryColumnOptions, enableSku],
+  );
+  const visibleInventoryColumnSet = useMemo(
+    () =>
+      new Set<InventoryVisibleColumnKey>(
+        visibleInventoryColumns.filter((column) => (column === "sku" ? enableSku : true)),
+      ),
+    [enableSku, visibleInventoryColumns],
   );
 
   const adjustSchema = useMemo(
@@ -541,7 +536,10 @@ const InventoryPage = () => {
       z.object({
         productId: z.string().min(1, t("productRequired")),
         variantId: z.string().optional().nullable(),
-        qtyDelta: z.coerce.number().int().refine((value) => value !== 0, t("qtyNonZero")),
+        qtyDelta: z.coerce
+          .number()
+          .int()
+          .refine((value) => value !== 0, t("qtyNonZero")),
         unitSelection: z.string().min(1, t("unitRequired")),
         reason: z.string().trim().min(3, t("reasonRequired")),
         expiryDate: z.string().optional(),
@@ -660,19 +658,6 @@ const InventoryPage = () => {
     [t],
   );
 
-  const receiveForm = useForm<z.infer<typeof receiveSchema>>({
-    resolver: zodResolver(receiveSchema),
-    defaultValues: {
-      productId: "",
-      variantId: null,
-      qtyReceived: 0,
-      unitSelection: "BASE",
-      unitCost: undefined,
-      expiryDate: "",
-      note: "",
-    },
-  });
-
   const adjustForm = useForm<z.infer<typeof adjustSchema>>({
     resolver: zodResolver(adjustSchema),
     defaultValues: {
@@ -762,13 +747,6 @@ const InventoryPage = () => {
     enabled: Boolean(storeId) && inventoryTableStateReady,
     keepPreviousData: true,
   });
-  const receiveProductSearchQuery = trpc.inventory.searchProducts.useQuery(
-    { storeId: storeId ?? "", search: receiveProductSearch || undefined, limit: 25 },
-    {
-      enabled: activeDialog === "receive" && Boolean(storeId),
-      keepPreviousData: true,
-    },
-  );
   const adjustProductSearchQuery = trpc.inventory.searchProducts.useQuery(
     { storeId: storeId ?? "", search: adjustProductSearch || undefined, limit: 25 },
     {
@@ -858,32 +836,27 @@ const InventoryPage = () => {
       byKey.set(`${item.product.id}:${item.snapshot.variantId ?? "BASE"}`, item);
     };
     inventoryItems.forEach(addItem);
-    (receiveProductSearchQuery.data ?? []).forEach(addItem);
     (adjustProductSearchQuery.data ?? []).forEach(addItem);
     (transferProductSearchQuery.data ?? []).forEach(addItem);
     return Array.from(byKey.values());
-  }, [
-    adjustProductSearchQuery.data,
-    inventoryItems,
-    receiveProductSearchQuery.data,
-    transferProductSearchQuery.data,
-  ]);
+  }, [adjustProductSearchQuery.data, inventoryItems, transferProductSearchQuery.data]);
 
   const productOptions = useMemo<InventoryProductOption[]>(() => {
     return selectorItems.map((item) => {
       const label = item.variant?.name
         ? `${item.product.name} • ${item.variant.name}`
         : item.product.name;
-      const skuLabel = item.product.sku ? `${label} (${item.product.sku})` : label;
+      const skuLabel = enableSku && item.product.sku ? `${label} (${item.product.sku})` : label;
       return {
         key: `${item.product.id}:${item.snapshot.variantId ?? "BASE"}`,
         productId: item.product.id,
         variantId: item.snapshot.variantId ?? null,
         label: skuLabel,
-        sku: item.product.sku,
-        barcode:
-          ("primaryBarcode" in item ? item.primaryBarcode : item.product.barcodes?.[0]?.value) ??
-          null,
+        sku: enableSku ? item.product.sku : "",
+        barcode: enableBarcode
+          ? (("primaryBarcode" in item ? item.primaryBarcode : item.product.barcodes?.[0]?.value) ??
+            null)
+          : null,
         imageUrl: getInventoryPreviewUrl(item),
         onHand: item.snapshot.onHand,
         unitCostKgs: ("unitCostKgs" in item ? item.unitCostKgs : null) ?? null,
@@ -895,7 +868,7 @@ const InventoryPage = () => {
               : null) ?? null,
       };
     });
-  }, [selectorItems]);
+  }, [enableBarcode, enableSku, selectorItems]);
 
   const productMap = useMemo(
     () => new Map(selectorItems.map((item) => [item.product.id, item.product])),
@@ -979,13 +952,13 @@ const InventoryPage = () => {
       if (map.has(item.product.id)) {
         return;
       }
-      const label = item.product.sku
+      const label = enableSku && item.product.sku
         ? `${item.product.name} (${item.product.sku})`
         : item.product.name;
       map.set(item.product.id, { productId: item.product.id, label });
     });
     return Array.from(map.values());
-  }, [inventoryItems]);
+  }, [enableSku, inventoryItems]);
 
   const selectedSnapshotIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
   const selectedPrintItems = useMemo(
@@ -1225,11 +1198,6 @@ const InventoryPage = () => {
     printForm.setValue("allowWithoutBarcode", false);
   }, [printForm, rollTemplateSelected]);
 
-  const receiveProductId = receiveForm.watch("productId");
-  const receiveVariantId = receiveForm.watch("variantId");
-  const receiveUnitSelection = receiveForm.watch("unitSelection");
-  const receiveQty = receiveForm.watch("qtyReceived");
-  const receiveUnitCost = receiveForm.watch("unitCost");
   const adjustProductId = adjustForm.watch("productId");
   const adjustVariantId = adjustForm.watch("variantId");
   const adjustUnitSelection = adjustForm.watch("unitSelection");
@@ -1241,7 +1209,6 @@ const InventoryPage = () => {
   const transferFromStoreId = transferForm.watch("fromStoreId");
   const minStockProductId = minStockForm.watch("productId");
   const minStockApplyToAll = minStockForm.watch("applyToAll");
-  const receiveProduct = receiveProductId ? productMap.get(receiveProductId) : undefined;
   const adjustProduct = adjustProductId ? productMap.get(adjustProductId) : undefined;
   const transferProduct = transferProductId ? productMap.get(transferProductId) : undefined;
 
@@ -1269,11 +1236,6 @@ const InventoryPage = () => {
     if (!firstOption) {
       return;
     }
-    if (!receiveForm.getValues("productId")) {
-      receiveForm.setValue("productId", firstOption.productId, { shouldValidate: true });
-      receiveForm.setValue("variantId", firstOption.variantId, { shouldValidate: true });
-      receiveForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-    }
     if (!adjustForm.getValues("productId")) {
       adjustForm.setValue("productId", firstOption.productId, { shouldValidate: true });
       adjustForm.setValue("variantId", firstOption.variantId, { shouldValidate: true });
@@ -1284,7 +1246,7 @@ const InventoryPage = () => {
       transferForm.setValue("variantId", firstOption.variantId, { shouldValidate: true });
       transferForm.setValue("unitSelection", "BASE", { shouldValidate: true });
     }
-  }, [productOptions, receiveForm, adjustForm, transferForm]);
+  }, [productOptions, adjustForm, transferForm]);
 
   useEffect(() => {
     const firstMinStock = minStockOptions[0];
@@ -1528,8 +1490,8 @@ const InventoryPage = () => {
   };
 
   const openActionDialog = useCallback(
-    (type: "receive" | "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
-      if ((type === "receive" || type === "adjust" || type === "transfer") && !canManageStock) {
+    (type: "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
+      if ((type === "adjust" || type === "transfer") && !canManageStock) {
         return;
       }
       if (type === "minStock" && !canManage) {
@@ -1544,10 +1506,6 @@ const InventoryPage = () => {
       }
       const productId = item.product.id;
       const variantId = item.snapshot.variantId ?? null;
-      if (type === "receive") {
-        receiveForm.setValue("productId", productId, { shouldValidate: true });
-        receiveForm.setValue("variantId", variantId, { shouldValidate: true });
-      }
       if (type === "adjust") {
         adjustForm.setValue("productId", productId, { shouldValidate: true });
         adjustForm.setValue("variantId", variantId, { shouldValidate: true });
@@ -1562,7 +1520,7 @@ const InventoryPage = () => {
         minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
       }
     },
-    [adjustForm, canManage, canManageStock, minStockForm, receiveForm, transferForm],
+    [adjustForm, canManage, canManageStock, minStockForm, transferForm],
   );
 
   useEffect(() => {
@@ -1571,7 +1529,7 @@ const InventoryPage = () => {
       return;
     }
 
-    const isStockAction = action === "receive" || action === "adjust" || action === "transfer";
+    const isStockAction = action === "adjust" || action === "transfer";
     const isManagedAction = isStockAction || action === "minStock";
     if ((isStockAction && !canManageStock) || (isManagedAction && !canManage)) {
       const nextParams = new URLSearchParams(searchParams.toString());
@@ -1585,12 +1543,7 @@ const InventoryPage = () => {
       return;
     }
 
-    if (
-      action === "receive" ||
-      action === "adjust" ||
-      action === "transfer" ||
-      action === "minStock"
-    ) {
+    if (action === "adjust" || action === "transfer" || action === "minStock") {
       openActionDialog(action);
     }
 
@@ -1625,12 +1578,6 @@ const InventoryPage = () => {
     const actions = [
       ...(canManageStock
         ? [
-            {
-              key: "receive",
-              label: t("receiveStock"),
-              icon: ReceiveIcon,
-              onSelect: () => openActionDialog("receive", item),
-            },
             {
               key: "adjust",
               label: t("stockAdjustment"),
@@ -1736,20 +1683,6 @@ const InventoryPage = () => {
       setBulkOnHandProgress(null);
     }
   };
-
-  const receiveMutation = trpc.inventory.receive.useMutation({
-    onSuccess: () => {
-      inventoryQuery.refetch();
-      void trpcUtils.inventory.searchProducts.invalidate();
-      receiveForm.setValue("qtyReceived", 0);
-      receiveForm.setValue("note", "");
-      toast({ variant: "success", description: t("receiveSuccess") });
-      setActiveDialog(null);
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
 
   const transferMutation = trpc.inventory.transfer.useMutation({
     onSuccess: () => {
@@ -1894,9 +1827,6 @@ const InventoryPage = () => {
     }
   };
 
-  const receiveSelectionKey = receiveProductId
-    ? buildSelectionKey(receiveProductId, receiveVariantId)
-    : "";
   const adjustSelectionKey = adjustProductId
     ? buildSelectionKey(adjustProductId, adjustVariantId)
     : "";
@@ -1951,14 +1881,11 @@ const InventoryPage = () => {
             {canManage || canManageStock ? (
               <>
                 {canManageStock ? (
-                  <Button
-                    className="w-full sm:w-auto"
-                    onClick={() => openActionDialog("receive")}
-                    disabled={!storeId}
-                    data-tour="inventory-receive"
-                  >
-                    <ReceiveIcon className="h-4 w-4" aria-hidden />
-                    {t("receiveStock")}
+                  <Button asChild className="w-full sm:w-auto" data-tour="inventory-receive">
+                    <Link href="/inventory/receiving">
+                      <ReceiveIcon className="h-4 w-4" aria-hidden />
+                      {t("stockReceiving")}
+                    </Link>
                   </Button>
                 ) : null}
                 <DropdownMenu>
@@ -2595,7 +2522,11 @@ const InventoryPage = () => {
                               <p className="truncate text-sm font-semibold text-foreground">
                                 {label}
                               </p>
-                              <p className="text-xs text-muted-foreground">{item.product.sku}</p>
+                              {enableSku ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {item.product.sku}
+                                </p>
+                              ) : null}
                             </div>
                             <RowActions
                               actions={actions}
@@ -2699,7 +2630,9 @@ const InventoryPage = () => {
                           <Badge variant="danger">{t("negativeStockBadge")}</Badge>
                         ) : null}
                       </div>
-                      <p className="text-xs text-muted-foreground">{item.product.sku}</p>
+                      {enableSku ? (
+                        <p className="text-xs text-muted-foreground">{item.product.sku}</p>
+                      ) : null}
                       <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                         <div>
                           <p>{t("onHand")}</p>
@@ -3117,9 +3050,11 @@ const InventoryPage = () => {
                       <p className="mt-1 text-[11px] font-semibold text-foreground">
                         {t("rollPreviewPrice")}
                       </p>
-                      <p className="mt-1 text-[8px] text-muted-foreground">
-                        {rollPreviewItem?.product.sku || t("rollPreviewSku")}
-                      </p>
+                        {enableSku ? (
+                          <p className="mt-1 text-[8px] text-muted-foreground">
+                            {rollPreviewItem?.product.sku || t("rollPreviewSku")}
+                          </p>
+                        ) : null}
                       <div className="mt-1 h-4 rounded-none bg-muted" />
                       <p className="mt-1 text-center text-[7px] text-muted-foreground">
                         {t("rollPreviewBarcode")}
@@ -3341,233 +3276,6 @@ const InventoryPage = () => {
           </Form>
         </Modal>
       ) : null}
-
-      <Modal
-        open={activeDialog === "receive"}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActiveDialog(null);
-          }
-        }}
-        title={t("receiveStock")}
-      >
-        <Form {...receiveForm}>
-          <form
-            className="space-y-4"
-            onSubmit={receiveForm.handleSubmit((values) => {
-              if (!storeId) {
-                return;
-              }
-              receiveMutation.mutate({
-                storeId,
-                productId: values.productId,
-                variantId: values.variantId ?? undefined,
-                qtyReceived: values.qtyReceived,
-                unitId: values.unitSelection === "BASE" ? receiveProduct?.baseUnitId : undefined,
-                packId: values.unitSelection !== "BASE" ? values.unitSelection : undefined,
-                unitCost: values.unitCost ?? undefined,
-                expiryDate: values.expiryDate || undefined,
-                note: values.note?.trim() || undefined,
-                idempotencyKey: crypto.randomUUID(),
-              });
-            })}
-          >
-            <FormGrid>
-              <FormField
-                control={receiveForm.control}
-                name="productId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{tCommon("product")}</FormLabel>
-                    <FormControl>
-                      <ProductSearchSelect
-                        value={receiveSelectionKey}
-                        options={productOptions}
-                        search={receiveProductSearch}
-                        onSearchChange={setReceiveProductSearch}
-                        placeholder={t("productSearchPlaceholder")}
-                        selectedLabel={t("selectedProduct")}
-                        noResultsLabel={t("productSearchEmpty")}
-                        loadingLabel={tCommon("loading")}
-                        stockLabel={t("onHand")}
-                        costLabel={t("unitCost")}
-                        priceLabel={t("price")}
-                        formatMoney={formatSelectedStoreMoney}
-                        disabled={!storeId}
-                        loading={receiveProductSearchQuery.isFetching}
-                        onProductSelect={(option) => {
-                          field.onChange(option.productId);
-                          receiveForm.setValue("variantId", option.variantId, {
-                            shouldValidate: true,
-                          });
-                          receiveForm.setValue("unitSelection", "BASE", { shouldValidate: true });
-                        }}
-                      />
-                    </FormControl>
-                    {!productOptions.length ? (
-                      <FormDescription>{t("noInventory")}</FormDescription>
-                    ) : null}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={receiveForm.control}
-                name="qtyReceived"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("receiveQty")}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        inputMode="numeric"
-                        placeholder={t("qtyPlaceholder")}
-                      />
-                    </FormControl>
-                    {receiveProduct ? (
-                      <FormDescription>
-                        {(() => {
-                          const baseQty = resolveBasePreview(
-                            receiveProduct,
-                            receiveUnitSelection,
-                            receiveQty,
-                          );
-                          if (baseQty === null) {
-                            return null;
-                          }
-                          return t("baseQtyPreview", {
-                            qty: formatNumber(baseQty, locale),
-                            unit: resolveUnitLabel(receiveProduct.baseUnit),
-                          });
-                        })()}
-                      </FormDescription>
-                    ) : null}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={receiveForm.control}
-                name="unitSelection"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("unit")}</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={!receiveProduct}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t("unitPlaceholder")} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {buildUnitOptions(receiveProduct, "receiving").map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={receiveForm.control}
-                name="unitCost"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("unitCost")}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        placeholder={t("unitCostPlaceholder")}
-                      />
-                    </FormControl>
-                    {receiveProduct &&
-                    Number.isFinite(Number(receiveUnitCost)) &&
-                    Number(receiveUnitCost) >= 0 ? (
-                      <FormDescription>
-                        {(() => {
-                          const baseQty = resolveBasePreview(
-                            receiveProduct,
-                            receiveUnitSelection,
-                            receiveQty,
-                          );
-                          if (baseQty === null) {
-                            return null;
-                          }
-                          return t("lineTotalPreview", {
-                            total: formatSelectedStoreMoney(baseQty * Number(receiveUnitCost)),
-                          });
-                        })()}
-                      </FormDescription>
-                    ) : null}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {trackExpiryLots ? (
-                <FormField
-                  control={receiveForm.control}
-                  name="expiryDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("expiryDate")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ) : null}
-              <FormField
-                control={receiveForm.control}
-                name="note"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>{t("receiveNote")}</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} rows={3} placeholder={t("notePlaceholder")} />
-                    </FormControl>
-                    <FormDescription>{t("noteHint")}</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </FormGrid>
-            <FormActions>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setActiveDialog(null)}
-              >
-                {tCommon("cancel")}
-              </Button>
-              <Button
-                type="submit"
-                className="w-full sm:w-auto"
-                disabled={receiveMutation.isLoading || !storeId || !receiveProductId}
-              >
-                {receiveMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <ReceiveIcon className="h-4 w-4" aria-hidden />
-                )}
-                {receiveMutation.isLoading ? tCommon("loading") : t("receiveSubmit")}
-              </Button>
-            </FormActions>
-          </form>
-        </Form>
-      </Modal>
 
       <Modal
         open={activeDialog === "bulkOnHand"}

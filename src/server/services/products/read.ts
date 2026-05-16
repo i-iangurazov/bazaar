@@ -1031,6 +1031,9 @@ export const getProductsBootstrap = async ({
     name: true,
     currencyCode: true,
     currencyRateKgsPerUnit: true,
+    enableSku: true,
+    enableBarcode: true,
+    enableSimilarProductCheck: true,
     printerSettings: { select: { id: true } },
   } satisfies Prisma.StoreSelect;
   const [stores, categories] = await Promise.all([
@@ -1431,12 +1434,15 @@ export const getProductStorePricing = async ({
       trackExpiryLots: true,
       currencyCode: true,
       currencyRateKgsPerUnit: true,
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
     },
     orderBy: { name: "asc" },
   });
   const storeIds = stores.map((store) => store.id);
 
-  const [overrides, cost, snapshots] = await Promise.all([
+  const [overrides, cost, snapshots, variants, variantSnapshots] = await Promise.all([
     prisma.storePrice.findMany({
       where: {
         organizationId,
@@ -1473,6 +1479,34 @@ export const getProductStorePricing = async ({
         onHand: true,
       },
     }),
+    prisma.productVariant.findMany({
+      where: {
+        productId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        attributes: true,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    prisma.inventorySnapshot.findMany({
+      where: {
+        productId,
+        variantId: { not: null },
+        storeId: { in: storeIds },
+        store: {
+          organizationId,
+        },
+      },
+      select: {
+        storeId: true,
+        variantId: true,
+        onHand: true,
+      },
+    }),
   ]);
 
   const basePrice = decimalToNumber(product.basePriceKgs);
@@ -1480,6 +1514,12 @@ export const getProductStorePricing = async ({
     overrides.map((override) => [override.storeId, Number(override.priceKgs)]),
   );
   const onHandByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]));
+  const variantOnHandByStore = new Map(
+    variantSnapshots.map((snapshot) => [
+      `${snapshot.storeId}:${snapshot.variantId ?? ""}`,
+      snapshot.onHand,
+    ]),
+  );
 
   return {
     basePriceKgs: basePrice,
@@ -1493,10 +1533,20 @@ export const getProductStorePricing = async ({
         trackExpiryLots: store.trackExpiryLots,
         currencyCode: store.currencyCode,
         currencyRateKgsPerUnit: Number(store.currencyRateKgsPerUnit),
+        enableSku: store.enableSku,
+        enableBarcode: store.enableBarcode,
+        enableSimilarProductCheck: store.enableSimilarProductCheck,
         effectivePriceKgs: effective,
         overridePriceKgs: override ?? null,
         priceOverridden: override !== undefined,
         onHand: onHandByStore.get(store.id) ?? 0,
+        variants: variants.map((variant) => ({
+          variantId: variant.id,
+          variantName: variant.name,
+          variantSku: variant.sku,
+          attributes: variant.attributes,
+          onHand: variantOnHandByStore.get(`${store.id}:${variant.id}`) ?? 0,
+        })),
       };
     }),
   };

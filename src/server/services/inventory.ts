@@ -72,6 +72,7 @@ export type ApplyStockMovementInput = {
   actorId?: string | null;
   organizationId?: string;
   allowNegativeStock?: boolean;
+  movementDate?: Date | null;
 };
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
@@ -157,6 +158,7 @@ export const applyStockMovement = async (
       referenceId: input.referenceId,
       note: input.note ?? undefined,
       createdById: input.actorId ?? undefined,
+      createdAt: input.movementDate ?? undefined,
     },
   });
 
@@ -259,7 +261,11 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
 
   eventBus.publish({
     type: "inventory.updated",
-    payload: { storeId: input.storeId, productId: input.productId, variantId: input.variantId ?? null },
+    payload: {
+      storeId: input.storeId,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+    },
   });
 
   logger.info(
@@ -278,9 +284,7 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
   return result;
 };
 
-export const bulkSetOnHand = async (
-  input: BulkSetOnHandInput,
-): Promise<BulkSetOnHandResult> => {
+export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetOnHandResult> => {
   const logger = getLogger(input.requestId);
   const snapshotIds = Array.from(new Set(input.snapshotIds.filter(Boolean)));
   if (!snapshotIds.length) {
@@ -556,7 +560,11 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
 
   eventBus.publish({
     type: "inventory.updated",
-    payload: { storeId: input.storeId, productId: input.productId, variantId: input.variantId ?? null },
+    payload: {
+      storeId: input.storeId,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+    },
   });
 
   logger.info(
@@ -571,6 +579,291 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
     onHand: result.onHand,
     requestId: input.requestId,
   });
+
+  return result;
+};
+
+export type StockReceivingLineInput = {
+  productId: string;
+  variantId?: string | null;
+  quantity: number;
+  unitCost: number;
+};
+
+export type StockReceivingInput = {
+  storeId: string;
+  date?: Date | null;
+  supplierName?: string | null;
+  note?: string | null;
+  referenceNumber?: string | null;
+  lines: StockReceivingLineInput[];
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+  idempotencyKey: string;
+};
+
+export type StockReceivingResult = {
+  receivingId: string;
+  storeId: string;
+  lineCount: number;
+  totalQuantity: number;
+  totalCostKgs: number;
+  lines: Array<{
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    unitCost: number;
+    snapshotId: string;
+    onHand: number;
+    movementId: string;
+  }>;
+};
+
+const buildReceivingMovementNote = (input: {
+  referenceNumber?: string | null;
+  supplierName?: string | null;
+  note?: string | null;
+}) =>
+  [
+    input.referenceNumber?.trim()
+      ? `Оприходование ${input.referenceNumber.trim()}`
+      : "Оприходование",
+    input.supplierName?.trim() ? `Поставщик: ${input.supplierName.trim()}` : null,
+    input.note?.trim() ? input.note.trim() : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
+export const postStockReceiving = async (
+  input: StockReceivingInput,
+): Promise<StockReceivingResult> => {
+  const logger = getLogger(input.requestId);
+  if (!input.lines.length) {
+    throw new AppError("receivingLinesRequired", "BAD_REQUEST", 400);
+  }
+
+  const receivingId = randomUUID();
+  const movementNote = buildReceivingMovementNote(input);
+  const changedItems: Array<{
+    storeId: string;
+    productId: string;
+    variantId: string | null;
+    onHand: number;
+  }> = [];
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: receipt } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "inventory.stockReceiving",
+        userId: input.actorId,
+      },
+      async () => {
+        const store = await tx.store.findFirst({
+          where: { id: input.storeId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+        if (!store) {
+          throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+        }
+
+        const normalizedLines = input.lines.map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId ?? null,
+          variantKey: resolveVariantKey(line.variantId),
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+        }));
+        const lineKeys = new Set<string>();
+        for (const line of normalizedLines) {
+          const key = `${line.productId}:${line.variantKey}`;
+          if (lineKeys.has(key)) {
+            throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+          }
+          lineKeys.add(key);
+          if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+            throw new AppError("invalidReceivingQuantity", "BAD_REQUEST", 400);
+          }
+          if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+            throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+          }
+        }
+
+        const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
+        const products = await tx.product.findMany({
+          where: {
+            id: { in: productIds },
+            organizationId: input.organizationId,
+            isDeleted: false,
+          },
+          select: { id: true },
+        });
+        if (products.length !== productIds.length) {
+          throw new AppError("invalidProducts", "FORBIDDEN", 403);
+        }
+
+        const variantIds = Array.from(
+          new Set(normalizedLines.map((line) => line.variantId).filter(Boolean) as string[]),
+        );
+        if (variantIds.length) {
+          const variants = await tx.productVariant.findMany({
+            where: {
+              id: { in: variantIds },
+              isActive: true,
+              product: { organizationId: input.organizationId, isDeleted: false },
+            },
+            select: { id: true, productId: true },
+          });
+          const variantProductMap = new Map(
+            variants.map((variant) => [variant.id, variant.productId]),
+          );
+          for (const line of normalizedLines) {
+            if (line.variantId && variantProductMap.get(line.variantId) !== line.productId) {
+              throw new AppError("variantMismatch", "BAD_REQUEST", 400);
+            }
+          }
+          if (variants.length !== variantIds.length) {
+            throw new AppError("variantNotFound", "NOT_FOUND", 404);
+          }
+        }
+
+        const [storeProducts, snapshots] = await Promise.all([
+          tx.storeProduct.findMany({
+            where: {
+              organizationId: input.organizationId,
+              storeId: input.storeId,
+              productId: { in: productIds },
+              isActive: true,
+            },
+            select: { productId: true },
+          }),
+          tx.inventorySnapshot.findMany({
+            where: {
+              storeId: input.storeId,
+              productId: { in: productIds },
+            },
+            select: { productId: true, variantKey: true },
+          }),
+        ]);
+        const assignedProductIds = new Set(storeProducts.map((row) => row.productId));
+        const snapshotKeys = new Set(
+          snapshots.map((snapshot) => `${snapshot.productId}:${snapshot.variantKey}`),
+        );
+        for (const line of normalizedLines) {
+          if (
+            !assignedProductIds.has(line.productId) &&
+            !snapshotKeys.has(`${line.productId}:${line.variantKey}`)
+          ) {
+            throw new AppError("productNotAvailableInStore", "FORBIDDEN", 403);
+          }
+        }
+
+        const lineResults: StockReceivingResult["lines"] = [];
+        for (const line of normalizedLines) {
+          const before = await tx.inventorySnapshot.findUnique({
+            where: {
+              storeId_productId_variantKey: {
+                storeId: input.storeId,
+                productId: line.productId,
+                variantKey: line.variantKey,
+              },
+            },
+          });
+
+          const { snapshot, movementId } = await applyStockMovement(tx, {
+            storeId: input.storeId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyDelta: line.quantity,
+            type: StockMovementType.RECEIVE,
+            referenceType: "STOCK_RECEIVING",
+            referenceId: receivingId,
+            note: movementNote,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+            movementDate: input.date ?? null,
+          });
+
+          await updateProductCost(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyReceived: line.quantity,
+            unitCost: line.unitCost,
+          });
+
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "INVENTORY_RECEIVE",
+            entity: "InventorySnapshot",
+            entityId: snapshot.id,
+            before: before ? toJson(before) : null,
+            after: toJson(snapshot),
+            requestId: input.requestId,
+          });
+
+          changedItems.push({
+            storeId: input.storeId,
+            productId: line.productId,
+            variantId: line.variantId,
+            onHand: snapshot.onHand,
+          });
+          lineResults.push({
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: line.quantity,
+            unitCost: line.unitCost,
+            snapshotId: snapshot.id,
+            onHand: snapshot.onHand,
+            movementId,
+          });
+        }
+
+        return {
+          receivingId,
+          storeId: input.storeId,
+          lineCount: lineResults.length,
+          totalQuantity: lineResults.reduce((sum, line) => sum + line.quantity, 0),
+          totalCostKgs: lineResults.reduce((sum, line) => sum + line.quantity * line.unitCost, 0),
+          lines: lineResults,
+        };
+      },
+    );
+
+    return receipt as StockReceivingResult;
+  });
+
+  changedItems.forEach((item) => {
+    eventBus.publish({
+      type: "inventory.updated",
+      payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
+    });
+  });
+
+  await Promise.all(
+    changedItems.map((item) =>
+      maybeEmitLowStock({
+        storeId: item.storeId,
+        productId: item.productId,
+        variantId: item.variantId,
+        onHand: item.onHand,
+        requestId: input.requestId,
+      }),
+    ),
+  );
+
+  logger.info(
+    {
+      storeId: input.storeId,
+      receivingId: result.receivingId,
+      lineCount: result.lineCount,
+      totalQuantity: result.totalQuantity,
+    },
+    "stock receiving posted",
+  );
 
   return result;
 };
@@ -739,11 +1032,19 @@ export const transferStock = async (input: TransferStockInput) => {
 
   eventBus.publish({
     type: "inventory.updated",
-    payload: { storeId: input.fromStoreId, productId: input.productId, variantId: input.variantId ?? null },
+    payload: {
+      storeId: input.fromStoreId,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+    },
   });
   eventBus.publish({
     type: "inventory.updated",
-    payload: { storeId: input.toStoreId, productId: input.productId, variantId: input.variantId ?? null },
+    payload: {
+      storeId: input.toStoreId,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+    },
   });
 
   logger.info(
@@ -874,8 +1175,7 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
       }
 
       const before = snapshotMap.get(snapshotKey) ?? null;
-      const resolvedVariantId =
-        before?.variantId ?? (variantKey === "BASE" ? null : variantKey);
+      const resolvedVariantId = before?.variantId ?? (variantKey === "BASE" ? null : variantKey);
       const updated = await tx.inventorySnapshot.upsert({
         where: {
           storeId_productId_variantKey: {

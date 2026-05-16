@@ -13,14 +13,17 @@ import {
   DeleteIcon,
   DownloadIcon,
   EmptyIcon,
+  MenuIcon,
   PrintIcon,
   SearchIcon,
   StatusWarningIcon,
   TagIcon,
 } from "@/components/icons";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PopoverSurface } from "@/components/ui/popover";
 import {
@@ -105,6 +108,8 @@ const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tAppHeader = useTranslations("appHeader");
+  const tBreadcrumbs = useTranslations("breadcrumbs");
   const locale = useLocale();
   const searchParams = useSearchParams();
   const trpcUtils = trpc.useUtils();
@@ -136,6 +141,7 @@ const PosSellPage = () => {
     "idle" | "printing" | "ready" | "blocked" | "failed"
   >("idle");
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
+  const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
   const paymentsSectionRef = useRef<HTMLDivElement | null>(null);
   const firstPaymentAmountRef = useRef<HTMLInputElement | null>(null);
@@ -150,6 +156,8 @@ const PosSellPage = () => {
 
   const registersQuery = trpc.pos.registers.list.useQuery();
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
+  const enableSku = selectedRegister?.store.enableSku ?? true;
+  const enableBarcode = selectedRegister?.store.enableBarcode ?? true;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -171,6 +179,23 @@ const PosSellPage = () => {
     }
     setRegisterId(registersQuery.data[0].id);
   }, [registerId, registersQuery.data]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      setIsPhoneScreen(false);
+      return;
+    }
+
+    const phoneQuery = window.matchMedia("(max-width: 767px)");
+    const updatePhoneScreen = () => setIsPhoneScreen(phoneQuery.matches);
+
+    updatePhoneScreen();
+    phoneQuery.addEventListener("change", updatePhoneScreen);
+
+    return () => {
+      phoneQuery.removeEventListener("change", updatePhoneScreen);
+    };
+  }, []);
 
   const shiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
@@ -1276,7 +1301,7 @@ const PosSellPage = () => {
     };
   };
 
-  return (
+  const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
         <Button
@@ -1492,7 +1517,7 @@ const PosSellPage = () => {
               <div className="mx-4 mt-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
                 <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {t("sell.draftDetectedHint", { number: activeDraft.number })}
+                  {t("sell.draftDetectedHint", { number: activeDraft?.number ?? "" })}
                 </p>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Button
@@ -1550,6 +1575,12 @@ const PosSellPage = () => {
                     const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
                     const stockQty = product.onHandQty ?? null;
                     const barcode = product.barcodes?.[0]?.value ?? null;
+                    const productIdentity = [
+                      enableSku ? product.sku : "",
+                      enableBarcode && barcode ? barcode : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
                     const primaryImage = product.images[0]?.url ?? product.photoUrl;
                     const stock = stockMeta(stockQty);
                     const priceMissing = priceKgs === null;
@@ -1605,10 +1636,11 @@ const PosSellPage = () => {
                             <p className="line-clamp-2 min-h-10 text-sm font-medium text-foreground">
                               {product.name}
                             </p>
-                            <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">
-                              {product.sku}
-                              {barcode ? ` · ${barcode}` : ""}
-                            </p>
+                            {productIdentity ? (
+                              <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">
+                                {productIdentity}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="border-t border-border/70 pt-3">
                             <p
@@ -1851,9 +1883,11 @@ const PosSellPage = () => {
                                       {line.product.name}
                                       {line.product.isBundle ? ` · ${t("sell.bundle")}` : ""}
                                     </p>
-                                    <p className="truncate text-[11px] leading-4 text-muted-foreground">
-                                      {line.product.sku}
-                                    </p>
+                                    {enableSku ? (
+                                      <p className="truncate text-[11px] leading-4 text-muted-foreground">
+                                        {line.product.sku}
+                                      </p>
+                                    ) : null}
                                   </div>
                                   <Button
                                     variant="ghost"
@@ -2231,6 +2265,673 @@ const PosSellPage = () => {
       )}
     </div>
   );
+
+  // Active phone renderer restored from 4e48e65:src/app/(app)/pos/sell/page.tsx and wired to current POS actions.
+  const MobileLegacyPosSaleView = () => (
+    <div className="min-h-screen overflow-x-hidden bg-muted/40 text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background text-foreground shadow-sm">
+        <div className="flex h-14 items-center justify-between gap-3 px-3">
+          <Button
+            asChild
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 border border-border bg-card text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground"
+            aria-label={tCommon("openMenu")}
+          >
+            <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
+              <MenuIcon className="h-5 w-5" aria-hidden />
+            </Link>
+          </Button>
+          <LanguageSwitcher
+            compact
+            className="border-border bg-card text-foreground shadow-none"
+            inactiveButtonClassName="text-muted-foreground hover:text-foreground"
+            activeButtonClassName="bg-primary text-primary-foreground"
+          />
+        </div>
+        <div className="border-t border-border px-3 py-3">
+          <div className="flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-foreground shadow-sm">
+            <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <ScanInput
+              context="pos"
+              value={lineSearch}
+              onValueChange={setLineSearch}
+              placeholder={tAppHeader("scanPlaceholder")}
+              ariaLabel={tAppHeader("scanLabel")}
+              onResolved={handleScanResolved}
+              supportsTabSubmit
+              showDropdown={false}
+              disabled={!hasOpenShift}
+              className="min-w-0 flex-1"
+              inputClassName="h-10 border-0 bg-transparent px-0 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+            />
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-md space-y-4 px-3 py-4">
+        <section className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">
+            {tBreadcrumbs("home")} / {t("title")} / {t("entry.sell")}
+          </p>
+          <h1 className="text-2xl font-semibold tracking-normal text-foreground">
+            {t("sell.title")}
+          </h1>
+          <p className="text-sm leading-5 text-muted-foreground">{t("sell.subtitle")}</p>
+        </section>
+
+        <Card className="rounded-md border-border bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{t("sell.registerAndShift")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">{t("entry.register")}</p>
+              <Select value={registerId} onValueChange={setRegisterId}>
+                <SelectTrigger aria-label={t("entry.register")} className="h-11">
+                  <SelectValue placeholder={t("entry.selectRegister")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(registersQuery.data ?? []).map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.store.name} · {item.name} ({item.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={hasOpenShift ? "success" : "warning"}>
+                {hasOpenShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
+              </Badge>
+              {shiftOpenedLabel ? (
+                <span className="text-xs text-muted-foreground">{shiftOpenedLabel}</span>
+              ) : null}
+              {!hasOpenShift && registerId ? (
+                <Button variant="secondary" asChild className="h-9">
+                  <Link href={`/pos?registerId=${registerId}`}>{t("sell.openShiftFirst")}</Link>
+                </Button>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        {showCompletedSale && lastCompletedSale ? (
+          <Card className="rounded-md border-success/30 bg-success/10 shadow-sm">
+            <CardContent className="space-y-3 p-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {t("sell.completeSuccess", { number: lastCompletedSale.number })}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{receiptStatusLabel}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10"
+                  onClick={() => {
+                    void handleReceiptPdf("print", "precheck");
+                  }}
+                  disabled={Boolean(receiptAction)}
+                >
+                  {receiptAction?.mode === "print" && receiptAction.kind === "precheck" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("sell.printPrecheck")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10"
+                  onClick={() => {
+                    void handleReceiptPdf("download", "precheck");
+                  }}
+                  disabled={Boolean(receiptAction)}
+                >
+                  {receiptAction?.mode === "download" && receiptAction.kind === "precheck" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <DownloadIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("sell.downloadPrecheck")}
+                </Button>
+              </div>
+              <Button type="button" className="h-11 w-full" onClick={handleStartNewSale}>
+                {t("sell.newSale")}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <Card className="rounded-md border-border bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{t("sell.saleTitle")}</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {sale?.number ? `${t("sell.saleNumber")}: ${sale.number}` : checkoutSheetSummary}
+                </p>
+              </div>
+              {saleId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 shrink-0"
+                  onClick={handleDiscardSale}
+                  disabled={isLineBusy || completeMutation.isLoading}
+                >
+                  {cancelDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                  {t("sell.discardSale")}
+                </Button>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {activeDraft && !saleId ? (
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("sell.draftDetectedHint", { number: activeDraft.number })}
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    className="h-10"
+                    onClick={handleResumeActiveDraft}
+                    disabled={isLineBusy || completeMutation.isLoading}
+                  >
+                    {t("sell.resumeDraft")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-10"
+                    onClick={() => void handleDiscardActiveDraft()}
+                    disabled={isLineBusy || completeMutation.isLoading}
+                  >
+                    {cancelDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {t("sell.discardSale")}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">{t("sell.addItem")}</p>
+              <div className="flex min-h-11 items-center gap-2 rounded-md border border-input bg-background px-3">
+                <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <ScanInput
+                  ref={lineSearchInputRef}
+                  context="pos"
+                  value={lineSearch}
+                  onValueChange={setLineSearch}
+                  placeholder={t("sell.searchProduct")}
+                  ariaLabel={t("sell.searchProduct")}
+                  onResolved={handleScanResolved}
+                  supportsTabSubmit
+                  autoFocus={hasOpenShift}
+                  showDropdown={false}
+                  disabled={!hasOpenShift}
+                  className="min-w-0 flex-1"
+                  inputClassName="h-10 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+                />
+              </div>
+              {!hasSearchTerm ? (
+                <p className="text-xs text-muted-foreground">{t("sell.searchHint")}</p>
+              ) : null}
+            </div>
+
+            {catalogProductsQuery.error ? (
+              <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                {translateError(tErrors, catalogProductsQuery.error)}
+              </div>
+            ) : null}
+
+            {hasSearchTerm && productGridLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
+            ) : null}
+
+            {hasSearchTerm && !productGridLoading && !visibleProducts.length ? (
+              <p className="text-xs text-muted-foreground">{t("sell.noSearchResults")}</p>
+            ) : null}
+
+            {hasSearchTerm && visibleProducts.length ? (
+              <div className="space-y-2">
+                {visibleProducts.slice(0, 12).map((product) => {
+                  const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
+                  const barcode = product.barcodes?.[0]?.value ?? null;
+                  const primaryImage = product.images[0]?.url ?? product.photoUrl;
+                  const productIdentity = [
+                    enableSku ? product.sku : "",
+                    enableBarcode && barcode ? barcode : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  const priceMissing = priceKgs === null;
+
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => {
+                        if (priceMissing) {
+                          toast({
+                            variant: "error",
+                            description: t("sell.priceMissingCannotSell"),
+                          });
+                          return;
+                        }
+                        blurLineSearchInput();
+                        void handleAddLine(product.id);
+                      }}
+                      disabled={!hasOpenShift || isLineBusy || completeMutation.isLoading}
+                      className="grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-background px-3 py-3 text-left text-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span className="grid h-14 w-14 place-items-center overflow-hidden rounded-md border border-border bg-muted/30">
+                        {primaryImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={primaryImage}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <EmptyIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground">
+                          {product.name}
+                        </span>
+                        {productIdentity ? (
+                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                            {productIdentity}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 text-right text-sm font-semibold text-foreground">
+                        {priceMissing ? t("sell.priceMissing") : formatSaleMoney(priceKgs)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">{t("sell.lines")}</p>
+              {saleId && saleQuery.error ? (
+                <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                  {translateError(tErrors, saleQuery.error)}
+                </div>
+              ) : null}
+              {saleId && saleQuery.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner className="h-4 w-4" />
+                  {tCommon("loading")}
+                </div>
+              ) : null}
+              {!saleId || (!hasCartLines && !saleQuery.isLoading && !saleQuery.error) ? (
+                <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  {t("sell.noLinesYet")}
+                </div>
+              ) : null}
+
+              {hasCartLines ? (
+                <div className="space-y-2">
+                  {saleLines.map((line) => {
+                    const lineDiscountKgs = lineDiscountById.get(line.id) ?? 0;
+                    const lineNetTotalKgs = roundMoney(
+                      Math.max(0, line.lineTotalKgs - lineDiscountKgs),
+                    );
+
+                    return (
+                      <div
+                        key={line.id}
+                        className="space-y-3 rounded-md border border-border bg-background p-3 text-sm"
+                      >
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium leading-snug text-foreground">
+                              {line.product.name}
+                              {line.product.isBundle ? ` · ${t("sell.bundle")}` : ""}
+                            </p>
+                            {enableSku ? (
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                                {line.product.sku}
+                              </p>
+                            ) : null}
+                            <label className="mt-2 block space-y-1">
+                              <span className="block text-xs font-medium text-muted-foreground">
+                                {t("sell.cartPrice")}
+                              </span>
+                              <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                                <Input
+                                  key={`${line.id}:mobile-price:${line.unitPriceKgs}`}
+                                  defaultValue={formatSaleMoneyDraft(line.unitPriceKgs)}
+                                  aria-label={t("sell.unitPrice")}
+                                  inputMode="decimal"
+                                  className="h-10 text-right"
+                                  onFocus={(event) => event.currentTarget.select()}
+                                  onBlur={(event) =>
+                                    handleUpdateLinePrice(
+                                      line.id,
+                                      event.currentTarget.value,
+                                      line.unitPriceKgs,
+                                    )
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.currentTarget.blur();
+                                    }
+                                    if (event.key === "Escape") {
+                                      event.currentTarget.value = formatSaleMoneyDraft(
+                                        line.unitPriceKgs,
+                                      );
+                                      event.currentTarget.blur();
+                                    }
+                                  }}
+                                  disabled={isLineBusy || completeMutation.isLoading}
+                                />
+                                <span className="flex h-10 items-center justify-center rounded-md border border-input bg-muted/20 px-2 text-xs font-medium text-muted-foreground">
+                                  {discountCurrencyCode}
+                                </span>
+                              </div>
+                            </label>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleRemoveLine(line.id)}
+                            disabled={isLineBusy || completeMutation.isLoading}
+                            aria-label={tCommon("delete")}
+                          >
+                            <DeleteIcon className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </div>
+
+                        {saleMarkingEnabled && line.product.complianceFlags?.requiresMarking ? (
+                          <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
+                            <p className="text-xs text-muted-foreground">
+                              {t("sell.markingLabel")}
+                              {saleMarkingMode === "REQUIRED_ON_SALE"
+                                ? ` · ${t("sell.markingRequired")}`
+                                : ""}
+                            </p>
+                            <Input
+                              value={markingInput[line.id] ?? ""}
+                              onChange={(event) =>
+                                setMarkingInput((current) => ({
+                                  ...current,
+                                  [line.id]: event.target.value,
+                                }))
+                              }
+                              placeholder={t("sell.markingPlaceholder")}
+                              className="h-10"
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] text-muted-foreground">
+                                {t("sell.markingCapturedCount", {
+                                  count: line.markingCodes.length,
+                                })}
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleSaveMarkingCodes(line.id)}
+                                disabled={isLineBusy || completeMutation.isLoading}
+                              >
+                                {t("sell.markingSave")}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+                          <label className="space-y-1">
+                            <span className="block text-xs font-medium text-muted-foreground">
+                              {t("sell.cartQty")}
+                            </span>
+                            <Input
+                              key={`${line.id}:${line.qty}`}
+                              defaultValue={String(line.qty)}
+                              onBlur={(event) => handleUpdateQty(line.id, event.target.value)}
+                              className="h-11 w-24 text-right"
+                              inputMode="numeric"
+                              disabled={isLineBusy || completeMutation.isLoading}
+                            />
+                          </label>
+                          <div className="text-right">
+                            {lineDiscountKgs > 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                {t("sell.discount")}: {formatSaleMoney(lineDiscountKgs)}
+                              </p>
+                            ) : null}
+                            <p className="text-base font-semibold text-foreground">
+                              {formatSaleMoney(lineNetTotalKgs)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            {saleId && sale && hasCartLines ? (
+              <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("sell.subtotal")}</span>
+                  <span className="font-medium text-foreground">
+                    {formatSaleMoney(sale.subtotalKgs)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    {t("sell.saleDiscount")}
+                  </label>
+                  <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                    <Input
+                      value={discountDraft}
+                      onChange={(event) => setDiscountDraft(event.target.value)}
+                      onBlur={() => void handleUpdateDiscount()}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      aria-label={t("sell.saleDiscount")}
+                      placeholder={t("sell.discountPlaceholder")}
+                      inputMode="decimal"
+                      disabled={isLineBusy || completeMutation.isLoading}
+                      className="h-10 text-right"
+                    />
+                    <span className="flex h-10 items-center justify-center rounded-md border border-input bg-background px-2 text-xs font-medium text-muted-foreground">
+                      {discountCurrencyCode}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-10 w-full"
+                    onClick={() => void handleUpdateDiscount()}
+                    disabled={isLineBusy || completeMutation.isLoading}
+                  >
+                    {updateDiscountMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {t("sell.applyDiscount")}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("sell.discount")}</span>
+                  <span className="font-medium text-foreground">
+                    {formatSaleMoney(sale.discountKgs ?? 0)}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-md border border-border bg-muted/20 p-3 text-sm font-semibold text-foreground">
+              {t("sell.orderTotal")}: {sale ? formatSaleMoney(sale.totalKgs) : formatSaleMoney(0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-md border-border bg-card shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{t("sell.paymentsTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div ref={paymentsSectionRef} />
+            {saleId && sale ? (
+              <>
+                <div className="space-y-2">
+                  {payments.map((payment, index) => (
+                    <div key={`${index}-${payment.method}`} className="space-y-2">
+                      <div className="grid grid-cols-[1fr_1fr_44px] gap-2">
+                        <Select
+                          value={payment.method}
+                          onValueChange={(value) =>
+                            setPayments((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? { ...item, method: value as PosPaymentMethod }
+                                  : item,
+                              ),
+                            )
+                          }
+                        >
+                          <SelectTrigger aria-label={t("sell.paymentMethod")} className="h-11">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={PosPaymentMethod.CASH}>
+                              {t("payments.cash")}
+                            </SelectItem>
+                            <SelectItem value={PosPaymentMethod.CARD}>
+                              {t("payments.card")}
+                            </SelectItem>
+                            <SelectItem value={PosPaymentMethod.TRANSFER}>
+                              {t("payments.transfer")}
+                            </SelectItem>
+                            <SelectItem value={PosPaymentMethod.OTHER}>
+                              {t("payments.other")}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          ref={index === 0 ? firstPaymentAmountRef : undefined}
+                          value={payment.amount}
+                          onChange={(event) =>
+                            setPayments((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? { ...item, amount: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                          placeholder={t("sell.paymentAmount")}
+                          inputMode="decimal"
+                          className="h-11"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="icon"
+                          className="h-11 w-11"
+                          onClick={() => removePaymentRow(index)}
+                          disabled={
+                            payments.length <= 1 || isLineBusy || completeMutation.isLoading
+                          }
+                          aria-label={tCommon("delete")}
+                        >
+                          <DeleteIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-10"
+                    onClick={addPaymentRow}
+                    disabled={isLineBusy || completeMutation.isLoading}
+                  >
+                    {t("sell.addPayment")}
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    {t("sell.paymentTotal")}: {paymentTotalLabel}
+                  </p>
+                </div>
+
+                <div className="rounded-md border border-border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{t("sell.sellInDebt")}</p>
+                      <p className="text-xs text-muted-foreground">{t("sell.sellInDebtHint")}</p>
+                    </div>
+                    <Switch checked={sellInDebt} onCheckedChange={handleSellInDebtChange} />
+                  </div>
+                  {sellInDebt ? (
+                    <div className="mt-3 space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        {t("sell.debtFullName")}
+                      </label>
+                      <Input
+                        value={debtFullName}
+                        onChange={(event) => setDebtFullName(event.target.value)}
+                        placeholder={t("sell.debtFullNamePlaceholder")}
+                        disabled={isLineBusy || completeMutation.isLoading}
+                        className="h-11"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <Button
+                  className="h-12 w-full bg-success text-base font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
+                  onClick={handleComplete}
+                  disabled={completeDisabled}
+                >
+                  {completeMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                  {sellInDebt ? t("sell.completeDebtSale") : t("sell.completeSale")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">{t("sell.startByAddingProduct")}</p>
+                <Button className="h-12 w-full" disabled>
+                  {t("sell.completeSale")}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
+
+  if (isPhoneScreen === null) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  return isPhoneScreen ? MobileLegacyPosSaleView() : DesktopPosSaleView();
 };
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;

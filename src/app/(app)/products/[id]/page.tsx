@@ -73,11 +73,7 @@ import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
-import {
-  getQzTrayBinding,
-  printPdfBlobViaQzTray,
-  qzTrayErrorMessageKey,
-} from "@/lib/qzTrayPrint";
+import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import {
   buildSavedLabelPrintValues,
   resolveLabelPrintFlowAction,
@@ -128,6 +124,7 @@ const ProductDetailPage = () => {
   const [basePriceDraft, setBasePriceDraft] = useState("");
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [storeOnHandDrafts, setStoreOnHandDrafts] = useState<Record<string, string>>({});
+  const [variantOnHandDrafts, setVariantOnHandDrafts] = useState<Record<string, string>>({});
   const [selectedComponent, setSelectedComponent] = useState<{
     id: string;
     name: string;
@@ -136,8 +133,10 @@ const ProductDetailPage = () => {
   const [assembleOpen, setAssembleOpen] = useState(false);
   const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
   const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
+  const [savingVariantOnHandKey, setSavingVariantOnHandKey] = useState<string | null>(null);
   const [labelSetupOpen, setLabelSetupOpen] = useState(false);
   const [labelAction, setLabelAction] = useState<"print" | "download" | null>(null);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const basePriceAutofillRef = useRef<string | null>(null);
 
   const productQuery = trpc.products.getById.useQuery(
@@ -175,6 +174,15 @@ const ProductDetailPage = () => {
     [storePricingQuery.data?.stores],
   );
   const selectedPricingStore = assignedStoreRows.find((store) => store.storeId === pricingStoreId);
+  const selectedSettingsStore = selectedPricingStore ?? assignedStoreRows[0] ?? null;
+  const productSettingsLoaded = storePricingQuery.isSuccess;
+  const enableSku = productSettingsLoaded ? (selectedSettingsStore?.enableSku ?? true) : false;
+  const enableBarcode = productSettingsLoaded
+    ? (selectedSettingsStore?.enableBarcode ?? true)
+    : false;
+  const enableSimilarProductCheck = productSettingsLoaded
+    ? (selectedSettingsStore?.enableSimilarProductCheck ?? true)
+    : true;
   const selectedPricingCurrencyCode = normalizeCurrencyCode(selectedPricingStore?.currencyCode);
   const selectedPricingCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
     Number(selectedPricingStore?.currencyRateKgsPerUnit ?? 1),
@@ -276,6 +284,7 @@ const ProductDetailPage = () => {
   });
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: (result) => {
+      setDuplicateDialogOpen(false);
       toast({
         variant: "success",
         description: result.copiedBarcodes
@@ -400,8 +409,17 @@ const ProductDetailPage = () => {
     const onHandDrafts = Object.fromEntries(
       storePricingQuery.data.stores.map((storeRow) => [storeRow.storeId, String(storeRow.onHand)]),
     );
+    const variantDrafts = Object.fromEntries(
+      storePricingQuery.data.stores.flatMap((storeRow) =>
+        storeRow.variants.map((variant) => [
+          `${storeRow.storeId}:${variant.variantId}`,
+          String(variant.onHand),
+        ]),
+      ),
+    );
     setStorePriceDrafts(priceDrafts);
     setStoreOnHandDrafts(onHandDrafts);
+    setVariantOnHandDrafts(variantDrafts);
   }, [convertStoreMoneyFromKgs, formatDraftMoneyAmount, storePricingQuery.data]);
 
   useEffect(() => {
@@ -729,9 +747,64 @@ const ProductDetailPage = () => {
     }
   };
 
+  const handleSaveStoreVariantOnHand = async (
+    storeId: string,
+    variantId: string,
+    currentOnHand: number,
+  ) => {
+    const key = `${storeId}:${variantId}`;
+    const raw = variantOnHandDrafts[key]?.trim() ?? "";
+    const targetOnHand = Number(raw);
+    if (!raw.length || !Number.isFinite(targetOnHand) || !Number.isInteger(targetOnHand)) {
+      toast({ variant: "error", description: tErrors("validationError") });
+      return;
+    }
+    if (targetOnHand === currentOnHand) {
+      return;
+    }
+    setSavingVariantOnHandKey(key);
+    try {
+      await adjustStockMutation.mutateAsync({
+        storeId,
+        productId,
+        variantId,
+        qtyDelta: targetOnHand - currentOnHand,
+        reason: tInventory("stockAdjustment"),
+        idempotencyKey: createIdempotencyKey(),
+      });
+    } finally {
+      setSavingVariantOnHandKey(null);
+    }
+  };
+
+  const resolveVariantLabel = (variant: {
+    variantName?: string | null;
+    variantSku?: string | null;
+    attributes?: unknown;
+  }) => {
+    if (variant.variantName?.trim()) {
+      return variant.variantName;
+    }
+    if (enableSku && variant.variantSku?.trim()) {
+      return variant.variantSku;
+    }
+    if (variant.attributes && typeof variant.attributes === "object") {
+      const values = Object.values(variant.attributes as Record<string, unknown>)
+        .map((value) => (Array.isArray(value) ? value.join(", ") : String(value ?? "")))
+        .filter(Boolean);
+      if (values.length) {
+        return values.join(" / ");
+      }
+    }
+    return t("variantName");
+  };
+
   const handleProductLabelPdf = async (mode: "print" | "download") => {
     const product = productQuery.data;
     if (!product || labelAction) {
+      return;
+    }
+    if (!enableBarcode) {
       return;
     }
     const settings = labelPrintProfileQuery.data?.settings;
@@ -834,7 +907,7 @@ const ProductDetailPage = () => {
     }
   };
 
-  if (productQuery.isLoading || !formValues) {
+  if (productQuery.isLoading || storePricingQuery.isLoading || !formValues) {
     return (
       <div>
         <PageHeader title={t("editTitle")} subtitle={tCommon("loading")} />
@@ -872,18 +945,20 @@ const ProductDetailPage = () => {
         action={
           canManageProducts ? (
             <>
-              <Button
-                className="w-full sm:w-auto"
-                onClick={() => void handleProductLabelPdf("print")}
-                disabled={Boolean(labelAction)}
-              >
-                {labelAction === "print" ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <PrintIcon className="h-4 w-4" aria-hidden />
-                )}
-                {t("printLabels")}
-              </Button>
+              {enableBarcode ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleProductLabelPdf("print")}
+                  disabled={Boolean(labelAction)}
+                >
+                  {labelAction === "print" ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <PrintIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {t("printLabels")}
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="secondary" className="w-full sm:w-auto">
@@ -892,31 +967,35 @@ const ProductDetailPage = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[240px]">
-                  <DropdownMenuItem
-                    disabled={Boolean(labelAction)}
-                    onSelect={() => void handleProductLabelPdf("download")}
-                  >
-                    {labelAction === "download" ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                    )}
-                    {t("printDownload")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings/printing">
-                      <PrintIcon className="h-4 w-4" aria-hidden />
-                      {t("changePrintSettings")}
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
+                  {enableBarcode ? (
+                    <>
+                      <DropdownMenuItem
+                        disabled={Boolean(labelAction)}
+                        onSelect={() => void handleProductLabelPdf("download")}
+                      >
+                        {labelAction === "download" ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : (
+                          <DownloadIcon className="h-4 w-4" aria-hidden />
+                        )}
+                        {t("printDownload")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/settings/printing">
+                          <PrintIcon className="h-4 w-4" aria-hidden />
+                          {t("changePrintSettings")}
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  ) : null}
                   <DropdownMenuItem onSelect={() => setMovementsOpen(true)}>
                     <ViewIcon className="h-4 w-4" aria-hidden />
                     {tInventory("viewMovements")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={duplicateMutation.isLoading}
-                    onSelect={() => duplicateMutation.mutate({ productId })}
+                    onSelect={() => setDuplicateDialogOpen(true)}
                   >
                     {duplicateMutation.isLoading ? (
                       <Spinner className="h-4 w-4" />
@@ -972,9 +1051,11 @@ const ProductDetailPage = () => {
           </div>
           <div className="space-y-4">
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {productQuery.data.sku}
-              </p>
+              {enableSku ? (
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {productQuery.data.sku}
+                </p>
+              ) : null}
               <h2 className="text-2xl font-semibold leading-tight text-foreground sm:text-3xl">
                 {productQuery.data.name}
               </h2>
@@ -1027,7 +1108,7 @@ const ProductDetailPage = () => {
 
       <div className="mb-6">
         <ProductForm
-          key={`${productId}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}`}
+          key={`${productId}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
           initialValues={formValues}
           onSubmit={(values) =>
             updateMutation.mutate({
@@ -1046,6 +1127,9 @@ const ProductDetailPage = () => {
           currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
           formId={productEditFormId}
           hideActions
+          enableSku={enableSku}
+          enableBarcode={enableBarcode}
+          enableSimilarProductCheck={enableSimilarProductCheck}
         />
       </div>
 
@@ -1216,6 +1300,67 @@ const ProductDetailPage = () => {
                       <div className="text-xs text-muted-foreground">{t("storePriceReadOnly")}</div>
                     )}
                   </div>
+                  {storeRow.variants.length ? (
+                    <div className="mt-3 border-t border-border/70 pt-3">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        {t("variantStock")}
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {storeRow.variants.map((variant) => {
+                          const key = `${storeRow.storeId}:${variant.variantId}`;
+                          return (
+                            <div
+                              key={key}
+                              className="rounded-none border border-border/70 bg-muted/20 p-2"
+                            >
+                              <p className="truncate text-xs font-medium text-foreground">
+                                {resolveVariantLabel(variant)}
+                              </p>
+                              {canManageInventory ? (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    step="1"
+                                    className="h-9"
+                                    value={variantOnHandDrafts[key] ?? String(variant.onHand)}
+                                    onChange={(event) =>
+                                      setVariantOnHandDrafts((prev) => ({
+                                        ...prev,
+                                        [key]: event.target.value,
+                                      }))
+                                    }
+                                    onBlur={() =>
+                                      void handleSaveStoreVariantOnHand(
+                                        storeRow.storeId,
+                                        variant.variantId,
+                                        variant.onHand,
+                                      )
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        event.currentTarget.blur();
+                                      }
+                                    }}
+                                    placeholder={tInventory("qtyPlaceholder")}
+                                    disabled={adjustStockMutation.isLoading}
+                                  />
+                                  {savingVariantOnHandKey === key ? (
+                                    <Spinner className="h-4 w-4 text-muted-foreground" />
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {formatNumber(variant.onHand, locale)}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1926,6 +2071,55 @@ const ProductDetailPage = () => {
                 <PrintIcon className="h-4 w-4" aria-hidden />
                 {t("openPrintSettings")}
               </Link>
+            </Button>
+          </FormActions>
+        </div>
+      </Modal>
+      <Modal
+        open={duplicateDialogOpen}
+        onOpenChange={setDuplicateDialogOpen}
+        title={t("duplicateDialogTitle")}
+        subtitle={productQuery.data.name}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>
+          <FormActions>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDuplicateDialogOpen(false)}
+              disabled={duplicateMutation.isLoading}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                duplicateMutation.mutate({
+                  productId,
+                  copyImages: false,
+                  storeId: pricingStoreId || undefined,
+                })
+              }
+              disabled={duplicateMutation.isLoading}
+            >
+              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("duplicateWithoutPhotos")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                duplicateMutation.mutate({
+                  productId,
+                  copyImages: true,
+                  storeId: pricingStoreId || undefined,
+                })
+              }
+              disabled={duplicateMutation.isLoading}
+            >
+              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("duplicateWithPhotos")}
             </Button>
           </FormActions>
         </div>

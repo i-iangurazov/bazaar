@@ -531,6 +531,9 @@ model Store {
   phone                  String?
   currencyCode           String           @default("KGS")
   currencyRateKgsPerUnit Decimal          @default(1.00) @db.Decimal(18, 6)
+  enableSku              Boolean          @default(true)
+  enableBarcode          Boolean          @default(true)
+  enableSimilarProductCheck Boolean       @default(true)
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
 

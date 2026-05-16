@@ -234,14 +234,17 @@ export const productsRouter = router({
 
   duplicate: managerProcedure
     .input(duplicateProductInputSchema)
-    .mutation(({ ctx, input }) =>
-      duplicateProductMutation({
+    .mutation(async ({ ctx, input }) => {
+      if (input.storeId) {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      }
+      return duplicateProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   assignToStore: managerProcedure
     .input(assignProductsToStoreInputSchema)

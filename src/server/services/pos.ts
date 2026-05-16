@@ -415,6 +415,9 @@ const loadShiftReport = async (
           allowNegativeStock: true,
           currencyCode: true,
           currencyRateKgsPerUnit: true,
+          enableSku: true,
+          enableBarcode: true,
+          enableSimilarProductCheck: true,
           complianceProfile: {
             select: {
               enableMarking: true,
@@ -594,6 +597,9 @@ export const listPosRegisters = async (input: {
           allowNegativeStock: true,
           currencyCode: true,
           currencyRateKgsPerUnit: true,
+          enableSku: true,
+          enableBarcode: true,
+          enableSimilarProductCheck: true,
           complianceProfile: {
             select: {
               enableMarking: true,

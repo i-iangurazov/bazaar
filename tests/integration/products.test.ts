@@ -99,6 +99,131 @@ describeDb("products", () => {
     expect(policy?.minStock).toBe(3);
   });
 
+  it("applies initial on-hand per variant on store product creation", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-variant-initial-stock-create",
+      sku: "VARIANT-STOCK-1",
+      name: "Variant Stock Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      variants: [
+        { name: "S", attributes: { size: "S" }, initialOnHand: 2 },
+        { name: "M", attributes: { size: "M" }, initialOnHand: 5 },
+      ],
+    });
+
+    const variants = await prisma.productVariant.findMany({
+      where: { productId: product.id },
+      orderBy: { name: "asc" },
+    });
+    const snapshots = await prisma.inventorySnapshot.findMany({
+      where: {
+        storeId: store.id,
+        productId: product.id,
+        variantId: { in: variants.map((variant) => variant.id) },
+      },
+      orderBy: { variant: { name: "asc" } },
+    });
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        storeId: store.id,
+        productId: product.id,
+        variantId: { in: variants.map((variant) => variant.id) },
+        type: "ADJUSTMENT",
+      },
+      orderBy: { qtyDelta: "asc" },
+    });
+
+    expect(snapshots.map((snapshot) => snapshot.onHand)).toEqual([2, 5]);
+    expect(movements.map((movement) => movement.qtyDelta)).toEqual([2, 5]);
+  });
+
+  it("duplicates products with selectable photos, fresh SKU, copied store price, and zero stock", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const source = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-duplicate-source",
+      sku: "DUP-SOURCE-1",
+      name: "Duplicate Source",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      basePriceKgs: 100,
+      initialOnHand: 9,
+      photoUrl: `/uploads/imported-products/${org.id}/source-main.jpg`,
+      images: [
+        { url: `/uploads/imported-products/${org.id}/source-main.jpg`, position: 0 },
+        { url: `/uploads/imported-products/${org.id}/source-extra.jpg`, position: 1 },
+      ],
+      barcodes: ["DUP-SOURCE-BARCODE"],
+      variants: [{ name: "Large", sku: "DUP-SOURCE-L", attributes: { size: "L" } }],
+    });
+    await prisma.storePrice.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: source.id,
+        variantKey: "BASE",
+        priceKgs: 1234,
+        updatedById: adminUser.id,
+      },
+    });
+
+    const withoutPhotos = await caller.products.duplicate({
+      productId: source.id,
+      storeId: store.id,
+      copyImages: false,
+    });
+    const withPhotos = await caller.products.duplicate({
+      productId: source.id,
+      storeId: store.id,
+      copyImages: true,
+    });
+
+    const noPhotoProduct = await prisma.product.findUniqueOrThrow({
+      where: { id: withoutPhotos.productId },
+      include: {
+        barcodes: true,
+        images: true,
+        inventorySnapshots: true,
+        storePrices: true,
+        storeProducts: true,
+        variants: true,
+      },
+    });
+    const photoProduct = await prisma.product.findUniqueOrThrow({
+      where: { id: withPhotos.productId },
+      include: { images: true },
+    });
+
+    expect(noPhotoProduct.sku).not.toBe(source.sku);
+    expect(noPhotoProduct.photoUrl).toBeNull();
+    expect(noPhotoProduct.images).toHaveLength(0);
+    expect(noPhotoProduct.barcodes).toHaveLength(0);
+    expect(noPhotoProduct.variants[0]?.sku).toBeNull();
+    expect(noPhotoProduct.inventorySnapshots.find((row) => row.storeId === store.id)?.onHand).toBe(
+      0,
+    );
+    expect(noPhotoProduct.storePrices.find((row) => row.storeId === store.id)?.priceKgs.toNumber()).toBe(
+      1234,
+    );
+    expect(noPhotoProduct.storeProducts.find((row) => row.storeId === store.id)?.isActive).toBe(
+      true,
+    );
+    expect(photoProduct.images).toHaveLength(2);
+  });
+
   it("stores multiple categories and keeps the first one as primary", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
 

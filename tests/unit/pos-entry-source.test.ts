@@ -69,4 +69,34 @@ describe("pos entry navigation", () => {
     expect(serviceSource).toContain("unitPriceKgs: nextUnitPriceKgs");
     expect(serviceSource).toContain("lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty)");
   });
+
+  it("keeps the new POS view for desktop and restores the legacy flow only for phones", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(pageSource).toContain('window.matchMedia("(max-width: 767px)")');
+    expect(pageSource).toContain("const DesktopPosSaleView = () => (");
+    expect(pageSource).toContain("const MobileLegacyPosSaleView = () => (");
+    expect(pageSource).toContain(
+      "return isPhoneScreen ? MobileLegacyPosSaleView() : DesktopPosSaleView();",
+    );
+    expect(pageSource).toContain("4e48e65:src/app/(app)/pos/sell/page.tsx");
+    expect(pageSource).toContain('t("sell.registerAndShift")');
+    expect(pageSource).toContain('t("sell.paymentsTitle")');
+  });
+
+  it("keeps mobile legacy POS on theme tokens with editable price, discount, and image search rows", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(pageSource).toContain(
+      '<header className="sticky top-0 z-40 border-b border-border bg-background text-foreground shadow-sm">',
+    );
+    expect(pageSource).toContain('className="border-border bg-card text-foreground shadow-none"');
+    expect(pageSource).toContain(
+      "const primaryImage = product.images[0]?.url ?? product.photoUrl;",
+    );
+    expect(pageSource).toContain("key={`${line.id}:mobile-price:${line.unitPriceKgs}`}");
+    expect(pageSource).toContain("handleUpdateLinePrice(");
+    expect(pageSource).toContain('t("sell.saleDiscount")');
+    expect(pageSource).toContain('t("sell.applyDiscount")');
+  });
 });

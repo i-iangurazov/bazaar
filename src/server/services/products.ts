@@ -66,6 +66,7 @@ export type CreateProductInput = {
     name?: string | null;
     sku?: string | null;
     attributes?: Record<string, unknown>;
+    initialOnHand?: number | null;
   }[];
   isBundle?: boolean;
   bundleComponents?: {
@@ -1389,6 +1390,103 @@ const ensureBaseSnapshots = async (
   });
 };
 
+const ensureVariantSnapshots = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    store: { id: string; allowNegativeStock: boolean };
+    productId: string;
+    variants: Array<{ id: string }>;
+  },
+) => {
+  if (!input.variants.length) {
+    return;
+  }
+
+  await tx.inventorySnapshot.createMany({
+    data: input.variants.map((variant) => ({
+      storeId: input.store.id,
+      productId: input.productId,
+      variantId: variant.id,
+      variantKey: variant.id,
+      onHand: 0,
+      onOrder: 0,
+      allowNegativeStock: input.store.allowNegativeStock,
+    })),
+    skipDuplicates: true,
+  });
+};
+
+const applyInitialVariantInventory = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    actorId: string;
+    store?: { id: string; allowNegativeStock: boolean } | null;
+    productId: string;
+    variants?: Array<{ id: string; initialOnHand?: number | null }>;
+  },
+) => {
+  const variantsWithStock =
+    input.variants
+      ?.map((variant) => ({
+        id: variant.id,
+        initialOnHand:
+          variant.initialOnHand === undefined || variant.initialOnHand === null
+            ? null
+            : Math.trunc(variant.initialOnHand),
+      }))
+      .filter((variant) => variant.initialOnHand !== null) ?? [];
+
+  if (!variantsWithStock.length) {
+    return;
+  }
+  if (!input.store) {
+    throw new AppError("storeRequired", "BAD_REQUEST", 400);
+  }
+  if (variantsWithStock.some((variant) => (variant.initialOnHand ?? 0) < 0)) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  await ensureVariantSnapshots(tx, {
+    store: input.store,
+    productId: input.productId,
+    variants: variantsWithStock,
+  });
+
+  for (const variant of variantsWithStock) {
+    const initialOnHand = variant.initialOnHand ?? 0;
+    if (initialOnHand <= 0) {
+      continue;
+    }
+    await tx.inventorySnapshot.update({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: input.store.id,
+          productId: input.productId,
+          variantKey: variant.id,
+        },
+      },
+      data: {
+        onHand: { increment: initialOnHand },
+        allowNegativeStock: input.store.allowNegativeStock,
+      },
+    });
+    await tx.stockMovement.create({
+      data: {
+        storeId: input.store.id,
+        productId: input.productId,
+        variantId: variant.id,
+        type: StockMovementType.ADJUSTMENT,
+        qtyDelta: initialOnHand,
+        referenceType: "ProductVariant",
+        referenceId: variant.id,
+        note: "Initial variant stock",
+        createdById: input.actorId,
+      },
+    });
+  }
+};
+
 const defaultReorderPolicy = {
   leadTimeDays: 7,
   reviewPeriodDays: 7,
@@ -1706,7 +1804,7 @@ export const createProduct = async (input: CreateProductInput) => {
         });
       }
 
-      await createVariants(
+      const createdVariants = await createVariants(
         tx,
         product.id,
         input.variants,
@@ -1736,6 +1834,16 @@ export const createProduct = async (input: CreateProductInput) => {
         productId: product.id,
         initialOnHand: input.initialOnHand,
         minStock: input.minStock,
+      });
+      await applyInitialVariantInventory(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        store: assignmentStores[0] ?? null,
+        productId: product.id,
+        variants: createdVariants.map((variant, index) => ({
+          id: variant.id,
+          initialOnHand: input.variants?.[index]?.initialOnHand,
+        })),
       });
       if (resolvedBaseCost !== undefined) {
         await upsertBaseProductCost(tx, {
@@ -2209,6 +2317,8 @@ export const duplicateProduct = async (input: {
   requestId: string;
   productId: string;
   sku?: string | null;
+  copyImages?: boolean;
+  storeId?: string | null;
 }) => {
   return prisma.$transaction(async (tx) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
@@ -2221,9 +2331,28 @@ export const duplicateProduct = async (input: {
         variants: {
           where: { isActive: true },
           select: {
+            id: true,
             name: true,
             sku: true,
             attributes: true,
+          },
+        },
+        storeProducts: {
+          where: { isActive: true },
+          select: {
+            store: {
+              select: {
+                id: true,
+                allowNegativeStock: true,
+              },
+            },
+          },
+        },
+        storePrices: {
+          where: { variantKey: "BASE" },
+          select: {
+            storeId: true,
+            priceKgs: true,
           },
         },
         bundleComponents: {
@@ -2239,6 +2368,28 @@ export const duplicateProduct = async (input: {
     if (!source || source.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
+
+    const copyImages = input.copyImages ?? true;
+    const requestedStoreId = input.storeId?.trim() || null;
+    const assignmentStores = requestedStoreId
+      ? await tx.store
+          .findFirst({
+            where: { id: requestedStoreId, organizationId: input.organizationId },
+            select: { id: true, allowNegativeStock: true },
+          })
+          .then((store) => {
+            if (!store) {
+              throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+            }
+            return [store];
+          })
+      : source.storeProducts.map((row) => row.store);
+    const resolvedAssignmentStores = assignmentStores.length
+      ? assignmentStores
+      : await tx.store.findMany({
+          where: { organizationId: input.organizationId },
+          select: { id: true, allowNegativeStock: true },
+        });
 
     const nextSku = await resolveDuplicateSku(tx, {
       organizationId: input.organizationId,
@@ -2258,16 +2409,16 @@ export const duplicateProduct = async (input: {
           : source.category
             ? [source.category]
             : [],
-        unit: source.unit,
-        baseUnitId: source.baseUnitId,
-        basePriceKgs: source.basePriceKgs,
-        description: source.description,
-        photoUrl: source.photoUrl,
-        isBundle: source.isBundle,
+          unit: source.unit,
+          baseUnitId: source.baseUnitId,
+          basePriceKgs: source.basePriceKgs,
+          description: source.description,
+          photoUrl: copyImages ? source.photoUrl : null,
+          isBundle: source.isBundle,
       },
     });
 
-    if (source.images.length) {
+    if (copyImages && source.images.length) {
       await tx.productImage.createMany({
         data: source.images.map((image) => ({
           organizationId: input.organizationId,
@@ -2299,7 +2450,7 @@ export const duplicateProduct = async (input: {
         duplicate.id,
         source.variants.map((variant) => ({
           name: variant.name,
-          sku: variant.sku,
+          sku: null,
           attributes:
             variant.attributes && typeof variant.attributes === "object"
               ? (variant.attributes as Record<string, unknown>)
@@ -2308,6 +2459,31 @@ export const duplicateProduct = async (input: {
         input.organizationId,
         attributeDefinitions,
       );
+    }
+
+    await createInitialStoreAssignments(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      productId: duplicate.id,
+      stores: resolvedAssignmentStores,
+    });
+
+    const assignedStoreIds = new Set(resolvedAssignmentStores.map((store) => store.id));
+    const copiedBaseStorePrices = source.storePrices.filter((price) =>
+      assignedStoreIds.has(price.storeId),
+    );
+    if (copiedBaseStorePrices.length) {
+      await tx.storePrice.createMany({
+        data: copiedBaseStorePrices.map((price) => ({
+          organizationId: input.organizationId,
+          storeId: price.storeId,
+          productId: duplicate.id,
+          variantKey: "BASE",
+          priceKgs: price.priceKgs,
+          updatedById: input.actorId,
+        })),
+        skipDuplicates: true,
+      });
     }
 
     if (source.isBundle && source.bundleComponents.length) {
@@ -2323,7 +2499,7 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id);
+    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id, resolvedAssignmentStores);
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,

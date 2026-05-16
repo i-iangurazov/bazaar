@@ -32,6 +32,6 @@ describe("product barcode capture source", () => {
     const source = await readSource("src/app/(app)/products/new/page.tsx");
 
     expect(source).toContain("searchParams?.get(\"barcode\")");
-    expect(source).toContain("barcodes: barcode ? [barcode] : []");
+    expect(source).toContain("barcodes: enableBarcode && barcode ? [barcode] : []");
   });
 });

@@ -2,12 +2,19 @@ import { z } from "zod";
 import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 
-import { adminProcedure, managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
+import {
+  adminOrOrgOwnerProcedure,
+  adminProcedure,
+  managerProcedure,
+  protectedProcedure,
+  router,
+} from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   createStore,
   updateStore,
   updateStoreLegalDetails,
+  updateStoreProductSettings,
   updateStorePolicy,
 } from "@/server/services/stores";
 import {
@@ -36,6 +43,9 @@ export const storesRouter = router({
       phone: true,
       currencyCode: true,
       currencyRateKgsPerUnit: true,
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
       complianceProfile: {
         select: {
           enableKkm: true,
@@ -107,10 +117,20 @@ export const storesRouter = router({
         stockQuantityDelta: z.number().int().min(-1_000_000).max(1_000_000).optional(),
         priceAdjustmentMode: z.enum(["none", "percentage", "amount"]).optional(),
         priceAdjustmentValue: z.number().min(-1_000_000).max(1_000_000).optional(),
+        enableSku: z.boolean().optional(),
+        enableBarcode: z.boolean().optional(),
+        enableSimilarProductCheck: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        const customProductSettingsRequested =
+          input.enableSku !== undefined ||
+          input.enableBarcode !== undefined ||
+          input.enableSimilarProductCheck !== undefined;
+        if (customProductSettingsRequested && ctx.user.role !== "ADMIN" && !ctx.user.isOrgOwner) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+        }
         if ((input.copyInventory || input.stockQuantityDelta) && ctx.user.role !== "ADMIN") {
           throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
         }
@@ -132,6 +152,34 @@ export const storesRouter = router({
           stockQuantityDelta: input.stockQuantityDelta,
           priceAdjustmentMode: input.priceAdjustmentMode,
           priceAdjustmentValue: input.priceAdjustmentValue,
+          enableSku: input.enableSku,
+          enableBarcode: input.enableBarcode,
+          enableSimilarProductCheck: input.enableSimilarProductCheck,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  updateProductSettings: adminOrOrgOwnerProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        enableSku: z.boolean(),
+        enableBarcode: z.boolean(),
+        enableSimilarProductCheck: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateStoreProductSettings({
+          storeId: input.storeId,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          enableSku: input.enableSku,
+          enableBarcode: input.enableBarcode,
+          enableSimilarProductCheck: input.enableSimilarProductCheck,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -115,6 +115,7 @@ export type ProductFormValues = {
     id?: string;
     name?: string;
     sku?: string;
+    initialOnHand?: number;
     attributes: Record<string, unknown>;
     canDelete?: boolean;
   }[];
@@ -396,6 +397,9 @@ export const ProductForm = ({
   formId,
   hideActions = false,
   canEditInitialStock = true,
+  enableSku = true,
+  enableBarcode = true,
+  enableSimilarProductCheck = true,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -411,6 +415,9 @@ export const ProductForm = ({
   formId?: string;
   hideActions?: boolean;
   canEditInitialStock?: boolean;
+  enableSku?: boolean;
+  enableBarcode?: boolean;
+  enableSimilarProductCheck?: boolean;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -511,6 +518,7 @@ export const ProductForm = ({
             id: z.string().optional(),
             name: z.string().optional(),
             sku: z.string().optional(),
+            initialOnHand: optionalStockQty,
             attributes: z
               .array(
                 z.object({
@@ -536,20 +544,25 @@ export const ProductForm = ({
       })
       .superRefine((values, context) => {
         const normalizedSku = values.sku.trim();
-        if (productId) {
-          if (normalizedSku.length < 2) {
+        if (enableSku) {
+          if (productId) {
+            if (normalizedSku.length < 2) {
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: normalizedSku.length === 0 ? t("skuRequired") : t("skuMinLength"),
+                path: ["sku"],
+              });
+            }
+          } else if (normalizedSku.length > 0 && normalizedSku.length < 2) {
             context.addIssue({
               code: z.ZodIssueCode.custom,
-              message: normalizedSku.length === 0 ? t("skuRequired") : t("skuMinLength"),
+              message: t("skuMinLength"),
               path: ["sku"],
             });
           }
-        } else if (normalizedSku.length > 0 && normalizedSku.length < 2) {
-          context.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: t("skuMinLength"),
-            path: ["sku"],
-          });
+        }
+        if (!enableBarcode) {
+          return;
         }
         const normalizedBarcodes = (values.barcodes ?? [])
           .map((value) => normalizeProductBarcodeInput(value))
@@ -572,7 +585,7 @@ export const ProductForm = ({
           });
         }
       });
-  }, [productId, t, tErrors]);
+  }, [enableBarcode, enableSku, productId, t, tErrors]);
   type VariantFormRow = z.infer<typeof schema>["variants"][number];
 
   const toAttributeEntries = (attributes: Record<string, unknown>) => {
@@ -620,6 +633,7 @@ export const ProductForm = ({
               id: variant.id,
               name: variant.name ?? "",
               sku: variant.sku ?? "",
+              initialOnHand: variant.initialOnHand,
               attributes: toAttributeEntries(variant.attributes ?? {}),
               canDelete: variant.canDelete ?? true,
             }))
@@ -628,6 +642,7 @@ export const ProductForm = ({
                 id: undefined,
                 name: "",
                 sku: "",
+                initialOnHand: undefined,
                 attributes: toAttributeEntries({}),
                 canDelete: true,
               },
@@ -745,6 +760,9 @@ export const ProductForm = ({
     );
 
   const generateNextVariantSku = (usedSkus = collectUsedVariantSkus()) => {
+    if (!enableSku) {
+      return "";
+    }
     const base = normalizeSkuToken(form.getValues("sku")) || normalizeSkuToken(form.getValues("name")) || "VAR";
     for (let counter = 1; counter <= 9999; counter += 1) {
       const candidate = `${base}-V${String(counter).padStart(2, "0")}`;
@@ -862,15 +880,16 @@ export const ProductForm = ({
   const duplicateDiagnosticsInput = useMemo(
     () => ({
       productId,
-      sku: watchedSku?.trim() || undefined,
+      sku: enableSku ? watchedSku?.trim() || undefined : undefined,
       name: watchedName?.trim() || undefined,
-      barcodes: normalizeProductBarcodes(watchedBarcodes),
+      barcodes: enableBarcode ? normalizeProductBarcodes(watchedBarcodes) : [],
     }),
-    [productId, watchedBarcodes, watchedName, watchedSku],
+    [enableBarcode, enableSku, productId, watchedBarcodes, watchedName, watchedSku],
   );
   const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
   const duplicateDiagnosticsEnabled =
     !readOnly &&
+    enableSimilarProductCheck &&
     (compactCreate
       ? deferredDuplicateDiagnosticsInput.barcodes.length > 0
       : Boolean(
@@ -945,7 +964,7 @@ export const ProductForm = ({
   }, [showAdvanced, fields.length]);
 
   const addBarcodeFromDraft = () => {
-    if (readOnly) {
+    if (readOnly || !enableBarcode) {
       return false;
     }
     const value = normalizeProductBarcodeInput(barcodeInput);
@@ -974,6 +993,9 @@ export const ProductForm = ({
   };
 
   const handleBarcodeInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!enableBarcode) {
+      return;
+    }
     if (event.key !== "Enter") {
       return;
     }
@@ -2416,6 +2438,7 @@ export const ProductForm = ({
         id: undefined,
         name,
         sku: generateNextVariantSku(usedVariantSkus),
+        initialOnHand: undefined,
         attributes,
         canDelete: true,
       });
@@ -2480,7 +2503,10 @@ export const ProductForm = ({
       const attributes = variant.attributes ?? [];
       const hasContent =
         Boolean(variant.name?.trim()) ||
-        Boolean(variant.sku?.trim()) ||
+        (enableSku && Boolean(variant.sku?.trim())) ||
+        (variant.initialOnHand !== undefined &&
+          variant.initialOnHand !== null &&
+          Number(variant.initialOnHand) > 0) ||
         attributes.some((entry) => {
           const value = entry.value;
           if (Array.isArray(value)) {
@@ -2566,7 +2592,8 @@ export const ProductForm = ({
       parsedVariants.push({
         id: variant.id,
         name: variant.name?.trim() || undefined,
-        sku: variant.sku?.trim() || undefined,
+        sku: enableSku ? variant.sku?.trim() || undefined : undefined,
+        initialOnHand: variant.initialOnHand,
         attributes: parsedAttributes,
       });
     }
@@ -2593,17 +2620,16 @@ export const ProductForm = ({
       return;
     }
 
-    const draftBarcode = normalizeProductBarcodeInput(barcodeInput);
+    const draftBarcode = enableBarcode ? normalizeProductBarcodeInput(barcodeInput) : "";
     if (draftBarcode && draftBarcode.length < minimumProductBarcodeLength) {
       form.setError("barcodes", {
         message: t("barcodeTooShort", { min: minimumProductBarcodeLength }),
       });
       return;
     }
-    const submittedBarcodes = normalizeProductBarcodes([
-      ...(values.barcodes ?? []),
-      ...(draftBarcode ? [draftBarcode] : []),
-    ]);
+    const submittedBarcodes = enableBarcode
+      ? normalizeProductBarcodes([...(values.barcodes ?? []), ...(draftBarcode ? [draftBarcode] : [])])
+      : normalizeProductBarcodes(values.barcodes ?? []);
 
     onSubmit({
       sku: values.sku.trim(),
@@ -2674,7 +2700,12 @@ export const ProductForm = ({
         }
         return Boolean(String(value ?? "").trim());
       });
-      return !hasSavedId && !variant.name?.trim() && !variant.sku?.trim() && !hasAttributeValue;
+      return (
+        !hasSavedId &&
+        !variant.name?.trim() &&
+        (!enableSku || !variant.sku?.trim()) &&
+        !hasAttributeValue
+      );
     });
     if (existingEmptyDraftIndex >= 0) {
       form.setValue(`variants.${existingEmptyDraftIndex}.sku`, generateNextVariantSku(
@@ -2691,6 +2722,7 @@ export const ProductForm = ({
       id: undefined,
       name: "",
       sku: generateNextVariantSku(),
+      initialOnHand: undefined,
       attributes: toAttributeEntries({}),
       canDelete: true,
     });
@@ -2718,12 +2750,15 @@ export const ProductForm = ({
       const hasContent =
         Boolean(variant.id) ||
         Boolean(variant.name?.trim()) ||
-        Boolean(variant.sku?.trim()) ||
+        (enableSku && Boolean(variant.sku?.trim())) ||
+        (variant.initialOnHand !== undefined &&
+          variant.initialOnHand !== null &&
+          Number(variant.initialOnHand) > 0) ||
         hasAttributeValue;
       return {
         index,
         key: fields[index]?.id ?? `${variant.name ?? variant.sku ?? "variant"}-${index}`,
-        name: variant.name?.trim() || variant.sku?.trim() || `#${index + 1}`,
+        name: variant.name?.trim() || (enableSku ? variant.sku?.trim() : "") || `#${index + 1}`,
         attributeCount: attributes.length,
         hasContent,
       };
@@ -3333,22 +3368,24 @@ export const ProductForm = ({
               >
                 <div className="space-y-6">
                   <FormGrid className="items-start">
-                    <FormField
-                      control={form.control}
-                      name="sku"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t("sku")}</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled={readOnly} />
-                          </FormControl>
-                          {!productId && !compactCreate ? (
-                            <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
-                          ) : null}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {enableSku ? (
+                      <FormField
+                        control={form.control}
+                        name="sku"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("sku")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} disabled={readOnly} />
+                            </FormControl>
+                            {!productId && !compactCreate ? (
+                              <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
+                            ) : null}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
                     <FormField
                       control={form.control}
                       name="name"
@@ -3601,7 +3638,7 @@ export const ProductForm = ({
                         />
                       </>
                     ) : null}
-                    {compactCreate ? (
+                    {compactCreate && enableBarcode ? (
                       <FormField
                         control={form.control}
                         name="barcodes"
@@ -3711,7 +3748,7 @@ export const ProductForm = ({
                           </div>
                         ) : null}
                       </div>
-                      {duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
+                      {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
                         <div className="mt-3 rounded-none border border-danger/30 bg-background p-3">
                           <p className="text-xs font-medium text-danger">
                             {t("duplicateExactSkuTitle")}
@@ -3736,7 +3773,7 @@ export const ProductForm = ({
                           </div>
                         </div>
                       ) : null}
-                      {duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length ? (
+                      {enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length ? (
                         <div className="mt-3 space-y-2">
                           <p className="text-xs font-medium text-foreground">
                             {t("duplicateExactBarcodesTitle")}
@@ -3749,7 +3786,9 @@ export const ProductForm = ({
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="muted">{match.barcode}</Badge>
                                 <span className="text-sm text-foreground">{match.name}</span>
-                                <span className="text-xs text-muted-foreground">{match.sku}</span>
+                                {enableSku ? (
+                                  <span className="text-xs text-muted-foreground">{match.sku}</span>
+                                ) : null}
                                 {match.isDeleted ? (
                                   <Badge variant="muted">{t("archived")}</Badge>
                                 ) : null}
@@ -3777,7 +3816,7 @@ export const ProductForm = ({
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm text-foreground">{match.name}</span>
-                                <Badge variant="muted">{match.sku}</Badge>
+                                {enableSku ? <Badge variant="muted">{match.sku}</Badge> : null}
                                 {match.isDeleted ? (
                                   <Badge variant="muted">{t("archived")}</Badge>
                                 ) : null}
@@ -3794,8 +3833,8 @@ export const ProductForm = ({
                         </div>
                       ) : null}
                       {!duplicateDiagnosticsQuery.isFetching &&
-                      !duplicateDiagnosticsQuery.data?.exactSkuMatch &&
-                      !duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length &&
+                      !(enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch) &&
+                      !(enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length) &&
                       !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
                         <p className="mt-3 text-xs text-muted-foreground">
                           {t("duplicateDiagnosticsEmpty")}
@@ -3852,7 +3891,7 @@ export const ProductForm = ({
                 </div>
               </FormSection>
 
-              {!compactCreate ? barcodeManagementSection : null}
+              {!compactCreate && enableBarcode ? barcodeManagementSection : null}
 
               {isBundle ? (
                 <FormSection
@@ -4113,28 +4152,32 @@ export const ProductForm = ({
                                   </FormItem>
                                 )}
                               />
-                              <FormField
-                                control={form.control}
-                                name={`packs.${index}.packBarcode`}
-                                render={({ field: itemField }) => (
-                                  <FormItem>
-                                    <FormLabel>{t("packBarcode")}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...(() => {
-                                          const { value: _value, ...rest } = itemField;
-                                          void _value;
-                                          return rest;
-                                        })()}
-                                        value={itemField.value ?? ""}
-                                        onChange={(event) => itemField.onChange(event.target.value)}
-                                        disabled={readOnly}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
+                              {enableBarcode ? (
+                                <FormField
+                                  control={form.control}
+                                  name={`packs.${index}.packBarcode`}
+                                  render={({ field: itemField }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("packBarcode")}</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          {...(() => {
+                                            const { value: _value, ...rest } = itemField;
+                                            void _value;
+                                            return rest;
+                                          })()}
+                                          value={itemField.value ?? ""}
+                                          onChange={(event) =>
+                                            itemField.onChange(event.target.value)
+                                          }
+                                          disabled={readOnly}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              ) : null}
                             </FormGrid>
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="flex flex-wrap items-center gap-4">
@@ -4264,19 +4307,45 @@ export const ProductForm = ({
                                 </FormItem>
                               )}
                             />
-                            <FormField
-                              control={form.control}
-                              name={`variants.${index}.sku`}
-                              render={({ field: itemField }) => (
-                                <FormItem>
-                                  <FormLabel>{t("variantSku")}</FormLabel>
-                                  <FormControl>
-                                    <Input {...itemField} disabled={readOnly} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                            {enableSku ? (
+                              <FormField
+                                control={form.control}
+                                name={`variants.${index}.sku`}
+                                render={({ field: itemField }) => (
+                                  <FormItem>
+                                    <FormLabel>{t("variantSku")}</FormLabel>
+                                    <FormControl>
+                                      <Input {...itemField} disabled={readOnly} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            ) : null}
+                            {!productId && canEditInitialStock ? (
+                              <FormField
+                                control={form.control}
+                                name={`variants.${index}.initialOnHand`}
+                                render={({ field: itemField }) => (
+                                  <FormItem>
+                                    <FormLabel>{t("variantInitialOnHand")}</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...itemField}
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={0}
+                                        step={1}
+                                        placeholder={t("initialOnHandPlaceholder")}
+                                        onKeyDown={preventInvalidIntegerInput}
+                                        disabled={readOnly}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            ) : null}
                           </FormGrid>
 
                           <div className="space-y-3">

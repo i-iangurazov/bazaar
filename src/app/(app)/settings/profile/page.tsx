@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormActions, FormGrid } from "@/components/form-layout";
+import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { applyThemePreference, persistThemeCookie } from "@/lib/theme";
@@ -40,6 +41,7 @@ import {
   supportedCurrencyCodes,
   type SupportedCurrencyCode,
 } from "@/lib/currency";
+import { buildScopedStorageKey } from "@/lib/useScopedLocalStorageState";
 
 type ThemePreferenceValue = "LIGHT" | "DARK";
 
@@ -53,15 +55,31 @@ const ProfilePage = () => {
   const tRegister = useTranslations("registerBusiness");
   const { data: session, status, update: updateSession } = useSession();
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
 
   const canEditBusiness = session?.user?.role === "ADMIN" || Boolean(session?.user?.isOrgOwner);
+  const productsTableStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "products-table-state",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
 
   const personalSchema = useMemo(
     () =>
       z.object({
         name: z.string().min(2, t("personal.validation.nameRequired")),
-        phone: z.string().max(40, t("personal.validation.phoneMax", { max: 40 })).optional(),
-        jobTitle: z.string().max(120, t("personal.validation.jobTitleMax", { max: 120 })).optional(),
+        phone: z
+          .string()
+          .max(40, t("personal.validation.phoneMax", { max: 40 }))
+          .optional(),
+        jobTitle: z
+          .string()
+          .max(120, t("personal.validation.jobTitleMax", { max: 120 }))
+          .optional(),
       }),
     [t],
   );
@@ -85,10 +103,33 @@ const ProfilePage = () => {
           .number()
           .positive(t("business.validation.currencyRateRequired")),
         legalEntityType: z.enum(["IP", "OSOO", "AO", "OTHER", "NONE"]),
-        legalName: z.string().max(240, t("business.validation.legalNameMax", { max: 240 })).optional(),
-        inn: z.string().max(32, t("business.validation.innMax", { max: 32 })).optional(),
-        address: z.string().max(512, t("business.validation.addressMax", { max: 512 })).optional(),
-        phone: z.string().max(40, t("business.validation.phoneMax", { max: 40 })).optional(),
+        legalName: z
+          .string()
+          .max(240, t("business.validation.legalNameMax", { max: 240 }))
+          .optional(),
+        inn: z
+          .string()
+          .max(32, t("business.validation.innMax", { max: 32 }))
+          .optional(),
+        address: z
+          .string()
+          .max(512, t("business.validation.addressMax", { max: 512 }))
+          .optional(),
+        phone: z
+          .string()
+          .max(40, t("business.validation.phoneMax", { max: 40 }))
+          .optional(),
+      }),
+    [t],
+  );
+
+  const productSettingsSchema = useMemo(
+    () =>
+      z.object({
+        storeId: z.string().min(1, t("business.validation.storeRequired")),
+        enableSku: z.boolean(),
+        enableBarcode: z.boolean(),
+        enableSimilarProductCheck: z.boolean(),
       }),
     [t],
   );
@@ -98,10 +139,11 @@ const ProfilePage = () => {
   });
 
   const [selectedStoreId, setSelectedStoreId] = useState<string | undefined>(undefined);
+  const [productSettingsStoreReady, setProductSettingsStoreReady] = useState(false);
 
   const businessQuery = trpc.orgSettings.getBusinessProfile.useQuery(
     { storeId: selectedStoreId },
-    { enabled: status === "authenticated" && canEditBusiness },
+    { enabled: status === "authenticated" && canEditBusiness && productSettingsStoreReady },
   );
 
   const personalForm = useForm<z.infer<typeof personalSchema>>({
@@ -136,6 +178,16 @@ const ProfilePage = () => {
     },
   });
 
+  const productSettingsForm = useForm<z.infer<typeof productSettingsSchema>>({
+    resolver: zodResolver(productSettingsSchema),
+    defaultValues: {
+      storeId: "",
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
+    },
+  });
+
   useEffect(() => {
     const profile = profileQuery.data;
     if (!profile) {
@@ -153,11 +205,48 @@ const ProfilePage = () => {
   }, [profileQuery.data, personalForm, preferencesForm]);
 
   useEffect(() => {
+    if (productSettingsStoreReady) {
+      return;
+    }
+    if (status === "loading") {
+      return;
+    }
+    if (status !== "authenticated" || !canEditBusiness) {
+      setProductSettingsStoreReady(true);
+      return;
+    }
+    if (!productsTableStorageKey) {
+      setProductSettingsStoreReady(true);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(productsTableStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      const storedStoreId =
+        parsed && typeof parsed === "object" && typeof parsed.storeId === "string"
+          ? parsed.storeId
+          : "";
+      if (storedStoreId) {
+        setSelectedStoreId(storedStoreId);
+      }
+    } catch {
+      // If saved product table state is unreadable, fall back to the profile default store.
+    } finally {
+      setProductSettingsStoreReady(true);
+    }
+  }, [canEditBusiness, productSettingsStoreReady, productsTableStorageKey, status]);
+
+  useEffect(() => {
     const businessData = businessQuery.data;
     if (!businessData?.selectedStore) {
       return;
     }
-    setSelectedStoreId((current) => current ?? businessData.selectedStore?.id ?? undefined);
+    setSelectedStoreId((current) =>
+      current && businessData.stores.some((store) => store.id === current)
+        ? current
+        : (businessData.selectedStore?.id ?? undefined),
+    );
     businessForm.reset({
       organizationName: businessData.organization.name,
       storeId: businessData.selectedStore.id,
@@ -170,7 +259,13 @@ const ProfilePage = () => {
       address: businessData.selectedStore.address ?? "",
       phone: businessData.selectedStore.phone ?? "",
     });
-  }, [businessQuery.data, businessForm]);
+    productSettingsForm.reset({
+      storeId: businessData.selectedStore.id,
+      enableSku: businessData.selectedStore.enableSku ?? true,
+      enableBarcode: businessData.selectedStore.enableBarcode ?? true,
+      enableSimilarProductCheck: businessData.selectedStore.enableSimilarProductCheck ?? true,
+    });
+  }, [businessQuery.data, businessForm, productSettingsForm]);
 
   const updateProfileMutation = trpc.userSettings.updateMyProfile.useMutation({
     onSuccess: (result) => {
@@ -235,6 +330,30 @@ const ProfilePage = () => {
     },
   });
 
+  const updateProductSettingsMutation = trpc.stores.updateProductSettings.useMutation({
+    onSuccess: async (result) => {
+      productSettingsForm.reset({
+        storeId: result.id,
+        enableSku: result.enableSku ?? true,
+        enableBarcode: result.enableBarcode ?? true,
+        enableSimilarProductCheck: result.enableSimilarProductCheck ?? true,
+      });
+      await Promise.all([
+        businessQuery.refetch(),
+        trpcUtils.stores.list.invalidate(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.getById.invalidate(),
+        trpcUtils.products.storePricing.invalidate(),
+        trpcUtils.products.searchQuick.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
+      toast({ variant: "success", description: t("productSettings.saved") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   const handleThemeChange = (nextTheme: string) => {
     if (!isThemePreferenceValue(nextTheme)) {
       return;
@@ -248,9 +367,18 @@ const ProfilePage = () => {
   const handleStoreChange = (storeId: string) => {
     setSelectedStoreId(storeId);
     businessForm.setValue("storeId", storeId, { shouldDirty: true });
+    productSettingsForm.setValue("storeId", storeId, { shouldDirty: false });
   };
 
   const selectedCurrency = businessForm.watch("currencyCode") as SupportedCurrencyCode;
+  const selectedBusinessStore = businessQuery.data?.selectedStore ?? null;
+  const productSettingsStoreId = productSettingsForm.watch("storeId");
+  const productSettingsStorePending =
+    Boolean(productSettingsStoreId) && selectedBusinessStore?.id !== productSettingsStoreId;
+  const productSettingsDisabled =
+    businessQuery.isLoading ||
+    updateProductSettingsMutation.isLoading ||
+    productSettingsStorePending;
 
   if (status === "loading" || profileQuery.isLoading) {
     return (
@@ -451,7 +579,8 @@ const ProfilePage = () => {
                       values.currencyCode === "KGS"
                         ? defaultCurrencyRateKgsPerUnit
                         : values.currencyRateKgsPerUnit,
-                    legalEntityType: values.legalEntityType === "NONE" ? null : values.legalEntityType,
+                    legalEntityType:
+                      values.legalEntityType === "NONE" ? null : values.legalEntityType,
                     legalName: values.legalName ?? null,
                     inn: values.inn ?? null,
                     address: values.address ?? null,
@@ -579,9 +708,13 @@ const ProfilePage = () => {
                             <SelectContent>
                               <SelectItem value="NONE">{t("business.none")}</SelectItem>
                               <SelectItem value="IP">{tRegister("legalEntityTypes.IP")}</SelectItem>
-                              <SelectItem value="OSOO">{tRegister("legalEntityTypes.OSOO")}</SelectItem>
+                              <SelectItem value="OSOO">
+                                {tRegister("legalEntityTypes.OSOO")}
+                              </SelectItem>
                               <SelectItem value="AO">{tRegister("legalEntityTypes.AO")}</SelectItem>
-                              <SelectItem value="OTHER">{tRegister("legalEntityTypes.OTHER")}</SelectItem>
+                              <SelectItem value="OTHER">
+                                {tRegister("legalEntityTypes.OTHER")}
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -648,6 +781,150 @@ const ProfilePage = () => {
                     disabled={updateBusinessMutation.isLoading || businessQuery.isLoading}
                   >
                     {updateBusinessMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {tCommon("save")}
+                  </Button>
+                </FormActions>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canEditBusiness ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("productSettings.title")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t("productSettings.description")}</p>
+          </CardHeader>
+          <CardContent>
+            <Form {...productSettingsForm}>
+              <form
+                className="space-y-4"
+                onSubmit={productSettingsForm.handleSubmit((values) => {
+                  updateProductSettingsMutation.mutate({
+                    storeId: values.storeId,
+                    enableSku: values.enableSku,
+                    enableBarcode: values.enableBarcode,
+                    enableSimilarProductCheck: values.enableSimilarProductCheck,
+                  });
+                })}
+              >
+                <FormField
+                  control={productSettingsForm.control}
+                  name="storeId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("business.store")}</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            handleStoreChange(value);
+                          }}
+                          disabled={
+                            businessQuery.isLoading || updateProductSettingsMutation.isLoading
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={t("business.selectStore")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(businessQuery.data?.stores ?? []).map((store) => (
+                              <SelectItem key={store.id} value={store.id}>
+                                {store.name} ({store.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormDescription>{t("productSettings.storeHint")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-3">
+                  <FormField
+                    control={productSettingsForm.control}
+                    name="enableSku"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="space-y-1">
+                            <FormLabel>{t("productSettings.enableSku")}</FormLabel>
+                            <FormDescription>{t("productSettings.enableSkuHint")}</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={productSettingsDisabled}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={productSettingsForm.control}
+                    name="enableBarcode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="space-y-1">
+                            <FormLabel>{t("productSettings.enableBarcode")}</FormLabel>
+                            <FormDescription>
+                              {t("productSettings.enableBarcodeHint")}
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={productSettingsDisabled}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={productSettingsForm.control}
+                    name="enableSimilarProductCheck"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="space-y-1">
+                            <FormLabel>{t("productSettings.enableSimilarProductCheck")}</FormLabel>
+                            <FormDescription>
+                              {t("productSettings.enableSimilarProductCheckHint")}
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={productSettingsDisabled}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormActions>
+                  <Button
+                    type="submit"
+                    disabled={!selectedBusinessStore || productSettingsDisabled}
+                  >
+                    {updateProductSettingsMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : null}
                     {tCommon("save")}
                   </Button>
                 </FormActions>

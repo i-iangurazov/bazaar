@@ -33,6 +33,19 @@ export type CreateStoreInput = {
   stockQuantityDelta?: number;
   priceAdjustmentMode?: "none" | "percentage" | "amount";
   priceAdjustmentValue?: number;
+  enableSku?: boolean;
+  enableBarcode?: boolean;
+  enableSimilarProductCheck?: boolean;
+};
+
+export type UpdateStoreProductSettingsInput = {
+  storeId: string;
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  enableSku: boolean;
+  enableBarcode: boolean;
+  enableSimilarProductCheck: boolean;
 };
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
@@ -78,6 +91,9 @@ export const createStore = async (input: CreateStoreInput) =>
         inn,
         address: normalizeOptional(input.address),
         phone: normalizeOptional(input.phone),
+        enableSku: input.enableSku ?? true,
+        enableBarcode: input.enableBarcode ?? true,
+        enableSimilarProductCheck: input.enableSimilarProductCheck ?? true,
       },
     });
 
@@ -107,7 +123,7 @@ export const createStore = async (input: CreateStoreInput) =>
       const priceAdjustmentMode = input.priceAdjustmentMode ?? "none";
       const priceAdjustmentValue = input.priceAdjustmentValue ?? 0;
 
-	      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] = await Promise.all([
+      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] = await Promise.all([
         copyInventory
           ? tx.inventorySnapshot.findMany({
               where: {
@@ -139,7 +155,7 @@ export const createStore = async (input: CreateStoreInput) =>
             priceKgs: true,
           },
         }),
-	        tx.reorderPolicy.findMany({
+        tx.reorderPolicy.findMany({
           where: {
             storeId: cloneFromStoreId,
             product: {
@@ -154,18 +170,18 @@ export const createStore = async (input: CreateStoreInput) =>
             reviewPeriodDays: true,
             safetyStockDays: true,
             minOrderQty: true,
-	          },
-	        }),
-	        tx.storeProduct.findMany({
-	          where: {
-	            organizationId: input.organizationId,
-	            storeId: cloneFromStoreId,
-	            isActive: true,
-	            product: { isDeleted: false },
-	          },
-	          select: { productId: true },
-	        }),
-	      ]);
+          },
+        }),
+        tx.storeProduct.findMany({
+          where: {
+            organizationId: input.organizationId,
+            storeId: cloneFromStoreId,
+            isActive: true,
+            product: { isDeleted: false },
+          },
+          select: { productId: true },
+        }),
+      ]);
 
       const nextSnapshots = sourceSnapshots.map((snapshot) => ({
         storeId: store.id,
@@ -333,6 +349,44 @@ export const updateStorePolicy = async (input: UpdateStorePolicyInput) =>
       entityId: updated.id,
       before: toJson(store),
       after: toJson(updated),
+      requestId: input.requestId,
+    });
+
+    return updated;
+  });
+
+export const updateStoreProductSettings = async (input: UpdateStoreProductSettingsInput) =>
+  prisma.$transaction(async (tx) => {
+    const store = await tx.store.findUnique({ where: { id: input.storeId } });
+    if (!store || store.organizationId !== input.organizationId) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
+    const updated = await tx.store.update({
+      where: { id: input.storeId },
+      data: {
+        enableSku: input.enableSku,
+        enableBarcode: input.enableBarcode,
+        enableSimilarProductCheck: input.enableSimilarProductCheck,
+      },
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "STORE_PRODUCT_SETTINGS_UPDATE",
+      entity: "Store",
+      entityId: updated.id,
+      before: toJson({
+        enableSku: store.enableSku,
+        enableBarcode: store.enableBarcode,
+        enableSimilarProductCheck: store.enableSimilarProductCheck,
+      }),
+      after: toJson({
+        enableSku: updated.enableSku,
+        enableBarcode: updated.enableBarcode,
+        enableSimilarProductCheck: updated.enableSimilarProductCheck,
+      }),
       requestId: input.requestId,
     });
 

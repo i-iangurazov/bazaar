@@ -1,12 +1,19 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import {
+  adminProcedure,
+  managerProcedure,
+  protectedProcedure,
+  rateLimit,
+  router,
+} from "@/server/trpc/trpc";
 import { logProfileSection } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
   bulkSetOnHand,
+  postStockReceiving,
   receiveStock,
   recomputeInventorySnapshots,
   transferStock,
@@ -30,7 +37,7 @@ const inventoryListIdsInputSchema = z.object({
 const inventoryProductSearchInputSchema = z.object({
   storeId: z.string(),
   search: z.string().optional(),
-  limit: z.number().int().min(1).max(50).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
 });
 
 const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInputSchema>) => ({
@@ -42,8 +49,16 @@ const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInput
           OR: [
             { name: { contains: input.search, mode: "insensitive" as const } },
             { sku: { contains: input.search, mode: "insensitive" as const } },
-            { barcodes: { some: { value: { contains: input.search, mode: "insensitive" as const } } } },
-            { packs: { some: { packBarcode: { contains: input.search, mode: "insensitive" as const } } } },
+            {
+              barcodes: {
+                some: { value: { contains: input.search, mode: "insensitive" as const } },
+              },
+            },
+            {
+              packs: {
+                some: { packBarcode: { contains: input.search, mode: "insensitive" as const } },
+              },
+            },
           ],
         }
       : {}),
@@ -64,6 +79,7 @@ const inventoryProductSelect = (storeId: string, organizationId: string) =>
       select: {
         id: true,
         packName: true,
+        packBarcode: true,
         multiplierToBase: true,
         allowInPurchasing: true,
         allowInReceiving: true,
@@ -94,166 +110,160 @@ const inventoryProductSelect = (storeId: string, organizationId: string) =>
   }) as const;
 
 export const inventoryRouter = router({
-  list: protectedProcedure
-    .input(inventoryListInputSchema)
-    .query(async ({ ctx, input }) => {
-      const page = input.page ?? 1;
-      const pageSize = input.pageSize ?? 25;
-      const storeAccessStartedAt = Date.now();
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-      logProfileSection({
-        logger: ctx.logger,
-        scope: "inventory.list",
-        section: "storeAccess",
-        startedAt: storeAccessStartedAt,
-        details: {
-          hasStoreId: true,
-        },
-      });
+  list: protectedProcedure.input(inventoryListInputSchema).query(async ({ ctx, input }) => {
+    const page = input.page ?? 1;
+    const pageSize = input.pageSize ?? 25;
+    const storeAccessStartedAt = Date.now();
+    await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+    logProfileSection({
+      logger: ctx.logger,
+      scope: "inventory.list",
+      section: "storeAccess",
+      startedAt: storeAccessStartedAt,
+      details: {
+        hasStoreId: true,
+      },
+    });
 
-      const where = buildInventorySnapshotWhere(input);
-      const primaryReadsStartedAt = Date.now();
-      const [total, snapshots] = await Promise.all([
-        ctx.prisma.inventorySnapshot.count({ where }),
-        ctx.prisma.inventorySnapshot.findMany({
-          where,
-          select: {
-            id: true,
-            storeId: true,
-            productId: true,
-            variantId: true,
-            variantKey: true,
-            onHand: true,
-            onOrder: true,
-            allowNegativeStock: true,
-            updatedAt: true,
-            product: {
-              select: {
-                id: true,
-                supplierId: true,
-                sku: true,
-                name: true,
-                basePriceKgs: true,
-                baseUnitId: true,
-                photoUrl: true,
-                baseUnit: true,
-                packs: {
-                  select: {
-                    id: true,
-                    packName: true,
-                    multiplierToBase: true,
-                    allowInPurchasing: true,
-                    allowInReceiving: true,
-                  },
-                },
-                images: {
-                  where: {
-                    url: {
-                      not: { startsWith: "data:image/" },
-                    },
-                  },
-                  select: { id: true, url: true, position: true },
-                  orderBy: { position: "asc" },
-                  take: 1,
-                },
-                barcodes: {
-                  select: { value: true },
-                  take: 5,
+    const where = buildInventorySnapshotWhere(input);
+    const primaryReadsStartedAt = Date.now();
+    const [total, snapshots] = await Promise.all([
+      ctx.prisma.inventorySnapshot.count({ where }),
+      ctx.prisma.inventorySnapshot.findMany({
+        where,
+        select: {
+          id: true,
+          storeId: true,
+          productId: true,
+          variantId: true,
+          variantKey: true,
+          onHand: true,
+          onOrder: true,
+          allowNegativeStock: true,
+          updatedAt: true,
+          product: {
+            select: {
+              id: true,
+              supplierId: true,
+              sku: true,
+              name: true,
+              basePriceKgs: true,
+              baseUnitId: true,
+              photoUrl: true,
+              baseUnit: true,
+              packs: {
+                select: {
+                  id: true,
+                  packName: true,
+                  multiplierToBase: true,
+                  allowInPurchasing: true,
+                  allowInReceiving: true,
                 },
               },
-            },
-            variant: {
-              select: {
-                id: true,
-                name: true,
+              images: {
+                where: {
+                  url: {
+                    not: { startsWith: "data:image/" },
+                  },
+                },
+                select: { id: true, url: true, position: true },
+                orderBy: { position: "asc" },
+                take: 1,
+              },
+              barcodes: {
+                select: { value: true },
+                take: 5,
               },
             },
           },
-          orderBy: { product: { name: "asc" } },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ]);
-      logProfileSection({
-        logger: ctx.logger,
-        scope: "inventory.list",
-        section: "primaryReads",
-        startedAt: primaryReadsStartedAt,
-        details: {
-          total,
-          page,
-          pageSize,
-          snapshots: snapshots.length,
-          hasSearch: Boolean(input.search?.trim()),
+          variant: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
-      });
-
-      const productIds = snapshots.map((snapshot) => snapshot.productId);
-      const enrichmentReadsStartedAt = Date.now();
-      const [policies, forecasts] =
-        productIds.length > 0
-          ? await Promise.all([
-              ctx.prisma.reorderPolicy.findMany({
-                where: { storeId: input.storeId, productId: { in: productIds } },
-              }),
-              ctx.prisma.forecastSnapshot.findMany({
-                where: { storeId: input.storeId, productId: { in: productIds } },
-                orderBy: { generatedAt: "desc" },
-                distinct: ["productId"],
-              }),
-            ])
-          : [[], []];
-      logProfileSection({
-        logger: ctx.logger,
-        scope: "inventory.list",
-        section: "enrichmentReads",
-        startedAt: enrichmentReadsStartedAt,
-        details: {
-          productIds: productIds.length,
-          policies: policies.length,
-          forecasts: forecasts.length,
-        },
-      });
-
-      const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
-      const forecastMap = new Map(
-        forecasts.map((forecast) => [forecast.productId, forecast]),
-      );
-
-      const items = snapshots.map((snapshot) => {
-        const policy = policyMap.get(snapshot.productId) ?? null;
-        const minStock = policy?.minStock ?? 0;
-        return {
-          snapshot,
-          product: snapshot.product,
-          variant: snapshot.variant,
-          minStock,
-          lowStock: minStock > 0 && snapshot.onHand <= minStock,
-          reorder: buildReorderSuggestion(
-            snapshot,
-            policy,
-            forecastMap.get(snapshot.productId) ?? null,
-          ),
-        };
-      });
-
-      return { items, total, page, pageSize };
-    }),
-
-  listIds: protectedProcedure
-    .input(inventoryListIdsInputSchema)
-    .query(async ({ ctx, input }) => {
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-
-      const where = buildInventorySnapshotWhere(input);
-
-      const rows = await ctx.prisma.inventorySnapshot.findMany({
-        where,
-        select: { id: true },
         orderBy: { product: { name: "asc" } },
-      });
-      return rows.map((row) => row.id);
-    }),
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    logProfileSection({
+      logger: ctx.logger,
+      scope: "inventory.list",
+      section: "primaryReads",
+      startedAt: primaryReadsStartedAt,
+      details: {
+        total,
+        page,
+        pageSize,
+        snapshots: snapshots.length,
+        hasSearch: Boolean(input.search?.trim()),
+      },
+    });
+
+    const productIds = snapshots.map((snapshot) => snapshot.productId);
+    const enrichmentReadsStartedAt = Date.now();
+    const [policies, forecasts] =
+      productIds.length > 0
+        ? await Promise.all([
+            ctx.prisma.reorderPolicy.findMany({
+              where: { storeId: input.storeId, productId: { in: productIds } },
+            }),
+            ctx.prisma.forecastSnapshot.findMany({
+              where: { storeId: input.storeId, productId: { in: productIds } },
+              orderBy: { generatedAt: "desc" },
+              distinct: ["productId"],
+            }),
+          ])
+        : [[], []];
+    logProfileSection({
+      logger: ctx.logger,
+      scope: "inventory.list",
+      section: "enrichmentReads",
+      startedAt: enrichmentReadsStartedAt,
+      details: {
+        productIds: productIds.length,
+        policies: policies.length,
+        forecasts: forecasts.length,
+      },
+    });
+
+    const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
+    const forecastMap = new Map(forecasts.map((forecast) => [forecast.productId, forecast]));
+
+    const items = snapshots.map((snapshot) => {
+      const policy = policyMap.get(snapshot.productId) ?? null;
+      const minStock = policy?.minStock ?? 0;
+      return {
+        snapshot,
+        product: snapshot.product,
+        variant: snapshot.variant,
+        minStock,
+        lowStock: minStock > 0 && snapshot.onHand <= minStock,
+        reorder: buildReorderSuggestion(
+          snapshot,
+          policy,
+          forecastMap.get(snapshot.productId) ?? null,
+        ),
+      };
+    });
+
+    return { items, total, page, pageSize };
+  }),
+
+  listIds: protectedProcedure.input(inventoryListIdsInputSchema).query(async ({ ctx, input }) => {
+    await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+
+    const where = buildInventorySnapshotWhere(input);
+
+    const rows = await ctx.prisma.inventorySnapshot.findMany({
+      where,
+      select: { id: true },
+      orderBy: { product: { name: "asc" } },
+    });
+    return rows.map((row) => row.id);
+  }),
 
   searchProducts: protectedProcedure
     .input(inventoryProductSearchInputSchema)
@@ -336,7 +346,11 @@ export const inventoryRouter = router({
           variant: snapshot.variant,
           primaryBarcode: product.barcodes[0]?.value ?? null,
           unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
-          priceKgs: price ? Number(price.priceKgs) : product.basePriceKgs ? Number(product.basePriceKgs) : null,
+          priceKgs: price
+            ? Number(price.priceKgs)
+            : product.basePriceKgs
+              ? Number(product.basePriceKgs)
+              : null,
         };
       });
     }),
@@ -397,7 +411,10 @@ export const inventoryRouter = router({
         storeId: z.string(),
         productId: z.string(),
         variantId: z.string().optional(),
-        qtyDelta: z.number().int().refine((value) => value !== 0, "nonZeroAdjustment"),
+        qtyDelta: z
+          .number()
+          .int()
+          .refine((value) => value !== 0, "nonZeroAdjustment"),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         reason: z.string().min(3),
@@ -485,6 +502,49 @@ export const inventoryRouter = router({
           unitCost: input.unitCost ?? undefined,
           expiryDate: input.expiryDate ? new Date(input.expiryDate) : undefined,
           note: input.note,
+          actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          requestId: ctx.requestId,
+          idempotencyKey: input.idempotencyKey,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  postStockReceiving: adminProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-stock-receiving" }))
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        date: z.string().datetime().optional(),
+        supplierName: z.string().trim().max(160).optional(),
+        note: z.string().trim().max(1_000).optional(),
+        referenceNumber: z.string().trim().max(80).optional(),
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              variantId: z.string().optional().nullable(),
+              quantity: z.number().int().positive("invalidReceivingQuantity"),
+              unitCost: z.number().min(0, "unitCostInvalid"),
+            }),
+          )
+          .min(1, "receivingLinesRequired")
+          .max(500),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await postStockReceiving({
+          storeId: input.storeId,
+          date: input.date ? new Date(input.date) : undefined,
+          supplierName: input.supplierName,
+          note: input.note,
+          referenceNumber: input.referenceNumber,
+          lines: input.lines,
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,

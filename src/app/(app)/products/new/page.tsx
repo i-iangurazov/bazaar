@@ -34,6 +34,7 @@ const NewProductPage = () => {
   const canManageProducts = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const canEditInitialStock = session?.user?.role === "ADMIN";
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
   const attributesQuery = trpc.attributes.list.useQuery();
   const unitsQuery = trpc.units.list.useQuery();
   const storesQuery = trpc.stores.list.useQuery(undefined, {
@@ -44,7 +45,8 @@ const NewProductPage = () => {
   });
 
   const createMutation = trpc.products.create.useMutation({
-    onSuccess: (product) => {
+    onSuccess: async (product) => {
+      await trpcUtils.products.suggestSku.invalidate();
       toast({ variant: "success", description: t("createSuccess") });
       router.push(`/products/${product.id}`);
     },
@@ -77,6 +79,9 @@ const NewProductPage = () => {
 
   const selectedStore = storeOptions.find((store) => store.id === selectedStoreId) ?? null;
   const selectedCurrencyRate = Number(selectedStore?.currencyRateKgsPerUnit ?? 1);
+  const enableSku = selectedStore?.enableSku ?? true;
+  const enableBarcode = selectedStore?.enableBarcode ?? true;
+  const enableSimilarProductCheck = selectedStore?.enableSimilarProductCheck ?? true;
   const storeSelectDisabled = storesQuery.isLoading || storeOptions.length <= 1;
 
   if (session && !canManageProducts) {
@@ -144,7 +149,7 @@ const NewProductPage = () => {
         <p className="text-sm text-muted-foreground">{t("createStoreEmpty")}</p>
       ) : (
         <ProductForm
-          key={`new:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}`}
+          key={`new:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
           initialValues={{
             sku: suggestedSku,
             name: "",
@@ -160,7 +165,7 @@ const NewProductPage = () => {
             description: "",
             photoUrl: "",
             images: [],
-            barcodes: barcode ? [barcode] : [],
+            barcodes: enableBarcode && barcode ? [barcode] : [],
             packs: [],
             variants: [],
             bundleComponents: [],
@@ -171,7 +176,10 @@ const NewProductPage = () => {
             createMutation.mutate({
               ...values,
               storeId: selectedStore.id,
-              sku: suggestedSku && values.sku.trim() === suggestedSku ? "" : values.sku,
+              sku:
+                !enableSku || (suggestedSku && values.sku.trim() === suggestedSku)
+                  ? ""
+                  : values.sku,
             })
           }
           isSubmitting={createMutation.isLoading}
@@ -179,6 +187,9 @@ const NewProductPage = () => {
           currencyRateKgsPerUnit={selectedCurrencyRate}
           quickCreateMode
           canEditInitialStock={canEditInitialStock}
+          enableSku={enableSku}
+          enableBarcode={enableBarcode}
+          enableSimilarProductCheck={enableSimilarProductCheck}
         />
       )}
       {createMutation.error ? (

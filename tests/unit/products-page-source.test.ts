@@ -56,7 +56,9 @@ describe("index page source layout", () => {
     );
     expect(listSource).toContain("const canSelectProducts = canManageProducts;");
     expect(listSource).toContain("if (!canManageProducts || arrangeCategoriesRunning)");
-    expect(listSource).toContain("if (!selectedList.length || !canManageProducts)");
+    expect(listSource).toContain(
+      "if (!enableBarcode || !selectedList.length || !canManageProducts)",
+    );
     expect(createSource).toContain(
       'const canManageProducts = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";',
     );
@@ -84,5 +86,76 @@ describe("index page source layout", () => {
     expect(detailSource).not.toContain("confirmDeletePermanent");
     expect(readServiceSource).toContain('const sortKey = input?.sortKey ?? "updatedAt";');
     expect(readServiceSource).toContain('const sortDirection = input?.sortDirection ?? "desc";');
+  });
+
+  it("wires store-scoped product behavior settings through product screens", async () => {
+    const listSource = await readSource("src/app/(app)/products/page.tsx");
+    const createSource = await readSource("src/app/(app)/products/new/page.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+    const formSource = await readSource("src/components/product-form.tsx");
+    const storeRouterSource = await readSource("src/server/trpc/routers/stores.ts");
+    const productServiceSource = await readSource("src/server/services/products.ts");
+
+    expect(storeRouterSource).toContain("updateProductSettings");
+    expect(storeRouterSource).toContain("adminOrOrgOwnerProcedure");
+    expect(createSource).toContain("enableSku={enableSku}");
+    expect(createSource).toContain("enableBarcode={enableBarcode}");
+    expect(createSource).toContain("trpcUtils.products.suggestSku.invalidate()");
+    expect(listSource).toContain("const productSearchPlaceholder = useMemo");
+    expect(listSource).toContain('return t("searchPlaceholderNameOnly");');
+    expect(listSource).toContain("placeholder={productSearchPlaceholder}");
+    expect(detailSource).toContain("enableSimilarProductCheck={enableSimilarProductCheck}");
+    expect(detailSource).toContain("handleSaveStoreVariantOnHand");
+    expect(listSource).toContain("duplicateDialogTitle");
+    expect(listSource).toContain("copyImages: false");
+    expect(formSource).toContain("enableSimilarProductCheck &&");
+    expect(formSource).toContain("{enableSku ? (");
+    expect(formSource).toContain("{compactCreate && enableBarcode ? (");
+    expect(formSource).toContain(
+      "{!compactCreate && enableBarcode ? barcodeManagementSection : null}",
+    );
+    expect(formSource).toContain("!enableSku || !variant.sku?.trim()");
+    expect(productServiceSource).toContain("copyImages ? source.photoUrl : null");
+    expect(productServiceSource).toContain("sku: null");
+  });
+
+  it("exposes store-scoped product behavior settings on the profile page", async () => {
+    const profileSource = await readSource("src/app/(app)/settings/profile/page.tsx");
+    const orgSettingsSource = await readSource("src/server/services/orgSettings.ts");
+    const storeRouterSource = await readSource("src/server/trpc/routers/stores.ts");
+
+    expect(profileSource).toContain('t("productSettings.title")');
+    expect(profileSource).toContain('prefix: "products-table-state"');
+    expect(profileSource).toContain("productSettingsStoreReady");
+    expect(profileSource).toContain('name="storeId"');
+    expect(profileSource).toContain("handleStoreChange(value)");
+    expect(profileSource).toContain('name="enableSku"');
+    expect(profileSource).toContain('name="enableBarcode"');
+    expect(profileSource).toContain('name="enableSimilarProductCheck"');
+    expect(profileSource).toContain('t("productSettings.storeHint")');
+    expect(profileSource).toContain("trpc.stores.updateProductSettings.useMutation");
+    expect(profileSource).toContain("businessData.selectedStore.enableSku ?? true");
+    expect(profileSource).toContain("trpcUtils.products.bootstrap.invalidate()");
+    expect(profileSource).toContain("trpcUtils.products.storePricing.invalidate()");
+    expect(orgSettingsSource).toContain("enableSku: true");
+    expect(orgSettingsSource).toContain("enableBarcode: true");
+    expect(orgSettingsSource).toContain("enableSimilarProductCheck: true");
+    expect(storeRouterSource).toContain("updateProductSettings: adminOrOrgOwnerProcedure");
+  });
+
+  it("keeps shared mobile list pagination touch-friendly", async () => {
+    const responsiveListSource = await readSource("src/components/responsive-data-list.tsx");
+
+    expect(responsiveListSource).toContain('className="h-10 sm:h-8"');
+    expect(responsiveListSource).toContain('className="h-10 w-10 sm:h-8 sm:w-8"');
+  });
+
+  it("does not show barcode UI on product edit before store settings are loaded", async () => {
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+
+    expect(detailSource).toContain("const productSettingsLoaded = storePricingQuery.isSuccess;");
+    expect(detailSource).toContain("const enableBarcode = productSettingsLoaded");
+    expect(detailSource).toContain("? (selectedSettingsStore?.enableBarcode ?? true)");
+    expect(detailSource).toContain("storePricingQuery.isLoading || !formValues");
   });
 });

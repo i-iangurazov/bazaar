@@ -5,6 +5,7 @@ import { prisma } from "@/server/db/prisma";
 import {
   adjustStock,
   bulkSetOnHand,
+  postStockReceiving,
   receiveStock,
   recomputeInventorySnapshots,
   transferStock,
@@ -157,12 +158,118 @@ describeDb("inventory service", () => {
 
     const snapshot = await prisma.inventorySnapshot.findUnique({
       where: {
-        storeId_productId_variantKey: { storeId: store.id, productId: product.id, variantKey: "BASE" },
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
       },
     });
 
     expect(movements).toHaveLength(1);
     expect(snapshot?.onHand).toBe(4);
+  });
+
+  it("posts bulk stock receiving with one movement reference", async () => {
+    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "TEST-2",
+        name: "Second Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: secondProduct.id,
+        isActive: true,
+      },
+    });
+
+    const result = await postStockReceiving({
+      storeId: store.id,
+      referenceNumber: "RCV-1",
+      supplierName: "Test Supplier",
+      lines: [
+        { productId: product.id, quantity: 3, unitCost: 5 },
+        { productId: secondProduct.id, quantity: 2, unitCost: 7 },
+      ],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-receive",
+      idempotencyKey: "idem-bulk-receive",
+    });
+
+    expect(result.lineCount).toBe(2);
+    expect(result.totalQuantity).toBe(5);
+    expect(result.totalCostKgs).toBe(29);
+
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        storeId: store.id,
+        referenceType: "STOCK_RECEIVING",
+        referenceId: result.receivingId,
+        type: StockMovementType.RECEIVE,
+      },
+      orderBy: { productId: "asc" },
+    });
+    expect(movements).toHaveLength(2);
+
+    await assertSnapshotMatchesLedger(store.id, product.id);
+    await assertSnapshotMatchesLedger(store.id, secondProduct.id);
+  });
+
+  it("does not partially post stock receiving when one line is unavailable in the store", async () => {
+    const { org, supplier, product, adminUser, baseUnit } = await seedBase();
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Other Store",
+        code: "OTH",
+      },
+    });
+    const otherStoreProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "OTH-2",
+        name: "Other Store Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: otherStore.id,
+        productId: otherStoreProduct.id,
+        isActive: true,
+      },
+    });
+
+    await expect(
+      postStockReceiving({
+        storeId: otherStore.id,
+        lines: [
+          { productId: otherStoreProduct.id, quantity: 2, unitCost: 4 },
+          { productId: product.id, quantity: 1, unitCost: 3 },
+        ],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-bulk-receive-blocked",
+        idempotencyKey: "idem-bulk-receive-blocked",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const movements = await prisma.stockMovement.findMany({
+      where: { storeId: otherStore.id },
+    });
+    expect(movements).toHaveLength(0);
   });
 
   it("allows negative stock when store policy permits it", async () => {

@@ -155,7 +155,7 @@ export const ResponsiveDataList = <T,>({
             })}
           </div>
         ) : (
-          empty ?? null
+          (empty ?? null)
         )}
       </div>
       {showPagination ? (
@@ -164,8 +164,10 @@ export const ResponsiveDataList = <T,>({
             {tCommon("pagination.items", { from: startItem, to: endItem, total: totalCount })}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">{tCommon("pagination.rowsPerPage")}</span>
-            <div className="w-[88px]">
+            <span className="text-xs text-muted-foreground">
+              {tCommon("pagination.rowsPerPage")}
+            </span>
+            <div className="w-[96px] sm:w-[88px]">
               <Select
                 value={String(pageSize)}
                 onValueChange={(value) => {
@@ -187,7 +189,7 @@ export const ResponsiveDataList = <T,>({
                   }
                 }}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-10 sm:h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -206,7 +208,7 @@ export const ResponsiveDataList = <T,>({
               type="button"
               variant="secondary"
               size="icon"
-              className="h-8 w-8"
+              className="h-10 w-10 sm:h-8 sm:w-8"
               onClick={() => {
                 if (isServerPagination) {
                   onPageChange?.(Math.max(1, page - 1));
@@ -224,7 +226,7 @@ export const ResponsiveDataList = <T,>({
               type="button"
               variant="secondary"
               size="icon"
-              className="h-8 w-8"
+              className="h-10 w-10 sm:h-8 sm:w-8"
               onClick={() => {
                 if (isServerPagination) {
                   onPageChange?.(Math.min(totalPages, page + 1));

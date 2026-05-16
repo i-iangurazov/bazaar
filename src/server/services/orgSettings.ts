@@ -62,14 +62,14 @@ export const getBusinessProfile = async (input: GetBusinessProfileInput) => {
       phone: true,
       currencyCode: true,
       currencyRateKgsPerUnit: true,
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
     },
     orderBy: { name: "asc" },
   });
 
-  const selectedStore =
-    stores.find((store) => store.id === input.storeId) ??
-    stores[0] ??
-    null;
+  const selectedStore = stores.find((store) => store.id === input.storeId) ?? stores[0] ?? null;
 
   const serializedSelectedStore = selectedStore
     ? {
@@ -108,6 +108,9 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
         phone: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
+        enableSku: true,
+        enableBarcode: true,
+        enableSimilarProductCheck: true,
       },
     });
     if (!store || store.organizationId !== input.organizationId) {
@@ -156,6 +159,9 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
         phone: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
+        enableSku: true,
+        enableBarcode: true,
+        enableSimilarProductCheck: true,
       },
     });
 

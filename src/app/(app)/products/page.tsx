@@ -83,11 +83,7 @@ import {
   type BarcodePrintProduct,
 } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
-import {
-  getQzTrayBinding,
-  printPdfBlobViaQzTray,
-  qzTrayErrorMessageKey,
-} from "@/lib/qzTrayPrint";
+import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import {
   PRICE_TAG_ROLL_DEFAULTS,
   PRICE_TAG_ROLL_LIMITS,
@@ -320,6 +316,10 @@ const ProductsPage = () => {
   const [legacyProductsPrintModalOpen, setLegacyProductsPrintModalOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
   const [printAdvancedOpen, setPrintAdvancedOpen] = useState(false);
+  const [duplicateTarget, setDuplicateTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const inlineEditingEnabled = true;
 
   const defaultProductsTableState = useMemo<ProductsTableState>(
@@ -507,7 +507,7 @@ const ProductsPage = () => {
     () => findMatchingSavedTableView(productsSavedViewsState.views, productsTableState),
     [productsSavedViewsState.views, productsTableState],
   );
-  const productColumnOptions = useMemo(
+  const baseProductColumnOptions = useMemo(
     () => [
       { key: "sku", label: t("sku") },
       { key: "image", label: t("imageLabel") },
@@ -522,10 +522,6 @@ const ProductsPage = () => {
       { key: "stores", label: t("stores") },
     ],
     [t, tInventory],
-  );
-  const visibleProductColumnSet = useMemo(
-    () => new Set<ProductVisibleColumnKey>(visibleProductColumns),
-    [visibleProductColumns],
   );
   const productsBootstrapInput = useMemo(
     () => ({
@@ -567,6 +563,47 @@ const ProductsPage = () => {
     () => stores.find((store) => store.id === storeId) ?? null,
     [storeId, stores],
   );
+  const enableSku = selectedStore?.enableSku ?? true;
+  const enableBarcode = selectedStore?.enableBarcode ?? true;
+  const productSearchPlaceholder = useMemo(() => {
+    if (enableSku) {
+      return t("searchPlaceholder");
+    }
+    return t("searchPlaceholderNameOnly");
+  }, [enableSku, t]);
+  const productColumnOptions = useMemo(
+    () =>
+      baseProductColumnOptions.filter((column) => {
+        if (column.key === "sku") {
+          return enableSku;
+        }
+        if (column.key === "barcodes") {
+          return enableBarcode;
+        }
+        return true;
+      }),
+    [baseProductColumnOptions, enableBarcode, enableSku],
+  );
+  const visibleProductColumnSet = useMemo(
+    () =>
+      new Set<ProductVisibleColumnKey>(
+        visibleProductColumns.filter((column) => {
+          if (column === "sku") {
+            return enableSku;
+          }
+          if (column === "barcodes") {
+            return enableBarcode;
+          }
+          return true;
+        }),
+      ),
+    [enableBarcode, enableSku, visibleProductColumns],
+  );
+  useEffect(() => {
+    if (!enableBarcode && readiness === "missingBarcode") {
+      setReadiness("all");
+    }
+  }, [enableBarcode, readiness, setReadiness]);
   const defaultPrintStoreId =
     storeId ||
     stores.find((store) => Boolean(store.printerSettings?.id))?.id ||
@@ -659,6 +696,7 @@ const ProductsPage = () => {
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: (result) => {
       productsBootstrapQuery.refetch();
+      setDuplicateTarget(null);
       toast({
         variant: "success",
         description: result.copiedBarcodes
@@ -1491,7 +1529,7 @@ const ProductsPage = () => {
   const getProductReadiness = (product: ProductRow) => {
     const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
     return {
-      missingBarcode: !product.barcodes.some((barcode) => barcode.value.trim()),
+      missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
       missingPrice: price === null || price === undefined,
       negativeStock: product.onHandQty < 0,
       lowStock: product.onHandQty <= 0,
@@ -1910,26 +1948,27 @@ const ProductsPage = () => {
             href: `/products/${product.id}`,
             openInNewTab: true,
           },
-          {
-            key: "print-labels",
-            label: t("printLabels"),
-            icon: PrintIcon,
-            onSelect: () => {
-              if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
-                toast({ variant: "error", description: t("printMissingBarcode") });
-                return;
-              }
-              void openPrintForProducts([product.id]);
-            },
-          },
+          ...(enableBarcode
+            ? [
+                {
+                  key: "print-labels",
+                  label: t("printLabels"),
+                  icon: PrintIcon,
+                  onSelect: () => {
+                    if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
+                      toast({ variant: "error", description: t("printMissingBarcode") });
+                      return;
+                    }
+                    void openPrintForProducts([product.id]);
+                  },
+                },
+              ]
+            : []),
           {
             key: "duplicate",
             label: t("duplicate"),
             icon: CopyIcon,
-            onSelect: () =>
-              duplicateMutation.mutate({
-                productId: product.id,
-              }),
+            onSelect: () => setDuplicateTarget({ id: product.id, name: product.name }),
           },
           {
             key: "archive",
@@ -2227,7 +2266,7 @@ const ProductsPage = () => {
   };
 
   const handleBulkGenerateBarcodes = async () => {
-    if (!selectedList.length || !canManageProducts) {
+    if (!enableBarcode || !selectedList.length || !canManageProducts) {
       return;
     }
     if (
@@ -2480,10 +2519,12 @@ const ProductsPage = () => {
                       <CopyIcon className="h-4 w-4" aria-hidden />
                       {t("addExistingProducts")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={openPrintSettings}>
-                      <PrintIcon className="h-4 w-4" aria-hidden />
-                      {t("changePrintSettings")}
-                    </DropdownMenuItem>
+                    {enableBarcode ? (
+                      <DropdownMenuItem onSelect={openPrintSettings}>
+                        <PrintIcon className="h-4 w-4" aria-hidden />
+                        {t("changePrintSettings")}
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuSeparator />
                     {canManagePrices ? (
                       <DropdownMenuItem
@@ -2505,7 +2546,7 @@ const ProductsPage = () => {
                       )}
                       {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
                     </DropdownMenuItem>
-                    {selectedList.length ? (
+                    {enableBarcode && selectedList.length ? (
                       <>
                         <DropdownMenuItem
                           data-tour="products-print-tags"
@@ -2562,7 +2603,7 @@ const ProductsPage = () => {
             <Input
               data-tour="products-search"
               className="w-full sm:max-w-xs"
-              placeholder={t("searchPlaceholder")}
+              placeholder={productSearchPlaceholder}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -2641,7 +2682,9 @@ const ProductsPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("readinessAll")}</SelectItem>
-                  <SelectItem value="missingBarcode">{t("missingBarcode")}</SelectItem>
+                  {enableBarcode ? (
+                    <SelectItem value="missingBarcode">{t("missingBarcode")}</SelectItem>
+                  ) : null}
                   <SelectItem value="missingPrice">{t("missingPrice")}</SelectItem>
                   <SelectItem value="lowStock">{t("lowStock")}</SelectItem>
                   <SelectItem value="negativeStock">{t("negativeStock")}</SelectItem>
@@ -2772,21 +2815,23 @@ const ProductsPage = () => {
                         : tCommon("selectAllResults", { count: productsTotal })}
                     </Button>
                   ) : null}
-                  <Button
-                    data-tour="products-print-tags"
-                    type="button"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => void openPrintForProducts(selectedList)}
-                    disabled={quickPrintLoading}
-                  >
-                    {quickPrintLoading ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <PrintIcon className="h-4 w-4" aria-hidden />
-                    )}
-                    {quickPrintLoading ? tCommon("loading") : t("printLabels")}
-                  </Button>
+                  {enableBarcode ? (
+                    <Button
+                      data-tour="products-print-tags"
+                      type="button"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => void openPrintForProducts(selectedList)}
+                      disabled={quickPrintLoading}
+                    >
+                      {quickPrintLoading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <PrintIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {quickPrintLoading ? tCommon("loading") : t("printLabels")}
+                    </Button>
+                  ) : null}
                   {canManagePrices ? (
                     <Button
                       type="button"
@@ -2889,21 +2934,23 @@ const ProductsPage = () => {
                             ? tCommon("loading")
                             : t("bulkGenerateDescriptions")}
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={
-                            bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
-                          }
-                          onSelect={() => void handleBulkGenerateBarcodes()}
-                        >
-                          {bulkGenerateBarcodesMutation.isLoading ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <AddIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {bulkGenerateBarcodesMutation.isLoading
-                            ? tCommon("loading")
-                            : t("bulkGenerateBarcodes")}
-                        </DropdownMenuItem>
+                        {enableBarcode ? (
+                          <DropdownMenuItem
+                            disabled={
+                              bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
+                            }
+                            onSelect={() => void handleBulkGenerateBarcodes()}
+                          >
+                            {bulkGenerateBarcodesMutation.isLoading ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <AddIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {bulkGenerateBarcodesMutation.isLoading
+                              ? tCommon("loading")
+                              : t("bulkGenerateBarcodes")}
+                          </DropdownMenuItem>
+                        ) : null}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : null}
@@ -3242,7 +3289,9 @@ const ProductsPage = () => {
                                 <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
                                   {product.name}
                                 </p>
-                                <p className="text-xs text-muted-foreground">{product.sku}</p>
+                                {enableSku ? (
+                                  <p className="text-xs text-muted-foreground">{product.sku}</p>
+                                ) : null}
                               </div>
                               <RowActions
                                 actions={actions}
@@ -3326,12 +3375,14 @@ const ProductsPage = () => {
                                   className="text-sm font-semibold text-foreground"
                                 />
                               </div>
-                              <div>
-                                <p>{t("barcodes")}</p>
-                                <p className="truncate text-sm font-semibold text-foreground">
-                                  {barcodeSummary.label}
-                                </p>
-                              </div>
+                              {enableBarcode ? (
+                                <div>
+                                  <p>{t("barcodes")}</p>
+                                  <p className="truncate text-sm font-semibold text-foreground">
+                                    {barcodeSummary.label}
+                                  </p>
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -3385,7 +3436,11 @@ const ProductsPage = () => {
                             <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
                               {product.name}
                             </p>
-                            <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
+                            {enableSku ? (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {product.sku}
+                              </p>
+                            ) : null}
                           </div>
                           <RowActions
                             actions={actions}
@@ -3513,9 +3568,11 @@ const ProductsPage = () => {
                               {readinessSummary.label}
                             </Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {t("sku")}: {product.sku}
-                          </p>
+                          {enableSku ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("sku")}: {product.sku}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                       <RowActions
@@ -3594,10 +3651,12 @@ const ProductsPage = () => {
                           className="justify-end text-foreground"
                         />
                       </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{t("barcodes")}</span>
-                        <span className="text-foreground">{barcodeSummary.label}</span>
-                      </div>
+                      {enableBarcode ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{t("barcodes")}</span>
+                          <span className="text-foreground">{barcodeSummary.label}</span>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between gap-2">
                         <span>{t("stores")}</span>
                         <span className="text-foreground">{storeInfo.summary}</span>
@@ -3741,13 +3800,19 @@ const ProductsPage = () => {
                           {product.name}
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {product.sku}
-                          {productCategories.length ? ` · ${productCategories.join(", ")}` : ""}
+                          {[
+                            enableSku ? product.sku : "",
+                            productCategories.length ? productCategories.join(", ") : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
-                      <span className="hidden text-xs text-muted-foreground sm:inline">
-                        {barcodeSummary.label}
-                      </span>
+                      {enableBarcode ? (
+                        <span className="hidden text-xs text-muted-foreground sm:inline">
+                          {barcodeSummary.label}
+                        </span>
+                      ) : null}
                     </label>
                   );
                 })
@@ -4073,9 +4138,9 @@ const ProductsPage = () => {
               name="search"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("searchPlaceholder")}</FormLabel>
+                  <FormLabel>{productSearchPlaceholder}</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder={t("searchPlaceholder")} />
+                    <Input {...field} placeholder={productSearchPlaceholder} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -4757,9 +4822,11 @@ const ProductsPage = () => {
                             <p className="mt-1 text-[11px] font-semibold text-foreground">
                               {rollPreviewPriceText}
                             </p>
-                            <p className="mt-1 text-[8px] text-muted-foreground">
-                              {rollPreviewProduct?.sku || t("rollPreviewSku")}
-                            </p>
+                            {enableSku ? (
+                              <p className="mt-1 text-[8px] text-muted-foreground">
+                                {rollPreviewProduct?.sku || t("rollPreviewSku")}
+                              </p>
+                            ) : null}
                             <div className="mt-1 h-4 rounded-md bg-muted" />
                             <p className="mt-1 text-center text-[7px] text-muted-foreground">
                               {t("rollPreviewBarcode")}
@@ -4786,9 +4853,11 @@ const ProductsPage = () => {
                             <span className="truncate text-foreground">
                               {product?.name ?? productId}
                             </span>
-                            <span className="shrink-0 text-muted-foreground">
-                              {product?.sku ?? tCommon("notAvailable")}
-                            </span>
+                            {enableSku ? (
+                              <span className="shrink-0 text-muted-foreground">
+                                {product?.sku ?? tCommon("notAvailable")}
+                              </span>
+                            ) : null}
                           </div>
                         );
                       })}
@@ -4830,6 +4899,65 @@ const ProductsPage = () => {
           </Form>
         </Modal>
       ) : null}
+      <Modal
+        open={Boolean(duplicateTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDuplicateTarget(null);
+          }
+        }}
+        title={t("duplicateDialogTitle")}
+        subtitle={duplicateTarget?.name}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDuplicateTarget(null)}
+              disabled={duplicateMutation.isLoading}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (!duplicateTarget) {
+                  return;
+                }
+                duplicateMutation.mutate({
+                  productId: duplicateTarget.id,
+                  copyImages: false,
+                  storeId: storeId || undefined,
+                });
+              }}
+              disabled={duplicateMutation.isLoading}
+            >
+              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("duplicateWithoutPhotos")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!duplicateTarget) {
+                  return;
+                }
+                duplicateMutation.mutate({
+                  productId: duplicateTarget.id,
+                  copyImages: true,
+                  storeId: storeId || undefined,
+                });
+              }}
+              disabled={duplicateMutation.isLoading}
+            >
+              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("duplicateWithPhotos")}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
       {confirmDialog}
     </div>
   );

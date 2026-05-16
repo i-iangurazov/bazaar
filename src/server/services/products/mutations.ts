@@ -205,7 +205,9 @@ export const inlineUpdateProductMutation = async ({
 export const duplicateProductMutation = async ({
   input,
   ...ctx
-}: ProductMutationContext & { input: { productId: string; sku?: string } }) => {
+}: ProductMutationContext & {
+  input: { productId: string; sku?: string; copyImages?: boolean; storeId?: string };
+}) => {
   try {
     return await duplicateProduct({
       organizationId: ctx.organizationId,
@@ -213,6 +215,8 @@ export const duplicateProductMutation = async ({
       requestId: ctx.requestId,
       productId: input.productId,
       sku: input.sku,
+      copyImages: input.copyImages,
+      storeId: input.storeId,
     });
   } catch (error) {
     throw toTRPCError(error);

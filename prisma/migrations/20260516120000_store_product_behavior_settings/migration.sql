@@ -1,0 +1,4 @@
+ALTER TABLE "Store"
+  ADD COLUMN "enableSku" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "enableBarcode" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "enableSimilarProductCheck" BOOLEAN NOT NULL DEFAULT true;
