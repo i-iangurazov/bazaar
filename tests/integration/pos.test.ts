@@ -302,6 +302,70 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("allows POS sale completion to drive stock negative", async () => {
+    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-negative-stock-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-negative-stock-1",
+      payments: [{ method: "CASH", amountKgs: 200 }],
+    });
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const movement = await prisma.stockMovement.findFirst({
+      where: {
+        storeId: store.id,
+        productId: product.id,
+        type: StockMovementType.SALE,
+        referenceId: sale.id,
+      },
+    });
+
+    expect(store.allowNegativeStock).toBe(false);
+    expect(snapshot?.onHand).toBe(-2);
+    expect(snapshot?.allowNegativeStock).toBe(true);
+    expect(movement?.qtyDelta).toBe(-2);
+  });
+
   it("tracks discounted debt sales and settles debt into the active shift", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 

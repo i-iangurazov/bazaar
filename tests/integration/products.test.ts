@@ -763,6 +763,44 @@ describeDb("products", () => {
     expect(pageTwo.items.map((item) => item.name)).toContain("Charlie Product");
   });
 
+  it("ranks product search results by name relevance before alphabetical order", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const aerator = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-search-relevance-aerator",
+      sku: "01033",
+      name: "Аэратор внут. резьба",
+      baseUnitId: baseUnit.id,
+    });
+    const directThread = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-search-relevance-thread",
+      sku: "05318",
+      name: "Резьба 15 (10см)",
+      baseUnitId: baseUnit.id,
+    });
+
+    const result = await caller.products.list({
+      search: "Резьба",
+      page: 1,
+      pageSize: 10,
+      sortKey: "name",
+      sortDirection: "asc",
+    });
+
+    const resultIds = result.items.map((item) => item.id);
+    expect(resultIds.indexOf(directThread.id)).toBeLessThan(resultIds.indexOf(aerator.id));
+  });
+
   it("sorts paginated product lists by computed on-hand quantity", async () => {
     const { org, adminUser, baseUnit, store } = await seedBase();
     const caller = createTestCaller({

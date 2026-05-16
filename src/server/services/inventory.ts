@@ -71,6 +71,7 @@ export type ApplyStockMovementInput = {
   note?: string | null;
   actorId?: string | null;
   organizationId?: string;
+  allowNegativeStock?: boolean;
 };
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
@@ -113,10 +114,11 @@ export const applyStockMovement = async (
 
   const variantKey = resolveVariantKey(input.variantId);
 
+  const effectiveAllowNegativeStock = store.allowNegativeStock || input.allowNegativeStock === true;
   const snapshotCreatedAt = new Date();
   await tx.$executeRaw`
     INSERT INTO "InventorySnapshot" ("id", "storeId", "productId", "variantId", "variantKey", "onHand", "onOrder", "allowNegativeStock", "updatedAt")
-    VALUES (${randomUUID()}, ${input.storeId}, ${input.productId}, ${input.variantId ?? null}, ${variantKey}, 0, 0, ${store.allowNegativeStock}, ${snapshotCreatedAt})
+    VALUES (${randomUUID()}, ${input.storeId}, ${input.productId}, ${input.variantId ?? null}, ${variantKey}, 0, 0, ${effectiveAllowNegativeStock}, ${snapshotCreatedAt})
     ON CONFLICT ("storeId", "productId", "variantKey") DO NOTHING;
   `;
 
@@ -132,7 +134,7 @@ export const applyStockMovement = async (
   }
 
   const nextOnHand = snapshot.onHand + input.qtyDelta;
-  if (!store.allowNegativeStock && nextOnHand < 0) {
+  if (!effectiveAllowNegativeStock && nextOnHand < 0) {
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }
 
@@ -140,7 +142,7 @@ export const applyStockMovement = async (
     where: { id: snapshot.id },
     data: {
       onHand: nextOnHand,
-      allowNegativeStock: store.allowNegativeStock,
+      allowNegativeStock: effectiveAllowNegativeStock,
     },
   });
 

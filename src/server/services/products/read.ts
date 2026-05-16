@@ -10,6 +10,10 @@ import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
 import { getProductDuplicateDiagnostics } from "@/server/services/products/diagnostics";
 import {
+  compareProductSearchRelevance,
+  tokenizeProductSearchText,
+} from "@/server/services/products/searchRelevance";
+import {
   assertUserCanAccessStore,
   productStoreAssignmentInWhere,
   productStoreAssignmentWhere,
@@ -56,9 +60,19 @@ const buildProductListWhere = (
   if (input?.search) {
     const normalizedScanSearch = normalizeScanValue(input.search);
     const barcodeSearch = normalizedScanSearch || input.search;
+    const searchTokens = tokenizeProductSearchText(input.search);
     filters.push({
       OR: [
         { name: { contains: input.search, mode: "insensitive" } },
+        ...(searchTokens.length > 1
+          ? [
+              {
+                AND: searchTokens.map((token) => ({
+                  name: { contains: token, mode: "insensitive" as const },
+                })),
+              },
+            ]
+          : []),
         { sku: { contains: input.search, mode: "insensitive" } },
         { barcodes: { some: { value: { contains: barcodeSearch, mode: "insensitive" } } } },
         { packs: { some: { packBarcode: { contains: barcodeSearch, mode: "insensitive" } } } },
@@ -162,7 +176,7 @@ const resolveReadinessProductIds = async ({
             AND p."minStock" > 0
             AND s."onHand" <= p."minStock"
         `
-      : await prisma.$queryRaw<{ productId: string }[]>`
+        : await prisma.$queryRaw<{ productId: string }[]>`
           SELECT DISTINCT s."productId" AS "productId"
           FROM "InventorySnapshot" s
           INNER JOIN "ReorderPolicy" p
@@ -304,6 +318,7 @@ const productListSelect = {
 } satisfies Prisma.ProductSelect;
 
 type ProductPreviewRecord = Prisma.ProductGetPayload<{ select: typeof productPreviewSelect }>;
+type ProductListItem = ReturnType<typeof serializeProductListItem>;
 
 export const getSuggestedProductSku = async (organizationId: string) => {
   try {
@@ -431,6 +446,7 @@ export const searchQuickProducts = async ({
   const barcodeNeedle = normalized || fuzzyNeedle;
   const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
   const barcodeNeedleLower = barcodeNeedle.toLowerCase();
+  const fuzzyTokens = tokenizeProductSearchText(fuzzyNeedle);
   if (storeId && user) {
     try {
       await assertUserCanAccessStore(prisma, user, storeId);
@@ -476,6 +492,15 @@ export const searchQuickProducts = async ({
         ...storeAssignmentWhere,
         OR: [
           { name: { contains: fuzzyNeedle, mode: "insensitive" } },
+          ...(fuzzyTokens.length > 1
+            ? [
+                {
+                  AND: fuzzyTokens.map((token) => ({
+                    name: { contains: token, mode: "insensitive" as const },
+                  })),
+                },
+              ]
+            : []),
           { sku: { contains: fuzzyNeedle, mode: "insensitive" } },
           {
             barcodes: {
@@ -498,7 +523,7 @@ export const searchQuickProducts = async ({
         },
       },
       orderBy: { name: "asc" },
-      take: 10,
+      take: 40,
     }),
   ]);
 
@@ -529,7 +554,20 @@ export const searchQuickProducts = async ({
     items.set(product.id, { ...product, matchType: "sku" });
   });
 
-  fuzzyMatches.forEach((product) => {
+  const searchCollator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const rankedFuzzyMatches = fuzzyMatches.sort((left, right) =>
+    compareProductSearchRelevance({
+      query: fuzzyNeedle,
+      left,
+      right,
+      collator: searchCollator,
+    }),
+  );
+
+  rankedFuzzyMatches.forEach((product) => {
     if (items.has(product.id)) {
       return;
     }
@@ -578,7 +616,28 @@ const sortProductListItems = ({
   storeNameById,
   selectedStoreId,
 }: {
-  items: Awaited<ReturnType<typeof listProducts>>["items"];
+  items: ProductListItem[];
+  sortKey: ProductSortKey;
+  sortDirection: ProductSortDirection;
+  storeNameById: Map<string, string>;
+  selectedStoreId?: string;
+}) => {
+  const comparator = createProductListItemComparator({
+    sortKey,
+    sortDirection,
+    storeNameById,
+    selectedStoreId,
+  });
+
+  items.sort(comparator);
+};
+
+const createProductListItemComparator = ({
+  sortKey,
+  sortDirection,
+  storeNameById,
+  selectedStoreId,
+}: {
   sortKey: ProductSortKey;
   sortDirection: ProductSortDirection;
   storeNameById: Map<string, string>;
@@ -589,17 +648,17 @@ const sortProductListItems = ({
     sensitivity: "base",
   });
   const directionMultiplier = sortDirection === "asc" ? 1 : -1;
-  const resolveSalePriceForSort = (product: (typeof items)[number]) => {
+  const resolveSalePriceForSort = (product: ProductListItem) => {
     const value = selectedStoreId ? product.effectivePriceKgs : product.basePriceKgs;
     return value ?? Number.NEGATIVE_INFINITY;
   };
-  const resolveBarcodeSortValue = (product: (typeof items)[number]) =>
+  const resolveBarcodeSortValue = (product: ProductListItem) =>
     product.barcodes
       .map((entry) => entry.value.trim())
       .filter(Boolean)
       .sort((left, right) => sortCollator.compare(left, right))
       .join(", ");
-  const resolveStoreSortValue = (product: (typeof items)[number]) =>
+  const resolveStoreSortValue = (product: ProductListItem) =>
     Array.from(
       new Set(
         product.inventorySnapshots
@@ -610,7 +669,7 @@ const sortProductListItems = ({
       .sort((left, right) => sortCollator.compare(left, right))
       .join(", ");
 
-  items.sort((left, right) => {
+  return (left: ProductListItem, right: ProductListItem) => {
     let result = 0;
     switch (sortKey) {
       case "sku":
@@ -663,7 +722,44 @@ const sortProductListItems = ({
     }
 
     return result * directionMultiplier;
+  };
+};
+
+const sortProductListItemsBySearchRelevance = ({
+  items,
+  query,
+  sortKey,
+  sortDirection,
+  storeNameById,
+  selectedStoreId,
+}: {
+  items: ProductListItem[];
+  query: string;
+  sortKey: ProductSortKey;
+  sortDirection: ProductSortDirection;
+  storeNameById: Map<string, string>;
+  selectedStoreId?: string;
+}) => {
+  const relevanceCollator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
   });
+  const tieBreaker = createProductListItemComparator({
+    sortKey,
+    sortDirection,
+    storeNameById,
+    selectedStoreId,
+  });
+
+  items.sort((left, right) =>
+    compareProductSearchRelevance({
+      query,
+      left,
+      right,
+      collator: relevanceCollator,
+      tieBreaker,
+    }),
+  );
 };
 
 export const listProducts = async ({
@@ -714,6 +810,7 @@ export const listProducts = async ({
   const pageSize = input?.pageSize ?? 25;
   const sortKey = input?.sortKey ?? "updatedAt";
   const sortDirection = input?.sortDirection ?? "desc";
+  const searchQuery = input?.search?.trim() ?? "";
   const readinessProductIds = await resolveReadinessProductIds({
     prisma,
     organizationId,
@@ -726,10 +823,8 @@ export const listProducts = async ({
     readinessProductIds,
     accessibleStoreIds,
   );
-  const paginatedOrderBy = getDbProductOrderBy(sortKey, sortDirection);
-  const visibleSnapshotStoreIds = input?.storeId
-    ? [input.storeId]
-    : accessibleStoreIds;
+  const paginatedOrderBy = searchQuery ? null : getDbProductOrderBy(sortKey, sortDirection);
+  const visibleSnapshotStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
 
   const baseReadStartedAt = Date.now();
   const [total, products] = paginatedOrderBy
@@ -803,9 +898,7 @@ export const listProducts = async ({
           ? prisma.store.findMany({
               where: {
                 organizationId,
-                ...(visibleSnapshotStoreIds
-                  ? { id: { in: visibleSnapshotStoreIds } }
-                  : {}),
+                ...(visibleSnapshotStoreIds ? { id: { in: visibleSnapshotStoreIds } } : {}),
               },
               select: { id: true, name: true },
             })
@@ -866,7 +959,29 @@ export const listProducts = async ({
     }),
   );
 
-  if (!paginatedOrderBy) {
+  if (searchQuery) {
+    const sortStartedAt = Date.now();
+    sortProductListItemsBySearchRelevance({
+      items,
+      query: searchQuery,
+      sortKey,
+      sortDirection,
+      storeNameById,
+      selectedStoreId: input?.storeId,
+    });
+    if (logger) {
+      logProfileSection({
+        logger,
+        scope: "products.list",
+        section: "relevanceSort",
+        startedAt: sortStartedAt,
+        details: {
+          itemCount: items.length,
+          sortKey,
+        },
+      });
+    }
+  } else if (!paginatedOrderBy) {
     const sortStartedAt = Date.now();
     sortProductListItems({
       items,
@@ -1536,10 +1651,7 @@ export const exportProductsCsv = async ({
       : "";
 
   const serializeImages = (product: (typeof products)[number]) => {
-    const urls = [
-      product.photoUrl,
-      ...product.images.map((image) => image.url),
-    ]
+    const urls = [product.photoUrl, ...product.images.map((image) => image.url)]
       .map((url) => sanitizeDetailImageUrl(url))
       .filter((url): url is string => Boolean(url))
       .filter((url, index, list) => list.indexOf(url) === index);

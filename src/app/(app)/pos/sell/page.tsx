@@ -1186,7 +1186,6 @@ const PosSellPage = () => {
         })
       : t("sell.emptyCartTitle");
   const completeDisabled = !sale || completeMutation.isLoading || isLineBusy || !hasCartLines;
-  const allowNegativeStock = shiftQuery.data?.store.allowNegativeStock ?? false;
   const isDemoCategory = (category: string) =>
     ["test", "tests", "demo", "sample", "samples"].includes(category.trim().toLowerCase());
   const categoryLabel = (category: string) => {
@@ -1204,7 +1203,7 @@ const PosSellPage = () => {
     if (stockQty === null) {
       return {
         label: tCommon("notAvailable"),
-        className: "border-border bg-muted text-muted-foreground",
+        className: "border-foreground bg-foreground text-background",
         showWarningIcon: false,
       };
     }
@@ -1212,27 +1211,27 @@ const PosSellPage = () => {
       const absoluteQty = formatNumber(Math.abs(stockQty), locale);
       return {
         label: `−${absoluteQty} ${t("sell.stockUnitShort")}`,
-        className: "border-danger/35 bg-danger/10 text-danger",
+        className: "border-danger bg-danger text-danger-foreground",
         showWarningIcon: true,
       };
     }
     if (stockQty === 0) {
       return {
         label: t("sell.outOfStock"),
-        className: "border-border bg-muted text-muted-foreground",
+        className: "border-danger bg-danger text-danger-foreground",
         showWarningIcon: false,
       };
     }
     if (stockQty <= 5) {
       return {
         label: `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`,
-        className: "border-warning/25 bg-warning/10 text-warning",
+        className: "border-warning bg-warning text-warning-foreground",
         showWarningIcon: false,
       };
     }
     return {
       label: `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`,
-      className: "border-success/25 bg-success/10 text-success",
+      className: "border-success bg-success text-success-foreground",
       showWarningIcon: false,
     };
   };
@@ -1269,123 +1268,18 @@ const PosSellPage = () => {
           />
         </div>
 
-        <div className="grid min-h-16 gap-0 border-t border-border bg-muted/30 lg:w-[520px] lg:border-l lg:border-t-0 2xl:w-[600px]">
-          <div className="flex min-w-0 flex-col justify-center gap-1 px-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Badge variant={hasOpenShift ? "success" : "warning"}>
-                {hasOpenShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
-              </Badge>
-              <div className="relative flex min-w-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-7 min-w-0 justify-start gap-1 px-2 text-xs font-medium"
-                  onClick={() => setCustomerSelectorOpen((current) => !current)}
-                  disabled={!hasOpenShift || !activeStoreId}
-                  aria-expanded={customerSelectorOpen}
-                >
-                  <span className="truncate">
-                    {currentCustomer
-                      ? currentCustomerDetails
-                        ? `${currentCustomerLabel} · ${currentCustomerDetails}`
-                        : currentCustomerLabel
-                      : t("sell.retailCustomer")}
-                  </span>
-                  <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                </Button>
-                {currentCustomer ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0"
-                    onClick={() => void handleClearCustomer()}
-                    disabled={updateCustomerMutation.isLoading}
-                    aria-label={t("sell.clearCustomer")}
-                    title={t("sell.clearCustomer")}
-                  >
-                    {updateCustomerMutation.isLoading ? (
-                      <Spinner className="h-3.5 w-3.5" />
-                    ) : (
-                      <CloseIcon className="h-3.5 w-3.5" aria-hidden />
-                    )}
-                  </Button>
-                ) : null}
-                {customerSelectorOpen ? (
-                  <PopoverSurface className="absolute left-0 top-full z-50 mt-2 max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto p-0 sm:left-auto sm:right-0">
-                    <div className="space-y-3 p-3">
-                      <Input
-                        value={customerSearch}
-                        onChange={(event) => setCustomerSearch(event.target.value)}
-                        placeholder={t("sell.customerSearchPlaceholder")}
-                        autoFocus
-                      />
-                      <Button
-                        type="button"
-                        variant={currentCustomer ? "secondary" : "default"}
-                        className="h-10 w-full justify-start"
-                        onClick={() => void handleClearCustomer()}
-                        disabled={updateCustomerMutation.isLoading}
-                      >
-                        {t("sell.selectRetailCustomer")}
-                      </Button>
-                    </div>
-
-                    {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
-                      <div className="flex items-center justify-center gap-2 border-t border-border py-5 text-sm text-muted-foreground">
-                        <Spinner className="h-4 w-4" />
-                        {tCommon("loading")}
-                      </div>
-                    ) : null}
-
-                    {customerSearchQuery.error ? (
-                      <div className="m-3 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
-                        {translateError(tErrors, customerSearchQuery.error)}
-                      </div>
-                    ) : null}
-
-                    {!customerSearchQuery.isLoading &&
-                    !customerSearchQuery.error &&
-                    !(customerSearchQuery.data?.items.length ?? 0) ? (
-                      <div className="border-t border-border px-4 py-5 text-center text-sm text-muted-foreground">
-                        {t("sell.customerNotFound")}
-                      </div>
-                    ) : null}
-
-                    {customerSearchQuery.data?.items.length ? (
-                      <div className="divide-y divide-border border-t border-border">
-                        {customerSearchQuery.data.items.map((customer) => (
-                          <button
-                            key={customer.id}
-                            type="button"
-                            className="flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            onClick={() => {
-                              void handleSelectCustomer({
-                                id: customer.id,
-                                name: customer.name,
-                                email: customer.email,
-                                phone: customer.phone,
-                              });
-                            }}
-                            disabled={updateCustomerMutation.isLoading}
-                          >
-                            <span className="font-medium text-foreground">{customer.name}</span>
-                            <span className="text-sm text-muted-foreground">
-                              {[customer.phone, customer.email].filter(Boolean).join(" · ") ||
-                                t("sell.customerNoContact")}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </PopoverSurface>
-                ) : null}
-              </div>
-            </div>
+        <div className="grid min-h-12 gap-0 border-t border-border bg-muted/30 lg:w-[520px] lg:border-l lg:border-t-0 2xl:w-[600px]">
+          <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+            <Badge
+              variant={hasOpenShift ? "success" : "warning"}
+              className="h-8 shrink-0 px-3 text-xs font-semibold"
+            >
+              {hasOpenShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
+            </Badge>
             <Select value={registerId} onValueChange={setRegisterId}>
               <SelectTrigger
                 aria-label={t("entry.register")}
-                className="h-7 border-0 bg-transparent px-0 text-left font-semibold shadow-none focus:ring-0"
+                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-left text-sm font-semibold shadow-none focus:ring-0"
               >
                 <SelectValue placeholder={selectedRegisterLabel} />
               </SelectTrigger>
@@ -1397,6 +1291,112 @@ const PosSellPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            <div className="relative flex min-w-0 max-w-[44%] items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 min-w-0 justify-start gap-1 px-2 text-xs font-medium"
+                onClick={() => setCustomerSelectorOpen((current) => !current)}
+                disabled={!hasOpenShift || !activeStoreId}
+                aria-expanded={customerSelectorOpen}
+              >
+                <span className="truncate">
+                  {currentCustomer
+                    ? currentCustomerDetails
+                      ? `${currentCustomerLabel} · ${currentCustomerDetails}`
+                      : currentCustomerLabel
+                    : t("sell.retailCustomer")}
+                </span>
+                <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              </Button>
+              {currentCustomer ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => void handleClearCustomer()}
+                  disabled={updateCustomerMutation.isLoading}
+                  aria-label={t("sell.clearCustomer")}
+                  title={t("sell.clearCustomer")}
+                >
+                  {updateCustomerMutation.isLoading ? (
+                    <Spinner className="h-3.5 w-3.5" />
+                  ) : (
+                    <CloseIcon className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                </Button>
+              ) : null}
+              {customerSelectorOpen ? (
+                <PopoverSurface className="absolute left-0 top-full z-50 mt-2 max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto p-0 sm:left-auto sm:right-0">
+                  <div className="space-y-3 p-3">
+                    <Input
+                      value={customerSearch}
+                      onChange={(event) => setCustomerSearch(event.target.value)}
+                      placeholder={t("sell.customerSearchPlaceholder")}
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant={currentCustomer ? "secondary" : "default"}
+                      className="h-10 w-full justify-start"
+                      onClick={() => void handleClearCustomer()}
+                      disabled={updateCustomerMutation.isLoading}
+                    >
+                      {t("sell.selectRetailCustomer")}
+                    </Button>
+                  </div>
+
+                  {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
+                    <div className="flex items-center justify-center gap-2 border-t border-border py-5 text-sm text-muted-foreground">
+                      <Spinner className="h-4 w-4" />
+                      {tCommon("loading")}
+                    </div>
+                  ) : null}
+
+                  {customerSearchQuery.error ? (
+                    <div className="m-3 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                      {translateError(tErrors, customerSearchQuery.error)}
+                    </div>
+                  ) : null}
+
+                  {!customerSearchQuery.isLoading &&
+                  !customerSearchQuery.error &&
+                  !(customerSearchQuery.data?.items.length ?? 0) ? (
+                    <div className="border-t border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                      {t("sell.customerNotFound")}
+                    </div>
+                  ) : null}
+
+                  {customerSearchQuery.data?.items.length ? (
+                    <div className="divide-y divide-border border-t border-border">
+                      {customerSearchQuery.data.items.map((customer) => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          className="flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={() => {
+                            void handleSelectCustomer({
+                              id: customer.id,
+                              name: customer.name,
+                              email: customer.email,
+                              phone: customer.phone,
+                            });
+                          }}
+                          disabled={updateCustomerMutation.isLoading}
+                        >
+                          <span className="font-medium text-foreground">{customer.name}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {[customer.phone, customer.email].filter(Boolean).join(" · ") ||
+                              t("sell.customerNoContact")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </PopoverSurface>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
@@ -1513,8 +1513,7 @@ const PosSellPage = () => {
                     const primaryImage = product.images[0]?.url ?? product.photoUrl;
                     const stock = stockMeta(stockQty);
                     const priceMissing = priceKgs === null;
-                    const stockBlocked = !allowNegativeStock && stockQty !== null && stockQty <= 0;
-                    const productBlocked = priceMissing || stockBlocked;
+                    const productBlocked = priceMissing;
 
                     return (
                       <button
@@ -1526,10 +1525,6 @@ const PosSellPage = () => {
                               variant: "error",
                               description: t("sell.priceMissingCannotSell"),
                             });
-                            return;
-                          }
-                          if (stockBlocked) {
-                            toast({ variant: "error", description: t("sell.insufficientStock") });
                             return;
                           }
                           blurLineSearchInput();
@@ -1725,12 +1720,20 @@ const PosSellPage = () => {
               </div>
             ) : (
               <>
-                <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-3 py-2">
                   <div className="min-w-0 flex-1">
-                    <p className="text-base font-semibold text-foreground">{checkoutPanelTitle}</p>
-                    <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {checkoutPanelTitle}
+                      </p>
+                      {shiftOpenedLabel ? (
+                        <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                          {shiftOpenedLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground">
                       {selectedRegisterLabel}
-                      {shiftOpenedLabel ? ` · ${shiftOpenedLabel}` : ""}
                     </p>
                   </div>
                   {saleId ? (
@@ -1738,10 +1741,11 @@ const PosSellPage = () => {
                       type="button"
                       variant="secondary"
                       size="sm"
+                      className="h-8 shrink-0 px-3 text-xs"
                       onClick={handleDiscardSale}
                       disabled={isLineBusy || completeMutation.isLoading}
                     >
-                      {cancelDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                      {cancelDraftMutation.isLoading ? <Spinner className="h-3.5 w-3.5" /> : null}
                       {t("sell.discardSale")}
                     </Button>
                   ) : null}
@@ -1786,35 +1790,35 @@ const PosSellPage = () => {
                         );
 
                         return (
-                          <div key={line.id} className="px-4 py-4">
-                            <div className="flex gap-3">
+                          <div key={line.id} className="px-3 py-2">
+                            <div className="flex gap-2.5">
                               {line.product.primaryImage ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={line.product.primaryImage}
                                   alt={line.product.name}
-                                  className="h-14 w-14 shrink-0 rounded-sm border border-border object-cover"
+                                  className="h-12 w-12 shrink-0 rounded-sm border border-border object-cover"
                                 />
                               ) : (
-                                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-sm border border-dashed border-border bg-muted/40 text-muted-foreground">
-                                  <EmptyIcon className="h-5 w-5" aria-hidden />
+                                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-sm border border-dashed border-border bg-muted/40 text-muted-foreground">
+                                  <EmptyIcon className="h-4 w-4" aria-hidden />
                                 </span>
                               )}
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
-                                    <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+                                    <p className="line-clamp-1 text-sm font-medium leading-5 text-foreground">
                                       {line.product.name}
                                       {line.product.isBundle ? ` · ${t("sell.bundle")}` : ""}
                                     </p>
-                                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                                    <p className="truncate text-[11px] leading-4 text-muted-foreground">
                                       {line.product.sku}
                                     </p>
                                   </div>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                                     onClick={() => handleRemoveLine(line.id)}
                                     disabled={isLineBusy || completeMutation.isLoading}
                                     aria-label={tCommon("delete")}
@@ -1822,20 +1826,20 @@ const PosSellPage = () => {
                                     <DeleteIcon className="h-4 w-4" aria-hidden />
                                   </Button>
                                 </div>
-                                <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-3">
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">
+                                <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-2">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <p className="min-w-0 truncate text-[11px] leading-4 text-muted-foreground">
                                       {formatSaleMoney(line.unitPriceKgs)}
                                       {lineDiscountKgs > 0
                                         ? ` · ${t("sell.discount")} ${formatSaleMoney(lineDiscountKgs)}`
                                         : ""}
                                     </p>
-                                    <div className="mt-2 inline-flex items-center overflow-hidden rounded-sm border border-border bg-background">
+                                    <div className="inline-flex items-center overflow-hidden rounded-sm border border-border bg-background">
                                       <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-9 w-9 rounded-none"
+                                        className="h-8 w-8 rounded-none text-sm"
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
@@ -1855,7 +1859,7 @@ const PosSellPage = () => {
                                         onBlur={(event) =>
                                           handleUpdateQty(line.id, event.target.value)
                                         }
-                                        className="h-9 w-14 rounded-none border-y-0 text-center shadow-none focus-visible:ring-0"
+                                        className="h-8 w-11 rounded-none border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
                                         inputMode="numeric"
                                         disabled={isLineBusy || completeMutation.isLoading}
                                       />
@@ -1863,7 +1867,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-9 w-9 rounded-none"
+                                        className="h-8 w-8 rounded-none text-sm"
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
@@ -1874,15 +1878,15 @@ const PosSellPage = () => {
                                       </Button>
                                     </div>
                                   </div>
-                                  <p className="text-right text-sm font-semibold text-foreground">
+                                  <p className="text-right text-sm font-semibold leading-none text-foreground">
                                     {formatSaleMoney(lineNetTotalKgs)}
                                   </p>
                                 </div>
                               </div>
                             </div>
                             {saleMarkingEnabled && line.product.complianceFlags?.requiresMarking ? (
-                              <div className="mt-3 space-y-2 rounded-md border border-border bg-muted/20 p-3">
-                                <p className="text-xs text-muted-foreground">
+                              <div className="mt-2 space-y-1.5 rounded-sm border border-border bg-muted/20 p-2">
+                                <p className="text-[11px] text-muted-foreground">
                                   {t("sell.markingLabel")}
                                   {saleMarkingMode === "REQUIRED_ON_SALE"
                                     ? ` · ${t("sell.markingRequired")}`
@@ -1897,7 +1901,7 @@ const PosSellPage = () => {
                                     }))
                                   }
                                   placeholder={t("sell.markingPlaceholder")}
-                                  className="h-9"
+                                  className="h-8 px-2 text-sm"
                                 />
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-[11px] text-muted-foreground">
@@ -1909,6 +1913,7 @@ const PosSellPage = () => {
                                     type="button"
                                     size="sm"
                                     variant="secondary"
+                                    className="h-8 px-3 text-xs"
                                     onClick={() => handleSaveMarkingCodes(line.id)}
                                     disabled={isLineBusy || completeMutation.isLoading}
                                   >

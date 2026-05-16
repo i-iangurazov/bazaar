@@ -48,4 +48,12 @@ describe("pos entry navigation", () => {
     expect(source).not.toContain("bg-emerald-");
     expect(source).not.toContain("text-emerald-");
   });
+
+  it("does not block adding out-of-stock products to a POS sale", async () => {
+    const source = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(source).toContain("const productBlocked = priceMissing;");
+    expect(source).not.toContain("stockBlocked");
+    expect(source).not.toContain('t("sell.insufficientStock")');
+  });
 });

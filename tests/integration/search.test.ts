@@ -101,10 +101,18 @@ describeDb("search router", () => {
     });
 
     const result = await caller.search.global({ q: "acm" });
-    const productResult = result.results.find((item) => item.type === "product" && item.id === product.id);
-    const supplierResult = result.results.find((item) => item.type === "supplier" && item.id === supplier.id);
-    const storeResult = result.results.find((item) => item.type === "store" && item.id === store.id);
-    const poResult = result.results.find((item) => item.type === "purchaseOrder" && item.id === po.id);
+    const productResult = result.results.find(
+      (item) => item.type === "product" && item.id === product.id,
+    );
+    const supplierResult = result.results.find(
+      (item) => item.type === "supplier" && item.id === supplier.id,
+    );
+    const storeResult = result.results.find(
+      (item) => item.type === "store" && item.id === store.id,
+    );
+    const poResult = result.results.find(
+      (item) => item.type === "purchaseOrder" && item.id === po.id,
+    );
 
     expect(productResult?.href).toBe(`/products/${product.id}`);
     expect(supplierResult?.href).toBe("/suppliers");
@@ -155,6 +163,44 @@ describeDb("search router", () => {
       matchKind: "exact",
     });
     expect(result.results.some((item) => item.type === "supplier")).toBe(false);
+  });
+
+  it("ranks global product search results by name relevance", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+
+    const aerator = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        sku: "01033",
+        name: "Аэратор внут. резьба",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+    const directThread = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        sku: "05318",
+        name: "Резьба 15 (10см)",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const result = await caller.search.global({ q: "Резьба" });
+    const productIds = result.results
+      .filter((item) => item.type === "product")
+      .map((item) => item.id);
+
+    expect(productIds.indexOf(directThread.id)).toBeLessThan(productIds.indexOf(aerator.id));
   });
 
   it("requires at least 2 characters", async () => {

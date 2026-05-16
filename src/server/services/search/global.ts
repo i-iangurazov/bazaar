@@ -5,6 +5,10 @@ import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
 import { serializeProductPreview } from "@/server/services/products/serializers";
 import {
+  compareProductSearchRelevance,
+  tokenizeProductSearchText,
+} from "@/server/services/products/searchRelevance";
+import {
   productStoreAssignmentInWhere,
   resolveAccessibleStoreIds,
   type StoreAccessUser,
@@ -49,11 +53,7 @@ const productSearchSelect = {
 
 type ProductSearchRecord = Prisma.ProductGetPayload<{ select: typeof productSearchSelect }>;
 
-const pushUnique = (
-  items: SearchResult[],
-  seen: Set<string>,
-  next: SearchResult,
-) => {
+const pushUnique = (items: SearchResult[], seen: Set<string>, next: SearchResult) => {
   const key = `${next.type}:${next.id}`;
   if (seen.has(key)) {
     return;
@@ -106,11 +106,7 @@ export const isExactLikeGlobalSearchQuery = ({
     return false;
   }
 
-  return (
-    normalizedScanQuery !== query ||
-    /[\d._:/-]/.test(query) ||
-    query === query.toUpperCase()
-  );
+  return normalizedScanQuery !== query || /[\d._:/-]/.test(query) || query === query.toUpperCase();
 };
 
 export const resolveGlobalSearchPlan = ({
@@ -160,13 +156,9 @@ export const searchGlobal = async ({
       ? await resolveAccessibleStoreIds(prisma, user)
       : undefined;
   const productScopeWhere = productStoreAssignmentInWhere(accessibleStoreIds);
-  const storeScopeWhere = accessibleStoreIds
-    ? { id: { in: accessibleStoreIds } }
-    : {};
-  const orderStoreScopeWhere = accessibleStoreIds
-    ? { storeId: { in: accessibleStoreIds } }
-    : {};
-  const planlessProductFilters = [
+  const storeScopeWhere = accessibleStoreIds ? { id: { in: accessibleStoreIds } } : {};
+  const orderStoreScopeWhere = accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {};
+  const planlessProductFilters: Prisma.ProductWhereInput[] = [
     { sku: { startsWith: query, mode: "insensitive" as const } },
     { name: buildNameSearchFilter(query) },
     ...(normalizedScanQuery
@@ -245,6 +237,7 @@ export const searchGlobal = async ({
   const results: SearchResult[] = [];
   const seen = new Set<string>();
   const queryLower = query.toLowerCase();
+  const queryTokens = tokenizeProductSearchText(query);
 
   exactBarcodeMatches.forEach((match) => {
     if (!match.product) {
@@ -278,8 +271,17 @@ export const searchGlobal = async ({
     return { results };
   }
 
-  const fuzzyProductFilters = [
+  const fuzzyProductFilters: Prisma.ProductWhereInput[] = [
     ...planlessProductFilters,
+    ...(queryTokens.length > 1
+      ? [
+          {
+            AND: queryTokens.map((token) => ({
+              name: { contains: token, mode: "insensitive" as const },
+            })),
+          },
+        ]
+      : []),
   ];
 
   const queryStartedAt = Date.now();
@@ -295,16 +297,13 @@ export const searchGlobal = async ({
         ...productSearchSelect,
       },
       orderBy: [{ sku: "asc" }, { name: "asc" }],
-      take: plan.productOnlyFuzzy ? 8 : 6,
+      take: plan.productOnlyFuzzy ? 32 : 24,
     }),
     plan.includeGroupedEntities && !accessibleStoreIds
       ? prisma.supplier.findMany({
           where: {
             organizationId,
-            OR: [
-              { name: buildNameSearchFilter(query) },
-              { email: buildEmailSearchFilter(query) },
-            ],
+            OR: [{ name: buildNameSearchFilter(query) }, { email: buildEmailSearchFilter(query) }],
           },
           select: {
             id: true,
@@ -381,7 +380,23 @@ export const searchGlobal = async ({
       slowThresholdMs: 120,
     });
   }
-  fuzzyProducts.forEach((product) => {
+  const productLimit = plan.productOnlyFuzzy ? 8 : 6;
+  const searchCollator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const rankedFuzzyProducts = fuzzyProducts
+    .sort((left, right) =>
+      compareProductSearchRelevance({
+        query,
+        left,
+        right,
+        collator: searchCollator,
+      }),
+    )
+    .slice(0, productLimit);
+
+  rankedFuzzyProducts.forEach((product) => {
     pushUnique(
       results,
       seen,
