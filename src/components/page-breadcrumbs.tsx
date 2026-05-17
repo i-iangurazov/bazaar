@@ -95,6 +95,8 @@ const segmentLabel = (
       return tNav("printing");
     case "attributes":
       return tNav("attributes");
+    case "categories":
+      return tNav("categories");
     case "units":
       return tNav("units");
     case "import":

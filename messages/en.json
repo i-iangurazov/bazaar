@@ -621,6 +621,7 @@
     "users": "Users",
     "printing": "Print settings",
     "attributes": "Attributes",
+    "categories": "Categories",
     "units": "Units",
     "imports": "Import",
     "integrations": "Integrations",
@@ -2797,6 +2798,11 @@
     "categoryHint": "Category hint",
     "categoryAdd": "Category add",
     "categoryPrimaryBadge": "Category primary badge",
+    "categoryHiddenBadge": "Hidden",
+    "categoryShowHidden": "Show hidden ({count})",
+    "categoryHideHidden": "Hide hidden categories",
+    "categoryNoSuggestions": "No matching categories. You can add a new category.",
+    "categoryMoreSuggestions": "{count} more categories are hidden. Refine search.",
     "categoryPromote": "Category promote",
     "unit": "Unit",
     "unitRequired": "Unit is required.",
@@ -3567,6 +3573,41 @@
     "confirmBulkDelete": "Confirm bulk delete",
     "bulkDeleteSuccess": "Bulk delete success {count}",
     "noSuppliers": "No suppliers"
+  },
+  "categorySettings": {
+    "title": "Product categories",
+    "subtitle": "Manage categories available when creating and editing products.",
+    "controlsTitle": "Filters and store",
+    "controlsDescription": "Hidden categories stay on existing products, but no longer appear in the default picker.",
+    "store": "Store",
+    "storePlaceholder": "Select store",
+    "storeHint": "These settings apply only to {store}.",
+    "search": "Search categories",
+    "searchPlaceholder": "Find category",
+    "adminOnly": "Only an owner or admin can change category visibility.",
+    "filters": {
+      "active": "Active",
+      "hidden": "Hidden",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "listTitle": "Category list",
+    "listDescription": "Hiding affects future category selection only. Existing product assignments are preserved.",
+    "statuses": {
+      "active": "Active",
+      "hidden": "Hidden",
+      "archived": "Archived"
+    },
+    "actions": {
+      "hide": "Hide",
+      "show": "Show",
+      "archive": "Archive",
+      "restore": "Restore"
+    },
+    "productCount": "Products: {count}",
+    "empty": "No categories found.",
+    "emptyAction": "Create a product with a new category",
+    "saved": "Category settings saved."
   },
   "profile": {
     "title": "Profile",

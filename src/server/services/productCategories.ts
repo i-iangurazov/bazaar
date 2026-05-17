@@ -10,6 +10,11 @@ export const normalizeProductCategoryName = (value?: string | null) => {
   return normalized ? normalized : null;
 };
 
+export const normalizeProductCategoryKey = (value?: string | null) => {
+  const normalized = normalizeProductCategoryName(value);
+  return normalized ? normalized.toLocaleLowerCase("ru-RU") : null;
+};
+
 export const normalizeProductCategoryNames = (values?: Array<string | null | undefined>) => {
   const seen = new Set<string>();
   const categories: string[] = [];
@@ -75,6 +80,137 @@ export const listProductCategoriesFromDb = async (
 
 export const listProductCategories = async (organizationId: string) =>
   listProductCategoriesFromDb(prisma, organizationId);
+
+export type StoreProductCategoryOption = {
+  name: string;
+  normalizedName: string;
+  productCount: number;
+  isVisibleInForms: boolean;
+  isArchived: boolean;
+};
+
+type CategoryAccumulatorValue = StoreProductCategoryOption;
+
+const addCategoryToAccumulator = (
+  categories: Map<string, CategoryAccumulatorValue>,
+  rawName?: string | null,
+  options?: {
+    productCount?: number;
+  },
+) => {
+  const name = normalizeProductCategoryName(rawName);
+  const normalizedName = normalizeProductCategoryKey(rawName);
+  if (!name || !normalizedName) {
+    return;
+  }
+
+  const current = categories.get(normalizedName);
+  if (!current) {
+    categories.set(normalizedName, {
+      name,
+      normalizedName,
+      productCount: options?.productCount ?? 0,
+      isVisibleInForms: true,
+      isArchived: false,
+    });
+    return;
+  }
+
+  current.productCount += options?.productCount ?? 0;
+};
+
+export const listStoreProductCategoriesFromDb = async (
+  db: PrismaClient | Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    storeId: string;
+    includeHidden?: boolean;
+  },
+) => {
+  const store = await db.store.findFirst({
+    where: { id: input.storeId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!store) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
+
+  const [savedCategories, products, templateCategories, preferences] = await Promise.all([
+    db.productCategory.findMany({
+      where: { organizationId: input.organizationId },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.product.findMany({
+      where: {
+        organizationId: input.organizationId,
+        isDeleted: false,
+        storeProducts: {
+          some: {
+            storeId: input.storeId,
+            isActive: true,
+          },
+        },
+      },
+      select: { category: true, categories: true },
+    }),
+    db.categoryAttributeTemplate.findMany({
+      where: { organizationId: input.organizationId },
+      select: { category: true },
+      distinct: ["category"],
+    }),
+    db.storeCategoryPreference.findMany({
+      where: { organizationId: input.organizationId, storeId: input.storeId },
+      select: {
+        name: true,
+        normalizedName: true,
+        isVisibleInForms: true,
+        isArchived: true,
+      },
+    }),
+  ]);
+
+  const categories = new Map<string, CategoryAccumulatorValue>();
+
+  savedCategories.forEach((item) => addCategoryToAccumulator(categories, item.name));
+
+  products.forEach((product) => {
+    const uniqueProductCategoryKeys = new Set<string>();
+    normalizeProductCategoryNames([product.category, ...product.categories]).forEach((name) => {
+      const key = normalizeProductCategoryKey(name);
+      if (!key || uniqueProductCategoryKeys.has(key)) {
+        return;
+      }
+      uniqueProductCategoryKeys.add(key);
+      addCategoryToAccumulator(categories, name, { productCount: 1 });
+    });
+  });
+
+  templateCategories.forEach((item) => addCategoryToAccumulator(categories, item.category));
+
+  preferences.forEach((preference) => {
+    addCategoryToAccumulator(categories, preference.name);
+    const category = categories.get(preference.normalizedName);
+    if (!category) {
+      return;
+    }
+    category.name = preference.name;
+    category.isVisibleInForms = preference.isVisibleInForms;
+    category.isArchived = preference.isArchived;
+  });
+
+  return Array.from(categories.values())
+    .filter((category) =>
+      input.includeHidden ? true : category.isVisibleInForms && !category.isArchived,
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
+
+export const listStoreProductCategories = async (input: {
+  organizationId: string;
+  storeId: string;
+  includeHidden?: boolean;
+}) => listStoreProductCategoriesFromDb(prisma, input);
 
 export const ensureProductCategory = async (
   tx: Prisma.TransactionClient,
@@ -149,6 +285,85 @@ export const createProductCategory = async (input: {
     });
 
     return category;
+  });
+
+export const updateStoreProductCategoryPreference = async (input: {
+  organizationId: string;
+  storeId: string;
+  actorId: string;
+  requestId: string;
+  name: string;
+  isVisibleInForms?: boolean;
+  isArchived?: boolean;
+}) =>
+  prisma.$transaction(async (tx) => {
+    const name = normalizeProductCategoryName(input.name);
+    const normalizedName = normalizeProductCategoryKey(input.name);
+    if (!name || !normalizedName) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+
+    const store = await tx.store.findFirst({
+      where: { id: input.storeId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!store) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
+    const before = await tx.storeCategoryPreference.findUnique({
+      where: {
+        storeId_normalizedName: {
+          storeId: input.storeId,
+          normalizedName,
+        },
+      },
+    });
+
+    const nextArchived = input.isArchived ?? before?.isArchived ?? false;
+    const nextVisible = nextArchived
+      ? false
+      : (input.isVisibleInForms ?? before?.isVisibleInForms ?? true);
+
+    const preference = await tx.storeCategoryPreference.upsert({
+      where: {
+        storeId_normalizedName: {
+          storeId: input.storeId,
+          normalizedName,
+        },
+      },
+      update: {
+        name,
+        isVisibleInForms: nextVisible,
+        isArchived: nextArchived,
+      },
+      create: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        name,
+        normalizedName,
+        isVisibleInForms: nextVisible,
+        isArchived: nextArchived,
+      },
+    });
+
+    await ensureProductCategory(tx, {
+      organizationId: input.organizationId,
+      name,
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "STORE_CATEGORY_PREFERENCE_UPDATE",
+      entity: "StoreCategoryPreference",
+      entityId: preference.id,
+      before: before ? toJson(before) : null,
+      after: toJson(preference),
+      requestId: input.requestId,
+    });
+
+    return preference;
   });
 
 export const removeProductCategory = async (input: {

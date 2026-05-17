@@ -238,6 +238,11 @@ const normalizeCategoryName = (value?: string | null) => {
   return normalized ? normalized : null;
 };
 
+const normalizeCategoryKey = (value?: string | null) => {
+  const normalized = normalizeCategoryName(value);
+  return normalized ? normalized.toLocaleLowerCase("ru-RU") : null;
+};
+
 const replaceFileExtension = (fileName: string, extension: string) => {
   if (!fileName.includes(".")) {
     return `${fileName}.${extension}`;
@@ -400,6 +405,7 @@ export const ProductForm = ({
   enableSku = true,
   enableBarcode = true,
   enableSimilarProductCheck = true,
+  categoryStoreId,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -418,6 +424,7 @@ export const ProductForm = ({
   enableSku?: boolean;
   enableBarcode?: boolean;
   enableSimilarProductCheck?: boolean;
+  categoryStoreId?: string | null;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -664,40 +671,133 @@ export const ProductForm = ({
     }
   }, [form, unitOptions]);
 
+  const [categoryDraft, setCategoryDraft] = useState("");
+  const [showHiddenCategoryOptions, setShowHiddenCategoryOptions] = useState(false);
   const watchedCategoryValues = useWatch({ control: form.control, name: "categories" });
   const watchedSku = useWatch({ control: form.control, name: "sku" });
   const watchedName = useWatch({ control: form.control, name: "name" });
   const watchedBarcodesValue = useWatch({ control: form.control, name: "barcodes" });
   const categoryValues = useMemo(() => watchedCategoryValues ?? [], [watchedCategoryValues]);
+  const categoryValueKeys = useMemo(
+    () => new Set(categoryValues.map((value) => normalizeCategoryKey(value)).filter(Boolean)),
+    [categoryValues],
+  );
   const watchedBarcodes = useMemo(() => watchedBarcodesValue ?? [], [watchedBarcodesValue]);
   const primaryCategoryValue = categoryValues[0]?.trim() ?? "";
-  const categoryOptionsQuery = trpc.productCategories.list.useQuery(undefined, {
-    enabled: !readOnly,
+  const categoryOptionsQuery = trpc.productCategories.listForStore.useQuery(
+    { storeId: categoryStoreId ?? "", includeHidden: true },
+    {
+      enabled: !readOnly && Boolean(categoryStoreId),
+    },
+  );
+  const legacyCategoryOptionsQuery = trpc.productCategories.list.useQuery(undefined, {
+    enabled: !readOnly && !categoryStoreId,
   });
   const templateQuery = trpc.categoryTemplates.list.useQuery(
     { category: primaryCategoryValue },
     { enabled: !readOnly && Boolean(primaryCategoryValue) },
   );
   const categoryOptions = useMemo(() => {
-    const categories = new Set<string>();
-    (categoryOptionsQuery.data ?? []).forEach((value) => {
-      const normalized = normalizeCategoryName(value);
-      if (normalized) {
-        categories.add(normalized);
+    const categories = new Map<
+      string,
+      {
+        name: string;
+        productCount: number;
+        isVisibleInForms: boolean;
+        isArchived: boolean;
       }
+    >();
+
+    (categoryOptionsQuery.data ?? []).forEach((item) => {
+      const normalized = normalizeCategoryName(item.name);
+      const key = normalizeCategoryKey(item.name);
+      if (!normalized || !key) {
+        return;
+      }
+      categories.set(key, {
+        name: normalized,
+        productCount: item.productCount,
+        isVisibleInForms: item.isVisibleInForms,
+        isArchived: item.isArchived,
+      });
     });
+
+    if (!categoryStoreId) {
+      (legacyCategoryOptionsQuery.data ?? []).forEach((value) => {
+        const normalized = normalizeCategoryName(value);
+        const key = normalizeCategoryKey(value);
+        if (!normalized || !key) {
+          return;
+        }
+        categories.set(key, {
+          name: normalized,
+          productCount: 0,
+          isVisibleInForms: true,
+          isArchived: false,
+        });
+      });
+    }
+
     categoryValues.forEach((value) => {
       const normalized = normalizeCategoryName(value);
-      if (normalized) {
-        categories.add(normalized);
+      const key = normalizeCategoryKey(value);
+      if (!normalized || !key || categories.has(key)) {
+        return;
+      }
+      categories.set(key, {
+        name: normalized,
+        productCount: 0,
+        isVisibleInForms: true,
+        isArchived: false,
+      });
+    });
+
+    return Array.from(categories.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [categoryOptionsQuery.data, categoryStoreId, categoryValues, legacyCategoryOptionsQuery.data]);
+  const categoryDraftQuery = useDeferredValue(categoryDraft.trim().toLocaleLowerCase("ru-RU"));
+  const showHiddenCategoryCount = useMemo(
+    () =>
+      categoryOptions.filter(
+        (option) =>
+          !categoryValueKeys.has(normalizeCategoryKey(option.name)) &&
+          (!option.isVisibleInForms || option.isArchived),
+      ).length,
+    [categoryOptions, categoryValueKeys],
+  );
+  const matchingCategoryOptions = useMemo(
+    () =>
+      categoryOptions.filter((option) => {
+        const key = normalizeCategoryKey(option.name);
+        if (!key || categoryValueKeys.has(key)) {
+          return false;
+        }
+        if ((!option.isVisibleInForms || option.isArchived) && !showHiddenCategoryOptions) {
+          return false;
+        }
+        if (
+          categoryDraftQuery &&
+          !option.name.toLocaleLowerCase("ru-RU").includes(categoryDraftQuery)
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [categoryDraftQuery, categoryOptions, categoryValueKeys, showHiddenCategoryOptions],
+  );
+  const suggestedCategoryOptions = useMemo(
+    () => matchingCategoryOptions.slice(0, 12),
+    [matchingCategoryOptions],
+  );
+  const categoryMetaByKey = useMemo(() => {
+    const map = new Map<string, (typeof categoryOptions)[number]>();
+    categoryOptions.forEach((option) => {
+      const key = normalizeCategoryKey(option.name);
+      if (key) {
+        map.set(key, option);
       }
     });
-    return Array.from(categories).sort((a, b) => a.localeCompare(b));
-  }, [categoryOptionsQuery.data, categoryValues]);
-  const suggestedCategoryOptions = useMemo(
-    () => categoryOptions.filter((value) => !categoryValues.includes(value)),
-    [categoryOptions, categoryValues],
-  );
+    return map;
+  }, [categoryOptions]);
   const setProductCategories = (values: string[]) => {
     form.setValue("categories", values, {
       shouldDirty: true,
@@ -710,7 +810,8 @@ export const ProductForm = ({
     if (!normalized) {
       return false;
     }
-    if (categoryValues.includes(normalized)) {
+    const key = normalizeCategoryKey(normalized);
+    if (key && categoryValueKeys.has(key)) {
       return true;
     }
     setProductCategories([...categoryValues, normalized]);
@@ -835,7 +936,6 @@ export const ProductForm = ({
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [categoryDraft, setCategoryDraft] = useState("");
   const [barcodeGenerateMode, setBarcodeGenerateMode] = useState<"EAN13" | "CODE128">("EAN13");
   const [variantToRemove, setVariantToRemove] = useState<number | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(
@@ -3481,39 +3581,54 @@ export const ProductForm = ({
                           <div className="space-y-3">
                             <div className="flex min-h-10 flex-wrap gap-2 rounded-none border border-border bg-muted/20 p-2">
                               {categoryValues.length ? (
-                                categoryValues.map((value, index) => (
-                                  <div
-                                    key={value}
-                                    className="inline-flex items-center gap-1 rounded-none border border-border bg-background px-2 py-1 text-xs text-foreground"
-                                  >
-                                    <span>{value}</span>
-                                    {index === 0 ? (
-                                      <span className="rounded-none bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                        {t("categoryPrimaryBadge")}
-                                      </span>
-                                    ) : null}
-                                    {!readOnly && index > 0 ? (
-                                      <button
-                                        type="button"
-                                        className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                                        onClick={() => promoteProductCategory(value)}
-                                        aria-label={t("categoryPromote")}
-                                      >
-                                        <ArrowUpIcon className="h-3 w-3" aria-hidden />
-                                      </button>
-                                    ) : null}
-                                    {!readOnly ? (
-                                      <button
-                                        type="button"
-                                        className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                                        onClick={() => removeProductCategory(value)}
-                                        aria-label={tCommon("delete")}
-                                      >
-                                        <CloseIcon className="h-3 w-3" aria-hidden />
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                ))
+                                categoryValues.map((value, index) => {
+                                  const categoryMeta = categoryMetaByKey.get(
+                                    normalizeCategoryKey(value) ?? "",
+                                  );
+                                  const isHiddenCategory = Boolean(
+                                    categoryMeta &&
+                                    (!categoryMeta.isVisibleInForms || categoryMeta.isArchived),
+                                  );
+
+                                  return (
+                                    <div
+                                      key={value}
+                                      className="inline-flex items-center gap-1 rounded-none border border-border bg-background px-2 py-1 text-xs text-foreground"
+                                    >
+                                      <span>{value}</span>
+                                      {index === 0 ? (
+                                        <span className="rounded-none bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                          {t("categoryPrimaryBadge")}
+                                        </span>
+                                      ) : null}
+                                      {isHiddenCategory ? (
+                                        <span className="rounded-none bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-warning">
+                                          {t("categoryHiddenBadge")}
+                                        </span>
+                                      ) : null}
+                                      {!readOnly && index > 0 ? (
+                                        <button
+                                          type="button"
+                                          className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                          onClick={() => promoteProductCategory(value)}
+                                          aria-label={t("categoryPromote")}
+                                        >
+                                          <ArrowUpIcon className="h-3 w-3" aria-hidden />
+                                        </button>
+                                      ) : null}
+                                      {!readOnly ? (
+                                        <button
+                                          type="button"
+                                          className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                          onClick={() => removeProductCategory(value)}
+                                          aria-label={tCommon("delete")}
+                                        >
+                                          <CloseIcon className="h-3 w-3" aria-hidden />
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })
                               ) : (
                                 <span className="text-sm text-muted-foreground">
                                   {tCommon("notAvailable")}
@@ -3550,22 +3665,64 @@ export const ProductForm = ({
                                     {t("categoryAdd")}
                                   </Button>
                                 </div>
+                                {showHiddenCategoryCount ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-fit px-0 text-xs text-muted-foreground hover:text-foreground"
+                                    onClick={() =>
+                                      setShowHiddenCategoryOptions((current) => !current)
+                                    }
+                                  >
+                                    {showHiddenCategoryOptions
+                                      ? t("categoryHideHidden")
+                                      : t("categoryShowHidden", {
+                                          count: showHiddenCategoryCount,
+                                        })}
+                                  </Button>
+                                ) : null}
                                 {suggestedCategoryOptions.length ? (
-                                  <div className="flex flex-wrap gap-2">
-                                    {suggestedCategoryOptions.map((value) => (
-                                      <Button
-                                        key={value}
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-auto rounded-none border border-dashed border-border px-3 py-1.5 text-xs"
-                                        onClick={() => addProductCategory(value)}
-                                      >
-                                        <AddIcon className="h-3 w-3" aria-hidden />
-                                        {value}
-                                      </Button>
-                                    ))}
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    {suggestedCategoryOptions.map((option) => {
+                                      const isHiddenCategory =
+                                        !option.isVisibleInForms || option.isArchived;
+                                      return (
+                                        <Button
+                                          key={option.name}
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-auto justify-start gap-2 rounded-none border border-dashed border-border px-3 py-2 text-left text-xs"
+                                          onClick={() => addProductCategory(option.name)}
+                                        >
+                                          <AddIcon className="h-3 w-3" aria-hidden />
+                                          <span className="min-w-0 flex-1 truncate">
+                                            {option.name}
+                                          </span>
+                                          {isHiddenCategory ? (
+                                            <span className="rounded-none bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-warning">
+                                              {t("categoryHiddenBadge")}
+                                            </span>
+                                          ) : null}
+                                        </Button>
+                                      );
+                                    })}
                                   </div>
+                                ) : categoryDraftQuery ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {t("categoryNoSuggestions")}
+                                  </p>
+                                ) : null}
+                                {matchingCategoryOptions.length >
+                                suggestedCategoryOptions.length ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {t("categoryMoreSuggestions", {
+                                      count:
+                                        matchingCategoryOptions.length -
+                                        suggestedCategoryOptions.length,
+                                    })}
+                                  </p>
                                 ) : null}
                               </>
                             ) : null}

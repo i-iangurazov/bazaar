@@ -1130,6 +1130,7 @@ const ProductDetailPage = () => {
           enableSku={enableSku}
           enableBarcode={enableBarcode}
           enableSimilarProductCheck={enableSimilarProductCheck}
+          categoryStoreId={selectedSettingsStore?.storeId ?? null}
         />
       </div>
 
@@ -1673,7 +1674,7 @@ const ProductDetailPage = () => {
             type="submit"
             form={productEditFormId}
             disabled={updateMutation.isLoading}
-            className="w-full shadow-lg md:min-w-[180px] md:w-auto"
+            className="w-full shadow-lg md:w-auto md:min-w-[180px]"
           >
             {updateMutation.isLoading ? (
               <Spinner className="h-4 w-4" />

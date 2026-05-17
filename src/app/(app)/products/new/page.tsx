@@ -190,6 +190,7 @@ const NewProductPage = () => {
           enableSku={enableSku}
           enableBarcode={enableBarcode}
           enableSimilarProductCheck={enableSimilarProductCheck}
+          categoryStoreId={selectedStore.id}
         />
       )}
       {createMutation.error ? (

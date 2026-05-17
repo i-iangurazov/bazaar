@@ -16,6 +16,14 @@ const applyHotQueryDefaults = (queryClient: QueryClient) => {
     cacheTime: 30 * 60_000,
   });
 
+  queryClient.setQueryDefaults(
+    getQueryKey(trpc.productCategories.listForStore, undefined, "query"),
+    {
+      staleTime: 5 * 60_000,
+      cacheTime: 15 * 60_000,
+    },
+  );
+
   queryClient.setQueryDefaults(getQueryKey(trpc.suppliers.list, undefined, "query"), {
     staleTime: 10 * 60_000,
     cacheTime: 30 * 60_000,

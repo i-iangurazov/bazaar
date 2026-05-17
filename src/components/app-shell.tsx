@@ -51,6 +51,7 @@ import {
   IntegrationsIcon,
   UserIcon,
   ChevronDownIcon,
+  TagIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { normalizeLocale } from "@/lib/locales";
@@ -317,6 +318,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             key: "attributes",
             href: "/settings/attributes",
             icon: AdjustIcon,
+            requiredPermission: "manageProducts",
+          },
+          {
+            key: "categories",
+            href: "/settings/categories",
+            icon: TagIcon,
+            adminOnly: true,
             requiredPermission: "manageProducts",
           },
           {
@@ -836,9 +844,17 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       key: "mobile-settings",
       label: tBreadcrumbs("settings"),
       href: "/settings/profile",
-      activePath: "/settings",
+      activePath: "/settings/profile",
       icon: UserIcon,
       requiredPermission: "viewProfile",
+    },
+    {
+      key: "mobile-categories",
+      label: tNav("categories"),
+      href: "/settings/categories",
+      icon: TagIcon,
+      adminOnly: true,
+      requiredPermission: "manageProducts",
     },
     {
       key: "mobile-printing",
