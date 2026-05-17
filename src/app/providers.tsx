@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { httpBatchLink, loggerLink } from "@trpc/client";
 import superjson from "superjson";
-import { SessionProvider } from "next-auth/react";
+import { SessionProvider, useSession } from "next-auth/react";
 import { NextIntlClientProvider } from "next-intl";
 import { z } from "zod";
 
@@ -17,8 +17,38 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSync } from "@/components/theme-sync";
 import { PwaServiceWorkerRegister } from "@/components/pwa-service-worker-register";
 import { PwaViewportLock } from "@/components/pwa-viewport-lock";
+import { PwaOfflineBanner } from "@/components/pwa-offline-banner";
 
 type IntlMessages = ComponentProps<typeof NextIntlClientProvider>["messages"];
+
+const QuerySessionIsolationBoundary = () => {
+  const { data: session, status } = useSession();
+  const queryClient = useQueryClient();
+  const lastIdentityRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (status === "loading") {
+      return;
+    }
+
+    const identity =
+      status === "authenticated" && session?.user?.id && session.user.organizationId
+        ? `${session.user.organizationId}:${session.user.id}`
+        : null;
+
+    if (lastIdentityRef.current === undefined) {
+      lastIdentityRef.current = identity;
+      return;
+    }
+
+    if (lastIdentityRef.current !== identity) {
+      queryClient.clear();
+      lastIdentityRef.current = identity;
+    }
+  }, [queryClient, session?.user?.id, session?.user?.organizationId, status]);
+
+  return null;
+};
 
 export const Providers = ({
   children,
@@ -69,6 +99,7 @@ export const Providers = ({
     <SessionProvider>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
+          <QuerySessionIsolationBoundary />
           <NextIntlClientProvider
             locale={locale}
             messages={messages}
@@ -78,6 +109,7 @@ export const Providers = ({
             <ThemeSync />
             <PwaServiceWorkerRegister />
             <PwaViewportLock />
+            <PwaOfflineBanner />
             <TooltipProvider>
               <ToastProvider>{children}</ToastProvider>
             </TooltipProvider>

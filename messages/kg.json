@@ -18,8 +18,10 @@
     "yes": "Ооба",
     "no": "Жок",
     "search": "Издөө",
+    "filters": "Фильтрлер",
     "select": "Тандоо",
     "actions": "Аракеттер",
+    "additional": "Кошумча",
     "optional": "Милдеттүү эмес",
     "tooltips": {
       "download": "Жүктөп алуу",
@@ -603,9 +605,12 @@
     "customizeSubtitle": "Ролуңузга жеткиликтүү шилтемелердин кайсылары сол менюда көрүнөрүн тандаңыз.",
     "customizeToggle": "{item} менюда көрсөтүү",
     "customizeReset": "Бардык шилтемелерди көрсөтүү",
+    "mobileNavigation": "Мобилдик навигация",
+    "more": "Дагы",
     "dashboard": "Башкы панель",
     "pos": "Касса",
     "inventory": "Запастар",
+    "sales": "Сатуулар",
     "orders": "Заказдар",
     "salesOrders": "Кардарлар",
     "customers": "Кардар базасы",
@@ -640,6 +645,23 @@
   "printingSettings": {
     "title": "Басуу жөндөөлөрү",
     "subtitle": "Ар бир дүкөн үчүн чектер, этикеткалар, жергиликтүү басуу кызматы жана POS автобасуу.",
+    "wizardTitle": "Басуу мастери",
+    "wizardDescription": "Басуу ыкмасын, QZ Tray ишенимин, принтерлерди, шаблондорду жана тесттик басууну жөндөңүз.",
+    "wizardMethodTitle": "Басуу ыкмасы",
+    "wizardMethodDescription": "Бул терминал чектерди жана этикеткаларды кантип басарын тандаңыз.",
+    "wizardAgentUnavailable": "Bazaar Print Agent көрсөтүлгөн жок, анткени бул орнотууда реалдуу агент провайдери туташкан эмес.",
+    "wizardConnectionTitle": "Туташуу",
+    "wizardConnectionDescription": "Бул түзмөктө QZ Tray иштеп жатканын текшериңиз.",
+    "wizardTrustTitle": "Ишеним жана сертификат",
+    "wizardTrustDescription": "Сертификатты, сурам кол тамгасын жана локалдык QZ ишенимин өзүнчө текшериңиз.",
+    "wizardPrintersTitle": "Принтерлер",
+    "wizardPrintersDescription": "Бул терминал үчүн чек жана этикетка принтерин тандаңыз.",
+    "wizardTemplatesTitle": "Чек жана этикетка шаблондору",
+    "wizardTemplatesDescription": "Кагаз өлчөмүн, көрүнүүчү талааларды, этикетка макетин жана алдын ала көрүүнү жөндөңүз.",
+    "wizardTestTitle": "Тесттик басуу",
+    "wizardTestDescription": "Принтерлерди тандагандан кийин тесттик чек жана тесттик этикетка жөнөтүңүз.",
+    "wizardReadyTitle": "Даяр",
+    "wizardReadyDescription": "Автобасуу QZ туташып, принтер тандалып, кол тамга иштеп, сертификат локалдуу ишенимдүү болгондо гана даяр деп эсептелет.",
     "empty": "Басууну жөндөөдөн мурун дүкөн түзүңүз.",
     "storeScopeTitle": "Дүкөн жана терминал",
     "deviceScopeHint": "Калыптар дүкөнгө сакталат, жергиликтүү принтер аттары ушул терминалда сакталат.",
@@ -833,6 +855,7 @@
     "exports": "Экспорттор",
     "close": "Мезгилди жабуу",
     "metrics": "Метрикалар",
+    "receiving": "Оприходование",
     "counts": "Эсептөөлөр",
     "compliance": "Талаптар",
     "bazaarCatalog": "bazaar-каталог",
@@ -922,7 +945,9 @@
     "actions": {
       "add": "Кардар кошуу",
       "create": "Кардар түзүү",
-      "save": "Өзгөртүүлөрдү сактоо"
+      "save": "Өзгөртүүлөрдү сактоо",
+      "call": "Чалуу",
+      "viewSales": "Сатуулар"
     },
     "columns": {
       "name": "Аты",
@@ -931,6 +956,8 @@
       "address": "Дарек",
       "source": "Булак",
       "createdAt": "Түзүлгөн",
+      "lastPurchase": "Акыркы сатып алуу",
+      "totalPurchases": "Сатып алуулар",
       "actions": "Аракеттер"
     },
     "fields": {
@@ -944,6 +971,7 @@
       "storePlaceholder": "Дүкөндү тандаңыз",
       "search": "Издөө",
       "searchPlaceholder": "Аты, email, телефон же дарек",
+      "mobileSearchPlaceholder": "Аты, телефон же email",
       "source": "Булак",
       "allSources": "Бардык булактар"
     },
@@ -957,6 +985,14 @@
       "addTitle": "Кардар кошуу",
       "editTitle": "Кардарды өзгөртүү",
       "subtitle": "Кардар тандалган дүкөнгө гана сакталат."
+    },
+    "detail": {
+      "title": "Кардар",
+      "subtitle": "Тандалган дүкөндөгү байланыштар жана сатып алуу тарыхы.",
+      "contactInfo": "Байланыштар",
+      "summary": "Жыйынтык",
+      "recentReceipts": "Акыркы чектер",
+      "noReceipts": "Бул кардар боюнча чек жок."
     },
     "validation": {
       "nameRequired": "Аты милдеттүү.",
@@ -1890,6 +1926,8 @@
   },
   "pwaInstall": {
     "buttonLabel": "Колдонмону орнотуу",
+    "cardTitle": "Bazaar'ды орнотуу",
+    "cardDescription": "Bazaar'ды телефондун башкы экранынан колдонмо катары ачыңыз.",
     "installedToast": "Bazaar орнотулду.",
     "close": "Жабуу",
     "ios": {
@@ -1923,6 +1961,10 @@
       "subtitle": "Колдонмо даяр болгондо браузер орнотуу сунушун көрсөтөт.",
       "body": "Сунуш чыкпаса, браузер менюсун ачып Колдонмону орнотууну тандаңыз. iPhone же iPad'да Safari'ди ачып, Башкы экранга кошууну колдонуңуз."
     }
+  },
+  "pwaStatus": {
+    "offlineTitle": "Байланыш жок",
+    "offlineDescription": "Маалымат экранда калат, бирок жаңы аракеттерди тармак калыбына келгенден кийин кайталаңыз."
   },
   "commandPalette": {
     "openButton": "Командалык панель",
@@ -2322,6 +2364,31 @@
       "printFiscalReceipt": "Фискалдык чекти басуу",
       "downloadReceipt": "Чекти PDF жүктөө",
       "printReceipt": "Чекти басып чыгаруу",
+      "shareReceipt": "Чекти бөлүшүү",
+      "shareReceiptTitle": "Чек {number}",
+      "shareReceiptText": "{number} сатуу чеги",
+      "shareUnavailable": "Түз бөлүшүү жеткиликтүү эмес, чек PDF болуп жүктөлдү.",
+      "filtersButton": "Фильтрлер {count}",
+      "mobileFiltersTitle": "Сатуулар фильтри",
+      "today": "Бүгүн",
+      "dateFrom": "Баштап",
+      "dateTo": "Чейин",
+      "applyFilters": "Көрсөтүү",
+      "clearFilters": "Тазалоо",
+      "statusAll": "Бардык абалдар",
+      "saleStatus": "Сатуу абалы",
+      "paymentMethod": "Төлөм",
+      "paymentMethodAll": "Бардык төлөм ыкмалары",
+      "openDetails": "Деталдар",
+      "detailsTitle": "Сатуу деталдары",
+      "itemsTitle": "Товарлар",
+      "totalsTitle": "Жыйынтык",
+      "paymentsTitle": "Төлөмдөр",
+      "receiptActions": "Чек аракеттери",
+      "customer": "Кардар",
+      "store": "Магазин",
+      "register": "Касса",
+      "dateTime": "Дата жана убакыт",
       "receiptPdfFailed": "Чек PDF даярдоо мүмкүн болгон жок."
     },
     "payments": {
@@ -2481,6 +2548,7 @@
     "receivingNote": "Комментарий",
     "receivingSearchTitle": "Товар кошуу",
     "receivingSearchPlaceholder": "Товарды аталышы, SKU же штрихкод боюнча издеңиз",
+    "receivingSearchPlaceholderShort": "Товар табуу",
     "receivingProductUnavailable": "Товар тандалган дүкөндө жеткиликтүү эмес.",
     "receivingAdded": "Кошулду",
     "receivingTableTitle": "Киреше позициялары",
@@ -2499,9 +2567,12 @@
     "receivingEmptyState": "Оприходование үчүн товар кошуңуз. Аталышы, SKU же штрихкод боюнча издеңиз.",
     "receivingSummaryTitle": "Жыйынтык",
     "receivingProductsCount": "Товарлар",
+    "receivingProductsCountShort": "товар",
     "receivingTotalQuantity": "Жалпы саны",
+    "receivingTotalQuantityShort": "даана",
     "receivingTotalCost": "Жалпы сумма",
     "receivingPost": "Оприходование өткөрүү",
+    "receivingPostShort": "Өткөрүү",
     "receiveQty": "Саны",
     "receiveNote": "Комментарий",
     "receiveSubmit": "Кабыл алуу",
@@ -2523,6 +2594,14 @@
     "summaryNegativeStock": "Терс калдык",
     "summaryLowStock": "Аз калган",
     "summaryPendingReceive": "Заказда",
+    "stockFilter": "Калдык чыпкасы",
+    "stockFilterAll": "Баары",
+    "outOfStock": "Калдык жок",
+    "stockOk": "Бар",
+    "countAdjustAction": "Инвентаризация / тууралоо",
+    "mobileTransferAction": "Которуу",
+    "mobileCountAction": "Эсептөө",
+    "mobileMinStockAction": "Мин. калдык",
     "negativeStockBadge": "Терс",
     "viewTable": "Таблица",
     "viewGrid": "Сетка",
@@ -2584,6 +2663,8 @@
     "priceTagsFailed": "PDF түзүү мүмкүн болгон жок.",
     "allStores": "Бардык дүкөндөр",
     "searchPlaceholder": "SKU же аталыш боюнча издөө",
+    "searchPlaceholderFull": "Аты, SKU же штрихкод боюнча издөө",
+    "searchPlaceholderNameBarcode": "Аты же штрихкод боюнча издөө",
     "searchPlaceholderNameOnly": "Аталыш боюнча издөө",
     "sku": "SKU",
     "productRequired": "Буюмду тандаңыз.",
@@ -2947,6 +3028,8 @@
     "rowInvalid": "Сап өткөрүлдү: милдеттүү талаалар жок.",
     "importSuccess": "Импорт аяктады.",
     "searchPlaceholder": "SKU же аталыш боюнча издөө",
+    "searchPlaceholderFull": "Аты, SKU же штрихкод боюнча издөө",
+    "searchPlaceholderNameBarcode": "Аты же штрихкод боюнча издөө",
     "searchPlaceholderNameOnly": "Аталыш боюнча издөө",
     "stores": "Дүкөндөр",
     "storesCount": "{count} дүкөн",
@@ -3078,8 +3161,10 @@
     "readinessFilter": "Даярдык",
     "readinessAll": "Бардык даярдык",
     "missingBarcode": "Штрихкод жок",
+    "missingImage": "Сүрөт жок",
     "missingPrice": "Баа жок",
     "negativeStock": "Терс калдык",
+    "outOfStock": "Калдык жок",
     "missingStock": "Калдык жок",
     "readyForSale": "Сатууга даяр",
     "readinessColumn": "Даярдык",
@@ -3485,6 +3570,42 @@
   "profile": {
     "title": "Профиль",
     "subtitle": "Жеке маалыматтар, интерфейс жөндөөлөрү жана бизнес реквизиттери.",
+    "mobileHub": {
+      "title": "Жөндөөлөр",
+      "description": "Дүкөн профилине, товарларга, басып чыгарууга жана аккаунтка тез өтүү.",
+      "storeProfile": {
+        "title": "Дүкөн профили",
+        "description": "Дүкөн аталышы, валюта жана бизнес реквизиттери."
+      },
+      "productSettings": {
+        "title": "Товар жөндөөлөрү",
+        "description": "SKU, штрихкоддор жана окшош товарларды текшерүү."
+      },
+      "printing": {
+        "title": "Басып чыгаруу",
+        "description": "Принтерлер, чектер жана басып чыгаруу шаблондору."
+      },
+      "users": {
+        "title": "Колдонуучулар жана ролдор",
+        "description": "Кызматкерлердин жеткиликтүүлүгү жана укуктары."
+      },
+      "subscription": {
+        "title": "Жазылуу",
+        "description": "Тариф, төлөм жана аккаунт чектөөлөрү."
+      },
+      "language": {
+        "title": "Тил жана тема",
+        "description": "Интерфейс тили жана көрүнүшү."
+      },
+      "support": {
+        "title": "Колдоо",
+        "description": "Жардам, нускамалар жана колдоо."
+      },
+      "account": {
+        "title": "Аккаунт",
+        "description": "Аты-жөнү, телефон жана жумуш маалыматы."
+      }
+    },
     "personal": {
       "title": "Жеке маалыматтар",
       "name": "Аты-жөнү",

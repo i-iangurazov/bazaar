@@ -386,7 +386,7 @@ const InventoryReceivingPage = () => {
   }
 
   return (
-    <div>
+    <div className="overflow-x-hidden pb-[15rem] md:pb-0">
       <PageHeader
         title={t("stockReceiving")}
         subtitle={t("stockReceivingSubtitle")}
@@ -398,17 +398,24 @@ const InventoryReceivingPage = () => {
             </Link>
           </Button>
         }
+        actionClassName="hidden md:flex"
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
-          <section className="border border-border bg-card p-4">
-            <div className="mb-4">
+          <section className="border border-border bg-card p-4 md:p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingDetailsTitle")}
               </h3>
+              <Button asChild variant="ghost" size="sm" className="md:hidden">
+                <Link href="/inventory">
+                  <BackIcon className="h-4 w-4" aria-hidden />
+                  {tCommon("back")}
+                </Link>
+              </Button>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label>{tCommon("store")}</Label>
                 <Select value={storeId} onValueChange={setStoreId}>
@@ -433,7 +440,42 @@ const InventoryReceivingPage = () => {
                   onChange={(event) => setDateTime(event.target.value)}
                 />
               </div>
-              <div className="space-y-2">
+              <details className="rounded-md border border-border bg-muted/20 p-3 lg:hidden">
+                <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                  {tCommon("additional")}
+                </summary>
+                <div className="mt-3 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="receiving-supplier-mobile">{t("receivingSupplier")}</Label>
+                    <Input
+                      id="receiving-supplier-mobile"
+                      value={supplierName}
+                      onChange={(event) => setSupplierName(event.target.value)}
+                      placeholder={t("receivingSupplierPlaceholder")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receiving-reference-mobile">{t("receivingReference")}</Label>
+                    <Input
+                      id="receiving-reference-mobile"
+                      value={referenceNumber}
+                      onChange={(event) => setReferenceNumber(event.target.value)}
+                      placeholder={t("receivingReferencePlaceholder")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receiving-note-mobile">{t("receivingNote")}</Label>
+                    <Textarea
+                      id="receiving-note-mobile"
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      placeholder={t("notePlaceholder")}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </details>
+              <div className="hidden space-y-2 lg:block">
                 <Label htmlFor="receiving-supplier">{t("receivingSupplier")}</Label>
                 <Input
                   id="receiving-supplier"
@@ -442,7 +484,7 @@ const InventoryReceivingPage = () => {
                   placeholder={t("receivingSupplierPlaceholder")}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="hidden space-y-2 lg:block">
                 <Label htmlFor="receiving-reference">{t("receivingReference")}</Label>
                 <Input
                   id="receiving-reference"
@@ -451,7 +493,7 @@ const InventoryReceivingPage = () => {
                   placeholder={t("receivingReferencePlaceholder")}
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="hidden space-y-2 lg:col-span-2 lg:block">
                 <Label htmlFor="receiving-note">{t("receivingNote")}</Label>
                 <Textarea
                   id="receiving-note"
@@ -479,7 +521,7 @@ const InventoryReceivingPage = () => {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder={t("receivingSearchPlaceholder")}
+                placeholder={t("receivingSearchPlaceholderShort")}
                 disabled={!storeId}
                 className="pl-9"
                 autoComplete="off"
@@ -527,7 +569,10 @@ const InventoryReceivingPage = () => {
                             .filter(Boolean)
                             .join(" • ") || tCommon("notAvailable")}
                         </span>
-                        <span className="block truncate text-xs text-muted-foreground">
+                        <span className="block text-xs text-muted-foreground lg:hidden">
+                          {t("onHand")}: {formatNumber(result.snapshot.onHand, locale)}
+                        </span>
+                        <span className="hidden truncate text-xs text-muted-foreground lg:block">
                           {t("onHand")}: {formatNumber(result.snapshot.onHand, locale)}
                           {result.unitCostKgs !== null
                             ? ` • ${t("unitCost")}: ${formatMoney(result.unitCostKgs)}`
@@ -561,7 +606,7 @@ const InventoryReceivingPage = () => {
 
             {lines.length ? (
               <>
-                <div className="hidden overflow-x-auto md:block">
+                <div className="hidden overflow-x-auto lg:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -662,7 +707,7 @@ const InventoryReceivingPage = () => {
                   </Table>
                 </div>
 
-                <div className="space-y-3 md:hidden">
+                <div className="space-y-3 lg:hidden">
                   {lines.map((line) => {
                     const metric = metricByKey.get(line.key);
                     return (
@@ -767,7 +812,7 @@ const InventoryReceivingPage = () => {
           </section>
         </div>
 
-        <aside className="xl:sticky xl:top-4 xl:self-start">
+        <aside className="hidden md:block xl:sticky xl:top-4 xl:self-start">
           <div className="border border-border bg-card p-4">
             <h3 className="text-base font-semibold text-foreground">
               {t("receivingSummaryTitle")}
@@ -830,6 +875,49 @@ const InventoryReceivingPage = () => {
             </div>
           </div>
         </aside>
+      </div>
+      <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40 border-t border-border bg-card p-2.5 shadow-2xl md:hidden">
+        <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <div className="min-w-0">
+              <span className="font-semibold text-foreground">
+                {formatNumber(summary.products, locale)}
+              </span>{" "}
+              {t("receivingProductsCountShort")}
+              <span className="px-1 text-muted-foreground/60">·</span>
+              <span className="font-semibold text-foreground">
+                {formatNumber(summary.totalQuantity, locale)}
+              </span>{" "}
+              {t("receivingTotalQuantityShort")}
+            </div>
+            <div className="shrink-0 text-sm font-semibold text-foreground">
+              {formatMoney(summary.totalCost)}
+            </div>
+          </div>
+          <div className="grid grid-cols-[0.8fr_1.2fr] gap-2">
+            <Button asChild variant="secondary" className="min-h-11">
+              <Link href="/inventory">{tCommon("cancel")}</Link>
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11"
+              onClick={handlePost}
+              disabled={postMutation.isLoading || Boolean(validationMessage)}
+            >
+              {postMutation.isLoading ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <ReceiveIcon className="h-4 w-4" aria-hidden />
+              )}
+              <span className="sm:hidden">
+                {postMutation.isLoading ? tCommon("saving") : t("receivingPostShort")}
+              </span>
+              <span className="hidden sm:inline">
+                {postMutation.isLoading ? tCommon("saving") : t("receivingPost")}
+              </span>
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

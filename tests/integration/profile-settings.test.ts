@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { Role } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
@@ -87,5 +88,95 @@ describeDb("profile settings", () => {
     const profile = await caller.userSettings.getMyProfile();
     expect(profile.preferredLocale).toBe("kg");
     expect(profile.themePreference).toBe("DARK");
+  });
+
+  it("keeps product customization settings scoped to the selected store and organization", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const secondStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Second Store",
+        code: "SND",
+        enableSku: true,
+        enableBarcode: true,
+        enableSimilarProductCheck: true,
+      },
+    });
+    const otherOrg = await prisma.organization.create({
+      data: { name: "Other Org", plan: "BUSINESS" },
+    });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: otherOrg.id,
+        name: "Other Store",
+        code: "OTH",
+        enableSku: true,
+        enableBarcode: true,
+        enableSimilarProductCheck: true,
+      },
+    });
+    const otherAdmin = await prisma.user.create({
+      data: {
+        organizationId: otherOrg.id,
+        email: "other-admin@test.local",
+        name: "Other Admin",
+        passwordHash: "hash",
+        role: Role.ADMIN,
+        isOrgOwner: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+    const otherCaller = createTestCaller({
+      id: otherAdmin.id,
+      email: otherAdmin.email,
+      role: otherAdmin.role,
+      organizationId: otherOrg.id,
+      isOrgOwner: true,
+    });
+
+    await caller.stores.updateProductSettings({
+      storeId: store.id,
+      enableSku: false,
+      enableBarcode: false,
+      enableSimilarProductCheck: false,
+    });
+
+    const firstStoreProfile = await caller.orgSettings.getBusinessProfile({ storeId: store.id });
+    const secondStoreProfile = await caller.orgSettings.getBusinessProfile({
+      storeId: secondStore.id,
+    });
+    const otherStoreProfile = await otherCaller.orgSettings.getBusinessProfile({
+      storeId: otherStore.id,
+    });
+
+    expect(firstStoreProfile.selectedStore?.enableSku).toBe(false);
+    expect(firstStoreProfile.selectedStore?.enableBarcode).toBe(false);
+    expect(firstStoreProfile.selectedStore?.enableSimilarProductCheck).toBe(false);
+    expect(secondStoreProfile.selectedStore?.enableSku).toBe(true);
+    expect(secondStoreProfile.selectedStore?.enableBarcode).toBe(true);
+    expect(secondStoreProfile.selectedStore?.enableSimilarProductCheck).toBe(true);
+    expect(otherStoreProfile.selectedStore?.enableSku).toBe(true);
+    expect(otherStoreProfile.selectedStore?.enableBarcode).toBe(true);
+    expect(otherStoreProfile.selectedStore?.enableSimilarProductCheck).toBe(true);
+
+    await expect(otherCaller.orgSettings.getBusinessProfile({ storeId: store.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(
+      otherCaller.stores.updateProductSettings({
+        storeId: store.id,
+        enableSku: true,
+        enableBarcode: true,
+        enableSimilarProductCheck: true,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

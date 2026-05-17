@@ -5,8 +5,10 @@ import { locales } from "@/lib/locales";
 export const productTypeFilterEnum = z.enum(["all", "product", "bundle"]);
 export const productReadinessFilterEnum = z.enum([
   "missingBarcode",
+  "missingImage",
   "missingPrice",
   "lowStock",
+  "outOfStock",
   "negativeStock",
 ]);
 export const productSortKeyEnum = z.enum([

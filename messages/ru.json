@@ -18,8 +18,10 @@
     "yes": "Да",
     "no": "Нет",
     "search": "Поиск",
+    "filters": "Фильтры",
     "select": "Выбрать",
     "actions": "Действия",
+    "additional": "Дополнительно",
     "optional": "Необязательно",
     "tooltips": {
       "download": "Скачать",
@@ -603,9 +605,12 @@
     "customizeSubtitle": "Выберите, какие доступные вашей роли ссылки показывать в боковом меню.",
     "customizeToggle": "Показывать {item} в меню",
     "customizeReset": "Показать все ссылки",
+    "mobileNavigation": "Мобильная навигация",
+    "more": "Ещё",
     "dashboard": "Панель",
     "pos": "Касса",
     "inventory": "Запасы",
+    "sales": "Продажи",
     "orders": "Заказы",
     "salesOrders": "Клиенты",
     "customers": "Клиентская база",
@@ -640,6 +645,23 @@
   "printingSettings": {
     "title": "Настройки печати",
     "subtitle": "Чеки, ценники, локальный агент печати и автопечать POS для каждого магазина.",
+    "wizardTitle": "Мастер печати",
+    "wizardDescription": "Настройте способ печати, доверие QZ Tray, принтеры, шаблоны и тестовую печать.",
+    "wizardMethodTitle": "Способ печати",
+    "wizardMethodDescription": "Выберите, как этот терминал будет печатать чеки и ценники.",
+    "wizardAgentUnavailable": "Bazaar Print Agent не показан, потому что реальный провайдер агента в этой установке не подключён.",
+    "wizardConnectionTitle": "Подключение",
+    "wizardConnectionDescription": "Проверьте, что QZ Tray запущен на этом устройстве.",
+    "wizardTrustTitle": "Доверие и сертификат",
+    "wizardTrustDescription": "Проверяйте сертификат, подпись запросов и локальное доверие QZ отдельно.",
+    "wizardPrintersTitle": "Принтеры",
+    "wizardPrintersDescription": "Выберите принтер чеков и принтер этикеток для этого терминала.",
+    "wizardTemplatesTitle": "Шаблоны чеков и ценников",
+    "wizardTemplatesDescription": "Настройте размер бумаги, видимые поля, макет ценника и предпросмотр.",
+    "wizardTestTitle": "Тестовая печать",
+    "wizardTestDescription": "Отправьте тестовый чек и тестовый ценник после выбора принтеров.",
+    "wizardReadyTitle": "Готово",
+    "wizardReadyDescription": "Автопечать будет считаться готовой только после подключения QZ, выбора принтера, рабочей подписи и локального доверия сертификату.",
     "empty": "Создайте магазин перед настройкой печати.",
     "storeScopeTitle": "Магазин и терминал",
     "deviceScopeHint": "Шаблоны сохраняются для магазина, а имена локальных принтеров сохраняются на этом терминале.",
@@ -833,6 +855,7 @@
     "exports": "Экспорты",
     "close": "Закрытие периода",
     "metrics": "Метрики",
+    "receiving": "Оприходование",
     "counts": "Пересчеты",
     "compliance": "Требования",
     "bazaarCatalog": "bazaar-каталог",
@@ -922,7 +945,9 @@
     "actions": {
       "add": "Добавить клиента",
       "create": "Создать клиента",
-      "save": "Сохранить изменения"
+      "save": "Сохранить изменения",
+      "call": "Позвонить",
+      "viewSales": "Продажи"
     },
     "columns": {
       "name": "Имя",
@@ -931,6 +956,8 @@
       "address": "Адрес",
       "source": "Источник",
       "createdAt": "Создан",
+      "lastPurchase": "Последняя покупка",
+      "totalPurchases": "Покупок",
       "actions": "Действия"
     },
     "fields": {
@@ -944,6 +971,7 @@
       "storePlaceholder": "Выберите магазин",
       "search": "Поиск",
       "searchPlaceholder": "Имя, email, телефон или адрес",
+      "mobileSearchPlaceholder": "Имя, телефон или email",
       "source": "Источник",
       "allSources": "Все источники"
     },
@@ -957,6 +985,14 @@
       "addTitle": "Добавить клиента",
       "editTitle": "Редактировать клиента",
       "subtitle": "Клиент сохраняется только в выбранный магазин."
+    },
+    "detail": {
+      "title": "Клиент",
+      "subtitle": "Контакты и история покупок в выбранном магазине.",
+      "contactInfo": "Контакты",
+      "summary": "Сводка",
+      "recentReceipts": "Последние чеки",
+      "noReceipts": "Чеков по этому клиенту пока нет."
     },
     "validation": {
       "nameRequired": "Имя обязательно.",
@@ -1890,6 +1926,8 @@
   },
   "pwaInstall": {
     "buttonLabel": "Установить приложение",
+    "cardTitle": "Установить Bazaar",
+    "cardDescription": "Откройте Bazaar как приложение с экрана телефона.",
     "installedToast": "Bazaar установлен.",
     "close": "Закрыть",
     "ios": {
@@ -1923,6 +1961,10 @@
       "subtitle": "Браузер покажет окно установки, когда приложение будет готово.",
       "body": "Если окно не появилось, откройте меню браузера и выберите Установить приложение. На iPhone или iPad откройте Safari и используйте На экран Домой."
     }
+  },
+  "pwaStatus": {
+    "offlineTitle": "Нет подключения",
+    "offlineDescription": "Данные остаются на экране, но новые действия нужно повторить после восстановления сети."
   },
   "commandPalette": {
     "openButton": "Командная панель",
@@ -2322,6 +2364,31 @@
       "printFiscalReceipt": "Печать фискального чека",
       "downloadReceipt": "Скачать чек PDF",
       "printReceipt": "Печать чека",
+      "shareReceipt": "Поделиться чеком",
+      "shareReceiptTitle": "Чек {number}",
+      "shareReceiptText": "Чек продажи {number}",
+      "shareUnavailable": "Поделиться напрямую нельзя, чек скачан PDF-файлом.",
+      "filtersButton": "Фильтры {count}",
+      "mobileFiltersTitle": "Фильтры продаж",
+      "today": "Сегодня",
+      "dateFrom": "С",
+      "dateTo": "По",
+      "applyFilters": "Показать",
+      "clearFilters": "Сбросить",
+      "statusAll": "Все статусы",
+      "saleStatus": "Статус продажи",
+      "paymentMethod": "Оплата",
+      "paymentMethodAll": "Все способы оплаты",
+      "openDetails": "Детали",
+      "detailsTitle": "Детали продажи",
+      "itemsTitle": "Товары",
+      "totalsTitle": "Итоги",
+      "paymentsTitle": "Оплаты",
+      "receiptActions": "Действия с чеком",
+      "customer": "Клиент",
+      "store": "Магазин",
+      "register": "Касса",
+      "dateTime": "Дата и время",
       "receiptPdfFailed": "Не удалось подготовить чек PDF."
     },
     "payments": {
@@ -2481,6 +2548,7 @@
     "receivingNote": "Комментарий",
     "receivingSearchTitle": "Добавить товары",
     "receivingSearchPlaceholder": "Найдите товар по названию, SKU или штрихкоду",
+    "receivingSearchPlaceholderShort": "Найти товар",
     "receivingProductUnavailable": "Товар недоступен для выбранного магазина.",
     "receivingAdded": "Добавлен",
     "receivingTableTitle": "Товары к оприходованию",
@@ -2499,9 +2567,12 @@
     "receivingEmptyState": "Добавьте товары для оприходования. Найдите товар по названию, SKU или штрихкоду.",
     "receivingSummaryTitle": "Итоги",
     "receivingProductsCount": "Товаров",
+    "receivingProductsCountShort": "товаров",
     "receivingTotalQuantity": "Общее количество",
+    "receivingTotalQuantityShort": "шт",
     "receivingTotalCost": "Общая сумма",
     "receivingPost": "Провести оприходование",
+    "receivingPostShort": "Провести",
     "receiveQty": "Количество",
     "receiveNote": "Комментарий",
     "receiveSubmit": "Принять",
@@ -2523,6 +2594,14 @@
     "summaryNegativeStock": "Отрицательный остаток",
     "summaryLowStock": "Низкий остаток",
     "summaryPendingReceive": "В заказе",
+    "stockFilter": "Фильтр остатков",
+    "stockFilterAll": "Все",
+    "outOfStock": "Нет в наличии",
+    "stockOk": "В наличии",
+    "countAdjustAction": "Инвентаризация / корректировка",
+    "mobileTransferAction": "Перемещение",
+    "mobileCountAction": "Инвентаризация",
+    "mobileMinStockAction": "Мин. остатки",
     "negativeStockBadge": "Минус",
     "viewTable": "Таблица",
     "viewGrid": "Сетка",
@@ -2585,6 +2664,8 @@
     "priceTagsFailed": "Не удалось создать PDF.",
     "allStores": "Все магазины",
     "searchPlaceholder": "Поиск по SKU или названию",
+    "searchPlaceholderFull": "Поиск по названию, SKU или штрихкоду",
+    "searchPlaceholderNameBarcode": "Поиск по названию или штрихкоду",
     "searchPlaceholderNameOnly": "Поиск по названию",
     "sku": "SKU",
     "productRequired": "Выберите товар.",
@@ -2948,6 +3029,8 @@
     "rowInvalid": "Строка пропущена: обязательные поля отсутствуют.",
     "importSuccess": "Импорт завершен.",
     "searchPlaceholder": "Поиск по SKU или названию",
+    "searchPlaceholderFull": "Поиск по названию, SKU или штрихкоду",
+    "searchPlaceholderNameBarcode": "Поиск по названию или штрихкоду",
     "searchPlaceholderNameOnly": "Поиск по названию",
     "stores": "Магазины",
     "storesCount": "{count, plural, one {# магазин} few {# магазина} many {# магазинов} other {# магазина}}",
@@ -3079,8 +3162,10 @@
     "readinessFilter": "Готовность",
     "readinessAll": "Любая готовность",
     "missingBarcode": "Нет штрихкода",
+    "missingImage": "Нет фото",
     "missingPrice": "Нет цены",
     "negativeStock": "Отрицательный остаток",
+    "outOfStock": "Нет в наличии",
     "missingStock": "Нет остатка",
     "readyForSale": "Готов к продаже",
     "readinessColumn": "Готовность",
@@ -3486,6 +3571,42 @@
   "profile": {
     "title": "Профиль",
     "subtitle": "Личные данные, настройки интерфейса и реквизиты бизнеса.",
+    "mobileHub": {
+      "title": "Настройки",
+      "description": "Быстрый доступ к профилю магазина, товарам, печати и аккаунту.",
+      "storeProfile": {
+        "title": "Профиль магазина",
+        "description": "Название, валюта и реквизиты магазина."
+      },
+      "productSettings": {
+        "title": "Настройки товаров",
+        "description": "SKU, штрихкоды и проверка похожих товаров."
+      },
+      "printing": {
+        "title": "Печать",
+        "description": "Принтеры, чеки и шаблоны печати."
+      },
+      "users": {
+        "title": "Пользователи и роли",
+        "description": "Доступы сотрудников и права."
+      },
+      "subscription": {
+        "title": "Подписка",
+        "description": "Тариф, оплата и ограничения аккаунта."
+      },
+      "language": {
+        "title": "Язык и тема",
+        "description": "Интерфейс, язык и внешний вид."
+      },
+      "support": {
+        "title": "Поддержка",
+        "description": "Справка, инструкции и помощь."
+      },
+      "account": {
+        "title": "Аккаунт",
+        "description": "Имя, телефон и рабочая информация."
+      }
+    },
     "personal": {
       "title": "Личные данные",
       "name": "Имя",

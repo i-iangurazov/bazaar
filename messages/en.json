@@ -18,8 +18,10 @@
     "yes": "Yes",
     "no": "No",
     "search": "Search",
+    "filters": "Filters",
     "select": "Select",
     "actions": "Actions",
+    "additional": "Additional",
     "optional": "Optional",
     "tooltips": {
       "download": "Download",
@@ -603,9 +605,12 @@
     "customizeSubtitle": "Choose which role-available links appear in your sidebar.",
     "customizeToggle": "Show {item} in navigation",
     "customizeReset": "Show all links",
+    "mobileNavigation": "Mobile navigation",
+    "more": "More",
     "dashboard": "Dashboard",
     "pos": "POS",
     "inventory": "Inventory",
+    "sales": "Sales",
     "orders": "Orders",
     "salesOrders": "Customers",
     "customers": "Customer Database",
@@ -640,6 +645,23 @@
   "printingSettings": {
     "title": "Print settings",
     "subtitle": "Receipts, labels, local print agent, and POS auto-print for each store.",
+    "wizardTitle": "Printing wizard",
+    "wizardDescription": "Set up print method, QZ Tray trust, printers, templates, and test printing.",
+    "wizardMethodTitle": "Print method",
+    "wizardMethodDescription": "Choose how this terminal prints receipts and labels.",
+    "wizardAgentUnavailable": "Bazaar Print Agent is not shown because a real agent provider is not connected in this installation.",
+    "wizardConnectionTitle": "Connection",
+    "wizardConnectionDescription": "Check that QZ Tray is running on this device.",
+    "wizardTrustTitle": "Trust and certificate",
+    "wizardTrustDescription": "Check certificate, request signing, and local QZ trust separately.",
+    "wizardPrintersTitle": "Printers",
+    "wizardPrintersDescription": "Select the receipt printer and label printer for this terminal.",
+    "wizardTemplatesTitle": "Receipt and label templates",
+    "wizardTemplatesDescription": "Configure paper size, visible fields, label layout, and preview.",
+    "wizardTestTitle": "Test print",
+    "wizardTestDescription": "Send a test receipt and test label after choosing printers.",
+    "wizardReadyTitle": "Ready",
+    "wizardReadyDescription": "Auto-print is only ready after QZ is connected, a printer is selected, signing works, and the certificate is trusted locally.",
     "empty": "Create a store before setting up printing.",
     "storeScopeTitle": "Store and terminal",
     "deviceScopeHint": "Templates are stored per store; local printer names are saved on this terminal.",
@@ -833,6 +855,7 @@
     "exports": "Exports",
     "close": "Period close",
     "metrics": "Metrics",
+    "receiving": "Stock receiving",
     "counts": "Counts",
     "compliance": "Compliance",
     "bazaarCatalog": "bazaar catalogue",
@@ -922,7 +945,9 @@
     "actions": {
       "add": "Add Customer",
       "create": "Create customer",
-      "save": "Save changes"
+      "save": "Save changes",
+      "call": "Call",
+      "viewSales": "Sales"
     },
     "columns": {
       "name": "Name",
@@ -931,6 +956,8 @@
       "address": "Address",
       "source": "Source",
       "createdAt": "Created",
+      "lastPurchase": "Last purchase",
+      "totalPurchases": "Purchases",
       "actions": "Actions"
     },
     "fields": {
@@ -944,6 +971,7 @@
       "storePlaceholder": "Select store",
       "search": "Search",
       "searchPlaceholder": "Name, email, phone, or address",
+      "mobileSearchPlaceholder": "Name, phone, or email",
       "source": "Source",
       "allSources": "All sources"
     },
@@ -957,6 +985,14 @@
       "addTitle": "Add customer",
       "editTitle": "Edit customer",
       "subtitle": "Customers are saved only to the selected store."
+    },
+    "detail": {
+      "title": "Customer",
+      "subtitle": "Contacts and purchase history in the selected store.",
+      "contactInfo": "Contact info",
+      "summary": "Summary",
+      "recentReceipts": "Recent receipts",
+      "noReceipts": "No receipts for this customer yet."
     },
     "validation": {
       "nameRequired": "Name is required.",
@@ -1890,6 +1926,8 @@
   },
   "pwaInstall": {
     "buttonLabel": "Install app",
+    "cardTitle": "Install Bazaar",
+    "cardDescription": "Open Bazaar like an app from your phone Home Screen.",
     "installedToast": "Bazaar was installed.",
     "close": "Close",
     "ios": {
@@ -1923,6 +1961,10 @@
       "subtitle": "Your browser will show the install prompt when the app is ready.",
       "body": "If no prompt appears, use the browser menu and choose Install app. On iPhone or iPad, open Safari and use Add to Home Screen."
     }
+  },
+  "pwaStatus": {
+    "offlineTitle": "No connection",
+    "offlineDescription": "Data stays visible, but new actions should be retried after the network returns."
   },
   "commandPalette": {
     "openButton": "Command palette",
@@ -2322,6 +2364,31 @@
       "printFiscalReceipt": "Print fiscal receipt",
       "downloadReceipt": "Download receipt",
       "printReceipt": "Print receipt",
+      "shareReceipt": "Share receipt",
+      "shareReceiptTitle": "Receipt {number}",
+      "shareReceiptText": "Sale receipt {number}",
+      "shareUnavailable": "Direct sharing is not available, so the receipt was downloaded as a PDF.",
+      "filtersButton": "Filters {count}",
+      "mobileFiltersTitle": "Sales filters",
+      "today": "Today",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "applyFilters": "Show",
+      "clearFilters": "Reset",
+      "statusAll": "All statuses",
+      "saleStatus": "Sale status",
+      "paymentMethod": "Payment",
+      "paymentMethodAll": "All payment methods",
+      "openDetails": "Details",
+      "detailsTitle": "Sale details",
+      "itemsTitle": "Items",
+      "totalsTitle": "Totals",
+      "paymentsTitle": "Payments",
+      "receiptActions": "Receipt actions",
+      "customer": "Customer",
+      "store": "Store",
+      "register": "Register",
+      "dateTime": "Date and time",
       "receiptPdfFailed": "Receipt PDF failed."
     },
     "payments": {
@@ -2481,6 +2548,7 @@
     "receivingNote": "Note",
     "receivingSearchTitle": "Add products",
     "receivingSearchPlaceholder": "Search by product name, SKU, or barcode",
+    "receivingSearchPlaceholderShort": "Find a product",
     "receivingProductUnavailable": "Product is unavailable for the selected store.",
     "receivingAdded": "Added",
     "receivingTableTitle": "Receiving lines",
@@ -2499,9 +2567,12 @@
     "receivingEmptyState": "Add products for receiving. Search by name, SKU, or barcode.",
     "receivingSummaryTitle": "Summary",
     "receivingProductsCount": "Products",
+    "receivingProductsCountShort": "products",
     "receivingTotalQuantity": "Total quantity",
+    "receivingTotalQuantityShort": "qty",
     "receivingTotalCost": "Total cost",
     "receivingPost": "Post receiving",
+    "receivingPostShort": "Post",
     "receiveQty": "Receive qty",
     "receiveNote": "Receive note",
     "receiveSubmit": "Receive submit",
@@ -2523,6 +2594,14 @@
     "summaryNegativeStock": "Negative stock",
     "summaryLowStock": "Low stock",
     "summaryPendingReceive": "On order",
+    "stockFilter": "Stock filter",
+    "stockFilterAll": "All",
+    "outOfStock": "Out of stock",
+    "stockOk": "In stock",
+    "countAdjustAction": "Count / adjust",
+    "mobileTransferAction": "Transfer",
+    "mobileCountAction": "Count",
+    "mobileMinStockAction": "Min stock",
     "negativeStockBadge": "Negative",
     "viewTable": "View table",
     "viewGrid": "View grid",
@@ -2584,7 +2663,9 @@
     "printDownload": "Print download",
     "priceTagsFailed": "Price tags failed.",
     "allStores": "All stores",
-    "searchPlaceholder": "Enter search",
+    "searchPlaceholder": "Search by SKU or name",
+    "searchPlaceholderFull": "Search by name, SKU, or barcode",
+    "searchPlaceholderNameBarcode": "Search by name or barcode",
     "searchPlaceholderNameOnly": "Search by name",
     "sku": "SKU",
     "productRequired": "Product is required.",
@@ -2947,7 +3028,9 @@
     "importParseError": "Import parse error",
     "rowInvalid": "Invalid row.",
     "importSuccess": "Import completed.",
-    "searchPlaceholder": "Enter search",
+    "searchPlaceholder": "Search by SKU or name",
+    "searchPlaceholderFull": "Search by name, SKU, or barcode",
+    "searchPlaceholderNameBarcode": "Search by name or barcode",
     "searchPlaceholderNameOnly": "Search by name",
     "stores": "Stores",
     "storesCount": "Stores count {count}",
@@ -3079,8 +3162,10 @@
     "readinessFilter": "Readiness",
     "readinessAll": "All readiness",
     "missingBarcode": "Missing barcode",
+    "missingImage": "No image",
     "missingPrice": "Missing price",
     "negativeStock": "Negative stock",
+    "outOfStock": "Out of stock",
     "missingStock": "Missing stock",
     "readyForSale": "Ready",
     "readinessColumn": "Readiness",
@@ -3486,6 +3571,42 @@
   "profile": {
     "title": "Profile",
     "subtitle": "Personal details, interface settings, and business details.",
+    "mobileHub": {
+      "title": "Settings",
+      "description": "Quick access to store profile, products, printing, and account settings.",
+      "storeProfile": {
+        "title": "Store profile",
+        "description": "Store name, currency, and business details."
+      },
+      "productSettings": {
+        "title": "Product settings",
+        "description": "SKU, barcodes, and similar product checks."
+      },
+      "printing": {
+        "title": "Printing",
+        "description": "Printers, receipts, and print templates."
+      },
+      "users": {
+        "title": "Users and roles",
+        "description": "Staff access and permissions."
+      },
+      "subscription": {
+        "title": "Subscription",
+        "description": "Plan, billing, and account limits."
+      },
+      "language": {
+        "title": "Language and theme",
+        "description": "Interface language and appearance."
+      },
+      "support": {
+        "title": "Support",
+        "description": "Help, guides, and support."
+      },
+      "account": {
+        "title": "Account",
+        "description": "Name, phone, and work details."
+      }
+    },
     "personal": {
       "title": "Personal details",
       "name": "Name",

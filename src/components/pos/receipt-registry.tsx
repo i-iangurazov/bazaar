@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { DownloadIcon, PrintIcon } from "@/components/icons";
+import { DownloadIcon, PrintIcon, ShareIcon } from "@/components/icons";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -74,7 +74,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
   const [receiptAction, setReceiptAction] = useState<{
     saleId: string;
-    mode: "download" | "print";
+    mode: "download" | "print" | "share";
   } | null>(null);
 
   const receiptsQuery = trpc.pos.receipts.useQuery(
@@ -178,6 +178,41 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
         }
       } else {
         downloadPdfBlob(blob, `pos-receipt-${number}-precheck.pdf`);
+      }
+    } catch {
+      toast({ variant: "error", description: tPos("history.receiptPdfFailed") });
+    } finally {
+      setReceiptAction(null);
+    }
+  };
+
+  const handleShareReceiptPdf = async (saleId: string, number: string) => {
+    if (receiptAction) {
+      return;
+    }
+    setReceiptAction({ saleId, mode: "share" });
+    try {
+      const blob = await fetchPdfBlob({
+        url: `/api/pos/receipts/${saleId}/pdf?kind=precheck&action=download`,
+      });
+      const file = new File([blob], `pos-receipt-${number}-precheck.pdf`, {
+        type: "application/pdf",
+      });
+      const shareNavigator = navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+      };
+      if (
+        typeof shareNavigator.share === "function" &&
+        (!shareNavigator.canShare || shareNavigator.canShare({ files: [file] }))
+      ) {
+        await shareNavigator.share({
+          title: tPos("history.shareReceiptTitle", { number }),
+          text: tPos("history.shareReceiptText", { number }),
+          files: [file],
+        });
+      } else {
+        downloadPdfBlob(blob, `pos-receipt-${number}-precheck.pdf`);
+        toast({ variant: "info", description: tPos("history.shareUnavailable") });
       }
     } catch {
       toast({ variant: "error", description: tPos("history.receiptPdfFailed") });
@@ -413,25 +448,61 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                       <p className="mt-1 text-xs text-muted-foreground">
                         {kkmStatusLabel(item.kkmStatus)}
                       </p>
-                      <div className="mt-3 flex gap-2">
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {paymentMethods
+                          .filter((method) => (item.paymentBreakdown[method] ?? 0) > 0)
+                          .map(
+                            (method) =>
+                              `${tPos(`payments.${method.toLowerCase()}`)}: ${formatKgsMoney(
+                                item.paymentBreakdown[method] ?? 0,
+                                locale,
+                                currencySourceWithFallback(item, item.store),
+                              )}`,
+                          )
+                          .join(" · ") || tCommon("notAvailable")}
+                      </p>
+                      <div className="mt-3 grid gap-2">
                         <Button
                           type="button"
-                          size="sm"
+                          className="h-10 justify-start"
                           onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
                           disabled={Boolean(receiptAction)}
                         >
-                          <PrintIcon className="h-4 w-4" aria-hidden />
+                          {receiptAction?.saleId === item.id && receiptAction.mode === "print" ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <PrintIcon className="h-4 w-4" aria-hidden />
+                          )}
                           {tPos("history.printPrecheck")}
                         </Button>
                         <Button
                           type="button"
                           variant="secondary"
-                          size="sm"
+                          className="h-10 justify-start"
                           onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
                           disabled={Boolean(receiptAction)}
                         >
-                          <DownloadIcon className="h-4 w-4" aria-hidden />
+                          {receiptAction?.saleId === item.id &&
+                          receiptAction.mode === "download" ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <DownloadIcon className="h-4 w-4" aria-hidden />
+                          )}
                           {tPos("history.downloadPrecheck")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-10 justify-start"
+                          onClick={() => void handleShareReceiptPdf(item.id, item.number)}
+                          disabled={Boolean(receiptAction)}
+                        >
+                          {receiptAction?.saleId === item.id && receiptAction.mode === "share" ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <ShareIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {tPos("history.shareReceipt")}
                         </Button>
                       </div>
                     </div>

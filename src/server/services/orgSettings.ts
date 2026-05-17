@@ -69,7 +69,14 @@ export const getBusinessProfile = async (input: GetBusinessProfileInput) => {
     orderBy: { name: "asc" },
   });
 
-  const selectedStore = stores.find((store) => store.id === input.storeId) ?? stores[0] ?? null;
+  const requestedStoreId = normalizeOptional(input.storeId);
+  const requestedStore = requestedStoreId
+    ? stores.find((store) => store.id === requestedStoreId)
+    : null;
+  if (requestedStoreId && !requestedStore) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
+  const selectedStore = requestedStore ?? stores[0] ?? null;
 
   const serializedSelectedStore = selectedStore
     ? {

@@ -938,7 +938,7 @@ const ProductDetailPage = () => {
   }
 
   return (
-    <div className={canManageProducts ? "pb-24" : undefined}>
+    <div className={canManageProducts ? "pb-48 md:pb-24" : undefined}>
       <PageHeader
         title={t("editTitle")}
         subtitle={productQuery.data.name}
@@ -1035,16 +1035,16 @@ const ProductDetailPage = () => {
 
       <Card className="mb-6 overflow-hidden">
         <CardContent className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="overflow-hidden rounded-none border border-border bg-muted/20">
+          <div className="h-56 overflow-hidden rounded-none border border-border bg-muted/20 sm:h-auto">
             {previewImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewImageUrl}
                 alt={productQuery.data.name}
-                className="aspect-square h-full w-full object-cover"
+                className="h-full w-full object-cover sm:aspect-square"
               />
             ) : (
-              <div className="flex aspect-square items-center justify-center">
+              <div className="flex h-full items-center justify-center sm:aspect-square">
                 <EmptyIcon className="h-10 w-10 text-muted-foreground" aria-hidden />
               </div>
             )}
@@ -1663,7 +1663,7 @@ const ProductDetailPage = () => {
         </CardContent>
       </Card>
       {canManageProducts ? (
-        <div className="fixed bottom-4 right-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2 sm:bottom-6 sm:right-6">
+        <div className="mt-4 flex flex-col gap-2 md:fixed md:inset-x-auto md:bottom-6 md:right-6 md:z-40 md:max-w-[calc(100vw-2rem)] md:items-end">
           {updateMutation.error ? (
             <div className="max-w-sm border border-danger/30 bg-danger/10 px-3 py-2 text-right text-sm text-danger shadow-lg">
               {translateError(tErrors, updateMutation.error)}
@@ -1673,7 +1673,7 @@ const ProductDetailPage = () => {
             type="submit"
             form={productEditFormId}
             disabled={updateMutation.isLoading}
-            className="min-w-[180px] shadow-lg"
+            className="w-full shadow-lg md:min-w-[180px] md:w-auto"
           >
             {updateMutation.isLoading ? (
               <Spinner className="h-4 w-4" />
@@ -2080,6 +2080,7 @@ const ProductDetailPage = () => {
         onOpenChange={setDuplicateDialogOpen}
         title={t("duplicateDialogTitle")}
         subtitle={productQuery.data.name}
+        mobileSheet
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>

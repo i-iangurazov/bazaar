@@ -378,6 +378,9 @@ const StockCountDetailPage = () => {
             <ResponsiveDataList
               items={lines}
               getKey={(line) => line.id}
+              desktopBreakpoint="lg"
+              desktopClassName="max-lg:!hidden"
+              mobileClassName="!block lg:!hidden"
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
                   <Table className="min-w-[800px]">

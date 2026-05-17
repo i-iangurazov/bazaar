@@ -50,6 +50,7 @@ const SalesOrdersPage = () => {
   const [search, setSearch] = useState("");
   const [storeId, setStoreId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<CustomerOrderStatus | "all">("all");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
@@ -102,6 +103,11 @@ const SalesOrdersPage = () => {
 
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const totalItems = listQuery.data?.total ?? 0;
+  const activeMobileFilterCount = [
+    search.trim(),
+    storeId !== "all" ? storeId : "",
+    statusFilter !== "all" ? statusFilter : "",
+  ].filter(Boolean).length;
 
   const statusVariant = (
     status: CustomerOrderStatus,
@@ -160,7 +166,55 @@ const SalesOrdersPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="space-y-3 md:hidden">
+            <Input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder={t("searchPlaceholder")}
+              aria-label={t("searchPlaceholder")}
+              className="h-11"
+            />
+            <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={statusFilter === "all" ? "default" : "secondary"}
+                className="h-10 shrink-0"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setPage(1);
+                }}
+              >
+                {t("allStatuses")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={statusFilter === CustomerOrderStatus.READY ? "default" : "secondary"}
+                className="h-10 shrink-0"
+                onClick={() => {
+                  setStatusFilter(CustomerOrderStatus.READY);
+                  setPage(1);
+                }}
+              >
+                {getCustomerOrderStatusLabel(t, "READY")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={activeMobileFilterCount ? "default" : "secondary"}
+                className="h-10 shrink-0"
+                onClick={() => setMobileFiltersOpen(true)}
+              >
+                {tCommon("filters")} {activeMobileFilterCount}
+              </Button>
+            </div>
+          </div>
+
+          <div className="hidden grid-cols-1 gap-3 md:grid md:grid-cols-4">
             <Input
               value={search}
               onChange={(event) => {
@@ -466,6 +520,115 @@ const SalesOrdersPage = () => {
           ) : null}
         </CardContent>
       </Card>
+      {mobileFiltersOpen ? (
+        <div className="fixed inset-0 z-[70] md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/35"
+            onClick={() => setMobileFiltersOpen(false)}
+            aria-label={tCommon("close")}
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={tCommon("filters")}
+            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto border-t border-border bg-background p-4 shadow-2xl"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{tCommon("filters")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={() => setMobileFiltersOpen(false)}
+                aria-label={tCommon("close")}
+              >
+                <CloseIcon className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{t("store")}</span>
+                <Select
+                  value={storeId}
+                  onValueChange={(value) => {
+                    setStoreId(value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger aria-label={t("store")} className="h-11">
+                    <SelectValue placeholder={t("store")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {showAllStoresFilter ? (
+                      <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+                    ) : null}
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{t("statusLabel")}</span>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value as CustomerOrderStatus | "all");
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger aria-label={t("statusLabel")} className="h-11">
+                    <SelectValue placeholder={t("statusLabel")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("allStatuses")}</SelectItem>
+                    <SelectItem value="DRAFT">{getCustomerOrderStatusLabel(t, "DRAFT")}</SelectItem>
+                    <SelectItem value="CONFIRMED">
+                      {getCustomerOrderStatusLabel(t, "CONFIRMED")}
+                    </SelectItem>
+                    <SelectItem value="READY">{getCustomerOrderStatusLabel(t, "READY")}</SelectItem>
+                    <SelectItem value="COMPLETED">
+                      {getCustomerOrderStatusLabel(t, "COMPLETED")}
+                    </SelectItem>
+                    <SelectItem value="CANCELED">
+                      {getCustomerOrderStatusLabel(t, "CANCELED")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11"
+                onClick={() => {
+                  setSearch("");
+                  setStoreId(showAllStoresFilter ? "all" : (stores[0]?.id ?? "all"));
+                  setStatusFilter("all");
+                  setPage(1);
+                }}
+              >
+                {tCommon("clearSelection")}
+              </Button>
+              <Button type="button" className="h-11" onClick={() => setMobileFiltersOpen(false)}>
+                {tCommon("confirm")}
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {confirmDialog}
     </div>
   );

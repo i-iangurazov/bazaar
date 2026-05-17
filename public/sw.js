@@ -1,4 +1,4 @@
-const STATIC_CACHE = "bazaar-static-v1";
+const STATIC_CACHE = "bazaar-static-v2";
 const STATIC_ASSETS = [
   "/offline.html",
   "/brand/icon.png",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { ChevronDownIcon } from "@/components/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -41,7 +43,6 @@ import {
   supportedCurrencyCodes,
   type SupportedCurrencyCode,
 } from "@/lib/currency";
-import { buildScopedStorageKey } from "@/lib/useScopedLocalStorageState";
 
 type ThemePreferenceValue = "LIGHT" | "DARK";
 
@@ -58,15 +59,10 @@ const ProfilePage = () => {
   const trpcUtils = trpc.useUtils();
 
   const canEditBusiness = session?.user?.role === "ADMIN" || Boolean(session?.user?.isOrgOwner);
-  const productsTableStorageKey = useMemo(
-    () =>
-      buildScopedStorageKey({
-        prefix: "products-table-state",
-        organizationId: session?.user?.organizationId,
-        userId: session?.user?.id,
-      }),
-    [session?.user?.id, session?.user?.organizationId],
-  );
+  const sessionIdentity =
+    status === "authenticated" && session?.user?.id && session.user.organizationId
+      ? `${session.user.organizationId}:${session.user.id}`
+      : null;
 
   const personalSchema = useMemo(
     () =>
@@ -139,12 +135,16 @@ const ProfilePage = () => {
   });
 
   const [selectedStoreId, setSelectedStoreId] = useState<string | undefined>(undefined);
-  const [productSettingsStoreReady, setProductSettingsStoreReady] = useState(false);
+  const lastSessionIdentityRef = useRef<string | null | undefined>(undefined);
 
   const businessQuery = trpc.orgSettings.getBusinessProfile.useQuery(
     { storeId: selectedStoreId },
-    { enabled: status === "authenticated" && canEditBusiness && productSettingsStoreReady },
+    { enabled: status === "authenticated" && canEditBusiness },
   );
+  const businessData =
+    businessQuery.data?.organization.id === session?.user?.organizationId
+      ? businessQuery.data
+      : undefined;
 
   const personalForm = useForm<z.infer<typeof personalSchema>>({
     resolver: zodResolver(personalSchema),
@@ -205,40 +205,6 @@ const ProfilePage = () => {
   }, [profileQuery.data, personalForm, preferencesForm]);
 
   useEffect(() => {
-    if (productSettingsStoreReady) {
-      return;
-    }
-    if (status === "loading") {
-      return;
-    }
-    if (status !== "authenticated" || !canEditBusiness) {
-      setProductSettingsStoreReady(true);
-      return;
-    }
-    if (!productsTableStorageKey) {
-      setProductSettingsStoreReady(true);
-      return;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(productsTableStorageKey);
-      const parsed = raw ? JSON.parse(raw) : null;
-      const storedStoreId =
-        parsed && typeof parsed === "object" && typeof parsed.storeId === "string"
-          ? parsed.storeId
-          : "";
-      if (storedStoreId) {
-        setSelectedStoreId(storedStoreId);
-      }
-    } catch {
-      // If saved product table state is unreadable, fall back to the profile default store.
-    } finally {
-      setProductSettingsStoreReady(true);
-    }
-  }, [canEditBusiness, productSettingsStoreReady, productsTableStorageKey, status]);
-
-  useEffect(() => {
-    const businessData = businessQuery.data;
     if (!businessData?.selectedStore) {
       return;
     }
@@ -265,7 +231,28 @@ const ProfilePage = () => {
       enableBarcode: businessData.selectedStore.enableBarcode ?? true,
       enableSimilarProductCheck: businessData.selectedStore.enableSimilarProductCheck ?? true,
     });
-  }, [businessQuery.data, businessForm, productSettingsForm]);
+  }, [businessData, businessForm, productSettingsForm]);
+
+  useEffect(() => {
+    if (status === "loading") {
+      return;
+    }
+    if (lastSessionIdentityRef.current === undefined) {
+      lastSessionIdentityRef.current = sessionIdentity;
+      return;
+    }
+    if (lastSessionIdentityRef.current === sessionIdentity) {
+      return;
+    }
+    lastSessionIdentityRef.current = sessionIdentity;
+    setSelectedStoreId(undefined);
+    productSettingsForm.reset({
+      storeId: "",
+      enableSku: true,
+      enableBarcode: true,
+      enableSimilarProductCheck: true,
+    });
+  }, [productSettingsForm, sessionIdentity, status]);
 
   const updateProfileMutation = trpc.userSettings.updateMyProfile.useMutation({
     onSuccess: (result) => {
@@ -371,14 +358,18 @@ const ProfilePage = () => {
   };
 
   const selectedCurrency = businessForm.watch("currencyCode") as SupportedCurrencyCode;
-  const selectedBusinessStore = businessQuery.data?.selectedStore ?? null;
+  const selectedBusinessStore = businessData?.selectedStore ?? null;
   const productSettingsStoreId = productSettingsForm.watch("storeId");
   const productSettingsStorePending =
     Boolean(productSettingsStoreId) && selectedBusinessStore?.id !== productSettingsStoreId;
+  const businessDataPending =
+    canEditBusiness &&
+    (businessQuery.isLoading ||
+      businessQuery.isFetching ||
+      (businessQuery.data !== undefined && businessData === undefined));
+  const productSettingsLoading = businessDataPending || productSettingsStorePending;
   const productSettingsDisabled =
-    businessQuery.isLoading ||
-    updateProductSettingsMutation.isLoading ||
-    productSettingsStorePending;
+    productSettingsLoading || updateProductSettingsMutation.isLoading;
 
   if (status === "loading" || profileQuery.isLoading) {
     return (
@@ -402,12 +393,87 @@ const ProfilePage = () => {
   }
 
   const userEmail = profileQuery.data?.email ?? session?.user?.email ?? "";
+  const mobileSettingsCards = [
+    ...(canEditBusiness
+      ? [
+          {
+            href: "#store-profile",
+            title: t("mobileHub.storeProfile.title"),
+            description: t("mobileHub.storeProfile.description"),
+          },
+          {
+            href: "#product-settings",
+            title: t("mobileHub.productSettings.title"),
+            description: t("mobileHub.productSettings.description"),
+          },
+          {
+            href: "/settings/printing",
+            title: t("mobileHub.printing.title"),
+            description: t("mobileHub.printing.description"),
+          },
+          {
+            href: "/settings/users",
+            title: t("mobileHub.users.title"),
+            description: t("mobileHub.users.description"),
+          },
+          {
+            href: "/billing",
+            title: t("mobileHub.subscription.title"),
+            description: t("mobileHub.subscription.description"),
+          },
+        ]
+      : []),
+    {
+      href: "#language-settings",
+      title: t("mobileHub.language.title"),
+      description: t("mobileHub.language.description"),
+    },
+    {
+      href: "/help",
+      title: t("mobileHub.support.title"),
+      description: t("mobileHub.support.description"),
+    },
+    {
+      href: "#account-settings",
+      title: t("mobileHub.account.title"),
+      description: t("mobileHub.account.description"),
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card>
+      <section className="space-y-3 md:hidden" data-mobile-settings-hub>
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-foreground">{t("mobileHub.title")}</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {t("mobileHub.description")}
+          </p>
+        </div>
+        <div className="grid gap-2">
+          {mobileSettingsCards.map((card) => (
+            <Link
+              key={card.href}
+              href={card.href}
+              className="flex min-h-16 items-center justify-between gap-3 border border-border bg-card px-4 py-3 text-left no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">{card.title}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                  {card.description}
+                </span>
+              </span>
+              <ChevronDownIcon
+                className="h-4 w-4 shrink-0 -rotate-90 text-muted-foreground"
+                aria-hidden
+              />
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <Card id="account-settings" className="scroll-mt-24">
         <CardHeader>
           <CardTitle>{t("personal.title")}</CardTitle>
         </CardHeader>
@@ -479,7 +545,7 @@ const ProfilePage = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="language-settings" className="scroll-mt-24">
         <CardHeader>
           <CardTitle>{t("preferences.title")}</CardTitle>
         </CardHeader>
@@ -562,7 +628,7 @@ const ProfilePage = () => {
       </Card>
 
       {canEditBusiness ? (
-        <Card>
+        <Card id="store-profile" className="scroll-mt-24">
           <CardHeader>
             <CardTitle>{t("business.title")}</CardTitle>
           </CardHeader>
@@ -620,7 +686,7 @@ const ProfilePage = () => {
                               <SelectValue placeholder={t("business.selectStore")} />
                             </SelectTrigger>
                             <SelectContent>
-                              {(businessQuery.data?.stores ?? []).map((store) => (
+                              {(businessData?.stores ?? []).map((store) => (
                                 <SelectItem key={store.id} value={store.id}>
                                   {store.name} ({store.code})
                                 </SelectItem>
@@ -775,7 +841,7 @@ const ProfilePage = () => {
                     )}
                   />
                 </FormGrid>
-                <FormActions>
+                <FormActions className="hidden md:flex">
                   <Button
                     type="submit"
                     disabled={updateBusinessMutation.isLoading || businessQuery.isLoading}
@@ -784,6 +850,16 @@ const ProfilePage = () => {
                     {tCommon("save")}
                   </Button>
                 </FormActions>
+                <div className="border border-border bg-background p-3 md:hidden">
+                  <Button
+                    type="submit"
+                    className="h-12 w-full"
+                    disabled={updateBusinessMutation.isLoading || businessQuery.isLoading}
+                  >
+                    {updateBusinessMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {tCommon("save")}
+                  </Button>
+                </div>
               </form>
             </Form>
           </CardContent>
@@ -791,7 +867,7 @@ const ProfilePage = () => {
       ) : null}
 
       {canEditBusiness ? (
-        <Card>
+        <Card id="product-settings" className="scroll-mt-24">
           <CardHeader>
             <CardTitle>{t("productSettings.title")}</CardTitle>
             <p className="text-sm text-muted-foreground">{t("productSettings.description")}</p>
@@ -830,7 +906,7 @@ const ProfilePage = () => {
                             <SelectValue placeholder={t("business.selectStore")} />
                           </SelectTrigger>
                           <SelectContent>
-                            {(businessQuery.data?.stores ?? []).map((store) => (
+                            {(businessData?.stores ?? []).map((store) => (
                               <SelectItem key={store.id} value={store.id}>
                                 {store.name} ({store.code})
                               </SelectItem>
@@ -844,80 +920,91 @@ const ProfilePage = () => {
                   )}
                 />
 
-                <div className="space-y-3">
-                  <FormField
-                    control={productSettingsForm.control}
-                    name="enableSku"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-                          <div className="space-y-1">
-                            <FormLabel>{t("productSettings.enableSku")}</FormLabel>
-                            <FormDescription>{t("productSettings.enableSkuHint")}</FormDescription>
+                {productSettingsLoading ? (
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
+                    <Spinner className="h-4 w-4" />
+                    {tCommon("loading")}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <FormField
+                      control={productSettingsForm.control}
+                      name="enableSku"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                            <div className="space-y-1">
+                              <FormLabel>{t("productSettings.enableSku")}</FormLabel>
+                              <FormDescription>
+                                {t("productSettings.enableSkuHint")}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={productSettingsDisabled}
+                              />
+                            </FormControl>
                           </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              disabled={productSettingsDisabled}
-                            />
-                          </FormControl>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={productSettingsForm.control}
-                    name="enableBarcode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-                          <div className="space-y-1">
-                            <FormLabel>{t("productSettings.enableBarcode")}</FormLabel>
-                            <FormDescription>
-                              {t("productSettings.enableBarcodeHint")}
-                            </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={productSettingsForm.control}
+                      name="enableBarcode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                            <div className="space-y-1">
+                              <FormLabel>{t("productSettings.enableBarcode")}</FormLabel>
+                              <FormDescription>
+                                {t("productSettings.enableBarcodeHint")}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={productSettingsDisabled}
+                              />
+                            </FormControl>
                           </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              disabled={productSettingsDisabled}
-                            />
-                          </FormControl>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={productSettingsForm.control}
-                    name="enableSimilarProductCheck"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-                          <div className="space-y-1">
-                            <FormLabel>{t("productSettings.enableSimilarProductCheck")}</FormLabel>
-                            <FormDescription>
-                              {t("productSettings.enableSimilarProductCheckHint")}
-                            </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={productSettingsForm.control}
+                      name="enableSimilarProductCheck"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                            <div className="space-y-1">
+                              <FormLabel>
+                                {t("productSettings.enableSimilarProductCheck")}
+                              </FormLabel>
+                              <FormDescription>
+                                {t("productSettings.enableSimilarProductCheckHint")}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                disabled={productSettingsDisabled}
+                              />
+                            </FormControl>
                           </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              disabled={productSettingsDisabled}
-                            />
-                          </FormControl>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
 
-                <FormActions>
+                <FormActions className="hidden md:flex">
                   <Button
                     type="submit"
                     disabled={!selectedBusinessStore || productSettingsDisabled}
@@ -928,6 +1015,18 @@ const ProfilePage = () => {
                     {tCommon("save")}
                   </Button>
                 </FormActions>
+                <div className="border border-border bg-background p-3 md:hidden">
+                  <Button
+                    type="submit"
+                    className="h-12 w-full"
+                    disabled={!selectedBusinessStore || productSettingsDisabled}
+                  >
+                    {updateProductSettingsMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : null}
+                    {tCommon("save")}
+                  </Button>
+                </div>
               </form>
             </Form>
           </CardContent>

@@ -135,8 +135,10 @@ const productTypeFilterSchema = z.enum(["all", "product", "bundle"]);
 const productReadinessFilterSchema = z.enum([
   "all",
   "missingBarcode",
+  "missingImage",
   "missingPrice",
   "lowStock",
+  "outOfStock",
   "negativeStock",
 ]);
 const productViewModeSchema = z.enum(["table", "grid"]);
@@ -566,11 +568,17 @@ const ProductsPage = () => {
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
   const productSearchPlaceholder = useMemo(() => {
+    if (enableSku && enableBarcode) {
+      return t("searchPlaceholderFull");
+    }
     if (enableSku) {
       return t("searchPlaceholder");
     }
+    if (enableBarcode) {
+      return t("searchPlaceholderNameBarcode");
+    }
     return t("searchPlaceholderNameOnly");
-  }, [enableSku, t]);
+  }, [enableBarcode, enableSku, t]);
   const productColumnOptions = useMemo(
     () =>
       baseProductColumnOptions.filter((column) => {
@@ -920,6 +928,7 @@ const ProductsPage = () => {
     });
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
   }, [getProductCategories, products, productsBootstrapQuery.data?.categories]);
+  const mobileCategoryOptions = categories.slice(0, 8);
 
   useEffect(() => {
     if (!categoryManagerOpen) {
@@ -1528,10 +1537,13 @@ const ProductsPage = () => {
   type ProductRow = NonNullable<typeof products>[number];
   const getProductReadiness = (product: ProductRow) => {
     const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
+    const hasImage = Boolean(getProductPreviewUrl(product));
     return {
       missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
+      missingImage: !hasImage,
       missingPrice: price === null || price === undefined,
       negativeStock: product.onHandQty < 0,
+      outOfStock: product.onHandQty <= 0,
       lowStock: product.onHandQty <= 0,
     };
   };
@@ -1544,8 +1556,14 @@ const ProductsPage = () => {
     if (readinessState.missingPrice) {
       return { label: t("missingPrice"), variant: "danger" };
     }
+    if (readinessState.missingImage) {
+      return { label: t("missingImage"), variant: "warning" };
+    }
     if (readinessState.missingBarcode) {
       return { label: t("missingBarcode"), variant: "warning" };
+    }
+    if (readinessState.outOfStock) {
+      return { label: t("outOfStock"), variant: "warning" };
     }
     if (readinessState.lowStock) {
       return { label: t("missingStock"), variant: "warning" };
@@ -2481,7 +2499,7 @@ const ProductsPage = () => {
         action={
           canManageProducts ? (
             <TooltipProvider>
-              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="hidden w-full flex-wrap items-center gap-2 md:flex md:w-auto">
                 <Link href={newProductHref} className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto" data-tour="products-create">
                     <AddIcon className="h-4 w-4" aria-hidden />
@@ -2602,12 +2620,12 @@ const ProductsPage = () => {
           <>
             <Input
               data-tour="products-search"
-              className="w-full sm:max-w-xs"
+              className="hidden w-full md:block md:max-w-xs"
               placeholder={productSearchPlaceholder}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <div className="w-full sm:max-w-xs">
+            <div className="hidden w-full md:block md:max-w-xs">
               <Select
                 value={storeId || "all"}
                 onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
@@ -2625,7 +2643,7 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex w-full items-center gap-2 sm:max-w-xs">
+            <div className="hidden w-full items-center gap-2 md:flex md:max-w-xs">
               <Select
                 value={category || "all"}
                 onValueChange={(value) => setCategory(value === "all" ? "" : value)}
@@ -2655,7 +2673,7 @@ const ProductsPage = () => {
                 </Button>
               ) : null}
             </div>
-            <div className="w-full sm:max-w-xs">
+            <div className="hidden w-full md:block md:max-w-xs">
               <Select
                 value={productType}
                 onValueChange={(value) => setProductType(value as "all" | "product" | "bundle")}
@@ -2670,7 +2688,7 @@ const ProductsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-full sm:max-w-xs">
+            <div className="hidden w-full md:block md:max-w-xs">
               <Select
                 value={readiness}
                 onValueChange={(value) =>
@@ -2692,7 +2710,7 @@ const ProductsPage = () => {
               </Select>
             </div>
             {canManageProducts ? (
-              <div className="flex items-center gap-2 rounded-none border border-border px-3 py-2">
+              <div className="hidden items-center gap-2 rounded-none border border-border px-3 py-2 md:flex">
                 <Switch
                   checked={showArchived}
                   onCheckedChange={setShowArchived}
@@ -2705,8 +2723,137 @@ const ProductsPage = () => {
         }
       />
 
+      <div className="mb-4 space-y-3 md:hidden" data-mobile-products-toolbar>
+        <div className="flex items-center gap-2">
+          <Input
+            data-tour="products-search-mobile"
+            className="min-h-11 flex-1"
+            placeholder={productSearchPlaceholder}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {canManageProducts ? (
+            <Link href={newProductHref} aria-label={t("newProduct")}>
+              <Button type="button" size="icon" className="h-11 w-11">
+                <AddIcon className="h-5 w-5" aria-hidden />
+              </Button>
+            </Link>
+          ) : null}
+        </div>
+        <Select
+          value={storeId || "all"}
+          onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
+        >
+          <SelectTrigger className="min-h-11">
+            <SelectValue placeholder={tCommon("selectStore")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("allStores")}</SelectItem>
+            {stores.map((store) => (
+              <SelectItem key={store.id} value={store.id}>
+                {store.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={category ? "secondary" : "primary"}
+            className="h-10 shrink-0"
+            onClick={() => setCategory("")}
+          >
+            {t("allCategories")}
+          </Button>
+          {mobileCategoryOptions.map((item) => (
+            <Button
+              key={item}
+              type="button"
+              size="sm"
+              variant={category === item ? "primary" : "secondary"}
+              className="h-10 shrink-0"
+              onClick={() => setCategory(category === item ? "" : item)}
+            >
+              {item}
+            </Button>
+          ))}
+        </div>
+        <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={readiness === "all" ? "primary" : "secondary"}
+            className="h-10 shrink-0"
+            onClick={() => setReadiness("all")}
+          >
+            {t("readinessAll")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={readiness === "missingImage" ? "primary" : "secondary"}
+            className="h-10 shrink-0"
+            onClick={() => setReadiness(readiness === "missingImage" ? "all" : "missingImage")}
+          >
+            {t("missingImage")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={readiness === "missingPrice" ? "primary" : "secondary"}
+            className="h-10 shrink-0"
+            onClick={() => setReadiness(readiness === "missingPrice" ? "all" : "missingPrice")}
+          >
+            {t("missingPrice")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={readiness === "outOfStock" ? "primary" : "secondary"}
+            className="h-10 shrink-0"
+            onClick={() => setReadiness(readiness === "outOfStock" ? "all" : "outOfStock")}
+          >
+            {t("outOfStock")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={readiness === "lowStock" ? "primary" : "secondary"}
+            className="h-10 shrink-0"
+            onClick={() => setReadiness(readiness === "lowStock" ? "all" : "lowStock")}
+          >
+            {t("lowStock")}
+          </Button>
+          {enableBarcode ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={readiness === "missingBarcode" ? "primary" : "secondary"}
+              className="h-10 shrink-0"
+              onClick={() =>
+                setReadiness(readiness === "missingBarcode" ? "all" : "missingBarcode")
+              }
+            >
+              {t("missingBarcode")}
+            </Button>
+          ) : null}
+          {canManageProducts ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={showArchived ? "primary" : "secondary"}
+              className="h-10 shrink-0"
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {t("showArchived")}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
       <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardHeader className="hidden flex-col gap-3 md:flex md:flex-row md:items-center md:justify-between">
           <CardTitle>{t("title")}</CardTitle>
           <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2967,7 +3114,7 @@ const ProductsPage = () => {
               onPageChange={setProductsPage}
               onPageSizeChange={setProductsPageSize}
               scrollToTopOnPageChange
-              mobileItemsClassName={viewMode === "grid" ? "grid grid-cols-2 gap-3" : undefined}
+              mobileItemsClassName="grid grid-cols-1 gap-3"
               renderDesktop={(visibleItems) =>
                 viewMode === "table" ? (
                   <div className="overflow-x-auto">
@@ -3398,131 +3545,147 @@ const ProductsPage = () => {
                   product.inventorySnapshots.map((snapshot) => snapshot.storeId),
                 );
                 const actions = getProductActions(product);
+                const mobileActions = actions.map((action) =>
+                  action.key === "edit" ? { ...action, openInNewTab: false } : action,
+                );
                 const productCategories = getProductCategories(product);
                 const readinessState = getProductReadiness(product);
                 const readinessSummary = getProductReadinessSummary(readinessState);
+                const renderPhotoFirstMobileCard = viewMode === "grid" || viewMode === "table";
 
-                if (viewMode === "grid") {
+                // Desktop view mode controls the table/grid choice above. Phones always use
+                // a photo-first product card so the catalog does not become a squeezed table.
+                if (renderPhotoFirstMobileCard) {
                   return (
-                    <div className="overflow-hidden rounded-none border border-border bg-card">
-                      <div className="relative aspect-[4/3] bg-muted/30">
-                        {previewImageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={previewImageUrl}
-                            alt={product.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <EmptyIcon className="h-6 w-6 text-muted-foreground" aria-hidden />
-                          </div>
-                        )}
-                        {canSelectProducts ? (
-                          <label className="absolute left-2 top-2">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                              checked={selectedIds.has(product.id)}
-                              onChange={() => toggleSelect(product.id)}
-                              aria-label={t("selectProduct", { name: product.name })}
+                    <div className="border border-border bg-card p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="relative h-24 w-24 shrink-0 overflow-hidden bg-muted/30">
+                          {previewImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={previewImageUrl}
+                              alt={product.name}
+                              className="h-full w-full object-cover"
                             />
-                          </label>
-                        ) : null}
-                      </div>
-                      <div className="space-y-3 p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
-                              {product.name}
-                            </p>
-                            {enableSku ? (
-                              <p className="truncate text-xs text-muted-foreground">
-                                {product.sku}
-                              </p>
-                            ) : null}
-                          </div>
-                          <RowActions
-                            actions={actions}
-                            maxInline={1}
-                            moreLabel={tCommon("tooltips.moreActions")}
-                            className="shrink-0"
-                          />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="muted">
-                            {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                          </Badge>
-                          {product.isDeleted ? (
-                            <Badge variant="muted">{t("archived")}</Badge>
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center border border-dashed border-border bg-secondary/60">
+                              <EmptyIcon className="h-6 w-6 text-muted-foreground" aria-hidden />
+                            </div>
+                          )}
+                          {canSelectProducts ? (
+                            <label className="absolute left-2 top-2">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                checked={selectedIds.has(product.id)}
+                                onChange={() => toggleSelect(product.id)}
+                                aria-label={t("selectProduct", { name: product.name })}
+                              />
+                            </label>
                           ) : null}
-                          <Badge variant={readinessSummary.variant}>{readinessSummary.label}</Badge>
-                          {productCategories.map((value) => (
-                            <Badge key={value} variant="muted">
-                              {value}
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
+                                {product.name}
+                              </p>
+                              {enableSku ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {product.sku}
+                                </p>
+                              ) : null}
+                            </div>
+                            <RowActions
+                              actions={mobileActions}
+                              maxInline={1}
+                              moreLabel={tCommon("tooltips.moreActions")}
+                              className="shrink-0"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="muted">
+                              {product.isBundle ? t("typeBundle") : t("typeProduct")}
                             </Badge>
-                          ))}
-                        </div>
-                        <div className="space-y-2 text-xs text-muted-foreground">
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{t("salePrice")}</span>
-                            <InlineEditableCell
-                              rowId={product.id}
-                              row={product}
-                              value={
-                                showEffectivePrice
-                                  ? product.effectivePriceKgs
-                                  : product.basePriceKgs
-                              }
-                              definition={inlineEditRegistry.products.salePrice}
-                              context={inlineProductsContext}
-                              role={role}
-                              locale={locale}
-                              columnLabel={t("salePrice")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineProductMutation}
-                              className="justify-end text-sm font-semibold text-foreground"
-                            />
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{tInventory("onHand")}</span>
-                            <InlineEditableCell
-                              rowId={product.id}
-                              row={product}
-                              value={product.onHandQty}
-                              definition={inlineEditRegistry.products.onHand}
-                              context={inlineProductsContext}
-                              role={role}
-                              locale={locale}
-                              columnLabel={tInventory("onHand")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineProductMutation}
-                              className="justify-end text-sm font-semibold text-foreground"
-                            />
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{t("avgCost")}</span>
-                            <InlineEditableCell
-                              rowId={product.id}
-                              row={product}
-                              value={product.avgCostKgs}
-                              definition={inlineEditRegistry.products.avgCost}
-                              context={inlineProductsContext}
-                              role={role}
-                              locale={locale}
-                              columnLabel={t("avgCost")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineProductMutation}
-                              className="justify-end text-sm font-semibold text-foreground"
-                            />
+                            {product.isDeleted ? (
+                              <Badge variant="muted">{t("archived")}</Badge>
+                            ) : null}
+                            <Badge variant={readinessSummary.variant}>
+                              {readinessSummary.label}
+                            </Badge>
+                            {productCategories.map((value) => (
+                              <Badge key={value} variant="muted">
+                                {value}
+                              </Badge>
+                            ))}
                           </div>
                         </div>
+                      </div>
+                      <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{t("salePrice")}</span>
+                          <InlineEditableCell
+                            rowId={product.id}
+                            row={product}
+                            value={
+                              showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs
+                            }
+                            definition={inlineEditRegistry.products.salePrice}
+                            context={inlineProductsContext}
+                            role={role}
+                            locale={locale}
+                            columnLabel={t("salePrice")}
+                            tTable={t}
+                            tCommon={tCommon}
+                            enabled={inlineEditingEnabled}
+                            executeMutation={executeInlineProductMutation}
+                            className="justify-end text-sm font-semibold text-foreground"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{tInventory("onHand")}</span>
+                          <InlineEditableCell
+                            rowId={product.id}
+                            row={product}
+                            value={product.onHandQty}
+                            definition={inlineEditRegistry.products.onHand}
+                            context={inlineProductsContext}
+                            role={role}
+                            locale={locale}
+                            columnLabel={tInventory("onHand")}
+                            tTable={t}
+                            tCommon={tCommon}
+                            enabled={inlineEditingEnabled}
+                            executeMutation={executeInlineProductMutation}
+                            className="justify-end text-sm font-semibold text-foreground"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{t("avgCost")}</span>
+                          <InlineEditableCell
+                            rowId={product.id}
+                            row={product}
+                            value={product.avgCostKgs}
+                            definition={inlineEditRegistry.products.avgCost}
+                            context={inlineProductsContext}
+                            role={role}
+                            locale={locale}
+                            columnLabel={t("avgCost")}
+                            tTable={t}
+                            tCommon={tCommon}
+                            enabled={inlineEditingEnabled}
+                            executeMutation={executeInlineProductMutation}
+                            className="justify-end text-sm font-semibold text-foreground"
+                          />
+                        </div>
+                        {enableBarcode ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{t("barcodes")}</span>
+                            <span className="truncate text-sm font-semibold text-foreground">
+                              {barcodeSummary.label}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -3576,7 +3739,7 @@ const ProductsPage = () => {
                         </div>
                       </div>
                       <RowActions
-                        actions={actions}
+                        actions={mobileActions}
                         maxInline={1}
                         moreLabel={tCommon("tooltips.moreActions")}
                         className="shrink-0"
@@ -4908,6 +5071,7 @@ const ProductsPage = () => {
         }}
         title={t("duplicateDialogTitle")}
         subtitle={duplicateTarget?.name}
+        mobileSheet
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>

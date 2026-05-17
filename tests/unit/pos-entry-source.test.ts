@@ -70,33 +70,34 @@ describe("pos entry navigation", () => {
     expect(serviceSource).toContain("lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty)");
   });
 
-  it("keeps the new POS view for desktop and restores the legacy flow only for phones", async () => {
+  it("keeps the new POS view for desktop and uses the dedicated mobile quick-sale flow only for phones", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 
     expect(pageSource).toContain('window.matchMedia("(max-width: 767px)")');
     expect(pageSource).toContain("const DesktopPosSaleView = () => (");
-    expect(pageSource).toContain("const MobileLegacyPosSaleView = () => (");
-    expect(pageSource).toContain(
-      "return isPhoneScreen ? MobileLegacyPosSaleView() : DesktopPosSaleView();",
-    );
-    expect(pageSource).toContain("4e48e65:src/app/(app)/pos/sell/page.tsx");
-    expect(pageSource).toContain('t("sell.registerAndShift")');
+    expect(pageSource).toContain("const MobilePosView = () => {");
+    expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
+    expect(pageSource).toContain("const MobileCustomerSheet = () => {");
+    expect(pageSource).toContain('t("sell.openCart")');
+    expect(pageSource).toContain('t("sell.customerSelectorTitle")');
     expect(pageSource).toContain('t("sell.paymentsTitle")');
   });
 
-  it("keeps mobile legacy POS on theme tokens with editable price, discount, and image search rows", async () => {
+  it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 
     expect(pageSource).toContain(
-      '<header className="sticky top-0 z-40 border-b border-border bg-background text-foreground shadow-sm">',
+      '<header className="sticky top-0 z-30 border-b border-border bg-background/95 px-3 py-3 shadow-sm backdrop-blur md:hidden">',
     );
-    expect(pageSource).toContain('className="border-border bg-card text-foreground shadow-none"');
     expect(pageSource).toContain(
       "const primaryImage = product.images[0]?.url ?? product.photoUrl;",
     );
+    expect(pageSource).toContain("currentCustomerLabel");
+    expect(pageSource).toContain("handleSelectCustomer({");
     expect(pageSource).toContain("key={`${line.id}:mobile-price:${line.unitPriceKgs}`}");
     expect(pageSource).toContain("handleUpdateLinePrice(");
     expect(pageSource).toContain('t("sell.saleDiscount")');
-    expect(pageSource).toContain('t("sell.applyDiscount")');
+    expect(pageSource).toContain("handleComplete");
+    expect(pageSource).toContain('handleReceiptPdf("print", "precheck")');
   });
 });

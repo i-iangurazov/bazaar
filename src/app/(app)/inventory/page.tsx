@@ -120,6 +120,7 @@ import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const inventoryViewModeSchema = z.enum(["table", "grid"]);
+const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventoryVisibleColumnSchema = z.enum([
   "sku",
   "image",
@@ -144,6 +145,7 @@ const inventoryTableStateSchema = z.object({
   storeId: z.string(),
   search: z.string(),
   viewMode: inventoryViewModeSchema,
+  stockFilter: inventoryStockFilterSchema.optional().default("all"),
   pageSize: z.number().int().min(1).max(200),
   showPlanning: z.boolean(),
   visibleColumns: z
@@ -156,6 +158,7 @@ const legacyInventoryPrintModalEnabled = process.env.NODE_ENV !== "production";
 const BULK_ON_HAND_CHUNK_SIZE = 100;
 
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
+type InventoryStockFilter = z.infer<typeof inventoryStockFilterSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
 type InventoryProductOption = {
   key: string;
@@ -372,6 +375,7 @@ const InventoryPage = () => {
       storeId: "",
       search: "",
       viewMode: "table",
+      stockFilter: "all",
       pageSize: 25,
       showPlanning: false,
       visibleColumns: [...defaultInventoryVisibleColumns],
@@ -435,6 +439,7 @@ const InventoryPage = () => {
   const storeId = inventoryTableState.storeId;
   const search = inventoryTableState.search;
   const viewMode = inventoryTableState.viewMode;
+  const stockFilter = inventoryTableState.stockFilter;
   const inventoryPageSize = inventoryTableState.pageSize;
   const showPlanning = inventoryTableState.showPlanning;
   const visibleInventoryColumns = inventoryTableState.visibleColumns;
@@ -451,6 +456,14 @@ const InventoryPage = () => {
       setInventoryTableState((current) => ({
         ...current,
         search: nextValue,
+      })),
+    [setInventoryTableState],
+  );
+  const setStockFilter = useCallback(
+    (nextValue: InventoryStockFilter) =>
+      setInventoryTableState((current) => ({
+        ...current,
+        stockFilter: nextValue,
       })),
     [setInventoryTableState],
   );
@@ -529,6 +542,16 @@ const InventoryPage = () => {
         visibleInventoryColumns.filter((column) => (column === "sku" ? enableSku : true)),
       ),
     [enableSku, visibleInventoryColumns],
+  );
+  const mobileStockFilters = useMemo(
+    () =>
+      [
+        { value: "all", label: t("stockFilterAll") },
+        { value: "lowStock", label: t("lowStock") },
+        { value: "outOfStock", label: t("outOfStock") },
+        { value: "negativeStock", label: t("summaryNegativeStock") },
+      ] satisfies Array<{ value: InventoryStockFilter; label: string }>,
+    [t],
   );
 
   const adjustSchema = useMemo(
@@ -738,10 +761,11 @@ const InventoryPage = () => {
     () => ({
       storeId: storeId ?? "",
       search: search || undefined,
+      stockFilter,
       page: inventoryPage,
       pageSize: inventoryPageSize,
     }),
-    [inventoryPage, inventoryPageSize, search, storeId],
+    [inventoryPage, inventoryPageSize, search, stockFilter, storeId],
   );
   const inventoryQuery = trpc.inventory.list.useQuery(inventoryListInput, {
     enabled: Boolean(storeId) && inventoryTableStateReady,
@@ -993,6 +1017,7 @@ const InventoryPage = () => {
       const ids = await trpcUtils.inventory.listIds.fetch({
         storeId,
         search: search || undefined,
+        stockFilter,
       });
       setSelectedIds(new Set(ids));
     } catch (error) {
@@ -1112,7 +1137,7 @@ const InventoryPage = () => {
 
   useEffect(() => {
     setInventoryPage(1);
-  }, [storeId, search]);
+  }, [storeId, search, stockFilter]);
 
   useEffect(() => {
     if (!poDraftOpen) {
@@ -1131,7 +1156,7 @@ const InventoryPage = () => {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [storeId, search]);
+  }, [storeId, search, stockFilter]);
 
   useEffect(() => {
     if (activeDialog !== "adjust") {
@@ -1877,7 +1902,7 @@ const InventoryPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <>
+          <div className="hidden md:contents">
             {canManage || canManageStock ? (
               <>
                 {canManageStock ? (
@@ -1940,10 +1965,10 @@ const InventoryPage = () => {
                 {showPlanning ? <HelpLink articleId="reorder" /> : null}
               </>
             ) : null}
-          </>
+          </div>
         }
         filters={
-          <>
+          <div className="hidden md:contents">
             <div className="w-full sm:max-w-xs">
               <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
                 <SelectTrigger>
@@ -1972,11 +1997,128 @@ const InventoryPage = () => {
               />
               <span className="text-sm text-muted-foreground">{t("showPlanning")}</span>
             </div>
-          </>
+          </div>
         }
+        actionClassName="hidden md:flex"
+        filtersClassName="hidden md:flex"
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section data-mobile-inventory-toolbar className="mb-4 space-y-3 md:hidden">
+        <div className="space-y-3 rounded-lg border border-border bg-card p-3 shadow-sm">
+          <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
+            <SelectTrigger className="min-h-11">
+              <SelectValue placeholder={tCommon("selectStore")} />
+            </SelectTrigger>
+            <SelectContent>
+              {storesQuery.data?.map((store) => (
+                <SelectItem key={store.id} value={store.id}>
+                  {store.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="relative">
+            <SearchIcon
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              className="min-h-11 pl-9"
+              placeholder={t("searchPlaceholder")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <div
+            className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+            role="group"
+            aria-label={t("stockFilter")}
+          >
+            {mobileStockFilters.map((filter) => (
+              <Button
+                key={filter.value}
+                type="button"
+                size="sm"
+                variant={stockFilter === filter.value ? "primary" : "secondary"}
+                className="min-h-10 shrink-0"
+                onClick={() => setStockFilter(filter.value)}
+              >
+                {filter.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {canManage || canManageStock ? (
+          <div data-mobile-inventory-actions className="grid grid-cols-[1fr_auto] gap-2">
+            {canManageStock ? (
+              <Button asChild className="min-h-12 justify-center px-3 text-sm">
+                <Link href="/inventory/receiving">
+                  <ReceiveIcon className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="leading-tight">{t("stockReceiving")}</span>
+                </Link>
+              </Button>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-12 w-12 px-0"
+                  aria-label={tCommon("actions")}
+                >
+                  <MoreIcon className="h-5 w-5" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                {canManageStock ? (
+                  <DropdownMenuItem disabled={!storeId} onSelect={() => openActionDialog("transfer")}>
+                    <TransferIcon className="h-4 w-4" aria-hidden />
+                    {t("transferStock")}
+                  </DropdownMenuItem>
+                ) : null}
+                {canManage ? (
+                  <DropdownMenuItem asChild>
+                    <Link href="/inventory/counts">
+                      <ViewIcon className="h-4 w-4" aria-hidden />
+                      {t("countAdjustAction")}
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
+                {canManage ? (
+                  <DropdownMenuItem disabled={!storeId} onSelect={() => openActionDialog("minStock")}>
+                    <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                    {t("minStockTitle")}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : null}
+      </section>
+
+      <div className="mb-4 grid grid-cols-2 gap-2 text-sm md:hidden">
+        <div className="rounded-md bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
+          <p className="font-semibold text-foreground">
+            {formatNumber(inventorySummary.totalSkus, locale)}
+          </p>
+        </div>
+        <div className="rounded-md bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
+          <p
+            className={
+              inventorySummary.lowStockCount > 0
+                ? "font-semibold text-warning"
+                : "font-semibold text-foreground"
+            }
+          >
+            {formatNumber(inventorySummary.lowStockCount, locale)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-5 hidden grid-cols-2 gap-2 md:mb-6 md:grid md:gap-3 xl:grid-cols-4">
         <div className="border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
           <p className="mt-1 text-xl font-semibold text-foreground">
@@ -2075,7 +2217,7 @@ const InventoryPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("inventoryOverview")}</CardTitle>
-          <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
+          <div className="hidden w-full flex-col gap-2 md:flex lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <SavedTableViews
                 views={inventorySavedViewsState.views}
@@ -2126,38 +2268,6 @@ const InventoryPage = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {inventoryItems.length ? (
-            <div className="mb-3 sm:hidden">
-              <div className="flex flex-wrap items-center gap-2">
-                {!allSelected ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                    onClick={toggleSelectAll}
-                  >
-                    {t("selectAll")}
-                  </Button>
-                ) : null}
-                {inventoryTotal > inventoryItems.length && !allResultsSelected ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => void handleSelectAllResults()}
-                    disabled={selectingAllResults}
-                  >
-                    {selectingAllResults ? <Spinner className="h-4 w-4" /> : null}
-                    {selectingAllResults
-                      ? tCommon("loading")
-                      : tCommon("selectAllResults", { count: inventoryTotal })}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
           {selectedCount ? (
             <div className="mb-3">
               <TooltipProvider>
@@ -2596,94 +2706,122 @@ const InventoryPage = () => {
                 ? `${item.product.name} • ${item.variant.name}`
                 : item.product.name;
               const previewImageUrl = getInventoryPreviewUrl(item);
-              const actions = getInventoryActions(item);
+              const status =
+                item.snapshot.onHand < 0
+                  ? { label: t("negativeStockBadge"), variant: "danger" as const }
+                  : item.snapshot.onHand === 0
+                    ? { label: t("outOfStock"), variant: "warning" as const }
+                    : item.lowStock
+                      ? { label: t("lowStockBadge"), variant: "warning" as const }
+                      : { label: t("stockOk"), variant: "success" as const };
 
               return (
-                <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+                <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      checked={selectedIds.has(item.snapshot.id)}
-                      onChange={() => toggleSelect(item.snapshot.id)}
-                      aria-label={t("selectInventoryItem", { name: label })}
-                    />
                     {previewImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={previewImageUrl}
                         alt={label}
-                        className="h-10 w-10 rounded-md border border-border object-cover"
+                        className="h-14 w-14 rounded-md border border-border object-cover"
                       />
                     ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
                         <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                       </div>
                     )}
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-foreground">{label}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{label}</p>
+                          {enableSku ? (
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                              {item.product.sku}
+                            </p>
+                          ) : null}
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 shrink-0"
+                              aria-label={tCommon("tooltips.moreActions")}
+                            >
+                              <MoreIcon className="h-4 w-4" aria-hidden />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[220px]">
+                            {canManageStock ? (
+                              <DropdownMenuItem onSelect={() => openActionDialog("adjust", item)}>
+                                <AdjustIcon className="h-4 w-4" aria-hidden />
+                                {t("stockAdjustment")}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canManageStock ? (
+                              <DropdownMenuItem onSelect={() => openActionDialog("transfer", item)}>
+                                <TransferIcon className="h-4 w-4" aria-hidden />
+                                {t("transferStock")}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canManage ? (
+                              <DropdownMenuItem onSelect={() => openActionDialog("minStock", item)}>
+                                <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                                {t("minStockTitle")}
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => openMovements(item)}>
+                              <ViewIcon className="h-4 w-4" aria-hidden />
+                              {t("viewMovements")}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge variant={status.variant}>{status.label}</Badge>
                         {trackExpiryLots && expiringSet.has(expiryKey) ? (
                           <Badge variant="warning">{t("expiringSoonBadge")}</Badge>
                         ) : null}
-                        {item.snapshot.onHand < 0 ? (
-                          <Badge variant="danger">{t("negativeStockBadge")}</Badge>
-                        ) : null}
                       </div>
-                      {enableSku ? (
-                        <p className="text-xs text-muted-foreground">{item.product.sku}</p>
-                      ) : null}
-                      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                        <div>
-                          <p>{t("onHand")}</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                        <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+                          <p className="truncate">{t("onHand")}</p>
                           <p
                             className={
                               item.snapshot.onHand < 0
-                                ? "text-sm font-semibold text-danger"
-                                : "text-sm font-semibold text-foreground"
+                                ? "text-lg font-semibold leading-tight text-danger tabular-nums"
+                                : "text-lg font-semibold leading-tight text-foreground tabular-nums"
                             }
                           >
                             {formatNumber(item.snapshot.onHand, locale)}
                           </p>
                         </div>
-                        <div>
-                          <p>{t("minStock")}</p>
-                          <p className="text-sm font-semibold text-foreground">
+                        <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+                          <p className="truncate">{t("minStock")}</p>
+                          <p className="text-lg font-semibold leading-tight text-foreground tabular-nums">
                             {formatNumber(item.minStock, locale)}
                           </p>
                         </div>
-                        <div>
-                          <p>{t("onOrder")}</p>
-                          <p className="text-sm font-semibold text-foreground">
+                        <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+                          <p className="truncate">{t("onOrder")}</p>
+                          <p className="text-lg font-semibold leading-tight text-foreground tabular-nums">
                             {formatNumber(item.snapshot.onOrder, locale)}
                           </p>
                         </div>
-                        {showPlanning ? (
-                          <div>
-                            <p>{t("suggestedOrder")}</p>
-                            <p className="text-sm font-semibold text-foreground">
-                              {reorder
-                                ? formatNumber(reorder.suggestedOrderQty, locale)
-                                : t("planningUnavailable")}
-                            </p>
-                          </div>
-                        ) : null}
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {item.lowStock && item.snapshot.onHand >= 0 ? (
-                          <Badge variant="warning">{t("lowStockBadge")}</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/80">
-                            {tCommon("notAvailable")}
+                      {showPlanning ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {t("suggestedOrder")}:{" "}
+                          <span className="font-medium text-foreground">
+                            {reorder
+                              ? formatNumber(reorder.suggestedOrderQty, locale)
+                              : t("planningUnavailable")}
                           </span>
-                        )}
-                      </div>
+                        </p>
+                      ) : null}
                     </div>
-                    <RowActions
-                      actions={actions}
-                      maxInline={2}
-                      moreLabel={tCommon("tooltips.moreActions")}
-                    />
                   </div>
                 </div>
               );
@@ -3375,6 +3513,7 @@ const InventoryPage = () => {
           }
         }}
         title={t("stockAdjustment")}
+        mobileSheet
       >
         <Form {...adjustForm}>
           <form
@@ -3563,6 +3702,7 @@ const InventoryPage = () => {
           }
         }}
         title={t("transferStock")}
+        mobileSheet
       >
         <Form {...transferForm}>
           <form
@@ -3798,6 +3938,7 @@ const InventoryPage = () => {
           }
         }}
         title={t("minStockTitle")}
+        mobileSheet
       >
         <Form {...minStockForm}>
           <form

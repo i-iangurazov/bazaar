@@ -9,10 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { cn } from "@/lib/utils";
 
 type GuidanceMode = "ios" | "safari" | "unsupported" | "browser";
 
-export const PwaInstallButton = () => {
+export const PwaInstallButton = ({
+  presentation = "icon",
+  className,
+}: {
+  presentation?: "icon" | "card";
+  className?: string;
+}) => {
   const t = useTranslations("pwaInstall");
   const [guidanceMode, setGuidanceMode] = useState<GuidanceMode | null>(null);
   const { toast } = useToast();
@@ -92,17 +99,39 @@ export const PwaInstallButton = () => {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="secondary"
-        size="icon"
-        className="h-10 w-10"
-        onClick={handleInstallClick}
-        aria-label={t("buttonLabel")}
-        title={t("buttonLabel")}
-      >
-        <InstallAppIcon className="h-4 w-4" aria-hidden />
-      </Button>
+      {presentation === "card" ? (
+        <button
+          type="button"
+          className={cn(
+            "flex min-h-16 w-full items-center gap-3 border border-primary/30 bg-primary/10 px-3 py-3 text-left text-primary transition hover:border-primary/50 hover:bg-primary/15",
+            className,
+          )}
+          onClick={handleInstallClick}
+          aria-label={t("buttonLabel")}
+        >
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center border border-primary/30 bg-background">
+            <InstallAppIcon className="h-4 w-4" aria-hidden />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{t("cardTitle")}</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              {t("cardDescription")}
+            </span>
+          </span>
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          className={cn("h-11 w-11", className)}
+          onClick={handleInstallClick}
+          aria-label={t("buttonLabel")}
+          title={t("buttonLabel")}
+        >
+          <InstallAppIcon className="h-4 w-4" aria-hidden />
+        </Button>
+      )}
 
       <Modal
         open={guidanceMode !== null}

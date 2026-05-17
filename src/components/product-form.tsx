@@ -753,9 +753,7 @@ export const ProductForm = ({
   const collectUsedVariantSkus = (excludeIndex?: number) =>
     new Set(
       (form.getValues("variants") ?? [])
-        .map((variant, index) =>
-          index === excludeIndex ? "" : normalizeSkuToken(variant.sku),
-        )
+        .map((variant, index) => (index === excludeIndex ? "" : normalizeSkuToken(variant.sku)))
         .filter(Boolean),
     );
 
@@ -763,7 +761,10 @@ export const ProductForm = ({
     if (!enableSku) {
       return "";
     }
-    const base = normalizeSkuToken(form.getValues("sku")) || normalizeSkuToken(form.getValues("name")) || "VAR";
+    const base =
+      normalizeSkuToken(form.getValues("sku")) ||
+      normalizeSkuToken(form.getValues("name")) ||
+      "VAR";
     for (let counter = 1; counter <= 9999; counter += 1) {
       const candidate = `${base}-V${String(counter).padStart(2, "0")}`;
       if (!usedSkus.has(candidate)) {
@@ -1541,14 +1542,20 @@ export const ProductForm = ({
     return new Promise<Response>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       let settled = false;
-      const timeout = window.setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        xhr.abort();
-        reject(new ProductImageUploadTimeoutError());
-      }, resolveProductImageDirectUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_DIRECT_UPLOAD_TIMEOUT_MS ?? process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS));
+      const timeout = window.setTimeout(
+        () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          xhr.abort();
+          reject(new ProductImageUploadTimeoutError());
+        },
+        resolveProductImageDirectUploadTimeoutMs(
+          process.env.NEXT_PUBLIC_PRODUCT_IMAGE_DIRECT_UPLOAD_TIMEOUT_MS ??
+            process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
+        ),
+      );
 
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable || event.total <= 0) {
@@ -2218,9 +2225,9 @@ export const ProductForm = ({
     setPendingImageUploads((current) => [...current, ...uploads]);
     setIsUploadingImages(true);
     try {
-      const results: Array<{ url: string; uploadId: string } | null> = new Array(uploads.length).fill(
-        null,
-      );
+      const results: Array<{ url: string; uploadId: string } | null> = new Array(
+        uploads.length,
+      ).fill(null);
       let cursor = 0;
       const workers = Array.from(
         { length: Math.min(maxImageUploadConcurrency, uploads.length) },
@@ -2238,8 +2245,8 @@ export const ProductForm = ({
       );
 
       await Promise.all(workers);
-      const uploadedImages = results.filter(
-        (result): result is { url: string; uploadId: string } => Boolean(result),
+      const uploadedImages = results.filter((result): result is { url: string; uploadId: string } =>
+        Boolean(result),
       );
       const failedCount = uploads.length - uploadedImages.length;
 
@@ -2628,7 +2635,10 @@ export const ProductForm = ({
       return;
     }
     const submittedBarcodes = enableBarcode
-      ? normalizeProductBarcodes([...(values.barcodes ?? []), ...(draftBarcode ? [draftBarcode] : [])])
+      ? normalizeProductBarcodes([
+          ...(values.barcodes ?? []),
+          ...(draftBarcode ? [draftBarcode] : []),
+        ])
       : normalizeProductBarcodes(values.barcodes ?? []);
 
     onSubmit({
@@ -2708,13 +2718,15 @@ export const ProductForm = ({
       );
     });
     if (existingEmptyDraftIndex >= 0) {
-      form.setValue(`variants.${existingEmptyDraftIndex}.sku`, generateNextVariantSku(
-        collectUsedVariantSkus(existingEmptyDraftIndex),
-      ), {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
+      form.setValue(
+        `variants.${existingEmptyDraftIndex}.sku`,
+        generateNextVariantSku(collectUsedVariantSkus(existingEmptyDraftIndex)),
+        {
+          shouldDirty: true,
+          shouldTouch: true,
+          shouldValidate: true,
+        },
+      );
       scrollToVariantsEditor();
       return;
     }
@@ -2782,6 +2794,8 @@ export const ProductForm = ({
         return t("imageUploadStatusSelected");
     }
   };
+  const mobileProductSectionClassName =
+    "rounded-none border border-border/70 bg-background p-4 md:border-0 md:bg-transparent md:p-0";
 
   const pendingImageUploadCards = pendingImageUploads.length ? (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -2864,7 +2878,11 @@ export const ProductForm = ({
   ) : null;
 
   const imageManagementSection = (
-    <FormSection title={t("imagesTitle")} description={t("imagesHint")}>
+    <FormSection
+      title={t("imagesTitle")}
+      description={t("imagesHint")}
+      className={mobileProductSectionClassName}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <input
           ref={fileInputRef}
@@ -3085,7 +3103,7 @@ export const ProductForm = ({
   );
 
   const barcodeManagementSection = (
-    <FormSection title={t("barcodes")}>
+    <FormSection title={t("barcodes")} className={mobileProductSectionClassName}>
       <FormField
         control={form.control}
         name="barcodes"
@@ -3209,7 +3227,11 @@ export const ProductForm = ({
   );
 
   const variantSetupSection = (
-    <FormSection title={t("variantSetupTitle")} description={t("variantSetupHint")}>
+    <FormSection
+      title={t("variantSetupTitle")}
+      description={t("variantSetupHint")}
+      className={mobileProductSectionClassName}
+    >
       <div className="space-y-4">
         <div className="flex flex-col gap-3 rounded-none border border-border/70 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -3253,7 +3275,7 @@ export const ProductForm = ({
 
   const quickImageUrl = orderedImageUrls[0]?.url ?? watchedPhotoUrl?.trim() ?? "";
   const quickImageSection = (
-    <FormSection title={t("quickCreatePhotoTitle")}>
+    <FormSection title={t("quickCreatePhotoTitle")} className={mobileProductSectionClassName}>
       <div className="grid gap-4 md:grid-cols-[160px_1fr]">
         <div className="flex h-40 w-full items-center justify-center overflow-hidden border border-dashed border-border bg-muted/30 md:w-40">
           {quickImageUrl ? (
@@ -3342,7 +3364,11 @@ export const ProductForm = ({
 
   return (
     <Form {...form}>
-      <form id={formId} className="space-y-6" onSubmit={form.handleSubmit(handleSubmit)}>
+      <form
+        id={formId}
+        className="space-y-6 pb-28 md:pb-0"
+        onSubmit={form.handleSubmit(handleSubmit)}
+      >
         <TooltipProvider>
           <Card>
             <CardHeader>
@@ -3355,6 +3381,25 @@ export const ProductForm = ({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div
+                className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:hidden"
+                data-mobile-product-form-sections
+              >
+                {[
+                  t("quickCreatePhotoTitle"),
+                  t("basicInfoTitle"),
+                  t("salePrice"),
+                  t("initialOnHand"),
+                ]
+                  .concat(enableSku ? [t("sku")] : [])
+                  .concat(enableBarcode ? [t("barcodes")] : [])
+                  .concat([t("variants"), t("advancedTitle")])
+                  .map((label) => (
+                    <Badge key={label} variant="muted" className="shrink-0 px-3 py-1.5">
+                      {label}
+                    </Badge>
+                  ))}
+              </div>
               {compactCreate ? quickImageSection : imageManagementSection}
 
               <FormSection
@@ -3365,6 +3410,7 @@ export const ProductForm = ({
                       ? t("basicInfoBundleTitle")
                       : t("basicInfoTitle")
                 }
+                className={mobileProductSectionClassName}
               >
                 <div className="space-y-6">
                   <FormGrid className="items-start">
@@ -3773,7 +3819,8 @@ export const ProductForm = ({
                           </div>
                         </div>
                       ) : null}
-                      {enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length ? (
+                      {enableBarcode &&
+                      duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length ? (
                         <div className="mt-3 space-y-2">
                           <p className="text-xs font-medium text-foreground">
                             {t("duplicateExactBarcodesTitle")}
@@ -3834,7 +3881,9 @@ export const ProductForm = ({
                       ) : null}
                       {!duplicateDiagnosticsQuery.isFetching &&
                       !(enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch) &&
-                      !(enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length) &&
+                      !(
+                        enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length
+                      ) &&
                       !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
                         <p className="mt-3 text-xs text-muted-foreground">
                           {t("duplicateDiagnosticsEmpty")}
@@ -3897,6 +3946,7 @@ export const ProductForm = ({
                 <FormSection
                   title={t("bundleComponentsTitle")}
                   description={t("bundleComponentsHint")}
+                  className={mobileProductSectionClassName}
                 >
                   <div className="space-y-3 rounded-none border border-border p-3">
                     <div className="relative">
@@ -4015,7 +4065,10 @@ export const ProductForm = ({
                   <Separator />
                   {compactCreate ? (
                     <>
-                      <FormSection title={t("profitabilityTitle")}>
+                      <FormSection
+                        title={t("profitabilityTitle")}
+                        className={mobileProductSectionClassName}
+                      >
                         <FormGrid className="items-start">
                           <FormField
                             control={form.control}
@@ -4040,7 +4093,10 @@ export const ProductForm = ({
                         </FormGrid>
                       </FormSection>
                       <Separator />
-                      <FormSection title={t("descriptionTitle")}>
+                      <FormSection
+                        title={t("descriptionTitle")}
+                        className={mobileProductSectionClassName}
+                      >
                         <FormField
                           control={form.control}
                           name="description"
@@ -4084,7 +4140,7 @@ export const ProductForm = ({
                       <Separator />
                     </>
                   ) : null}
-                  <FormSection title={t("packsTitle")}>
+                  <FormSection title={t("packsTitle")} className={mobileProductSectionClassName}>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <Button
                         type="button"
@@ -4241,7 +4297,7 @@ export const ProductForm = ({
                   <Separator />
 
                   <div ref={variantsEditorRef} className="scroll-mt-24">
-                    <FormSection title={t("variants")}>
+                    <FormSection title={t("variants")} className={mobileProductSectionClassName}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                           {!readOnly && templateKeys.length ? (
@@ -4289,31 +4345,17 @@ export const ProductForm = ({
                         );
                         const selectedAttributeKey = attributeDrafts[field.id] ?? "";
                         return (
-                        <div
-                          key={field.id}
-                          className="space-y-4 rounded-none border border-border/70 bg-card p-4"
-                        >
-                          <FormGrid className="items-start">
-                            <FormField
-                              control={form.control}
-                              name={`variants.${index}.name`}
-                              render={({ field: itemField }) => (
-                                <FormItem>
-                                  <FormLabel>{t("variantName")}</FormLabel>
-                                  <FormControl>
-                                    <Input {...itemField} disabled={readOnly} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            {enableSku ? (
+                          <div
+                            key={field.id}
+                            className="space-y-4 rounded-none border border-border/70 bg-card p-4"
+                          >
+                            <FormGrid className="items-start">
                               <FormField
                                 control={form.control}
-                                name={`variants.${index}.sku`}
+                                name={`variants.${index}.name`}
                                 render={({ field: itemField }) => (
                                   <FormItem>
-                                    <FormLabel>{t("variantSku")}</FormLabel>
+                                    <FormLabel>{t("variantName")}</FormLabel>
                                     <FormControl>
                                       <Input {...itemField} disabled={readOnly} />
                                     </FormControl>
@@ -4321,310 +4363,335 @@ export const ProductForm = ({
                                   </FormItem>
                                 )}
                               />
-                            ) : null}
-                            {!productId && canEditInitialStock ? (
-                              <FormField
-                                control={form.control}
-                                name={`variants.${index}.initialOnHand`}
-                                render={({ field: itemField }) => (
-                                  <FormItem>
-                                    <FormLabel>{t("variantInitialOnHand")}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...itemField}
-                                        type="number"
-                                        inputMode="numeric"
-                                        min={0}
-                                        step={1}
-                                        placeholder={t("initialOnHandPlaceholder")}
-                                        onKeyDown={preventInvalidIntegerInput}
-                                        disabled={readOnly}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            ) : null}
-                          </FormGrid>
+                              {enableSku ? (
+                                <FormField
+                                  control={form.control}
+                                  name={`variants.${index}.sku`}
+                                  render={({ field: itemField }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("variantSku")}</FormLabel>
+                                      <FormControl>
+                                        <Input {...itemField} disabled={readOnly} />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              ) : null}
+                              {!productId && canEditInitialStock ? (
+                                <FormField
+                                  control={form.control}
+                                  name={`variants.${index}.initialOnHand`}
+                                  render={({ field: itemField }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("variantInitialOnHand")}</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          {...itemField}
+                                          type="number"
+                                          inputMode="numeric"
+                                          min={0}
+                                          step={1}
+                                          placeholder={t("initialOnHandPlaceholder")}
+                                          onKeyDown={preventInvalidIntegerInput}
+                                          disabled={readOnly}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              ) : null}
+                            </FormGrid>
 
-                          <div className="space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <h4 className="text-sm font-semibold text-foreground">
-                                {t("variantAttributes")}
-                              </h4>
-                              {!readOnly && availableDefinitions.length ? (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Select
-                                    value={selectedAttributeKey}
-                                    onValueChange={(value) =>
-                                      setAttributeDrafts((prev) => ({
-                                        ...prev,
-                                        [field.id]: value,
-                                      }))
-                                    }
-                                  >
-                                    <SelectTrigger className="min-w-[160px]">
-                                      <SelectValue placeholder={t("addAttribute")} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {availableDefinitions.map((definition) => (
-                                        <SelectItem key={definition.key} value={definition.key}>
-                                          {resolveLabel(definition, definition.key)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    className="h-9 px-3"
-                                    onClick={() => {
-                                      if (!selectedAttributeKey) {
-                                        return;
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h4 className="text-sm font-semibold text-foreground">
+                                  {t("variantAttributes")}
+                                </h4>
+                                {!readOnly && availableDefinitions.length ? (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Select
+                                      value={selectedAttributeKey}
+                                      onValueChange={(value) =>
+                                        setAttributeDrafts((prev) => ({
+                                          ...prev,
+                                          [field.id]: value,
+                                        }))
                                       }
-                                      const current =
-                                        form.getValues(`variants.${index}.attributes`) ?? [];
-                                      if (
-                                        current.some((entry) => entry.key === selectedAttributeKey)
-                                      ) {
-                                        return;
-                                      }
-                                      const definition = definitionMap.get(selectedAttributeKey);
-                                      const defaultValue =
-                                        definition?.type === "MULTI_SELECT" ? [] : "";
-                                      form.setValue(
-                                        `variants.${index}.attributes`,
-                                        [
-                                          ...current,
-                                          { key: selectedAttributeKey, value: defaultValue },
-                                        ],
-                                        { shouldDirty: true, shouldValidate: true },
-                                      );
-                                      setAttributeDrafts((prev) => ({
-                                        ...prev,
-                                        [field.id]: "",
-                                      }));
-                                    }}
-                                  >
-                                    <AddIcon className="h-4 w-4" aria-hidden />
-                                    {t("addAttribute")}
-                                  </Button>
+                                    >
+                                      <SelectTrigger className="min-w-[160px]">
+                                        <SelectValue placeholder={t("addAttribute")} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {availableDefinitions.map((definition) => (
+                                          <SelectItem key={definition.key} value={definition.key}>
+                                            {resolveLabel(definition, definition.key)}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      className="h-9 px-3"
+                                      onClick={() => {
+                                        if (!selectedAttributeKey) {
+                                          return;
+                                        }
+                                        const current =
+                                          form.getValues(`variants.${index}.attributes`) ?? [];
+                                        if (
+                                          current.some(
+                                            (entry) => entry.key === selectedAttributeKey,
+                                          )
+                                        ) {
+                                          return;
+                                        }
+                                        const definition = definitionMap.get(selectedAttributeKey);
+                                        const defaultValue =
+                                          definition?.type === "MULTI_SELECT" ? [] : "";
+                                        form.setValue(
+                                          `variants.${index}.attributes`,
+                                          [
+                                            ...current,
+                                            { key: selectedAttributeKey, value: defaultValue },
+                                          ],
+                                          { shouldDirty: true, shouldValidate: true },
+                                        );
+                                        setAttributeDrafts((prev) => ({
+                                          ...prev,
+                                          [field.id]: "",
+                                        }));
+                                      }}
+                                    >
+                                      <AddIcon className="h-4 w-4" aria-hidden />
+                                      {t("addAttribute")}
+                                    </Button>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {variantAttributes.length ? (
+                                <div className="grid gap-3 md:grid-cols-2">
+                                  {variantAttributes.map((attribute, attrIndex) => {
+                                    const definition = definitionMap.get(attribute.key);
+                                    const label = resolveLabel(definition, attribute.key);
+                                    const isRequired = Boolean(definition?.required);
+                                    const options = resolveOptions(definition);
+                                    const fieldName =
+                                      `variants.${index}.attributes.${attrIndex}.value` as const;
+                                    const selectedValues = Array.isArray(attribute.value)
+                                      ? attribute.value.map((value) => String(value))
+                                      : [];
+                                    const currentValue =
+                                      typeof attribute.value === "string" ||
+                                      typeof attribute.value === "number"
+                                        ? String(attribute.value)
+                                        : "";
+                                    const selectOptions =
+                                      currentValue && !options.includes(currentValue)
+                                        ? [currentValue, ...options]
+                                        : options;
+                                    return (
+                                      <FormField
+                                        key={`${attribute.key}-${attrIndex}`}
+                                        control={form.control}
+                                        name={fieldName}
+                                        render={({ field: attrField }) => (
+                                          <FormItem className="rounded-none border border-border/70 p-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <FormLabel>
+                                                {label}
+                                                {isRequired ? (
+                                                  <span className="text-danger"> *</span>
+                                                ) : null}
+                                              </FormLabel>
+                                              {!readOnly && !isRequired ? (
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <Button
+                                                      type="button"
+                                                      size="icon"
+                                                      variant="ghost"
+                                                      className="h-7 w-7"
+                                                      aria-label={t("removeAttribute")}
+                                                      onClick={() => {
+                                                        const next = variantAttributes.filter(
+                                                          (_, idx) => idx !== attrIndex,
+                                                        );
+                                                        form.setValue(
+                                                          `variants.${index}.attributes`,
+                                                          next,
+                                                          {
+                                                            shouldDirty: true,
+                                                            shouldValidate: true,
+                                                          },
+                                                        );
+                                                      }}
+                                                    >
+                                                      <DeleteIcon className="h-3 w-3" aria-hidden />
+                                                    </Button>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    {t("removeAttribute")}
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              ) : null}
+                                            </div>
+                                            {definition?.type === "SELECT" ? (
+                                              <FormControl>
+                                                <Select
+                                                  value={currentValue}
+                                                  onValueChange={(value) =>
+                                                    attrField.onChange(value)
+                                                  }
+                                                  disabled={readOnly}
+                                                >
+                                                  <SelectTrigger>
+                                                    <SelectValue
+                                                      placeholder={t("selectAttributeValue")}
+                                                    />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    {selectOptions.map((option) => (
+                                                      <SelectItem key={option} value={option}>
+                                                        {option}
+                                                      </SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </FormControl>
+                                            ) : definition?.type === "MULTI_SELECT" ? (
+                                              <FormControl>
+                                                <div className="flex flex-wrap gap-2">
+                                                  {options.map((option) => {
+                                                    const isSelected =
+                                                      selectedValues.includes(option);
+                                                    return (
+                                                      <Button
+                                                        key={option}
+                                                        type="button"
+                                                        variant={isSelected ? "secondary" : "ghost"}
+                                                        className="h-8 px-3 text-xs"
+                                                        aria-pressed={isSelected}
+                                                        onClick={() => {
+                                                          if (readOnly) {
+                                                            return;
+                                                          }
+                                                          const next = isSelected
+                                                            ? selectedValues.filter(
+                                                                (value) => value !== option,
+                                                              )
+                                                            : [...selectedValues, option];
+                                                          attrField.onChange(next);
+                                                        }}
+                                                        disabled={readOnly}
+                                                      >
+                                                        {option}
+                                                      </Button>
+                                                    );
+                                                  })}
+                                                  {selectedValues
+                                                    .filter((value) => !options.includes(value))
+                                                    .map((value) => (
+                                                      <Badge
+                                                        key={value}
+                                                        variant="muted"
+                                                        className="gap-1 pr-1"
+                                                      >
+                                                        <span>{value}</span>
+                                                        {!readOnly ? (
+                                                          <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-6 w-6 shadow-none"
+                                                            aria-label={t("removeAttributeValue")}
+                                                            onClick={() => {
+                                                              const next = selectedValues.filter(
+                                                                (entry) => entry !== value,
+                                                              );
+                                                              attrField.onChange(next);
+                                                            }}
+                                                          >
+                                                            <CloseIcon
+                                                              className="h-3 w-3"
+                                                              aria-hidden
+                                                            />
+                                                          </Button>
+                                                        ) : null}
+                                                      </Badge>
+                                                    ))}
+                                                </div>
+                                              </FormControl>
+                                            ) : (
+                                              <FormControl>
+                                                <Input
+                                                  {...(() => {
+                                                    const { value: _unused, ...rest } = attrField;
+                                                    void _unused;
+                                                    return rest;
+                                                  })()}
+                                                  value={currentValue}
+                                                  onChange={(event) =>
+                                                    attrField.onChange(event.target.value)
+                                                  }
+                                                  type={
+                                                    definition?.type === "NUMBER"
+                                                      ? "number"
+                                                      : "text"
+                                                  }
+                                                  inputMode={
+                                                    definition?.type === "NUMBER"
+                                                      ? "decimal"
+                                                      : "text"
+                                                  }
+                                                  disabled={readOnly}
+                                                />
+                                              </FormControl>
+                                            )}
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                    );
+                                  })}
                                 </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  {t("variantAttributesEmpty")}
+                                </p>
+                              )}
+                              {definitions.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {t("variantAttributesNoDefinitions")}
+                                </p>
                               ) : null}
                             </div>
 
-                            {variantAttributes.length ? (
-                              <div className="grid gap-3 md:grid-cols-2">
-                                {variantAttributes.map((attribute, attrIndex) => {
-                                  const definition = definitionMap.get(attribute.key);
-                                  const label = resolveLabel(definition, attribute.key);
-                                  const isRequired = Boolean(definition?.required);
-                                  const options = resolveOptions(definition);
-                                  const fieldName =
-                                    `variants.${index}.attributes.${attrIndex}.value` as const;
-                                  const selectedValues = Array.isArray(attribute.value)
-                                    ? attribute.value.map((value) => String(value))
-                                    : [];
-                                  const currentValue =
-                                    typeof attribute.value === "string" ||
-                                    typeof attribute.value === "number"
-                                      ? String(attribute.value)
-                                      : "";
-                                  const selectOptions =
-                                    currentValue && !options.includes(currentValue)
-                                      ? [currentValue, ...options]
-                                      : options;
-                                  return (
-                                    <FormField
-                                      key={`${attribute.key}-${attrIndex}`}
-                                      control={form.control}
-                                      name={fieldName}
-                                      render={({ field: attrField }) => (
-                                        <FormItem className="rounded-none border border-border/70 p-3">
-                                          <div className="flex items-center justify-between gap-2">
-                                            <FormLabel>
-                                              {label}
-                                              {isRequired ? (
-                                                <span className="text-danger"> *</span>
-                                              ) : null}
-                                            </FormLabel>
-                                            {!readOnly && !isRequired ? (
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <Button
-                                                    type="button"
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-7 w-7"
-                                                    aria-label={t("removeAttribute")}
-                                                    onClick={() => {
-                                                      const next = variantAttributes.filter(
-                                                        (_, idx) => idx !== attrIndex,
-                                                      );
-                                                      form.setValue(
-                                                        `variants.${index}.attributes`,
-                                                        next,
-                                                        { shouldDirty: true, shouldValidate: true },
-                                                      );
-                                                    }}
-                                                  >
-                                                    <DeleteIcon className="h-3 w-3" aria-hidden />
-                                                  </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                  {t("removeAttribute")}
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            ) : null}
-                                          </div>
-                                          {definition?.type === "SELECT" ? (
-                                            <FormControl>
-                                              <Select
-                                                value={currentValue}
-                                                onValueChange={(value) => attrField.onChange(value)}
-                                                disabled={readOnly}
-                                              >
-                                                <SelectTrigger>
-                                                  <SelectValue
-                                                    placeholder={t("selectAttributeValue")}
-                                                  />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  {selectOptions.map((option) => (
-                                                    <SelectItem key={option} value={option}>
-                                                      {option}
-                                                    </SelectItem>
-                                                  ))}
-                                                </SelectContent>
-                                              </Select>
-                                            </FormControl>
-                                          ) : definition?.type === "MULTI_SELECT" ? (
-                                            <FormControl>
-                                              <div className="flex flex-wrap gap-2">
-                                                {options.map((option) => {
-                                                  const isSelected =
-                                                    selectedValues.includes(option);
-                                                  return (
-                                                    <Button
-                                                      key={option}
-                                                      type="button"
-                                                      variant={isSelected ? "secondary" : "ghost"}
-                                                      className="h-8 px-3 text-xs"
-                                                      aria-pressed={isSelected}
-                                                      onClick={() => {
-                                                        if (readOnly) {
-                                                          return;
-                                                        }
-                                                        const next = isSelected
-                                                          ? selectedValues.filter(
-                                                              (value) => value !== option,
-                                                            )
-                                                          : [...selectedValues, option];
-                                                        attrField.onChange(next);
-                                                      }}
-                                                      disabled={readOnly}
-                                                    >
-                                                      {option}
-                                                    </Button>
-                                                  );
-                                                })}
-                                                {selectedValues
-                                                  .filter((value) => !options.includes(value))
-                                                  .map((value) => (
-                                                    <Badge
-                                                      key={value}
-                                                      variant="muted"
-                                                      className="gap-1 pr-1"
-                                                    >
-                                                      <span>{value}</span>
-                                                      {!readOnly ? (
-                                                        <Button
-                                                          type="button"
-                                                          size="icon"
-                                                          variant="ghost"
-                                                          className="h-6 w-6 shadow-none"
-                                                          aria-label={t("removeAttributeValue")}
-                                                          onClick={() => {
-                                                            const next = selectedValues.filter(
-                                                              (entry) => entry !== value,
-                                                            );
-                                                            attrField.onChange(next);
-                                                          }}
-                                                        >
-                                                          <CloseIcon
-                                                            className="h-3 w-3"
-                                                            aria-hidden
-                                                          />
-                                                        </Button>
-                                                      ) : null}
-                                                    </Badge>
-                                                  ))}
-                                              </div>
-                                            </FormControl>
-                                          ) : (
-                                            <FormControl>
-                                              <Input
-                                                {...(() => {
-                                                  const { value: _unused, ...rest } = attrField;
-                                                  void _unused;
-                                                  return rest;
-                                                })()}
-                                                value={currentValue}
-                                                onChange={(event) =>
-                                                  attrField.onChange(event.target.value)
-                                                }
-                                                type={
-                                                  definition?.type === "NUMBER" ? "number" : "text"
-                                                }
-                                                inputMode={
-                                                  definition?.type === "NUMBER" ? "decimal" : "text"
-                                                }
-                                                disabled={readOnly}
-                                              />
-                                            </FormControl>
-                                          )}
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                {t("variantAttributesEmpty")}
-                              </p>
-                            )}
-                            {definitions.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">
-                                {t("variantAttributesNoDefinitions")}
-                              </p>
-                            ) : null}
+                            <div className="flex items-center justify-end">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex">
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="shadow-none"
+                                      aria-label={t("removeVariant")}
+                                      onClick={() => setVariantToRemove(index)}
+                                      disabled={readOnly || isBlocked}
+                                    >
+                                      <DeleteIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{tooltipLabel}</TooltipContent>
+                              </Tooltip>
+                            </div>
                           </div>
-
-                          <div className="flex items-center justify-end">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex">
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    className="shadow-none"
-                                    aria-label={t("removeVariant")}
-                                    onClick={() => setVariantToRemove(index)}
-                                    disabled={readOnly || isBlocked}
-                                  >
-                                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>{tooltipLabel}</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      );
+                        );
                       })}
                     </FormSection>
                   </div>
@@ -4635,7 +4702,7 @@ export const ProductForm = ({
         </TooltipProvider>
 
         {!readOnly && !hideActions ? (
-          <FormActions>
+          <FormActions className="hidden md:flex">
             <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
               {isSubmitting ? (
                 <Spinner className="h-4 w-4" />
@@ -4645,6 +4712,18 @@ export const ProductForm = ({
               {isSubmitting ? t("saving") : t("save")}
             </Button>
           </FormActions>
+        ) : null}
+        {!readOnly && !hideActions ? (
+          <div className="mt-4 rounded-none border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden">
+            <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+              )}
+              {isSubmitting ? t("saving") : t("save")}
+            </Button>
+          </div>
         ) : null}
       </form>
 

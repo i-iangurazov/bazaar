@@ -1,4 +1,4 @@
-import { CustomerSource, type Customer, type Prisma } from "@prisma/client";
+import { CustomerOrderStatus, CustomerSource, type Customer, type Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { writeAuditLog } from "@/server/services/audit";
@@ -352,6 +352,78 @@ export const listCustomers = async (input: {
   ]);
 
   return { items, total, page, pageSize, accessibleStoreIds };
+};
+
+export const getCustomerDetail = async (input: {
+  user: StoreAccessUser;
+  customerId: string;
+}) => {
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id: input.customerId,
+      organizationId: input.user.organizationId,
+      deletedAt: null,
+    },
+  });
+  if (!customer) {
+    throw new AppError("customerNotFound", "NOT_FOUND", 404);
+  }
+  await assertUserCanAccessStore(prisma, input.user, customer.storeId);
+
+  const customerMatches: Prisma.CustomerOrderWhereInput[] = [
+    ...(customer.email ? [{ customerEmail: customer.email }] : []),
+    ...(customer.phone ? [{ customerPhone: customer.phone }] : []),
+  ];
+  if (!customerMatches.length) {
+    customerMatches.push({ customerName: customer.name });
+  }
+
+  const recentOrders = await prisma.customerOrder.findMany({
+    where: {
+      organizationId: input.user.organizationId,
+      storeId: customer.storeId,
+      isPosSale: true,
+      status: CustomerOrderStatus.COMPLETED,
+      OR: customerMatches,
+    },
+    select: {
+      id: true,
+      number: true,
+      customerName: true,
+      customerEmail: true,
+      customerPhone: true,
+      totalKgs: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
+      completedAt: true,
+      createdAt: true,
+      payments: {
+        select: {
+          id: true,
+          method: true,
+          amountKgs: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
+          isRefund: true,
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+    orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+    take: 10,
+  });
+
+  return {
+    customer,
+    recentOrders: recentOrders.map((order) => ({
+      ...order,
+      totalKgs: Number(order.totalKgs),
+      payments: order.payments.map((payment) => ({
+        ...payment,
+        amountKgs: Number(payment.amountKgs),
+      })),
+    })),
+  };
 };
 
 export const createCustomer = async (input: {

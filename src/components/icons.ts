@@ -60,6 +60,7 @@ import {
   Printer,
   Sparkles,
   Smartphone,
+  Share2,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
@@ -128,3 +129,4 @@ export const LanguageIcon = Languages;
 export const GridViewIcon = LayoutGrid;
 export const TableViewIcon = List;
 export const SparklesIcon = Sparkles;
+export const ShareIcon = Share2;

@@ -59,6 +59,8 @@ const segmentLabel = (
       return tPos("entry.registers");
     case "inventory":
       return tNav("inventory");
+    case "receiving":
+      return tBreadcrumbs("receiving");
     case "counts":
       return tBreadcrumbs("counts");
     case "products":
@@ -89,6 +91,8 @@ const segmentLabel = (
       return tNav("users");
     case "settings":
       return tBreadcrumbs("settings");
+    case "printing":
+      return tNav("printing");
     case "attributes":
       return tNav("attributes");
     case "units":

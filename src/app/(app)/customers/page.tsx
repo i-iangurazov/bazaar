@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { formatStoreMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -70,6 +71,7 @@ const CustomerDatabasePage = () => {
   const [pageSize, setPageSize] = useState(25);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
+  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
@@ -96,6 +98,10 @@ const CustomerDatabasePage = () => {
       pageSize,
     },
     { enabled: Boolean(storeId) },
+  );
+  const customerDetailQuery = trpc.customers.detail.useQuery(
+    { customerId: detailCustomerId ?? "" },
+    { enabled: Boolean(detailCustomerId) },
   );
 
   const utils = trpc.useUtils();
@@ -133,6 +139,7 @@ const CustomerDatabasePage = () => {
 
   const selectedStore = stores.find((store) => store.id === storeId);
   const customers = customersQuery.data?.items ?? [];
+  const customerDetail = customerDetailQuery.data ?? null;
   const formErrors = useMemo(() => {
     const errors: string[] = [];
     if (!form.name.trim()) {
@@ -185,6 +192,12 @@ const CustomerDatabasePage = () => {
 
   const renderSource = (value: CustomerSource) => t(`sources.${value.toLowerCase()}`);
 
+  const viewCustomerSales = (customer: (typeof customers)[number]) => {
+    setDetailCustomerId(customer.id);
+  };
+
+  const formatCustomerMoney = (value: number) => formatStoreMoney(value, locale, selectedStore);
+
   const emptyState = (
     <Card>
       <CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -199,12 +212,14 @@ const CustomerDatabasePage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <Button type="button" onClick={openAdd} disabled={!storeId}>
-            {t("actions.add")}
-          </Button>
+          <div className="hidden md:block">
+            <Button type="button" onClick={openAdd} disabled={!storeId}>
+              {t("actions.add")}
+            </Button>
+          </div>
         }
         filters={
-          <>
+          <div className="hidden md:contents">
             <div className="w-full sm:w-64">
               <Label htmlFor="customer-store">{t("filters.store")}</Label>
               <Select
@@ -260,9 +275,77 @@ const CustomerDatabasePage = () => {
                 </SelectContent>
               </Select>
             </div>
-          </>
+          </div>
         }
       />
+
+      <section data-mobile-customers-toolbar className="mb-5 space-y-4 md:hidden">
+        <div className="space-y-3 border border-border bg-card p-3">
+          <Select
+            value={storeId}
+            onValueChange={(value) => {
+              setStoreId(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="min-h-11">
+              <SelectValue placeholder={t("filters.storePlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {stores.map((store) => (
+                <SelectItem key={store.id} value={store.id}>
+                  {store.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            className="min-h-11"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder={t("filters.mobileSearchPlaceholder")}
+          />
+          <div
+            className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+            role="group"
+            aria-label={t("filters.source")}
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant={source === "ALL" ? "primary" : "secondary"}
+              className="min-h-10 shrink-0"
+              onClick={() => {
+                setSource("ALL");
+                setPage(1);
+              }}
+            >
+              {t("filters.allSources")}
+            </Button>
+            {sourceValues.map((value) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={source === value ? "primary" : "secondary"}
+                className="min-h-10 shrink-0"
+                onClick={() => {
+                  setSource(value);
+                  setPage(1);
+                }}
+              >
+                {renderSource(value)}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <Button type="button" className="min-h-12 w-full" onClick={openAdd} disabled={!storeId}>
+          {t("actions.add")}
+        </Button>
+      </section>
 
       {!storesQuery.isLoading && !stores.length ? (
         <Card>
@@ -291,6 +374,7 @@ const CustomerDatabasePage = () => {
           setPage(1);
         }}
         paginationKey="customers"
+        mobileItemsClassName="space-y-3"
         empty={emptyState}
         getKey={(customer) => customer.id}
         renderDesktop={(items) => (
@@ -351,46 +435,77 @@ const CustomerDatabasePage = () => {
         )}
         renderMobile={(customer) => (
           <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-base">{customer.name}</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                {selectedStore?.name} · {renderSource(customer.source)}
-              </p>
+            <CardHeader className="space-y-1 pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle className="truncate text-base">{customer.name}</CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedStore?.name} · {renderSource(customer.source)}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-10 shrink-0"
+                  onClick={() => viewCustomerSales(customer)}
+                >
+                  {t("actions.viewSales")}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="grid gap-2">
-                <p>
-                  <span className="text-muted-foreground">{t("columns.email")}: </span>
-                  {customer.email ?? "-"}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">{t("columns.phone")}: </span>
-                  {customer.phone ?? "-"}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">{t("columns.address")}: </span>
-                  {customer.address ?? "-"}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">{t("columns.createdAt")}: </span>
-                  {formatDateTime(customer.createdAt, locale)}
-                </p>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("columns.phone")}</p>
+                  <p className="font-medium text-foreground">{customer.phone ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("columns.email")}</p>
+                  <p className="font-medium text-foreground">{customer.email ?? "—"}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-md bg-muted/30 p-2">
+                    <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {customer.lastOrderAt
+                        ? formatDateTime(customer.lastOrderAt, locale)
+                        : tCommon("notAvailable")}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 p-2">
+                    <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
+                    <p className="text-sm font-semibold text-foreground">{customer.orderCount}</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="secondary" onClick={() => openEdit(customer)}>
+              <div className="grid grid-cols-3 gap-2">
+                {customer.phone ? (
+                  <Button asChild variant="secondary" size="sm" className="min-h-10">
+                    <a href={`tel:${customer.phone}`}>{t("actions.call")}</a>
+                  </Button>
+                ) : (
+                  <Button type="button" variant="secondary" size="sm" className="min-h-10" disabled>
+                    {t("actions.call")}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => openEdit(customer)}
+                >
                   {tCommon("edit")}
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
-                  disabled={deleteMutation.isLoading}
-                  onClick={() => {
-                    if (window.confirm(t("deleteConfirm", { name: customer.name }))) {
-                      deleteMutation.mutate({ customerId: customer.id });
-                    }
-                  }}
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => viewCustomerSales(customer)}
                 >
-                  {tCommon("delete")}
+                  {t("actions.viewSales")}
                 </Button>
               </div>
             </CardContent>
@@ -399,11 +514,123 @@ const CustomerDatabasePage = () => {
       />
 
       <Modal
+        open={Boolean(detailCustomerId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDetailCustomerId(null);
+          }
+        }}
+        title={customerDetail?.customer.name ?? t("detail.title")}
+        subtitle={t("detail.subtitle")}
+        className="max-w-2xl"
+        mobileSheet
+      >
+        {customerDetailQuery.isLoading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {tCommon("loading")}
+          </div>
+        ) : customerDetailQuery.error ? (
+          <div className="border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+            {translateError(tErrors, customerDetailQuery.error)}
+          </div>
+        ) : customerDetail ? (
+          <div className="space-y-5">
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">{t("detail.contactInfo")}</h3>
+              <div className="grid gap-2 text-sm">
+                <div className="rounded-md bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{t("columns.phone")}</p>
+                  <p className="font-medium text-foreground">
+                    {customerDetail.customer.phone ?? "—"}
+                  </p>
+                </div>
+                <div className="rounded-md bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{t("columns.email")}</p>
+                  <p className="font-medium text-foreground">
+                    {customerDetail.customer.email ?? "—"}
+                  </p>
+                </div>
+                <div className="rounded-md bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{t("columns.address")}</p>
+                  <p className="font-medium text-foreground">
+                    {customerDetail.customer.address ?? "—"}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">{t("detail.summary")}</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-md bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
+                  <p className="font-semibold text-foreground">
+                    {customerDetail.customer.lastOrderAt
+                      ? formatDateTime(customerDetail.customer.lastOrderAt, locale)
+                      : tCommon("notAvailable")}
+                  </p>
+                </div>
+                <div className="rounded-md bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
+                  <p className="font-semibold text-foreground">
+                    {customerDetail.customer.orderCount}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  {t("detail.recentReceipts")}
+                </h3>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setDetailCustomerId(null);
+                    openEdit(customerDetail.customer);
+                  }}
+                >
+                  {tCommon("edit")}
+                </Button>
+              </div>
+              {customerDetail.recentOrders.length ? (
+                <div className="space-y-2">
+                  {customerDetail.recentOrders.map((order) => (
+                    <div key={order.id} className="border border-border bg-card p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-foreground">{order.number}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateTime(order.completedAt ?? order.createdAt, locale)}
+                          </p>
+                        </div>
+                        <p className="shrink-0 font-semibold text-foreground">
+                          {formatCustomerMoney(order.totalKgs)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  {t("detail.noReceipts")}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
         open={formOpen}
         onOpenChange={setFormOpen}
         title={form.id ? t("modal.editTitle") : t("modal.addTitle")}
         subtitle={t("modal.subtitle")}
         className="max-w-2xl"
+        mobileSheet
       >
         <div className="grid gap-4">
           <div>

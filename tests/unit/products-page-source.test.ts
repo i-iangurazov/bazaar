@@ -123,10 +123,14 @@ describe("index page source layout", () => {
     const profileSource = await readSource("src/app/(app)/settings/profile/page.tsx");
     const orgSettingsSource = await readSource("src/server/services/orgSettings.ts");
     const storeRouterSource = await readSource("src/server/trpc/routers/stores.ts");
+    const providersSource = await readSource("src/app/providers.tsx");
+    const signOutSource = await readSource("src/components/signout-button.tsx");
 
     expect(profileSource).toContain('t("productSettings.title")');
-    expect(profileSource).toContain('prefix: "products-table-state"');
-    expect(profileSource).toContain("productSettingsStoreReady");
+    expect(profileSource).not.toContain('prefix: "products-table-state"');
+    expect(profileSource).not.toContain("productSettingsStoreReady");
+    expect(profileSource).toContain("businessQuery.data?.organization.id === session?.user?.organizationId");
+    expect(profileSource).toContain("productSettingsLoading ? (");
     expect(profileSource).toContain('name="storeId"');
     expect(profileSource).toContain("handleStoreChange(value)");
     expect(profileSource).toContain('name="enableSku"');
@@ -137,9 +141,13 @@ describe("index page source layout", () => {
     expect(profileSource).toContain("businessData.selectedStore.enableSku ?? true");
     expect(profileSource).toContain("trpcUtils.products.bootstrap.invalidate()");
     expect(profileSource).toContain("trpcUtils.products.storePricing.invalidate()");
+    expect(providersSource).toContain("QuerySessionIsolationBoundary");
+    expect(providersSource).toContain("queryClient.clear()");
+    expect(signOutSource).toContain("queryClient.clear()");
     expect(orgSettingsSource).toContain("enableSku: true");
     expect(orgSettingsSource).toContain("enableBarcode: true");
     expect(orgSettingsSource).toContain("enableSimilarProductCheck: true");
+    expect(orgSettingsSource).toContain("requestedStoreId && !requestedStore");
     expect(storeRouterSource).toContain("updateProductSettings: adminOrOrgOwnerProcedure");
   });
 

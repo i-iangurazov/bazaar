@@ -6,9 +6,13 @@
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait-primary",
   "theme_color": "#2563eb",
   "background_color": "#ffffff",
+  "categories": ["business", "productivity", "shopping"],
+  "lang": "ru",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icons/icon-192.png",

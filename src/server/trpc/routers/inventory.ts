@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import {
@@ -22,17 +23,20 @@ import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
-const inventoryListInputSchema = z.object({
+const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
+
+const inventoryListBaseInputSchema = z.object({
   storeId: z.string(),
   search: z.string().optional(),
+  stockFilter: inventoryStockFilterSchema.optional().default("all"),
+});
+
+const inventoryListInputSchema = inventoryListBaseInputSchema.extend({
   page: z.number().int().min(1).optional(),
   pageSize: z.number().int().min(10).max(200).optional(),
 });
 
-const inventoryListIdsInputSchema = z.object({
-  storeId: z.string(),
-  search: z.string().optional(),
-});
+const inventoryListIdsInputSchema = inventoryListBaseInputSchema;
 
 const inventoryProductSearchInputSchema = z.object({
   storeId: z.string(),
@@ -40,8 +44,12 @@ const inventoryProductSearchInputSchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
 });
 
-const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInputSchema>) => ({
+const buildInventorySnapshotWhere = (
+  input: z.infer<typeof inventoryListIdsInputSchema>,
+): Prisma.InventorySnapshotWhereInput => ({
   storeId: input.storeId,
+  ...(input.stockFilter === "negativeStock" ? { onHand: { lt: 0 } } : {}),
+  ...(input.stockFilter === "outOfStock" ? { onHand: { equals: 0 } } : {}),
   product: {
     isDeleted: false,
     ...(input.search
@@ -64,6 +72,43 @@ const buildInventorySnapshotWhere = (input: z.infer<typeof inventoryListIdsInput
       : {}),
   },
 });
+
+const buildLowStockSnapshotSql = (
+  input: z.infer<typeof inventoryListIdsInputSchema>,
+  organizationId: string,
+) => {
+  const search = input.search?.trim();
+  const searchPattern = search ? `%${search}%` : "";
+  const searchSql = search
+    ? Prisma.sql`
+      AND (
+        p."name" ILIKE ${searchPattern}
+        OR p."sku" ILIKE ${searchPattern}
+        OR EXISTS (
+          SELECT 1 FROM "ProductBarcode" b
+          WHERE b."productId" = p."id" AND b."value" ILIKE ${searchPattern}
+        )
+        OR EXISTS (
+          SELECT 1 FROM "ProductPack" pack
+          WHERE pack."productId" = p."id" AND pack."packBarcode" ILIKE ${searchPattern}
+        )
+      )
+    `
+    : Prisma.empty;
+
+  return Prisma.sql`
+    FROM "InventorySnapshot" s
+    JOIN "Product" p ON p."id" = s."productId"
+    JOIN "ReorderPolicy" rp ON rp."storeId" = s."storeId" AND rp."productId" = s."productId"
+    WHERE s."storeId" = ${input.storeId}
+      AND p."organizationId" = ${organizationId}
+      AND p."isDeleted" = false
+      AND rp."minStock" > 0
+      AND s."onHand" <= rp."minStock"
+      AND s."onHand" >= 0
+      ${searchSql}
+  `;
+};
 
 const inventoryProductSelect = (storeId: string, organizationId: string) =>
   ({
@@ -109,6 +154,59 @@ const inventoryProductSelect = (storeId: string, organizationId: string) =>
     },
   }) as const;
 
+const inventoryListSnapshotSelect = {
+  id: true,
+  storeId: true,
+  productId: true,
+  variantId: true,
+  variantKey: true,
+  onHand: true,
+  onOrder: true,
+  allowNegativeStock: true,
+  updatedAt: true,
+  product: {
+    select: {
+      id: true,
+      supplierId: true,
+      sku: true,
+      name: true,
+      basePriceKgs: true,
+      baseUnitId: true,
+      photoUrl: true,
+      baseUnit: true,
+      packs: {
+        select: {
+          id: true,
+          packName: true,
+          multiplierToBase: true,
+          allowInPurchasing: true,
+          allowInReceiving: true,
+        },
+      },
+      images: {
+        where: {
+          url: {
+            not: { startsWith: "data:image/" },
+          },
+        },
+        select: { id: true, url: true, position: true },
+        orderBy: { position: "asc" as const },
+        take: 1,
+      },
+      barcodes: {
+        select: { value: true },
+        take: 5,
+      },
+    },
+  },
+  variant: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+} satisfies Prisma.InventorySnapshotSelect;
+
 export const inventoryRouter = router({
   list: protectedProcedure.input(inventoryListInputSchema).query(async ({ ctx, input }) => {
     const page = input.page ?? 1;
@@ -127,67 +225,56 @@ export const inventoryRouter = router({
 
     const where = buildInventorySnapshotWhere(input);
     const primaryReadsStartedAt = Date.now();
-    const [total, snapshots] = await Promise.all([
-      ctx.prisma.inventorySnapshot.count({ where }),
-      ctx.prisma.inventorySnapshot.findMany({
-        where,
-        select: {
-          id: true,
-          storeId: true,
-          productId: true,
-          variantId: true,
-          variantKey: true,
-          onHand: true,
-          onOrder: true,
-          allowNegativeStock: true,
-          updatedAt: true,
-          product: {
-            select: {
-              id: true,
-              supplierId: true,
-              sku: true,
-              name: true,
-              basePriceKgs: true,
-              baseUnitId: true,
-              photoUrl: true,
-              baseUnit: true,
-              packs: {
-                select: {
-                  id: true,
-                  packName: true,
-                  multiplierToBase: true,
-                  allowInPurchasing: true,
-                  allowInReceiving: true,
-                },
-              },
-              images: {
-                where: {
-                  url: {
-                    not: { startsWith: "data:image/" },
-                  },
-                },
-                select: { id: true, url: true, position: true },
-                orderBy: { position: "asc" },
-                take: 1,
-              },
-              barcodes: {
-                select: { value: true },
-                take: 5,
-              },
-            },
-          },
-          variant: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: { product: { name: "asc" } },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-    ]);
+    let total = 0;
+    let snapshots: Array<
+      Prisma.InventorySnapshotGetPayload<{ select: typeof inventoryListSnapshotSelect }>
+    > = [];
+    if (input.stockFilter === "lowStock") {
+      const lowStockSql = buildLowStockSnapshotSql(input, ctx.user.organizationId);
+      const [countRows, idRows] = await Promise.all([
+        ctx.prisma.$queryRaw<Array<{ count: number | bigint }>>(
+          Prisma.sql`SELECT COUNT(*)::int AS count ${lowStockSql}`,
+        ),
+        ctx.prisma.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`
+            SELECT s."id"
+            ${lowStockSql}
+            ORDER BY p."name" ASC, s."variantKey" ASC
+            LIMIT ${pageSize}
+            OFFSET ${(page - 1) * pageSize}
+          `,
+        ),
+      ]);
+      total = Number(countRows[0]?.count ?? 0);
+      const snapshotIds = idRows.map((row) => row.id);
+      if (snapshotIds.length) {
+        const unorderedSnapshots = await ctx.prisma.inventorySnapshot.findMany({
+          where: { id: { in: snapshotIds } },
+          select: inventoryListSnapshotSelect,
+        });
+        const snapshotMap = new Map(unorderedSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+        snapshots = snapshotIds
+          .map((snapshotId) => snapshotMap.get(snapshotId))
+          .filter(
+            (
+              snapshot,
+            ): snapshot is Prisma.InventorySnapshotGetPayload<{
+              select: typeof inventoryListSnapshotSelect;
+            }> => Boolean(snapshot),
+          );
+      }
+    } else {
+      [total, snapshots] = await Promise.all([
+        ctx.prisma.inventorySnapshot.count({ where }),
+        ctx.prisma.inventorySnapshot.findMany({
+          where,
+          select: inventoryListSnapshotSelect,
+          orderBy: { product: { name: "asc" } },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+    }
     logProfileSection({
       logger: ctx.logger,
       scope: "inventory.list",
@@ -199,6 +286,7 @@ export const inventoryRouter = router({
         pageSize,
         snapshots: snapshots.length,
         hasSearch: Boolean(input.search?.trim()),
+        stockFilter: input.stockFilter,
       },
     });
 
@@ -254,6 +342,17 @@ export const inventoryRouter = router({
 
   listIds: protectedProcedure.input(inventoryListIdsInputSchema).query(async ({ ctx, input }) => {
     await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+
+    if (input.stockFilter === "lowStock") {
+      const rows = await ctx.prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+          SELECT s."id"
+          ${buildLowStockSnapshotSql(input, ctx.user.organizationId)}
+          ORDER BY p."name" ASC, s."variantKey" ASC
+        `,
+      );
+      return rows.map((row) => row.id);
+    }
 
     const where = buildInventorySnapshotWhere(input);
 

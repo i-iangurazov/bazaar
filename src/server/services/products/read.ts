@@ -90,6 +90,22 @@ const buildProductListWhere = (
   if (input?.readiness === "missingBarcode") {
     filters.push({ barcodes: { none: {} } });
   }
+  if (input?.readiness === "missingImage") {
+    filters.push({
+      AND: [
+        { OR: [{ photoUrl: null }, { photoUrl: "" }] },
+        {
+          images: {
+            none: {
+              url: {
+                not: "",
+              },
+            },
+          },
+        },
+      ],
+    });
+  }
   if (input?.readiness === "missingPrice") {
     filters.push({ basePriceKgs: null });
   }
@@ -134,6 +150,22 @@ const resolveReadinessProductIds = async ({
       where: {
         ...(scopedStoreIds ? { storeId: { in: scopedStoreIds } } : {}),
         onHand: { lt: 0 },
+        product: {
+          organizationId,
+          ...(input.includeArchived ? {} : { isDeleted: false }),
+        },
+      },
+      select: { productId: true },
+      distinct: ["productId"],
+    });
+    return rows.map((row) => row.productId);
+  }
+
+  if (input?.readiness === "outOfStock") {
+    const rows = await prisma.inventorySnapshot.findMany({
+      where: {
+        ...(scopedStoreIds ? { storeId: { in: scopedStoreIds } } : {}),
+        onHand: { lte: 0 },
         product: {
           organizationId,
           ...(input.includeArchived ? {} : { isDeleted: false }),

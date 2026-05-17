@@ -23,6 +23,7 @@ type ResponsiveDataListProps<T> = {
   desktopClassName?: string;
   mobileClassName?: string;
   mobileItemsClassName?: string;
+  desktopBreakpoint?: "md" | "lg";
   paginationKey?: string;
   defaultPageSize?: number;
   pageSizeOptions?: number[];
@@ -42,6 +43,7 @@ export const ResponsiveDataList = <T,>({
   desktopClassName,
   mobileClassName,
   mobileItemsClassName,
+  desktopBreakpoint = "md",
   paginationKey,
   defaultPageSize = 25,
   pageSizeOptions = [10, 25, 50, 100],
@@ -138,11 +140,13 @@ export const ResponsiveDataList = <T,>({
       : Math.min(page * pageSize, totalCount)
     : 0;
   const showPagination = totalPages > 1;
+  const desktopVisibility = desktopBreakpoint === "lg" ? "hidden lg:block" : "hidden md:block";
+  const mobileVisibility = desktopBreakpoint === "lg" ? "lg:hidden" : "md:hidden";
 
   return (
     <div ref={containerRef}>
-      <div className={cn("hidden md:block", desktopClassName)}>{renderDesktop(pagedItems)}</div>
-      <div className={cn("md:hidden", mobileClassName)}>
+      <div className={cn(desktopVisibility, desktopClassName)}>{renderDesktop(pagedItems)}</div>
+      <div className={cn(mobileVisibility, mobileClassName)}>
         {pagedItems.length ? (
           <div className={cn(mobileItemsClassName ?? "space-y-3")}>
             {pagedItems.map((item, index) => {

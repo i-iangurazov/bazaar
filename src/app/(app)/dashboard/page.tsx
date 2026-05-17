@@ -4,6 +4,7 @@ import { useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
+import { MobileQuickActionButton, MobileTaskCard } from "@/components/mobile-app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
   ReceiveIcon,
   PosIcon,
   PurchaseOrdersIcon,
+  CustomerDatabaseIcon,
 } from "@/components/icons";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import {
@@ -41,6 +43,8 @@ const DashboardPage = () => {
   const tAudit = useTranslations("audit");
   const tOrders = useTranslations("purchaseOrders");
   const tCommon = useTranslations("common");
+  const tNav = useTranslations("nav");
+  const tInventory = useTranslations("inventory");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session } = useSession();
@@ -289,34 +293,89 @@ const DashboardPage = () => {
   const visibleQuickActions = quickActions.filter((action) =>
     hasPermission(access, action.permission),
   );
+  const mobileQuickActions: Array<{
+    key: string;
+    href: string;
+    label: string;
+    icon?: ComponentType<{ className?: string }>;
+    permission: AppPermission;
+    variant?: "primary" | "secondary" | "warning";
+  }> = [
+    {
+      key: "mobile-start-sale",
+      href: "/pos/sell",
+      label: t("startSale"),
+      icon: PosIcon,
+      permission: "usePos",
+      variant: "primary",
+    },
+    {
+      key: "mobile-add-product",
+      href: "/products/new",
+      label: t("addProduct"),
+      icon: AddIcon,
+      permission: "manageProducts",
+    },
+    {
+      key: "mobile-receiving",
+      href: "/inventory/receiving",
+      label: tInventory("stockReceiving"),
+      icon: ReceiveIcon,
+      permission: "viewInventory",
+    },
+    {
+      key: "mobile-customer",
+      href: "/customers",
+      label: tNav("customers"),
+      icon: CustomerDatabaseIcon,
+      permission: "manageCustomers",
+    },
+    {
+      key: "mobile-printing",
+      href: "/settings/printing",
+      label: tNav("printing"),
+      icon: PrintIcon,
+      permission: "manageSettings",
+    },
+  ];
+  const visibleMobileQuickActions = mobileQuickActions.filter((action) =>
+    hasPermission(access, action.permission),
+  );
+  const mobileAlertItems = visibleAttentionItems.filter((item) => item.value > 0).slice(0, 4);
+  const mobileRecentActivity = activity.slice(0, 4);
 
   return (
     <div>
-      <PageHeader title={t("title")} subtitle={t("businessSubtitle")} />
-      {dashboardQuery.error ? (
-        <p className="mb-6 text-sm text-danger">{translateError(tErrors, dashboardQuery.error)}</p>
-      ) : null}
+      <div className="space-y-4 md:hidden">
+        {dashboardQuery.error ? (
+          <p className="text-sm text-danger">{translateError(tErrors, dashboardQuery.error)}</p>
+        ) : null}
 
-      <Card>
-        <CardContent className="space-y-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary/80">
-                {t("businessOverview")}
+        <section className="border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {tCommon("store")}
               </p>
-              <h3 className="text-xl font-semibold text-foreground">
+              <h1 className="mt-1 truncate text-xl font-semibold text-foreground">
                 {selectedStore?.name ?? tCommon("selectStore")}
-              </h3>
-              <p className="text-sm text-muted-foreground">{t("businessOverviewHint")}</p>
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">{currencyCode}</p>
             </div>
-
-            <div className="w-full sm:max-w-xs">
+            {(business?.openShiftsCount ?? 0) > 0 ? (
+              <Badge variant="success">{t("openShifts")}</Badge>
+            ) : (
+              <Badge variant="muted">{formatNumber(0, locale)}</Badge>
+            )}
+          </div>
+          {dashboardQuery.data?.stores.length ? (
+            <div className="mt-4">
               <Select value={storeId ?? ""} onValueChange={setRequestedStoreId}>
-                <SelectTrigger data-tour="dashboard-store-filter">
+                <SelectTrigger data-tour="dashboard-mobile-store-filter" className="min-h-11">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {dashboardQuery.data?.stores.map((store) => (
+                  {dashboardQuery.data.stores.map((store) => (
                     <SelectItem key={store.id} value={store.id}>
                       {store.name}
                     </SelectItem>
@@ -324,133 +383,278 @@ const DashboardPage = () => {
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          ) : null}
+          {session?.user?.emailVerified === false ? (
+            <p className="mt-3 border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
+              {tNav("emailUnverifiedTitle")}
+            </p>
+          ) : null}
+        </section>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            {kpis.map((kpi) => (
-              <div key={kpi.key} className="border border-border/80 bg-card p-3">
-                <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
-                <p className={`mt-2 text-xl font-semibold leading-none ${kpi.valueClassName}`}>
-                  {kpi.value}
+        <section className="space-y-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary/80">
+              {t("businessOverview")}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-foreground">{t("businessSubtitle")}</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <MobileTaskCard
+              label={t("todaySales")}
+              value={formatStoreMoney(business?.todaySalesKgs ?? 0)}
+              description={t("todaySalesHint")}
+            />
+            <MobileTaskCard
+              label={t("receiptsCount")}
+              value={formatNumber(business?.receiptsCount ?? 0, locale)}
+              description={t("receiptsHint")}
+            />
+            <MobileTaskCard
+              label={t("lowStock")}
+              value={formatNumber(business?.lowStockCount ?? 0, locale)}
+              description={t("lowStockHint")}
+              href="/inventory"
+              variant={(business?.lowStockCount ?? 0) > 0 ? "warning" : "default"}
+            />
+            <MobileTaskCard
+              label={t("openShifts")}
+              value={formatNumber(business?.openShiftsCount ?? 0, locale)}
+              description={t("openShiftsHint")}
+              href="/pos"
+              variant={(business?.openShiftsCount ?? 0) > 0 ? "success" : "default"}
+            />
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">{t("quickActions")}</h2>
+          <div className="grid gap-2">
+            {visibleMobileQuickActions.map((action) => (
+              <MobileQuickActionButton
+                key={action.key}
+                href={action.href}
+                label={action.label}
+                icon={action.icon}
+                variant={action.variant}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">{t("needsAttention")}</h2>
+          {mobileAlertItems.length ? (
+            <div className="grid gap-2">
+              {mobileAlertItems.map((item) => (
+                <MobileTaskCard
+                  key={item.key}
+                  label={item.label}
+                  value={formatNumber(item.value, locale)}
+                  href={item.href}
+                  variant={item.variant === "danger" ? "danger" : "warning"}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-14 items-center gap-2 border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
+              <EmptyIcon className="h-4 w-4" aria-hidden />
+              {t("noLowStock")}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">{t("recentActivity")}</h2>
+          {activityQuery.isLoading ? (
+            loadingState
+          ) : mobileRecentActivity.length ? (
+            <div className="grid gap-2">
+              {mobileRecentActivity.map((item) => (
+                <div key={item.id} className="border border-border bg-card p-3 shadow-sm">
+                  <p className="text-sm font-semibold text-foreground">
+                    {item.summaryKey
+                      ? tAudit(item.summaryKey, item.summaryValues ?? {})
+                      : tAudit("fallback")}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.actor?.name ?? item.actor?.email ?? tAudit("systemActor")} •{" "}
+                    {formatDateTime(item.createdAt, locale)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-14 items-center gap-2 border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
+              <EmptyIcon className="h-4 w-4" aria-hidden />
+              {t("noActivity")}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <div className="hidden md:block">
+        <PageHeader title={t("title")} subtitle={t("businessSubtitle")} />
+        {dashboardQuery.error ? (
+          <p className="mb-6 text-sm text-danger">
+            {translateError(tErrors, dashboardQuery.error)}
+          </p>
+        ) : null}
+
+        <Card>
+          <CardContent className="space-y-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary/80">
+                  {t("businessOverview")}
                 </p>
-                <p className="mt-2 text-[11px] text-muted-foreground">{kpi.hint}</p>
+                <h3 className="text-xl font-semibold text-foreground">
+                  {selectedStore?.name ?? tCommon("selectStore")}
+                </h3>
+                <p className="text-sm text-muted-foreground">{t("businessOverviewHint")}</p>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-6 xl:grid-cols-12">
-        <Card className="h-full md:col-span-3 xl:col-span-4">
-          <CardHeader>
-            <CardTitle>{t("quickActions")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            {visibleQuickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Button key={action.key} asChild variant={action.variant}>
-                  <Link href={action.href}>
-                    {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}
-                    {action.label}
-                  </Link>
-                </Button>
-              );
-            })}
+              <div className="w-full sm:max-w-xs">
+                <Select value={storeId ?? ""} onValueChange={setRequestedStoreId}>
+                  <SelectTrigger data-tour="dashboard-store-filter">
+                    <SelectValue placeholder={tCommon("selectStore")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dashboardQuery.data?.stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              {kpis.map((kpi) => (
+                <div key={kpi.key} className="border border-border/80 bg-card p-3">
+                  <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
+                  <p className={`mt-2 text-xl font-semibold leading-none ${kpi.valueClassName}`}>
+                    {kpi.value}
+                  </p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">{kpi.hint}</p>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="h-full md:col-span-3 xl:col-span-8">
-          <CardHeader>
-            <CardTitle>{t("needsAttention")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {visibleAttentionItems.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="flex items-center justify-between gap-3 border border-border/80 bg-secondary/20 px-3 py-2 text-sm transition hover:bg-secondary/40"
-              >
-                <span className="text-foreground">{item.label}</span>
-                <Badge variant={item.value > 0 ? item.variant : "muted"}>
-                  {formatNumber(item.value, locale)}
-                </Badge>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+        <div className="mt-6 grid gap-6 md:grid-cols-6 xl:grid-cols-12">
+          <Card className="h-full md:col-span-3 xl:col-span-4">
+            <CardHeader>
+              <CardTitle>{t("quickActions")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              {visibleQuickActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <Button key={action.key} asChild variant={action.variant}>
+                    <Link href={action.href}>
+                      {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}
+                      {action.label}
+                    </Link>
+                  </Button>
+                );
+              })}
+            </CardContent>
+          </Card>
 
-        <Card className="h-full md:col-span-3 xl:col-span-5">
-          <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <CardTitle>{t("pendingPurchaseOrders")}</CardTitle>
-            <Badge variant="muted">{formatNumber(pendingOrders.length, locale)}</Badge>
-          </CardHeader>
-          <CardContent>
-            {dashboardQuery.isLoading ? (
-              loadingState
-            ) : pendingOrders.length ? (
-              <div className="space-y-3">
-                {pendingOrders.map((po) => (
-                  <div
-                    key={po.id}
-                    className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {po.supplier?.name ?? tCommon("supplierUnassigned")}
+          <Card className="h-full md:col-span-3 xl:col-span-8">
+            <CardHeader>
+              <CardTitle>{t("needsAttention")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {visibleAttentionItems.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="flex items-center justify-between gap-3 border border-border/80 bg-secondary/20 px-3 py-2 text-sm transition hover:bg-secondary/40"
+                >
+                  <span className="text-foreground">{item.label}</span>
+                  <Badge variant={item.value > 0 ? item.variant : "muted"}>
+                    {formatNumber(item.value, locale)}
+                  </Badge>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="h-full md:col-span-3 xl:col-span-5">
+            <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <CardTitle>{t("pendingPurchaseOrders")}</CardTitle>
+              <Badge variant="muted">{formatNumber(pendingOrders.length, locale)}</Badge>
+            </CardHeader>
+            <CardContent>
+              {dashboardQuery.isLoading ? (
+                loadingState
+              ) : pendingOrders.length ? (
+                <div className="space-y-3">
+                  {pendingOrders.map((po) => (
+                    <div
+                      key={po.id}
+                      className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {po.supplier?.name ?? tCommon("supplierUnassigned")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(po.createdAt, locale)}
+                        </p>
+                      </div>
+                      <Badge variant={statusVariant(po.status)}>{statusLabel(po.status)}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <EmptyIcon className="h-4 w-4" aria-hidden />
+                  {t("noPending")}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="h-full md:col-span-6 xl:col-span-7">
+            <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <CardTitle>{t("recentActivity")}</CardTitle>
+              <Badge variant="muted">{formatNumber(activity.length, locale)}</Badge>
+            </CardHeader>
+            <CardContent>
+              {activityQuery.isLoading ? (
+                loadingState
+              ) : activity.length ? (
+                <div className="space-y-3">
+                  {activity.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-none border border-border/80 bg-secondary/30 p-3"
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        {item.summaryKey
+                          ? tAudit(item.summaryKey, item.summaryValues ?? {})
+                          : tAudit("fallback")}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDateTime(po.createdAt, locale)}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.actor?.name ?? item.actor?.email ?? tAudit("systemActor")} •{" "}
+                        {formatDateTime(item.createdAt, locale)}
                       </p>
                     </div>
-                    <Badge variant={statusVariant(po.status)}>{statusLabel(po.status)}</Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noPending")}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="h-full md:col-span-6 xl:col-span-7">
-          <CardHeader className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <CardTitle>{t("recentActivity")}</CardTitle>
-            <Badge variant="muted">{formatNumber(activity.length, locale)}</Badge>
-          </CardHeader>
-          <CardContent>
-            {activityQuery.isLoading ? (
-              loadingState
-            ) : activity.length ? (
-              <div className="space-y-3">
-                {activity.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-none border border-border/80 bg-secondary/30 p-3"
-                  >
-                    <p className="text-sm font-semibold text-foreground">
-                      {item.summaryKey
-                        ? tAudit(item.summaryKey, item.summaryValues ?? {})
-                        : tAudit("fallback")}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.actor?.name ?? item.actor?.email ?? tAudit("systemActor")} •{" "}
-                      {formatDateTime(item.createdAt, locale)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noActivity")}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <EmptyIcon className="h-4 w-4" aria-hidden />
+                  {t("noActivity")}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

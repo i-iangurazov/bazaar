@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
@@ -10,6 +10,11 @@ import { GuidanceOverlay } from "@/components/guidance/guidance-overlay";
 import { GuidanceProvider } from "@/components/guidance/guidance-provider";
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  MobileAppShell,
+  MobilePageContainer,
+  type MobileShellNavItem,
+} from "@/components/mobile-app-shell";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { SignOutButton } from "@/components/signout-button";
 import { ScanInput } from "@/components/ScanInput";
@@ -44,14 +49,13 @@ import {
   AdjustIcon,
   UploadIcon,
   IntegrationsIcon,
-  MenuIcon,
-  CloseIcon,
   UserIcon,
   ChevronDownIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { normalizeLocale } from "@/lib/locales";
 import { translateError } from "@/lib/translateError";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import {
   canCreateProductForRole,
   hasPermission,
@@ -126,6 +130,7 @@ const stripLocaleFromPath = (pathname: string) => {
 export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
+  const tBreadcrumbs = useTranslations("breadcrumbs");
   const tHeader = useTranslations("appHeader");
   const tCommand = useTranslations("commandPalette");
   const tErrors = useTranslations("errors");
@@ -133,16 +138,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const normalizedPath = stripLocaleFromPath(pathname);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [customizeNavOpen, setCustomizeNavOpen] = useState(false);
   const [verificationResent, setVerificationResent] = useState(false);
-  const drawerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
   const [hiddenNavItemKeys, setHiddenNavItemKeys] = useState<string[]>([]);
   const { toast } = useToast();
   const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
     enabled: Boolean(user.organizationId),
+  });
+  const storesQuery = trpc.stores.list.useQuery(undefined, {
+    enabled: Boolean(user.organizationId) && isMobile === true,
   });
   const resendVerificationMutation = trpc.publicAuth.resendVerification.useMutation({
     onSuccess: () => {
@@ -154,7 +161,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     },
   });
   const isOrgOwner = Boolean(profileQuery.data?.isOrgOwner ?? user.isOrgOwner);
-  const emailVerified = profileQuery.data ? Boolean(profileQuery.data.emailVerifiedAt) : user.emailVerified !== false;
+  const emailVerified = profileQuery.data
+    ? Boolean(profileQuery.data.emailVerifiedAt)
+    : user.emailVerified !== false;
   const showEmailVerificationNotice = Boolean(user.email && !emailVerified && !impersonation);
   const access: RoleAccess = useMemo(
     () => ({
@@ -409,60 +418,6 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       setHiddenNavItemKeys([]);
     }
   }, [hiddenNavStorageKey]);
-
-  useEffect(() => {
-    if (!mobileOpen) {
-      return;
-    }
-    const previousActive = document.activeElement as HTMLElement | null;
-    const drawer = drawerRef.current;
-    const focusableSelector =
-      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
-
-    const getFocusable = () =>
-      drawer
-        ? Array.from(drawer.querySelectorAll<HTMLElement>(focusableSelector)).filter(
-            (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
-          )
-        : [];
-
-    const focusables = getFocusable();
-    focusables[0]?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setMobileOpen(false);
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const items = getFocusable();
-      if (!items.length) {
-        event.preventDefault();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-      previousActive?.focus();
-    };
-  }, [mobileOpen]);
 
   const exitImpersonation = async () => {
     try {
@@ -737,7 +692,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     return (
       <div className="mt-3 border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-foreground">
         <p className="font-semibold text-foreground">{tNav("emailUnverifiedTitle")}</p>
-        <p className="mt-1 leading-relaxed text-muted-foreground">{tNav("emailUnverifiedDescription")}</p>
+        <p className="mt-1 leading-relaxed text-muted-foreground">
+          {tNav("emailUnverifiedDescription")}
+        </p>
         <Button
           type="button"
           variant="secondary"
@@ -781,6 +738,183 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     </Link>
   );
 
+  type MobileNavCandidate = MobileShellNavItem & {
+    activePath?: string;
+    adminOnly?: boolean;
+    managerOnly?: boolean;
+    platformOwnerOnly?: boolean;
+    orgOwnerOnly?: boolean;
+    requiredPermission?: AppPermission;
+  };
+
+  const isMobileNavCandidateAllowed = (item: MobileNavCandidate) => {
+    if (item.adminOnly && user.role !== "ADMIN") {
+      return false;
+    }
+    if (item.managerOnly && user.role !== "ADMIN" && user.role !== "MANAGER") {
+      return false;
+    }
+    if (item.platformOwnerOnly && !user.isPlatformOwner) {
+      return false;
+    }
+    if (item.orgOwnerOnly && !isOrgOwner) {
+      return false;
+    }
+    return hasPermission(access, item.requiredPermission);
+  };
+
+  const toMobileShellItem = (item: MobileNavCandidate): MobileShellNavItem => {
+    const activePath = item.activePath ?? item.href;
+    return {
+      key: item.key,
+      label: item.label,
+      href: item.href,
+      icon: item.icon,
+      description: item.description,
+      active: normalizedPath === activePath || normalizedPath.startsWith(`${activePath}/`),
+    };
+  };
+
+  const mobileBottomCandidates: MobileNavCandidate[] = [
+    {
+      key: "mobile-dashboard",
+      label: tBreadcrumbs("home"),
+      href: "/dashboard",
+      activePath: "/dashboard",
+      icon: DashboardIcon,
+      requiredPermission: "viewDashboard",
+    },
+    {
+      key: "mobile-pos",
+      label: tNav("pos"),
+      href: "/pos",
+      activePath: "/pos",
+      icon: PosIcon,
+      requiredPermission: "usePos",
+    },
+    {
+      key: "mobile-products",
+      label: tNav("products"),
+      href: "/products",
+      icon: ProductsIcon,
+      requiredPermission: "viewProducts",
+    },
+    {
+      key: "mobile-sales",
+      label: tNav("sales"),
+      href: "/sales/orders",
+      activePath: "/sales",
+      icon: SalesOrdersIcon,
+      requiredPermission: "viewSales",
+    },
+  ];
+
+  const mobileMoreCandidates: MobileNavCandidate[] = [
+    {
+      key: "mobile-inventory",
+      label: tNav("inventory"),
+      href: "/inventory",
+      activePath: "/inventory",
+      icon: InventoryIcon,
+      requiredPermission: "viewInventory",
+    },
+    {
+      key: "mobile-customers",
+      label: tNav("customers"),
+      href: "/customers",
+      icon: CustomerDatabaseIcon,
+      requiredPermission: "manageCustomers",
+    },
+    {
+      key: "mobile-reports",
+      label: tNav("reports"),
+      href: "/reports",
+      icon: ActivityIcon,
+      requiredPermission: "viewReports",
+    },
+    {
+      key: "mobile-settings",
+      label: tBreadcrumbs("settings"),
+      href: "/settings/profile",
+      activePath: "/settings",
+      icon: UserIcon,
+      requiredPermission: "viewProfile",
+    },
+    {
+      key: "mobile-printing",
+      label: tNav("printing"),
+      href: "/settings/printing",
+      icon: PrintIcon,
+      adminOnly: true,
+      requiredPermission: "manageSettings",
+    },
+    {
+      key: "mobile-stores",
+      label: tNav("stores"),
+      href: "/stores",
+      icon: StoresIcon,
+      requiredPermission: "viewStores",
+    },
+    {
+      key: "mobile-users",
+      label: tNav("users"),
+      href: "/settings/users",
+      icon: UsersIcon,
+      adminOnly: true,
+      requiredPermission: "manageUsers",
+    },
+    {
+      key: "mobile-help",
+      label: tNav("help"),
+      href: "/help",
+      icon: HelpIcon,
+      requiredPermission: "viewHelp",
+    },
+  ];
+
+  const mobileBottomItems = mobileBottomCandidates
+    .filter(isMobileNavCandidateAllowed)
+    .map(toMobileShellItem);
+  const mobileMoreItems = mobileMoreCandidates
+    .filter(isMobileNavCandidateAllowed)
+    .map(toMobileShellItem);
+
+  const mobilePageTitle = useMemo(() => {
+    if (normalizedPath === "/" || normalizedPath.startsWith("/dashboard")) {
+      return tBreadcrumbs("home");
+    }
+    if (normalizedPath.startsWith("/pos")) {
+      return tNav("pos");
+    }
+    if (normalizedPath.startsWith("/products")) {
+      return tNav("products");
+    }
+    if (normalizedPath.startsWith("/inventory")) {
+      return tNav("inventory");
+    }
+    if (normalizedPath.startsWith("/sales")) {
+      return tNav("sales");
+    }
+    if (normalizedPath.startsWith("/customers")) {
+      return tNav("customers");
+    }
+    if (normalizedPath.startsWith("/reports")) {
+      return tNav("reports");
+    }
+    if (normalizedPath.startsWith("/stores")) {
+      return tNav("stores");
+    }
+    if (normalizedPath.startsWith("/settings/printing")) {
+      return tNav("printing");
+    }
+    if (normalizedPath.startsWith("/settings")) {
+      return tBreadcrumbs("settings");
+    }
+    return tNav("brand");
+  }, [normalizedPath, tBreadcrumbs, tNav]);
+
+  const mobileStoreName = storesQuery.data?.[0]?.name ?? null;
+
   if (normalizedPath === "/pos/sell") {
     return (
       <div className="min-h-screen bg-background">
@@ -801,7 +935,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             </div>
           </div>
         ) : null}
-        {children}
+        <MobilePageContainer>{children}</MobilePageContainer>
+        <MobileAppShell
+          pageTitle={mobilePageTitle}
+          storeName={mobileStoreName}
+          bottomItems={mobileBottomItems}
+          moreItems={mobileMoreItems}
+          moreLabel={tNav("more")}
+          profileLabel={tNav("profile")}
+          closeLabel={tCommon("closeMenu")}
+          navigationLabel={tNav("mobileNavigation")}
+          showTopBar={false}
+        />
       </div>
     );
   }
@@ -826,32 +971,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             </div>
           </div>
         ) : null}
-        <header
-          className={cn(
-            "sticky z-40 flex items-center justify-between border-b border-border bg-background/90 px-4 py-3 shadow-sm backdrop-blur lg:hidden",
-            impersonation ? "top-10" : "top-0",
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              onClick={() => setMobileOpen(true)}
-              aria-label={tCommon("openMenu")}
-            >
-              <MenuIcon className="h-4 w-4" aria-hidden />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <PageTipsButton />
-            <PwaInstallButton />
-            <LanguageSwitcher />
-          </div>
-        </header>
-
+        <MobileAppShell
+          pageTitle={mobilePageTitle}
+          storeName={mobileStoreName}
+          bottomItems={mobileBottomItems}
+          moreItems={mobileMoreItems}
+          moreLabel={tNav("more")}
+          profileLabel={tNav("profile")}
+          closeLabel={tCommon("closeMenu")}
+          navigationLabel={tNav("mobileNavigation")}
+        />
         <div className="flex min-h-screen">
-          <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+          <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
             <div className="flex h-full min-h-0 flex-col">
               <div className="space-y-3">
                 <Image
@@ -889,99 +1020,32 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           </aside>
 
           <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-            <div className="mx-auto">
-              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="relative w-full sm:max-w-md">
-                  <ScanInput
-                    context="global"
-                    dataTour="scan-input"
-                    placeholder={tHeader("scanPlaceholder")}
-                    ariaLabel={tHeader("scanLabel")}
-                    supportsTabSubmit
-                    enableProductSearch
-                    onResolved={handleScanResolved}
-                  />
+            <MobilePageContainer>
+              <div className="mx-auto">
+                <div className="mb-6 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex">
+                  <div className="relative w-full sm:max-w-md">
+                    <ScanInput
+                      context="global"
+                      dataTour="scan-input"
+                      placeholder={tHeader("scanPlaceholder")}
+                      ariaLabel={tHeader("scanLabel")}
+                      supportsTabSubmit
+                      enableProductSearch
+                      onResolved={handleScanResolved}
+                    />
+                  </div>
+                  <div className="hidden md:flex md:items-center md:gap-2">
+                    <PageTipsButton />
+                    <PwaInstallButton />
+                    <LanguageSwitcher />
+                  </div>
                 </div>
-                <div className="hidden lg:flex lg:items-center lg:gap-2">
-                  <PageTipsButton />
-                  <PwaInstallButton />
-                  <LanguageSwitcher />
-                </div>
+                {children}
               </div>
-              {children}
-            </div>
+            </MobilePageContainer>
           </main>
         </div>
 
-        <div
-          className={cn(
-            "fixed inset-0 z-50 lg:hidden",
-            mobileOpen ? "pointer-events-auto" : "pointer-events-none",
-          )}
-          aria-hidden={!mobileOpen}
-        >
-          <button
-            type="button"
-            className={cn(
-              "absolute inset-0 bg-black/30 transition-opacity duration-200",
-              mobileOpen ? "opacity-100" : "opacity-0",
-            )}
-            onClick={() => setMobileOpen(false)}
-            aria-label={tCommon("closeMenu")}
-          />
-          <div
-            ref={drawerRef}
-            role="dialog"
-            aria-modal="true"
-            className={cn(
-              "scrollbar-soft absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-border bg-card p-6 shadow-xl transition-transform duration-200 ease-out",
-              mobileOpen ? "translate-x-0" : "-translate-x-full",
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <Image
-                src="/brand/logo.png"
-                alt={tNav("brand")}
-                width={724}
-                height={181}
-                className="h-auto w-[132px] max-w-full"
-                priority
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                onClick={() => setMobileOpen(false)}
-                aria-label={tCommon("closeMenu")}
-              >
-                <CloseIcon className="h-4 w-4" aria-hidden />
-              </Button>
-            </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setCommandPaletteOpen(true);
-                setMobileOpen(false);
-              }}
-              size="default"
-              className="mt-3 h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-              aria-label={tCommand("openButton")}
-            >
-              <CirclePlusIcon className="h-5 w-5" aria-hidden />
-            </Button>
-
-            <nav className="mt-6 space-y-4">{renderNavGroups(() => setMobileOpen(false))}</nav>
-
-            <div className="mt-8 border-t border-border pt-6 text-sm">
-              {renderCustomizeNavButton(() => setMobileOpen(false))}
-              {renderEmailVerificationNotice()}
-              {renderProfileShortcut(() => setMobileOpen(false))}
-              <div className="mt-4">
-                <SignOutButton />
-              </div>
-            </div>
-          </div>
-        </div>
         <Modal
           open={customizeNavOpen}
           onOpenChange={setCustomizeNavOpen}

@@ -25,11 +25,15 @@ export const PageHeader = ({
   subtitle,
   action,
   filters,
+  actionClassName,
+  filtersClassName,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
   filters?: ReactNode;
+  actionClassName?: string;
+  filtersClassName?: string;
 }) => (
   <div className="mb-8 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-4">
@@ -38,8 +42,8 @@ export const PageHeader = ({
         <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
         {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
-      {action ? <PageHeaderActions>{action}</PageHeaderActions> : null}
+      {action ? <PageHeaderActions className={actionClassName}>{action}</PageHeaderActions> : null}
     </div>
-    {filters ? <div className="flex flex-wrap gap-3">{filters}</div> : null}
+    {filters ? <div className={cn("flex flex-wrap gap-3", filtersClassName)}>{filters}</div> : null}
   </div>
 );

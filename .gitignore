@@ -4,6 +4,7 @@ out
 dist
 .turbo
 .pnpm-store
+tmp/
 coverage
 pnpm-debug.log
 npm-debug.log

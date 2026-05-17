@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   createCustomer,
   deleteCustomer,
+  getCustomerDetail,
   listCustomers,
   previewCustomerImport,
   runCustomerImport,
@@ -50,6 +51,19 @@ export const customersRouter = router({
           source: input?.source,
           page: input?.page,
           pageSize: input?.pageSize,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  detail: managerProcedure
+    .input(z.object({ customerId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await getCustomerDetail({
+          user: ctx.user,
+          customerId: input.customerId,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -160,9 +160,153 @@ const PosEntryPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t("title")} subtitle={t("cashierSubtitle")} />
+      <div className="hidden md:block">
+        <PageHeader title={t("title")} subtitle={t("cashierSubtitle")} />
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="space-y-4 md:hidden">
+        <div className="border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Badge variant={openShift ? "success" : "warning"}>
+                {openShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
+              </Badge>
+              <h2 className="mt-3 text-xl font-semibold text-foreground">
+                {openShift ? t("entry.readyToSell") : t("entry.openShiftTitle")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedRegister
+                  ? `${selectedRegister.store.name} · ${selectedRegister.name} (${selectedRegister.code})`
+                  : t("entry.selectRegister")}
+              </p>
+            </div>
+            {entryQuery.isLoading ? <Spinner className="mt-1 h-5 w-5 text-muted-foreground" /> : null}
+          </div>
+
+          {(entryQuery.data?.registers?.length ?? 0) > 1 ? (
+            <div className="mt-4">
+              <Select value={registerId} onValueChange={setRegisterId}>
+                <SelectTrigger aria-label={t("entry.register")} className="h-12">
+                  <SelectValue placeholder={t("entry.selectRegister")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(entryQuery.data?.registers ?? []).map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.store.name} · {item.name} ({item.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {!entryQuery.isLoading && !(entryQuery.data?.registers?.length ?? 0) ? (
+            <div className="mt-4 border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              {t("entry.noRegisters")}
+              {canManageRegisters ? (
+                <Button className="mt-3 h-11 w-full" size="sm" asChild>
+                  <Link href="/pos/registers">{t("registers.create")}</Link>
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {openShift ? (
+            <div className="mt-4 space-y-3">
+              <Button className="h-14 w-full text-base" asChild>
+                <Link href={`/pos/sell?registerId=${activeRegisterId}`}>{t("entry.sell")}</Link>
+              </Button>
+              <Button variant="secondary" className="h-11 w-full" asChild>
+                <Link href={`/pos/shifts?registerId=${activeRegisterId}`}>
+                  {t("shifts.closeShift")}
+                </Link>
+              </Button>
+            </div>
+          ) : selectedRegister ? (
+            <Button
+              className="mt-4 h-14 w-full text-base"
+              onClick={() => setOpenShiftDialogOpen(true)}
+              disabled={entryQuery.isLoading || openShiftMutation.isLoading}
+            >
+              {openShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("entry.openShift")}
+            </Button>
+          ) : null}
+        </div>
+
+        {openShift ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="border border-border bg-card p-3">
+              <p className="text-xs text-muted-foreground">{t("entry.shiftOpenedAt")}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {formatDateTime(openShift.openedAt, locale)}
+              </p>
+            </div>
+            <div className="border border-border bg-card p-3">
+              <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {formatStoreMoney(openShift.openingCashKgs)}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {previousClosedShift ? (
+          <div className="border border-border bg-card p-4 text-sm">
+            <p className="font-semibold text-foreground">{t("entry.previousClosedShiftTitle")}</p>
+            <p className="mt-1 text-muted-foreground">
+              {formatDateTime(previousClosedShift.closedAt ?? previousClosedShift.openedAt, locale)}
+              {" · "}
+              {previousClosedShift.register.name} ({previousClosedShift.register.code})
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  {t("entry.previousClosedShiftCounted")}
+                </p>
+                <p className="font-semibold text-foreground">
+                  {previousClosedShift.closingCashCountedKgs === null
+                    ? tCommon("notAvailable")
+                    : formatPreviousShiftMoney(previousClosedShift.closingCashCountedKgs)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  {t("entry.previousClosedShiftExpected")}
+                </p>
+                <p className="font-semibold text-foreground">
+                  {previousClosedShift.expectedCashKgs === null
+                    ? tCommon("notAvailable")
+                    : formatPreviousShiftMoney(previousClosedShift.expectedCashKgs)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="secondary" className="h-12" asChild>
+            <Link href={`/pos/history?registerId=${activeRegisterId}`}>{t("entry.history")}</Link>
+          </Button>
+          <Button variant="secondary" className="h-12" asChild>
+            <Link href={`/pos/shifts?registerId=${activeRegisterId}`}>{t("entry.shifts")}</Link>
+          </Button>
+          {canManageRegisters ? (
+            <Button variant="secondary" className="h-12" asChild>
+              <Link href="/pos/registers">{t("entry.registers")}</Link>
+            </Button>
+          ) : null}
+          <Button
+            variant="secondary"
+            className="h-12 border-danger/20 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger"
+            asChild
+          >
+            <Link href={`/pos/debts?registerId=${activeRegisterId}`}>{t("debts.title")}</Link>
+          </Button>
+        </div>
+      </section>
+
+      <div className="hidden gap-4 md:grid lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardContent className="space-y-5 p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

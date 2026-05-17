@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { PrinterPrintMode } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
@@ -325,6 +325,73 @@ const ToggleRow = ({
     <span>{label}</span>
     <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
   </label>
+);
+
+const MobileWizardStep = ({
+  step,
+  title,
+  description,
+  status,
+  children,
+}: {
+  step: number;
+  title: string;
+  description?: string;
+  status?: "ready" | "warning" | "neutral";
+  children: ReactNode;
+}) => (
+  <Card>
+    <CardHeader className="px-4 py-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
+          {step}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="text-base">{title}</CardTitle>
+            {status ? (
+              <span
+                className={`shrink-0 border px-2 py-0.5 text-[11px] font-semibold ${
+                  status === "ready"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : status === "warning"
+                      ? "border-warning/30 bg-warning/10 text-warning"
+                      : "border-border bg-secondary text-muted-foreground"
+                }`}
+              >
+                {status === "ready" ? "OK" : status === "warning" ? "!" : "..."}
+              </span>
+            ) : null}
+          </div>
+          {description ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-3 px-4 py-4">{children}</CardContent>
+  </Card>
+);
+
+const MobileStatusRow = ({
+  label,
+  value,
+  ready,
+}: {
+  label: string;
+  value: string;
+  ready?: boolean;
+}) => (
+  <div className="flex items-start justify-between gap-3 border border-border bg-secondary/20 p-3 text-sm">
+    <span className="text-muted-foreground">{label}</span>
+    <span
+      className={`max-w-[58%] text-right font-medium ${
+        ready === undefined ? "text-foreground" : ready ? "text-success" : "text-warning"
+      }`}
+    >
+      {value}
+    </span>
+  </div>
 );
 
 const qzTrustMessageKeyFor = (status: QzTrustStatus) => {
@@ -733,11 +800,524 @@ const PrintingSettingsPage = () => {
         : "qzValidityUnknown";
   const qzLocalTrustKey = qzTerminalProvisioned ? "qzLocalTrustTrusted" : "qzLocalTrustUntrusted";
   const qzFingerprint = qzSigningStatus?.certificateFingerprintSha256 ?? "";
+  const qzRequestSigningWorks =
+    qzCertificateLoaded && qzSignatureConfigured && qzSigningStatus?.keyPairMatches === true;
+  const qzReceiptPrinterSelected = Boolean(binding.receiptPrinterName.trim());
+  const qzLabelPrinterSelected = Boolean(binding.labelPrinterName.trim());
+  const qzMobileReady =
+    values.receiptPrintProvider === "QZ_TRAY" &&
+    qzStatus === "connected" &&
+    qzReceiptPrinterSelected &&
+    receiptPrinterAvailable &&
+    qzRequestSigningWorks &&
+    qzTrustStatus === "trusted" &&
+    qzTerminalProvisioned;
+  const qzSignedButUntrusted = qzRequestSigningWorks && !qzTerminalProvisioned;
 
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
+      <section className="space-y-4 md:hidden" data-mobile-printing-wizard>
+        <Card>
+          <CardHeader className="px-4 py-4">
+            <CardTitle className="text-base">{t("wizardTitle")}</CardTitle>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {t("wizardDescription")}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 px-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
+              <Select value={storeId} onValueChange={setStoreId}>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder={tCommon("selectStore")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(storesQuery.data ?? []).map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("deviceScopeHint")}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {!canEdit ? <p className="text-sm text-warning">{t("readOnly")}</p> : null}
+        {settingsQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
+          </div>
+        ) : null}
+        {settingsQuery.error ? (
+          <p className="text-sm text-danger">{translateError(tErrors, settingsQuery.error)}</p>
+        ) : null}
+        {!selectedStore && !storesQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <EmptyIcon className="h-4 w-4" aria-hidden />
+            {t("empty")}
+          </div>
+        ) : null}
+
+        {selectedStore ? (
+          <>
+            <MobileWizardStep
+              step={1}
+              title={t("wizardMethodTitle")}
+              description={t("wizardMethodDescription")}
+              status={values.receiptPrintProvider === "DISABLED" ? "neutral" : "ready"}
+            >
+              <div className="grid gap-2">
+                {(["QZ_TRAY", "DISABLED"] as const).map((provider) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    className={`min-h-16 border p-3 text-left transition ${
+                      values.receiptPrintProvider === provider
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card"
+                    }`}
+                    disabled={!canEdit}
+                    onClick={() => {
+                      updateValue("receiptPrintProvider", provider);
+                      updateValue("labelPrintProvider", provider);
+                      if (provider === "DISABLED") {
+                        updateValue("receiptAutoPrintEnabled", false);
+                      }
+                    }}
+                  >
+                    <span className="block text-sm font-semibold text-foreground">
+                      {provider === "QZ_TRAY" ? t("providerQz") : t("providerDisabled")}
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                      {provider === "QZ_TRAY" ? t("providerQzHint") : t("providerDisabledHint")}
+                    </span>
+                  </button>
+                ))}
+                <div className="border border-dashed border-border bg-secondary/20 p-3 text-xs leading-relaxed text-muted-foreground">
+                  {t("wizardAgentUnavailable")}
+                </div>
+              </div>
+            </MobileWizardStep>
+
+            <MobileWizardStep
+              step={2}
+              title={t("wizardConnectionTitle")}
+              description={t("wizardConnectionDescription")}
+              status={
+                values.receiptPrintProvider === "DISABLED"
+                  ? "neutral"
+                  : qzStatus === "connected"
+                    ? "ready"
+                    : "warning"
+              }
+            >
+              <MobileStatusRow
+                label={t("connectionStatus")}
+                value={qzStatusLabel}
+                ready={qzStatus === "connected"}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 w-full"
+                onClick={() => void checkQzConnection()}
+                disabled={qzStatus === "checking" || values.receiptPrintProvider !== "QZ_TRAY"}
+              >
+                {qzStatus === "checking" ? <Spinner className="h-4 w-4" /> : null}
+                {t("testConnection")}
+              </Button>
+            </MobileWizardStep>
+
+            <MobileWizardStep
+              step={3}
+              title={t("wizardTrustTitle")}
+              description={t("wizardTrustDescription")}
+              status={qzRequestSigningWorks && qzTerminalProvisioned ? "ready" : "warning"}
+            >
+              <MobileStatusRow
+                label={t("qzCertificateLoadedLabel")}
+                value={qzCertificateLoaded ? t("yes") : t("no")}
+                ready={qzCertificateLoaded}
+              />
+              <MobileStatusRow
+                label={t("qzSignatureConfiguredLabel")}
+                value={qzSignatureConfigured ? t("yes") : t("no")}
+                ready={qzSignatureConfigured}
+              />
+              <MobileStatusRow
+                label={t("qzRequestValidityLabel")}
+                value={t(qzRequestValidityKey)}
+                ready={qzSigningStatus?.keyPairMatches === true}
+              />
+              <MobileStatusRow
+                label={t("qzLocalTrustLabel")}
+                value={t(qzLocalTrustKey)}
+                ready={qzTerminalProvisioned}
+              />
+              {qzFingerprint ? (
+                <div className="border border-border bg-secondary/20 p-3 text-sm">
+                  <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
+                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                    {qzFingerprint}
+                  </p>
+                </div>
+              ) : (
+                <MobileStatusRow
+                  label={t("qzCertificateFingerprint")}
+                  value={t("qzCertificateFingerprintUnavailable")}
+                  ready={false}
+                />
+              )}
+              {qzSignedButUntrusted ? (
+                <div className="border border-warning/40 bg-warning/10 p-3 text-sm leading-relaxed text-warning">
+                  {t("qzClientProvisionNotice")}
+                </div>
+              ) : null}
+              <Button asChild type="button" variant="secondary" className="h-11 w-full">
+                <a href="/api/qz/certificate" download="bazaar-qz-certificate.txt">
+                  {t("downloadQzCertificate")}
+                </a>
+              </Button>
+              <label className="flex items-center justify-between gap-3 border border-border bg-card p-3 text-sm">
+                <span className="space-y-1">
+                  <span className="block font-medium text-foreground">
+                    {t("qzClientProvisionConfirm")}
+                  </span>
+                  <span className="block text-xs leading-relaxed text-muted-foreground">
+                    {t("qzClientProvisionHint")}
+                  </span>
+                </span>
+                <Switch
+                  checked={binding.certificateProvisioned}
+                  onCheckedChange={(checked) => updateBinding({ certificateProvisioned: checked })}
+                  disabled={!canEdit}
+                  aria-label={t("qzClientProvisionConfirm")}
+                />
+              </label>
+            </MobileWizardStep>
+
+            <MobileWizardStep
+              step={4}
+              title={t("wizardPrintersTitle")}
+              description={t("wizardPrintersDescription")}
+              status={qzReceiptPrinterSelected && qzLabelPrinterSelected ? "ready" : "warning"}
+            >
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">{t("receiptPrinter")}</label>
+                <Select
+                  value={binding.receiptPrinterName}
+                  onValueChange={(value) => updateBinding({ receiptPrinterName: value })}
+                  disabled={!canEdit || qzStatus !== "connected"}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder={t("selectPrinter")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {printerOptions.map((printer) => (
+                      <SelectItem key={printer} value={printer}>
+                        {printer}
+                        {printers.length > 0 && !printers.includes(printer)
+                          ? ` (${t("printerUnavailableShort")})`
+                          : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {binding.receiptPrinterName.trim()
+                    ? t("savedReceiptPrinter", { printer: binding.receiptPrinterName.trim() })
+                    : t("receiptPrinterNotSelected")}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">{t("labelPrinter")}</label>
+                <Select
+                  value={binding.labelPrinterName}
+                  onValueChange={(value) => updateBinding({ labelPrinterName: value })}
+                  disabled={!canEdit || qzStatus !== "connected"}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder={t("selectPrinter")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {printerOptions.map((printer) => (
+                      <SelectItem key={printer} value={printer}>
+                        {printer}
+                        {printers.length > 0 && !printers.includes(printer)
+                          ? ` (${t("printerUnavailableShort")})`
+                          : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {binding.labelPrinterName.trim()
+                    ? t("savedLabelPrinter", { printer: binding.labelPrinterName.trim() })
+                    : t("labelPrinterNotSelected")}
+                </p>
+              </div>
+            </MobileWizardStep>
+
+            <MobileWizardStep
+              step={5}
+              title={t("wizardTemplatesTitle")}
+              description={t("wizardTemplatesDescription")}
+              status="neutral"
+            >
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">{t("paperSize")}</label>
+                <Select
+                  value={values.receiptPaperSize}
+                  onValueChange={(value) => updateValue("receiptPaperSize", value as ReceiptPaperSize)}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="58MM">{t("paper58")}</SelectItem>
+                    <SelectItem value="80MM">{t("paper80")}</SelectItem>
+                    <SelectItem value="A4">A4</SelectItem>
+                    <SelectItem value="CUSTOM">{t("custom")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["receiptShowProductName", "showProductName"],
+                  ["receiptShowProductSku", "showSku"],
+                  ["receiptShowProductBarcode", "showBarcodeText"],
+                  ["receiptShowDiscount", "showDiscount"],
+                  ["receiptShowPaymentMethod", "showPaymentMethod"],
+                  ["receiptShowChange", "showChange"],
+                ] as const).map(([key, label]) => (
+                  <ToggleRow
+                    key={key}
+                    label={t(label)}
+                    checked={values[key]}
+                    disabled={!canEdit}
+                    onChange={(checked) => updateValue(key, checked)}
+                  />
+                ))}
+              </div>
+              <div className="overflow-auto">
+                <div
+                  className="border border-border bg-white p-3 text-xs text-black shadow-sm"
+                  style={{ width: Math.min(300, receiptPreviewWidth) }}
+                >
+                  <div className="text-center font-bold">{sample.receiptHeading}</div>
+                  {values.receiptShowSaleNumber ? <div>{sample.receiptNumber}</div> : null}
+                  <div>
+                    {values.receiptShowProductName ? sample.productName : ""}
+                    {values.receiptShowProductSku ? ` ${sample.sku}` : ""}
+                  </div>
+                  {values.receiptShowProductBarcode ? <div>{sample.barcode}</div> : null}
+                  <div className="flex justify-between gap-3">
+                    <span>{sample.quantity}</span>
+                    <span>{sample.lineTotal}</span>
+                  </div>
+                  {values.receiptShowTotal ? (
+                    <div className="flex justify-between font-bold">
+                      <span>{sample.total}</span>
+                      <span>{sample.lineTotal}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <label className="text-sm font-medium text-foreground">{t("layoutOrder")}</label>
+                <Select
+                  value={values.labelLayoutOrder}
+                  onValueChange={(value) => updateValue("labelLayoutOrder", value as LabelLayoutOrder)}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NAME_BARCODE_PRICE">{t("layoutNameBarcodePrice")}</SelectItem>
+                    <SelectItem value="PRICE_NAME_BARCODE">{t("layoutPriceNameBarcode")}</SelectItem>
+                    <SelectItem value="NAME_BARCODE">{t("layoutNameBarcode")}</SelectItem>
+                    <SelectItem value="PRICE_BARCODE">{t("layoutPriceBarcode")}</SelectItem>
+                    <SelectItem value="BARCODE_ONLY">{t("layoutBarcodeOnly")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["labelWidthMm", "widthMm"],
+                  ["labelHeightMm", "heightMm"],
+                  ["labelBarcodeHeightMm", "barcodeHeight"],
+                  ["labelDefaultCopies", "labelDefaultCopies"],
+                ] as const).map(([key, label]) => (
+                  <div key={key} className="space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">{t(label)}</label>
+                    <Input
+                      type="number"
+                      value={values[key]}
+                      onChange={(event) => updateValue(key, Number(event.target.value))}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["labelShowPrice", "showPrice"],
+                  ["labelShowProductName", "showProductName"],
+                  ["labelShowSku", "showSku"],
+                  ["labelShowBarcodeText", "showBarcodeText"],
+                ] as const).map(([key, label]) => (
+                  <ToggleRow
+                    key={key}
+                    label={t(label)}
+                    checked={values[key]}
+                    disabled={!canEdit}
+                    onChange={(checked) => updateValue(key, checked)}
+                  />
+                ))}
+              </div>
+              <div
+                className="flex items-center justify-center border border-border bg-white p-3 text-center text-xs text-black shadow-sm"
+                style={{ minHeight: 120 }}
+              >
+                <div className="w-full">
+                  {barcodePreviewBlocks.map((block) => {
+                    if (block === "name" && values.labelShowProductName) {
+                      return <div key={block}>{sample.productName}</div>;
+                    }
+                    if (block === "price" && values.labelShowPrice) {
+                      return (
+                        <div key={block} className="text-base font-bold">
+                          {sample.price}
+                        </div>
+                      );
+                    }
+                    if (block === "barcode") {
+                      return (
+                        <div key={block}>
+                          <div className="my-2 h-8 w-full bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />
+                          {values.labelShowBarcodeText ? <div>{sample.barcode}</div> : null}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                  {values.labelShowSku ? <div>{sample.sku}</div> : null}
+                </div>
+              </div>
+            </MobileWizardStep>
+
+            <MobileWizardStep
+              step={6}
+              title={t("wizardTestTitle")}
+              description={t("wizardTestDescription")}
+              status="neutral"
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 w-full"
+                onClick={() => void handleTestPrint("receipt")}
+                disabled={
+                  testAction !== null ||
+                  values.receiptPrintProvider !== "QZ_TRAY" ||
+                  qzStatus !== "connected"
+                }
+              >
+                {testAction === "receipt" ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <PrintIcon className="h-4 w-4" />
+                )}
+                {t("testReceiptPrint")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 w-full"
+                onClick={() => void handleTestPrint("barcode")}
+                disabled={
+                  testAction !== null ||
+                  values.labelPrintProvider !== "QZ_TRAY" ||
+                  qzStatus !== "connected"
+                }
+              >
+                {testAction === "barcode" ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <PrintIcon className="h-4 w-4" />
+                )}
+                {t("testBarcodePrint")}
+              </Button>
+            </MobileWizardStep>
+
+            <MobileWizardStep
+              step={7}
+              title={t("wizardReadyTitle")}
+              description={qzMobileReady ? t("autoPrintReadyHint") : t("wizardReadyDescription")}
+              status={qzMobileReady ? "ready" : "warning"}
+            >
+              <div
+                className={`border p-3 text-sm leading-relaxed ${
+                  qzMobileReady
+                    ? "border-success/40 bg-success/10 text-success"
+                    : "border-warning/40 bg-warning/10 text-warning"
+                }`}
+              >
+                <p className="font-semibold">
+                  {qzMobileReady ? t("autoPrintReady") : t("autoPrintNeedsSetup")}
+                </p>
+                <p className="mt-1 text-xs">
+                  {qzMobileReady ? t("autoPrintReadyHint") : t("autoPrintSetupRequired")}
+                </p>
+              </div>
+              <MobileStatusRow
+                label={t("connectionStatus")}
+                value={qzStatusLabel}
+                ready={qzStatus === "connected"}
+              />
+              <MobileStatusRow
+                label={t("signingStatus")}
+                value={qzRequestSigningWorks ? t("yes") : t("no")}
+                ready={qzRequestSigningWorks}
+              />
+              <MobileStatusRow
+                label={t("clientTrustStatus")}
+                value={qzTerminalProvisioned ? t("qzClientProvisioned") : t("qzClientProvisionMissing")}
+                ready={qzTerminalProvisioned}
+              />
+              <MobileStatusRow
+                label={t("printerStatus")}
+                value={hasSavedPrinters ? t("printersSaved") : t("printersNotSelected")}
+                ready={hasSavedPrinters}
+              />
+            </MobileWizardStep>
+
+            <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 border border-border bg-background p-3 shadow-lg">
+              <Button
+                type="button"
+                className="h-12 w-full"
+                onClick={handleSave}
+                disabled={!canEdit || !storeId || updateMutation.isLoading || settingsQuery.isLoading}
+              >
+                {updateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                {tCommon("save")}
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      <div className="hidden space-y-6 md:block">
       <Card>
         <CardHeader>
           <CardTitle>{t("storeScopeTitle")}</CardTitle>
@@ -1459,6 +2039,7 @@ const PrintingSettingsPage = () => {
           </div>
         </>
       ) : null}
+    </div>
     </div>
   );
 };

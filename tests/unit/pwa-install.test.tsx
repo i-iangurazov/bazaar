@@ -7,14 +7,18 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-li
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PwaInstallButton } from "@/components/pwa-install-button";
-import { type BeforeInstallPromptEvent, detectPwaEnvironment, usePwaInstall } from "@/hooks/usePwaInstall";
+import {
+  type BeforeInstallPromptEvent,
+  detectPwaEnvironment,
+  usePwaInstall,
+} from "@/hooks/usePwaInstall";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) =>
     ({
-      "buttonLabel": "Install app",
-      "installedToast": "Installed",
-      "close": "Close",
+      buttonLabel: "Install app",
+      installedToast: "Installed",
+      close: "Close",
       "ios.title": "Install on iOS",
       "ios.subtitle": "Use Safari",
       "ios.steps.openSafari": "Open Safari",
@@ -38,9 +42,8 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("@/components/ui/toast", async () => {
-  const actual = await vi.importActual<typeof import("@/components/ui/toast")>(
-    "@/components/ui/toast",
-  );
+  const actual =
+    await vi.importActual<typeof import("@/components/ui/toast")>("@/components/ui/toast");
   return {
     ...actual,
     useToast: () => ({ toast: vi.fn() }),
@@ -169,10 +172,15 @@ describe("PWA install utilities", () => {
   });
 
   it("header source keeps install next to existing header actions", () => {
-    const appShellSource = readFileSync(resolve(process.cwd(), "src/components/app-shell.tsx"), "utf8");
+    const appShellSource = readFileSync(
+      resolve(process.cwd(), "src/components/app-shell.tsx"),
+      "utf8",
+    );
 
-    expect(appShellSource).toContain("<PageTipsButton />\n            <PwaInstallButton />\n            <LanguageSwitcher />");
-    expect(appShellSource).toContain("<PageTipsButton />\n                  <PwaInstallButton />\n                  <LanguageSwitcher />");
+    expect(appShellSource).toMatch(
+      /<PageTipsButton \/>\s+<PwaInstallButton \/>\s+<LanguageSwitcher \/>/,
+    );
+    expect(appShellSource).toContain("MobileAppShell");
   });
 
   it("uses a portaled mobile sheet for install guidance so the header cannot clip it", () => {
@@ -183,7 +191,7 @@ describe("PWA install utilities", () => {
 
     expect(buttonSource).toContain("usePortal");
     expect(buttonSource).toContain("mobileSheet");
-    expect(buttonSource).toContain("headerClassName=\"p-4 sm:p-6\"");
-    expect(buttonSource).toContain("bodyClassName=\"p-4 sm:p-6\"");
+    expect(buttonSource).toContain('headerClassName="p-4 sm:p-6"');
+    expect(buttonSource).toContain('bodyClassName="p-4 sm:p-6"');
   });
 });
