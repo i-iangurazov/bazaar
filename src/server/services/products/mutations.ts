@@ -358,13 +358,6 @@ export const importProductsCsvMutation = async ({
       throw new TRPCError({ code: "BAD_REQUEST", message: "invalidInput" });
     }
 
-    if (mode === "full") {
-      const invalidFullRows = input.rows.some((row) => !row.name || !row.unit);
-      if (invalidFullRows) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "invalidInput" });
-      }
-    }
-
     if (
       input.rows.some((row) => row.minStock !== undefined) &&
       (mode === "full" || input.updateMask?.includes("minStock")) &&
@@ -382,6 +375,10 @@ export const importProductsCsvMutation = async ({
       storeId: input.storeId,
       mode,
       updateMask: input.updateMask as ImportUpdateField[] | undefined,
+      existingBehavior: input.existingBehavior,
+      emptyValueBehavior: input.emptyValueBehavior,
+      stockBehavior: input.stockBehavior,
+      rowActions: input.rowActions,
     });
 
     return {
@@ -430,7 +427,9 @@ export const previewProductsCsvImportMutation = async ({
       storeId: input.storeId,
       mode,
       updateMask: input.updateMask as ImportUpdateField[] | undefined,
+      existingBehavior: input.existingBehavior,
       previewLimit: input.previewLimit,
+      rowActions: input.rowActions,
       logger,
     });
   } catch (error) {

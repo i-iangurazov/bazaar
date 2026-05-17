@@ -3,15 +3,20 @@ import type { Logger } from "pino";
 
 import { logProfileSection } from "@/server/profiling/perf";
 import { decimalToNumber } from "@/server/services/products/serializers";
+import type { ProductDuplicateMatch } from "@/server/services/products/diagnostics";
 import {
-  listProductsByNormalizedNames,
-  normalizeProductNameForDiagnostics,
-  type ProductDuplicateMatch,
-} from "@/server/services/products/diagnostics";
+  productImportMatchIsBlocking,
+  productImportMatchIsExisting,
+  resolveProductImportMatch,
+  type ProductImportMatch,
+  type ProductImportMatchReason,
+} from "@/server/services/products/importMatching";
 import type {
   ImportCsvRowInput,
   ImportMode,
   ImportUpdateField,
+  ProductExistingBehavior,
+  ProductImportRowAction,
 } from "@/server/trpc/routers/products.schemas";
 
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
@@ -27,6 +32,23 @@ type ImportPreviewChange = {
 type ImportPreviewWarning =
   | {
       code: "barcodeConflict";
+      severity: "blocking";
+      barcode: string;
+      productId: string;
+      productSku: string;
+      productName: string;
+      isDeleted: boolean;
+    }
+  | {
+      code: "crossStoreSkuConflict";
+      severity: "blocking";
+      productId: string;
+      productSku: string;
+      productName: string;
+      isDeleted: boolean;
+    }
+  | {
+      code: "crossStoreBarcodeConflict";
       severity: "blocking";
       barcode: string;
       productId: string;
@@ -59,13 +81,50 @@ type ImportPreviewRow = {
   sku: string;
   name: string | null;
   action: "create" | "update" | "skipped";
+  matchStatus:
+    | "new"
+    | "matched_barcode"
+    | "matched_sku"
+    | "matched_name_category"
+    | "matched_name_price"
+    | "possible_duplicate"
+    | "cross_store_conflict"
+    | "error";
+  matchReason: ProductImportMatchReason;
   existingProduct: ProductDuplicateMatch | null;
+  possibleDuplicate: ProductDuplicateMatch | null;
   changes: ImportPreviewChange[];
   warnings: ImportPreviewWarning[];
   hasBlockingWarnings: boolean;
 };
 
 const DEFAULT_IMPORT_PREVIEW_ROW_LIMIT = 200;
+
+const existingPreviewProductSelect = {
+  id: true,
+  sku: true,
+  name: true,
+  isDeleted: true,
+  category: true,
+  categories: true,
+  unit: true,
+  description: true,
+  photoUrl: true,
+  basePriceKgs: true,
+  images: {
+    select: { url: true, position: true },
+    orderBy: { position: "asc" },
+  },
+  variants: {
+    where: { isActive: true },
+    select: { name: true, sku: true, attributes: true },
+    orderBy: { createdAt: "asc" },
+  },
+} as const;
+
+type ExistingPreviewProduct = Prisma.ProductGetPayload<{
+  select: typeof existingPreviewProductSelect;
+}>;
 
 const normalizeBarcodes = (barcodes?: string[]) =>
   Array.from(
@@ -292,6 +351,46 @@ const selectPreviewRows = (rows: ImportPreviewRow[], limit: number) => {
   );
 };
 
+const matchProductSummary = (match: ProductImportMatch): ProductDuplicateMatch | null =>
+  match.product
+    ? {
+        id: match.product.id,
+        sku: match.product.sku,
+        name: match.product.name,
+        isDeleted: match.product.isDeleted,
+      }
+    : null;
+
+const resolveMatchStatus = (match: ProductImportMatch): ImportPreviewRow["matchStatus"] => {
+  switch (match.reason) {
+    case "barcode":
+      return "matched_barcode";
+    case "sku":
+      return "matched_sku";
+    case "name_category":
+      return "matched_name_category";
+    case "name_price":
+      return "matched_name_price";
+    case "possible_duplicate":
+      return "possible_duplicate";
+    case "cross_store_barcode":
+    case "cross_store_sku":
+      return "cross_store_conflict";
+    case "none":
+      return "new";
+  }
+};
+
+const resolveRowAction = (match: ProductImportMatch, existingBehavior: ProductExistingBehavior) => {
+  if (productImportMatchIsBlocking(match) || match.reason === "possible_duplicate") {
+    return "skipped" as const;
+  }
+  if (productImportMatchIsExisting(match)) {
+    return existingBehavior === "skip" ? ("skipped" as const) : ("update" as const);
+  }
+  return "create" as const;
+};
+
 export const previewProductImport = async ({
   prisma,
   organizationId,
@@ -299,7 +398,9 @@ export const previewProductImport = async ({
   storeId,
   mode,
   updateMask: updateMaskInput,
+  existingBehavior: existingBehaviorInput,
   previewLimit: previewLimitInput,
+  rowActions,
   logger,
 }: {
   prisma: PrismaDbClient;
@@ -308,212 +409,77 @@ export const previewProductImport = async ({
   storeId?: string;
   mode?: ImportMode;
   updateMask?: ImportUpdateField[];
+  existingBehavior?: ProductExistingBehavior;
   previewLimit?: number;
+  rowActions?: Array<{
+    sourceRowNumber: number;
+    action: ProductImportRowAction;
+    existingProductId?: string;
+  }>;
   logger?: Logger;
 }) => {
   const updateMask = new Set<ImportUpdateField>(updateMaskInput ?? []);
-  const uniqueSkus = Array.from(
-    new Set(rows.map((row) => row.sku.trim()).filter((value) => value.length > 0)),
+  const existingBehavior = existingBehaviorInput ?? "update";
+  const rowDecisionByNumber = new Map(
+    (rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),
   );
-  const incomingBarcodes = Array.from(
-    new Set(
-      rows.flatMap((row) =>
-        shouldApplyImportField(mode, updateMask, "barcodes") ? normalizeBarcodes(row.barcodes) : [],
-      ),
-    ),
-  );
-  const normalizedNames = Array.from(
-    new Set(
-      rows
-        .map((row) => normalizeProductNameForDiagnostics(row.name))
-        .filter((value) => value.length >= 4),
-    ),
-  );
+  const productDetailsById = new Map<string, ExistingPreviewProduct | null>();
+  const existingBarcodesByProductId = new Map<string, string[]>();
+  const existingBaseCostByProductId = new Map<string, number | null>();
+  const existingMinStockByProductId = new Map<string, number | null>();
 
-  const existingProductsStartedAt = Date.now();
-  const existingProducts = uniqueSkus.length
-    ? await prisma.product.findMany({
-        where: {
-          organizationId,
-          sku: { in: uniqueSkus },
-        },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          isDeleted: true,
-          category: true,
-          categories: true,
-          unit: true,
-          description: true,
-          photoUrl: true,
-          basePriceKgs: true,
-          images: {
-            select: { url: true, position: true },
-            orderBy: { position: "asc" },
-          },
-          variants: {
-            where: { isActive: true },
-            select: { name: true, sku: true, attributes: true },
-            orderBy: { createdAt: "asc" },
-          },
-        },
-      })
-    : [];
-  if (logger) {
-    logProfileSection({
-      logger,
-      scope: "products.previewImportCsv",
-      section: "existingProductsLookup",
-      startedAt: existingProductsStartedAt,
-      details: {
-        rows: rows.length,
-        uniqueSkus: uniqueSkus.length,
-      },
-      slowThresholdMs: 120,
+  const loadExistingProductDetails = async (productId: string) => {
+    if (productDetailsById.has(productId)) {
+      return productDetailsById.get(productId) ?? null;
+    }
+    const product = await prisma.product.findFirst({
+      where: { id: productId, organizationId },
+      select: existingPreviewProductSelect,
     });
-  }
+    productDetailsById.set(productId, product);
+    return product;
+  };
 
-  const existingProductIds = existingProducts.map((product) => product.id);
-
-  const auxiliaryReadsStartedAt = Date.now();
-  const [
-    existingBarcodeRows,
-    existingCostRows,
-    existingMinStockRows,
-    conflictingBarcodeRows,
-    likelyNameRows,
-  ] = await Promise.all([
-    existingProductIds.length
-      ? prisma.productBarcode.findMany({
-          where: {
+  const loadAuxiliaryExistingData = async (productId: string) => {
+    if (!existingBarcodesByProductId.has(productId)) {
+      const barcodes = await prisma.productBarcode.findMany({
+        where: { organizationId, productId },
+        select: { value: true },
+      });
+      existingBarcodesByProductId.set(
+        productId,
+        barcodes.map((barcode) => barcode.value),
+      );
+    }
+    if (!existingBaseCostByProductId.has(productId)) {
+      const cost = await prisma.productCost.findUnique({
+        where: {
+          organizationId_productId_variantKey: {
             organizationId,
-            productId: { in: existingProductIds },
-          },
-          select: {
-            productId: true,
-            value: true,
-          },
-        })
-      : Promise.resolve([]),
-    existingProductIds.length
-      ? prisma.productCost.findMany({
-          where: {
-            organizationId,
-            productId: { in: existingProductIds },
+            productId,
             variantKey: "BASE",
           },
-          select: {
-            productId: true,
-            avgCostKgs: true,
-          },
-        })
-      : Promise.resolve([]),
-    storeId && existingProductIds.length
-      ? prisma.reorderPolicy.findMany({
-          where: {
-            storeId,
-            productId: { in: existingProductIds },
-          },
-          select: {
-            productId: true,
-            minStock: true,
-          },
-        })
-      : Promise.resolve([]),
-    incomingBarcodes.length
-      ? prisma.productBarcode.findMany({
-          where: {
-            organizationId,
-            value: { in: incomingBarcodes },
-          },
-          select: {
-            value: true,
-            product: {
-              select: {
-                id: true,
-                sku: true,
-                name: true,
-                isDeleted: true,
-              },
-            },
-          },
-          orderBy: [{ value: "asc" }, { product: { name: "asc" } }],
-        })
-      : Promise.resolve([]),
-    normalizedNames.length
-      ? listProductsByNormalizedNames({
-          prisma,
-          organizationId,
-          normalizedNames,
-        })
-      : Promise.resolve([]),
-  ]);
-  if (logger) {
-    logProfileSection({
-      logger,
-      scope: "products.previewImportCsv",
-      section: "auxiliaryReads",
-      startedAt: auxiliaryReadsStartedAt,
-      details: {
-        existingBarcodeRows: existingBarcodeRows.length,
-        existingCostRows: existingCostRows.length,
-        existingMinStockRows: existingMinStockRows.length,
-        conflictingBarcodeRows: conflictingBarcodeRows.length,
-        likelyNameRows: likelyNameRows.length,
-      },
-      slowThresholdMs: 120,
-    });
-  }
-
-  const existingBySku = new Map(existingProducts.map((product) => [product.sku, product]));
-  const existingBarcodesByProductId = new Map<string, string[]>();
-  existingBarcodeRows.forEach((row) => {
-    const list = existingBarcodesByProductId.get(row.productId) ?? [];
-    list.push(row.value);
-    existingBarcodesByProductId.set(row.productId, list);
-  });
-  const existingBaseCostByProductId = new Map(
-    existingCostRows.map((row) => [row.productId, decimalToNumber(row.avgCostKgs)]),
-  );
-  const existingMinStockByProductId = new Map(
-    existingMinStockRows.map((row) => [row.productId, row.minStock]),
-  );
-  const conflictingBarcodesByValue = new Map<string, ProductDuplicateMatch[]>();
-  conflictingBarcodeRows.forEach((row) => {
-    const list = conflictingBarcodesByValue.get(row.value) ?? [];
-    list.push(row.product);
-    conflictingBarcodesByValue.set(row.value, list);
-  });
-  const likelyNameMatchesByNormalized = new Map<string, ProductDuplicateMatch[]>();
-  likelyNameRows.forEach(({ normalizedName, ...match }) => {
-    const list = likelyNameMatchesByNormalized.get(normalizedName) ?? [];
-    list.push(match);
-    likelyNameMatchesByNormalized.set(normalizedName, list);
-  });
+        },
+        select: { avgCostKgs: true },
+      });
+      existingBaseCostByProductId.set(productId, cost ? decimalToNumber(cost.avgCostKgs) : null);
+    }
+    if (storeId && !existingMinStockByProductId.has(productId)) {
+      const policy = await prisma.reorderPolicy.findUnique({
+        where: { storeId_productId: { storeId, productId } },
+        select: { minStock: true },
+      });
+      existingMinStockByProductId.set(productId, policy?.minStock ?? null);
+    }
+  };
 
   const buildPreviewRowsStartedAt = Date.now();
-  const previewRows: ImportPreviewRow[] = rows.map((row, index) => {
+  const previewRows: ImportPreviewRow[] = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
     const sourceRowNumber = row.sourceRowNumber ?? index + 1;
     const sku = row.sku.trim();
     const name = row.name?.trim() ?? null;
-    const existing = existingBySku.get(sku) ?? null;
-
-    if (!existing && mode === "update_selected") {
-      return {
-        sourceRowNumber,
-        sku,
-        name,
-        action: "skipped",
-        existingProduct: null,
-        changes: [],
-        warnings: [{ code: "missingExistingProduct", severity: "warning" }],
-        hasBlockingWarnings: false,
-      };
-    }
-
-    const warnings: ImportPreviewWarning[] = [];
-    const changes: ImportPreviewChange[] = [];
     const normalizedRowBarcodes = shouldApplyImportField(mode, updateMask, "barcodes")
       ? normalizeBarcodes(row.barcodes)
       : [];
@@ -523,38 +489,94 @@ export const previewProductImport = async ({
     const normalizedRowColor = shouldApplyImportField(mode, updateMask, "color")
       ? normalizeRowColor(row.color)
       : null;
-    const normalizedName = normalizeProductNameForDiagnostics(name);
+    const match = storeId
+      ? await resolveProductImportMatch({
+          prisma,
+          organizationId,
+          storeId,
+          sku,
+          barcodes: normalizedRowBarcodes,
+          name,
+          categories: normalizedRowCategories,
+          basePriceKgs: row.basePriceKgs,
+        })
+      : ({ reason: "none", product: null } as ProductImportMatch);
+    const rowDecision = rowDecisionByNumber.get(sourceRowNumber);
+    const matchedExistingSummary = productImportMatchIsExisting(match)
+      ? matchProductSummary(match)
+      : null;
+    const possibleDuplicate =
+      match.reason === "possible_duplicate" ? matchProductSummary(match) : null;
+    const existingSummary =
+      rowDecision?.action === "update" && possibleDuplicate
+        ? possibleDuplicate
+        : rowDecision?.action === "create"
+          ? null
+          : matchedExistingSummary;
+    const existing = existingSummary ? await loadExistingProductDetails(existingSummary.id) : null;
+    if (existing) {
+      await loadAuxiliaryExistingData(existing.id);
+    }
+    const action =
+      mode === "update_selected" && !existing
+        ? "skipped"
+        : productImportMatchIsBlocking(match)
+          ? "skipped"
+          : rowDecision?.action === "skip"
+            ? "skipped"
+            : rowDecision?.action === "create" && match.reason === "possible_duplicate"
+              ? "create"
+              : rowDecision?.action === "update" && existing
+                ? "update"
+                : resolveRowAction(match, existingBehavior);
 
-    normalizedRowBarcodes.forEach((barcode) => {
-      const conflicts = (conflictingBarcodesByValue.get(barcode) ?? []).filter(
-        (match) => match.id !== existing?.id,
-      );
-      conflicts.forEach((match) => {
-        warnings.push({
-          code: "barcodeConflict",
-          severity: "blocking",
-          barcode,
-          productId: match.id,
-          productSku: match.sku,
-          productName: match.name,
-          isDeleted: match.isDeleted,
-        });
+    if (!existing && mode === "update_selected") {
+      previewRows.push({
+        sourceRowNumber,
+        sku,
+        name,
+        action: "skipped",
+        matchStatus: resolveMatchStatus(match),
+        matchReason: match.reason,
+        existingProduct: null,
+        possibleDuplicate,
+        changes: [],
+        warnings: [{ code: "missingExistingProduct", severity: "warning" }],
+        hasBlockingWarnings: false,
       });
-    });
+      continue;
+    }
 
-    if (normalizedName.length >= 4) {
-      const duplicateMatches = (likelyNameMatchesByNormalized.get(normalizedName) ?? []).filter(
-        (match) => match.id !== existing?.id,
-      );
-      duplicateMatches.forEach((match) => {
-        warnings.push({
-          code: "likelyDuplicateName",
-          severity: "warning",
-          productId: match.id,
-          productSku: match.sku,
-          productName: match.name,
-          isDeleted: match.isDeleted,
-        });
+    const warnings: ImportPreviewWarning[] = [];
+    const changes: ImportPreviewChange[] = [];
+
+    if (match.reason === "cross_store_barcode" && match.product) {
+      warnings.push({
+        code: "crossStoreBarcodeConflict",
+        severity: "blocking",
+        barcode: match.barcode ?? normalizedRowBarcodes[0] ?? "",
+        productId: match.product.id,
+        productSku: match.product.sku,
+        productName: match.product.name,
+        isDeleted: match.product.isDeleted,
+      });
+    } else if (match.reason === "cross_store_sku" && match.product) {
+      warnings.push({
+        code: "crossStoreSkuConflict",
+        severity: "blocking",
+        productId: match.product.id,
+        productSku: match.product.sku,
+        productName: match.product.name,
+        isDeleted: match.product.isDeleted,
+      });
+    } else if (match.reason === "possible_duplicate" && match.product) {
+      warnings.push({
+        code: "likelyDuplicateName",
+        severity: "warning",
+        productId: match.product.id,
+        productSku: match.product.sku,
+        productName: match.product.name,
+        isDeleted: match.product.isDeleted,
       });
     }
 
@@ -673,6 +695,9 @@ export const previewProductImport = async ({
           row.minStock,
         );
       }
+      if (shouldApplyImportField(mode, updateMask, "stockQty") && row.stockQty !== undefined) {
+        addChange(changes, "stockQty", null, row.stockQty);
+      }
     } else {
       if (name) {
         changes.push({ field: "name", before: null, after: name });
@@ -713,26 +738,25 @@ export const previewProductImport = async ({
       if (row.minStock !== undefined) {
         changes.push({ field: "minStock", before: null, after: row.minStock });
       }
+      if (row.stockQty !== undefined) {
+        changes.push({ field: "stockQty", before: null, after: row.stockQty });
+      }
     }
 
-    return {
+    previewRows.push({
       sourceRowNumber,
       sku,
       name,
-      action: existing ? "update" : "create",
-      existingProduct: existing
-        ? {
-            id: existing.id,
-            sku: existing.sku,
-            name: existing.name,
-            isDeleted: existing.isDeleted,
-          }
-        : null,
+      action,
+      matchStatus: resolveMatchStatus(match),
+      matchReason: match.reason,
+      existingProduct: existingSummary,
+      possibleDuplicate,
       changes,
       warnings,
       hasBlockingWarnings: warnings.some((warning) => warning.severity === "blocking"),
-    };
-  });
+    });
+  }
 
   const summaryCounts = previewRows.reduce(
     (acc, row) => {
@@ -747,6 +771,9 @@ export const previewProductImport = async ({
       acc.blockingWarningCount += row.warnings.filter(
         (warning) => warning.severity === "blocking",
       ).length;
+      if (row.matchStatus === "possible_duplicate") {
+        acc.possibleDuplicateCount += 1;
+      }
       return acc;
     },
     {
@@ -755,6 +782,7 @@ export const previewProductImport = async ({
       skipped: 0,
       warningCount: 0,
       blockingWarningCount: 0,
+      possibleDuplicateCount: 0,
     },
   );
   const previewLimit = Math.max(

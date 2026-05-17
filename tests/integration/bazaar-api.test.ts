@@ -167,6 +167,8 @@ describeDb("bazaar api integration", () => {
       sku: "COFFEE-1KG",
       attributes: { size: "1 kg" },
       attributeValues: [{ key: "size", value: "1 kg" }],
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
       stockQty: 3,
       priceKgs: 1200,
     });

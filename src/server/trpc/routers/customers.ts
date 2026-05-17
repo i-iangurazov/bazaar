@@ -26,6 +26,7 @@ const importRowSchema = z.object({
   email: z.string().max(254).optional().nullable(),
   phone: z.string().max(80).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
+  createdAt: z.union([z.string(), z.date()]).optional().nullable(),
   rowNumber: z.number().int().min(1).optional(),
 });
 
@@ -36,7 +37,10 @@ export const customersRouter = router({
         .object({
           storeId: z.string().min(1).optional().nullable(),
           search: z.string().max(200).optional().nullable(),
-          source: z.union([z.nativeEnum(CustomerSource), z.literal("ALL")]).optional().nullable(),
+          source: z
+            .union([z.nativeEnum(CustomerSource), z.literal("ALL")])
+            .optional()
+            .nullable(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(100).optional(),
         })

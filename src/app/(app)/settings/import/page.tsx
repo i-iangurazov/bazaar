@@ -61,6 +61,7 @@ type ImportRow = {
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   minStock?: number;
+  stockQty?: number;
 };
 
 type RawRow = Record<string, unknown>;
@@ -78,7 +79,8 @@ type MappingKey =
   | "basePriceKgs"
   | "purchasePriceKgs"
   | "avgCostKgs"
-  | "minStock";
+  | "minStock"
+  | "stockQty";
 
 type MappingState = Record<MappingKey, string>;
 
@@ -111,7 +113,18 @@ type ImportUpdateField =
   | "basePriceKgs"
   | "purchasePriceKgs"
   | "avgCostKgs"
-  | "minStock";
+  | "minStock"
+  | "stockQty";
+
+type ProductExistingBehavior = "update" | "skip";
+type ProductEmptyValueBehavior = "keep" | "overwrite";
+type ProductStockBehavior = "ignore" | "set" | "add";
+type ProductImportRowAction = "create" | "update" | "skip";
+type ProductImportRowDecision = {
+  sourceRowNumber: number;
+  action: ProductImportRowAction;
+  existingProductId?: string;
+};
 
 type ImportRunSummary = {
   rows?: number;
@@ -121,6 +134,9 @@ type ImportRunSummary = {
   source?: string;
   mode?: ImportMode;
   updateMask?: ImportUpdateField[] | null;
+  existingBehavior?: ProductExistingBehavior;
+  emptyValueBehavior?: ProductEmptyValueBehavior;
+  stockBehavior?: ProductStockBehavior;
   targetStoreId?: string;
   targetStoreName?: string;
   images?: {
@@ -130,7 +146,21 @@ type ImportRunSummary = {
   };
 };
 
-type CustomerMappingKey = "name" | "email" | "phone" | "address";
+type CustomerMappingKey =
+  | "name"
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "phone"
+  | "phoneFallback"
+  | "address"
+  | "address1"
+  | "address2"
+  | "city"
+  | "province"
+  | "country"
+  | "zip"
+  | "createdAt";
 type CustomerMappingState = Record<CustomerMappingKey, string>;
 type CustomerImportRunSummary = {
   rows?: number;
@@ -148,6 +178,14 @@ type CustomerImportPreviewData = {
     phone: string | null;
     address: string | null;
     action: "created" | "updated" | "skipped";
+    matchStatus: "new" | "matched_email" | "matched_phone" | "possible_duplicate" | "error";
+    matchedCustomer?: {
+      id: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+    } | null;
+    createdAt?: Date | string | null;
     errors: string[];
     warnings: string[];
   }>;
@@ -507,6 +545,11 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
     ["minstock", "minimumstock", "минимальныйостаток", "миностаток", "минкалдык"],
     { allowContains: true },
   ),
+  stockQty: detectColumn(
+    headers,
+    ["stock", "quantity", "qty", "onhand", "on hand", "остаток", "количество"],
+    { allowContains: true },
+  ),
   photoUrl: detectColumn(
     headers,
     [
@@ -553,12 +596,83 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
   barcodes: detectColumn(headers, ["barcode", "barcodes", "штрихкод", "штрихкоды"]),
 });
 
-const buildDefaultCustomerMapping = (headers: string[]): CustomerMappingState => ({
-  name: detectColumn(headers, ["name", "customer", "client", "клиент", "имя", "фио", "аты"]),
-  email: detectColumn(headers, ["email", "e-mail", "почта", "элпочта"]),
-  phone: detectColumn(headers, ["phone", "телефон", "номер", "тел", "байланыш"]),
-  address: detectColumn(headers, ["address", "адрес", "дарек"]),
+const emptyCustomerMapping = (): CustomerMappingState => ({
+  name: "",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  phoneFallback: "",
+  address: "",
+  address1: "",
+  address2: "",
+  city: "",
+  province: "",
+  country: "",
+  zip: "",
+  createdAt: "",
 });
+
+const buildDefaultCustomerMapping = (headers: string[]): CustomerMappingState => ({
+  name: detectColumn(headers, [
+    "name",
+    "full name",
+    "customer name",
+    "customer",
+    "client",
+    "клиент",
+    "фио",
+  ]),
+  firstName: detectColumn(headers, ["first name", "firstname", "first_name", "имя", "аты"]),
+  lastName: detectColumn(headers, ["last name", "lastname", "last_name", "фамилия"]),
+  email: detectColumn(headers, ["email", "e-mail", "почта", "электронная почта", "элпочта"]),
+  phone: detectColumn(headers, [
+    "phone",
+    "телефон",
+    "номер",
+    "тел",
+    "mobile",
+    "customer phone",
+    "байланыш",
+  ]),
+  phoneFallback: detectColumn(headers, [
+    "default address phone",
+    "address phone",
+    "default_address_phone",
+  ]),
+  address: detectColumn(headers, ["address", "адрес", "дарек"]),
+  address1: detectColumn(headers, ["default address address1", "address1", "address 1", "улица"]),
+  address2: detectColumn(headers, [
+    "default address address2",
+    "address2",
+    "address 2",
+    "квартира",
+  ]),
+  city: detectColumn(headers, ["default address city", "city", "город", "шаар"]),
+  province: detectColumn(headers, [
+    "default address province code",
+    "province",
+    "province code",
+    "region",
+    "область",
+  ]),
+  country: detectColumn(headers, [
+    "default address country code",
+    "country",
+    "country code",
+    "страна",
+  ]),
+  zip: detectColumn(headers, ["default address zip", "zip", "postal code", "postcode", "индекс"]),
+  createdAt: detectColumn(headers, ["created", "created at", "date created", "создан", "создано"]),
+});
+
+const detectCustomerImportSource = (headers: string[]) => {
+  const normalized = headers.map((header) => normalizeHeader(header));
+  const looksLikeShopify =
+    normalized.some((header) => header.includes("defaultaddress")) ||
+    normalized.some((header) => header.includes("accepts") || header.includes("totalorders"));
+  return looksLikeShopify ? "Shopify import" : "Import";
+};
 
 const DRY_RUN_PREVIEW_ROW_LIMIT = 100;
 const MAX_IMPORT_TRANSPORT_ROWS = 500;
@@ -571,6 +685,10 @@ type ImportTransportBase = {
   mode: ImportMode;
   updateMask?: ImportUpdateField[];
   previewLimit?: number;
+  existingBehavior?: ProductExistingBehavior;
+  emptyValueBehavior?: ProductEmptyValueBehavior;
+  stockBehavior?: ProductStockBehavior;
+  rowActions?: ProductImportRowDecision[];
 };
 
 type ImportTransportPayload = ImportTransportBase & {
@@ -635,6 +753,7 @@ const createEmptyDryRunSummary = (): DryRunPreviewSummary => ({
   skipped: 0,
   warningCount: 0,
   blockingWarningCount: 0,
+  possibleDuplicateCount: 0,
   totalRows: 0,
   returnedRows: 0,
   truncated: false,
@@ -681,6 +800,8 @@ const mergeDryRunPreview = (
       warningCount: current.summary.warningCount + next.summary.warningCount,
       blockingWarningCount:
         current.summary.blockingWarningCount + next.summary.blockingWarningCount,
+      possibleDuplicateCount:
+        (current.summary.possibleDuplicateCount ?? 0) + (next.summary.possibleDuplicateCount ?? 0),
       totalRows,
       returnedRows: rows.length,
       truncated: rows.length < totalRows,
@@ -709,6 +830,7 @@ const resetImportFormState = (setters: {
     purchasePriceKgs: "",
     avgCostKgs: "",
     minStock: "",
+    stockQty: "",
     photoUrl: "",
     variants: "",
     barcodes: "",
@@ -733,12 +855,8 @@ const CustomerImportPanel = ({
   const [fileName, setFileName] = useState<string | null>(null);
   const [rawRows, setRawRows] = useState<RawRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<CustomerMappingState>({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-  });
+  const [mapping, setMapping] = useState<CustomerMappingState>(() => emptyCustomerMapping());
+  const [importSourceLabel, setImportSourceLabel] = useState("Import");
   const [fileError, setFileError] = useState<string | null>(null);
   const [preview, setPreview] = useState<CustomerImportPreviewData | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -759,17 +877,53 @@ const CustomerImportPanel = ({
 
   const mappedRows = useMemo(
     () =>
-      rawRows.map((row, index) => ({
-        rowNumber: index + 2,
-        name: mapping.name ? normalizeValue(row[mapping.name]) : "",
-        email: mapping.email ? normalizeValue(row[mapping.email]) : "",
-        phone: mapping.phone ? normalizeValue(row[mapping.phone]) : "",
-        address: mapping.address ? normalizeValue(row[mapping.address]) : "",
-      })),
-    [mapping.address, mapping.email, mapping.name, mapping.phone, rawRows],
+      rawRows.map((row, index) => {
+        const firstName = mapping.firstName ? normalizeValue(row[mapping.firstName]) : "";
+        const lastName = mapping.lastName ? normalizeValue(row[mapping.lastName]) : "";
+        const fullName = mapping.name ? normalizeValue(row[mapping.name]) : "";
+        const email = mapping.email ? normalizeValue(row[mapping.email]) : "";
+        const primaryPhone = mapping.phone ? normalizeValue(row[mapping.phone]) : "";
+        const fallbackPhone = mapping.phoneFallback
+          ? normalizeValue(row[mapping.phoneFallback])
+          : "";
+        const phone = primaryPhone || fallbackPhone;
+        const name =
+          [firstName, lastName].filter(Boolean).join(" ") ||
+          fullName ||
+          firstName ||
+          lastName ||
+          (email.includes("@") ? email.split("@")[0] : email) ||
+          phone ||
+          "Без имени";
+        const addressParts = [
+          mapping.address ? normalizeValue(row[mapping.address]) : "",
+          mapping.address1 ? normalizeValue(row[mapping.address1]) : "",
+          mapping.address2 ? normalizeValue(row[mapping.address2]) : "",
+          mapping.city ? normalizeValue(row[mapping.city]) : "",
+          mapping.province ? normalizeValue(row[mapping.province]) : "",
+          mapping.country ? normalizeValue(row[mapping.country]) : "",
+          mapping.zip ? normalizeValue(row[mapping.zip]) : "",
+        ].filter(Boolean);
+        const createdAt = mapping.createdAt ? normalizeValue(row[mapping.createdAt]) : "";
+        return {
+          rowNumber: index + 2,
+          name,
+          email,
+          phone,
+          address: addressParts.join(", "),
+          createdAt: createdAt || undefined,
+        };
+      }),
+    [mapping, rawRows],
   );
 
-  const missingMapping = !mapping.name || (!mapping.email && !mapping.phone);
+  const missingMapping =
+    !mapping.name &&
+    !mapping.firstName &&
+    !mapping.lastName &&
+    !mapping.email &&
+    !mapping.phone &&
+    !mapping.phoneFallback;
   const canPreview = Boolean(targetStoreId && mappedRows.length && !missingMapping);
   const isPreviewing =
     canPreview &&
@@ -842,10 +996,11 @@ const CustomerImportPanel = ({
     setFileName(file.name);
     setRawRows([]);
     setHeaders([]);
-    setMapping({ name: "", email: "", phone: "", address: "" });
+    setMapping(emptyCustomerMapping());
     setPreview(null);
     setPreviewError(null);
     setLastSummary(null);
+    setImportSourceLabel("Import");
 
     try {
       if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
@@ -857,6 +1012,7 @@ const CustomerImportPanel = ({
         setRawRows(parsed.rows);
         setHeaders(parsed.headers);
         setMapping(buildDefaultCustomerMapping(parsed.headers));
+        setImportSourceLabel(detectCustomerImportSource(parsed.headers));
         setIsParsingFile(false);
         return;
       }
@@ -870,6 +1026,7 @@ const CustomerImportPanel = ({
           setRawRows(results.data);
           setHeaders(nextHeaders);
           setMapping(buildDefaultCustomerMapping(nextHeaders));
+          setImportSourceLabel(detectCustomerImportSource(nextHeaders));
           setIsParsingFile(false);
         },
         error: () => {
@@ -922,7 +1079,7 @@ const CustomerImportPanel = ({
       const result = await importMutation.mutateAsync({
         storeId: targetStoreId,
         rows: mappedRows,
-        source: fileName?.endsWith(".xlsx") || fileName?.endsWith(".xls") ? "xlsx" : "csv",
+        source: importSourceLabel,
       });
       setLastSummary(result.summary as CustomerImportRunSummary);
       const importedCount = (result.summary.created ?? 0) + (result.summary.updated ?? 0);
@@ -982,7 +1139,24 @@ const CustomerImportPanel = ({
         <CardContent className="space-y-4">
           {headers.length ? (
             <div className="grid gap-3 md:grid-cols-2">
-              {(["name", "email", "phone", "address"] as CustomerMappingKey[]).map((field) => (
+              {(
+                [
+                  "firstName",
+                  "lastName",
+                  "name",
+                  "email",
+                  "phone",
+                  "phoneFallback",
+                  "address1",
+                  "address2",
+                  "address",
+                  "city",
+                  "province",
+                  "country",
+                  "zip",
+                  "createdAt",
+                ] as CustomerMappingKey[]
+              ).map((field) => (
                 <div key={field} className="space-y-1.5">
                   <p className="text-sm font-medium">{t(`customerImport.fields.${field}`)}</p>
                   <Select
@@ -1075,6 +1249,8 @@ const CustomerImportPanel = ({
                       <TableHead>{t("customerImport.fields.email")}</TableHead>
                       <TableHead>{t("customerImport.fields.phone")}</TableHead>
                       <TableHead>{t("customerImport.fields.address")}</TableHead>
+                      <TableHead>{t("customerImport.fields.matchStatus")}</TableHead>
+                      <TableHead>{t("customerImport.fields.matchedCustomer")}</TableHead>
                       <TableHead>{t("customerImport.fields.action")}</TableHead>
                       <TableHead>{t("customerImport.fields.errors")}</TableHead>
                     </TableRow>
@@ -1087,13 +1263,34 @@ const CustomerImportPanel = ({
                         <TableCell>{row.email ?? "-"}</TableCell>
                         <TableCell>{row.phone ?? "-"}</TableCell>
                         <TableCell>{row.address ?? "-"}</TableCell>
+                        <TableCell>{t(`customerImport.matchStatus.${row.matchStatus}`)}</TableCell>
+                        <TableCell>
+                          {row.matchedCustomer ? (
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p className="font-medium text-foreground">
+                                {row.matchedCustomer.name}
+                              </p>
+                              <p>{row.matchedCustomer.email ?? row.matchedCustomer.phone ?? "-"}</p>
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
                         <TableCell>{t(`customerImport.actions.${row.action}`)}</TableCell>
                         <TableCell className={row.errors.length ? "text-danger" : undefined}>
                           {row.errors.length
                             ? row.errors
                                 .map((error) => t(`customerImport.errors.${error}`))
                                 .join(", ")
-                            : "-"}
+                            : row.warnings.length
+                              ? row.warnings
+                                  .map((warning) =>
+                                    warning.startsWith("customerConflicts:")
+                                      ? t("customerImport.warnings.customerConflicts")
+                                      : t(`customerImport.warnings.${warning}`),
+                                  )
+                                  .join(", ")
+                              : "-"}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1201,11 +1398,18 @@ const ImportPage = () => {
     purchasePriceKgs: "",
     avgCostKgs: "",
     minStock: "",
+    stockQty: "",
     photoUrl: "",
     variants: "",
     barcodes: "",
   });
   const [importMode, setImportMode] = useState<ImportMode>("full");
+  const [existingBehavior, setExistingBehavior] = useState<ProductExistingBehavior>("update");
+  const [emptyValueBehavior, setEmptyValueBehavior] = useState<ProductEmptyValueBehavior>("keep");
+  const [stockBehavior, setStockBehavior] = useState<ProductStockBehavior>("ignore");
+  const [productRowActions, setProductRowActions] = useState<
+    Record<number, ProductImportRowDecision>
+  >({});
   const [selectedUpdateFields, setSelectedUpdateFields] = useState<ImportUpdateField[]>([
     "basePriceKgs",
     "purchasePriceKgs",
@@ -1314,6 +1518,7 @@ const ImportPage = () => {
       { key: "purchasePriceKgs" as const, label: t("fieldPurchasePrice"), required: false },
       { key: "avgCostKgs" as const, label: t("fieldAvgCost"), required: false },
       { key: "minStock" as const, label: t("fieldMinStock"), required: false },
+      { key: "stockQty" as const, label: t("fieldStockQty"), required: false },
       { key: "photoUrl" as const, label: t("fieldPhotoUrl"), required: false },
       { key: "variants" as const, label: t("fieldVariants"), required: false },
       { key: "barcodes" as const, label: t("fieldBarcodes"), required: false },
@@ -1461,6 +1666,10 @@ const ImportPage = () => {
           : "";
       const minStockCandidate =
         shouldApply("minStock") && mapping.minStock ? normalizeValue(row[mapping.minStock]) : "";
+      const stockQtyCandidate =
+        stockBehavior !== "ignore" && shouldApply("stockQty") && mapping.stockQty
+          ? normalizeValue(row[mapping.stockQty])
+          : "";
       const categories =
         shouldApply("category") && mapping.category
           ? parseCategoryHierarchy(normalizeValue(row[mapping.category]))
@@ -1481,6 +1690,7 @@ const ImportPage = () => {
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
       const minStockResult = parseOptionalIntegerValue(minStockCandidate);
+      const stockQtyResult = parseOptionalIntegerValue(stockQtyCandidate);
 
       if (basePriceResult.invalid) {
         errors.push({
@@ -1518,6 +1728,15 @@ const ImportPage = () => {
         });
         return;
       }
+      if (stockQtyResult.invalid) {
+        errors.push({
+          row: rowNumber,
+          message: t("rowInvalidInteger", { row: rowNumber, field: t("fieldStockQty") }),
+          code: "invalidNumber",
+          value: "stockQty",
+        });
+        return;
+      }
       if (parsedVariants.invalid) {
         errors.push({
           row: rowNumber,
@@ -1533,6 +1752,15 @@ const ImportPage = () => {
           message: t("rowStoreRequiredForMinStock", { row: rowNumber }),
           code: "missingStoreForMinStock",
           value: "minStock",
+        });
+        return;
+      }
+      if (stockQtyResult.value !== undefined && !targetStoreId) {
+        errors.push({
+          row: rowNumber,
+          message: t("rowStoreRequiredForStock", { row: rowNumber }),
+          code: "missingStoreForMinStock",
+          value: "stockQty",
         });
         return;
       }
@@ -1571,6 +1799,7 @@ const ImportPage = () => {
         purchasePriceKgs: purchasePriceResult.value,
         avgCostKgs: avgCostResult.value,
         minStock: minStockResult.value,
+        stockQty: stockQtyResult.value,
         photoUrl: imageUrls[0],
         images: imageUrls.length
           ? imageUrls.map((url, position) => ({ url, position }))
@@ -1592,6 +1821,7 @@ const ImportPage = () => {
     rawRows,
     selectedUpdateFieldSet,
     skippedRows,
+    stockBehavior,
     t,
     targetStoreId,
   ]);
@@ -1609,13 +1839,21 @@ const ImportPage = () => {
             storeId: targetStoreId,
             mode: importMode,
             updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
+            existingBehavior,
+            emptyValueBehavior,
+            stockBehavior,
+            rowActions: Object.values(productRowActions),
           },
     [
+      emptyValueBehavior,
+      existingBehavior,
       importMode,
       isUpdateSelectedMode,
       missingRequired.length,
+      productRowActions,
       selectedUpdateFields,
       source,
+      stockBehavior,
       targetStoreId,
       validation.rows,
     ],
@@ -1641,6 +1879,10 @@ const ImportPage = () => {
         storeId: previewInput.storeId,
         mode: previewInput.mode,
         updateMask: previewInput.updateMask,
+        existingBehavior: previewInput.existingBehavior,
+        emptyValueBehavior: previewInput.emptyValueBehavior,
+        stockBehavior: previewInput.stockBehavior,
+        rowActions: previewInput.rowActions,
         previewLimit: DRY_RUN_PREVIEW_ROW_LIMIT,
       });
 
@@ -1698,12 +1940,14 @@ const ImportPage = () => {
       purchasePriceKgs: "",
       avgCostKgs: "",
       minStock: "",
+      stockQty: "",
       photoUrl: "",
       barcodes: "",
       variants: "",
     });
     setDefaultUnitCode("");
     setSkippedRows([]);
+    setProductRowActions({});
 
     try {
       if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
@@ -1928,6 +2172,21 @@ const ImportPage = () => {
     setSelectedUpdateFields([]);
   };
 
+  const handleProductRowActionChange = (
+    sourceRowNumber: number,
+    action: ProductImportRowAction,
+    existingProductId?: string,
+  ) => {
+    setProductRowActions((current) => ({
+      ...current,
+      [sourceRowNumber]: {
+        sourceRowNumber,
+        action,
+        existingProductId,
+      },
+    }));
+  };
+
   const handleApplyImport = async () => {
     if (!validation.rows.length) {
       toast({ variant: "error", description: t("importEmpty") });
@@ -1962,11 +2221,18 @@ const ImportPage = () => {
       storeId: targetStoreId,
       mode: importMode,
       updateMask: isUpdateSelectedMode ? selectedUpdateFields : undefined,
+      existingBehavior,
+      emptyValueBehavior,
+      stockBehavior,
+      rowActions: Object.values(productRowActions),
     });
     const aggregateSummary: ImportRunSummary = {
       source,
       mode: importMode,
       updateMask: isUpdateSelectedMode ? selectedUpdateFields : null,
+      existingBehavior,
+      emptyValueBehavior,
+      stockBehavior,
       targetStoreId,
       rows: 0,
       created: 0,
@@ -2017,6 +2283,7 @@ const ImportPage = () => {
         setDefaultUnitCode,
         setSkippedRows,
       });
+      setProductRowActions({});
     } catch (error) {
       toast({
         variant: "error",
@@ -2227,6 +2494,65 @@ const ImportPage = () => {
                   <p className="text-xs text-muted-foreground">{t("importModeHint")}</p>
                 </div>
 
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {t("existingBehaviorTitle")}
+                    </p>
+                    <Select
+                      value={existingBehavior}
+                      onValueChange={(value) =>
+                        setExistingBehavior(value as ProductExistingBehavior)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="update">{t("existingBehavior.update")}</SelectItem>
+                        <SelectItem value="skip">{t("existingBehavior.skip")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {t("emptyValueBehaviorTitle")}
+                    </p>
+                    <Select
+                      value={emptyValueBehavior}
+                      onValueChange={(value) =>
+                        setEmptyValueBehavior(value as ProductEmptyValueBehavior)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="keep">{t("emptyValueBehavior.keep")}</SelectItem>
+                        <SelectItem value="overwrite">
+                          {t("emptyValueBehavior.overwrite")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">{t("stockBehaviorTitle")}</p>
+                    <Select
+                      value={stockBehavior}
+                      onValueChange={(value) => setStockBehavior(value as ProductStockBehavior)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ignore">{t("stockBehavior.ignore")}</SelectItem>
+                        <SelectItem value="set">{t("stockBehavior.set")}</SelectItem>
+                        <SelectItem value="add">{t("stockBehavior.add")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 {isUpdateSelectedMode ? (
                   <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
                     <div className="flex flex-wrap items-center gap-2">
@@ -2398,7 +2724,11 @@ const ImportPage = () => {
             </div>
             <div className="mt-4">
               {dryRunPreview ? (
-                <ImportDryRunPreview preview={dryRunPreview} />
+                <ImportDryRunPreview
+                  preview={dryRunPreview}
+                  rowActions={productRowActions}
+                  onRowActionChange={handleProductRowActionChange}
+                />
               ) : dryRunPreviewError ? (
                 <p className="text-sm text-danger">{dryRunPreviewError}</p>
               ) : (

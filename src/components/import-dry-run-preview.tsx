@@ -6,6 +6,13 @@ import { useTranslations } from "next-intl";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,7 +28,31 @@ type ImportPreviewRow = {
   sku: string;
   name: string | null;
   action: "create" | "update" | "skipped";
+  matchStatus:
+    | "new"
+    | "matched_barcode"
+    | "matched_sku"
+    | "matched_name_category"
+    | "matched_name_price"
+    | "possible_duplicate"
+    | "cross_store_conflict"
+    | "error";
+  matchReason:
+    | "barcode"
+    | "sku"
+    | "name_category"
+    | "name_price"
+    | "possible_duplicate"
+    | "cross_store_barcode"
+    | "cross_store_sku"
+    | "none";
   existingProduct: {
+    id: string;
+    sku: string;
+    name: string;
+    isDeleted: boolean;
+  } | null;
+  possibleDuplicate: {
     id: string;
     sku: string;
     name: string;
@@ -40,7 +71,8 @@ type ImportPreviewRow = {
       | "basePriceKgs"
       | "purchasePriceKgs"
       | "avgCostKgs"
-      | "minStock";
+      | "minStock"
+      | "stockQty";
     before: ImportPreviewValue;
     after: ImportPreviewValue;
   }>;
@@ -57,6 +89,23 @@ type ImportPreviewRow = {
     | {
         code: "likelyDuplicateName";
         severity: "warning";
+        productId: string;
+        productSku: string;
+        productName: string;
+        isDeleted: boolean;
+      }
+    | {
+        code: "crossStoreSkuConflict";
+        severity: "blocking";
+        productId: string;
+        productSku: string;
+        productName: string;
+        isDeleted: boolean;
+      }
+    | {
+        code: "crossStoreBarcodeConflict";
+        severity: "blocking";
+        barcode: string;
         productId: string;
         productSku: string;
         productName: string;
@@ -85,6 +134,7 @@ export type ImportDryRunPreviewData = {
     skipped: number;
     warningCount: number;
     blockingWarningCount: number;
+    possibleDuplicateCount?: number;
     totalRows: number;
     returnedRows: number;
     truncated: boolean;
@@ -93,6 +143,19 @@ export type ImportDryRunPreviewData = {
 
 type ImportDryRunPreviewProps = {
   preview: ImportDryRunPreviewData;
+  rowActions?: Record<
+    number,
+    {
+      sourceRowNumber: number;
+      action: "create" | "update" | "skip";
+      existingProductId?: string;
+    }
+  >;
+  onRowActionChange?: (
+    sourceRowNumber: number,
+    action: "create" | "update" | "skip",
+    existingProductId?: string,
+  ) => void;
 };
 
 const formatPreviewValue = (value: ImportPreviewValue, fallback: string) => {
@@ -105,7 +168,11 @@ const formatPreviewValue = (value: ImportPreviewValue, fallback: string) => {
   return String(value);
 };
 
-export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
+export const ImportDryRunPreview = ({
+  preview,
+  rowActions,
+  onRowActionChange,
+}: ImportDryRunPreviewProps) => {
   const t = useTranslations("imports");
   const tCommon = useTranslations("common");
 
@@ -135,6 +202,42 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
     return t("dryRunActionSkip");
   };
 
+  const resolveMatchStatusLabel = (status: ImportPreviewRow["matchStatus"]) =>
+    t(`dryRunMatchStatus.${status}`);
+
+  const renderRowDecision = (row: ImportPreviewRow) => {
+    if (row.matchStatus !== "possible_duplicate" || !row.possibleDuplicate || !onRowActionChange) {
+      return null;
+    }
+    const selected = rowActions?.[row.sourceRowNumber]?.action ?? "skip";
+    return (
+      <div className="space-y-1">
+        <p className="text-[11px] font-medium text-warning-foreground">
+          {t("dryRunPossibleDuplicateDecision")}
+        </p>
+        <Select
+          value={selected}
+          onValueChange={(value) =>
+            onRowActionChange(
+              row.sourceRowNumber,
+              value as "create" | "update" | "skip",
+              row.possibleDuplicate?.id,
+            )
+          }
+        >
+          <SelectTrigger className="h-8 min-w-[150px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="skip">{t("dryRunActionSkip")}</SelectItem>
+            <SelectItem value="update">{t("dryRunActionUpdate")}</SelectItem>
+            <SelectItem value="create">{t("dryRunActionCreate")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
+
   const resolveFieldLabel = (field: ImportPreviewRow["changes"][number]["field"]) => {
     switch (field) {
       case "name":
@@ -161,6 +264,8 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
         return t("fieldAvgCost");
       case "minStock":
         return t("fieldMinStock");
+      case "stockQty":
+        return t("fieldStockQty");
     }
   };
 
@@ -195,6 +300,33 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
               </p>
             );
           }
+          if (warning.code === "crossStoreSkuConflict") {
+            return (
+              <p
+                key={`${warning.code}-${warning.productId}-${index}`}
+                className="text-xs text-danger"
+              >
+                {t("dryRunWarningCrossStoreSku", {
+                  product: warning.productName,
+                  sku: warning.productSku,
+                })}
+              </p>
+            );
+          }
+          if (warning.code === "crossStoreBarcodeConflict") {
+            return (
+              <p
+                key={`${warning.code}-${warning.barcode}-${warning.productId}-${index}`}
+                className="text-xs text-danger"
+              >
+                {t("dryRunWarningCrossStoreBarcode", {
+                  barcode: warning.barcode,
+                  product: warning.productName,
+                  sku: warning.productSku,
+                })}
+              </p>
+            );
+          }
           if (warning.code === "archivedProductWillBeRestored") {
             return (
               <p
@@ -221,7 +353,7 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <div className="rounded-none border border-success/30 bg-success/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunCreates")}</p>
           <p className="text-lg font-semibold text-foreground">{preview.summary.creates}</p>
@@ -237,6 +369,12 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
         <div className="rounded-none border border-warning/30 bg-warning/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunWarnings")}</p>
           <p className="text-lg font-semibold text-foreground">{preview.summary.warningCount}</p>
+        </div>
+        <div className="rounded-none border border-warning/30 bg-warning/10 p-3">
+          <p className="text-xs text-muted-foreground">{t("dryRunPossibleDuplicates")}</p>
+          <p className="text-lg font-semibold text-foreground">
+            {preview.summary.possibleDuplicateCount ?? 0}
+          </p>
         </div>
         <div className="rounded-none border border-danger/30 bg-danger/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunBlockingWarnings")}</p>
@@ -265,6 +403,7 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
                 <TableRow>
                   <TableHead>{t("dryRunRow")}</TableHead>
                   <TableHead>{t("dryRunAction")}</TableHead>
+                  <TableHead>{t("dryRunMatchStatusTitle")}</TableHead>
                   <TableHead>{t("fieldSku")}</TableHead>
                   <TableHead>{t("fieldName")}</TableHead>
                   <TableHead>{t("dryRunExisting")}</TableHead>
@@ -282,6 +421,10 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
                       <Badge variant={resolveActionVariant(row.action, row.hasBlockingWarnings)}>
                         {resolveActionLabel(row.action)}
                       </Badge>
+                      <div className="mt-2">{renderRowDecision(row)}</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {resolveMatchStatusLabel(row.matchStatus)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{row.sku}</TableCell>
                     <TableCell className="font-medium">
@@ -304,6 +447,11 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
                               {t("dryRunOpenProduct")}
                             </Link>
                           </div>
+                        </div>
+                      ) : row.possibleDuplicate ? (
+                        <div className="space-y-1">
+                          <p className="text-foreground">{row.possibleDuplicate.name}</p>
+                          <Badge variant="warning">{row.possibleDuplicate.sku}</Badge>
                         </div>
                       ) : (
                         t("dryRunCreateNew")
@@ -351,6 +499,10 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
                 {resolveActionLabel(row.action)}
               </Badge>
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant="muted">{resolveMatchStatusLabel(row.matchStatus)}</Badge>
+              {renderRowDecision(row)}
+            </div>
             <div className="mt-3 space-y-3">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
@@ -369,6 +521,11 @@ export const ImportDryRunPreview = ({ preview }: ImportDryRunPreviewProps) => {
                         {t("dryRunOpenProduct")}
                       </Link>
                     </div>
+                  </div>
+                ) : row.possibleDuplicate ? (
+                  <div className="space-y-1">
+                    <p className="text-sm text-foreground">{row.possibleDuplicate.name}</p>
+                    <Badge variant="warning">{row.possibleDuplicate.sku}</Badge>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">{t("dryRunCreateNew")}</p>

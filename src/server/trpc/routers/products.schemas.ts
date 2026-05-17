@@ -28,6 +28,10 @@ export const barcodeGenerationModeEnum = z.enum(["EAN13", "CODE128"]);
 export const productLocaleEnum = z.enum(locales);
 export const importSourceEnum = z.enum(["cloudshop", "onec", "csv"]);
 export const importModeEnum = z.enum(["full", "update_selected"]);
+export const productExistingBehaviorEnum = z.enum(["update", "skip"]);
+export const productEmptyValueBehaviorEnum = z.enum(["keep", "overwrite"]);
+export const productStockBehaviorEnum = z.enum(["ignore", "set", "add"]);
+export const productImportRowActionEnum = z.enum(["create", "update", "skip"]);
 export const bulkCategoryModeEnum = z.enum(["add", "setPrimary", "replace"]);
 
 export const importUpdateFieldEnum = z.enum([
@@ -43,6 +47,7 @@ export const importUpdateFieldEnum = z.enum([
   "purchasePriceKgs",
   "avgCostKgs",
   "minStock",
+  "stockQty",
 ]);
 
 export const productImageInputSchema = z.object({
@@ -280,6 +285,7 @@ export const importCsvRowSchema = z.object({
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
   minStock: z.number().int().min(0).optional(),
+  stockQty: z.number().int().min(0).optional(),
   sourceRowNumber: z.number().int().positive().optional(),
 });
 
@@ -289,6 +295,19 @@ export const importProductsCsvInputSchema = z.object({
   storeId: z.string().min(1),
   mode: importModeEnum.optional(),
   updateMask: z.array(importUpdateFieldEnum).optional(),
+  existingBehavior: productExistingBehaviorEnum.optional(),
+  emptyValueBehavior: productEmptyValueBehaviorEnum.optional(),
+  stockBehavior: productStockBehaviorEnum.optional(),
+  rowActions: z
+    .array(
+      z.object({
+        sourceRowNumber: z.number().int().positive(),
+        action: productImportRowActionEnum,
+        existingProductId: z.string().min(1).optional(),
+      }),
+    )
+    .max(5_000)
+    .optional(),
 });
 
 export const previewProductsImportCsvInputSchema = importProductsCsvInputSchema.extend({
@@ -333,6 +352,10 @@ export type PreviewProductsImportCsvInput = z.infer<typeof previewProductsImport
 export type ImportCsvRowInput = z.infer<typeof importCsvRowSchema>;
 export type ImportMode = z.infer<typeof importModeEnum>;
 export type ImportUpdateField = z.infer<typeof importUpdateFieldEnum>;
+export type ProductExistingBehavior = z.infer<typeof productExistingBehaviorEnum>;
+export type ProductEmptyValueBehavior = z.infer<typeof productEmptyValueBehaviorEnum>;
+export type ProductStockBehavior = z.infer<typeof productStockBehaviorEnum>;
+export type ProductImportRowAction = z.infer<typeof productImportRowActionEnum>;
 export type ProductDuplicateDiagnosticsInput = z.infer<
   typeof productDuplicateDiagnosticsInputSchema
 >;

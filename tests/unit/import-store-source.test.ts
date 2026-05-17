@@ -28,7 +28,9 @@ describe("import store selection source", () => {
     expect(pageSource).toContain('type ImportType = "products" | "customers"');
     expect(pageSource).toContain("CustomerImportPanel");
     expect(pageSource).toContain('accept=".csv,text/csv,.xlsx,.xls"');
-    expect(pageSource).toContain('(["name", "email", "phone", "address"] as CustomerMappingKey[])');
+    expect(pageSource).toContain('"phoneFallback"');
+    expect(pageSource).toContain('"address1"');
+    expect(pageSource).toContain('"createdAt"');
     expect(pageSource).toContain("storeId: targetStoreId");
     expect(customerRouterSource).toContain("managerProcedure");
     expect(customerRouterSource).toContain("previewImport");

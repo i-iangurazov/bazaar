@@ -4363,8 +4363,8 @@
       "managerHint": "Managers can import customers for stores they can access."
     },
     "templateDownload": "Download 1C template",
-    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
-    "templateExample": "SKU-001,Product,pcs,\"Women, Shoes\",Black,Description,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,stockQty,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Product,pcs,\"Women, Shoes\",Black,Description,150,120,120,15,20,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "customerImport": {
       "uploadTitle": "Customer file",
       "uploadHint": "Upload a CSV or Excel file with customer contacts.",
@@ -4385,11 +4385,30 @@
       "templateExample": "Jane Customer,jane@example.com,+996555123456,\"Bishkek, Chuy 1\"",
       "fields": {
         "name": "Name",
+        "firstName": "First name",
+        "lastName": "Last name",
         "email": "Email",
         "phone": "Phone",
+        "phoneFallback": "Phone fallback",
         "address": "Address",
+        "address1": "Address 1",
+        "address2": "Address 2",
+        "city": "City",
+        "province": "Province",
+        "country": "Country",
+        "zip": "Zip",
+        "createdAt": "Created",
+        "matchStatus": "Match",
+        "matchedCustomer": "Existing customer",
         "action": "Action",
         "errors": "Errors"
+      },
+      "matchStatus": {
+        "new": "New customer",
+        "matched_email": "Matched by email",
+        "matched_phone": "Matched by phone",
+        "possible_duplicate": "Possible duplicate",
+        "error": "Error"
       },
       "summary": {
         "created": "New",
@@ -4413,7 +4432,13 @@
         "customerNameRequired": "Name is required.",
         "customerContactRequired": "Email or phone is required.",
         "customerEmailInvalid": "Email is invalid.",
-        "customerDuplicateInFile": "Duplicate in file."
+        "customerDuplicateInFile": "Duplicate in file.",
+        "customerEmpty": "Empty customer row."
+      },
+      "warnings": {
+        "customerContactMissing": "No email or phone.",
+        "customerPossibleDuplicate": "Possible duplicate.",
+        "customerConflicts": "Existing value differs; non-empty existing data is kept."
       }
     },
     "mappingTitle": "Mapping",
@@ -4434,12 +4459,29 @@
     "fieldPurchasePrice": "Field purchase price",
     "fieldAvgCost": "Field avg cost",
     "fieldMinStock": "Field min stock",
+    "fieldStockQty": "Stock quantity",
     "fieldPhotoUrl": "Photos / image links",
     "fieldVariants": "Variants",
     "fieldBarcodes": "Field barcodes",
     "importModeTitle": "Import mode",
     "importModePlaceholder": "Enter import mode",
     "importModeHint": "Import mode hint",
+    "existingBehaviorTitle": "Existing products",
+    "existingBehavior": {
+      "update": "Update existing",
+      "skip": "Skip existing"
+    },
+    "emptyValueBehaviorTitle": "Empty imported values",
+    "emptyValueBehavior": {
+      "keep": "Keep existing values",
+      "overwrite": "Overwrite with empty"
+    },
+    "stockBehaviorTitle": "Stock behavior",
+    "stockBehavior": {
+      "ignore": "Do not update stock",
+      "set": "Set stock to imported quantity",
+      "add": "Add imported quantity"
+    },
     "mode": {
       "full": "Full",
       "update_selected": "Update selected"
@@ -4469,6 +4511,7 @@
     "dryRunUpdates": "Dry run updates",
     "dryRunSkipped": "Dry run skipped",
     "dryRunWarnings": "Dry run warnings",
+    "dryRunPossibleDuplicates": "Possible duplicates",
     "dryRunBlockingWarnings": "Dry run blocking warnings",
     "dryRunRow": "Dry run row",
     "dryRunAction": "Dry run action",
@@ -4478,6 +4521,18 @@
     "dryRunActionCreate": "Dry run action create",
     "dryRunActionUpdate": "Dry run action update",
     "dryRunActionSkip": "Dry run action skip",
+    "dryRunMatchStatusTitle": "Match status",
+    "dryRunMatchStatus": {
+      "new": "New product",
+      "matched_barcode": "Matched by barcode",
+      "matched_sku": "Matched by SKU",
+      "matched_name_category": "Matched by name + category",
+      "matched_name_price": "Matched by name + price",
+      "possible_duplicate": "Possible duplicate",
+      "cross_store_conflict": "Other-store conflict",
+      "error": "Error"
+    },
+    "dryRunPossibleDuplicateDecision": "Choose action",
     "dryRunOpenProduct": "Dry run open product",
     "dryRunCreateNew": "Dry run create new",
     "dryRunNoChanges": "Dry run no changes",
@@ -4485,6 +4540,8 @@
     "dryRunShowingRows": "Showing {shown} of {total} checked rows.",
     "dryRunRowLabel": "Dry run row label {row}",
     "dryRunWarningBarcodeConflict": "Dry run warning barcode conflict {barcode} {product} {sku}",
+    "dryRunWarningCrossStoreSku": "SKU belongs to another store product {product} ({sku}).",
+    "dryRunWarningCrossStoreBarcode": "Barcode {barcode} belongs to another store product {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "Dry run warning likely duplicate {product} {sku}",
     "dryRunWarningArchivedRestore": "Dry run warning archived restore {product} {sku}",
     "dryRunWarningMissingExisting": "Dry run warning missing existing",
@@ -4527,6 +4584,7 @@
     "rowInvalidInteger": "Row {row}: {field} must be an integer greater than or equal to 0.",
     "rowInvalidVariants": "Row {row}: variants must be a JSON array of objects with a name field.",
     "rowStoreRequiredForMinStock": "Row store required for min stock {row}",
+    "rowStoreRequiredForStock": "Row {row}: choose a store to update stock.",
     "duplicateSku": "Duplicate SKU {row} {value}",
     "duplicateBarcode": "Duplicate barcode {row} {value}",
     "historyTitle": "History",

@@ -4360,8 +4360,8 @@
       "managerHint": "Менеджерлер доступ бар дүкөндөргө кардарларды импорттой алат."
     },
     "templateDownload": "1C шаблонун жүктөө",
-    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
-    "templateExample": "SKU-001,Буюм,шт,\"Women, Shoes\",Black,Сыпаттама,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,stockQty,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Буюм,шт,\"Women, Shoes\",Black,Сыпаттама,150,120,120,15,20,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "customerImport": {
       "uploadTitle": "Кардар файлы",
       "uploadHint": "Кардар контакттары бар CSV же Excel файлын жүктөңүз.",
@@ -4382,11 +4382,30 @@
       "templateExample": "Jane Customer,jane@example.com,+996555123456,\"Бишкек, Чүй 1\"",
       "fields": {
         "name": "Аты",
+        "firstName": "Аты",
+        "lastName": "Фамилиясы",
         "email": "Email",
         "phone": "Телефон",
+        "phoneFallback": "Кошумча телефон",
         "address": "Дарек",
+        "address1": "Дарек 1",
+        "address2": "Дарек 2",
+        "city": "Шаар",
+        "province": "Регион",
+        "country": "Өлкө",
+        "zip": "Индекс",
+        "createdAt": "Түзүлгөн",
+        "matchStatus": "Дал келүү",
+        "matchedCustomer": "Учурдагы кардар",
         "action": "Аракет",
         "errors": "Каталар"
+      },
+      "matchStatus": {
+        "new": "Жаңы кардар",
+        "matched_email": "Email боюнча дал келди",
+        "matched_phone": "Телефон боюнча дал келди",
+        "possible_duplicate": "Мүмкүн дубликат",
+        "error": "Ката"
       },
       "summary": {
         "created": "Жаңы",
@@ -4410,7 +4429,13 @@
         "customerNameRequired": "Аты милдеттүү.",
         "customerContactRequired": "Email же телефон милдеттүү.",
         "customerEmailInvalid": "Email туура эмес.",
-        "customerDuplicateInFile": "Файлдагы дубликат."
+        "customerDuplicateInFile": "Файлдагы дубликат.",
+        "customerEmpty": "Бош кардар сабы."
+      },
+      "warnings": {
+        "customerContactMissing": "Email же телефон жок.",
+        "customerPossibleDuplicate": "Мүмкүн дубликат.",
+        "customerConflicts": "Маани учурдагыдан айырмаланат; бош эмес учурдагы маалымат сакталат."
       }
     },
     "mappingTitle": "Тилкелерди дал келтирүү",
@@ -4431,12 +4456,29 @@
     "fieldPurchasePrice": "Сатып алуу баасы",
     "fieldAvgCost": "Өздүк наркы",
     "fieldMinStock": "Минималдуу калдык",
+    "fieldStockQty": "Калдык",
     "fieldPhotoUrl": "Фото / сүрөт шилтемелери",
     "fieldVariants": "Варианттар",
     "fieldBarcodes": "Штрихкоддор",
     "importModeTitle": "Импорт режими",
     "importModePlaceholder": "Режимди тандаңыз",
     "importModeHint": "Толук импорт карточкаларды түзөт/жаңыртат. Тандалма импорт бар болгон SKU үчүн белгиленген талааларды гана жаңыртат.",
+    "existingBehaviorTitle": "Учурдагы товарлар",
+    "existingBehavior": {
+      "update": "Учурдагыларды жаңыртуу",
+      "skip": "Учурдагыларды өткөрүү"
+    },
+    "emptyValueBehaviorTitle": "Бош маанилер",
+    "emptyValueBehavior": {
+      "keep": "Учурдагы маанилерди сактоо",
+      "overwrite": "Учурдагы маанилерди тазалоо"
+    },
+    "stockBehaviorTitle": "Калдыктар",
+    "stockBehavior": {
+      "ignore": "Калдыктарды жаңыртпоо",
+      "set": "Файлдагы калдыкты коюу",
+      "add": "Файлдагы санды кошуу"
+    },
     "mode": {
       "full": "Толук импорт",
       "update_selected": "Тандалма жаңыртуу"
@@ -4466,6 +4508,7 @@
     "dryRunUpdates": "Жаңыртылат",
     "dryRunSkipped": "Өткөрүлөт",
     "dryRunWarnings": "Эскертүүлөр",
+    "dryRunPossibleDuplicates": "Мүмкүн дубликаттар",
     "dryRunBlockingWarnings": "Бөгөт коюучу конфликттер",
     "dryRunRow": "Сап",
     "dryRunAction": "Аракет",
@@ -4475,6 +4518,18 @@
     "dryRunActionCreate": "Түзүү",
     "dryRunActionUpdate": "Жаңыртуу",
     "dryRunActionSkip": "Өткөрүү",
+    "dryRunMatchStatusTitle": "Дал келүү",
+    "dryRunMatchStatus": {
+      "new": "Жаңы товар",
+      "matched_barcode": "Штрихкод боюнча дал келди",
+      "matched_sku": "SKU боюнча дал келди",
+      "matched_name_category": "Аталыш жана категория боюнча дал келди",
+      "matched_name_price": "Аталыш жана баа боюнча дал келди",
+      "possible_duplicate": "Мүмкүн дубликат",
+      "cross_store_conflict": "Башка дүкөн менен конфликт",
+      "error": "Ката"
+    },
+    "dryRunPossibleDuplicateDecision": "Аракетти тандаңыз",
     "dryRunOpenProduct": "Товарды ачуу",
     "dryRunCreateNew": "Жаңы товар түзүлөт",
     "dryRunNoChanges": "Өзгөрүү жок",
@@ -4482,6 +4537,8 @@
     "dryRunShowingRows": "{total} текшерилген саптын {shown} көрсөтүлдү.",
     "dryRunRowLabel": "Сап {row}",
     "dryRunWarningBarcodeConflict": "Штрихкод {barcode} буга чейин {product} ({sku}) товарында колдонулуп жатат.",
+    "dryRunWarningCrossStoreSku": "SKU башка дүкөндүн товарыныкы: {product} ({sku}).",
+    "dryRunWarningCrossStoreBarcode": "{barcode} штрихкоду башка дүкөндүн товарыныкы: {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "{product} ({sku}) товарına окшош болушу мүмкүн.",
     "dryRunWarningArchivedRestore": "Архивдеги {product} ({sku}) товары калыбына келтирилет.",
     "dryRunWarningMissingExisting": "SKU учурдагы товарлардан табылган жок, бул сап тандалма жаңыртуу режиминде өткөрүлөт.",
@@ -4524,6 +4581,7 @@
     "rowInvalidInteger": "Сап {row}: {field} талаасы 0 же андан чоң бүтүн сан болушу керек.",
     "rowInvalidVariants": "Сап {row}: варианттар name талаасы бар объекттердин JSON массиви болушу керек.",
     "rowStoreRequiredForMinStock": "Сап {row}: минималдуу калдыкты импорттоо үчүн дүкөндү тандаңыз.",
+    "rowStoreRequiredForStock": "Сап {row}: калдыкты жаңыртуу үчүн дүкөндү тандаңыз.",
     "duplicateSku": "Сап {row}: SKU дубликаты {value}.",
     "duplicateBarcode": "Сап {row}: штрихкод дубликаты {value}.",
     "historyTitle": "Импорт тарыхы",

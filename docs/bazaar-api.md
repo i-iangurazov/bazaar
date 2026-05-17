@@ -28,11 +28,12 @@ The authenticated API token resolves one store. Product responses are limited to
 Responses include safe integration fields such as:
 
 - product identifiers, SKU, name, description, categories
+- product `createdAt` and `updatedAt` timestamps
 - unit/base unit
 - supplier display fields
 - barcodes and packs
 - images and image objects
-- variants and variant attribute values
+- variants with `createdAt`/`updatedAt` timestamps and variant attribute values
 - store-scoped stock and variant stock
 - `currencyCode` and currency rate metadata
 

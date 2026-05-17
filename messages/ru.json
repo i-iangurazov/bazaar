@@ -4361,8 +4361,8 @@
       "managerHint": "Менеджеры могут импортировать клиентов в доступные им магазины."
     },
     "templateDownload": "Скачать шаблон 1С",
-    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,photoUrl,variants,barcodes",
-    "templateExample": "SKU-001,Товар,шт,\"Women, Shoes\",Black,Описание,150,120,120,15,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
+    "templateHeaders": "sku,name,unit,category,color,description,basePriceKgs,purchasePriceKgs,avgCostKgs,minStock,stockQty,photoUrl,variants,barcodes",
+    "templateExample": "SKU-001,Товар,шт,\"Women, Shoes\",Black,Описание,150,120,120,15,20,\"https://cdn.example.com/1.jpg|https://cdn.example.com/2.jpg\",\"[{\"\"name\"\":\"\"single\"\",\"\"dimensions\"\":\"\"single seat 90*101*75cm\"\"}]\",1234567890",
     "customerImport": {
       "uploadTitle": "Файл клиентов",
       "uploadHint": "Загрузите CSV или Excel с контактами клиентов.",
@@ -4383,11 +4383,30 @@
       "templateExample": "Jane Customer,jane@example.com,+996555123456,\"Бишкек, Чуй 1\"",
       "fields": {
         "name": "Имя",
+        "firstName": "Имя",
+        "lastName": "Фамилия",
         "email": "Email",
         "phone": "Телефон",
+        "phoneFallback": "Телефон запасной",
         "address": "Адрес",
+        "address1": "Адрес 1",
+        "address2": "Адрес 2",
+        "city": "Город",
+        "province": "Регион",
+        "country": "Страна",
+        "zip": "Индекс",
+        "createdAt": "Создан",
+        "matchStatus": "Совпадение",
+        "matchedCustomer": "Текущий клиент",
         "action": "Действие",
         "errors": "Ошибки"
+      },
+      "matchStatus": {
+        "new": "Новый клиент",
+        "matched_email": "Совпадение по email",
+        "matched_phone": "Совпадение по телефону",
+        "possible_duplicate": "Возможный дубликат",
+        "error": "Ошибка"
       },
       "summary": {
         "created": "Новые",
@@ -4411,7 +4430,13 @@
         "customerNameRequired": "Имя обязательно.",
         "customerContactRequired": "Email или телефон обязателен.",
         "customerEmailInvalid": "Некорректный email.",
-        "customerDuplicateInFile": "Дубликат в файле."
+        "customerDuplicateInFile": "Дубликат в файле.",
+        "customerEmpty": "Пустая строка клиента."
+      },
+      "warnings": {
+        "customerContactMissing": "Нет email или телефона.",
+        "customerPossibleDuplicate": "Возможный дубликат.",
+        "customerConflicts": "Значение отличается от текущего; непустые текущие данные сохраняются."
       }
     },
     "mappingTitle": "Сопоставление колонок",
@@ -4432,12 +4457,29 @@
     "fieldPurchasePrice": "Цена закупки",
     "fieldAvgCost": "Себестоимость",
     "fieldMinStock": "Минимальный остаток",
+    "fieldStockQty": "Остаток",
     "fieldPhotoUrl": "Фото / ссылки на изображения",
     "fieldVariants": "Варианты",
     "fieldBarcodes": "Штрихкоды",
     "importModeTitle": "Режим импорта",
     "importModePlaceholder": "Выберите режим",
     "importModeHint": "Полный импорт создает/обновляет карточки. Выборочный импорт обновляет только отмеченные поля у существующих SKU.",
+    "existingBehaviorTitle": "Существующие товары",
+    "existingBehavior": {
+      "update": "Обновлять существующие",
+      "skip": "Пропускать существующие"
+    },
+    "emptyValueBehaviorTitle": "Пустые значения",
+    "emptyValueBehavior": {
+      "keep": "Сохранять текущие значения",
+      "overwrite": "Очищать текущие значения"
+    },
+    "stockBehaviorTitle": "Остатки",
+    "stockBehavior": {
+      "ignore": "Не обновлять остатки",
+      "set": "Установить остаток из файла",
+      "add": "Прибавить количество из файла"
+    },
     "mode": {
       "full": "Полный импорт",
       "update_selected": "Выборочное обновление"
@@ -4467,6 +4509,7 @@
     "dryRunUpdates": "Будет обновлено",
     "dryRunSkipped": "Будет пропущено",
     "dryRunWarnings": "Предупреждения",
+    "dryRunPossibleDuplicates": "Возможные дубликаты",
     "dryRunBlockingWarnings": "Блокирующие конфликты",
     "dryRunRow": "Строка",
     "dryRunAction": "Действие",
@@ -4476,6 +4519,18 @@
     "dryRunActionCreate": "Создать",
     "dryRunActionUpdate": "Обновить",
     "dryRunActionSkip": "Пропустить",
+    "dryRunMatchStatusTitle": "Совпадение",
+    "dryRunMatchStatus": {
+      "new": "Новый товар",
+      "matched_barcode": "Совпадение по штрихкоду",
+      "matched_sku": "Совпадение по SKU",
+      "matched_name_category": "Совпадение по названию и категории",
+      "matched_name_price": "Совпадение по названию и цене",
+      "possible_duplicate": "Возможный дубликат",
+      "cross_store_conflict": "Конфликт с другим магазином",
+      "error": "Ошибка"
+    },
+    "dryRunPossibleDuplicateDecision": "Выберите действие",
     "dryRunOpenProduct": "Открыть товар",
     "dryRunCreateNew": "Будет создан новый товар",
     "dryRunNoChanges": "Изменений нет",
@@ -4483,6 +4538,8 @@
     "dryRunShowingRows": "Показано {shown} из {total} проверенных строк.",
     "dryRunRowLabel": "Строка {row}",
     "dryRunWarningBarcodeConflict": "Штрихкод {barcode} уже используется товаром {product} ({sku}).",
+    "dryRunWarningCrossStoreSku": "SKU принадлежит товару другого магазина: {product} ({sku}).",
+    "dryRunWarningCrossStoreBarcode": "Штрихкод {barcode} принадлежит товару другого магазина: {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "Похоже на существующий товар {product} ({sku}).",
     "dryRunWarningArchivedRestore": "Архивный товар {product} ({sku}) будет восстановлен.",
     "dryRunWarningMissingExisting": "SKU не найден среди существующих товаров, строка будет пропущена в режиме выборочного обновления.",
@@ -4525,6 +4582,7 @@
     "rowInvalidInteger": "Строка {row}: поле {field} должно быть целым числом не меньше 0.",
     "rowInvalidVariants": "Строка {row}: варианты должны быть JSON-массивом объектов с полем name.",
     "rowStoreRequiredForMinStock": "Строка {row}: для импорта минимального остатка выберите магазин.",
+    "rowStoreRequiredForStock": "Строка {row}: для обновления остатка выберите магазин.",
     "duplicateSku": "Строка {row}: дубликат SKU {value}.",
     "duplicateBarcode": "Строка {row}: дубликат штрихкода {value}.",
     "historyTitle": "История импортов",

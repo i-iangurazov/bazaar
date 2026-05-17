@@ -11,6 +11,11 @@ import {
   resolveImportRowsPhotoUrlsForOrganization,
   type ImportProductsInput,
 } from "@/server/services/products";
+import {
+  productImportMatchIsBlocking,
+  productImportMatchIsExisting,
+  resolveProductImportMatch,
+} from "@/server/services/products/importMatching";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertCapacity, assertFeatureEnabled } from "@/server/services/planLimits";
 
@@ -57,22 +62,48 @@ export const runProductImport = async (input: RunProductImportInput) => {
     input.organizationId,
   );
   const rows = photoResolution.rows;
-  const uniqueSkus = Array.from(
-    new Set(
-      rows
-        .map((row) => row.sku.trim())
-        .filter((sku) => sku.length > 0),
-    ),
+  const rowDecisionByNumber = new Map(
+    (input.rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),
   );
-  const existingCount = uniqueSkus.length
-    ? await prisma.product.count({
-        where: {
-          organizationId: input.organizationId,
-          sku: { in: uniqueSkus },
-        },
-      })
-    : 0;
-  const netNewProducts = Math.max(0, uniqueSkus.length - existingCount);
+  let netNewProducts = 0;
+
+  if (input.storeId) {
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const sourceRowNumber = row.sourceRowNumber ?? index + 1;
+      const rowDecision = rowDecisionByNumber.get(sourceRowNumber);
+      if (rowDecision?.action === "skip") {
+        continue;
+      }
+      const match = await resolveProductImportMatch({
+        prisma,
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        sku: row.sku,
+        barcodes: row.barcodes,
+        name: row.name,
+        categories: row.categories?.length
+          ? row.categories
+          : row.category
+            ? [row.category]
+            : undefined,
+        basePriceKgs: row.basePriceKgs,
+      });
+      if (productImportMatchIsBlocking(match)) {
+        continue;
+      }
+      if (match.reason === "possible_duplicate") {
+        if (rowDecision?.action === "create") {
+          netNewProducts += 1;
+        }
+        continue;
+      }
+      if (productImportMatchIsExisting(match)) {
+        continue;
+      }
+      netNewProducts += 1;
+    }
+  }
 
   if (importMode === "full" && netNewProducts > 0) {
     await assertCapacity({
@@ -81,60 +112,63 @@ export const runProductImport = async (input: RunProductImportInput) => {
       add: netNewProducts,
     });
   }
-  const result = await prisma.$transaction(
-    async (tx) => {
-      const batch = await tx.importBatch.create({
-        data: {
-          organizationId: input.organizationId,
-          type: "products",
-          createdById: input.actorId,
-          summary: {
-            source: input.source ?? "csv",
-            mode: importMode,
-            updateMask: input.updateMask ?? null,
-            targetStoreId: targetStore?.id ?? null,
-            targetStoreName: targetStore?.name ?? null,
-            rows: rows.length,
-          },
+  const result = await prisma.$transaction(async (tx) => {
+    const batch = await tx.importBatch.create({
+      data: {
+        organizationId: input.organizationId,
+        type: "products",
+        createdById: input.actorId,
+        summary: {
+          source: input.source ?? "csv",
+          mode: importMode,
+          updateMask: input.updateMask ?? null,
+          existingBehavior: input.existingBehavior ?? "update",
+          emptyValueBehavior: input.emptyValueBehavior ?? "keep",
+          stockBehavior: input.stockBehavior ?? "ignore",
+          targetStoreId: targetStore?.id ?? null,
+          targetStoreName: targetStore?.name ?? null,
+          rows: rows.length,
         },
-      });
+      },
+    });
 
-      const results = await importProductsTx(tx, {
-        ...input,
-        rows,
-        batchId: batch.id,
-      });
+    const results = await importProductsTx(tx, {
+      ...input,
+      rows,
+      batchId: batch.id,
+    });
 
-      const created = results.filter((row) => row.action === "created").length;
-      const updated = results.filter((row) => row.action === "updated").length;
-      const skipped = results.filter((row) => row.action === "skipped").length;
+    const created = results.filter((row) => row.action === "created").length;
+    const updated = results.filter((row) => row.action === "updated").length;
+    const skipped = results.filter((row) => row.action === "skipped").length;
 
-      const summary = {
-        source: input.source ?? "csv",
-        mode: importMode,
-        updateMask: input.updateMask ?? null,
-        targetStoreId: targetStore?.id ?? null,
-        targetStoreName: targetStore?.name ?? null,
-        rows: rows.length,
-        created,
-        updated,
-        skipped,
-        images: {
-          downloaded: photoResolution.summary.downloaded,
-          fallback: photoResolution.summary.fallback,
-          missing: photoResolution.summary.missing,
-        },
-      };
+    const summary = {
+      source: input.source ?? "csv",
+      mode: importMode,
+      updateMask: input.updateMask ?? null,
+      existingBehavior: input.existingBehavior ?? "update",
+      emptyValueBehavior: input.emptyValueBehavior ?? "keep",
+      stockBehavior: input.stockBehavior ?? "ignore",
+      targetStoreId: targetStore?.id ?? null,
+      targetStoreName: targetStore?.name ?? null,
+      rows: rows.length,
+      created,
+      updated,
+      skipped,
+      images: {
+        downloaded: photoResolution.summary.downloaded,
+        fallback: photoResolution.summary.fallback,
+        missing: photoResolution.summary.missing,
+      },
+    };
 
-      const updatedBatch = await tx.importBatch.update({
-        where: { id: batch.id },
-        data: { summary },
-      });
+    const updatedBatch = await tx.importBatch.update({
+      where: { id: batch.id },
+      data: { summary },
+    });
 
-      return { batch: updatedBatch, results, summary };
-    },
-    importTransactionOptions,
-  );
+    return { batch: updatedBatch, results, summary };
+  }, importTransactionOptions);
 
   await recordFirstEvent({
     organizationId: input.organizationId,

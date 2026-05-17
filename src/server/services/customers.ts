@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { CustomerOrderStatus, CustomerSource, type Customer, type Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -18,6 +19,7 @@ export type CustomerImportRow = {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  createdAt?: string | Date | null;
   rowNumber?: number;
 };
 
@@ -28,13 +30,22 @@ export type CustomerImportRowResult = {
   phone: string | null;
   address: string | null;
   action: "created" | "updated" | "skipped";
+  matchStatus: "new" | "matched_email" | "matched_phone" | "possible_duplicate" | "error";
+  matchedCustomer?: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
   customerId?: string;
+  createdAt?: Date | null;
   errors: string[];
   warnings: string[];
 };
 
 const MAX_CUSTOMER_IMPORT_ROWS = 5_000;
-const CUSTOMER_IMPORT_TRANSACTION_TIMEOUT_MS = 120_000;
+const CUSTOMER_IMPORT_CHUNK_SIZE = 100;
+const CUSTOMER_IMPORT_CHUNK_TRANSACTION_TIMEOUT_MS = 30_000;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const normalizeCustomerEmail = (value?: string | null) => {
@@ -43,17 +54,38 @@ export const normalizeCustomerEmail = (value?: string | null) => {
 };
 
 export const normalizeCustomerPhone = (value?: string | null) => {
-  const normalized = value
+  const raw = value
     ?.trim()
     .replace(/^[\uFEFF\u200B\u200C\u200D'’‘`´]+/, "")
-    .trim()
-    .replace(/\s+/g, " ");
-  return normalized ? normalized : null;
+    .trim();
+  if (!raw) {
+    return null;
+  }
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) {
+    return null;
+  }
+  return raw.startsWith("+") ? `+${digits}` : digits;
 };
 
 const normalizeOptionalText = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+};
+
+const normalizeCustomerNameForMatch = (value?: string | null) =>
+  value
+    ?.toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim() ?? "";
+
+const parseCustomerImportDate = (value?: string | Date | null) => {
+  if (!value) {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
 };
 
 const ensureCustomerContact = (input: { email?: string | null; phone?: string | null }) => {
@@ -90,16 +122,17 @@ const validateImportRow = (
 ): Omit<CustomerImportRowResult, "action"> => {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const name = normalizeOptionalText(row.name) ?? "";
   const email = normalizeCustomerEmail(row.email);
   const phone = normalizeCustomerPhone(row.phone);
+  const name =
+    normalizeOptionalText(row.name) ?? (email ? email.split("@")[0] : null) ?? phone ?? "Без имени";
   const address = normalizeOptionalText(row.address);
+  const createdAt = parseCustomerImportDate(row.createdAt);
 
-  if (!name) {
-    errors.push("customerNameRequired");
-  }
-  if (!email && !phone) {
-    errors.push("customerContactRequired");
+  if (!normalizeOptionalText(row.name) && !email && !phone) {
+    errors.push("customerEmpty");
+  } else if (!email && !phone) {
+    warnings.push("customerContactMissing");
   }
   if (email && !emailPattern.test(email)) {
     errors.push("customerEmailInvalid");
@@ -111,22 +144,33 @@ const validateImportRow = (
     email,
     phone,
     address,
+    matchStatus: errors.length ? "error" : "new",
+    matchedCustomer: null,
+    createdAt,
     errors,
     warnings,
   };
 };
 
+type CustomerMatch = Pick<Customer, "id" | "name" | "email" | "phone" | "address">;
+
 type CustomerLookup = {
-  byEmail: Map<string, Customer>;
-  byPhone: Map<string, Customer>;
+  byEmail: Map<string, CustomerMatch>;
+  byPhone: Map<string, CustomerMatch>;
+  customers: CustomerMatch[];
 };
 
-const addCustomerToLookup = (lookup: CustomerLookup, customer: Customer) => {
-  if (customer.email && !lookup.byEmail.has(customer.email)) {
-    lookup.byEmail.set(customer.email, customer);
+const addCustomerToLookup = (lookup: CustomerLookup, customer: CustomerMatch) => {
+  const email = normalizeCustomerEmail(customer.email);
+  const phone = normalizeCustomerPhone(customer.phone);
+  if (email && !lookup.byEmail.has(email)) {
+    lookup.byEmail.set(email, customer);
   }
-  if (customer.phone && !lookup.byPhone.has(customer.phone)) {
-    lookup.byPhone.set(customer.phone, customer);
+  if (phone && !lookup.byPhone.has(phone)) {
+    lookup.byPhone.set(phone, customer);
+  }
+  if (!lookup.customers.some((item) => item.id === customer.id)) {
+    lookup.customers.push(customer);
   }
 };
 
@@ -137,10 +181,43 @@ const findMatchingCustomerInLookup = (
   if (input.email) {
     const byEmail = lookup.byEmail.get(input.email);
     if (byEmail) {
-      return byEmail;
+      return { customer: byEmail, reason: "email" as const };
     }
   }
-  return input.phone ? (lookup.byPhone.get(input.phone) ?? null) : null;
+  if (input.phone) {
+    const byPhone = lookup.byPhone.get(input.phone);
+    if (byPhone) {
+      return { customer: byPhone, reason: "phone" as const };
+    }
+  }
+  return null;
+};
+
+const findPossibleCustomerDuplicate = (
+  lookup: CustomerLookup,
+  input: { name?: string | null; email?: string | null; phone?: string | null },
+) => {
+  const normalizedName = normalizeCustomerNameForMatch(input.name);
+  if (normalizedName.length < 3) {
+    return null;
+  }
+  const emailLocalPart = input.email?.split("@")[0]?.toLowerCase() ?? "";
+  const phoneTail = input.phone && input.phone.length >= 4 ? input.phone.slice(-4) : "";
+  return (
+    lookup.customers.find((customer) => {
+      if (normalizeCustomerNameForMatch(customer.name) !== normalizedName) {
+        return false;
+      }
+      const customerEmailLocalPart = customer.email?.split("@")[0]?.toLowerCase() ?? "";
+      const customerPhone = normalizeCustomerPhone(customer.phone);
+      const customerPhoneTail =
+        customerPhone && customerPhone.length >= 4 ? customerPhone.slice(-4) : "";
+      return (
+        (emailLocalPart && customerEmailLocalPart === emailLocalPart) ||
+        (phoneTail && customerPhoneTail === phoneTail)
+      );
+    }) ?? null
+  );
 };
 
 const loadCustomerLookup = async (
@@ -148,7 +225,7 @@ const loadCustomerLookup = async (
   input: {
     organizationId: string;
     storeId: string;
-    rows: Array<{ email?: string | null; phone?: string | null }>;
+    rows: Array<{ name?: string | null; email?: string | null; phone?: string | null }>;
   },
 ): Promise<CustomerLookup> => {
   const emails = Array.from(
@@ -157,9 +234,16 @@ const loadCustomerLookup = async (
   const phones = Array.from(
     new Set(input.rows.map((row) => row.phone).filter((value): value is string => Boolean(value))),
   );
-  const lookup: CustomerLookup = { byEmail: new Map(), byPhone: new Map() };
+  const names = Array.from(
+    new Set(
+      input.rows
+        .map((row) => normalizeCustomerNameForMatch(row.name))
+        .filter((value) => value.length >= 3),
+    ),
+  );
+  const lookup: CustomerLookup = { byEmail: new Map(), byPhone: new Map(), customers: [] };
 
-  if (!emails.length && !phones.length) {
+  if (!emails.length && !phones.length && !names.length) {
     return lookup;
   }
 
@@ -169,11 +253,13 @@ const loadCustomerLookup = async (
       storeId: input.storeId,
       deletedAt: null,
       OR: [
-        ...(emails.length ? [{ email: { in: emails } }] : []),
-        ...(phones.length ? [{ phone: { in: phones } }] : []),
+        ...(emails.length ? [{ email: { not: null } }] : []),
+        ...(phones.length ? [{ phone: { not: null } }] : []),
+        ...(names.length ? [{ name: { not: "" } }] : []),
       ],
     },
     orderBy: { createdAt: "asc" },
+    take: 10_000,
   });
 
   customers.forEach((customer) => addCustomerToLookup(lookup, customer));
@@ -194,7 +280,7 @@ const findMatchingCustomer = async (
       where: {
         organizationId: input.organizationId,
         storeId: input.storeId,
-        email: input.email,
+        email: { equals: input.email, mode: "insensitive" },
         deletedAt: null,
       },
       orderBy: { createdAt: "asc" },
@@ -205,22 +291,27 @@ const findMatchingCustomer = async (
   }
 
   if (input.phone) {
-    return client.customer.findFirst({
+    const phoneCandidates = await client.customer.findMany({
       where: {
         organizationId: input.organizationId,
         storeId: input.storeId,
-        phone: input.phone,
+        phone: { not: null },
         deletedAt: null,
       },
       orderBy: { createdAt: "asc" },
+      take: 10_000,
     });
+    return (
+      phoneCandidates.find((customer) => normalizeCustomerPhone(customer.phone) === input.phone) ??
+      null
+    );
   }
 
   return null;
 };
 
 const missingOnlyCustomerData = (
-  existing: Customer,
+  existing: CustomerMatch,
   input: {
     name?: string | null;
     email?: string | null;
@@ -354,10 +445,7 @@ export const listCustomers = async (input: {
   return { items, total, page, pageSize, accessibleStoreIds };
 };
 
-export const getCustomerDetail = async (input: {
-  user: StoreAccessUser;
-  customerId: string;
-}) => {
+export const getCustomerDetail = async (input: { user: StoreAccessUser; customerId: string }) => {
   const customer = await prisma.customer.findFirst({
     where: {
       id: input.customerId,
@@ -591,6 +679,7 @@ export const previewCustomerImport = async (input: {
       if (duplicateInFile) {
         validated.errors.push("customerDuplicateInFile");
         action = "skipped";
+        validated.matchStatus = "error";
       } else {
         if (validated.email) {
           seenEmails.add(validated.email);
@@ -598,11 +687,58 @@ export const previewCustomerImport = async (input: {
         if (validated.phone) {
           seenPhones.add(validated.phone);
         }
-        const existing = findMatchingCustomerInLookup(lookup, validated);
-        action = existing ? "updated" : "created";
+        const existingMatch = findMatchingCustomerInLookup(lookup, validated);
+        if (existingMatch) {
+          action = "updated";
+          validated.matchStatus =
+            existingMatch.reason === "email" ? "matched_email" : "matched_phone";
+          validated.matchedCustomer = {
+            id: existingMatch.customer.id,
+            name: existingMatch.customer.name,
+            email: existingMatch.customer.email,
+            phone: existingMatch.customer.phone,
+          };
+          const conflictFields = [
+            validated.name &&
+            existingMatch.customer.name &&
+            normalizeOptionalText(existingMatch.customer.name) !== validated.name
+              ? "name"
+              : null,
+            validated.phone &&
+            existingMatch.customer.phone &&
+            normalizeCustomerPhone(existingMatch.customer.phone) !== validated.phone
+              ? "phone"
+              : null,
+            validated.address &&
+            existingMatch.customer.address &&
+            normalizeOptionalText(existingMatch.customer.address) !== validated.address
+              ? "address"
+              : null,
+          ].filter((value): value is string => Boolean(value));
+          if (conflictFields.length) {
+            validated.warnings.push(`customerConflicts:${conflictFields.join("|")}`);
+          }
+        } else {
+          const possibleDuplicate = findPossibleCustomerDuplicate(lookup, validated);
+          if (possibleDuplicate) {
+            action = "skipped";
+            validated.matchStatus = "possible_duplicate";
+            validated.matchedCustomer = {
+              id: possibleDuplicate.id,
+              name: possibleDuplicate.name,
+              email: possibleDuplicate.email,
+              phone: possibleDuplicate.phone,
+            };
+            validated.warnings.push("customerPossibleDuplicate");
+          } else {
+            action = "created";
+            validated.matchStatus = "new";
+          }
+        }
       }
     } else if (validated.errors.length > 0) {
       action = "skipped";
+      validated.matchStatus = "error";
     }
 
     if (action === "created") {
@@ -643,112 +779,196 @@ export const runCustomerImport = async (input: {
   });
   const importableRows = preview.rows.filter((row) => row.errors.length === 0);
 
-  const result = await prisma.$transaction(
-    async (tx) => {
-      const store = await tx.store.findFirst({
-        where: { id: input.storeId, organizationId: input.user.organizationId },
-        select: { id: true, name: true },
-      });
-      if (!store) {
-        throw new AppError("storeNotFound", "NOT_FOUND", 404);
-      }
+  const store = await prisma.store.findFirst({
+    where: { id: input.storeId, organizationId: input.user.organizationId },
+    select: { id: true, name: true },
+  });
+  if (!store) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
 
-      const batch = await tx.importBatch.create({
-        data: {
-          organizationId: input.user.organizationId,
-          type: "customers",
-          createdById: input.actorId,
-          summary: {
-            source: input.source ?? "csv",
-            targetStoreId: store.id,
-            targetStoreName: store.name,
-            rows: input.rows.length,
-          },
-        },
-      });
-
-      const lookup = await loadCustomerLookup(tx, {
-        organizationId: input.user.organizationId,
-        storeId: input.storeId,
-        rows: importableRows,
-      });
-      const rows: CustomerImportRowResult[] = [];
-      const importedEntities: Array<{ batchId: string; entityType: string; entityId: string }> = [];
-      let created = 0;
-      let updated = 0;
-      let skipped = 0;
-      let errors = 0;
-
-      for (const row of preview.rows) {
-        if (row.errors.length > 0) {
-          rows.push({ ...row, action: "skipped" });
-          skipped += 1;
-          errors += row.errors.length;
-          continue;
-        }
-
-        const existing = findMatchingCustomerInLookup(lookup, row);
-        let customer: Customer;
-        let action: CustomerImportRowResult["action"];
-        if (existing) {
-          const data = missingOnlyCustomerData(existing, row);
-          customer = Object.keys(data).length
-            ? await tx.customer.update({
-                where: { id: existing.id },
-                data,
-              })
-            : existing;
-          action = "updated";
-          updated += 1;
-        } else {
-          customer = await tx.customer.create({
-            data: {
-              organizationId: input.user.organizationId,
-              storeId: input.storeId,
-              createdById: input.actorId,
-              source: CustomerSource.IMPORT,
-              name: row.name,
-              email: row.email,
-              phone: row.phone,
-              address: row.address,
-            },
-          });
-          action = "created";
-          created += 1;
-        }
-
-        addCustomerToLookup(lookup, customer);
-        importedEntities.push({
-          batchId: batch.id,
-          entityType: "Customer",
-          entityId: customer.id,
-        });
-        rows.push({
-          ...row,
-          action,
-          customerId: customer.id,
-        });
-      }
-
-      if (importedEntities.length) {
-        await tx.importedEntity.createMany({
-          data: importedEntities,
-          skipDuplicates: true,
-        });
-      }
-
-      const summary = {
+  const batch = await prisma.importBatch.create({
+    data: {
+      organizationId: input.user.organizationId,
+      type: "customers",
+      createdById: input.actorId,
+      summary: {
         source: input.source ?? "csv",
         targetStoreId: store.id,
         targetStoreName: store.name,
         rows: input.rows.length,
-        created,
-        updated,
-        skipped,
-        errors,
-      };
+      },
+    },
+  });
 
-      const updatedBatch = await tx.importBatch.update({
+  const lookup = await loadCustomerLookup(prisma, {
+    organizationId: input.user.organizationId,
+    storeId: input.storeId,
+    rows: importableRows,
+  });
+  const rows: CustomerImportRowResult[] = [];
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (let start = 0; start < preview.rows.length; start += CUSTOMER_IMPORT_CHUNK_SIZE) {
+    const chunk = preview.rows.slice(start, start + CUSTOMER_IMPORT_CHUNK_SIZE);
+    const refreshedLookup = await loadCustomerLookup(prisma, {
+      organizationId: input.user.organizationId,
+      storeId: input.storeId,
+      rows: chunk.filter((row) => row.errors.length === 0),
+    });
+    refreshedLookup.customers.forEach((customer) => addCustomerToLookup(lookup, customer));
+
+    const chunkResult = await prisma.$transaction(
+      async (tx) => {
+        const chunkRows: CustomerImportRowResult[] = [];
+        const lookupUpdates: CustomerMatch[] = [];
+        const newCustomers: Prisma.CustomerCreateManyInput[] = [];
+        const importedEntities: Prisma.ImportedEntityCreateManyInput[] = [];
+        let chunkCreated = 0;
+        let chunkUpdated = 0;
+        let chunkSkipped = 0;
+        let chunkErrors = 0;
+
+        for (const row of chunk) {
+          if (row.errors.length > 0) {
+            chunkRows.push({ ...row, action: "skipped" });
+            chunkSkipped += 1;
+            chunkErrors += row.errors.length;
+            continue;
+          }
+
+          if (row.matchStatus === "possible_duplicate") {
+            chunkRows.push({ ...row, action: "skipped" });
+            chunkSkipped += 1;
+            continue;
+          }
+
+          const existingMatch = findMatchingCustomerInLookup(lookup, row);
+          const existing = existingMatch?.customer ?? null;
+          if (existing) {
+            const data = missingOnlyCustomerData(existing, row);
+            const customer = Object.keys(data).length
+              ? await tx.customer.update({
+                  where: { id: existing.id },
+                  data,
+                })
+              : existing;
+            chunkUpdated += 1;
+            lookupUpdates.push(customer);
+            importedEntities.push({
+              batchId: batch.id,
+              entityType: "Customer",
+              entityId: customer.id,
+            });
+            chunkRows.push({
+              ...row,
+              action: "updated",
+              customerId: customer.id,
+            });
+            continue;
+          }
+
+          const possibleDuplicate = findPossibleCustomerDuplicate(lookup, row);
+          if (possibleDuplicate) {
+            chunkRows.push({
+              ...row,
+              action: "skipped",
+              matchStatus: "possible_duplicate",
+              matchedCustomer: {
+                id: possibleDuplicate.id,
+                name: possibleDuplicate.name,
+                email: possibleDuplicate.email,
+                phone: possibleDuplicate.phone,
+              },
+              warnings: row.warnings.includes("customerPossibleDuplicate")
+                ? row.warnings
+                : [...row.warnings, "customerPossibleDuplicate"],
+            });
+            chunkSkipped += 1;
+            continue;
+          }
+
+          const customerId = randomUUID();
+          const createdCustomer: CustomerMatch = {
+            id: customerId,
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            address: row.address,
+          };
+          newCustomers.push({
+            id: customerId,
+            organizationId: input.user.organizationId,
+            storeId: input.storeId,
+            createdById: input.actorId,
+            source: CustomerSource.IMPORT,
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            address: row.address,
+            createdAt: row.createdAt ?? undefined,
+          });
+          lookupUpdates.push(createdCustomer);
+          importedEntities.push({
+            batchId: batch.id,
+            entityType: "Customer",
+            entityId: customerId,
+          });
+          chunkRows.push({
+            ...row,
+            action: "created",
+            customerId,
+          });
+          chunkCreated += 1;
+        }
+
+        if (newCustomers.length) {
+          await tx.customer.createMany({ data: newCustomers });
+        }
+        if (importedEntities.length) {
+          await tx.importedEntity.createMany({
+            data: importedEntities,
+            skipDuplicates: true,
+          });
+        }
+
+        return {
+          rows: chunkRows,
+          lookupUpdates,
+          created: chunkCreated,
+          updated: chunkUpdated,
+          skipped: chunkSkipped,
+          errors: chunkErrors,
+        };
+      },
+      { maxWait: 10_000, timeout: CUSTOMER_IMPORT_CHUNK_TRANSACTION_TIMEOUT_MS },
+    );
+
+    chunkResult.lookupUpdates.forEach((customer) => addCustomerToLookup(lookup, customer));
+    rows.push(...chunkResult.rows);
+    created += chunkResult.created;
+    updated += chunkResult.updated;
+    skipped += chunkResult.skipped;
+    errors += chunkResult.errors;
+  }
+
+  const summary = {
+    source: input.source ?? "csv",
+    targetStoreId: store.id,
+    targetStoreName: store.name,
+    rows: input.rows.length,
+    created,
+    updated,
+    skipped,
+    errors,
+  };
+
+  const updatedBatch = await prisma.$transaction(
+    async (tx) => {
+      const updatedImportBatch = await tx.importBatch.update({
         where: { id: batch.id },
         data: { summary },
       });
@@ -764,13 +984,15 @@ export const runCustomerImport = async (input: {
         requestId: input.requestId,
       });
 
-      return { batch: updatedBatch, rows, summary };
+      return updatedImportBatch;
     },
-    { maxWait: 10_000, timeout: CUSTOMER_IMPORT_TRANSACTION_TIMEOUT_MS },
+    { maxWait: 10_000, timeout: CUSTOMER_IMPORT_CHUNK_TRANSACTION_TIMEOUT_MS },
   );
 
   return {
-    ...result,
+    batch: updatedBatch,
+    rows,
+    summary,
     skippedRows: preview.rows.length - importableRows.length,
   };
 };
