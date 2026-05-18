@@ -242,7 +242,7 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
             autoComplete="off"
           />
         </div>
-        <div className="max-h-56 overflow-y-auto border border-border bg-background">
+        <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-background">
           {loading ? (
             <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
@@ -1989,7 +1989,7 @@ const InventoryPage = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <div className="flex items-center gap-2 rounded-none border border-border px-3 py-2">
+            <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
               <Switch
                 checked={showPlanning}
                 onCheckedChange={setShowPlanning}
@@ -2004,7 +2004,7 @@ const InventoryPage = () => {
       />
 
       <section data-mobile-inventory-toolbar className="mb-4 space-y-3 md:hidden">
-        <div className="space-y-3 rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="space-y-3 rounded-md border border-border bg-card p-3 shadow-sm">
           <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
             <SelectTrigger className="min-h-11">
               <SelectValue placeholder={tCommon("selectStore")} />
@@ -2119,13 +2119,13 @@ const InventoryPage = () => {
       </div>
 
       <div className="mb-5 hidden grid-cols-2 gap-2 md:mb-6 md:grid md:gap-3 xl:grid-cols-4">
-        <div className="border border-border bg-card p-3">
+        <div className="rounded-md border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
           <p className="mt-1 text-xl font-semibold text-foreground">
             {formatNumber(inventorySummary.totalSkus, locale)}
           </p>
         </div>
-        <div className="border border-border bg-card p-3">
+        <div className="rounded-md border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryNegativeStock")}</p>
           <p
             className={
@@ -2137,7 +2137,7 @@ const InventoryPage = () => {
             {formatNumber(inventorySummary.negativeStockCount, locale)}
           </p>
         </div>
-        <div className="border border-border bg-card p-3">
+        <div className="rounded-md border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
           <p
             className={
@@ -2149,7 +2149,7 @@ const InventoryPage = () => {
             {formatNumber(inventorySummary.lowStockCount, locale)}
           </p>
         </div>
-        <div className="border border-border bg-card p-3">
+        <div className="rounded-md border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryPendingReceive")}</p>
           <p className="mt-1 text-xl font-semibold text-foreground">
             {formatNumber(inventorySummary.pendingReceiveCount, locale)}
@@ -2241,7 +2241,7 @@ const InventoryPage = () => {
                 />
               ) : null}
             </div>
-            <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-none border border-border p-1 sm:w-auto">
+            <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-md border border-border p-1 sm:w-auto">
               <Button
                 type="button"
                 size="sm"
@@ -2351,7 +2351,7 @@ const InventoryPage = () => {
                             <TableHead className="w-10">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={allSelected}
                                 onChange={toggleSelectAll}
                                 aria-label={t("selectAll")}
@@ -2399,7 +2399,7 @@ const InventoryPage = () => {
                                   <TableCell>
                                     <input
                                       type="checkbox"
-                                      className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                       checked={selectedIds.has(item.snapshot.id)}
                                       onChange={() => toggleSelect(item.snapshot.id)}
                                       aria-label={t("selectInventoryItem", {
@@ -2601,7 +2601,7 @@ const InventoryPage = () => {
                     return (
                       <div
                         key={item.snapshot.id}
-                        className="overflow-hidden rounded-none border border-border bg-card"
+                        className="overflow-hidden rounded-md border border-border bg-card"
                       >
                         <div className="relative aspect-[4/3] bg-muted/30">
                           {previewImageUrl ? (
@@ -2619,7 +2619,7 @@ const InventoryPage = () => {
                           <label className="absolute right-2 top-2">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                               checked={selectedIds.has(item.snapshot.id)}
                               onChange={() => toggleSelect(item.snapshot.id)}
                               aria-label={t("selectInventoryItem", { name: label })}
@@ -2716,7 +2716,7 @@ const InventoryPage = () => {
                       : { label: t("stockOk"), variant: "success" as const };
 
               return (
-                <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+                <div className="rounded-md border border-border bg-card p-3 shadow-sm">
                   <div className="flex items-start gap-3">
                     {previewImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -3071,7 +3071,7 @@ const InventoryPage = () => {
         subtitle={t("printSetupRequiredSubtitle")}
       >
         <div className="space-y-4">
-          <div className="border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+          <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
             <p className="font-medium text-foreground">
               {t("printSetupSelected", { count: selectedCount })}
             </p>
@@ -3180,8 +3180,8 @@ const InventoryPage = () => {
                   <p className="text-xs font-medium text-foreground">
                     {t("rollTemplatePreviewTitle")}
                   </p>
-                  <div className="w-[210px] max-w-full rounded-none border border-border bg-card p-2">
-                    <div className="aspect-[58/40] rounded-none border border-dashed border-border/70 p-2">
+                  <div className="w-[210px] max-w-full rounded-md border border-border bg-card p-2">
+                    <div className="aspect-[58/40] rounded-md border border-dashed border-border/70 p-2">
                       <p className="line-clamp-2 text-[10px] font-medium text-foreground">
                         {rollPreviewItem?.product.name ?? t("rollPreviewName")}
                       </p>
@@ -3193,7 +3193,7 @@ const InventoryPage = () => {
                             {rollPreviewItem?.product.sku || t("rollPreviewSku")}
                           </p>
                         ) : null}
-                      <div className="mt-1 h-4 rounded-none bg-muted" />
+                      <div className="mt-1 h-4 rounded-md bg-muted" />
                       <p className="mt-1 text-center text-[7px] text-muted-foreground">
                         {t("rollPreviewBarcode")}
                       </p>
@@ -3228,7 +3228,7 @@ const InventoryPage = () => {
                                         field.onChange(nextValue);
                                       }
                                     }}
-                                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
                                     aria-label={t("rollGapMm")}
                                   />
                                   <Input
@@ -3283,7 +3283,7 @@ const InventoryPage = () => {
                                         field.onChange(nextValue);
                                       }
                                     }}
-                                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
                                     aria-label={t("rollXOffsetMm")}
                                   />
                                   <Input
@@ -3337,7 +3337,7 @@ const InventoryPage = () => {
                                         field.onChange(nextValue);
                                       }
                                     }}
-                                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
                                     aria-label={t("rollYOffsetMm")}
                                   />
                                   <Input
@@ -3466,7 +3466,7 @@ const InventoryPage = () => {
               />
             </FormGrid>
             {bulkOnHandProgress ? (
-              <div className="border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 {t("bulkOnHandProgress", {
                   processed: bulkOnHandProgress.processed,
                   total: bulkOnHandProgress.total,

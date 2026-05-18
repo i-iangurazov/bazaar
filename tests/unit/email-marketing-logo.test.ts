@@ -3,9 +3,66 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildEmailUnsubscribeUrl,
+  collectNonPublicEmailImageUrls,
+  isPublicEmailMarketingAssetUrl,
   renderEmailCampaign,
   resolveEmailMarketingAssetUrl,
 } from "@/server/services/emailMarketing";
+
+const testStore = {
+  id: "store-1",
+  name: "Airport Store",
+  legalName: null,
+  address: null,
+  phone: null,
+  currencyCode: "KGS",
+  currencyRateKgsPerUnit: 1,
+  enableSku: true,
+  enableBarcode: true,
+  bazaarCatalog: null,
+};
+
+const testCampaign = {
+  storeId: "store-1",
+  name: "Sale",
+  audience: { mode: "segment" as const, segment: "all" as const, source: "ALL" as const },
+  template: EmailCampaignTemplate.CUSTOM,
+  templateKey: "blank",
+  subject: "Sale",
+  preheader: null,
+  senderDisplayName: null,
+  replyToEmail: null,
+  brandColor: "#111827",
+  buttonColor: "#111827",
+  buttonTextColor: "#ffffff",
+  backgroundColor: "#f3f4f6",
+  contentBackgroundColor: "#ffffff",
+  textColor: "#111827",
+  mutedTextColor: "#4b5563",
+  borderColor: "#e5e7eb",
+  fontFamily: EmailCampaignFontFamily.INTER,
+  logoStoreId: null,
+  blocks: [
+    {
+      id: "header",
+      type: "header" as const,
+      showStoreName: true,
+      showLogo: true,
+    },
+    {
+      id: "text",
+      type: "text" as const,
+      heading: "Sale",
+      body: "Selected products are available.",
+    },
+    {
+      id: "footer",
+      type: "footer" as const,
+      showUnsubscribe: true,
+    },
+  ],
+  legacyBody: "Selected products are available.",
+};
 
 describe("email marketing logo rendering", () => {
   it("resolves relative managed logo URLs against the public app URL", () => {
@@ -63,31 +120,12 @@ describe("email marketing logo rendering", () => {
 
   it("falls back to store name instead of a broken image when no logo is selected", () => {
     const rendered = renderEmailCampaign({
-      campaign: {
-        storeId: "store-1",
-        source: "ALL",
-        template: EmailCampaignTemplate.CUSTOM,
-        subject: "Sale",
-        preheader: null,
-        heading: "Sale",
-        body: "Selected products are available.",
-        ctaLabel: null,
-        ctaUrl: null,
-        footerText: null,
-        senderDisplayName: null,
-        replyToEmail: null,
-        brandColor: "#111827",
-        buttonColor: "#111827",
-        fontFamily: EmailCampaignFontFamily.INTER,
-        bannerImageUrl: null,
-        logoStoreId: null,
-      },
-      storeName: "Airport Store",
+      campaign: testCampaign,
+      store: testStore,
       logoUrl: null,
     });
 
     expect(rendered.html).toContain("Airport Store");
-    expect(rendered.html).toContain("<strong");
     expect(rendered.html).not.toContain("<img src=");
   });
 
@@ -102,33 +140,15 @@ describe("email marketing logo rendering", () => {
         email: "ONE@EXAMPLE.COM",
       });
       const rendered = renderEmailCampaign({
-        campaign: {
-          storeId: "store-1",
-          source: "ALL",
-          template: EmailCampaignTemplate.CUSTOM,
-          subject: "Sale",
-          preheader: null,
-          heading: "Sale",
-          body: "Selected products are available.",
-          ctaLabel: null,
-          ctaUrl: null,
-          footerText: null,
-          senderDisplayName: null,
-          replyToEmail: null,
-          brandColor: "#111827",
-          buttonColor: "#111827",
-          fontFamily: EmailCampaignFontFamily.INTER,
-          bannerImageUrl: null,
-          logoStoreId: null,
-        },
-        storeName: "Airport Store",
+        campaign: testCampaign,
+        store: testStore,
         logoUrl: null,
         unsubscribeUrl,
       });
 
       expect(unsubscribeUrl).toContain("email=one%40example.com");
-      expect(rendered.html).toContain("Unsubscribe");
-      expect(rendered.text).toContain(`Unsubscribe: ${unsubscribeUrl}`);
+      expect(rendered.html).toContain("Отписаться");
+      expect(rendered.text).toContain(`Отписаться от рассылки: ${unsubscribeUrl}`);
     } finally {
       if (previousNextAuthSecret === undefined) {
         delete process.env.NEXTAUTH_SECRET;
@@ -136,5 +156,89 @@ describe("email marketing logo rendering", () => {
         process.env.NEXTAUTH_SECRET = previousNextAuthSecret;
       }
     }
+  });
+
+  it("renders selected logo and hero banner images in the shared email renderer", () => {
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "header",
+            type: "header",
+            showStoreName: true,
+            showLogo: true,
+          },
+          {
+            id: "hero",
+            type: "hero",
+            imageUrl: "https://cdn.bazaar.kg/email/banner.jpg",
+            heading: "Новая коллекция",
+            subtitle: "Посмотрите обновление магазина.",
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: "https://cdn.bazaar.kg/email/logo.png",
+    });
+
+    expect(rendered.html).toContain('src="https://cdn.bazaar.kg/email/logo.png"');
+    expect(rendered.html).toContain('src="https://cdn.bazaar.kg/email/banner.jpg"');
+    expect(rendered.text).toContain("Новая коллекция");
+  });
+
+  it("flags localhost image URLs before test or final email send", () => {
+    const campaign = {
+      ...testCampaign,
+      blocks: [
+        {
+          id: "header",
+          type: "header" as const,
+          showStoreName: true,
+          showLogo: true,
+        },
+        {
+          id: "hero",
+          type: "hero" as const,
+          imageUrl: "http://localhost:3000/uploads/banner.png",
+          heading: "Banner",
+        },
+        {
+          id: "products",
+          type: "products" as const,
+          productIds: ["product-1"],
+          showImage: true,
+        },
+      ],
+    };
+    const productsById = new Map([
+      [
+        "product-1",
+        {
+          id: "product-1",
+          name: "Case",
+          description: null,
+          imageUrl: "http://127.0.0.1:3000/uploads/product.png",
+          priceKgs: 1000,
+          priceText: "1 000 сом",
+          currencyCode: "KGS",
+          publicUrl: null,
+        },
+      ],
+    ]);
+
+    expect(isPublicEmailMarketingAssetUrl("https://cdn.bazaar.kg/image.png")).toBe(true);
+    expect(isPublicEmailMarketingAssetUrl("http://localhost:3000/image.png")).toBe(false);
+    expect(
+      collectNonPublicEmailImageUrls({
+        campaign,
+        productsById,
+        logoUrl: "http://localhost:3000/uploads/logo.png",
+      }),
+    ).toEqual([
+      "http://localhost:3000/uploads/logo.png",
+      "http://localhost:3000/uploads/banner.png",
+      "http://127.0.0.1:3000/uploads/product.png",
+    ]);
   });
 });

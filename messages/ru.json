@@ -3857,6 +3857,7 @@
     "emailCampaignReplyToInvalid": "Некорректный email для ответа.",
     "emailMarketingNotConfigured": "Email Marketing не настроен.",
     "emailMarketingPublicUrlRequired": "Укажите публичный NEXTAUTH_URL или NEXT_PUBLIC_APP_URL перед отправкой кампаний.",
+    "emailCampaignImagePublicUrlRequired": "Изображения письма должны быть доступны по публичному URL. Укажите публичный NEXTAUTH_URL/NEXT_PUBLIC_APP_URL или R2_PUBLIC_BASE_URL.",
     "emailMarketingUnsubscribeSecretMissing": "Укажите EMAIL_UNSUBSCRIBE_SECRET, NEXTAUTH_SECRET или JOBS_SECRET перед отправкой кампаний.",
     "emailCampaignAudienceEmpty": "В выбранной аудитории нет клиентов с email.",
     "invalidCurrencyRate": "Для выбранной валюты укажите корректный курс к сому.",

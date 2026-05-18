@@ -599,7 +599,7 @@ const CustomerDatabasePage = () => {
               {customerDetail.recentOrders.length ? (
                 <div className="space-y-2">
                   {customerDetail.recentOrders.map((order) => (
-                    <div key={order.id} className="border border-border bg-card p-3">
+                    <div key={order.id} className="rounded-md border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-foreground">{order.number}</p>

@@ -2895,7 +2895,7 @@ export const ProductForm = ({
     }
   };
   const mobileProductSectionClassName =
-    "rounded-none border border-border/70 bg-background p-4 md:border-0 md:bg-transparent md:p-0";
+    "rounded-md border border-border/70 bg-background p-4 md:border-0 md:bg-transparent md:p-0";
 
   const pendingImageUploadCards = pendingImageUploads.length ? (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -3010,7 +3010,7 @@ export const ProductForm = ({
         <span className="text-xs text-muted-foreground">{t("imagesReorderHint")}</span>
       </div>
       <div
-        className={`rounded-none border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
+        className={`rounded-md border border-dashed px-4 py-4 text-sm text-muted-foreground transition ${
           isDragActive ? "border-ink bg-muted/30" : "border-border"
         }`}
         onDragOver={handleImageDragOver}
@@ -3029,7 +3029,7 @@ export const ProductForm = ({
             return (
               <div
                 key={image.id}
-                className={`grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-none border border-border bg-card p-3 sm:flex sm:items-start ${
+                className={`grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-border bg-card p-3 sm:flex sm:items-start ${
                   draggedImageIndex === index ? "opacity-60" : ""
                 }`}
                 draggable={!readOnly}
@@ -3055,7 +3055,7 @@ export const ProductForm = ({
                   setDraggedImageIndex(null);
                 }}
               >
-                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-none bg-muted/30 sm:h-36 sm:w-36 sm:shrink-0">
+                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-md bg-muted/30 sm:h-36 sm:w-36 sm:shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={withPreviewVersion(imageUrl, image.id)}
@@ -3167,7 +3167,7 @@ export const ProductForm = ({
                       href={image.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block space-y-1 rounded-none border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
+                      className="block space-y-1 rounded-md border border-border bg-card px-3 py-2 transition hover:bg-muted/30"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -3333,7 +3333,7 @@ export const ProductForm = ({
       className={mobileProductSectionClassName}
     >
       <div className="space-y-4">
-        <div className="flex flex-col gap-3 rounded-none border border-border/70 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-md border border-border/70 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
               {t("variantSetupCount", { count: variantSummaries.length })}
@@ -3358,7 +3358,7 @@ export const ProductForm = ({
         {variantSummaries.length ? (
           <div className="grid gap-2 md:grid-cols-2">
             {variantSummaries.map((variant) => (
-              <div key={variant.key} className="rounded-none border border-border/70 bg-card p-3">
+              <div key={variant.key} className="rounded-md border border-border/70 bg-card p-3">
                 <p className="truncate text-sm font-semibold text-foreground">{variant.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {t("variantSetupAttributes", { count: variant.attributeCount })}
@@ -3579,7 +3579,7 @@ export const ProductForm = ({
                         <FormItem>
                           <FormLabel>{t("category")}</FormLabel>
                           <div className="space-y-3">
-                            <div className="flex min-h-10 flex-wrap gap-2 rounded-none border border-border bg-muted/20 p-2">
+                            <div className="flex min-h-10 flex-wrap gap-2 rounded-md border border-border bg-muted/20 p-2">
                               {categoryValues.length ? (
                                 categoryValues.map((value, index) => {
                                   const categoryMeta = categoryMetaByKey.get(
@@ -3593,23 +3593,23 @@ export const ProductForm = ({
                                   return (
                                     <div
                                       key={value}
-                                      className="inline-flex items-center gap-1 rounded-none border border-border bg-background px-2 py-1 text-xs text-foreground"
+                                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
                                     >
                                       <span>{value}</span>
                                       {index === 0 ? (
-                                        <span className="rounded-none bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                        <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                                           {t("categoryPrimaryBadge")}
                                         </span>
                                       ) : null}
                                       {isHiddenCategory ? (
-                                        <span className="rounded-none bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-warning">
+                                        <span className="rounded-md bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-warning">
                                           {t("categoryHiddenBadge")}
                                         </span>
                                       ) : null}
                                       {!readOnly && index > 0 ? (
                                         <button
                                           type="button"
-                                          className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                          className="rounded-md p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                                           onClick={() => promoteProductCategory(value)}
                                           aria-label={t("categoryPromote")}
                                         >
@@ -3619,7 +3619,7 @@ export const ProductForm = ({
                                       {!readOnly ? (
                                         <button
                                           type="button"
-                                          className="rounded-none p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                                          className="rounded-md p-0.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                                           onClick={() => removeProductCategory(value)}
                                           aria-label={tCommon("delete")}
                                         >
@@ -3693,7 +3693,7 @@ export const ProductForm = ({
                                           type="button"
                                           variant="ghost"
                                           size="sm"
-                                          className="h-auto justify-start gap-2 rounded-none border border-dashed border-border px-3 py-2 text-left text-xs"
+                                          className="h-auto justify-start gap-2 rounded-md border border-dashed border-border px-3 py-2 text-left text-xs"
                                           onClick={() => addProductCategory(option.name)}
                                         >
                                           <AddIcon className="h-3 w-3" aria-hidden />
@@ -3701,7 +3701,7 @@ export const ProductForm = ({
                                             {option.name}
                                           </span>
                                           {isHiddenCategory ? (
-                                            <span className="rounded-none bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-warning">
+                                            <span className="rounded-md bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-warning">
                                               {t("categoryHiddenBadge")}
                                             </span>
                                           ) : null}
@@ -3960,7 +3960,7 @@ export const ProductForm = ({
                     ) : null}
                   </FormGrid>
                   {duplicateDiagnosticsEnabled ? (
-                    <div className="rounded-none border border-warning/40 bg-warning/10 p-3">
+                    <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-medium text-foreground">
                           {t("duplicateDiagnosticsTitle")}
@@ -3973,7 +3973,7 @@ export const ProductForm = ({
                         ) : null}
                       </div>
                       {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
-                        <div className="mt-3 rounded-none border border-danger/30 bg-background p-3">
+                        <div className="mt-3 rounded-md border border-danger/30 bg-background p-3">
                           <p className="text-xs font-medium text-danger">
                             {t("duplicateExactSkuTitle")}
                           </p>
@@ -4006,7 +4006,7 @@ export const ProductForm = ({
                           {duplicateDiagnosticsQuery.data.exactBarcodeMatches.map((match) => (
                             <div
                               key={`${match.barcode}-${match.id}`}
-                              className="rounded-none border border-danger/30 bg-background p-3"
+                              className="rounded-md border border-danger/30 bg-background p-3"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="muted">{match.barcode}</Badge>
@@ -4037,7 +4037,7 @@ export const ProductForm = ({
                           {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
                             <div
                               key={match.id}
-                              className="rounded-none border border-warning/30 bg-background p-3"
+                              className="rounded-md border border-warning/30 bg-background p-3"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm text-foreground">{match.name}</span>
@@ -4126,7 +4126,7 @@ export const ProductForm = ({
                   description={t("bundleComponentsHint")}
                   className={mobileProductSectionClassName}
                 >
-                  <div className="space-y-3 rounded-none border border-border p-3">
+                  <div className="space-y-3 rounded-md border border-border p-3">
                     <div className="relative">
                       <Input
                         value={bundleSearch}
@@ -4142,7 +4142,7 @@ export const ProductForm = ({
                         disabled={readOnly}
                       />
                       {showBundleResults && bundleSearch.trim().length > 0 ? (
-                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-none border border-border bg-background shadow-lg">
+                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
                           {bundleSearchQuery.isLoading ? (
                             <div className="px-3 py-2 text-sm text-muted-foreground">
                               {tCommon("loading")}
@@ -4176,7 +4176,7 @@ export const ProductForm = ({
                         {bundleComponentFields.map((component, index) => (
                           <div
                             key={component.id}
-                            className="grid gap-2 rounded-none border border-border p-3 sm:grid-cols-[1fr_120px_auto]"
+                            className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_120px_auto]"
                           >
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-foreground">
@@ -4316,7 +4316,7 @@ export const ProductForm = ({
                         {packFields.map((field, index) => (
                           <div
                             key={field.id}
-                            className="space-y-3 rounded-none border border-border/70 bg-card p-4"
+                            className="space-y-3 rounded-md border border-border/70 bg-card p-4"
                           >
                             <FormGrid className="items-start">
                               <FormField
@@ -4497,7 +4497,7 @@ export const ProductForm = ({
                         return (
                           <div
                             key={field.id}
-                            className="space-y-4 rounded-none border border-border/70 bg-card p-4"
+                            className="space-y-4 rounded-md border border-border/70 bg-card p-4"
                           >
                             <FormGrid className="items-start">
                               <FormField
@@ -4649,7 +4649,7 @@ export const ProductForm = ({
                                         control={form.control}
                                         name={fieldName}
                                         render={({ field: attrField }) => (
-                                          <FormItem className="rounded-none border border-border/70 p-3">
+                                          <FormItem className="rounded-md border border-border/70 p-3">
                                             <div className="flex items-center justify-between gap-2">
                                               <FormLabel>
                                                 {label}
@@ -4864,7 +4864,7 @@ export const ProductForm = ({
           </FormActions>
         ) : null}
         {!readOnly && !hideActions ? (
-          <div className="mt-4 rounded-none border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden">
+          <div className="mt-4 rounded-md border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden">
             <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>
               {isSubmitting ? (
                 <Spinner className="h-4 w-4" />
@@ -4938,7 +4938,7 @@ export const ProductForm = ({
                     return (
                       <div
                         key={attribute.key}
-                        className="rounded-none border border-border/70 bg-card p-3"
+                        className="rounded-md border border-border/70 bg-card p-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
@@ -5137,7 +5137,7 @@ export const ProductForm = ({
         usePortal
       >
         <div className="space-y-4">
-          <div className="relative h-[48vh] min-h-[280px] overflow-hidden rounded-none border border-border bg-black/70">
+          <div className="relative h-[48vh] min-h-[280px] overflow-hidden rounded-md border border-border bg-black/70">
             {isPreparingImageEditor ? (
               <div className="flex h-full items-center justify-center text-sm text-white/90">
                 <Spinner className="h-4 w-4" />
@@ -5177,7 +5177,7 @@ export const ProductForm = ({
 
           {!readOnly ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-3 rounded-none border border-border bg-secondary/40 p-3">
+              <div className="space-y-3 rounded-md border border-border bg-secondary/40 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">
                     {t("imageEditorZoom")}
@@ -5197,11 +5197,11 @@ export const ProductForm = ({
                     }
                   }}
                   aria-label={t("imageEditorZoom")}
-                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                  className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
                 />
               </div>
 
-              <div className="space-y-3 rounded-none border border-border bg-secondary/40 p-3">
+              <div className="space-y-3 rounded-md border border-border bg-secondary/40 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">
                     {t("imageEditorRotation")}
@@ -5222,7 +5222,7 @@ export const ProductForm = ({
                       }
                     }}
                     aria-label={t("imageEditorRotation")}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
                   />
                   <Button
                     type="button"

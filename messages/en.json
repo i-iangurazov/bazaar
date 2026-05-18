@@ -3857,6 +3857,7 @@
     "emailCampaignReplyToInvalid": "Reply-to email is invalid.",
     "emailMarketingNotConfigured": "Email marketing is not configured.",
     "emailMarketingPublicUrlRequired": "Set NEXTAUTH_URL or NEXT_PUBLIC_APP_URL to a public app URL before sending campaigns.",
+    "emailCampaignImagePublicUrlRequired": "Email images must be available through a public URL. Set a public NEXTAUTH_URL/NEXT_PUBLIC_APP_URL or R2_PUBLIC_BASE_URL.",
     "emailMarketingUnsubscribeSecretMissing": "Set EMAIL_UNSUBSCRIBE_SECRET, NEXTAUTH_SECRET, or JOBS_SECRET before sending campaigns.",
     "emailCampaignAudienceEmpty": "No customers with email match this audience.",
     "invalidCurrencyRate": "Enter a valid KGS exchange rate for the selected currency.",

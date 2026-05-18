@@ -44,7 +44,7 @@ export const PreviewTabs = ({ tabs, tabListAriaLabel }: PreviewTabsProps) => {
       <div
         role="tablist"
         aria-label={tabListAriaLabel}
-        className="inline-flex w-full flex-wrap gap-2 rounded-xl border border-border bg-secondary/50 p-1"
+        className="inline-flex w-full flex-wrap gap-2 rounded-md border border-border bg-secondary/50 p-1"
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeId;
@@ -58,7 +58,7 @@ export const PreviewTabs = ({ tabs, tabListAriaLabel }: PreviewTabsProps) => {
               aria-controls={`preview-panel-${tab.id}`}
               onClick={() => setActiveId(tab.id)}
               className={cn(
-                "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -68,7 +68,7 @@ export const PreviewTabs = ({ tabs, tabListAriaLabel }: PreviewTabsProps) => {
         })}
       </div>
 
-      <div className="relative min-h-[220px] overflow-hidden rounded-lg border border-border bg-card p-4">
+      <div className="relative min-h-[220px] overflow-hidden rounded-md border border-border bg-card p-4">
         {tabs.map((tab) => {
           const isActive = tab.id === activeId;
           return (
@@ -89,7 +89,7 @@ export const PreviewTabs = ({ tabs, tabListAriaLabel }: PreviewTabsProps) => {
               <ul className="mt-4 space-y-2 text-sm text-foreground">
                 {tab.points.map((point) => (
                   <li key={point} className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-md bg-primary" aria-hidden />
                     <span>{point}</span>
                   </li>
                 ))}

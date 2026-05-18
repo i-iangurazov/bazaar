@@ -302,6 +302,7 @@ enum EmailCampaignStatus {
   SENDING
   SENT
   FAILED
+  PARTIAL
 }
 
 enum EmailCampaignTemplate {
@@ -316,6 +317,14 @@ enum EmailCampaignFontFamily {
   JOST
   INTER
   SYSTEM
+  NOTO_SANS
+  ROBOTO
+  OPEN_SANS
+  MONTSERRAT
+  LATO
+  PT_SANS
+  SOURCE_SANS_3
+  MANROPE
 }
 
 enum EmailCampaignRecipientStatus {
@@ -1431,31 +1440,43 @@ model Customer {
 }
 
 model EmailCampaign {
-  id                String                  @id @default(cuid())
-  organizationId    String
-  storeId           String
-  createdById       String?
-  status            EmailCampaignStatus     @default(DRAFT)
-  template          EmailCampaignTemplate   @default(CUSTOM)
-  subject           String
-  preheader         String?
-  heading           String?
-  body              String                  @db.Text
-  ctaLabel          String?
-  ctaUrl            String?
-  footerText        String?
-  senderDisplayName String?
-  replyToEmail      String?
-  brandColor        String?
-  buttonColor       String?
-  fontFamily        EmailCampaignFontFamily @default(INTER)
-  bannerImageUrl    String?
-  logoImageId       String?
-  recipientCount    Int                     @default(0)
-  sentAt            DateTime?
-  errorMessage      String?                 @db.Text
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  storeId                String
+  createdById            String?
+  status                 EmailCampaignStatus     @default(DRAFT)
+  template               EmailCampaignTemplate   @default(CUSTOM)
+  templateKey            String                  @default("blank")
+  name                   String                  @default("Кампания")
+  subject                String
+  preheader              String?
+  heading                String?
+  body                   String                  @db.Text
+  blocksJson             Json?
+  audienceSummaryJson    Json?
+  ctaLabel               String?
+  ctaUrl                 String?
+  footerText             String?
+  senderDisplayName      String?
+  replyToEmail           String?
+  brandColor             String?
+  buttonColor            String?
+  buttonTextColor        String?
+  backgroundColor        String?
+  contentBackgroundColor String?
+  textColor              String?
+  mutedTextColor         String?
+  borderColor            String?
+  fontFamily             EmailCampaignFontFamily @default(INTER)
+  bannerImageUrl         String?
+  logoImageId            String?
+  recipientCount         Int                     @default(0)
+  sentCount              Int                     @default(0)
+  failedCount            Int                     @default(0)
+  sentAt                 DateTime?
+  errorMessage           String?                 @db.Text
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   organization Organization             @relation(fields: [organizationId], references: [id])
   store        Store                    @relation(fields: [storeId], references: [id])

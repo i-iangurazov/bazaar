@@ -239,7 +239,7 @@ const CompliancePage = () => {
                   control={form.control}
                   name="enableKkm"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+                    <FormItem className="flex items-center justify-between gap-3 rounded-md border px-3 py-3">
                       <div>
                         <FormLabel>{t("kkmToggle")}</FormLabel>
                         <p className="text-xs text-muted-foreground">{t("kkmHint")}</p>
@@ -255,7 +255,7 @@ const CompliancePage = () => {
                   control={form.control}
                   name="enableEsf"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+                    <FormItem className="flex items-center justify-between gap-3 rounded-md border px-3 py-3">
                       <div>
                         <FormLabel>{t("esfToggle")}</FormLabel>
                         <p className="text-xs text-muted-foreground">{t("esfHint")}</p>
@@ -271,7 +271,7 @@ const CompliancePage = () => {
                   control={form.control}
                   name="enableEttn"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+                    <FormItem className="flex items-center justify-between gap-3 rounded-md border px-3 py-3">
                       <div>
                         <FormLabel>{t("ettnToggle")}</FormLabel>
                         <p className="text-xs text-muted-foreground">{t("ettnHint")}</p>
@@ -287,7 +287,7 @@ const CompliancePage = () => {
                   control={form.control}
                   name="enableMarking"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+                    <FormItem className="flex items-center justify-between gap-3 rounded-md border px-3 py-3">
                       <div>
                         <FormLabel>{t("markingToggle")}</FormLabel>
                         <p className="text-xs text-muted-foreground">{t("markingHint")}</p>
@@ -333,7 +333,7 @@ const CompliancePage = () => {
                 ) : null}
 
                 {advancedOpen ? (
-                  <div className="rounded-lg border p-4">
+                  <div className="rounded-md border p-4">
                     <p className="mb-4 text-sm text-muted-foreground">{t("advancedIntro")}</p>
                     <FormStack>
                       <FormField

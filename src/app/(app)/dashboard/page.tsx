@@ -351,7 +351,7 @@ const DashboardPage = () => {
           <p className="text-sm text-danger">{translateError(tErrors, dashboardQuery.error)}</p>
         ) : null}
 
-        <section className="border border-border bg-card p-4 shadow-sm">
+        <section className="rounded-md border border-border bg-card p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -385,7 +385,7 @@ const DashboardPage = () => {
             </div>
           ) : null}
           {session?.user?.emailVerified === false ? (
-            <p className="mt-3 border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
+            <p className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
               {tNav("emailUnverifiedTitle")}
             </p>
           ) : null}
@@ -456,7 +456,7 @@ const DashboardPage = () => {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-14 items-center gap-2 border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
+            <div className="flex min-h-14 items-center gap-2 rounded-md border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("noLowStock")}
             </div>
@@ -470,7 +470,10 @@ const DashboardPage = () => {
           ) : mobileRecentActivity.length ? (
             <div className="grid gap-2">
               {mobileRecentActivity.map((item) => (
-                <div key={item.id} className="border border-border bg-card p-3 shadow-sm">
+                <div
+                  key={item.id}
+                  className="rounded-md border border-border bg-card p-3 shadow-sm"
+                >
                   <p className="text-sm font-semibold text-foreground">
                     {item.summaryKey
                       ? tAudit(item.summaryKey, item.summaryValues ?? {})
@@ -484,7 +487,7 @@ const DashboardPage = () => {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-14 items-center gap-2 border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
+            <div className="flex min-h-14 items-center gap-2 rounded-md border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("noActivity")}
             </div>
@@ -531,7 +534,7 @@ const DashboardPage = () => {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
               {kpis.map((kpi) => (
-                <div key={kpi.key} className="border border-border/80 bg-card p-3">
+                <div key={kpi.key} className="rounded-md border border-border/80 bg-card p-3">
                   <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
                   <p className={`mt-2 text-xl font-semibold leading-none ${kpi.valueClassName}`}>
                     {kpi.value}
@@ -572,7 +575,7 @@ const DashboardPage = () => {
                 <Link
                   key={item.key}
                   href={item.href}
-                  className="flex items-center justify-between gap-3 border border-border/80 bg-secondary/20 px-3 py-2 text-sm transition hover:bg-secondary/40"
+                  className="flex items-center justify-between gap-3 rounded-md border border-border/80 bg-secondary/20 px-3 py-2 text-sm transition hover:bg-secondary/40"
                 >
                   <span className="text-foreground">{item.label}</span>
                   <Badge variant={item.value > 0 ? item.variant : "muted"}>
@@ -632,7 +635,7 @@ const DashboardPage = () => {
                   {activity.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-none border border-border/80 bg-secondary/30 p-3"
+                      className="rounded-md border border-border/80 bg-secondary/30 p-3"
                     >
                       <p className="text-sm font-semibold text-foreground">
                         {item.summaryKey

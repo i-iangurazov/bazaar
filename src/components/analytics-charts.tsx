@@ -324,19 +324,19 @@ export const AnalyticsCharts = ({
                 {formatKgsMoney(inventoryValue.valueKgs, locale, currencySource)}
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-none border border-border bg-muted/20 p-3">
+                <div className="rounded-md border border-border bg-muted/20 p-3">
                   <p className="text-xs text-muted-foreground">{t("deadStock30")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatNumber(inventoryValue.deadStock30, locale)}
                   </p>
                 </div>
-                <div className="rounded-none border border-border bg-muted/20 p-3">
+                <div className="rounded-md border border-border bg-muted/20 p-3">
                   <p className="text-xs text-muted-foreground">{t("deadStock60")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatNumber(inventoryValue.deadStock60, locale)}
                   </p>
                 </div>
-                <div className="rounded-none border border-border bg-muted/20 p-3">
+                <div className="rounded-md border border-border bg-muted/20 p-3">
                   <p className="text-xs text-muted-foreground">{t("deadStock90")}</p>
                   <p className="text-lg font-semibold text-foreground">
                     {formatNumber(inventoryValue.deadStock90, locale)}

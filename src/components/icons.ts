@@ -34,7 +34,10 @@ import {
   LogOut,
   User,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check,
+  SquareCheckBig,
   MoreHorizontal,
   Pencil,
   Archive,
@@ -56,6 +59,7 @@ import {
   Languages,
   LayoutGrid,
   List,
+  Monitor,
   Plug,
   Printer,
   Sparkles,
@@ -106,7 +110,10 @@ export const EmptyIcon = Inbox;
 export const SignOutIcon = LogOut;
 export const UserIcon = User;
 export const ChevronDownIcon = ChevronDown;
+export const ChevronLeftIcon = ChevronLeft;
+export const ChevronRightIcon = ChevronRight;
 export const CheckIcon = Check;
+export const SelectAllIcon = SquareCheckBig;
 export const MoreIcon = MoreHorizontal;
 export const EditIcon = Pencil;
 export const ArchiveIcon = Archive;
@@ -128,5 +135,7 @@ export const CopyIcon = Copy;
 export const LanguageIcon = Languages;
 export const GridViewIcon = LayoutGrid;
 export const TableViewIcon = List;
+export const DesktopPreviewIcon = Monitor;
+export const MobilePreviewIcon = Smartphone;
 export const SparklesIcon = Sparkles;
 export const ShareIcon = Share2;

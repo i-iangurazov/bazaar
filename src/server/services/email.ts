@@ -226,7 +226,7 @@ export const sendVerificationEmail = async (input: {
           <p style="margin:0 0 8px;color:#111827;">${copy.greeting}</p>
           <p style="margin:0 0 16px;color:#374151;">${copy.intro}</p>
           <p style="margin:0 0 16px;color:#374151;">${copy.expires}</p>
-          <a href="${input.verifyLink}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">
+          <a href="${input.verifyLink}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">
             ${copy.cta}
           </a>
           <p style="margin:16px 0 6px;color:#6b7280;font-size:13px;">${copy.fallback}</p>

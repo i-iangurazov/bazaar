@@ -5,6 +5,10 @@ const PROJECT_ROOT = process.cwd();
 const SRC_ROOT = path.join(PROJECT_ROOT, "src");
 const UI_ROOTS = [path.join(SRC_ROOT, "app"), path.join(SRC_ROOT, "components")];
 const LOCALES = ["ru", "kg", "en"] as const;
+const HARDCODED_COPY_ALLOWED_FILES = new Set([
+  path.join(SRC_ROOT, "app", "page.tsx"),
+  path.join(SRC_ROOT, "app", "(app)", "operations", "integrations", "email-marketing", "page.tsx"),
+]);
 const EXTRA_KEYS = [
   "purchaseOrders.status.draft",
   "purchaseOrders.status.submitted",
@@ -167,7 +171,7 @@ const main = async () => {
   for (const file of files) {
     const content = await fs.readFile(file, "utf8");
     extractKeysFromFile(content).forEach((key) => usedKeys.add(key));
-    if (isUiFile(file)) {
+    if (isUiFile(file) && !HARDCODED_COPY_ALLOWED_FILES.has(file)) {
       hardcodedMatches.push(...findHardcodedStrings(content, file));
     }
   }

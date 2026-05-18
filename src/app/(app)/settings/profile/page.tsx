@@ -850,7 +850,7 @@ const ProfilePage = () => {
                     {tCommon("save")}
                   </Button>
                 </FormActions>
-                <div className="border border-border bg-background p-3 md:hidden">
+                <div className="rounded-md border border-border bg-background p-3 md:hidden">
                   <Button
                     type="submit"
                     className="h-12 w-full"
@@ -1015,7 +1015,7 @@ const ProfilePage = () => {
                     {tCommon("save")}
                   </Button>
                 </FormActions>
-                <div className="border border-border bg-background p-3 md:hidden">
+                <div className="rounded-md border border-border bg-background p-3 md:hidden">
                   <Button
                     type="submit"
                     className="h-12 w-full"

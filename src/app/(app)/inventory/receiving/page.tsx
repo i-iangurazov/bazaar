@@ -403,7 +403,7 @@ const InventoryReceivingPage = () => {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
-          <section className="border border-border bg-card p-4 md:p-4">
+          <section className="rounded-md border border-border bg-card p-4 md:p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingDetailsTitle")}
@@ -506,7 +506,7 @@ const InventoryReceivingPage = () => {
             </div>
           </section>
 
-          <section className="border border-border bg-card p-4">
+          <section className="rounded-md border border-border bg-card p-4">
             <div className="mb-4">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingSearchTitle")}
@@ -594,7 +594,7 @@ const InventoryReceivingPage = () => {
             </div>
           </section>
 
-          <section className="border border-border bg-card p-4">
+          <section className="rounded-md border border-border bg-card p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingTableTitle")}
@@ -711,7 +711,7 @@ const InventoryReceivingPage = () => {
                   {lines.map((line) => {
                     const metric = metricByKey.get(line.key);
                     return (
-                      <div key={line.key} className="border border-border bg-background p-3">
+                      <div key={line.key} className="rounded-md border border-border bg-background p-3">
                         <div className="flex items-start gap-3">
                           {renderProductImage(line)}
                           <div className="min-w-0 flex-1">
@@ -813,7 +813,7 @@ const InventoryReceivingPage = () => {
         </div>
 
         <aside className="hidden md:block xl:sticky xl:top-4 xl:self-start">
-          <div className="border border-border bg-card p-4">
+          <div className="rounded-md border border-border bg-card p-4">
             <h3 className="text-base font-semibold text-foreground">
               {t("receivingSummaryTitle")}
             </h3>

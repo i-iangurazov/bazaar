@@ -31,7 +31,7 @@ describe("mobile products source", () => {
     expect(source).toContain('<FormActions className="hidden md:flex">');
     expect(source).toContain("scrollbar-none -mx-1 flex gap-2 overflow-x-auto");
     expect(source).toContain(
-      'className="mt-4 rounded-none border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden"',
+      'className="mt-4 rounded-md border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden"',
     );
     expect(source).toContain('enableSku ? [t("sku")] : []');
     expect(source).toContain('enableBarcode ? [t("barcodes")] : []');

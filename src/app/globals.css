@@ -22,8 +22,8 @@
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
 
-  /* keep blue, slightly refined */
-  --primary: 221 83% 53%;
+  /* Bazaar brand blue */
+  --primary: 221 83% 45%;
   --primary-foreground: 0 0% 100%;
 
   /* make secondary distinct: subtle tinted surface */
@@ -42,7 +42,7 @@
   --input: 220 13% 91%;
 
   /* ring: match primary but slightly softer */
-  --ring: 221 83% 53%;
+  --ring: 221 83% 45%;
 
   /* semantics: balanced for white backgrounds */
   --success: 142 71% 35%;
@@ -57,11 +57,11 @@
   --destructive: 0 74% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --radius: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-control: 0px;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-control: 6px;
   --mobile-top-safe-area: env(safe-area-inset-top, 0px);
   --mobile-bottom-safe-area: env(safe-area-inset-bottom, 0px);
   --mobile-bottom-nav-height: calc(4.5rem + var(--mobile-bottom-safe-area));
@@ -78,9 +78,9 @@
   --popover: 222 47% 9%;
   --popover-foreground: 210 40% 98%;
 
-  /* blue stays “blue” but tuned for dark */
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 11%;
+  /* Bazaar brand blue, tuned for dark */
+  --primary: 217 91% 56%;
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 223 25% 16%;
   --secondary-foreground: 210 40% 98%;
@@ -94,7 +94,7 @@
   --border: 223 20% 22%;
   --input: 223 20% 22%;
 
-  --ring: 217 91% 60%;
+  --ring: 217 91% 56%;
 
   --success: 142 60% 45%;
   --success-foreground: 222 47% 11%;
@@ -108,11 +108,11 @@
   --destructive: 0 84% 64%;
   --destructive-foreground: 222 47% 11%;
 
-  --radius: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-control: 0px;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-control: 6px;
   color-scheme: dark;
 }
 
@@ -251,7 +251,7 @@
     120deg,
     hsl(var(--primary) / 1) 0%,
     hsl(var(--primary) / 0.95) 46%,
-    hsl(224 90% 60% / 0.95) 58%,
+    hsl(var(--primary) / 0.9) 58%,
     hsl(var(--primary) / 1) 100%
   );
   background-size: 210% 100%;

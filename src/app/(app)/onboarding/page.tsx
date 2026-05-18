@@ -274,9 +274,9 @@ const OnboardingPage = () => {
             <span>{t("progressLabel", { done: doneCount, total: totalCount })}</span>
             <span>{progressPercent}%</span>
           </div>
-          <div className="h-2 w-full rounded-full bg-muted/40">
+          <div className="h-2 w-full rounded-md bg-muted/40">
             <div
-              className="h-2 rounded-full bg-emerald-500"
+              className="h-2 rounded-md bg-success"
               style={{ width: `${progressPercent}%` }}
             />
           </div>

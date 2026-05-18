@@ -63,7 +63,7 @@ describe("conservative app shell navigation source", () => {
     expect(source).toContain('aria-label={tCommand("openButton")}');
     expect(source).toContain("<CirclePlusIcon");
     expect(source).toContain(
-      'className="h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"',
+      'className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"',
     );
     expect(source).toContain("requiredPermission?: AppPermission");
     expect(source).toContain("hasPermission(access, item.requiredPermission)");
@@ -81,5 +81,16 @@ describe("conservative app shell navigation source", () => {
     expect(attributesSource).not.toContain("adminOnly: true");
     expect(unitsSource).toContain('requiredPermission: "manageProducts"');
     expect(unitsSource).not.toContain("adminOnly: true");
+  });
+
+  it("keeps integrations reachable from the mobile more menu", () => {
+    const mobileMoreStart = source.indexOf("const mobileMoreCandidates");
+    const mobileMoreSource = source.slice(mobileMoreStart, mobileMoreStart + 1800);
+
+    expect(mobileMoreSource).toContain('key: "mobile-integrations"');
+    expect(mobileMoreSource).toContain('label: tNav("integrations")');
+    expect(mobileMoreSource).toContain('href: "/operations/integrations"');
+    expect(mobileMoreSource).toContain('requiredPermission: "manageIntegrations"');
+    expect(source).toContain('normalizedPath.startsWith("/operations/integrations")');
   });
 });

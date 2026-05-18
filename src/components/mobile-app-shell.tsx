@@ -147,7 +147,7 @@ export const MobileTopBar = ({
         <div className="mt-0.5 flex min-w-0 items-center gap-2">
           <h1 className="truncate text-base font-semibold text-foreground">{pageTitle}</h1>
           {statusLabel ? (
-            <span className="shrink-0 border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+            <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
               {statusLabel}
             </span>
           ) : null}
@@ -158,7 +158,7 @@ export const MobileTopBar = ({
         <PwaInstallButton />
         <Link
           href="/settings/profile"
-          className="inline-flex h-11 w-11 items-center justify-center border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+          className="button-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label={profileLabel}
         >
           <UserIcon className="h-4 w-4" aria-hidden />
@@ -186,7 +186,7 @@ export const MobileBottomNav = ({
   onOpenMore,
 }: MobileBottomNavProps) => (
   <nav
-    className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-2 pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+    className="fixed inset-x-2 bottom-2 z-40 rounded-md border border-border bg-background/95 px-2 pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
     style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     aria-label={navigationLabel}
   >
@@ -200,7 +200,7 @@ export const MobileBottomNav = ({
       <button
         type="button"
         className={cn(
-          "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 text-[11px] font-semibold transition",
+          "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 text-[11px] font-semibold transition",
           moreActive
             ? "bg-primary text-primary-foreground shadow-sm"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -219,7 +219,7 @@ const MobileBottomNavLink = ({ item }: { item: MobileShellNavItem }) => (
   <Link
     href={item.href}
     className={cn(
-      "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline",
+      "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline",
       item.active
         ? "bg-primary text-primary-foreground shadow-sm"
         : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -279,7 +279,7 @@ export const MobileMoreMenu = ({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto border-t border-border bg-background shadow-2xl transition-transform duration-200 ease-out",
+          "absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-md border-t border-border bg-background shadow-2xl transition-transform duration-200 ease-out",
           open ? "translate-y-0" : "translate-y-full",
         )}
       >
@@ -303,7 +303,7 @@ export const MobileMoreMenu = ({
               href={item.href}
               onClick={onClose}
               className={cn(
-                "flex min-h-12 items-center gap-3 border border-border bg-card px-3 py-2 text-sm font-semibold no-underline transition hover:border-primary/40 hover:bg-accent hover:no-underline",
+                "flex min-h-12 items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold no-underline transition hover:border-primary/40 hover:bg-accent hover:no-underline",
                 item.active && "border-primary/40 bg-primary/10 text-primary",
               )}
             >
@@ -321,7 +321,7 @@ export const MobileMoreMenu = ({
         </div>
 
         <div className="space-y-3 border-t border-border px-4 py-4">
-          <div className="flex min-h-12 items-center justify-center border border-border bg-card px-3 py-2">
+          <div className="flex min-h-12 items-center justify-center rounded-md border border-border bg-card px-3 py-2">
             <LanguageSwitcher
               compact
               className="border-0 bg-transparent p-0 shadow-none"
@@ -357,7 +357,7 @@ export const MobileQuickActionButton = ({
   <Link
     href={href}
     className={cn(
-      "flex min-h-14 items-center gap-3 border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline",
+      "flex min-h-14 items-center gap-3 rounded-md border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline",
       variant === "primary" &&
         "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
       variant === "secondary" &&
@@ -370,7 +370,7 @@ export const MobileQuickActionButton = ({
     {Icon ? (
       <span
         className={cn(
-          "inline-flex h-10 w-10 shrink-0 items-center justify-center border",
+          "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border",
           variant === "primary"
             ? "border-primary-foreground/30 bg-primary-foreground/10"
             : "border-border bg-secondary",
@@ -416,7 +416,7 @@ export const MobileTaskCard = ({
         {Icon ? (
           <span
             className={cn(
-              "inline-flex h-9 w-9 shrink-0 items-center justify-center border",
+              "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border",
               variant === "success" && "border-success/30 bg-success/10 text-success",
               variant === "warning" && "border-warning/30 bg-warning/10 text-warning",
               variant === "danger" && "border-danger/30 bg-danger/10 text-danger",
@@ -434,7 +434,7 @@ export const MobileTaskCard = ({
   );
 
   const classNames = cn(
-    "block min-h-24 border border-border bg-card p-3 text-left no-underline shadow-sm hover:no-underline",
+    "block min-h-24 rounded-md border border-border bg-card p-3 text-left no-underline shadow-sm hover:no-underline",
     href && "transition hover:border-primary/40 hover:bg-accent",
     className,
   );

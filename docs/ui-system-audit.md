@@ -22,13 +22,13 @@
 
 ## Findings
 
-- Radius is hardcoded across shared primitives (`rounded-md`, `rounded-lg`, `rounded-xl`, `rounded-2xl`, `rounded-full`) instead of using a controlled token.
+- Radius is standardized on `rounded-md` across shared primitives and page surfaces.
 - `tailwind.config.ts` maps `sm/md/lg` to `--radius`, currently `0.75rem`; that conflicts with the sharp UI direction.
 - Icon-only buttons have fixed `h-10 w-10`, but the base button does not force `shrink-0` for icon size.
-- Help/tips buttons are close to correct but still inherit rounded styling and can be affected by surrounding flex layouts.
-- Modal shells and headers encode rounded corners and lack a dedicated footer primitive, though `FormActions` is widely used.
-- Cards are rounded and have a relatively decorative `shadow-soft`, which makes nested card layouts feel heavier.
-- AppShell nav links and profile shortcut use multiple rounded values.
+- Help/tips buttons use the shared `rounded-md` system radius and fixed hit areas.
+- Modal shells and headers use `rounded-md` and a dedicated footer primitive.
+- Cards use `rounded-md` and restrained shadows.
+- AppShell nav links and profile shortcut use the same `rounded-md` value.
 
 ## System Direction
 

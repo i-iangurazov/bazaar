@@ -20,7 +20,7 @@ export const TableContainer = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("w-full overflow-x-auto rounded-none border border-border bg-card", className)}
+    className={cn("w-full overflow-x-auto rounded-md border border-border bg-card", className)}
     {...props}
   />
 ));

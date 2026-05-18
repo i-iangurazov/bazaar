@@ -412,8 +412,8 @@ const StockCountDetailPage = () => {
                               line.deltaQty === 0
                                 ? ""
                                 : line.deltaQty > 0
-                                  ? "text-emerald-600"
-                                  : "text-red-600"
+                                  ? "text-success"
+                                  : "text-danger"
                             }
                           >
                             {formatNumber(line.deltaQty, locale)}
@@ -488,8 +488,8 @@ const StockCountDetailPage = () => {
                   line.deltaQty === 0
                     ? "text-muted-foreground"
                     : line.deltaQty > 0
-                      ? "text-emerald-600"
-                      : "text-red-600";
+                      ? "text-success"
+                      : "text-danger";
                 const actions = [
                   {
                     key: "edit",
@@ -592,13 +592,13 @@ const StockCountDetailPage = () => {
             </div>
             <div className="flex items-center justify-between">
               <span>{t("overages")}</span>
-              <span className="font-semibold text-emerald-600">{summary.overages}</span>
+              <span className="font-semibold text-success">{summary.overages}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>{t("shortages")}</span>
-              <span className="font-semibold text-red-600">{summary.shortages}</span>
+              <span className="font-semibold text-danger">{summary.shortages}</span>
             </div>
-            <div className="rounded-none border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {t("summaryHint")}
             </div>
           </CardContent>
@@ -620,7 +620,7 @@ const StockCountDetailPage = () => {
                         {line.product.name}
                         {line.variant?.name ? ` • ${line.variant.name}` : ""}
                       </span>
-                      <span className="font-semibold text-emerald-600">
+                      <span className="font-semibold text-success">
                         +{formatNumber(line.deltaQty, locale)}
                       </span>
                     </li>
@@ -664,7 +664,7 @@ const StockCountDetailPage = () => {
                         {line.product.name}
                         {line.variant?.name ? ` • ${line.variant.name}` : ""}
                       </span>
-                      <span className="font-semibold text-red-600">
+                      <span className="font-semibold text-danger">
                         {formatNumber(line.deltaQty, locale)}
                       </span>
                     </li>

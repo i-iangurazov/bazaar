@@ -9,7 +9,7 @@ export const PopoverSurface = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-none border border-border bg-popover p-3 text-popover-foreground shadow-lg",
+      "rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg",
       className,
     )}
     {...props}

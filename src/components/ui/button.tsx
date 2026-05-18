@@ -32,7 +32,7 @@ const variantClasses: Record<Variant, string> = {
   danger: "bg-danger text-danger-foreground hover:bg-danger/90",
   destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
   outline: "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
-  link: "h-auto rounded-none px-0 text-primary hover:text-primary/80 shadow-none",
+  link: "h-auto rounded-md px-0 text-primary hover:text-primary/80 shadow-none",
 };
 
 const sizeClasses: Record<Size, string> = {
@@ -52,7 +52,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          "button-focus-ring inline-flex items-center justify-center gap-2 rounded-none text-sm font-semibold shadow-sm transition focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
+          "button-focus-ring inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold shadow-sm transition focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
           variantClasses[variant],
           sizeClasses[size],
           className,

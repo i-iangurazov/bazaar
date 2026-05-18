@@ -1499,27 +1499,27 @@ const PrintingSettingsPage = () => {
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <div className="border border-border bg-card p-3 text-sm">
+                <div className="rounded-md border border-border bg-card p-3 text-sm">
                   <p className="font-medium text-foreground">{t("qzCertificateLoadedLabel")}</p>
                   <p className="mt-1 text-muted-foreground">
                     {qzCertificateLoaded ? t("yes") : t("no")}
                   </p>
                 </div>
-                <div className="border border-border bg-card p-3 text-sm">
+                <div className="rounded-md border border-border bg-card p-3 text-sm">
                   <p className="font-medium text-foreground">{t("qzSignatureConfiguredLabel")}</p>
                   <p className="mt-1 text-muted-foreground">
                     {qzSignatureConfigured ? t("yes") : t("no")}
                   </p>
                 </div>
-                <div className="border border-border bg-card p-3 text-sm">
+                <div className="rounded-md border border-border bg-card p-3 text-sm">
                   <p className="font-medium text-foreground">{t("qzRequestValidityLabel")}</p>
                   <p className="mt-1 text-muted-foreground">{t(qzRequestValidityKey)}</p>
                 </div>
-                <div className="border border-border bg-card p-3 text-sm">
+                <div className="rounded-md border border-border bg-card p-3 text-sm">
                   <p className="font-medium text-foreground">{t("qzLocalTrustLabel")}</p>
                   <p className="mt-1 text-muted-foreground">{t(qzLocalTrustKey)}</p>
                 </div>
-                <div className="border border-border bg-card p-3 text-sm md:col-span-2 xl:col-span-1">
+                <div className="rounded-md border border-border bg-card p-3 text-sm md:col-span-2 xl:col-span-1">
                   <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
                   <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                     {qzFingerprint || t("qzCertificateFingerprintUnavailable")}

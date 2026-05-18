@@ -1301,7 +1301,7 @@ const PosSellPage = () => {
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
         <Button
           asChild
-          className="h-16 w-full rounded-none bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90 lg:w-32"
+          className="h-16 w-full rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90 lg:w-32"
         >
           <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
             <BackIcon className="h-5 w-5" aria-hidden />
@@ -1485,7 +1485,7 @@ const PosSellPage = () => {
                 <Button
                   type="button"
                   variant={selectedCategory ? "secondary" : "default"}
-                  className="h-10 shrink-0 rounded-sm"
+                  className="h-10 shrink-0 rounded-md"
                   onClick={() => {
                     setSelectedCategory("");
                     setLineSearch("");
@@ -1499,7 +1499,7 @@ const PosSellPage = () => {
                     key={category}
                     type="button"
                     variant={selectedCategory === category ? "default" : "secondary"}
-                    className="h-10 shrink-0 rounded-sm"
+                    className="h-10 shrink-0 rounded-md"
                     onClick={() => setSelectedCategory(category)}
                   >
                     {categoryLabel(category)}
@@ -1605,7 +1605,7 @@ const PosSellPage = () => {
                         }`}
                       >
                         <div
-                          className={`absolute right-2 top-2 z-10 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-sm border px-2 py-1 text-[11px] font-semibold ${stock.className}`}
+                          className={`absolute right-2 top-2 z-10 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${stock.className}`}
                         >
                           {stock.showWarningIcon ? (
                             <StatusWarningIcon className="h-3 w-3 shrink-0" aria-hidden />
@@ -1618,10 +1618,10 @@ const PosSellPage = () => {
                             <img
                               src={primaryImage}
                               alt={product.name}
-                              className="max-h-full max-w-full rounded-sm object-contain"
+                              className="max-h-full max-w-full rounded-md object-contain"
                             />
                           ) : (
-                            <span className="grid h-20 w-20 place-items-center rounded-sm border border-dashed border-border bg-muted/40 text-muted-foreground">
+                            <span className="grid h-20 w-20 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
                               <EmptyIcon className="h-6 w-6" aria-hidden />
                             </span>
                           )}
@@ -1662,12 +1662,12 @@ const PosSellPage = () => {
                 {selectedRegisterLabel}
                 {shiftOpenedLabel ? ` / ${shiftOpenedLabel}` : ""}
               </div>
-              <span className="h-3 w-3 justify-self-end rounded-full bg-success" aria-hidden />
+              <span className="h-3 w-3 justify-self-end rounded-md bg-success" aria-hidden />
             </footer>
           </section>
 
           <aside
-            className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-xl border border-border bg-card shadow-2xl transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-none lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none ${
+            className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-md border border-border bg-card shadow-2xl transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-md lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none ${
               mobileCheckoutOpen ? "translate-y-0" : "translate-y-[calc(100%-76px)]"
             }`}
           >
@@ -1835,7 +1835,7 @@ const PosSellPage = () => {
                   {!saleId || (!hasCartLines && !saleQuery.isLoading && !saleQuery.error) ? (
                     <div className="grid min-h-[300px] place-items-center p-6 text-center">
                       <div>
-                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-sm border border-dashed border-border bg-muted/30 text-muted-foreground">
+                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-md border border-dashed border-border bg-muted/30 text-muted-foreground">
                           <EmptyIcon className="h-5 w-5" aria-hidden />
                         </div>
                         <p className="mt-4 text-sm font-medium text-foreground">
@@ -1864,10 +1864,10 @@ const PosSellPage = () => {
                                 <img
                                   src={line.product.primaryImage}
                                   alt={line.product.name}
-                                  className="h-12 w-12 shrink-0 rounded-sm border border-border object-cover"
+                                  className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
                                 />
                               ) : (
-                                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-sm border border-dashed border-border bg-muted/40 text-muted-foreground">
+                                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
                                   <EmptyIcon className="h-4 w-4" aria-hidden />
                                 </span>
                               )}
@@ -1904,7 +1904,7 @@ const PosSellPage = () => {
                                         aria-label={t("sell.unitPrice")}
                                         title={t("sell.unitPrice")}
                                         inputMode="decimal"
-                                        className="h-8 w-24 rounded-sm px-2 text-[12px] font-medium text-foreground shadow-none focus-visible:ring-1"
+                                        className="h-8 w-24 rounded-md px-2 text-[12px] font-medium text-foreground shadow-none focus-visible:ring-1"
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={(event) =>
                                           handleUpdateLinePrice(
@@ -1932,12 +1932,12 @@ const PosSellPage = () => {
                                         </span>
                                       ) : null}
                                     </div>
-                                    <div className="inline-flex items-center overflow-hidden rounded-sm border border-border bg-background">
+                                    <div className="inline-flex items-center overflow-hidden rounded-md border border-border bg-background">
                                       <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 rounded-none text-sm"
+                                        className="h-8 w-8 rounded-md text-sm"
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
@@ -1957,7 +1957,7 @@ const PosSellPage = () => {
                                         onBlur={(event) =>
                                           handleUpdateQty(line.id, event.target.value)
                                         }
-                                        className="h-8 w-11 rounded-none border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
+                                        className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
                                         inputMode="numeric"
                                         disabled={isLineBusy || completeMutation.isLoading}
                                       />
@@ -1965,7 +1965,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 rounded-none text-sm"
+                                        className="h-8 w-8 rounded-md text-sm"
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
@@ -1983,7 +1983,7 @@ const PosSellPage = () => {
                               </div>
                             </div>
                             {saleMarkingEnabled && line.product.complianceFlags?.requiresMarking ? (
-                              <div className="mt-2 space-y-1.5 rounded-sm border border-border bg-muted/20 p-2">
+                              <div className="mt-2 space-y-1.5 rounded-md border border-border bg-muted/20 p-2">
                                 <p className="text-[11px] text-muted-foreground">
                                   {t("sell.markingLabel")}
                                   {saleMarkingMode === "REQUIRED_ON_SALE"
@@ -2070,7 +2070,7 @@ const PosSellPage = () => {
                       </div>
 
                       {showDiscountEditor ? (
-                        <div className="rounded-sm border border-border/60 bg-muted/5 p-2">
+                        <div className="rounded-md border border-border/60 bg-muted/5 p-2">
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-xs font-medium text-foreground">
                               {t("sell.saleDiscount")}
@@ -2096,7 +2096,7 @@ const PosSellPage = () => {
                               disabled={isLineBusy || completeMutation.isLoading}
                               className="h-8 px-2 text-sm"
                             />
-                            <div className="flex h-8 items-center justify-center rounded-sm border border-input bg-muted/20 px-2 text-[11px] font-medium text-muted-foreground">
+                            <div className="flex h-8 items-center justify-center rounded-md border border-input bg-muted/20 px-2 text-[11px] font-medium text-muted-foreground">
                               {discountCurrencyCode}
                             </div>
                             <Button
@@ -2116,14 +2116,14 @@ const PosSellPage = () => {
                         </div>
                       ) : null}
 
-                      <div className="rounded-sm border border-border/60 bg-muted/5 p-2">
+                      <div className="rounded-md border border-border/60 bg-muted/5 p-2">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-sm font-medium leading-none text-foreground">
                               {t("sell.paymentsTitle")}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 rounded-sm px-1">
+                          <div className="flex items-center gap-2 rounded-md px-1">
                             <span className="text-xs leading-none text-muted-foreground">
                               {t("sell.sellInDebt")}
                             </span>
@@ -2132,7 +2132,7 @@ const PosSellPage = () => {
                         </div>
 
                         {sellInDebt ? (
-                          <div className="mt-2 space-y-1.5 rounded-sm border border-warning/25 bg-warning/10 p-2">
+                          <div className="mt-2 space-y-1.5 rounded-md border border-warning/25 bg-warning/10 p-2">
                             <p className="text-xs leading-4 text-muted-foreground">
                               {t("sell.sellInDebtHint")}
                             </p>
@@ -2241,7 +2241,7 @@ const PosSellPage = () => {
                       </div>
 
                       <Button
-                        className="h-9 w-full rounded-sm bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
+                        className="h-9 w-full rounded-md bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
                         onClick={handleComplete}
                         disabled={completeDisabled}
                       >
@@ -2429,7 +2429,7 @@ const PosSellPage = () => {
 
         <main className="mx-auto w-full max-w-md space-y-4 px-3 pb-[calc(11rem+env(safe-area-inset-bottom))] pt-4 md:hidden">
           {showMobileRegisterPanel ? (
-            <section className="border border-border bg-card p-3 shadow-sm">
+            <section className="rounded-md border border-border bg-card p-3 shadow-sm">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">{t("entry.register")}</label>
                 <Select value={registerId} onValueChange={setRegisterId}>
@@ -2849,7 +2849,7 @@ const PosSellPage = () => {
                           );
 
                           return (
-                            <div key={line.id} className="border border-border bg-card p-3">
+                            <div key={line.id} className="rounded-md border border-border bg-card p-3">
                               <div className="flex gap-3">
                                 {line.product.primaryImage ? (
                                   // eslint-disable-next-line @next/next/no-img-element
@@ -2921,7 +2921,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-11 w-11 rounded-none text-base"
+                                        className="h-11 w-11 rounded-md text-base"
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
@@ -2941,7 +2941,7 @@ const PosSellPage = () => {
                                         onBlur={(event) =>
                                           handleUpdateQty(line.id, event.target.value)
                                         }
-                                        className="h-11 w-11 rounded-none border-y-0 px-1 text-center shadow-none focus-visible:ring-0"
+                                        className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-0"
                                         inputMode="numeric"
                                         disabled={isLineBusy || completeMutation.isLoading}
                                       />
@@ -2949,7 +2949,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-11 w-11 rounded-none text-base"
+                                        className="h-11 w-11 rounded-md text-base"
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
@@ -3016,7 +3016,7 @@ const PosSellPage = () => {
 
                     {saleId && sale && hasCartLines ? (
                       <div className="mt-4 space-y-3">
-                        <div className="border border-border bg-card p-3">
+                        <div className="rounded-md border border-border bg-card p-3">
                           <div className="flex items-center justify-between gap-3 text-sm">
                             <span className="text-muted-foreground">{t("sell.subtotal")}</span>
                             <span className="font-medium text-foreground">
@@ -3071,7 +3071,7 @@ const PosSellPage = () => {
                           </div>
                         </div>
 
-                        <div ref={paymentsSectionRef} className="border border-border bg-card p-3">
+                        <div ref={paymentsSectionRef} className="rounded-md border border-border bg-card p-3">
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-foreground">
                               {t("sell.paymentsTitle")}

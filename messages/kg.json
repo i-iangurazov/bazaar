@@ -3856,6 +3856,7 @@
     "emailCampaignReplyToInvalid": "Жооп email туура эмес.",
     "emailMarketingNotConfigured": "Email Marketing жөндөлгөн эмес.",
     "emailMarketingPublicUrlRequired": "Кампания жөнөтүүдөн мурун ачык NEXTAUTH_URL же NEXT_PUBLIC_APP_URL көрсөтүңүз.",
+    "emailCampaignImagePublicUrlRequired": "Каттагы сүрөттөр ачык URL аркылуу жеткиликтүү болушу керек. Ачык NEXTAUTH_URL/NEXT_PUBLIC_APP_URL же R2_PUBLIC_BASE_URL көрсөтүңүз.",
     "emailMarketingUnsubscribeSecretMissing": "Кампания жөнөтүүдөн мурун EMAIL_UNSUBSCRIBE_SECRET, NEXTAUTH_SECRET же JOBS_SECRET көрсөтүңүз.",
     "emailCampaignAudienceEmpty": "Тандалган аудиторияда email бар кардар жок.",
     "invalidCurrencyRate": "Тандалган валюта үчүн сомго карата туура курс киргизиңиз.",

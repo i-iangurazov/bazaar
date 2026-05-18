@@ -1035,7 +1035,7 @@ const ProductDetailPage = () => {
 
       <Card className="mb-6 overflow-hidden">
         <CardContent className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="h-56 overflow-hidden rounded-none border border-border bg-muted/20 sm:h-auto">
+          <div className="h-56 overflow-hidden rounded-md border border-border bg-muted/20 sm:h-auto">
             {previewImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -1077,7 +1077,7 @@ const ProductDetailPage = () => {
               <Badge variant="muted">{productQuery.data.baseUnit.code}</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-none border border-border/70 bg-card p-3">
+              <div className="rounded-md border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {effectivePrice !== null
@@ -1085,13 +1085,13 @@ const ProductDetailPage = () => {
                     : tCommon("notAvailable")}
                 </p>
               </div>
-              <div className="rounded-none border border-border/70 bg-card p-3">
+              <div className="rounded-md border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
                 </p>
               </div>
-              <div className="rounded-none border border-border/70 bg-card p-3">
+              <div className="rounded-md border border-border/70 bg-card p-3">
                 <p className="text-xs text-muted-foreground">{tInventory("onHand")}</p>
                 <p className="text-base font-semibold text-foreground">
                   {formatNumber(
@@ -1147,7 +1147,7 @@ const ProductDetailPage = () => {
             </div>
           ) : storePricingQuery.data ? (
             <div className="space-y-3">
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{t("basePrice")}</p>
@@ -1207,7 +1207,7 @@ const ProductDetailPage = () => {
               {storePricingQuery.data.stores.map((storeRow) => (
                 <div
                   key={storeRow.storeId}
-                  className="rounded-none border border-border bg-card p-3"
+                  className="rounded-md border border-border bg-card p-3"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
@@ -1312,7 +1312,7 @@ const ProductDetailPage = () => {
                           return (
                             <div
                               key={key}
-                              className="rounded-none border border-border/70 bg-muted/20 p-2"
+                              className="rounded-md border border-border/70 bg-muted/20 p-2"
                             >
                               <p className="truncate text-xs font-medium text-foreground">
                                 {resolveVariantLabel(variant)}
@@ -1390,7 +1390,7 @@ const ProductDetailPage = () => {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-none border border-border/70 bg-card p-3">
+          <div className="rounded-md border border-border/70 bg-card p-3">
             <div className="flex items-center gap-2">
               <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
               {pricingQuery.data?.priceOverridden ? (
@@ -1403,13 +1403,13 @@ const ProductDetailPage = () => {
                 : tCommon("notAvailable")}
             </p>
           </div>
-          <div className="rounded-none border border-border/70 bg-card p-3">
+          <div className="rounded-md border border-border/70 bg-card p-3">
             <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
             <p className="text-sm font-semibold">
               {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
             </p>
           </div>
-          <div className="rounded-none border border-border/70 bg-card p-3">
+          <div className="rounded-md border border-border/70 bg-card p-3">
             <p className="text-xs text-muted-foreground">{t("markupMargin")}</p>
             <p className="text-sm font-semibold">
               {markupPct !== null ? `${formatNumber(markupPct, locale)}%` : tCommon("notAvailable")}

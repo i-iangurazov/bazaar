@@ -354,29 +354,29 @@ export const ImportDryRunPreview = ({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <div className="rounded-none border border-success/30 bg-success/10 p-3">
+        <div className="rounded-md border border-success/30 bg-success/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunCreates")}</p>
           <p className="text-lg font-semibold text-foreground">{preview.summary.creates}</p>
         </div>
-        <div className="rounded-none border border-warning/30 bg-warning/10 p-3">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunUpdates")}</p>
           <p className="text-lg font-semibold text-foreground">{preview.summary.updates}</p>
         </div>
-        <div className="rounded-none border border-border bg-muted/30 p-3">
+        <div className="rounded-md border border-border bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunSkipped")}</p>
           <p className="text-lg font-semibold text-foreground">{preview.summary.skipped}</p>
         </div>
-        <div className="rounded-none border border-warning/30 bg-warning/10 p-3">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunWarnings")}</p>
           <p className="text-lg font-semibold text-foreground">{preview.summary.warningCount}</p>
         </div>
-        <div className="rounded-none border border-warning/30 bg-warning/10 p-3">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunPossibleDuplicates")}</p>
           <p className="text-lg font-semibold text-foreground">
             {preview.summary.possibleDuplicateCount ?? 0}
           </p>
         </div>
-        <div className="rounded-none border border-danger/30 bg-danger/10 p-3">
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunBlockingWarnings")}</p>
           <p className="text-lg font-semibold text-foreground">
             {preview.summary.blockingWarningCount}
@@ -484,7 +484,7 @@ export const ImportDryRunPreview = ({
           </div>
         )}
         renderMobile={(row) => (
-          <div className="rounded-none border border-border bg-card p-3">
+          <div className="rounded-md border border-border bg-card p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">

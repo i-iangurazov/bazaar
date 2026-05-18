@@ -88,13 +88,13 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
         width={40}
         height={40}
         unoptimized
-        className="h-10 w-10 shrink-0 rounded-none border border-border object-cover"
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
       />
     );
   }
 
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
       {fallbackLabel}
     </div>
   );
@@ -639,7 +639,7 @@ const SalesOrderDetailPage = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               {!lines.length ? (
-                <div className="rounded-none border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                   <EmptyIcon className="mx-auto mb-2 h-5 w-5" aria-hidden />
                   {t("noLines")}
                 </div>

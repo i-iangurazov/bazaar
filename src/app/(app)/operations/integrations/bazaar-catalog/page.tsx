@@ -163,13 +163,13 @@ const ProductImageThumb = ({
       <img
         src={imageUrl}
         alt={name}
-        className="h-10 w-10 shrink-0 rounded-none border border-border object-cover"
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
       />
     );
   }
 
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
       {fallbackLabel}
     </div>
   );
@@ -512,19 +512,19 @@ const BazaarCatalogSettingsPage = () => {
               <p className="text-xs text-muted-foreground">{t("productsVisibility.note")}</p>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">
                     {t("productsVisibility.metrics.total")}
                   </p>
                   <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
                 </div>
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">
                     {t("productsVisibility.metrics.visible")}
                   </p>
                   <p className="text-lg font-semibold">{productSummary?.visibleProducts ?? 0}</p>
                 </div>
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">
                     {t("productsVisibility.metrics.hidden")}
                   </p>
@@ -624,7 +624,7 @@ const BazaarCatalogSettingsPage = () => {
                                 <TableHead className="w-10">
                                   <input
                                     type="checkbox"
-                                    className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                     checked={allProductsSelectedOnPage}
                                     onChange={toggleSelectAllProductsOnPage}
                                     aria-label={t("productsVisibility.selectAll")}
@@ -652,7 +652,7 @@ const BazaarCatalogSettingsPage = () => {
                                   <TableCell>
                                     <input
                                       type="checkbox"
-                                      className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                       checked={selectedProductIds.has(product.id)}
                                       onChange={() => toggleProductSelection(product.id)}
                                       aria-label={t("productsVisibility.selectProduct", {
@@ -714,7 +714,7 @@ const BazaarCatalogSettingsPage = () => {
                     )
                   }
                   renderMobile={(product) => (
-                    <div className="rounded-none border border-border bg-card p-4">
+                    <div className="rounded-md border border-border bg-card p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
                           <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
@@ -748,7 +748,7 @@ const BazaarCatalogSettingsPage = () => {
                           <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                               checked={selectedProductIds.has(product.id)}
                               onChange={() => toggleProductSelection(product.id)}
                               aria-label={t("productsVisibility.selectProduct", {
@@ -856,10 +856,10 @@ const BazaarCatalogSettingsPage = () => {
                     <img
                       src={formState.logoUrl}
                       alt={t("logoPreviewAlt")}
-                      className="h-14 w-14 rounded-none border border-border object-cover"
+                      className="h-14 w-14 rounded-md border border-border object-cover"
                     />
                   ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-none border border-dashed border-border text-xs text-muted-foreground">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
                       {t("logoEmpty")}
                     </div>
                   )}
@@ -906,7 +906,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="rounded-none border border-border">
+              <div className="rounded-md border border-border">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
@@ -990,12 +990,12 @@ const BazaarCatalogSettingsPage = () => {
               </div>
 
               <div
-                className="rounded-none border border-border p-4"
+                className="rounded-md border border-border p-4"
                 style={{ borderColor: `${formState.accentColor}55` }}
               >
                 <p className="mb-3 text-sm text-muted-foreground">{t("previewTitle")}</p>
                 <div
-                  className="rounded-none border border-border bg-background p-3"
+                  className="rounded-md border border-border bg-background p-3"
                   style={previewFontStyle(formState.fontFamily)}
                 >
                   <div
@@ -1012,7 +1012,7 @@ const BazaarCatalogSettingsPage = () => {
                     >
                       <div
                         className={cn(
-                          "flex items-center justify-center rounded-none border border-border bg-secondary font-semibold",
+                          "flex items-center justify-center rounded-md border border-border bg-secondary font-semibold",
                           formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT
                             ? "h-8 w-8 text-xs"
                             : "h-10 w-10 text-sm",
@@ -1059,27 +1059,27 @@ const BazaarCatalogSettingsPage = () => {
                   >
                     <div
                       className={cn(
-                        "rounded-none border border-input bg-background",
+                        "rounded-md border border-input bg-background",
                         formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT ? "h-8" : "h-9",
                       )}
                     />
                     <div
                       className={cn(
-                        "rounded-none border border-input bg-background",
+                        "rounded-md border border-input bg-background",
                         formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT ? "h-8" : "h-9",
                       )}
                     />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className="inline-flex rounded-none px-3 py-1 text-xs font-semibold text-white"
+                      className="inline-flex rounded-md px-3 py-1 text-xs font-semibold text-white"
                       style={{ backgroundColor: formState.accentColor }}
                     >
                       {t("previewBadge")}
                     </span>
                     <button
                       type="button"
-                      className="inline-flex h-9 items-center rounded-none px-3 text-sm font-semibold text-white"
+                      className="inline-flex h-9 items-center rounded-md px-3 text-sm font-semibold text-white"
                       style={{ backgroundColor: formState.accentColor }}
                     >
                       {t("previewButton")}
@@ -1088,7 +1088,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-none border border-border p-4">
+              <div className="flex items-center justify-between rounded-md border border-border p-4">
                 <div>
                   <p className="text-sm font-semibold">{t("publishLabel")}</p>
                   <p className="text-xs text-muted-foreground">{t("publishHint")}</p>

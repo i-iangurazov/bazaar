@@ -165,7 +165,7 @@ const PosEntryPage = () => {
       </div>
 
       <section className="space-y-4 md:hidden">
-        <div className="border border-border bg-card p-4 shadow-sm">
+        <div className="rounded-md border border-border bg-card p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Badge variant={openShift ? "success" : "warning"}>
@@ -236,13 +236,13 @@ const PosEntryPage = () => {
 
         {openShift ? (
           <div className="grid grid-cols-2 gap-2">
-            <div className="border border-border bg-card p-3">
+            <div className="rounded-md border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">{t("entry.shiftOpenedAt")}</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {formatDateTime(openShift.openedAt, locale)}
               </p>
             </div>
-            <div className="border border-border bg-card p-3">
+            <div className="rounded-md border border-border bg-card p-3">
               <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {formatStoreMoney(openShift.openingCashKgs)}
@@ -252,7 +252,7 @@ const PosEntryPage = () => {
         ) : null}
 
         {previousClosedShift ? (
-          <div className="border border-border bg-card p-4 text-sm">
+          <div className="rounded-md border border-border bg-card p-4 text-sm">
             <p className="font-semibold text-foreground">{t("entry.previousClosedShiftTitle")}</p>
             <p className="mt-1 text-muted-foreground">
               {formatDateTime(previousClosedShift.closedAt ?? previousClosedShift.openedAt, locale)}

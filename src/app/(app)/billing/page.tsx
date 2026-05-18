@@ -203,11 +203,11 @@ const BillingPage = () => {
                 </p>
               ) : null}
               {billingQuery.data.trialExpired ? (
-                <p className="text-sm text-amber-700">{t("trialExpired")}</p>
+                <p className="text-sm text-warning-foreground">{t("trialExpired")}</p>
               ) : billingQuery.data.trialActive ? (
                 <p>{t("trialActive")}</p>
               ) : billingQuery.data.subscriptionActive ? (
-                <p className="text-sm text-emerald-700">{t("subscriptionActive")}</p>
+                <p className="text-sm text-success">{t("subscriptionActive")}</p>
               ) : null}
               {pendingRequest ? (
                 <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-foreground">

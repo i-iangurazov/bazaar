@@ -242,7 +242,7 @@ const ImportPreviewTable = dynamic(() => import("@/components/import-preview-tab
   ssr: false,
   loading: () => (
     <div
-      className="h-32 animate-pulse rounded-none border border-dashed border-border bg-muted/30"
+      className="h-32 animate-pulse rounded-md border border-dashed border-border bg-muted/30"
       aria-hidden
     />
   ),
@@ -1240,7 +1240,7 @@ const CustomerImportPanel = ({
                   <p className="text-lg font-semibold">{preview.summary.errors}</p>
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-none border border-border">
+              <div className="overflow-x-auto rounded-md border border-border">
                 <Table className="min-w-[760px]">
                   <TableHeader>
                     <TableRow>
@@ -1346,7 +1346,7 @@ const CustomerImportPanel = ({
             </div>
           ) : null}
           {lastSummary ? (
-            <div className="rounded-none border border-success/40 bg-success/10 p-3 text-sm">
+            <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm">
               <p className="font-medium">{t("importResultTitle")}</p>
               <p className="text-xs text-muted-foreground">
                 {t("targetStoreApplied", {
@@ -2976,31 +2976,31 @@ const ImportPage = () => {
                 </p>
               ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
-                <div className="rounded-none border border-success/40 bg-card p-2">
+                <div className="rounded-md border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.created")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.created ?? 0}</p>
                 </div>
-                <div className="rounded-none border border-success/40 bg-card p-2">
+                <div className="rounded-md border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.updated")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.updated ?? 0}</p>
                 </div>
-                <div className="rounded-none border border-success/40 bg-card p-2">
+                <div className="rounded-md border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.skipped")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.skipped ?? 0}</p>
                 </div>
-                <div className="rounded-none border border-success/40 bg-card p-2">
+                <div className="rounded-md border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageDownloaded")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.downloaded ?? 0}
                   </p>
                 </div>
-                <div className="rounded-none border border-success/40 bg-card p-2">
+                <div className="rounded-md border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageFallback")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.fallback ?? 0}
                   </p>
                 </div>
-                <div className="rounded-none border border-success/40 bg-card p-2">
+                <div className="rounded-md border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageMissing")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.missing ?? 0}

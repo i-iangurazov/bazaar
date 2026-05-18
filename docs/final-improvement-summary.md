@@ -452,19 +452,19 @@
 - Stores that already had an older `StorePrinterSettings` row receive migrated label defaults and count as having a saved profile. This is safe for quick printing, but it may not force a setup prompt for stores that previously configured only receipt printing.
 - Inventory summary problem counts are currently based on loaded rows for some cards; exact global counts should move server-side if the page needs strict totals.
 - Dashboard "today" metrics use server-day boundaries rather than explicit store timezone rules.
-- Some remaining rounded classes exist in legacy/lower-traffic UI, especially legacy print modals and public surfaces; the high-traffic workflow cleanup reduced visible clutter but did not attempt a blind global class removal.
+- Some remaining radius classes existed in legacy/lower-traffic UI, especially legacy print modals and public surfaces; the later brand pass standardized them around small Bazaar rounding.
 
 ## UI Cleanup Slice - 2026-05-04
 
 ### Changed
 
 - Added `docs/ui-rounded-cleanup-audit.md` with the rounded-class classification requested for shared components, high-traffic app pages, intentional exceptions, and remaining public-site work.
-- Made shared UI primitives explicitly sharp with `rounded-none`: Button, Input, Select, Textarea, Dialog/Modal, Dropdown, Tooltip, Card, Badge, Switch, Toast, ActionMenu, and TableContainer.
+- At the time, shared UI primitives were made explicitly sharp; the later brand pass replaced that direction with small `rounded-md` corners across shared controls and app surfaces.
 - Added sharp shared primitives for future cleanup work: `src/components/ui/popover.tsx` and `src/components/ui/tabs.tsx`.
 - Standardized modal footers through `ModalFooter` in saved table views, product variant/image modals, billing/platform modals, POS open-shift/return modals, sales order line modal, and import rollback modal.
 - Cleaned visible radius from high-traffic private surfaces: Dashboard, Products list/detail, Inventory/counts, POS entry/history/shifts, Sales order detail, Settings attributes/import/users, and Reports analytics chart panels.
-- Kept intentional `rounded-full` only for progress bars and range sliders in the touched high-traffic surfaces.
-- Added `tests/unit/ui-sharp-primitives.test.tsx` to lock square corners and modal footer layout for shared primitives.
+- Standardized remaining high-traffic radius utilities to `rounded-md`, including progress bars and range sliders.
+- Added `tests/unit/ui-sharp-primitives.test.tsx`, later updated to lock small rounded corners and modal footer layout for shared primitives.
 - Fixed an existing Vitest JSX-runtime fragility in `Card` and `Modal` by adding runtime `React` imports.
 
 ### Files Touched
@@ -479,7 +479,7 @@
 - No barcode printing, route protection, seed guard, or support bundle logic was changed in this slice.
 - New UI text was not introduced, so existing `en`, `ru`, and `kg` locale coverage remains unchanged and `i18n:check` passed.
 - No currency formatting logic was changed and no new currency hardcoding was introduced.
-- High-traffic private app scan now only shows visible radius in public catalog/landing components outside this slice, plus intentional progress/range exceptions.
+- High-traffic private app, public catalog, and landing scans now use `rounded-md` for visible radius utilities.
 
 ### Validation
 
@@ -492,9 +492,9 @@
 
 ### Remaining Risks
 
-- Public catalog and landing components still contain visible rounded classes and need a separate storefront/public-site visual pass.
-- Some lower-traffic private areas outside this slice, especially integrations, stores compliance/support, and purchase-order/supplier checkboxes, still contain page-specific rounded utilities.
-- `rounded-sm`, `rounded-md`, and `rounded-lg` still appear in older page code, but the configured tokens resolve those classes to `0px`; future work should keep replacing visible or confusing usages with explicit `rounded-none`.
+- Public catalog, landing, and private app surfaces now follow the small-radius brand direction after the later brand pass.
+- Lower-traffic private areas have been normalized to the same `rounded-md` utility.
+- `rounded-md` is the standard Bazaar radius utility in source files; non-standard radius utilities should not be reintroduced without an explicit design reason.
 
 ## Changed
 

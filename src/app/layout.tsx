@@ -18,7 +18,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#2563eb",
+  themeColor: "#1d4ed8",
 };
 
 export const generateMetadata = async (): Promise<Metadata> => {
@@ -35,6 +35,9 @@ export const generateMetadata = async (): Promise<Metadata> => {
       capable: true,
       title: "Bazaar",
       statusBarStyle: "default",
+    },
+    other: {
+      "mobile-web-app-capable": "yes",
     },
     icons: {
       icon: [

@@ -2710,7 +2710,7 @@ const ProductsPage = () => {
               </Select>
             </div>
             {canManageProducts ? (
-              <div className="hidden items-center gap-2 rounded-none border border-border px-3 py-2 md:flex">
+              <div className="hidden items-center gap-2 rounded-md border border-border px-3 py-2 md:flex">
                 <Switch
                   checked={showArchived}
                   onCheckedChange={setShowArchived}
@@ -2879,7 +2879,7 @@ const ProductsPage = () => {
                 />
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-1 rounded-none border border-border p-1">
+            <div className="flex shrink-0 items-center gap-1 rounded-md border border-border p-1">
               <Button
                 type="button"
                 size="sm"
@@ -3126,7 +3126,7 @@ const ProductsPage = () => {
                               <TableHead className="w-10">
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   checked={allSelected}
                                   onChange={toggleSelectAll}
                                   aria-label={t("selectAll")}
@@ -3189,7 +3189,7 @@ const ProductsPage = () => {
                                   <TableCell>
                                     <input
                                       type="checkbox"
-                                      className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                       checked={selectedIds.has(product.id)}
                                       onChange={() => toggleSelect(product.id)}
                                       aria-label={t("selectProduct", { name: product.name })}
@@ -3403,7 +3403,7 @@ const ProductsPage = () => {
                       return (
                         <div
                           key={product.id}
-                          className="overflow-hidden rounded-none border border-border bg-card"
+                          className="overflow-hidden rounded-md border border-border bg-card"
                         >
                           <div className="relative aspect-[4/3] bg-muted/30">
                             {previewImageUrl ? (
@@ -3422,7 +3422,7 @@ const ProductsPage = () => {
                               <label className="absolute right-2 top-2">
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   checked={selectedIds.has(product.id)}
                                   onChange={() => toggleSelect(product.id)}
                                   aria-label={t("selectProduct", { name: product.name })}
@@ -3557,7 +3557,7 @@ const ProductsPage = () => {
                 // a photo-first product card so the catalog does not become a squeezed table.
                 if (renderPhotoFirstMobileCard) {
                   return (
-                    <div className="border border-border bg-card p-3">
+                    <div className="rounded-md border border-border bg-card p-3">
                       <div className="flex items-start gap-3">
                         <div className="relative h-24 w-24 shrink-0 overflow-hidden bg-muted/30">
                           {previewImageUrl ? (
@@ -3576,7 +3576,7 @@ const ProductsPage = () => {
                             <label className="absolute left-2 top-2">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={selectedIds.has(product.id)}
                                 onChange={() => toggleSelect(product.id)}
                                 aria-label={t("selectProduct", { name: product.name })}
@@ -3692,13 +3692,13 @@ const ProductsPage = () => {
                 }
 
                 return (
-                  <div className="rounded-none border border-border bg-card p-4">
+                  <div className="rounded-md border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         {canSelectProducts ? (
                           <input
                             type="checkbox"
-                            className="mt-1 h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            className="mt-1 h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             checked={selectedIds.has(product.id)}
                             onChange={() => toggleSelect(product.id)}
                             aria-label={t("selectProduct", { name: product.name })}
@@ -3941,7 +3941,7 @@ const ProductsPage = () => {
                     >
                       <input
                         type="checkbox"
-                        className="h-4 w-4 shrink-0 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className="h-4 w-4 shrink-0 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         checked={assignExistingSelectedIds.has(product.id)}
                         onChange={() => toggleAssignExistingProduct(product.id)}
                         aria-label={t("selectProduct", { name: product.name })}
@@ -4029,7 +4029,7 @@ const ProductsPage = () => {
       >
         {arrangeCategoriesProgress ? (
           <div className="space-y-4">
-            <div className="rounded-none border border-border bg-muted/30 p-4">
+            <div className="rounded-md border border-border bg-muted/30 p-4">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">
                   {t("aiArrangeCategoriesProgressLabel", {
@@ -4041,9 +4041,9 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgressPercent}%
                 </span>
               </div>
-              <div className="mt-3 h-2 rounded-full bg-border/70">
+              <div className="mt-3 h-2 rounded-md bg-border/70">
                 <div
-                  className="h-2 rounded-full bg-primary transition-all duration-300"
+                  className="h-2 rounded-md bg-primary transition-all duration-300"
                   style={{ width: `${arrangeCategoriesProgressPercent}%` }}
                 />
               </div>
@@ -4069,7 +4069,7 @@ const ProductsPage = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressScanned")}
                 </p>
@@ -4077,7 +4077,7 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgress.scannedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressEligible")}
                 </p>
@@ -4085,7 +4085,7 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgress.eligibleCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressUpdated")}
                 </p>
@@ -4093,7 +4093,7 @@ const ProductsPage = () => {
                   {arrangeCategoriesProgress.updatedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("aiArrangeCategoriesProgressSkipped")}
                 </p>
@@ -4104,7 +4104,7 @@ const ProductsPage = () => {
             </div>
 
             {arrangeCategoriesProgress.errorMessage ? (
-              <div className="rounded-none border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {arrangeCategoriesProgress.errorMessage}
               </div>
             ) : null}
@@ -4149,7 +4149,7 @@ const ProductsPage = () => {
       >
         {bulkDescriptionProgress ? (
           <div className="space-y-4">
-            <div className="rounded-none border border-border bg-muted/30 p-4">
+            <div className="rounded-md border border-border bg-muted/30 p-4">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">
                   {t("bulkGenerateDescriptionsProgressLabel", {
@@ -4161,9 +4161,9 @@ const ProductsPage = () => {
                   {bulkDescriptionProgressPercent}%
                 </span>
               </div>
-              <div className="mt-3 h-2 rounded-full bg-border/70">
+              <div className="mt-3 h-2 rounded-md bg-border/70">
                 <div
-                  className="h-2 rounded-full bg-primary transition-all duration-300"
+                  className="h-2 rounded-md bg-primary transition-all duration-300"
                   style={{ width: `${bulkDescriptionProgressPercent}%` }}
                 />
               </div>
@@ -4189,7 +4189,7 @@ const ProductsPage = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressUpdated")}
                 </p>
@@ -4197,7 +4197,7 @@ const ProductsPage = () => {
                   {bulkDescriptionProgress.updatedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressSkipped")}
                 </p>
@@ -4205,7 +4205,7 @@ const ProductsPage = () => {
                   {bulkDescriptionProgress.skippedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressFailed")}
                 </p>
@@ -4213,7 +4213,7 @@ const ProductsPage = () => {
                   {bulkDescriptionProgress.failedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {t("bulkGenerateDescriptionsProgressDeferred")}
                 </p>
@@ -4224,7 +4224,7 @@ const ProductsPage = () => {
             </div>
 
             {bulkDescriptionProgress.errorMessage ? (
-              <div className="rounded-none border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {bulkDescriptionProgress.errorMessage}
               </div>
             ) : null}
@@ -4379,7 +4379,7 @@ const ProductsPage = () => {
               )}
             />
 
-            <div className="rounded-none border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               {previewQuery.isLoading
                 ? tCommon("loading")
                 : t("bulkPreview", { count: previewQuery.data?.total ?? 0 })}

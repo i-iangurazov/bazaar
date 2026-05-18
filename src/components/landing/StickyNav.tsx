@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import { CloseIcon, MenuIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 type StickyNavLink = {
@@ -14,14 +15,24 @@ type StickyNavProps = {
   links: StickyNavLink[];
   leftSlot: ReactNode;
   rightSlot: ReactNode;
+  mobileSlot?: ReactNode;
   navAriaLabel: string;
+  menuLabel?: string;
 };
 
 const resolveSectionId = (href: string) => href.replace(/^#/, "");
 
-export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNavProps) => {
+export const StickyNav = ({
+  links,
+  leftSlot,
+  rightSlot,
+  mobileSlot,
+  navAriaLabel,
+  menuLabel = "Меню",
+}: StickyNavProps) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeHref, setActiveHref] = useState(links[0]?.href ?? "");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const sectionIds = useMemo(() => links.map((link) => resolveSectionId(link.href)), [links]);
 
@@ -42,6 +53,9 @@ export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNa
         }
       }
       setActiveHref(current);
+      if (window.innerWidth >= 1024) {
+        setMobileOpen(false);
+      }
     };
 
     updateState();
@@ -68,7 +82,7 @@ export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNa
 
         <nav
           aria-label={navAriaLabel}
-          className="hidden flex-1 items-center justify-center gap-1 overflow-x-auto px-2 md:flex"
+          className="hidden flex-1 items-center justify-center gap-1 overflow-x-auto px-2 lg:flex"
         >
           {links.map((link) => {
             const isActive = activeHref === link.href;
@@ -92,7 +106,41 @@ export const StickyNav = ({ links, leftSlot, rightSlot, navAriaLabel }: StickyNa
         </nav>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2">{rightSlot}</div>
+        <button
+          type="button"
+          className="button-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm lg:hidden"
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-label={menuLabel}
+          aria-expanded={mobileOpen}
+        >
+          {mobileOpen ? (
+            <CloseIcon className="h-5 w-5" aria-hidden />
+          ) : (
+            <MenuIcon className="h-5 w-5" aria-hidden />
+          )}
+        </button>
       </div>
+
+      {mobileOpen ? (
+        <div className="border-t border-border bg-background/98 px-4 py-4 shadow-[0_18px_40px_-28px_hsl(var(--foreground)/0.6)] lg:hidden">
+          <nav aria-label={navAriaLabel} className="grid gap-1">
+            {links.map((link) => (
+              <a
+                key={`mobile-${link.href}`}
+                href={link.href}
+                onClick={() => {
+                  setActiveHref(link.href);
+                  setMobileOpen(false);
+                }}
+                className="rounded-md px-3 py-3 text-sm font-semibold text-foreground hover:bg-secondary"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+          {mobileSlot ? <div className="mt-4 grid gap-2">{mobileSlot}</div> : null}
+        </div>
+      ) : null}
     </header>
   );
 };

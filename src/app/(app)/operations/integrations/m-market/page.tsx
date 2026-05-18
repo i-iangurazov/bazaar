@@ -96,13 +96,13 @@ const ProductImageThumb = ({
       <img
         src={imageUrl}
         alt={name}
-        className="h-10 w-10 shrink-0 rounded-none border border-border object-cover"
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
       />
     );
   }
 
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60 text-xs font-medium text-muted-foreground">
       {fallbackLabel}
     </div>
   );
@@ -1235,19 +1235,19 @@ const MMarketSettingsPage = () => {
           <p className="text-xs text-muted-foreground">{t("productsSelection.note")}</p>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-none border border-border p-3">
+            <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.total")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
             </div>
-            <div className="rounded-none border border-border p-3">
+            <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.included")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.includedProducts ?? 0}</p>
             </div>
-            <div className="rounded-none border border-border p-3">
+            <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.excluded")}
               </p>
@@ -1380,7 +1380,7 @@ const MMarketSettingsPage = () => {
                             <TableHead className="w-10">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={allProductsSelectedOnPage}
                                 onChange={toggleSelectAllProductsOnPage}
                                 aria-label={t("productsSelection.selectAll")}
@@ -1408,7 +1408,7 @@ const MMarketSettingsPage = () => {
                               <TableCell>
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   checked={selectedProductIds.has(product.id)}
                                   onChange={() => toggleProductSelection(product.id)}
                                   aria-label={t("productsSelection.selectProduct", {
@@ -1472,7 +1472,7 @@ const MMarketSettingsPage = () => {
                 )
               }
               renderMobile={(product) => (
-                <div className="rounded-none border border-border bg-card p-4">
+                <div className="rounded-md border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
@@ -1517,7 +1517,7 @@ const MMarketSettingsPage = () => {
                       <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded-none border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                           checked={selectedProductIds.has(product.id)}
                           onChange={() => toggleProductSelection(product.id)}
                           aria-label={t("productsSelection.selectProduct", { name: product.name })}
@@ -1569,7 +1569,7 @@ const MMarketSettingsPage = () => {
           {preflightData ? (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">
                     {t("preflight.metrics.considered")}
                   </p>
@@ -1577,21 +1577,21 @@ const MMarketSettingsPage = () => {
                     {preflightData.summary.productsConsidered}
                   </p>
                 </div>
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.ready")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsReady}</p>
                 </div>
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.failed")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsFailed}</p>
                 </div>
-                <div className="rounded-none border border-border p-3">
+                <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.warnings")}</p>
                   <p className="text-lg font-semibold">{preflightData.warnings.total}</p>
                 </div>
               </div>
 
-              <div className="rounded-none border border-border p-3">
+              <div className="rounded-md border border-border p-3">
                 <p className="text-sm font-medium text-foreground">
                   {t("preflight.blockersTitle")}
                 </p>
@@ -1897,7 +1897,7 @@ const MMarketSettingsPage = () => {
       >
         {bulkProgress ? (
           <div className="space-y-4">
-            <div className="rounded-none border border-border bg-muted/30 p-4">
+            <div className="rounded-md border border-border bg-muted/30 p-4">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressLabel", {
@@ -1909,9 +1909,9 @@ const MMarketSettingsPage = () => {
                   {bulkProgressPercent}%
                 </span>
               </div>
-              <div className="mt-3 h-2 rounded-none bg-border/70">
+              <div className="mt-3 h-2 rounded-md bg-border/70">
                 <div
-                  className="h-2 rounded-none bg-primary transition-all duration-300"
+                  className="h-2 rounded-md bg-primary transition-all duration-300"
                   style={{ width: `${bulkProgressPercent}%` }}
                 />
               </div>
@@ -1943,7 +1943,7 @@ const MMarketSettingsPage = () => {
                   : "grid grid-cols-2 gap-3 sm:grid-cols-4"
               }
             >
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressUpdated")}
                 </p>
@@ -1952,7 +1952,7 @@ const MMarketSettingsPage = () => {
                 </p>
               </div>
               {bulkProgress.kind === "specs" ? (
-                <div className="rounded-none border border-border bg-card p-3">
+                <div className="rounded-md border border-border bg-card p-3">
                   <p className="text-xs text-muted-foreground">
                     {t("preflight.bulkProgressFilled")}
                   </p>
@@ -1961,7 +1961,7 @@ const MMarketSettingsPage = () => {
                   </p>
                 </div>
               ) : null}
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressSkipped")}
                 </p>
@@ -1969,7 +1969,7 @@ const MMarketSettingsPage = () => {
                   {bulkProgress.skippedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressFailed")}
                 </p>
@@ -1977,7 +1977,7 @@ const MMarketSettingsPage = () => {
                   {bulkProgress.failedCount}
                 </p>
               </div>
-              <div className="rounded-none border border-border bg-card p-3">
+              <div className="rounded-md border border-border bg-card p-3">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressDeferred")}
                 </p>
@@ -1988,7 +1988,7 @@ const MMarketSettingsPage = () => {
             </div>
 
             {bulkProgress.errorMessage ? (
-              <div className="rounded-none border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {bulkProgress.errorMessage}
               </div>
             ) : null}

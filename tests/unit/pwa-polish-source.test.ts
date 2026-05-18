@@ -37,7 +37,7 @@ describe("PWA polish source", () => {
     expect(manifest.short_name).toBe("Bazaar");
     expect(manifest.display).toBe("standalone");
     expect(manifest.display_override).toContain("standalone");
-    expect(manifest.theme_color).toBe("#2563eb");
+    expect(manifest.theme_color).toBe("#1d4ed8");
     expect(manifest.background_color).toBe("#ffffff");
     expect(manifest.icons?.some((icon) => icon.purpose === "maskable")).toBe(true);
   });

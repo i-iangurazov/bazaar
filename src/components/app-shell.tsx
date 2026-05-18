@@ -587,7 +587,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
-              className="flex w-full items-center justify-between rounded-none px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent/50 hover:text-foreground"
+              className="flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent/50 hover:text-foreground"
               aria-expanded={isOpen}
               aria-label={tNav("groupToggle", { group: groupLabel })}
             >
@@ -608,7 +608,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       <div key={item.key} className="space-y-1">
                         <div
                           className={cn(
-                            "relative flex h-9 items-center gap-2 rounded-none border-l-2 border-transparent px-3 text-sm font-semibold",
+                            "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold",
                             isActive
                               ? "border-l-4 border-primary bg-accent text-accent-foreground"
                               : "text-muted-foreground",
@@ -627,7 +627,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                 onClick={onNavigate}
                                 data-tour={`nav-${child.key}`}
                                 className={cn(
-                                  "relative flex h-9 items-center gap-2 rounded-none border-l-2 border-transparent px-3 text-sm font-semibold transition",
+                                  "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
                                   isChildActive
                                     ? "border-l-4 border-primary bg-accent text-accent-foreground"
                                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -652,7 +652,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       onClick={onNavigate}
                       data-tour={`nav-${item.key}`}
                       className={cn(
-                        "relative flex h-9 items-center gap-2 rounded-none border-l-2 border-transparent px-3 text-sm font-semibold transition",
+                        "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
                         isActive
                           ? "border-l-4 border-primary bg-accent text-accent-foreground"
                           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -673,7 +673,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     <Button
       type="button"
       variant="ghost"
-      className="mt-4 w-full justify-start rounded-none px-3"
+      className="mt-4 w-full justify-start rounded-md px-3"
       onClick={() => {
         onClick?.();
         setCustomizeNavOpen(true);
@@ -707,7 +707,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           type="button"
           variant="secondary"
           size="sm"
-          className="mt-3 h-8 rounded-none px-2 text-xs"
+          className="mt-3 h-8 rounded-md px-2 text-xs"
           onClick={handleResendVerification}
           disabled={resendVerificationMutation.isLoading || verificationResent}
         >
@@ -726,10 +726,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href="/settings/profile"
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex w-full items-center justify-between rounded-none border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group flex w-full items-center justify-between rounded-md border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
         <span className="min-w-0">
@@ -834,6 +834,14 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       requiredPermission: "manageCustomers",
     },
     {
+      key: "mobile-integrations",
+      label: tNav("integrations"),
+      href: "/operations/integrations",
+      activePath: "/operations/integrations",
+      icon: IntegrationsIcon,
+      requiredPermission: "manageIntegrations",
+    },
+    {
       key: "mobile-reports",
       label: tNav("reports"),
       href: "/reports",
@@ -916,6 +924,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     }
     if (normalizedPath.startsWith("/reports")) {
       return tNav("reports");
+    }
+    if (normalizedPath.startsWith("/operations/integrations")) {
+      return tNav("integrations");
     }
     if (normalizedPath.startsWith("/stores")) {
       return tNav("stores");
@@ -1013,7 +1024,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   type="button"
                   onClick={() => setCommandPaletteOpen(true)}
                   size="default"
-                  className="h-10 w-full rounded-none bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                  className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                   aria-label={tCommand("openButton")}
                 >
                   <CirclePlusIcon className="h-5 w-5" aria-hidden />

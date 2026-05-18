@@ -46,6 +46,30 @@ describe("mobile app shell source", () => {
     expect(appShellSource).toContain('requiredPermission: "viewInventory"');
   });
 
+  it("keeps the mobile header profile button rounded", () => {
+    const profileButtonStart = mobileShellSource.indexOf('href="/settings/profile"');
+    const profileButtonSource = mobileShellSource.slice(
+      profileButtonStart,
+      profileButtonStart + 500,
+    );
+
+    expect(profileButtonSource).toContain("button-focus-ring");
+    expect(profileButtonSource).toContain("h-11 w-11");
+    expect(profileButtonSource).toContain("rounded-md");
+    expect(profileButtonSource).toContain("focus-visible:ring-ring/30");
+  });
+
+  it("keeps the mobile bottom nav surface and items rounded", () => {
+    const bottomNavStart = mobileShellSource.indexOf("export const MobileBottomNav");
+    const bottomNavSource = mobileShellSource.slice(bottomNavStart, bottomNavStart + 1800);
+
+    expect(bottomNavSource).toContain("fixed inset-x-2 bottom-2 z-40 rounded-md border");
+    expect(bottomNavSource).toContain(
+      "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md",
+    );
+    expect(bottomNavSource).toContain("bg-primary text-primary-foreground shadow-sm");
+  });
+
   it("adds a mobile-only command center without replacing the desktop dashboard", () => {
     expect(dashboardSource).toContain('className="space-y-4 md:hidden"');
     expect(dashboardSource).toContain('className="hidden md:block"');

@@ -133,11 +133,11 @@ const BazaarApiSettingsPage = () => {
             </div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm md:grid-cols-2">
-            <div className="rounded-none border border-border p-3">
+            <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("productsEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/products</p>
             </div>
-            <div className="rounded-none border border-border p-3">
+            <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("ordersEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/orders</p>
             </div>
@@ -231,7 +231,7 @@ const BazaarApiSettingsPage = () => {
         subtitle={t("tokenSubtitle")}
       >
         <div className="space-y-4">
-          <div className="break-all rounded-none border border-border bg-muted/30 p-3 font-mono text-xs">
+          <div className="break-all rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
             {newToken}
           </div>
           <ModalFooter>

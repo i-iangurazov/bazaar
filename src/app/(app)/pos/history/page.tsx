@@ -534,7 +534,7 @@ const PosHistoryPage = () => {
 
         <section className="space-y-3">
           {!canLoadRegisterScopedData ? (
-            <div className="border border-border bg-card p-4 text-sm text-muted-foreground">
+            <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
               {(registersQuery.data ?? []).length
                 ? t("entry.selectRegisterFirst")
                 : t("entry.noRegisters")}
@@ -556,7 +556,7 @@ const PosHistoryPage = () => {
               !((sale.returnedTotalKgs ?? 0) > 0 && sale.returnedTotalKgs >= sale.totalKgs - 0.009);
 
             return (
-              <article key={sale.id} className="border border-border bg-card p-3 shadow-sm">
+              <article key={sale.id} className="rounded-md border border-border bg-card p-3 shadow-sm">
                 <button
                   type="button"
                   className="w-full text-left"
@@ -655,7 +655,7 @@ const PosHistoryPage = () => {
           })}
 
           {canLoadRegisterScopedData && !salesQuery.isLoading && !visibleSales.length ? (
-            <div className="border border-border bg-card p-4 text-sm text-muted-foreground">
+            <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
               {t("history.empty")}
             </div>
           ) : null}
@@ -734,7 +734,7 @@ const PosHistoryPage = () => {
                   {sale.kkmStatus !== "NOT_SENT" ? (
                     <div className="mt-1">
                       <span
-                        className={`inline-flex items-center rounded-none px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
+                        className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
                           sale.kkmStatus,
                         )}`}
                       >
@@ -883,7 +883,7 @@ const PosHistoryPage = () => {
                     </p>
                   </div>
                   <span
-                    className={`inline-flex items-center rounded-none px-2.5 py-1 text-xs font-semibold ${
+                    className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${
                       item.status === "COMPLETED"
                         ? "border border-success/20 bg-success/10 text-success"
                         : item.status === "CANCELED"
@@ -1133,7 +1133,7 @@ const PosHistoryPage = () => {
                       {t("history.itemsTitle")}
                     </h3>
                     {detailSale.lines.map((line) => (
-                      <div key={line.id} className="border border-border bg-card p-3">
+                      <div key={line.id} className="rounded-md border border-border bg-card p-3">
                         <div className="flex gap-3">
                           <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden border border-border bg-muted/30">
                             {line.product.primaryImage ? (

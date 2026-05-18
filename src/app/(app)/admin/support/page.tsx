@@ -198,7 +198,7 @@ const AdminSupportPage = () => {
             </div>
           ) : (
             (storeFlagsQuery.data ?? []).map((store) => (
-              <div key={store.id} className="rounded-lg border border-border/70 p-4">
+              <div key={store.id} className="rounded-md border border-border/70 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">{store.name}</p>

@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import { ChevronRight, Home } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 type Crumb = {
   label: string;
@@ -209,23 +212,41 @@ export const PageBreadcrumbs = () => {
   }
 
   return (
-    <nav aria-label={tBreadcrumbs("ariaLabel")} className="mb-2 overflow-x-auto">
-      <ol className="inline-flex min-w-max items-center gap-1 rounded-none border border-border/70 bg-card/70 px-2 py-1 text-xs text-muted-foreground">
+    <nav
+      aria-label={tBreadcrumbs("ariaLabel")}
+      className="scrollbar-none -mx-1 mb-3 overflow-x-auto px-1 pb-1"
+    >
+      <ol className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/80 bg-background/90 p-1 text-xs text-muted-foreground shadow-sm">
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1;
           return (
-            <li key={`${crumb.label}-${index}`} className="inline-flex items-center gap-1">
-              {index > 0 ? <span className="text-muted-foreground/60">/</span> : null}
+            <li key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-1">
+              {index > 0 ? (
+                <ChevronRight
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/45"
+                  aria-hidden
+                />
+              ) : null}
               {isLast || !crumb.href ? (
-                <span className="rounded-none px-1.5 py-0.5 font-medium text-foreground">
-                  {crumb.label}
+                <span
+                  aria-current={isLast ? "page" : undefined}
+                  className={cn(
+                    "inline-flex h-7 max-w-[54vw] items-center truncate rounded-md px-2.5 font-semibold sm:max-w-[280px]",
+                    isLast ? "bg-primary/10 text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  <span className="truncate">{crumb.label}</span>
                 </span>
               ) : (
                 <Link
                   href={crumb.href}
-                  className="rounded-none px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={index === 0 ? crumb.label : undefined}
+                  className="inline-flex h-7 max-w-[44vw] items-center gap-1 rounded-md px-2.5 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:max-w-[240px]"
                 >
-                  {crumb.label}
+                  {index === 0 ? <Home className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+                  <span className={cn("truncate", index === 0 ? "hidden sm:inline" : null)}>
+                    {crumb.label}
+                  </span>
                 </Link>
               )}
             </li>
