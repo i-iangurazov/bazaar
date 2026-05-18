@@ -3839,6 +3839,27 @@ export const ProductForm = ({
                             </FormItem>
                           )}
                         />
+                        <FormField
+                          control={form.control}
+                          name="avgCostKgs"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t("quickAvgCost")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="0.01"
+                                  placeholder={t("pricePlaceholder")}
+                                  disabled={readOnly}
+                                />
+                              </FormControl>
+                              <FormDescription>{t("quickAvgCostHint")}</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </>
                     ) : null}
                     {compactCreate && enableBarcode ? (
@@ -4222,34 +4243,6 @@ export const ProductForm = ({
                   <Separator />
                   {compactCreate ? (
                     <>
-                      <FormSection
-                        title={t("profitabilityTitle")}
-                        className={mobileProductSectionClassName}
-                      >
-                        <FormGrid className="items-start">
-                          <FormField
-                            control={form.control}
-                            name="avgCostKgs"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>{t("avgCost")}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.01"
-                                    placeholder={t("pricePlaceholder")}
-                                    disabled={readOnly}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </FormGrid>
-                      </FormSection>
-                      <Separator />
                       <FormSection
                         title={t("descriptionTitle")}
                         className={mobileProductSectionClassName}

@@ -3072,6 +3072,8 @@
     "quickMinStock": "Minimum stock",
     "minStockPlaceholder": "0",
     "quickMinStockHint": "Optional low-stock threshold for this store.",
+    "quickAvgCost": "Cost",
+    "quickAvgCostHint": "Used as the starting margin cost; receiving later recalculates it as average cost.",
     "effectivePrice": "Effective price",
     "priceOverridden": "Price overridden",
     "priceInherited": "Price inherited",

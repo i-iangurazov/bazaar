@@ -36,4 +36,18 @@ describe("mobile products source", () => {
     expect(source).toContain('enableSku ? [t("sku")] : []');
     expect(source).toContain('enableBarcode ? [t("barcodes")] : []');
   });
+
+  it("keeps quick-create cost in the core fields after minimum stock", async () => {
+    const source = await readSource("src/components/product-form.tsx");
+
+    const minStockIndex = source.indexOf('name="minStock"');
+    const quickCostIndex = source.indexOf('name="avgCostKgs"', minStockIndex);
+    const barcodeIndex = source.indexOf("{compactCreate && enableBarcode", quickCostIndex);
+
+    expect(minStockIndex).toBeGreaterThan(-1);
+    expect(quickCostIndex).toBeGreaterThan(minStockIndex);
+    expect(barcodeIndex).toBeGreaterThan(quickCostIndex);
+    expect(source).toContain('FormLabel>{t("quickAvgCost")}</FormLabel>');
+    expect(source).not.toContain('title={t("profitabilityTitle")}');
+  });
 });

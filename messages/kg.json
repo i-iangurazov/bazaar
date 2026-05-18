@@ -3071,6 +3071,8 @@
     "quickMinStock": "Минималдуу калдык",
     "minStockPlaceholder": "0",
     "quickMinStockHint": "Бул дүкөн үчүн милдеттүү эмес аз калдык чеги.",
+    "quickAvgCost": "Өздүк нарк",
+    "quickAvgCostHint": "Маржаны баштапкы эсептөө үчүн колдонулат; кабыл алуулардан кийин орточо өздүк нарк болуп кайра эсептелет.",
     "effectivePrice": "Натыйжалуу баа",
     "priceOverridden": "Өзгөртүлгөн",
     "priceInherited": "Жалпы баадан алынат",
