@@ -1360,6 +1360,7 @@ model CustomerOrder {
   customerName           String?
   customerEmail          String?
   customerPhone          String?
+  customerAddress        String?
   subtotalKgs            Decimal             @default(0) @db.Decimal(12, 2)
   discountKgs            Decimal             @default(0) @db.Decimal(12, 2)
   totalKgs               Decimal             @default(0) @db.Decimal(12, 2)

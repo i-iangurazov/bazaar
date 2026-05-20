@@ -13,6 +13,7 @@ const orderSchema = z.object({
   customerName: z.string().trim().max(160).optional().nullable(),
   customerEmail: z.string().trim().email().max(254).optional().nullable(),
   customerPhone: z.string().trim().max(64).optional().nullable(),
+  customerAddress: z.string().trim().max(512).optional().nullable(),
   comment: z.string().trim().max(2_000).optional().nullable(),
   lines: z
     .array(
@@ -59,6 +60,7 @@ export const POST = async (request: Request) => {
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.customerEmail,
       customerPhone: parsed.data.customerPhone,
+      customerAddress: parsed.data.customerAddress,
       comment: parsed.data.comment,
       lines: parsed.data.lines,
     });

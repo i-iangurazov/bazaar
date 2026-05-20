@@ -179,6 +179,7 @@ export const salesOrdersRouter = router({
         customerName: z.string().max(160).optional().nullable(),
         customerEmail: optionalEmailSchema,
         customerPhone: z.string().max(64).optional().nullable(),
+        customerAddress: z.string().max(512).optional().nullable(),
         notes: z.string().max(2_000).optional().nullable(),
         lines: z
           .array(
@@ -200,6 +201,7 @@ export const salesOrdersRouter = router({
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
+          customerAddress: input.customerAddress,
           notes: input.notes,
           lines: input.lines,
           actorId: ctx.user.id,
@@ -217,6 +219,7 @@ export const salesOrdersRouter = router({
         customerName: z.string().max(160).optional().nullable(),
         customerEmail: optionalEmailSchema,
         customerPhone: z.string().max(64).optional().nullable(),
+        customerAddress: z.string().max(512).optional().nullable(),
         notes: z.string().max(2_000).optional().nullable(),
       }),
     )
@@ -229,6 +232,7 @@ export const salesOrdersRouter = router({
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
+          customerAddress: input.customerAddress,
           notes: input.notes,
           actorId: ctx.user.id,
           requestId: ctx.requestId,

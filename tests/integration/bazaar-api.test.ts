@@ -191,6 +191,7 @@ describeDb("bazaar api integration", () => {
       customerName: "API Customer",
       customerEmail: "api.customer@example.com",
       customerPhone: "+996555111222",
+      customerAddress: "Bishkek, Manas 10",
       externalId: "EXT-1",
       lines: [{ productId: product.id, qty: 2 }],
     });
@@ -202,6 +203,7 @@ describeDb("bazaar api integration", () => {
 
     expect(order.totalKgs).toBe(500);
     expect(dbOrder?.source).toBe("API");
+    expect(dbOrder?.customerAddress).toBe("Bishkek, Manas 10");
     expect(dbOrder?.notes).toContain("EXT-1");
     expect(dbOrder?.lines[0]).toMatchObject({
       productId: product.id,

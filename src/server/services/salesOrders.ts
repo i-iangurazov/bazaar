@@ -256,6 +256,7 @@ export const listCustomerOrders = async (input: {
             { customerName: { contains: input.search, mode: "insensitive" } },
             { customerEmail: { contains: input.search, mode: "insensitive" } },
             { customerPhone: { contains: input.search, mode: "insensitive" } },
+            { customerAddress: { contains: input.search, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -515,6 +516,7 @@ export const createCustomerOrderDraft = async (input: {
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  customerAddress?: string | null;
   notes?: string | null;
   lines?: Array<{
     productId: string;
@@ -544,6 +546,7 @@ export const createCustomerOrderDraft = async (input: {
         customerName: input.customerName ?? null,
         customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
+        customerAddress: input.customerAddress ?? null,
         notes: input.notes ?? null,
         ...resolveCurrencySnapshot(store),
         createdById: input.actorId,
@@ -557,6 +560,7 @@ export const createCustomerOrderDraft = async (input: {
       customerName: input.customerName,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
+      customerAddress: input.customerAddress,
     });
 
     if (input.lines?.length) {
@@ -625,6 +629,7 @@ export const setCustomerOrderCustomer = async (input: {
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  customerAddress?: string | null;
   notes?: string | null;
   actorId: string;
   requestId: string;
@@ -646,6 +651,7 @@ export const setCustomerOrderCustomer = async (input: {
         customerName: input.customerName ?? null,
         customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
+        customerAddress: input.customerAddress ?? null,
         notes: input.notes ?? null,
         updatedById: input.actorId,
       },
@@ -657,6 +663,7 @@ export const setCustomerOrderCustomer = async (input: {
       customerName: updated.customerName,
       customerEmail: updated.customerEmail,
       customerPhone: updated.customerPhone,
+      customerAddress: updated.customerAddress,
       orderedAt: updated.updatedAt,
       countOrder: false,
     });

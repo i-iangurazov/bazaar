@@ -131,6 +131,7 @@ const SalesOrderDetailPage = () => {
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
 
   const [lineDialogMode, setLineDialogMode] = useState<"add" | "edit" | null>(null);
@@ -167,6 +168,7 @@ const SalesOrderDetailPage = () => {
     setCustomerName(order.customerName ?? "");
     setCustomerEmail(order.customerEmail ?? "");
     setCustomerPhone(order.customerPhone ?? "");
+    setCustomerAddress(order.customerAddress ?? "");
     setNotes(order.notes ?? "");
   }, [order]);
 
@@ -303,6 +305,7 @@ const SalesOrderDetailPage = () => {
       customerName: customerName.trim() || null,
       customerEmail: customerEmail.trim() || null,
       customerPhone: customerPhone.trim() || null,
+      customerAddress: customerAddress.trim() || null,
       notes: notes.trim() || null,
     });
   };
@@ -593,6 +596,16 @@ const SalesOrderDetailPage = () => {
                     onChange={setCustomerPhone}
                     placeholder={t("customerPhonePlaceholder")}
                     countrySelectLabel={t("customerPhoneCountry")}
+                    disabled={!isEditable || setCustomerMutation.isLoading}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <p className="text-sm font-medium">{t("customerAddress")}</p>
+                  <Input
+                    value={customerAddress}
+                    onChange={(event) => setCustomerAddress(event.target.value)}
+                    placeholder={t("customerAddressPlaceholder")}
+                    maxLength={512}
                     disabled={!isEditable || setCustomerMutation.isLoading}
                   />
                 </div>

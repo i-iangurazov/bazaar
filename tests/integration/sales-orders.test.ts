@@ -29,6 +29,7 @@ describeDb("sales orders", () => {
       storeId: store.id,
       customerName: null,
       customerPhone: null,
+      customerAddress: "Bishkek, Chui 1",
       lines: [{ productId: product.id, qty: 2 }],
     });
 
@@ -40,6 +41,7 @@ describeDb("sales orders", () => {
     expect(dbOrder).toBeTruthy();
     expect(dbOrder?.customerName).toBeNull();
     expect(dbOrder?.customerPhone).toBeNull();
+    expect(dbOrder?.customerAddress).toBe("Bishkek, Chui 1");
     expect(dbOrder?.lines).toHaveLength(1);
     expect(dbOrder?.lines[0]?.qty).toBe(2);
   });

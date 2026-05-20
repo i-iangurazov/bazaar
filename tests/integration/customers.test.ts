@@ -195,6 +195,7 @@ describeDb("customer database", () => {
       customerName: "Email Customer",
       customerEmail: "Customer@Example.COM",
       customerPhone: null,
+      customerAddress: "Bishkek, Chui 1",
     });
     await caller.salesOrders.createDraft({
       storeId: store.id,
@@ -220,6 +221,7 @@ describeDb("customer database", () => {
       customerName: "API Customer",
       customerEmail: "api@example.com",
       customerPhone: "+996 555 222 333",
+      customerAddress: "Osh, Lenin 2",
       lines: [{ productId: product.id, qty: 1 }],
     });
 
@@ -236,6 +238,12 @@ describeDb("customer database", () => {
       "customer@example.com",
     ]);
     expect(storeCustomers.some((customer) => customer.phone === "+996 555 123 123")).toBe(true);
+    expect(storeCustomers.find((customer) => customer.email === "customer@example.com")?.address).toBe(
+      "Bishkek, Chui 1",
+    );
+    expect(storeCustomers.find((customer) => customer.email === "api@example.com")?.address).toBe(
+      "Osh, Lenin 2",
+    );
     expect(storeCustomers.every((customer) => customer.source === CustomerSource.ORDER)).toBe(true);
     expect(otherStoreCustomers).toHaveLength(1);
     expect(otherStoreCustomers[0]?.email).toBe("customer@example.com");

@@ -284,11 +284,12 @@ const SalesOrdersPage = () => {
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
               <div className="overflow-x-auto">
-                <Table className="min-w-[860px]" data-tour="sales-orders-table">
+                <Table className="min-w-[980px]" data-tour="sales-orders-table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t("number")}</TableHead>
                       <TableHead>{t("customer")}</TableHead>
+                      <TableHead>{t("customerAddress")}</TableHead>
                       <TableHead>{t("store")}</TableHead>
                       <TableHead>{t("statusLabel")}</TableHead>
                       <TableHead>{t("sourceLabel")}</TableHead>
@@ -309,6 +310,9 @@ const SalesOrdersPage = () => {
                           </Link>
                         </TableCell>
                         <TableCell>{order.customerName || tCommon("notAvailable")}</TableCell>
+                        <TableCell className="max-w-[220px] truncate">
+                          {order.customerAddress || tCommon("notAvailable")}
+                        </TableCell>
                         <TableCell>{order.store.name}</TableCell>
                         <TableCell>
                           <Badge variant={statusVariant(order.status)}>
@@ -425,6 +429,12 @@ const SalesOrdersPage = () => {
                     <div>
                       <p>{t("store")}</p>
                       <p className="font-medium text-foreground">{order.store.name}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p>{t("customerAddress")}</p>
+                      <p className="font-medium text-foreground">
+                        {order.customerAddress || tCommon("notAvailable")}
+                      </p>
                     </div>
                     <div>
                       <p>{t("sourceLabel")}</p>

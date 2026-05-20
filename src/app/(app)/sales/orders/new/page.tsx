@@ -66,6 +66,7 @@ const NewSalesOrderPage = () => {
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [lineSearch, setLineSearch] = useState("");
   const [showLineSearchResults, setShowLineSearchResults] = useState(false);
@@ -223,6 +224,7 @@ const NewSalesOrderPage = () => {
       customerName: customerName.trim() || null,
       customerEmail: customerEmail.trim() || null,
       customerPhone: customerPhone.trim() || null,
+      customerAddress: customerAddress.trim() || null,
       notes: notes.trim() || null,
       lines: draftLines.map((line) => ({
         productId: line.productId,
@@ -304,6 +306,18 @@ const NewSalesOrderPage = () => {
                 onChange={setCustomerPhone}
                 placeholder={t("customerPhonePlaceholder")}
                 countrySelectLabel={t("customerPhoneCountry")}
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <p className="text-sm font-medium">
+                {t("customerAddress")} ({tCommon("optional")})
+              </p>
+              <Input
+                value={customerAddress}
+                onChange={(event) => setCustomerAddress(event.target.value)}
+                placeholder={t("customerAddressPlaceholder")}
+                maxLength={512}
               />
             </div>
 

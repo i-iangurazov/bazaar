@@ -428,6 +428,7 @@ export const createBazaarApiOrder = async (input: {
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  customerAddress?: string | null;
   comment?: string | null;
   externalId?: string | null;
   lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
@@ -573,6 +574,7 @@ export const createBazaarApiOrder = async (input: {
         customerName: normalizeOptionalText(input.customerName),
         customerEmail: normalizeOptionalText(input.customerEmail),
         customerPhone: normalizeOptionalText(input.customerPhone),
+        customerAddress: normalizeOptionalText(input.customerAddress),
         notes: notes || null,
         subtotalKgs: subtotal,
         totalKgs: subtotal,
@@ -587,6 +589,7 @@ export const createBazaarApiOrder = async (input: {
       customerName: input.customerName,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
+      customerAddress: input.customerAddress,
     });
     return order;
   });
