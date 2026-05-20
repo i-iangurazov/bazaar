@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
+import {
+  ProductEditorCard,
+  ProductEditorGrid,
+  ProductEditorHeader,
+  ProductEditorPage,
+  ProductEditorSaveBar,
+} from "@/components/product-editor-layout";
 import { ProductForm } from "@/components/product-form";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
   SelectContent,
@@ -14,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StatusSuccessIcon } from "@/components/icons";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -83,6 +94,7 @@ const NewProductPage = () => {
   const enableBarcode = selectedStore?.enableBarcode ?? true;
   const enableSimilarProductCheck = selectedStore?.enableSimilarProductCheck ?? true;
   const storeSelectDisabled = storesQuery.isLoading || storeOptions.length <= 1;
+  const productCreateFormId = "product-create-form";
 
   if (session && !canManageProducts) {
     return (
@@ -114,12 +126,8 @@ const NewProductPage = () => {
   const suggestedSku = suggestedSkuQuery.data ?? "";
 
   const storePicker = (
-    <section className="mb-6 border border-border bg-card p-4 shadow-sm">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)] lg:items-center">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">{t("createStoreTitle")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("createStoreHint")}</p>
-        </div>
+    <ProductEditorCard title={t("productAvailabilityTitle")} description={t("createStoreHint")}>
+      <div className="space-y-2">
         <Select
           value={selectedStoreId}
           onValueChange={setSelectedStoreId}
@@ -137,66 +145,133 @@ const NewProductPage = () => {
             ))}
           </SelectContent>
         </Select>
+        {selectedStore ? (
+          <p className="text-xs text-muted-foreground">
+            {t("productAvailabilitySelected", { store: selectedStore.name })}
+          </p>
+        ) : null}
       </div>
-    </section>
+    </ProductEditorCard>
+  );
+
+  const sidebar = (
+    <>
+      {storePicker}
+      <ProductEditorCard title={t("productOrganizationTitle")}>
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t("typeLabel")}</span>
+            <span className="font-medium text-foreground">
+              {isBundleDefault ? t("typeBundle") : t("typeProduct")}
+            </span>
+          </div>
+          {selectedStore?.currencyCode ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">{t("currency")}</span>
+              <span className="font-medium text-foreground">{selectedStore.currencyCode}</span>
+            </div>
+          ) : null}
+        </div>
+      </ProductEditorCard>
+      <ProductEditorCard title={t("additionalSettingsTitle")}>
+        <div className="space-y-2 text-xs text-muted-foreground">
+          <p>{t(enableSku ? "skuEnabledHint" : "skuDisabledHint")}</p>
+          <p>{t(enableBarcode ? "barcodeEnabledHint" : "barcodeDisabledHint")}</p>
+        </div>
+      </ProductEditorCard>
+    </>
   );
 
   return (
-    <div>
-      <PageHeader title={pageTitle} subtitle={pageSubtitle} />
-      {storePicker}
-      {!selectedStore ? (
-        <p className="text-sm text-muted-foreground">{t("createStoreEmpty")}</p>
-      ) : (
-        <ProductForm
-          key={`new:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
-          initialValues={{
-            sku: suggestedSku,
-            name: "",
-            isBundle: isBundleDefault,
-            category: "",
-            categories: [],
-            baseUnitId: "",
-            basePriceKgs: undefined,
-            purchasePriceKgs: undefined,
-            avgCostKgs: undefined,
-            initialOnHand: undefined,
-            minStock: undefined,
-            description: "",
-            photoUrl: "",
-            images: [],
-            barcodes: enableBarcode && barcode ? [barcode] : [],
-            packs: [],
-            variants: [],
-            bundleComponents: [],
-          }}
-          attributeDefinitions={attributesQuery.data ?? []}
-          units={unitsQuery.data ?? []}
-          onSubmit={(values) =>
-            createMutation.mutate({
-              ...values,
-              storeId: selectedStore.id,
-              sku:
-                !enableSku || (suggestedSku && values.sku.trim() === suggestedSku)
-                  ? ""
-                  : values.sku,
-            })
-          }
-          isSubmitting={createMutation.isLoading}
-          currencyCode={selectedStore.currencyCode ?? null}
-          currencyRateKgsPerUnit={selectedCurrencyRate}
-          quickCreateMode
-          canEditInitialStock={canEditInitialStock}
-          enableSku={enableSku}
-          enableBarcode={enableBarcode}
-          enableSimilarProductCheck={enableSimilarProductCheck}
-          categoryStoreId={selectedStore.id}
-        />
-      )}
+    <ProductEditorPage>
+      <ProductEditorHeader
+        eyebrow={
+          <Link href="/products" className="text-muted-foreground hover:text-foreground">
+            {tCommon("back")}
+          </Link>
+        }
+        title={pageTitle}
+      />
+      <ProductEditorSaveBar
+        label={t("saveBarUnsaved")}
+        actions={
+          <Button
+            type="submit"
+            form={productCreateFormId}
+            size="sm"
+            className="min-w-24"
+            disabled={!selectedStore || createMutation.isLoading}
+          >
+            {createMutation.isLoading ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+            )}
+            {createMutation.isLoading ? t("saving") : t("save")}
+          </Button>
+        }
+      />
+      <ProductEditorGrid
+        main={
+          !selectedStore ? (
+            <ProductEditorCard>
+              <p className="text-sm text-muted-foreground">{t("createStoreEmpty")}</p>
+            </ProductEditorCard>
+          ) : (
+            <ProductForm
+              key={`new:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
+              formId={productCreateFormId}
+              hideActions
+              initialValues={{
+                sku: suggestedSku,
+                name: "",
+                isBundle: isBundleDefault,
+                category: "",
+                categories: [],
+                baseUnitId: "",
+                basePriceKgs: undefined,
+                purchasePriceKgs: undefined,
+                avgCostKgs: undefined,
+                initialOnHand: undefined,
+                minStock: undefined,
+                description: "",
+                photoUrl: "",
+                images: [],
+                barcodes: enableBarcode && barcode ? [barcode] : [],
+                packs: [],
+                variants: [],
+                bundleComponents: [],
+              }}
+              attributeDefinitions={attributesQuery.data ?? []}
+              units={unitsQuery.data ?? []}
+              onSubmit={(values) =>
+                createMutation.mutate({
+                  ...values,
+                  storeId: selectedStore.id,
+                  sku:
+                    !enableSku || (suggestedSku && values.sku.trim() === suggestedSku)
+                      ? ""
+                      : values.sku,
+                })
+              }
+              isSubmitting={createMutation.isLoading}
+              currencyCode={selectedStore.currencyCode ?? null}
+              currencyRateKgsPerUnit={selectedCurrencyRate}
+              quickCreateMode
+              canEditInitialStock={canEditInitialStock}
+              enableSku={enableSku}
+              enableBarcode={enableBarcode}
+              enableSimilarProductCheck={enableSimilarProductCheck}
+              categoryStoreId={selectedStore.id}
+            />
+          )
+        }
+        sidebar={sidebar}
+      />
       {createMutation.error ? (
         <p className="mt-3 text-sm text-danger">{translateError(tErrors, createMutation.error)}</p>
       ) : null}
-    </div>
+    </ProductEditorPage>
   );
 };
 

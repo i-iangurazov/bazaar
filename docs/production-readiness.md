@@ -137,6 +137,7 @@ For Vercel runtime incidents (`ETIMEDOUT`, `Command timed out`, random 500 on al
 - Production should use `IMAGE_STORAGE_PROVIDER=r2` so product images upload through short-lived direct R2 signed URLs instead of long backend proxy requests.
 - Configure R2 bucket CORS to allow authenticated app origins to `PUT` with the `Content-Type` header.
 - Keep `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES` aligned with `PRODUCT_IMAGE_MAX_BYTES`; the default operational limit is 5 MB after client-side optimization.
+- Keep `PRODUCT_IMAGE_PROXY_MAX_BYTES` and `NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES` at or below `3750000` on Vercel so the proxy fallback never sends a multipart body large enough to trigger `FUNCTION_PAYLOAD_TOO_LARGE`.
 - `NEXT_PUBLIC_PRODUCT_IMAGE_DIRECT_UPLOAD_TIMEOUT_MS` controls the browser-to-R2 upload timeout for slow/remote clients.
 
 3. Runtime preflight

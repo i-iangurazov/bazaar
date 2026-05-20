@@ -66,7 +66,8 @@ describe("index page source layout", () => {
     expect(detailSource).toContain(
       'const canManageProducts = role === "ADMIN" || role === "MANAGER";',
     );
-    expect(detailSource).toContain("action={\n          canManageProducts ? (");
+    expect(detailSource).toContain("const productActions = canManageProducts ? (");
+    expect(detailSource).toContain("{canManageProducts ? (\n        <ProductEditorSaveBar");
     expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
 
@@ -129,7 +130,9 @@ describe("index page source layout", () => {
     expect(profileSource).toContain('t("productSettings.title")');
     expect(profileSource).not.toContain('prefix: "products-table-state"');
     expect(profileSource).not.toContain("productSettingsStoreReady");
-    expect(profileSource).toContain("businessQuery.data?.organization.id === session?.user?.organizationId");
+    expect(profileSource).toContain(
+      "businessQuery.data?.organization.id === session?.user?.organizationId",
+    );
     expect(profileSource).toContain("productSettingsLoading ? (");
     expect(profileSource).toContain('name="storeId"');
     expect(profileSource).toContain("handleStoreChange(value)");

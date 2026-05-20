@@ -6,6 +6,7 @@ import {
   fetchProductImageUpload,
   prepareProductImageFileForUpload,
   putProductImageDirectUpload,
+  resolveProductImageProxyUploadMaxBytes,
   resolvePrimaryImageUrl,
 } from "../../src/lib/productImageUpload";
 
@@ -27,6 +28,13 @@ describe("product image upload preprocessing", () => {
       ]),
     ).toBe("/uploads/img-1.jpg");
     expect(resolvePrimaryImageUrl([])).toBe("");
+  });
+
+  it("uses a proxy-safe upload limit below Vercel request payload limits", () => {
+    expect(resolveProductImageProxyUploadMaxBytes()).toBe(3_750_000);
+    expect(resolveProductImageProxyUploadMaxBytes("4200000")).toBe(4_200_000);
+    expect(resolveProductImageProxyUploadMaxBytes("0")).toBe(3_750_000);
+    expect(resolveProductImageProxyUploadMaxBytes("invalid")).toBe(3_750_000);
   });
 
   it("converts HEIC mime variants to JPEG before upload", async () => {

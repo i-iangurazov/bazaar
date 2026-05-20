@@ -91,6 +91,7 @@ export const resolvePrimaryImageUrl = (images: Array<{ url?: string | null }>) =
 
 const defaultProductImageUploadTimeoutMs = 45_000;
 const defaultProductImageDirectUploadTimeoutMs = 120_000;
+const defaultProductImageProxyUploadMaxBytes = 3_750_000;
 
 export class ProductImageUploadTimeoutError extends Error {
   constructor() {
@@ -109,6 +110,13 @@ export const resolveProductImageDirectUploadTimeoutMs = (value?: string | null) 
   return Number.isFinite(parsed) && parsed >= 1_000
     ? parsed
     : defaultProductImageDirectUploadTimeoutMs;
+};
+
+export const resolveProductImageProxyUploadMaxBytes = (value?: string | null) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.trunc(parsed)
+    : defaultProductImageProxyUploadMaxBytes;
 };
 
 const fetchWithTimeout = async ({
@@ -154,7 +162,9 @@ const fetchWithTimeout = async ({
 export const fetchProductImageUpload = async ({
   url,
   formData,
-  timeoutMs = resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
+  timeoutMs = resolveProductImageUploadTimeoutMs(
+    process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
+  ),
   fetchImpl = fetch,
 }: {
   url: string;
@@ -183,7 +193,9 @@ export type ProductImageDirectUploadTarget = {
 export const fetchProductImageDirectUploadTarget = async ({
   file,
   productId,
-  timeoutMs = resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
+  timeoutMs = resolveProductImageUploadTimeoutMs(
+    process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
+  ),
   fetchImpl = fetch,
 }: {
   file: File;

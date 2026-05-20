@@ -44,6 +44,33 @@ describe("product image source route", () => {
     expect(body.byteLength).toBe(3);
   });
 
+  it("infers image mime from bytes when managed upload urls have no extension", async () => {
+    const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(jpegBytes, {
+          status: 200,
+          headers: {
+            "content-type": "application/octet-stream",
+          },
+        }),
+      ),
+    );
+
+    const { GET } = await import("../../src/app/api/product-images/source/route");
+    const request = new Request(
+      `http://localhost/api/product-images/source?url=${encodeURIComponent(
+        "/uploads/imported-products/org-1/products/unassigned/hash-without-extension",
+      )}`,
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+  });
+
   it("allows managers to proxy managed product images", async () => {
     mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "MANAGER" });
     const fetchMock = vi.fn().mockResolvedValue(

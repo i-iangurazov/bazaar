@@ -18,10 +18,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Cropper, { type Area } from "react-easy-crop";
 
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
+import { ProductEditorCard, ProductEditorFieldGrid } from "@/components/product-editor-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -77,6 +79,7 @@ import {
   prepareProductImageFileForUpload,
   putProductImageDirectUpload,
   resolveProductImageDirectUploadTimeoutMs,
+  resolveProductImageProxyUploadMaxBytes,
   resolvePrimaryImageUrl,
   type ProductImageDirectUploadTarget,
 } from "@/lib/productImageUpload";
@@ -166,7 +169,7 @@ type PendingImageUpload = {
 };
 
 const defaultProductImageMaxBytes = 5 * 1024 * 1024;
-const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
+const defaultProductImageMaxInputBytes = 32 * 1024 * 1024;
 const productImageAccept = [
   "image/jpeg",
   "image/png",
@@ -197,7 +200,7 @@ const resolveClientImageMaxBytes = () => {
 const resolveClientImageMaxInputBytes = (maxImageBytes: number) => {
   const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES);
   if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.max(Math.trunc(parsed), maxImageBytes);
+    return Math.max(Math.trunc(parsed), defaultProductImageMaxInputBytes, maxImageBytes);
   }
   return Math.max(defaultProductImageMaxInputBytes, maxImageBytes);
 };
@@ -241,6 +244,32 @@ const normalizeCategoryName = (value?: string | null) => {
 const normalizeCategoryKey = (value?: string | null) => {
   const normalized = normalizeCategoryName(value);
   return normalized ? normalized.toLocaleLowerCase("ru-RU") : null;
+};
+
+const normalizeVariantOptionLabel = (value?: string | null) => {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized ? normalized : "";
+};
+
+const parseVariantOptionValues = (value?: string | null) =>
+  (value ?? "")
+    .split(/[,;\n]/)
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+
+const mergeVariantOptionValues = (currentValues: string[], nextValues: string[]) => {
+  const seen = new Set(currentValues.map((value) => value.toLocaleLowerCase("ru-RU")));
+  const merged = [...currentValues];
+  nextValues.forEach((value) => {
+    const normalized = normalizeVariantOptionLabel(value);
+    const key = normalized.toLocaleLowerCase("ru-RU");
+    if (!normalized || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    merged.push(normalized);
+  });
+  return merged;
 };
 
 const replaceFileExtension = (fileName: string, extension: string) => {
@@ -337,6 +366,48 @@ const resolveImageMimeTypeFromUrl = (sourceUrl: string) => {
   }
 };
 
+const inferImageMimeTypeFromBytes = (bytes: Uint8Array) => {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38
+  ) {
+    return "image/gif";
+  }
+  return "";
+};
+
 const minimumProductBarcodeLength = 4;
 const normalizeProductBarcodeInput = (value?: string | null) => normalizeScanValue(value ?? "");
 const normalizeProductBarcodes = (values?: string[] | null) =>
@@ -399,6 +470,7 @@ export const ProductForm = ({
   currencyCode,
   currencyRateKgsPerUnit,
   quickCreateMode = false,
+  shopifyEditorLayout = false,
   formId,
   hideActions = false,
   canEditInitialStock = true,
@@ -418,6 +490,7 @@ export const ProductForm = ({
   currencyCode?: string | null;
   currencyRateKgsPerUnit?: number | string | null;
   quickCreateMode?: boolean;
+  shopifyEditorLayout?: boolean;
   formId?: string;
   hideActions?: boolean;
   canEditInitialStock?: boolean;
@@ -432,6 +505,7 @@ export const ProductForm = ({
   const locale = useLocale();
   const { toast } = useToast();
   const compactCreate = quickCreateMode && !productId && !readOnly;
+  const shopifyEditor = shopifyEditorLayout || compactCreate;
   const moneyCurrencyCode = normalizeCurrencyCode(currencyCode);
   const moneyCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
     currencyRateKgsPerUnit,
@@ -844,7 +918,7 @@ export const ProductForm = ({
     [generatorDefinitions],
   );
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "variants",
   });
@@ -947,9 +1021,15 @@ export const ProductForm = ({
   const [generatorAttributes, setGeneratorAttributes] = useState<VariantGeneratorAttribute[]>([]);
   const [generatorDraftKey, setGeneratorDraftKey] = useState("");
   const [generatorValueDrafts, setGeneratorValueDrafts] = useState<Record<string, string>>({});
+  const [variantOptionEditorOpen, setVariantOptionEditorOpen] = useState(false);
+  const [variantOptionDraftName, setVariantOptionDraftName] = useState("");
+  const [variantOptionValueDraft, setVariantOptionValueDraft] = useState("");
+  const [variantOptionDraftValues, setVariantOptionDraftValues] = useState<string[]>([]);
   const [bundleSearch, setBundleSearch] = useState("");
   const [showBundleResults, setShowBundleResults] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [showImageUrlInput, setShowImageUrlInput] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
   const [pendingImageUploads, setPendingImageUploads] = useState<PendingImageUpload[]>([]);
   const pendingImageUploadsRef = useRef<PendingImageUpload[]>([]);
   const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
@@ -971,6 +1051,10 @@ export const ProductForm = ({
   const baseUnitId = form.watch("baseUnitId");
   const baseUnit = unitOptions.find((unit) => unit.id === baseUnitId);
   const maxImageBytes = resolveClientImageMaxBytes();
+  const maxProxyUploadBytes = Math.min(
+    maxImageBytes,
+    resolveProductImageProxyUploadMaxBytes(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES),
+  );
   const maxInputImageBytes = resolveClientImageMaxInputBytes(maxImageBytes);
   const maxImageUploadConcurrency = resolveClientImageUploadConcurrency();
 
@@ -1220,7 +1304,7 @@ export const ProductForm = ({
     });
   };
 
-  const optimizeImageToLimit = async (file: File) => {
+  const optimizeImageToLimit = async (file: File, targetMaxBytes = maxImageBytes) => {
     const normalizedType = normalizeImageMimeType(file.type);
     if (!["image/jpeg", "image/png", "image/webp"].includes(normalizedType)) {
       logImagePrepDebug("optimize-unsupported-type", {
@@ -1321,7 +1405,7 @@ export const ProductForm = ({
         let best = candidates.reduce((smallest, candidate) =>
           candidate.size < smallest.size ? candidate : smallest,
         );
-        if (best.size <= maxImageBytes) {
+        if (best.size <= targetMaxBytes) {
           return best;
         }
 
@@ -1345,7 +1429,7 @@ export const ProductForm = ({
           if (optimized.size < best.size) {
             best = optimized;
           }
-          if (optimized.size <= maxImageBytes) {
+          if (optimized.size <= targetMaxBytes) {
             return optimized;
           }
         }
@@ -1364,7 +1448,7 @@ export const ProductForm = ({
       let targetHeight = Math.max(1, Math.round(height * safeBaseScale));
 
       let best = await optimizeFromDimensions(targetWidth, targetHeight, false);
-      if (best?.size && best.size <= maxImageBytes) {
+      if (best?.size && best.size <= targetMaxBytes) {
         return best;
       }
 
@@ -1373,14 +1457,14 @@ export const ProductForm = ({
       const maxResizePasses = 8;
       for (let pass = 0; pass < maxResizePasses; pass += 1) {
         const referenceSize = best?.size ?? file.size;
-        if (referenceSize <= maxImageBytes) {
+        if (referenceSize <= targetMaxBytes) {
           return best;
         }
         if (targetWidth <= minDimension && targetHeight <= minDimension) {
           break;
         }
 
-        const predictedScale = Math.sqrt(maxImageBytes / Math.max(referenceSize, 1));
+        const predictedScale = Math.sqrt(targetMaxBytes / Math.max(referenceSize, 1));
         const stepScale = Math.min(0.9, Math.max(0.55, predictedScale * 0.98));
         const nextTargetWidth = Math.max(minDimension, Math.round(targetWidth * stepScale));
         const nextTargetHeight = Math.max(minDimension, Math.round(targetHeight * stepScale));
@@ -1398,7 +1482,7 @@ export const ProductForm = ({
         if (!best || resized.size < best.size) {
           best = resized;
         }
-        if (resized.size <= maxImageBytes) {
+        if (resized.size <= targetMaxBytes) {
           return resized;
         }
       }
@@ -1609,7 +1693,7 @@ export const ProductForm = ({
     }
   };
 
-  const showUploadFailureToast = (code?: string | null) => {
+  const showUploadFailureToast = (code?: string | null, sizeBytes = maxImageBytes) => {
     if (code === "forbidden") {
       toast({ variant: "error", description: tErrors("forbidden") });
       return;
@@ -1622,7 +1706,7 @@ export const ProductForm = ({
       toast({
         variant: "error",
         description: t("imageTooLargeAfterCompression", {
-          size: Math.round(maxImageBytes / (1024 * 1024)),
+          size: Math.round(sizeBytes / (1024 * 1024)),
         }),
       });
       return;
@@ -1699,8 +1783,45 @@ export const ProductForm = ({
   };
 
   const uploadImageFileViaProxy = async (file: File) => {
+    let uploadFile = file;
+    if (uploadFile.size > maxProxyUploadBytes) {
+      logImagePrepDebug("proxy-upload-optimize-start", {
+        fileName: uploadFile.name,
+        fileSize: uploadFile.size,
+        fileType: uploadFile.type,
+        targetSize: maxProxyUploadBytes,
+      });
+      const optimized = await optimizeImageToLimit(uploadFile, maxProxyUploadBytes);
+      if (!optimized) {
+        toast({ variant: "error", description: t("imageCompressionFailed") });
+        return null;
+      }
+      if (optimized.size > maxProxyUploadBytes) {
+        logImagePrepDebug("proxy-upload-optimized-too-large", {
+          fileName: uploadFile.name,
+          originalSize: uploadFile.size,
+          optimizedSize: optimized.size,
+          targetSize: maxProxyUploadBytes,
+        });
+        toast({
+          variant: "error",
+          description: t("imageTooLargeAfterCompression", {
+            size: Math.round(maxProxyUploadBytes / (1024 * 1024)),
+          }),
+        });
+        return null;
+      }
+      logImagePrepDebug("proxy-upload-optimized", {
+        fileName: uploadFile.name,
+        originalSize: uploadFile.size,
+        optimizedSize: optimized.size,
+        targetSize: maxProxyUploadBytes,
+      });
+      uploadFile = optimized;
+    }
+
     const formData = new FormData();
-    formData.set("file", file);
+    formData.set("file", uploadFile);
     if (productId) {
       formData.set("productId", productId);
     }
@@ -1715,9 +1836,9 @@ export const ProductForm = ({
       logImagePrepDebug(
         "upload-request-error",
         {
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
+          fileName: uploadFile.name,
+          fileSize: uploadFile.size,
+          fileType: uploadFile.type,
           code: error instanceof ProductImageUploadTimeoutError ? "imageUploadTimedOut" : "fetch",
         },
         error,
@@ -1737,15 +1858,15 @@ export const ProductForm = ({
       url?: string;
     } | null;
     if (!response.ok) {
-      const code = body?.message;
+      const code = body?.message ?? (response.status === 413 ? "imageTooLarge" : undefined);
       logImagePrepDebug("upload-request-failed", {
         status: response.status,
         code,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
+        fileName: uploadFile.name,
+        fileSize: uploadFile.size,
+        fileType: uploadFile.type,
       });
-      showUploadFailureToast(code);
+      showUploadFailureToast(code, code === "imageTooLarge" ? maxProxyUploadBytes : maxImageBytes);
       return null;
     }
 
@@ -1753,9 +1874,9 @@ export const ProductForm = ({
     if (!uploadedUrl) {
       logImagePrepDebug("upload-missing-url", {
         status: response.status,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
+        fileName: uploadFile.name,
+        fileSize: uploadFile.size,
+        fileType: uploadFile.type,
       });
       toast({ variant: "error", description: t("imageReadFailed") });
       return null;
@@ -1793,12 +1914,15 @@ export const ProductForm = ({
 
     if (!targetResponse.ok) {
       const code = targetBody?.message;
-      if (code === "directUploadUnavailable") {
-        logImagePrepDebug("direct-upload-unavailable", {
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-        });
+      if (code === "directUploadUnavailable" || code === "imageTooLarge") {
+        logImagePrepDebug(
+          code === "imageTooLarge" ? "direct-upload-target-too-large" : "direct-upload-unavailable",
+          {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+          },
+        );
         return { attempted: false, url: null };
       }
       if (targetResponse.status >= 500 || targetResponse.status === 404) {
@@ -1977,18 +2101,27 @@ export const ProductForm = ({
         if (!response.ok) {
           throw new Error("imageReadFailed");
         }
-        const blob = await response.blob();
+        const arrayBuffer = await response.arrayBuffer();
+        if (!arrayBuffer.byteLength) {
+          throw new Error("imageReadFailed");
+        }
         const fallbackMimeType = resolveImageMimeTypeFromUrl(sourceUrl);
-        const normalizedBlobType = normalizeImageMimeType(blob.type || fallbackMimeType);
-        const finalMimeType = normalizedBlobType.startsWith("image/")
-          ? normalizedBlobType
-          : normalizeImageMimeType(fallbackMimeType);
+        const headerMimeType = normalizeImageMimeType(response.headers.get("content-type") ?? "");
+        const inferredMimeType = inferImageMimeTypeFromBytes(
+          new Uint8Array(arrayBuffer.slice(0, 16)),
+        );
+        const finalMimeType = headerMimeType.startsWith("image/")
+          ? headerMimeType
+          : inferredMimeType ||
+            (normalizeImageMimeType(fallbackMimeType).startsWith("image/")
+              ? normalizeImageMimeType(fallbackMimeType)
+              : "");
         if (!finalMimeType.startsWith("image/")) {
           throw new Error("imageInvalidType");
         }
 
         const fileName = resolveImageFileNameFromUrl(sourceUrl, finalMimeType || "image/jpeg");
-        return new File([blob], fileName, {
+        return new File([arrayBuffer], fileName, {
           type: finalMimeType || "image/jpeg",
           lastModified: Date.now(),
         });
@@ -2119,6 +2252,12 @@ export const ProductForm = ({
       const nextAspect =
         dimensions.width > 0 && dimensions.height > 0 ? dimensions.width / dimensions.height : 1;
       setImageEditorAspect(nextAspect || 1);
+      setImageEditorCroppedAreaPixels({
+        x: 0,
+        y: 0,
+        width: dimensions.width,
+        height: dimensions.height,
+      });
       setImageEditorSourceFile(sourceFile);
       setImageEditorObjectUrl((previous) => {
         if (previous) {
@@ -2224,6 +2363,25 @@ export const ProductForm = ({
     const currentImages = form.getValues("images") ?? [];
     appendImageField(images);
     syncPhotoUrlWithImages([...currentImages, ...images]);
+  };
+
+  const addImageUrlFromDraft = () => {
+    const nextUrl = imageUrlDraft.trim();
+    if (!nextUrl) {
+      toast({ variant: "error", description: t("imageUrlRequired") });
+      return;
+    }
+    if (!isPhotoUrlValid(nextUrl)) {
+      toast({ variant: "error", description: t("photoUrlInvalid") });
+      return;
+    }
+
+    const currentImages = form.getValues("images") ?? [];
+    if (!currentImages.some((image) => image.url.trim() === nextUrl)) {
+      handleAppendImageEntries([{ url: nextUrl }]);
+    }
+    setImageUrlDraft("");
+    setShowImageUrlInput(false);
   };
 
   const handleRemoveImageAt = (index: number) => {
@@ -2877,6 +3035,219 @@ export const ProductForm = ({
     })
     .filter((variant) => variant.hasContent);
 
+  type CompactVariantOption = {
+    name: string;
+    values: string[];
+  };
+
+  const compactVariantOptions = useMemo<CompactVariantOption[]>(() => {
+    const order: string[] = [];
+    const valuesByName = new Map<string, string[]>();
+    const seenByName = new Map<string, Set<string>>();
+
+    watchedVariants.forEach((variant) => {
+      const attributes = Array.isArray(variant.attributes) ? variant.attributes : [];
+      attributes.forEach((entry) => {
+        const name = normalizeVariantOptionLabel(entry.key);
+        if (!name) {
+          return;
+        }
+        if (!valuesByName.has(name)) {
+          valuesByName.set(name, []);
+          seenByName.set(name, new Set<string>());
+          order.push(name);
+        }
+        const rawValues = Array.isArray(entry.value) ? entry.value : [entry.value];
+        rawValues.forEach((rawValue) => {
+          const value = normalizeVariantOptionLabel(String(rawValue ?? ""));
+          const valueKey = value.toLocaleLowerCase("ru-RU");
+          const seen = seenByName.get(name);
+          const values = valuesByName.get(name);
+          if (!value || !seen || !values || seen.has(valueKey)) {
+            return;
+          }
+          seen.add(valueKey);
+          values.push(value);
+        });
+      });
+    });
+
+    return order
+      .map((name) => ({ name, values: valuesByName.get(name) ?? [] }))
+      .filter((option) => option.values.length > 0);
+  }, [watchedVariants]);
+
+  const compactVariantRows = watchedVariants
+    .map((variant, index) => {
+      const attributes = Array.isArray(variant.attributes) ? variant.attributes : [];
+      const optionValues = compactVariantOptions
+        .map((option) => {
+          const entry = attributes.find(
+            (attribute) =>
+              normalizeVariantOptionLabel(attribute.key).toLocaleLowerCase("ru-RU") ===
+              option.name.toLocaleLowerCase("ru-RU"),
+          );
+          const value = Array.isArray(entry?.value)
+            ? entry.value.map((item) => String(item)).join(", ")
+            : String(entry?.value ?? "");
+          return normalizeVariantOptionLabel(value);
+        })
+        .filter(Boolean);
+      const hasContent =
+        Boolean(variant.id) ||
+        Boolean(variant.name?.trim()) ||
+        (enableSku && Boolean(variant.sku?.trim())) ||
+        (variant.initialOnHand !== undefined &&
+          variant.initialOnHand !== null &&
+          Number(variant.initialOnHand) > 0) ||
+        optionValues.length > 0;
+
+      return {
+        index,
+        key: fields[index]?.id ?? `${variant.name ?? variant.sku ?? "variant"}-${index}`,
+        name: optionValues.join(" / ") || variant.name?.trim() || `#${index + 1}`,
+        canDelete: fields[index]?.canDelete ?? variant.canDelete ?? true,
+        hasContent,
+      };
+    })
+    .filter((variant) => variant.hasContent);
+
+  const resetVariantOptionDraft = () => {
+    setVariantOptionDraftName("");
+    setVariantOptionValueDraft("");
+    setVariantOptionDraftValues([]);
+    setVariantOptionEditorOpen(false);
+  };
+
+  const addVariantOptionDraftValues = (rawValue: string) => {
+    const values = parseVariantOptionValues(rawValue);
+    if (!values.length) {
+      return false;
+    }
+    setVariantOptionDraftValues((current) => mergeVariantOptionValues(current, values));
+    setVariantOptionValueDraft("");
+    return true;
+  };
+
+  const buildVariantOptionSignature = (
+    attributes: { key: string; value?: unknown }[] | undefined,
+    optionNames: string[],
+  ) => {
+    const optionKeys = new Set(
+      optionNames.map((name) => normalizeVariantOptionLabel(name).toLocaleLowerCase("ru-RU")),
+    );
+    return buildAttributeSignature(
+      (attributes ?? [])
+        .filter((entry) =>
+          optionKeys.has(normalizeVariantOptionLabel(entry.key).toLocaleLowerCase("ru-RU")),
+        )
+        .map((entry) => ({
+          key: normalizeVariantOptionLabel(entry.key),
+          value: entry.value,
+        })),
+    );
+  };
+
+  const rebuildCompactVariantsFromOptions = (options: CompactVariantOption[]) => {
+    const normalizedOptions = options
+      .map((option) => ({
+        name: normalizeVariantOptionLabel(option.name),
+        values: mergeVariantOptionValues([], option.values),
+      }))
+      .filter((option) => option.name && option.values.length > 0);
+
+    if (!normalizedOptions.length) {
+      replace([]);
+      return;
+    }
+
+    const combinations = buildVariantMatrix(
+      normalizedOptions.map((option) => ({
+        key: option.name,
+        values: option.values,
+      })),
+    );
+    if (!combinations.length) {
+      replace([]);
+      return;
+    }
+    if (combinations.length > 200) {
+      toast({
+        variant: "error",
+        description: t("generatorTooMany", { count: combinations.length }),
+      });
+      return;
+    }
+
+    const optionNames = normalizedOptions.map((option) => option.name);
+    const existingVariants = form.getValues("variants") ?? [];
+    const existingBySignature = new Map<string, VariantFormRow>();
+    existingVariants.forEach((variant) => {
+      const signature = buildVariantOptionSignature(variant.attributes, optionNames);
+      if (!existingBySignature.has(signature)) {
+        existingBySignature.set(signature, variant);
+      }
+    });
+    const usedVariantSkus = collectUsedVariantSkus();
+    const nextVariants = combinations.map<VariantFormRow>((combo) => {
+      const attributes = normalizedOptions.map((option) => ({
+        key: option.name,
+        value: combo[option.name],
+      }));
+      const signature = buildVariantOptionSignature(attributes, optionNames);
+      const existing = existingBySignature.get(signature);
+      return {
+        id: existing?.id,
+        name: normalizedOptions.map((option) => String(combo[option.name])).join(" / "),
+        sku: existing?.sku?.trim() || generateNextVariantSku(usedVariantSkus),
+        initialOnHand: existing?.initialOnHand,
+        attributes,
+        canDelete: existing?.canDelete ?? true,
+      };
+    });
+
+    replace(nextVariants);
+  };
+
+  const handleSaveVariantOption = () => {
+    const name = normalizeVariantOptionLabel(variantOptionDraftName);
+    const values = mergeVariantOptionValues(
+      variantOptionDraftValues,
+      parseVariantOptionValues(variantOptionValueDraft),
+    );
+    if (!name) {
+      toast({ variant: "error", description: t("variantOptionNameRequired") });
+      return;
+    }
+    if (!values.length) {
+      toast({ variant: "error", description: t("variantOptionValuesRequired") });
+      return;
+    }
+
+    const existingIndex = compactVariantOptions.findIndex(
+      (option) => option.name.toLocaleLowerCase("ru-RU") === name.toLocaleLowerCase("ru-RU"),
+    );
+    const nextOptions =
+      existingIndex >= 0
+        ? compactVariantOptions.map((option, index) =>
+            index === existingIndex
+              ? { name: option.name, values: mergeVariantOptionValues(option.values, values) }
+              : option,
+          )
+        : [...compactVariantOptions, { name, values }];
+
+    rebuildCompactVariantsFromOptions(nextOptions);
+    resetVariantOptionDraft();
+  };
+
+  const handleRemoveVariantOption = (name: string) => {
+    rebuildCompactVariantsFromOptions(
+      compactVariantOptions.filter(
+        (option) => option.name.toLocaleLowerCase("ru-RU") !== name.toLocaleLowerCase("ru-RU"),
+      ),
+    );
+  };
+
   const pendingImageUploadStatusLabel = (status: PendingImageUploadStatus) => {
     switch (status) {
       case "validating":
@@ -3390,15 +3761,6 @@ export const ProductForm = ({
           )}
         </div>
         <div className="space-y-3">
-          <input
-            ref={quickFileInputRef}
-            type="file"
-            accept={productImageAccept}
-            multiple
-            className="hidden"
-            disabled={readOnly || isUploadingImages}
-            onChange={handleImageInputChange}
-          />
           <Button
             type="button"
             variant="secondary"
@@ -3461,6 +3823,1516 @@ export const ProductForm = ({
       </div>
     </FormSection>
   );
+
+  const duplicateDiagnosticsPanel = duplicateDiagnosticsEnabled ? (
+    <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">{t("duplicateDiagnosticsTitle")}</p>
+        {duplicateDiagnosticsQuery.isFetching ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            {t("duplicateDiagnosticsLoading")}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 space-y-2">
+        {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
+          <div className="rounded-md border border-danger/30 bg-background p-3">
+            <p className="text-xs font-semibold text-danger">{t("duplicateExactSkuTitle")}</p>
+            <p className="mt-1 text-sm text-foreground">
+              {duplicateDiagnosticsQuery.data.exactSkuMatch.name}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="muted">{duplicateDiagnosticsQuery.data.exactSkuMatch.sku}</Badge>
+              {duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? (
+                <Badge variant="muted">{t("archived")}</Badge>
+              ) : null}
+              <Link
+                href={`/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`}
+                target="_blank"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                {t("duplicateOpenProduct")}
+              </Link>
+            </div>
+          </div>
+        ) : null}
+        {enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length
+          ? duplicateDiagnosticsQuery.data.exactBarcodeMatches.map((match) => (
+              <div
+                key={`${match.barcode}-${match.id}`}
+                className="rounded-md border border-danger/30 bg-background p-3"
+              >
+                <p className="text-xs font-semibold text-danger">
+                  {t("duplicateExactBarcodesTitle")}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Badge variant="muted">{match.barcode}</Badge>
+                  <span className="text-sm text-foreground">{match.name}</span>
+                  {enableSku ? (
+                    <span className="text-xs text-muted-foreground">{match.sku}</span>
+                  ) : null}
+                  {match.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
+                </div>
+                <Link
+                  href={`/products/${match.id}`}
+                  target="_blank"
+                  className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
+                >
+                  {t("duplicateOpenProduct")}
+                </Link>
+              </div>
+            ))
+          : null}
+        {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-foreground">
+              {t("duplicateLikelyMatchesTitle")}
+            </p>
+            {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
+              <div key={match.id} className="rounded-md border border-warning/30 bg-background p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-foreground">{match.name}</span>
+                  {enableSku ? <Badge variant="muted">{match.sku}</Badge> : null}
+                  {match.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
+                </div>
+                <Link
+                  href={`/products/${match.id}`}
+                  target="_blank"
+                  className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
+                >
+                  {t("duplicateOpenProduct")}
+                </Link>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {!duplicateDiagnosticsQuery.isFetching &&
+        !(enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch) &&
+        !(enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length) &&
+        !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
+          <p className="text-xs text-muted-foreground">{t("duplicateDiagnosticsEmpty")}</p>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+
+  const shopifyMediaBlock = (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label>{t("imagesTitle")}</Label>
+        <input
+          ref={quickFileInputRef}
+          type="file"
+          accept={productImageAccept}
+          multiple
+          className="hidden"
+          disabled={readOnly || isUploadingImages}
+          onChange={handleImageInputChange}
+        />
+      </div>
+      <div
+        className={`rounded-lg border border-dashed px-4 py-6 text-center transition ${
+          isDragActive ? "border-ink bg-muted/40" : "border-black/20 bg-muted/20"
+        }`}
+        onDragOver={handleImageDragOver}
+        onDragLeave={handleImageDragLeave}
+        onDrop={handleImageDrop}
+      >
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => quickFileInputRef.current?.click()}
+          disabled={readOnly || isUploadingImages}
+        >
+          {isUploadingImages ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <ImagePlusIcon className="h-4 w-4" aria-hidden />
+          )}
+          {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+        </Button>
+        <p className="mt-2 text-xs text-muted-foreground">{t("imagesDrop")}</p>
+      </div>
+      {pendingImageUploadCards}
+      {imageFields.length ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {imageFields.map((image, index) => {
+            const imageUrl = watchedImages[index]?.url?.trim() || image.url?.trim() || "";
+            const canMoveUp = index > 0;
+            const canMoveDown = index < imageFields.length - 1;
+            return (
+              <div
+                key={image.id}
+                className={`group min-w-0 overflow-hidden rounded-md border border-border bg-card ${
+                  draggedImageIndex === index ? "opacity-60" : ""
+                }`}
+                draggable={!readOnly}
+                onDragStart={() => {
+                  if (readOnly) {
+                    return;
+                  }
+                  setDraggedImageIndex(index);
+                }}
+                onDragEnd={() => setDraggedImageIndex(null)}
+                onDragOver={(event) => {
+                  if (draggedImageIndex === null || readOnly) {
+                    return;
+                  }
+                  event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (draggedImageIndex === null || draggedImageIndex === index || readOnly) {
+                    return;
+                  }
+                  handleMoveImage(draggedImageIndex, index);
+                  setDraggedImageIndex(null);
+                }}
+              >
+                <button
+                  type="button"
+                  className="relative block aspect-square w-full overflow-hidden bg-muted/30 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-label={readOnly ? t("imagePreview") : t("imagePreviewEdit")}
+                  onClick={() => void openImageEditor(index, imageUrl)}
+                  disabled={!imageUrl || isUploadingImages || isSavingImageEdit}
+                >
+                  {imageUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={withPreviewVersion(imageUrl, image.id)}
+                        alt={t("imageAlt", { index: index + 1 })}
+                        className="h-full w-full object-cover"
+                      />
+                      <span className="absolute inset-x-2 bottom-2 inline-flex items-center justify-center gap-1 rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                        {readOnly ? (
+                          <ViewIcon className="h-3.5 w-3.5" aria-hidden />
+                        ) : (
+                          <EditIcon className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        {readOnly ? t("imagePreview") : t("imageEdit")}
+                      </span>
+                    </>
+                  ) : null}
+                  {index === 0 ? (
+                    <Badge variant="muted" className="absolute left-1.5 top-1.5">
+                      {t("imagePrimary")}
+                    </Badge>
+                  ) : null}
+                </button>
+                <div className="space-y-2 p-2">
+                  <span className="block min-w-0 truncate text-[11px] text-muted-foreground">
+                    {t("imagePosition", {
+                      index: index + 1,
+                      total: imageFields.length,
+                    })}
+                  </span>
+                  {!readOnly && canMoveUp ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 w-full justify-center px-2 text-xs shadow-none"
+                      onClick={() => handleMoveImage(index, 0)}
+                      disabled={isUploadingImages}
+                    >
+                      {t("imageSetPrimary")}
+                    </Button>
+                  ) : null}
+                  <div className="grid grid-cols-3 gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-full shadow-none"
+                          aria-label={t("imageMoveUp")}
+                          onClick={() => canMoveUp && handleMoveImage(index, index - 1)}
+                          disabled={!canMoveUp || readOnly || isUploadingImages}
+                        >
+                          <ArrowUpIcon className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("imageMoveUp")}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-full shadow-none"
+                          aria-label={t("imageMoveDown")}
+                          onClick={() => canMoveDown && handleMoveImage(index, index + 1)}
+                          disabled={!canMoveDown || readOnly || isUploadingImages}
+                        >
+                          <ArrowDownIcon className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("imageMoveDown")}</TooltipContent>
+                    </Tooltip>
+                    {!readOnly ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-full text-danger shadow-none hover:text-danger"
+                            aria-label={t("imageRemove")}
+                            onClick={() => handleRemoveImageAt(index)}
+                            disabled={isUploadingImages}
+                          >
+                            <CloseIcon className="h-3.5 w-3.5" aria-hidden />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("imageRemove")}</TooltipContent>
+                      </Tooltip>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t("imagesEmpty")}</p>
+      )}
+      {!readOnly ? (
+        <div className="space-y-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-0 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setShowImageUrlInput((current) => !current)}
+          >
+            <AddIcon className="h-3.5 w-3.5" aria-hidden />
+            {t("imageAddByUrl")}
+          </Button>
+          {showImageUrlInput ? (
+            <FormRow className="flex-col items-stretch gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="product-image-url">{t("photoUrl")}</Label>
+                <Input
+                  id="product-image-url"
+                  value={imageUrlDraft}
+                  onChange={(event) => setImageUrlDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") {
+                      return;
+                    }
+                    event.preventDefault();
+                    addImageUrlFromDraft();
+                  }}
+                  placeholder={t("imageUrlPlaceholder")}
+                  disabled={isUploadingImages}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={addImageUrlFromDraft}
+                disabled={isUploadingImages}
+              >
+                {t("imageUrlAdd")}
+              </Button>
+            </FormRow>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const shopifyCategoryPicker = (
+    <FormField
+      control={form.control}
+      name="categories"
+      render={() => (
+        <FormItem>
+          <FormLabel>{t("category")}</FormLabel>
+          <div className="space-y-3">
+            <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-md border border-input bg-background px-2 py-1.5">
+              {categoryValues.length ? (
+                categoryValues.map((value, index) => {
+                  const categoryMeta = categoryMetaByKey.get(normalizeCategoryKey(value) ?? "");
+                  const isHiddenCategory = Boolean(
+                    categoryMeta && (!categoryMeta.isVisibleInForms || categoryMeta.isArchived),
+                  );
+                  return (
+                    <Badge key={value} variant="muted" className="gap-1 pr-1">
+                      <span>{value}</span>
+                      {index === 0 ? <span className="text-muted-foreground">•</span> : null}
+                      {index === 0 ? <span>{t("categoryPrimaryBadge")}</span> : null}
+                      {isHiddenCategory ? <span>{t("categoryHiddenBadge")}</span> : null}
+                      {!readOnly && index > 0 ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 shadow-none"
+                          aria-label={t("categoryPromote")}
+                          onClick={() => promoteProductCategory(value)}
+                        >
+                          <ArrowUpIcon className="h-3 w-3" aria-hidden />
+                        </Button>
+                      ) : null}
+                      {!readOnly ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 shadow-none"
+                          aria-label={tCommon("delete")}
+                          onClick={() => removeProductCategory(value)}
+                        >
+                          <CloseIcon className="h-3 w-3" aria-hidden />
+                        </Button>
+                      ) : null}
+                    </Badge>
+                  );
+                })
+              ) : (
+                <span className="text-sm text-muted-foreground">{tCommon("notAvailable")}</span>
+              )}
+            </div>
+            {!readOnly ? (
+              <>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={categoryDraft}
+                    onChange={(event) => setCategoryDraft(event.target.value)}
+                    placeholder={t("categoryPlaceholder")}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") {
+                        return;
+                      }
+                      event.preventDefault();
+                      if (addProductCategory(categoryDraft)) {
+                        setCategoryDraft("");
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => {
+                      if (addProductCategory(categoryDraft)) {
+                        setCategoryDraft("");
+                      }
+                    }}
+                  >
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {t("categoryAdd")}
+                  </Button>
+                </div>
+                {suggestedCategoryOptions.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedCategoryOptions.slice(0, 6).map((option) => (
+                      <Button
+                        key={option.name}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-md border border-border bg-secondary/40 px-2.5 text-xs"
+                        onClick={() => addProductCategory(option.name)}
+                      >
+                        <AddIcon className="h-3 w-3" aria-hidden />
+                        {option.name}
+                      </Button>
+                    ))}
+                  </div>
+                ) : categoryDraftQuery ? (
+                  <p className="text-xs text-muted-foreground">{t("categoryNoSuggestions")}</p>
+                ) : null}
+                {showHiddenCategoryCount ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-0 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowHiddenCategoryOptions((current) => !current)}
+                  >
+                    {showHiddenCategoryOptions
+                      ? t("categoryHideHidden")
+                      : t("categoryShowHidden", { count: showHiddenCategoryCount })}
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+
+  const shopifyPackRows = (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() =>
+            appendPack({
+              packName: "",
+              packBarcode: "",
+              multiplierToBase: 1,
+              allowInPurchasing: true,
+              allowInReceiving: true,
+            })
+          }
+          disabled={readOnly}
+        >
+          <AddIcon className="h-4 w-4" aria-hidden />
+          {t("addPack")}
+        </Button>
+      </div>
+      {packFields.length ? (
+        <div className="space-y-3">
+          {packFields.map((field, index) => (
+            <div key={field.id} className="space-y-3 rounded-md border border-border/80 p-3">
+              <ProductEditorFieldGrid>
+                <FormField
+                  control={form.control}
+                  name={`packs.${index}.packName`}
+                  render={({ field: itemField }) => (
+                    <FormItem>
+                      <FormLabel>{t("packName")}</FormLabel>
+                      <FormControl>
+                        <Input {...itemField} disabled={readOnly} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`packs.${index}.multiplierToBase`}
+                  render={({ field: itemField }) => (
+                    <FormItem>
+                      <FormLabel>{t("packMultiplier")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...itemField}
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          disabled={readOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {enableBarcode ? (
+                  <FormField
+                    control={form.control}
+                    name={`packs.${index}.packBarcode`}
+                    render={({ field: itemField }) => (
+                      <FormItem>
+                        <FormLabel>{t("packBarcode")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...(() => {
+                              const { value: _value, ...rest } = itemField;
+                              void _value;
+                              return rest;
+                            })()}
+                            value={itemField.value ?? ""}
+                            onChange={(event) => itemField.onChange(event.target.value)}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+              </ProductEditorFieldGrid>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-4">
+                  <FormField
+                    control={form.control}
+                    name={`packs.${index}.allowInPurchasing`}
+                    render={({ field: itemField }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormControl>
+                          <Switch
+                            checked={itemField.value}
+                            onCheckedChange={itemField.onChange}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormLabel className="text-sm">{t("packAllowPurchasing")}</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`packs.${index}.allowInReceiving`}
+                    render={({ field: itemField }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormControl>
+                          <Switch
+                            checked={itemField.value}
+                            onCheckedChange={itemField.onChange}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormLabel className="text-sm">{t("packAllowReceiving")}</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-danger hover:text-danger"
+                  onClick={() => removePack(index)}
+                  disabled={readOnly}
+                >
+                  <DeleteIcon className="h-4 w-4" aria-hidden />
+                  {t("removePack")}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t("packsEmpty")}</p>
+      )}
+      <p className="text-xs text-muted-foreground">{t("packsHint")}</p>
+    </div>
+  );
+
+  if (shopifyEditor) {
+    return (
+      <Form {...form}>
+        <form
+          id={formId}
+          className="space-y-3 sm:space-y-4"
+          onSubmit={form.handleSubmit(handleSubmit)}
+        >
+          <TooltipProvider>
+            <ProductEditorCard title={t("productInformationTitle")}>
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("name")}</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={readOnly} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <FormLabel>{t("description")}</FormLabel>
+                      {!readOnly ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleGenerateDescription}
+                          disabled={
+                            isUploadingImages ||
+                            generateDescriptionMutation.isLoading ||
+                            !descriptionSourceImageUrls.length
+                          }
+                        >
+                          {generateDescriptionMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" />
+                          )}
+                          {generateDescriptionMutation.isLoading
+                            ? t("aiDescriptionGenerating")
+                            : t("aiDescriptionGenerate")}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <FormControl>
+                      <Textarea {...field} rows={7} disabled={readOnly} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {shopifyMediaBlock}
+              {duplicateDiagnosticsPanel}
+            </ProductEditorCard>
+
+            <ProductEditorCard title={t("category")}>
+              {shopifyCategoryPicker}
+              {!unitOptions.length ? (
+                <FormField
+                  control={form.control}
+                  name="baseUnitId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("unit")}</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={readOnly || !unitOptions.length}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t("unitPlaceholder")} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {unitOptions.map((unit) => (
+                            <SelectItem key={unit.id} value={unit.id}>
+                              {resolveUnitLabel(unit)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>{t("unitMissingHint")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+            </ProductEditorCard>
+
+            <ProductEditorCard title={t("pricingTitle")}>
+              <ProductEditorFieldGrid>
+                {showBasePriceField ? (
+                  <FormField
+                    control={form.control}
+                    name="basePriceKgs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("salePrice")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder={t("pricePlaceholder")}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+                <FormField
+                  control={form.control}
+                  name="avgCostKgs"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("quickAvgCost")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          placeholder={t("pricePlaceholder")}
+                          disabled={readOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </ProductEditorFieldGrid>
+            </ProductEditorCard>
+
+            <ProductEditorCard title={t("inventoryTitle")}>
+              <ProductEditorFieldGrid>
+                {canEditInitialStock ? (
+                  <FormField
+                    control={form.control}
+                    name="initialOnHand"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("initialOnHand")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            step={1}
+                            placeholder={t("initialOnHandPlaceholder")}
+                            onKeyDown={preventInvalidIntegerInput}
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+                <FormField
+                  control={form.control}
+                  name="minStock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("quickMinStock")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          step={1}
+                          placeholder={t("minStockPlaceholder")}
+                          onKeyDown={preventInvalidIntegerInput}
+                          disabled={readOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {enableSku ? (
+                  <FormField
+                    control={form.control}
+                    name="sku"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("sku")}</FormLabel>
+                        <FormControl>
+                          <Input {...field} disabled={readOnly} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
+              </ProductEditorFieldGrid>
+              {shopifyEditor && enableBarcode ? (
+                <FormField
+                  control={form.control}
+                  name="barcodes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("barcodes")}</FormLabel>
+                      <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                        <FormControl>
+                          <Input
+                            value={barcodeInput}
+                            onChange={(event) => setBarcodeInput(event.target.value)}
+                            onKeyDown={handleBarcodeInputKeyDown}
+                            placeholder={t("barcodePlaceholder")}
+                            className="flex-1"
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full sm:w-auto"
+                          onClick={addBarcodeFromDraft}
+                          disabled={readOnly}
+                        >
+                          <AddIcon className="h-4 w-4" aria-hidden />
+                          {t("addBarcode")}
+                        </Button>
+                      </FormRow>
+                      <div className="flex min-h-8 flex-wrap gap-2">
+                        {field.value?.length ? (
+                          field.value.map((barcode, index) => (
+                            <Badge
+                              key={`${barcode}-${index}`}
+                              variant="muted"
+                              className="gap-1 pr-1"
+                            >
+                              <span>{barcode}</span>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 shadow-none"
+                                aria-label={t("removeBarcode")}
+                                onClick={() => {
+                                  if (readOnly) {
+                                    return;
+                                  }
+                                  const next = (field.value ?? []).filter((_, i) => i !== index);
+                                  form.clearErrors("barcodes");
+                                  form.setValue("barcodes", next, {
+                                    shouldValidate: false,
+                                    shouldDirty: true,
+                                  });
+                                }}
+                                disabled={readOnly}
+                              >
+                                <CloseIcon className="h-3 w-3" aria-hidden />
+                              </Button>
+                            </Badge>
+                          ))
+                        ) : (
+                          <p className="text-xs text-muted-foreground">{t("barcodeEmpty")}</p>
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+            </ProductEditorCard>
+
+            {isBundle ? (
+              <ProductEditorCard
+                title={t("bundleComponentsTitle")}
+                description={t("bundleComponentsHint")}
+              >
+                <div className="relative">
+                  <Input
+                    value={bundleSearch}
+                    onChange={(event) => {
+                      setBundleSearch(event.target.value);
+                      setShowBundleResults(true);
+                    }}
+                    onFocus={() => setShowBundleResults(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setShowBundleResults(false), 120);
+                    }}
+                    placeholder={t("bundleSearchPlaceholder")}
+                    disabled={readOnly}
+                  />
+                  {showBundleResults && bundleSearch.trim().length > 0 ? (
+                    <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                      {bundleSearchQuery.isLoading ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          {tCommon("loading")}
+                        </div>
+                      ) : bundleSearchQuery.data?.length ? (
+                        bundleSearchQuery.data.map((product) => (
+                          <ProductSearchResultItem
+                            key={product.id}
+                            product={product}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() =>
+                              addBundleComponentFromSearch({
+                                id: product.id,
+                                name: product.name,
+                                sku: product.sku,
+                              })
+                            }
+                          />
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          {tCommon("nothingFound")}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                {bundleComponentFields.length ? (
+                  <div className="space-y-2">
+                    {bundleComponentFields.map((component, index) => (
+                      <div
+                        key={component.id}
+                        className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_120px_auto]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {component.componentName || tCommon("notAvailable")}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {component.componentSku || component.componentProductId}
+                          </p>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name={`bundleComponents.${index}.qty`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  inputMode="numeric"
+                                  disabled={readOnly}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="icon"
+                          onClick={() => removeBundleComponent(index)}
+                          disabled={readOnly}
+                          aria-label={t("bundleRemoveComponent")}
+                        >
+                          <DeleteIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("bundleEmpty")}</p>
+                )}
+              </ProductEditorCard>
+            ) : null}
+
+            <ProductEditorCard title={t("packagingTitle")}>{shopifyPackRows}</ProductEditorCard>
+
+            <ProductEditorCard title={t("variants")}>
+              {!compactVariantOptions.length && !variantOptionEditorOpen ? (
+                <div className="rounded-md border border-dashed border-border bg-muted/20 p-4">
+                  <p className="text-sm font-medium text-foreground">{t("variantsEmpty")}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("variantOptionsEmptyHelper")}
+                  </p>
+                  {!readOnly ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setVariantOptionEditorOpen(true)}
+                    >
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {t("variantAddOption")}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {compactVariantOptions.length ? (
+                <div className="space-y-2">
+                  {compactVariantOptions.map((option) => (
+                    <div
+                      key={option.name}
+                      className="rounded-md border border-border bg-background p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">{option.name}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {option.values.map((value) => (
+                              <Badge key={`${option.name}-${value}`} variant="muted">
+                                {value}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        {!readOnly ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0 text-danger hover:text-danger"
+                            onClick={() => handleRemoveVariantOption(option.name)}
+                          >
+                            {t("variantOptionDelete")}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {variantOptionEditorOpen ? (
+                <div className="space-y-3 rounded-md border border-border bg-background p-3">
+                  <ProductEditorFieldGrid>
+                    <div className="space-y-2">
+                      <Label htmlFor="variant-option-name">{t("variantOptionName")}</Label>
+                      <Input
+                        id="variant-option-name"
+                        value={variantOptionDraftName}
+                        onChange={(event) => setVariantOptionDraftName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                          }
+                        }}
+                        placeholder={t("variantOptionNamePlaceholder")}
+                        disabled={readOnly}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="variant-option-values">{t("variantOptionValues")}</Label>
+                      <Input
+                        id="variant-option-values"
+                        value={variantOptionValueDraft}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          if (nextValue.includes(",") || nextValue.includes(";")) {
+                            addVariantOptionDraftValues(nextValue);
+                            return;
+                          }
+                          setVariantOptionValueDraft(nextValue);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== ",") {
+                            return;
+                          }
+                          event.preventDefault();
+                          addVariantOptionDraftValues(variantOptionValueDraft);
+                        }}
+                        placeholder={t("variantOptionValuesPlaceholder")}
+                        disabled={readOnly}
+                      />
+                    </div>
+                  </ProductEditorFieldGrid>
+                  <div className="flex min-h-8 flex-wrap gap-1.5">
+                    {variantOptionDraftValues.length ? (
+                      variantOptionDraftValues.map((value) => (
+                        <Badge key={value} variant="muted" className="gap-1 pr-1">
+                          <span>{value}</span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 shadow-none"
+                            aria-label={t("variantOptionRemoveValue")}
+                            onClick={() =>
+                              setVariantOptionDraftValues((current) =>
+                                current.filter((item) => item !== value),
+                              )
+                            }
+                            disabled={readOnly}
+                          >
+                            <CloseIcon className="h-3 w-3" aria-hidden />
+                          </Button>
+                        </Badge>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {t("variantOptionValuesHint")}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-danger hover:text-danger"
+                      onClick={resetVariantOptionDraft}
+                      disabled={readOnly}
+                    >
+                      {t("variantOptionDelete")}
+                    </Button>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={resetVariantOptionDraft}
+                      >
+                        {t("variantOptionCancel")}
+                      </Button>
+                      <Button type="button" size="sm" onClick={handleSaveVariantOption}>
+                        {t("variantOptionDone")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : compactVariantOptions.length && !readOnly ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start border border-dashed border-border"
+                  onClick={() => setVariantOptionEditorOpen(true)}
+                >
+                  <AddIcon className="h-4 w-4" aria-hidden />
+                  {t("variantAddOption")}
+                </Button>
+              ) : null}
+
+              {compactVariantRows.length ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {t("variantGeneratedTitle", { count: compactVariantRows.length })}
+                    </p>
+                  </div>
+                  <div className="overflow-hidden rounded-md border border-border">
+                    <div
+                      className={`hidden bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid ${
+                        enableSku && canEditInitialStock
+                          ? "sm:grid-cols-[minmax(0,1fr)_160px_120px_40px]"
+                          : enableSku || canEditInitialStock
+                            ? "sm:grid-cols-[minmax(0,1fr)_160px_40px]"
+                            : "sm:grid-cols-[minmax(0,1fr)_40px]"
+                      }`}
+                    >
+                      <span>{t("variantTableVariant")}</span>
+                      {enableSku ? <span>{t("variantTableSku")}</span> : null}
+                      {canEditInitialStock ? <span>{t("variantTableStock")}</span> : null}
+                      <span className="sr-only">{tCommon("actions")}</span>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {compactVariantRows.map((variant) => {
+                        const canDelete = variant.canDelete;
+                        return (
+                          <div
+                            key={variant.key}
+                            className={`grid gap-2 px-3 py-3 ${
+                              enableSku && canEditInitialStock
+                                ? "sm:grid-cols-[minmax(0,1fr)_160px_120px_40px]"
+                                : enableSku || canEditInitialStock
+                                  ? "sm:grid-cols-[minmax(0,1fr)_160px_40px]"
+                                  : "sm:grid-cols-[minmax(0,1fr)_40px]"
+                            } sm:items-start`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {variant.name}
+                              </p>
+                            </div>
+                            {enableSku ? (
+                              <FormField
+                                control={form.control}
+                                name={`variants.${variant.index}.sku`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="sr-only">
+                                      {t("variantTableSku")}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input {...field} className="h-9" disabled={readOnly} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            ) : null}
+                            {canEditInitialStock ? (
+                              <FormField
+                                control={form.control}
+                                name={`variants.${variant.index}.initialOnHand`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="sr-only">
+                                      {t("variantTableStock")}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={0}
+                                        step={1}
+                                        className="h-9"
+                                        placeholder={t("initialOnHandPlaceholder")}
+                                        onKeyDown={preventInvalidIntegerInput}
+                                        disabled={readOnly}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            ) : null}
+                            {!readOnly ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex justify-end">
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-9 w-9 text-danger shadow-none hover:text-danger"
+                                      aria-label={t("removeVariant")}
+                                      onClick={() => remove(variant.index)}
+                                      disabled={!canDelete}
+                                    >
+                                      <DeleteIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {canDelete ? t("removeVariant") : tErrors("variantInUse")}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </ProductEditorCard>
+          </TooltipProvider>
+
+          {!readOnly && !hideActions ? (
+            <FormActions className="hidden md:flex">
+              <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                )}
+                {isSubmitting ? t("saving") : t("save")}
+              </Button>
+            </FormActions>
+          ) : null}
+          {!readOnly && !hideActions ? (
+            <div className="sticky bottom-3 z-20 mt-4 rounded-lg border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.12)] md:hidden">
+              <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                )}
+                {isSubmitting ? t("saving") : t("save")}
+              </Button>
+            </div>
+          ) : null}
+        </form>
+
+        {!readOnly ? (
+          <Modal
+            open={generatorOpen}
+            onOpenChange={(open) => setGeneratorOpen(open)}
+            title={t("generatorTitle")}
+            subtitle={t("generatorSubtitle")}
+          >
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    {t("generatorAttributes")}
+                  </p>
+                  {generatorAvailableDefinitions.length ? (
+                    <FormRow className="w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-end">
+                      <Select
+                        value={generatorDraftKey}
+                        onValueChange={(value) => setGeneratorDraftKey(value)}
+                      >
+                        <SelectTrigger className="min-w-[180px]">
+                          <SelectValue placeholder={t("generatorAttributePlaceholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {generatorAvailableDefinitions.map((definition) => (
+                            <SelectItem key={definition.key} value={definition.key}>
+                              {resolveLabel(definition, definition.key)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 px-3"
+                        onClick={() => {
+                          if (!generatorDraftKey) {
+                            return;
+                          }
+                          setGeneratorAttributes((prev) => [
+                            ...prev,
+                            { key: generatorDraftKey, values: [] },
+                          ]);
+                          setGeneratorDraftKey("");
+                        }}
+                      >
+                        <AddIcon className="h-4 w-4" aria-hidden />
+                        {t("generatorAddAttribute")}
+                      </Button>
+                    </FormRow>
+                  ) : null}
+                </div>
+
+                {generatorAttributes.length ? (
+                  <div className="space-y-3">
+                    {generatorAttributes.map((attribute) => {
+                      const definition = generatorDefinitionMap.get(attribute.key);
+                      const label = resolveLabel(definition, attribute.key);
+                      const options = resolveOptions(definition);
+                      const selectedValues = attribute.values;
+                      const draftValue = generatorValueDrafts[attribute.key] ?? "";
+                      return (
+                        <div
+                          key={attribute.key}
+                          className="rounded-md border border-border/70 bg-card p-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">{label}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {t("generatorAttributeHint")}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label={t("removeAttribute")}
+                              onClick={() =>
+                                setGeneratorAttributes((prev) =>
+                                  prev.filter((entry) => entry.key !== attribute.key),
+                                )
+                              }
+                            >
+                              <CloseIcon className="h-4 w-4" aria-hidden />
+                            </Button>
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            {options.length ? (
+                              <div className="flex flex-wrap gap-2">
+                                {options.map((option) => {
+                                  const isSelected = selectedValues.includes(option);
+                                  return (
+                                    <Button
+                                      key={option}
+                                      type="button"
+                                      variant={isSelected ? "secondary" : "ghost"}
+                                      className="h-8 px-3 text-xs"
+                                      aria-pressed={isSelected}
+                                      onClick={() => {
+                                        const nextValues = isSelected
+                                          ? selectedValues.filter((value) => value !== option)
+                                          : [...selectedValues, option];
+                                        setGeneratorAttributes((prev) =>
+                                          prev.map((entry) =>
+                                            entry.key === attribute.key
+                                              ? { ...entry, values: nextValues }
+                                              : entry,
+                                          ),
+                                        );
+                                      }}
+                                    >
+                                      {option}
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                {t("generatorNoOptions")}
+                              </p>
+                            )}
+
+                            <FormRow className="flex-col items-stretch gap-2 sm:flex-row sm:items-end">
+                              <Input
+                                value={draftValue}
+                                onChange={(event) =>
+                                  setGeneratorValueDrafts((prev) => ({
+                                    ...prev,
+                                    [attribute.key]: event.target.value,
+                                  }))
+                                }
+                                placeholder={t("generatorValuePlaceholder")}
+                                disabled={readOnly}
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="h-9 px-3"
+                                onClick={() => {
+                                  const value = draftValue.trim();
+                                  if (!value || selectedValues.includes(value)) {
+                                    return;
+                                  }
+                                  setGeneratorAttributes((prev) =>
+                                    prev.map((entry) =>
+                                      entry.key === attribute.key
+                                        ? { ...entry, values: [...entry.values, value] }
+                                        : entry,
+                                    ),
+                                  );
+                                  setGeneratorValueDrafts((prev) => ({
+                                    ...prev,
+                                    [attribute.key]: "",
+                                  }));
+                                }}
+                              >
+                                {t("generatorAddValue")}
+                              </Button>
+                            </FormRow>
+
+                            {selectedValues.filter((value) => !options.includes(value)).length ? (
+                              <div className="flex flex-wrap gap-2">
+                                {selectedValues
+                                  .filter((value) => !options.includes(value))
+                                  .map((value) => (
+                                    <Badge key={value} variant="muted" className="gap-1 pr-1">
+                                      <span>{value}</span>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 shadow-none"
+                                        aria-label={t("removeAttributeValue")}
+                                        onClick={() =>
+                                          setGeneratorAttributes((prev) =>
+                                            prev.map((entry) =>
+                                              entry.key === attribute.key
+                                                ? {
+                                                    ...entry,
+                                                    values: entry.values.filter(
+                                                      (item) => item !== value,
+                                                    ),
+                                                  }
+                                                : entry,
+                                            ),
+                                          )
+                                        }
+                                      >
+                                        <CloseIcon className="h-3 w-3" aria-hidden />
+                                      </Button>
+                                    </Badge>
+                                  ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("generatorEmpty")}</p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>{t("generatorPreview", { count: generatorPreviewCount })}</span>
+                {templateKeys.length ? <span>{t("generatorTemplateHint")}</span> : null}
+              </div>
+
+              <ModalFooter>
+                <Button type="button" variant="ghost" onClick={() => setGeneratorOpen(false)}>
+                  {tCommon("cancel")}
+                </Button>
+                <Button type="button" onClick={handleGenerateVariants}>
+                  {t("generatorConfirm")}
+                </Button>
+              </ModalFooter>
+            </div>
+          </Modal>
+        ) : null}
+      </Form>
+    );
+  }
 
   return (
     <Form {...form}>

@@ -5,7 +5,7 @@ import {
 } from "@/lib/productImageUpload";
 
 export const defaultProductImageMaxBytes = 5 * 1024 * 1024;
-export const defaultProductImageMaxInputBytes = 10 * 1024 * 1024;
+export const defaultProductImageMaxInputBytes = 32 * 1024 * 1024;
 
 export const resolveClientImageMaxBytes = () => {
   const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES);
@@ -18,7 +18,7 @@ export const resolveClientImageMaxBytes = () => {
 export const resolveClientImageMaxInputBytes = (maxImageBytes: number) => {
   const parsed = Number(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES);
   if (Number.isFinite(parsed) && parsed > 0) {
-    return Math.max(Math.trunc(parsed), maxImageBytes);
+    return Math.max(Math.trunc(parsed), defaultProductImageMaxInputBytes, maxImageBytes);
   }
   return Math.max(defaultProductImageMaxInputBytes, maxImageBytes);
 };
@@ -156,10 +156,7 @@ const convertBrowserReadableImageToJpeg = async (file: File) => {
   }
 };
 
-const createImageOptimizer = (input: {
-  maxImageBytes: number;
-  logger?: ImagePrepLogger;
-}) => {
+const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrepLogger }) => {
   const { logger, maxImageBytes } = input;
 
   return async (file: File) => {

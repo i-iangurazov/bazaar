@@ -10,6 +10,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import {
+  ProductEditorCard,
+  ProductEditorGrid,
+  ProductEditorHeader,
+  ProductEditorPage,
+  ProductEditorSaveBar,
+} from "@/components/product-editor-layout";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -937,314 +944,304 @@ const ProductDetailPage = () => {
     );
   }
 
-  return (
-    <div className={canManageProducts ? "pb-48 md:pb-24" : undefined}>
-      <PageHeader
-        title={t("editTitle")}
-        subtitle={productQuery.data.name}
-        action={
-          canManageProducts ? (
+  const productCategories = productQuery.data.categories?.length
+    ? productQuery.data.categories
+    : productQuery.data.category
+      ? [productQuery.data.category]
+      : [];
+  const totalOnHand =
+    storePricingQuery.data?.stores.reduce((sum, store) => sum + store.onHand, 0) ?? 0;
+  const productActions = canManageProducts ? (
+    <>
+      {enableBarcode ? (
+        <Button
+          className="w-full sm:w-auto"
+          size="sm"
+          onClick={() => void handleProductLabelPdf("print")}
+          disabled={Boolean(labelAction)}
+        >
+          {labelAction === "print" ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <PrintIcon className="h-4 w-4" aria-hidden />
+          )}
+          {t("printLabels")}
+        </Button>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="secondary" size="sm" className="w-full sm:w-auto">
+            <MoreIcon className="h-4 w-4" aria-hidden />
+            {tCommon("actions")}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[240px]">
+          {enableBarcode ? (
             <>
-              {enableBarcode ? (
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleProductLabelPdf("print")}
-                  disabled={Boolean(labelAction)}
-                >
-                  {labelAction === "print" ? (
-                    <Spinner className="h-4 w-4" />
-                  ) : (
-                    <PrintIcon className="h-4 w-4" aria-hidden />
-                  )}
-                  {t("printLabels")}
-                </Button>
-              ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="secondary" className="w-full sm:w-auto">
-                    <MoreIcon className="h-4 w-4" aria-hidden />
-                    {tCommon("actions")}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[240px]">
-                  {enableBarcode ? (
-                    <>
-                      <DropdownMenuItem
-                        disabled={Boolean(labelAction)}
-                        onSelect={() => void handleProductLabelPdf("download")}
-                      >
-                        {labelAction === "download" ? (
-                          <Spinner className="h-4 w-4" />
-                        ) : (
-                          <DownloadIcon className="h-4 w-4" aria-hidden />
-                        )}
-                        {t("printDownload")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href="/settings/printing">
-                          <PrintIcon className="h-4 w-4" aria-hidden />
-                          {t("changePrintSettings")}
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  ) : null}
-                  <DropdownMenuItem onSelect={() => setMovementsOpen(true)}>
-                    <ViewIcon className="h-4 w-4" aria-hidden />
-                    {tInventory("viewMovements")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={duplicateMutation.isLoading}
-                    onSelect={() => setDuplicateDialogOpen(true)}
-                  >
-                    {duplicateMutation.isLoading ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <CopyIcon className="h-4 w-4" aria-hidden />
-                    )}
-                    {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-danger focus:text-danger"
-                    disabled={archiveMutation.isLoading}
-                    onSelect={async () => {
-                      if (
-                        !(await confirm({
-                          description: t("confirmArchive"),
-                          confirmVariant: "danger",
-                        }))
-                      ) {
-                        return;
-                      }
-                      archiveMutation.mutate({ productId });
-                    }}
-                  >
-                    {archiveMutation.isLoading ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <ArchiveIcon className="h-4 w-4" aria-hidden />
-                    )}
-                    {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <DropdownMenuItem
+                disabled={Boolean(labelAction)}
+                onSelect={() => void handleProductLabelPdf("download")}
+              >
+                {labelAction === "download" ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                )}
+                {t("printDownload")}
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/printing">
+                  <PrintIcon className="h-4 w-4" aria-hidden />
+                  {t("changePrintSettings")}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
             </>
-          ) : undefined
-        }
-      />
-
-      <Card className="mb-6 overflow-hidden">
-        <CardContent className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="h-56 overflow-hidden rounded-md border border-border bg-muted/20 sm:h-auto">
-            {previewImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
+          ) : null}
+          <DropdownMenuItem onSelect={() => setMovementsOpen(true)}>
+            <ViewIcon className="h-4 w-4" aria-hidden />
+            {tInventory("viewMovements")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={duplicateMutation.isLoading}
+            onSelect={() => setDuplicateDialogOpen(true)}
+          >
+            {duplicateMutation.isLoading ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <CopyIcon className="h-4 w-4" aria-hidden />
+            )}
+            {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-danger focus:text-danger"
+            disabled={archiveMutation.isLoading}
+            onSelect={async () => {
+              if (
+                !(await confirm({
+                  description: t("confirmArchive"),
+                  confirmVariant: "danger",
+                }))
+              ) {
+                return;
+              }
+              archiveMutation.mutate({ productId });
+            }}
+          >
+            {archiveMutation.isLoading ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <ArchiveIcon className="h-4 w-4" aria-hidden />
+            )}
+            {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  ) : undefined;
+  const sidebar = (
+    <>
+      <ProductEditorCard title={tCommon("status")}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground">{t("statusActive")}</span>
+          <Badge variant="success">{t("statusActive")}</Badge>
+        </div>
+      </ProductEditorCard>
+      <ProductEditorCard title={t("productAvailabilityTitle")}>
+        <div className="space-y-2">
+          <Select value={pricingStoreId} onValueChange={(value) => setPricingStoreId(value)}>
+            <SelectTrigger>
+              <SelectValue placeholder={tCommon("selectStore")} />
+            </SelectTrigger>
+            <SelectContent>
+              {assignedStoreRows.map((store) => (
+                <SelectItem key={store.storeId} value={store.storeId}>
+                  {store.storeName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {selectedPricingStore
+              ? t("productAvailabilityEditing", { store: selectedPricingStore.storeName })
+              : t("storesCount", { count: assignedStoreRows.length })}
+          </p>
+        </div>
+      </ProductEditorCard>
+      <ProductEditorCard title={t("productOrganizationTitle")}>
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t("typeLabel")}</span>
+            <span className="font-medium text-foreground">
+              {productQuery.data.isBundle ? t("typeBundle") : t("typeProduct")}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t("category")}</span>
+            <span className="truncate text-right font-medium text-foreground">
+              {productCategories[0] ?? tCommon("notAvailable")}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t("unit")}</span>
+            <span className="font-medium text-foreground">{productQuery.data.baseUnit.code}</span>
+          </div>
+        </div>
+      </ProductEditorCard>
+      <ProductEditorCard title={t("productSummaryTitle")}>
+        <div className="space-y-3 text-sm">
+          {previewImageUrl ? (
+            <div className="overflow-hidden rounded-md border border-border bg-muted/20">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={previewImageUrl}
                 alt={productQuery.data.name}
-                className="h-full w-full object-cover sm:aspect-square"
+                className="aspect-square w-full object-cover"
               />
-            ) : (
-              <div className="flex h-full items-center justify-center sm:aspect-square">
-                <EmptyIcon className="h-10 w-10 text-muted-foreground" aria-hidden />
-              </div>
-            )}
+            </div>
+          ) : null}
+          {enableSku ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">{t("sku")}</span>
+              <span className="truncate font-medium text-foreground">{productQuery.data.sku}</span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{t("salePrice")}</span>
+            <span className="font-medium text-foreground">
+              {effectivePrice !== null
+                ? formatSelectedMoney(effectivePrice)
+                : tCommon("notAvailable")}
+            </span>
           </div>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              {enableSku ? (
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {productQuery.data.sku}
-                </p>
-              ) : null}
-              <h2 className="text-2xl font-semibold leading-tight text-foreground sm:text-3xl">
-                {productQuery.data.name}
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="muted">
-                {productQuery.data.isBundle ? t("typeBundle") : t("typeProduct")}
-              </Badge>
-              {(productQuery.data.categories?.length
-                ? productQuery.data.categories
-                : productQuery.data.category
-                  ? [productQuery.data.category]
-                  : []
-              ).map((category) => (
-                <Badge key={category} variant="muted">
-                  {category}
-                </Badge>
-              ))}
-              <Badge variant="muted">{productQuery.data.baseUnit.code}</Badge>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-md border border-border/70 bg-card p-3">
-                <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
-                <p className="text-base font-semibold text-foreground">
-                  {effectivePrice !== null
-                    ? formatSelectedMoney(effectivePrice)
-                    : tCommon("notAvailable")}
-                </p>
-              </div>
-              <div className="rounded-md border border-border/70 bg-card p-3">
-                <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
-                <p className="text-base font-semibold text-foreground">
-                  {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
-                </p>
-              </div>
-              <div className="rounded-md border border-border/70 bg-card p-3">
-                <p className="text-xs text-muted-foreground">{tInventory("onHand")}</p>
-                <p className="text-base font-semibold text-foreground">
-                  {formatNumber(
-                    storePricingQuery.data?.stores.reduce((sum, store) => sum + store.onHand, 0) ??
-                      0,
-                    locale,
-                  )}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{tInventory("onHand")}</span>
+            <span className="font-medium text-foreground">{formatNumber(totalOnHand, locale)}</span>
           </div>
-        </CardContent>
-      </Card>
+          {selectedPricingStore?.currencyCode ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">{t("currency")}</span>
+              <span className="font-medium text-foreground">
+                {normalizeCurrencyCode(selectedPricingStore.currencyCode)}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </ProductEditorCard>
+    </>
+  );
 
-      <div className="mb-6">
-        <ProductForm
-          key={`${productId}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
-          initialValues={formValues}
-          onSubmit={(values) =>
-            updateMutation.mutate({
-              productId,
-              ...values,
-              basePriceKgs: resolveDraftBasePrice(),
-            })
+  return (
+    <ProductEditorPage>
+      <ProductEditorHeader
+        eyebrow={
+          <Link href="/products" className="text-muted-foreground hover:text-foreground">
+            {tCommon("back")}
+          </Link>
+        }
+        title={
+          <span className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate">{productQuery.data.name}</span>
+            <Badge variant="success">{t("statusActive")}</Badge>
+          </span>
+        }
+        actions={productActions}
+      />
+
+      {canManageProducts ? (
+        <ProductEditorSaveBar
+          label={t("saveBarUnsaved")}
+          actions={
+            <Button
+              type="submit"
+              form={productEditFormId}
+              size="sm"
+              className="min-w-24"
+              disabled={updateMutation.isLoading}
+            >
+              {updateMutation.isLoading ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+              )}
+              {updateMutation.isLoading ? t("saving") : t("save")}
+            </Button>
           }
-          attributeDefinitions={attributesQuery.data ?? []}
-          units={unitsQuery.data ?? []}
-          isSubmitting={updateMutation.isLoading}
-          readOnly={!canManageProducts}
-          productId={productId}
-          showBasePriceField={false}
-          currencyCode={selectedPricingCurrencyCode}
-          currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
-          formId={productEditFormId}
-          hideActions
-          enableSku={enableSku}
-          enableBarcode={enableBarcode}
-          enableSimilarProductCheck={enableSimilarProductCheck}
-          categoryStoreId={selectedSettingsStore?.storeId ?? null}
         />
-      </div>
+      ) : null}
 
-      <Card className="mb-6">
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("storePricingTitle")}</CardTitle>
-          <p className="text-xs text-muted-foreground">{t("storePricingHint")}</p>
-        </CardHeader>
-        <CardContent>
-          {storePricingQuery.isLoading ? (
-            <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
-            </div>
-          ) : storePricingQuery.data ? (
-            <div className="space-y-3">
-              <div className="rounded-md border border-border bg-card p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{t("basePrice")}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("basePriceFallbackHint")}
-                    </p>
-                    {currentBasePrice === null && basePriceFallbackCandidate ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t("basePriceDerivedHint", {
-                          price: formatSelectedMoney(basePriceFallbackCandidate.priceKgs),
-                          source: basePriceFallbackSource,
-                        })}
-                      </p>
-                    ) : null}
+      <ProductEditorGrid
+        main={
+          <>
+            <ProductForm
+              key={`${productId}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
+              initialValues={formValues}
+              onSubmit={(values) =>
+                updateMutation.mutate({
+                  productId,
+                  ...values,
+                  basePriceKgs: resolveDraftBasePrice(),
+                })
+              }
+              attributeDefinitions={attributesQuery.data ?? []}
+              units={unitsQuery.data ?? []}
+              isSubmitting={updateMutation.isLoading}
+              readOnly={!canManageProducts}
+              productId={productId}
+              showBasePriceField={false}
+              currencyCode={selectedPricingCurrencyCode}
+              currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
+              formId={productEditFormId}
+              hideActions
+              canEditInitialStock={false}
+              enableSku={enableSku}
+              enableBarcode={enableBarcode}
+              enableSimilarProductCheck={enableSimilarProductCheck}
+              categoryStoreId={selectedSettingsStore?.storeId ?? null}
+              shopifyEditorLayout
+            />
+
+            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>{t("storePricingTitle")}</CardTitle>
+                <p className="text-xs text-muted-foreground">{t("storePricingHint")}</p>
+              </CardHeader>
+              <CardContent>
+                {storePricingQuery.isLoading ? (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Spinner className="h-4 w-4" />
+                    {tCommon("loading")}
                   </div>
-                  {canManageProducts ? (
-                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        className="w-full sm:w-[160px]"
-                        value={basePriceDraft}
-                        onChange={(event) => setBasePriceDraft(event.target.value)}
-                        onBlur={() => void handleSaveBasePrice()}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
-                        }}
-                        placeholder={t("pricePlaceholder")}
-                        disabled={basePriceMutation.isLoading}
-                      />
-                      {currentBasePrice === null && basePriceFallbackCandidate ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void handleApplyBasePriceFallback()}
-                          disabled={basePriceMutation.isLoading}
-                        >
-                          {t("basePriceApplyDerived")}
-                        </Button>
-                      ) : null}
-                      {basePriceMutation.isLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Spinner className="h-4 w-4" />
-                          {tCommon("saving")}
+                ) : storePricingQuery.data ? (
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-border bg-card p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {t("basePrice")}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t("basePriceFallbackHint")}
+                          </p>
+                          {currentBasePrice === null && basePriceFallbackCandidate ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {t("basePriceDerivedHint", {
+                                price: formatSelectedMoney(basePriceFallbackCandidate.priceKgs),
+                                source: basePriceFallbackSource,
+                              })}
+                            </p>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">{t("basePriceReadOnly")}</div>
-                  )}
-                </div>
-              </div>
-              {storePricingQuery.data.stores.map((storeRow) => (
-                <div
-                  key={storeRow.storeId}
-                  className="rounded-md border border-border bg-card p-3"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {storeRow.storeName}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Badge variant="muted">
-                          {storeRow.priceOverridden ? t("priceOverridden") : t("priceInherited")}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {storeRow.effectivePriceKgs !== null
-                            ? formatStoreMoney(storeRow.effectivePriceKgs, storeRow)
-                            : tCommon("notAvailable")}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {tInventory("onHand")}: {formatNumber(storeRow.onHand, locale)}
-                        </span>
-                      </div>
-                    </div>
-                    {canManageStorePrices || canManageInventory ? (
-                      <div className="flex w-full flex-col gap-2 sm:w-auto">
-                        {canManageStorePrices ? (
+                        {canManageProducts ? (
                           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                             <Input
                               type="number"
                               inputMode="decimal"
                               step="0.01"
                               className="w-full sm:w-[160px]"
-                              value={storePriceDrafts[storeRow.storeId] ?? ""}
-                              onChange={(event) =>
-                                setStorePriceDrafts((prev) => ({
-                                  ...prev,
-                                  [storeRow.storeId]: event.target.value,
-                                }))
-                              }
-                              onBlur={() => void handleSaveStorePrice(storeRow.storeId)}
+                              value={basePriceDraft}
+                              onChange={(event) => setBasePriceDraft(event.target.value)}
+                              onBlur={() => void handleSaveBasePrice()}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter") {
                                   event.preventDefault();
@@ -1252,91 +1249,110 @@ const ProductDetailPage = () => {
                                 }
                               }}
                               placeholder={t("pricePlaceholder")}
-                              disabled={storePriceMutation.isLoading}
+                              disabled={basePriceMutation.isLoading}
                             />
-                            {savingStorePriceId === storeRow.storeId ? (
+                            {currentBasePrice === null && basePriceFallbackCandidate ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => void handleApplyBasePriceFallback()}
+                                disabled={basePriceMutation.isLoading}
+                              >
+                                {t("basePriceApplyDerived")}
+                              </Button>
+                            ) : null}
+                            {basePriceMutation.isLoading ? (
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Spinner className="h-4 w-4" />
                                 {tCommon("saving")}
                               </div>
                             ) : null}
                           </div>
-                        ) : null}
-                        {canManageInventory ? (
-                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                            <Input
-                              type="number"
-                              inputMode="numeric"
-                              step="1"
-                              className="w-full sm:w-[160px]"
-                              value={storeOnHandDrafts[storeRow.storeId] ?? String(storeRow.onHand)}
-                              onChange={(event) =>
-                                setStoreOnHandDrafts((prev) => ({
-                                  ...prev,
-                                  [storeRow.storeId]: event.target.value,
-                                }))
-                              }
-                              onBlur={() =>
-                                void handleSaveStoreOnHand(storeRow.storeId, storeRow.onHand)
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                              placeholder={tInventory("qtyPlaceholder")}
-                              disabled={adjustStockMutation.isLoading}
-                            />
-                            {savingStoreOnHandId === storeRow.storeId ? (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Spinner className="h-4 w-4" />
-                                {tCommon("saving")}
-                              </div>
-                            ) : null}
+                        ) : (
+                          <div className="text-xs text-muted-foreground">
+                            {t("basePriceReadOnly")}
                           </div>
-                        ) : null}
+                        )}
                       </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">{t("storePriceReadOnly")}</div>
-                    )}
-                  </div>
-                  {storeRow.variants.length ? (
-                    <div className="mt-3 border-t border-border/70 pt-3">
-                      <p className="mb-2 text-xs font-medium text-muted-foreground">
-                        {t("variantStock")}
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {storeRow.variants.map((variant) => {
-                          const key = `${storeRow.storeId}:${variant.variantId}`;
-                          return (
-                            <div
-                              key={key}
-                              className="rounded-md border border-border/70 bg-muted/20 p-2"
-                            >
-                              <p className="truncate text-xs font-medium text-foreground">
-                                {resolveVariantLabel(variant)}
-                              </p>
+                    </div>
+                    {storePricingQuery.data.stores.map((storeRow) => (
+                      <div
+                        key={storeRow.storeId}
+                        className="rounded-md border border-border bg-card p-3"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {storeRow.storeName}
+                            </p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <Badge variant="muted">
+                                {storeRow.priceOverridden
+                                  ? t("priceOverridden")
+                                  : t("priceInherited")}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {storeRow.effectivePriceKgs !== null
+                                  ? formatStoreMoney(storeRow.effectivePriceKgs, storeRow)
+                                  : tCommon("notAvailable")}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {tInventory("onHand")}: {formatNumber(storeRow.onHand, locale)}
+                              </span>
+                            </div>
+                          </div>
+                          {canManageStorePrices || canManageInventory ? (
+                            <div className="flex w-full flex-col gap-2 sm:w-auto">
+                              {canManageStorePrices ? (
+                                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                                  <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    className="w-full sm:w-[160px]"
+                                    value={storePriceDrafts[storeRow.storeId] ?? ""}
+                                    onChange={(event) =>
+                                      setStorePriceDrafts((prev) => ({
+                                        ...prev,
+                                        [storeRow.storeId]: event.target.value,
+                                      }))
+                                    }
+                                    onBlur={() => void handleSaveStorePrice(storeRow.storeId)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        event.currentTarget.blur();
+                                      }
+                                    }}
+                                    placeholder={t("pricePlaceholder")}
+                                    disabled={storePriceMutation.isLoading}
+                                  />
+                                  {savingStorePriceId === storeRow.storeId ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <Spinner className="h-4 w-4" />
+                                      {tCommon("saving")}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                               {canManageInventory ? (
-                                <div className="mt-2 flex items-center gap-2">
+                                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                                   <Input
                                     type="number"
                                     inputMode="numeric"
                                     step="1"
-                                    className="h-9"
-                                    value={variantOnHandDrafts[key] ?? String(variant.onHand)}
+                                    className="w-full sm:w-[160px]"
+                                    value={
+                                      storeOnHandDrafts[storeRow.storeId] ?? String(storeRow.onHand)
+                                    }
                                     onChange={(event) =>
-                                      setVariantOnHandDrafts((prev) => ({
+                                      setStoreOnHandDrafts((prev) => ({
                                         ...prev,
-                                        [key]: event.target.value,
+                                        [storeRow.storeId]: event.target.value,
                                       }))
                                     }
                                     onBlur={() =>
-                                      void handleSaveStoreVariantOnHand(
-                                        storeRow.storeId,
-                                        variant.variantId,
-                                        variant.onHand,
-                                      )
+                                      void handleSaveStoreOnHand(storeRow.storeId, storeRow.onHand)
                                     }
                                     onKeyDown={(event) => {
                                       if (event.key === "Enter") {
@@ -1347,343 +1363,403 @@ const ProductDetailPage = () => {
                                     placeholder={tInventory("qtyPlaceholder")}
                                     disabled={adjustStockMutation.isLoading}
                                   />
-                                  {savingVariantOnHandKey === key ? (
-                                    <Spinner className="h-4 w-4 text-muted-foreground" />
+                                  {savingStoreOnHandId === storeRow.storeId ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <Spinner className="h-4 w-4" />
+                                      {tCommon("saving")}
+                                    </div>
                                   ) : null}
                                 </div>
-                              ) : (
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {formatNumber(variant.onHand, locale)}
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              {t("storePriceReadOnly")}
+                            </div>
+                          )}
+                        </div>
+                        {storeRow.variants.length ? (
+                          <div className="mt-3 border-t border-border/70 pt-3">
+                            <p className="mb-2 text-xs font-medium text-muted-foreground">
+                              {t("variantStock")}
+                            </p>
+                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                              {storeRow.variants.map((variant) => {
+                                const key = `${storeRow.storeId}:${variant.variantId}`;
+                                return (
+                                  <div
+                                    key={key}
+                                    className="rounded-md border border-border/70 bg-muted/20 p-2"
+                                  >
+                                    <p className="truncate text-xs font-medium text-foreground">
+                                      {resolveVariantLabel(variant)}
+                                    </p>
+                                    {canManageInventory ? (
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <Input
+                                          type="number"
+                                          inputMode="numeric"
+                                          step="1"
+                                          className="h-9"
+                                          value={variantOnHandDrafts[key] ?? String(variant.onHand)}
+                                          onChange={(event) =>
+                                            setVariantOnHandDrafts((prev) => ({
+                                              ...prev,
+                                              [key]: event.target.value,
+                                            }))
+                                          }
+                                          onBlur={() =>
+                                            void handleSaveStoreVariantOnHand(
+                                              storeRow.storeId,
+                                              variant.variantId,
+                                              variant.onHand,
+                                            )
+                                          }
+                                          onKeyDown={(event) => {
+                                            if (event.key === "Enter") {
+                                              event.preventDefault();
+                                              event.currentTarget.blur();
+                                            }
+                                          }}
+                                          placeholder={tInventory("qtyPlaceholder")}
+                                          disabled={adjustStockMutation.isLoading}
+                                        />
+                                        {savingVariantOnHandKey === key ? (
+                                          <Spinner className="h-4 w-4 text-muted-foreground" />
+                                        ) : null}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {formatNumber(variant.onHand, locale)}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{tCommon("notAvailable")}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>{t("profitabilityTitle")}</CardTitle>
+                <div className="w-full sm:max-w-xs">
+                  <Select
+                    value={pricingStoreId}
+                    onValueChange={(value) => setPricingStoreId(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={tCommon("selectStore")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignedStoreRows.map((store) => (
+                        <SelectItem key={store.storeId} value={store.storeId}>
+                          {store.storeName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-md border border-border/70 bg-card p-3">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
+                    {pricingQuery.data?.priceOverridden ? (
+                      <Badge variant="muted">{t("priceOverridden")}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-sm font-semibold">
+                    {effectivePrice !== null
+                      ? formatSelectedMoney(effectivePrice)
+                      : tCommon("notAvailable")}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border/70 bg-card p-3">
+                  <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
+                  <p className="text-sm font-semibold">
+                    {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border/70 bg-card p-3">
+                  <p className="text-xs text-muted-foreground">{t("markupMargin")}</p>
+                  <p className="text-sm font-semibold">
+                    {markupPct !== null
+                      ? `${formatNumber(markupPct, locale)}%`
+                      : tCommon("notAvailable")}
+                    {" · "}
+                    {marginPct !== null
+                      ? `${formatNumber(marginPct, locale)}%`
+                      : tCommon("notAvailable")}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/80">{t("profitabilityHint")}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>{t("bundleTitle")}</CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  {canManageBundles ? (
+                    <Button
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                      onClick={() => setComponentDialogOpen(true)}
+                    >
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {t("bundleAddComponent")}
+                    </Button>
+                  ) : null}
+                  {canAssembleBundles && bundleComponentsQuery.data?.length ? (
+                    <Button className="w-full sm:w-auto" onClick={() => setAssembleOpen(true)}>
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {t("bundleAssemble")}
+                    </Button>
+                  ) : null}
+                  <Button variant="ghost" size="sm" onClick={() => setShowBundle((prev) => !prev)}>
+                    {showBundle ? t("hideBundle") : t("showBundle")}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {showBundle ? (
+                  bundleComponentsQuery.isLoading ? (
+                    <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                      <Spinner className="h-4 w-4" />
+                      {tCommon("loading")}
+                    </div>
+                  ) : bundleComponents.length ? (
+                    <ResponsiveDataList
+                      items={bundleComponents}
+                      getKey={(component) => component.id}
+                      renderDesktop={(visibleItems) => (
+                        <div className="overflow-x-auto">
+                          <Table className="min-w-[520px]">
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{tCommon("product")}</TableHead>
+                                <TableHead>{t("variant")}</TableHead>
+                                <TableHead>{t("bundleQty")}</TableHead>
+                                <TableHead>{tCommon("actions")}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {visibleItems.map((component) => {
+                                const actions = [
+                                  {
+                                    key: "remove",
+                                    label: t("bundleRemoveComponent"),
+                                    icon: DeleteIcon,
+                                    variant: "danger" as const,
+                                    onSelect: async () => {
+                                      if (
+                                        !(await confirm({
+                                          description: t("bundleRemoveConfirm"),
+                                          confirmVariant: "danger",
+                                        }))
+                                      ) {
+                                        return;
+                                      }
+                                      removeComponentMutation.mutate({ componentId: component.id });
+                                    },
+                                    disabled: !canManageBundles,
+                                  },
+                                ];
+
+                                return (
+                                  <TableRow key={component.id}>
+                                    <TableCell>{component.componentProduct.name}</TableCell>
+                                    <TableCell>
+                                      {component.componentVariant?.name ?? tCommon("notAvailable")}
+                                    </TableCell>
+                                    <TableCell>{formatNumber(component.qty, locale)}</TableCell>
+                                    <TableCell>
+                                      {canManageBundles ? (
+                                        <RowActions
+                                          actions={actions}
+                                          maxInline={1}
+                                          moreLabel={tCommon("tooltips.moreActions")}
+                                        />
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground/80">
+                                          {tCommon("notAvailable")}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                      renderMobile={(component) => {
+                        const actions = [
+                          {
+                            key: "remove",
+                            label: t("bundleRemoveComponent"),
+                            icon: DeleteIcon,
+                            variant: "danger" as const,
+                            onSelect: async () => {
+                              if (
+                                !(await confirm({
+                                  description: t("bundleRemoveConfirm"),
+                                  confirmVariant: "danger",
+                                }))
+                              ) {
+                                return;
+                              }
+                              removeComponentMutation.mutate({ componentId: component.id });
+                            },
+                            disabled: !canManageBundles,
+                          },
+                        ];
+
+                        return (
+                          <div className="rounded-md border border-border bg-card p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {component.componentProduct.name}
                                 </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {component.componentVariant?.name ?? tCommon("notAvailable")}
+                                </p>
+                              </div>
+                              <div className="text-sm font-semibold text-foreground">
+                                {formatNumber(component.qty, locale)}
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-end">
+                              {canManageBundles ? (
+                                <RowActions
+                                  actions={actions}
+                                  maxInline={1}
+                                  moreLabel={tCommon("tooltips.moreActions")}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground/80">
+                                  {tCommon("notAvailable")}
+                                </span>
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <EmptyIcon className="h-4 w-4" aria-hidden />
+                      {t("bundleEmpty")}
                     </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">{tCommon("notAvailable")}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="mb-6">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("profitabilityTitle")}</CardTitle>
-          <div className="w-full sm:max-w-xs">
-            <Select value={pricingStoreId} onValueChange={(value) => setPricingStoreId(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder={tCommon("selectStore")} />
-              </SelectTrigger>
-              <SelectContent>
-                {assignedStoreRows.map((store) => (
-                  <SelectItem key={store.storeId} value={store.storeId}>
-                    {store.storeName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-md border border-border/70 bg-card p-3">
-            <div className="flex items-center gap-2">
-              <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
-              {pricingQuery.data?.priceOverridden ? (
-                <Badge variant="muted">{t("priceOverridden")}</Badge>
-              ) : null}
-            </div>
-            <p className="text-sm font-semibold">
-              {effectivePrice !== null
-                ? formatSelectedMoney(effectivePrice)
-                : tCommon("notAvailable")}
-            </p>
-          </div>
-          <div className="rounded-md border border-border/70 bg-card p-3">
-            <p className="text-xs text-muted-foreground">{t("avgCost")}</p>
-            <p className="text-sm font-semibold">
-              {avgCost !== null ? formatSelectedMoney(avgCost) : tCommon("notAvailable")}
-            </p>
-          </div>
-          <div className="rounded-md border border-border/70 bg-card p-3">
-            <p className="text-xs text-muted-foreground">{t("markupMargin")}</p>
-            <p className="text-sm font-semibold">
-              {markupPct !== null ? `${formatNumber(markupPct, locale)}%` : tCommon("notAvailable")}
-              {" · "}
-              {marginPct !== null ? `${formatNumber(marginPct, locale)}%` : tCommon("notAvailable")}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground/80">{t("profitabilityHint")}</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="mb-6">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("bundleTitle")}</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            {canManageBundles ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => setComponentDialogOpen(true)}
-              >
-                <AddIcon className="h-4 w-4" aria-hidden />
-                {t("bundleAddComponent")}
-              </Button>
-            ) : null}
-            {canAssembleBundles && bundleComponentsQuery.data?.length ? (
-              <Button className="w-full sm:w-auto" onClick={() => setAssembleOpen(true)}>
-                <AddIcon className="h-4 w-4" aria-hidden />
-                {t("bundleAssemble")}
-              </Button>
-            ) : null}
-            <Button variant="ghost" size="sm" onClick={() => setShowBundle((prev) => !prev)}>
-              {showBundle ? t("hideBundle") : t("showBundle")}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {showBundle ? (
-            bundleComponentsQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                {tCommon("loading")}
-              </div>
-            ) : bundleComponents.length ? (
-              <ResponsiveDataList
-                items={bundleComponents}
-                getKey={(component) => component.id}
-                renderDesktop={(visibleItems) => (
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[520px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{tCommon("product")}</TableHead>
-                          <TableHead>{t("variant")}</TableHead>
-                          <TableHead>{t("bundleQty")}</TableHead>
-                          <TableHead>{tCommon("actions")}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visibleItems.map((component) => {
-                          const actions = [
-                            {
-                              key: "remove",
-                              label: t("bundleRemoveComponent"),
-                              icon: DeleteIcon,
-                              variant: "danger" as const,
-                              onSelect: async () => {
-                                if (
-                                  !(await confirm({
-                                    description: t("bundleRemoveConfirm"),
-                                    confirmVariant: "danger",
-                                  }))
-                                ) {
-                                  return;
-                                }
-                                removeComponentMutation.mutate({ componentId: component.id });
-                              },
-                              disabled: !canManageBundles,
-                            },
-                          ];
-
-                          return (
-                            <TableRow key={component.id}>
-                              <TableCell>{component.componentProduct.name}</TableCell>
-                              <TableCell>
-                                {component.componentVariant?.name ?? tCommon("notAvailable")}
-                              </TableCell>
-                              <TableCell>{formatNumber(component.qty, locale)}</TableCell>
-                              <TableCell>
-                                {canManageBundles ? (
-                                  <RowActions
-                                    actions={actions}
-                                    maxInline={1}
-                                    moreLabel={tCommon("tooltips.moreActions")}
-                                  />
-                                ) : (
-                                  <span className="text-xs text-muted-foreground/80">
-                                    {tCommon("notAvailable")}
-                                  </span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  )
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("bundleHiddenHint")}</p>
                 )}
-                renderMobile={(component) => {
-                  const actions = [
-                    {
-                      key: "remove",
-                      label: t("bundleRemoveComponent"),
-                      icon: DeleteIcon,
-                      variant: "danger" as const,
-                      onSelect: async () => {
-                        if (
-                          !(await confirm({
-                            description: t("bundleRemoveConfirm"),
-                            confirmVariant: "danger",
-                          }))
-                        ) {
-                          return;
-                        }
-                        removeComponentMutation.mutate({ componentId: component.id });
-                      },
-                      disabled: !canManageBundles,
-                    },
-                  ];
+              </CardContent>
+            </Card>
 
-                  return (
-                    <div className="rounded-md border border-border bg-card p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {component.componentProduct.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {component.componentVariant?.name ?? tCommon("notAvailable")}
-                          </p>
+            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>{t("expiryLotsTitle")}</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLots((prev) => !prev)}
+                  disabled={!lotsEnabled}
+                >
+                  {showLots ? t("hideLots") : t("showLots")}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!lotsEnabled ? (
+                  <p className="text-sm text-muted-foreground">{t("expiryLotsDisabled")}</p>
+                ) : showLots ? (
+                  lotsQuery.isLoading ? (
+                    <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                      <Spinner className="h-4 w-4" />
+                      {tCommon("loading")}
+                    </div>
+                  ) : lots.length ? (
+                    <ResponsiveDataList
+                      items={lots}
+                      getKey={(lot) => lot.id}
+                      renderDesktop={(visibleItems) => (
+                        <div className="overflow-x-auto">
+                          <Table className="min-w-[420px]">
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>{t("expiryDate")}</TableHead>
+                                <TableHead>{tInventory("onHand")}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {visibleItems.map((lot) => (
+                                <TableRow key={lot.id}>
+                                  <TableCell>
+                                    {lot.expiryDate
+                                      ? formatDateTime(lot.expiryDate, locale)
+                                      : t("noExpiry")}
+                                  </TableCell>
+                                  <TableCell>{formatNumber(lot.onHandQty, locale)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
                         </div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {formatNumber(component.qty, locale)}
+                      )}
+                      renderMobile={(lot) => (
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-xs text-muted-foreground">{t("expiryDate")}</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {lot.expiryDate
+                                  ? formatDateTime(lot.expiryDate, locale)
+                                  : t("noExpiry")}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">
+                                {tInventory("onHand")}
+                              </p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatNumber(lot.onHandQty, locale)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-end">
-                        {canManageBundles ? (
-                          <RowActions
-                            actions={actions}
-                            maxInline={1}
-                            moreLabel={tCommon("tooltips.moreActions")}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground/80">
-                            {tCommon("notAvailable")}
-                          </span>
-                        )}
-                      </div>
+                      )}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <EmptyIcon className="h-4 w-4" aria-hidden />
+                      {t("noLots")}
                     </div>
-                  );
-                }}
-              />
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("bundleEmpty")}
-              </div>
-            )
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("bundleHiddenHint")}</p>
-          )}
-        </CardContent>
-      </Card>
+                  )
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("lotsHiddenHint")}</p>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        }
+        sidebar={sidebar}
+      />
 
-      <Card className="mt-6">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("expiryLotsTitle")}</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowLots((prev) => !prev)}
-            disabled={!lotsEnabled}
-          >
-            {showLots ? t("hideLots") : t("showLots")}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {!lotsEnabled ? (
-            <p className="text-sm text-muted-foreground">{t("expiryLotsDisabled")}</p>
-          ) : showLots ? (
-            lotsQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                {tCommon("loading")}
-              </div>
-            ) : lots.length ? (
-              <ResponsiveDataList
-                items={lots}
-                getKey={(lot) => lot.id}
-                renderDesktop={(visibleItems) => (
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[420px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{t("expiryDate")}</TableHead>
-                          <TableHead>{tInventory("onHand")}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visibleItems.map((lot) => (
-                          <TableRow key={lot.id}>
-                            <TableCell>
-                              {lot.expiryDate
-                                ? formatDateTime(lot.expiryDate, locale)
-                                : t("noExpiry")}
-                            </TableCell>
-                            <TableCell>{formatNumber(lot.onHandQty, locale)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-                renderMobile={(lot) => (
-                  <div className="rounded-md border border-border bg-card p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">{t("expiryDate")}</p>
-                        <p className="text-sm font-medium text-foreground">
-                          {lot.expiryDate ? formatDateTime(lot.expiryDate, locale) : t("noExpiry")}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">{tInventory("onHand")}</p>
-                        <p className="text-sm font-semibold text-foreground">
-                          {formatNumber(lot.onHandQty, locale)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              />
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noLots")}
-              </div>
-            )
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("lotsHiddenHint")}</p>
-          )}
-        </CardContent>
-      </Card>
-      {canManageProducts ? (
-        <div className="mt-4 flex flex-col gap-2 md:fixed md:inset-x-auto md:bottom-6 md:right-6 md:z-40 md:max-w-[calc(100vw-2rem)] md:items-end">
-          {updateMutation.error ? (
-            <div className="max-w-sm border border-danger/30 bg-danger/10 px-3 py-2 text-right text-sm text-danger shadow-lg">
-              {translateError(tErrors, updateMutation.error)}
-            </div>
-          ) : null}
-          <Button
-            type="submit"
-            form={productEditFormId}
-            disabled={updateMutation.isLoading}
-            className="w-full shadow-lg md:w-auto md:min-w-[180px]"
-          >
-            {updateMutation.isLoading ? (
-              <Spinner className="h-4 w-4" />
-            ) : (
-              <StatusSuccessIcon className="h-4 w-4" aria-hidden />
-            )}
-            {updateMutation.isLoading ? t("saving") : t("save")}
-          </Button>
-        </div>
+      {updateMutation.error ? (
+        <p className="mx-auto mt-3 max-w-[1120px] text-sm text-danger">
+          {translateError(tErrors, updateMutation.error)}
+        </p>
       ) : null}
 
       <Modal
@@ -2127,7 +2203,7 @@ const ProductDetailPage = () => {
         </div>
       </Modal>
       {confirmDialog}
-    </div>
+    </ProductEditorPage>
   );
 };
 

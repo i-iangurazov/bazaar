@@ -63,9 +63,11 @@ cp .env.example .env
 - `R2_PUBLIC_BASE_URL` (required when `IMAGE_STORAGE_PROVIDER=r2`; public/custom domain or `*.r2.dev`)
 - `R2_ENDPOINT` (optional override; defaults to `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`)
 - `PRODUCT_IMAGE_MAX_BYTES` (optional max image payload; default `5242880`)
+- `PRODUCT_IMAGE_PROXY_MAX_BYTES` (optional backend proxy upload cap; default `3750000` to stay below Vercel function payload limits)
 - `PRODUCT_IMAGE_FETCH_TIMEOUT_MS` (optional remote image fetch timeout for import/backfill resolution; default `4000`)
-- `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES` (optional client-side upload target max bytes; set `4000000` on Vercel to avoid `413` on multipart overhead)
-- `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES` (optional client-side pre-compression input cap; default `10485760`)
+- `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_BYTES` (optional client-side upload target max bytes; default `5242880`)
+- `NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES` (optional client-side proxy fallback cap; default `3750000` to avoid Vercel `FUNCTION_PAYLOAD_TOO_LARGE`)
+- `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES` (optional client-side pre-compression input cap; default `33554432`)
 
 ### 5) Create DB schema + seed
 ```bash
