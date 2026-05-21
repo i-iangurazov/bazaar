@@ -3519,7 +3519,7 @@
     "customerEmail": "Email клиента",
     "customerEmailPlaceholder": "client@example.com",
     "customerPhone": "Телефон клиента",
-    "customerPhonePlaceholder": "+996 XXX XXX XXX",
+    "customerPhonePlaceholder": "555 123 456",
     "customerPhoneCountry": "Код страны телефона",
     "customerAddress": "Адрес клиента",
     "customerAddressPlaceholder": "Улица, дом, квартира",

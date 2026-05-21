@@ -16,4 +16,16 @@ describe("customer order product images source", () => {
     expect(pageSource).toContain("ProductImageThumb");
     expect(pageSource).toContain("line.product.photoUrl ?? line.product.images?.[0]?.url ?? null");
   });
+
+  it("keeps customer order phone fields as plain text inputs", async () => {
+    const newOrderSource = await readSource("src/app/(app)/sales/orders/new/page.tsx");
+    const detailSource = await readSource("src/app/(app)/sales/orders/[id]/page.tsx");
+
+    expect(newOrderSource).not.toContain("PhoneNumberInput");
+    expect(detailSource).not.toContain("PhoneNumberInput");
+    expect(newOrderSource).toContain('type="tel"');
+    expect(detailSource).toContain('type="tel"');
+    expect(newOrderSource).toContain("setCustomerPhone(event.target.value)");
+    expect(detailSource).toContain("setCustomerPhone(event.target.value)");
+  });
 });

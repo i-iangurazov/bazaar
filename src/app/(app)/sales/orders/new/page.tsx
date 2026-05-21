@@ -7,7 +7,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
-import { PhoneNumberInput } from "@/components/phone-number-input";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -248,7 +247,9 @@ const NewSalesOrderPage = () => {
         title={isReturnMode ? t("newReturn") : t("new")}
         subtitle={isReturnMode ? t("newReturnSubtitle") : t("newSubtitle")}
       />
-      {isReturnMode ? <p className="mb-4 text-sm text-muted-foreground">{t("returnModeHint")}</p> : null}
+      {isReturnMode ? (
+        <p className="mb-4 text-sm text-muted-foreground">{t("returnModeHint")}</p>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -301,11 +302,14 @@ const NewSalesOrderPage = () => {
               <p className="text-sm font-medium">
                 {t("customerPhone")} ({tCommon("optional")})
               </p>
-              <PhoneNumberInput
+              <Input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={customerPhone}
-                onChange={setCustomerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value)}
                 placeholder={t("customerPhonePlaceholder")}
-                countrySelectLabel={t("customerPhoneCountry")}
+                maxLength={64}
               />
             </div>
 
@@ -361,14 +365,18 @@ const NewSalesOrderPage = () => {
                 {showLineSearchResults && lineSearch.trim().length > 0 ? (
                   <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
                     {productSearchQuery.isLoading ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</div>
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        {tCommon("loading")}
+                      </div>
                     ) : productSearchQuery.data?.length ? (
                       productSearchQuery.data.map((product) => (
                         <ProductSearchResultItem
                           key={product.id}
                           product={product}
                           currencySource={selectedStore}
-                          rightSlot={<AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />}
+                          rightSlot={
+                            <AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                          }
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => {
                             void addDraftLine(product as ProductSearchResult);
@@ -404,7 +412,9 @@ const NewSalesOrderPage = () => {
                     <div className="min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-medium">{line.productName}</p>
-                        {line.isBundle ? <Badge variant="muted">{t("bundleProductLabel")}</Badge> : null}
+                        {line.isBundle ? (
+                          <Badge variant="muted">{t("bundleProductLabel")}</Badge>
+                        ) : null}
                       </div>
                       <p className="truncate text-xs text-muted-foreground">{line.productSku}</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

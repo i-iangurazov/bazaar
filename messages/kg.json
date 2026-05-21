@@ -3518,7 +3518,7 @@
     "customerEmail": "Кардардын email дареги",
     "customerEmailPlaceholder": "client@example.com",
     "customerPhone": "Кардардын телефону",
-    "customerPhonePlaceholder": "+996 XXX XXX XXX",
+    "customerPhonePlaceholder": "555 123 456",
     "customerPhoneCountry": "Телефондун өлкө коду",
     "customerAddress": "Кардардын дареги",
     "customerAddressPlaceholder": "Көчө, үй, батир",

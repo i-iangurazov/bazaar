@@ -10,7 +10,6 @@ import Image from "next/image";
 import { FormGrid } from "@/components/form-layout";
 import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { PhoneNumberInput } from "@/components/phone-number-input";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
@@ -591,11 +590,14 @@ const SalesOrderDetailPage = () => {
                 </div>
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium">{t("customerPhone")}</p>
-                  <PhoneNumberInput
+                  <Input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     value={customerPhone}
-                    onChange={setCustomerPhone}
+                    onChange={(event) => setCustomerPhone(event.target.value)}
                     placeholder={t("customerPhonePlaceholder")}
-                    countrySelectLabel={t("customerPhoneCountry")}
+                    maxLength={64}
                     disabled={!isEditable || setCustomerMutation.isLoading}
                   />
                 </div>
@@ -676,7 +678,9 @@ const SalesOrderDetailPage = () => {
                             <TableCell>
                               <div className="flex min-w-[220px] items-center gap-3">
                                 <ProductImageThumb
-                                  imageUrl={line.product.photoUrl ?? line.product.images?.[0]?.url ?? null}
+                                  imageUrl={
+                                    line.product.photoUrl ?? line.product.images?.[0]?.url ?? null
+                                  }
                                   name={line.product.name}
                                 />
                                 <div className="min-w-0">
@@ -750,7 +754,9 @@ const SalesOrderDetailPage = () => {
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-3">
                               <ProductImageThumb
-                                imageUrl={line.product.photoUrl ?? line.product.images?.[0]?.url ?? null}
+                                imageUrl={
+                                  line.product.photoUrl ?? line.product.images?.[0]?.url ?? null
+                                }
                                 name={line.product.name}
                               />
                               <div className="min-w-0">
