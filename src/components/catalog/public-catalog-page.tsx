@@ -14,7 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultCurrencyCode, type SupportedCurrencyCode } from "@/lib/currency";
@@ -53,6 +59,7 @@ type CatalogPayload = {
       id: string;
       name: string;
       priceKgs: number;
+      imageUrl: string | null;
     }>;
   }>;
 };
@@ -72,7 +79,11 @@ const numericPattern = /^\d*$/;
 const baseVariantKey = "BASE";
 const catalogImageWidths = [320, 480, 720] as const;
 
-const formatCatalogCurrency = (amount: number, locale: string, currencyCode: SupportedCurrencyCode) =>
+const formatCatalogCurrency = (
+  amount: number,
+  locale: string,
+  currencyCode: SupportedCurrencyCode,
+) =>
   formatCurrency(amount, locale, currencyCode, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -337,7 +348,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           return null;
         }
         const variant = parsed.variantId
-          ? product.variants.find((entry) => entry.id === parsed.variantId) ?? null
+          ? (product.variants.find((entry) => entry.id === parsed.variantId) ?? null)
           : null;
         if (parsed.variantId && !variant) {
           return null;
@@ -519,29 +530,33 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   ) => {
     const selectedVariantId = selectedVariants[product.id];
     const selectedVariant = selectedVariantId
-      ? product.variants.find((variant) => variant.id === selectedVariantId) ?? null
+      ? (product.variants.find((variant) => variant.id === selectedVariantId) ?? null)
       : null;
-    const lineKey = cartKeyOf(product.id, product.variants.length ? selectedVariant?.id ?? null : null);
+    const lineKey = cartKeyOf(
+      product.id,
+      product.variants.length ? (selectedVariant?.id ?? null) : null,
+    );
     const qty = cart[lineKey] ?? 0;
     const qtyInput = qtyInputs[lineKey] ?? (qty > 0 ? String(qty) : "");
     const displayPrice = selectedVariant?.priceKgs ?? product.priceKgs;
     const canAdjustQty = product.variants.length === 0 || Boolean(selectedVariant);
-    const optimizedImageSources = product.imageUrl
+    const displayImageUrl = selectedVariant?.imageUrl ?? product.imageUrl;
+    const optimizedImageSources = displayImageUrl
       ? catalogImageWidths
           .map((width) => {
-            const optimizedUrl = toCatalogImageUrl(product.imageUrl, width);
+            const optimizedUrl = toCatalogImageUrl(displayImageUrl, width);
             return optimizedUrl ? `${optimizedUrl} ${width}w` : null;
           })
           .filter((value): value is string => Boolean(value))
       : [];
-    const imageSrc = toCatalogImageUrl(product.imageUrl, 720) ?? product.imageUrl;
+    const imageSrc = toCatalogImageUrl(displayImageUrl, 720) ?? displayImageUrl;
     const imageSrcSet = optimizedImageSources.length ? optimizedImageSources.join(", ") : undefined;
 
     return (
       <Card key={product.id} className="overflow-hidden">
         <CardContent className="space-y-3 p-3">
           <div className="aspect-square overflow-hidden bg-secondary">
-            {product.imageUrl ? (
+            {displayImageUrl ? (
               <img
                 src={imageSrc ?? undefined}
                 srcSet={imageSrcSet}
@@ -832,7 +847,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           </div>
         ) : !hasNamedCategories ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleProducts.map((product) => renderProductCard(product, priorityProductIds.has(product.id)))}
+            {visibleProducts.map((product) =>
+              renderProductCard(product, priorityProductIds.has(product.id)),
+            )}
           </div>
         ) : (
           groupedProducts.map((group) => {
@@ -864,7 +881,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 </button>
                 {!collapsed ? (
                   <div className="grid gap-3 border-t border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {group.products.map((product) => renderProductCard(product, priorityProductIds.has(product.id)))}
+                    {group.products.map((product) =>
+                      renderProductCard(product, priorityProductIds.has(product.id)),
+                    )}
                   </div>
                 ) : null}
               </section>
@@ -936,7 +955,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           <div className="space-y-4 text-center">
             <p className="text-sm text-muted-foreground">{t("successDescription")}</p>
             {orderNumber ? (
-              <p className="text-sm font-semibold">{t("successOrderNumber", { number: orderNumber })}</p>
+              <p className="text-sm font-semibold">
+                {t("successOrderNumber", { number: orderNumber })}
+              </p>
             ) : null}
             <Button
               type="button"
@@ -1120,7 +1141,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       </Modal>
 
       <div className="mt-10 text-center">
-        <Link href="/" className="inline-flex items-center justify-center rounded-md px-2 py-1 hover:opacity-90">
+        <Link
+          href="/"
+          className="inline-flex items-center justify-center rounded-md px-2 py-1 hover:opacity-90"
+        >
           <img src="/brand/logo.png" alt={t("poweredBy")} className="h-7 w-auto" />
           <span className="sr-only">{t("poweredBy")}</span>
         </Link>

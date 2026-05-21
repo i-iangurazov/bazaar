@@ -47,6 +47,12 @@ type ProductDetailRecord = {
   barcodes: Array<{ value: string }>;
   variants: Array<{
     id: string;
+    imageId: string | null;
+    image?: {
+      id: string;
+      url: string;
+      position: number;
+    } | null;
     name: string | null;
     sku: string | null;
     attributes: Prisma.JsonValue;
@@ -111,12 +117,13 @@ export const serializeProductPreview = (
   },
 ) => {
   const basePrice = decimalToNumber(product.basePriceKgs);
-  const onHandQty = product.inventorySnapshots?.reduce((sum, snapshot) => {
-    if (options?.selectedStoreId && snapshot.storeId !== options.selectedStoreId) {
-      return sum;
-    }
-    return sum + snapshot.onHand;
-  }, 0) ?? null;
+  const onHandQty =
+    product.inventorySnapshots?.reduce((sum, snapshot) => {
+      if (options?.selectedStoreId && snapshot.storeId !== options.selectedStoreId) {
+        return sum;
+      }
+      return sum + snapshot.onHand;
+    }, 0) ?? null;
 
   return {
     id: product.id,
@@ -130,9 +137,13 @@ export const serializeProductPreview = (
     effectivePriceKgs: options?.effectivePriceKgs ?? basePrice,
     onHandQty,
     primaryBarcode:
-      options?.primaryBarcode ?? product.barcodes?.find((barcode) => barcode.value.trim())?.value ?? null,
+      options?.primaryBarcode ??
+      product.barcodes?.find((barcode) => barcode.value.trim())?.value ??
+      null,
     primaryImage:
-      sanitizeListImageUrl(product.images[0]?.url) ?? sanitizeListImageUrl(product.photoUrl) ?? null,
+      sanitizeListImageUrl(product.images[0]?.url) ??
+      sanitizeListImageUrl(product.photoUrl) ??
+      null,
   };
 };
 
@@ -197,10 +208,20 @@ export const serializeProductDetail = <TProduct extends ProductDetailRecord>({
     images,
     photoUrl,
     barcodes: product.barcodes.map((barcode) => barcode.value),
-    variants: product.variants.map((variant) => ({
-      ...variant,
-      canDelete: !blockedVariantIds.has(variant.id),
-    })),
+    variants: product.variants.map((variant) => {
+      const variantImageUrl = sanitizeDetailImageUrl(variant.image?.url);
+      return {
+        ...variant,
+        image:
+          variant.image && variantImageUrl
+            ? {
+                ...variant.image,
+                url: variantImageUrl,
+              }
+            : null,
+        canDelete: !blockedVariantIds.has(variant.id),
+      };
+    }),
     basePriceKgs: decimalToNumber(product.basePriceKgs),
     purchasePriceKgs,
     avgCostKgs,

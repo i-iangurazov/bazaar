@@ -1249,7 +1249,14 @@ export const getProductById = async ({
     },
     include: {
       barcodes: true,
-      variants: { where: { isActive: true } },
+      variants: {
+        where: { isActive: true },
+        include: {
+          image: {
+            select: { id: true, url: true, position: true },
+          },
+        },
+      },
       packs: true,
       baseUnit: true,
       images: { orderBy: { position: "asc" } },

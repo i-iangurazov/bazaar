@@ -73,6 +73,8 @@ export const productPackInputSchema = z.object({
 
 export const productVariantInputSchema = z.object({
   id: z.string().optional(),
+  imageId: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   name: z.string().optional(),
   sku: z.string().optional(),
   attributes: z.record(z.unknown()).optional(),

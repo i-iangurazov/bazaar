@@ -1,19 +1,21 @@
 "use client";
 
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { useFieldArray, useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Cropper, { type Area } from "react-easy-crop";
 
@@ -116,6 +118,13 @@ export type ProductFormValues = {
   }[];
   variants: {
     id?: string;
+    imageId?: string | null;
+    imageUrl?: string | null;
+    image?: {
+      id: string;
+      url: string;
+      position: number;
+    } | null;
     name?: string;
     sku?: string;
     initialOnHand?: number;
@@ -167,6 +176,10 @@ type PendingImageUpload = {
   error: string | null;
   uploadedUrl?: string;
 };
+
+type VariantImageUploadTarget =
+  | { type: "variant"; index: number }
+  | { type: "draftValue"; valueKey: string };
 
 const defaultProductImageMaxBytes = 5 * 1024 * 1024;
 const defaultProductImageMaxInputBytes = 32 * 1024 * 1024;
@@ -250,6 +263,45 @@ const normalizeVariantOptionLabel = (value?: string | null) => {
   const normalized = value?.trim().replace(/\s+/g, " ");
   return normalized ? normalized : "";
 };
+
+const normalizeVariantOptionValueKey = (value?: string | null) =>
+  normalizeVariantOptionLabel(value).toLocaleLowerCase("ru-RU");
+
+const getFirstFormErrorMessage = (error: unknown): string | null => {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+  const maybeMessage = (error as { message?: unknown }).message;
+  if (typeof maybeMessage === "string" && maybeMessage.trim()) {
+    return maybeMessage;
+  }
+  if (Array.isArray(error)) {
+    for (const item of error) {
+      const message = getFirstFormErrorMessage(item);
+      if (message) {
+        return message;
+      }
+    }
+    return null;
+  }
+  for (const value of Object.values(error)) {
+    const message = getFirstFormErrorMessage(value);
+    if (message) {
+      return message;
+    }
+  }
+  return null;
+};
+
+const VariantImageOptionPreview = ({ url, label }: { url: string; label: string }) => (
+  <span className="inline-flex min-w-0 items-center gap-3">
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt="" className="max-h-full max-w-full object-contain" />
+    </span>
+    <span className="truncate">{label}</span>
+  </span>
+);
 
 const parseVariantOptionValues = (value?: string | null) =>
   (value ?? "")
@@ -529,12 +581,44 @@ export const ProductForm = ({
     [definitions],
   );
 
-  const resolveLabel = (definition?: AttributeDefinition, fallbackKey?: string) => {
-    if (!definition) {
-      return fallbackKey ?? "";
-    }
-    return locale === "kg" ? definition.labelKg : definition.labelRu;
-  };
+  const resolveLabel = useCallback(
+    (definition?: AttributeDefinition, fallbackKey?: string) => {
+      if (!definition) {
+        return fallbackKey ?? "";
+      }
+      return locale === "kg" ? definition.labelKg : definition.labelRu;
+    },
+    [locale],
+  );
+
+  const resolveVariantOptionDefinition = useCallback(
+    (value?: string | null) => {
+      const normalized = normalizeVariantOptionValueKey(value);
+      if (!normalized) {
+        return undefined;
+      }
+      return definitions.find((definition) =>
+        [definition.key, definition.labelRu, definition.labelKg].some(
+          (candidate) => normalizeVariantOptionValueKey(candidate) === normalized,
+        ),
+      );
+    },
+    [definitions],
+  );
+
+  const resolveVariantOptionKey = useCallback(
+    (value?: string | null) =>
+      resolveVariantOptionDefinition(value)?.key ?? normalizeVariantOptionLabel(value),
+    [resolveVariantOptionDefinition],
+  );
+
+  const resolveVariantOptionDisplayName = useCallback(
+    (value?: string | null) => {
+      const optionKey = resolveVariantOptionKey(value);
+      return resolveLabel(definitionMap.get(optionKey), optionKey);
+    },
+    [definitionMap, resolveLabel, resolveVariantOptionKey],
+  );
 
   const resolveOptions = (definition?: AttributeDefinition) => {
     if (!definition) {
@@ -597,6 +681,8 @@ export const ProductForm = ({
         variants: z.array(
           z.object({
             id: z.string().optional(),
+            imageId: z.string().optional().nullable(),
+            imageUrl: z.string().optional().nullable(),
             name: z.string().optional(),
             sku: z.string().optional(),
             initialOnHand: optionalStockQty,
@@ -712,6 +798,8 @@ export const ProductForm = ({
         initialValues.variants.length > 0
           ? initialValues.variants.map((variant) => ({
               id: variant.id,
+              imageId: variant.imageId ?? variant.image?.id ?? null,
+              imageUrl: variant.image?.url ?? variant.imageUrl ?? "",
               name: variant.name ?? "",
               sku: variant.sku ?? "",
               initialOnHand: variant.initialOnHand,
@@ -721,6 +809,8 @@ export const ProductForm = ({
           : [
               {
                 id: undefined,
+                imageId: null,
+                imageUrl: "",
                 name: "",
                 sku: "",
                 initialOnHand: undefined,
@@ -984,6 +1074,92 @@ export const ProductForm = ({
     const fallbackPhotoUrl = watchedPhotoUrl?.trim() ?? "";
     return fallbackPhotoUrl ? [fallbackPhotoUrl] : [];
   }, [orderedImageUrls, watchedPhotoUrl]);
+  const persistedProductImageIds = useMemo(
+    () =>
+      new Set(
+        (initialValues.images ?? [])
+          .map((image) => image.id?.trim())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [initialValues.images],
+  );
+  const variantImageOptions = useMemo(() => {
+    const fromImages =
+      watchedImages
+        ?.map((image, index) => {
+          const url = image.url?.trim() ?? "";
+          if (!url || url.startsWith("data:image/")) {
+            return null;
+          }
+          const imageId = image.id?.trim() || undefined;
+          const persistedImageId =
+            imageId && persistedProductImageIds.has(imageId) ? imageId : undefined;
+          return {
+            value: persistedImageId ? `id:${persistedImageId}` : `url:${url}`,
+            imageId: persistedImageId,
+            url,
+            label: t("variantImageOption", { index: index + 1 }),
+          };
+        })
+        .filter((image): image is NonNullable<typeof image> => Boolean(image)) ?? [];
+    if (fromImages.length) {
+      return fromImages;
+    }
+    const fallbackPhotoUrl = watchedPhotoUrl?.trim() ?? "";
+    return fallbackPhotoUrl && !fallbackPhotoUrl.startsWith("data:image/")
+      ? [
+          {
+            value: `url:${fallbackPhotoUrl}`,
+            imageId: undefined,
+            url: fallbackPhotoUrl,
+            label: t("imagePrimary"),
+          },
+        ]
+      : [];
+  }, [persistedProductImageIds, t, watchedImages, watchedPhotoUrl]);
+  const variantImageOptionByValue = useMemo(
+    () => new Map(variantImageOptions.map((option) => [option.value, option])),
+    [variantImageOptions],
+  );
+  const hasVariantImageOptions = variantImageOptions.length > 0;
+  const resolveVariantImageValue = (variant: {
+    imageId?: string | null;
+    imageUrl?: string | null;
+  }) => {
+    const imageId = variant.imageId?.trim();
+    if (imageId) {
+      return `id:${imageId}`;
+    }
+    const imageUrl = variant.imageUrl?.trim();
+    return imageUrl ? `url:${imageUrl}` : "__none";
+  };
+  const setVariantImageValue = (index: number, value: string) => {
+    const option = variantImageOptionByValue.get(value);
+    form.setValue(`variants.${index}.imageId`, option?.imageId ?? null, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    form.setValue(`variants.${index}.imageUrl`, option?.url ?? "", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+  const showVariantImagePicker = hasVariantImageOptions || watchedVariants.length > 0;
+  const openVariantImageUpload = (target?: VariantImageUploadTarget) => {
+    pendingVariantImageUploadTargetRef.current = target ?? null;
+    (quickFileInputRef.current ?? fileInputRef.current)?.click();
+  };
+  const compactVariantGridStyle = {
+    "--variant-grid-cols": [
+      "minmax(140px,1fr)",
+      showVariantImagePicker ? "minmax(220px,280px)" : null,
+      enableSku ? "160px" : null,
+      canEditInitialStock ? "120px" : null,
+      "40px",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  } as CSSProperties;
 
   const {
     fields: packFields,
@@ -1007,6 +1183,7 @@ export const ProductForm = ({
   const quickFileInputRef = useRef<HTMLInputElement | null>(null);
   const variantsEditorRef = useRef<HTMLDivElement | null>(null);
   const pendingVariantsEditorScrollRef = useRef(false);
+  const pendingVariantImageUploadTargetRef = useRef<VariantImageUploadTarget | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -1025,6 +1202,9 @@ export const ProductForm = ({
   const [variantOptionDraftName, setVariantOptionDraftName] = useState("");
   const [variantOptionValueDraft, setVariantOptionValueDraft] = useState("");
   const [variantOptionDraftValues, setVariantOptionDraftValues] = useState<string[]>([]);
+  const [variantOptionDraftImages, setVariantOptionDraftImages] = useState<Record<string, string>>(
+    {},
+  );
   const [bundleSearch, setBundleSearch] = useState("");
   const [showBundleResults, setShowBundleResults] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
@@ -1946,6 +2126,15 @@ export const ProductForm = ({
       return { attempted: true, url: null };
     }
 
+    if (targetBody?.message === "directUploadUnavailable") {
+      logImagePrepDebug("direct-upload-unavailable", {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
+      return { attempted: false, url: null };
+    }
+
     if (
       targetBody?.method !== "PUT" ||
       !targetBody.uploadUrl ||
@@ -2365,6 +2554,34 @@ export const ProductForm = ({
     syncPhotoUrlWithImages([...currentImages, ...images]);
   };
 
+  const assignUploadedImageToVariantTarget = (
+    target: VariantImageUploadTarget | null,
+    url: string,
+  ) => {
+    if (!target || !url.trim()) {
+      return;
+    }
+    if (target.type === "variant") {
+      const variants = form.getValues("variants") ?? [];
+      if (!variants[target.index]) {
+        return;
+      }
+      form.setValue(`variants.${target.index}.imageId`, null, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      form.setValue(`variants.${target.index}.imageUrl`, url, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      return;
+    }
+    setVariantOptionDraftImages((current) => ({
+      ...current,
+      [target.valueKey]: `url:${url}`,
+    }));
+  };
+
   const addImageUrlFromDraft = () => {
     const nextUrl = imageUrlDraft.trim();
     if (!nextUrl) {
@@ -2469,8 +2686,11 @@ export const ProductForm = ({
     }
     const list = Array.from(files);
     if (!list.length) {
+      pendingVariantImageUploadTargetRef.current = null;
       return;
     }
+    const variantImageUploadTarget = pendingVariantImageUploadTargetRef.current;
+    pendingVariantImageUploadTargetRef.current = null;
     const uploads = list.map((file) => ({
       id: createPendingImageUploadId(),
       file,
@@ -2510,6 +2730,7 @@ export const ProductForm = ({
 
       if (uploadedImages.length) {
         handleAppendImageEntries(uploadedImages.map((result) => ({ url: result.url })));
+        assignUploadedImageToVariantTarget(variantImageUploadTarget, uploadedImages[0].url);
         window.setTimeout(
           () => clearUploadedPendingImageUploads(uploadedImages.map((result) => result.uploadId)),
           1600,
@@ -2701,6 +2922,8 @@ export const ProductForm = ({
       const name = generatorAttributes.map((attr) => combo[attr.key]).join(" / ");
       acc.push({
         id: undefined,
+        imageId: null,
+        imageUrl: "",
         name,
         sku: generateNextVariantSku(usedVariantSkus),
         initialOnHand: undefined,
@@ -2856,6 +3079,8 @@ export const ProductForm = ({
 
       parsedVariants.push({
         id: variant.id,
+        imageId: variant.imageId?.trim() || null,
+        imageUrl: variant.imageUrl?.trim() || null,
         name: variant.name?.trim() || undefined,
         sku: enableSku ? variant.sku?.trim() || undefined : undefined,
         initialOnHand: variant.initialOnHand,
@@ -2938,6 +3163,15 @@ export const ProductForm = ({
     });
   };
 
+  const handleInvalidSubmit = (errors: FieldErrors<z.infer<typeof schema>>) => {
+    if (errors.variants) {
+      pendingVariantsEditorScrollRef.current = true;
+      setShowAdvanced(true);
+    }
+    const message = getFirstFormErrorMessage(errors) ?? tErrors("validationError");
+    toast({ variant: "error", description: message });
+  };
+
   const handleConfirmRemoveVariant = () => {
     if (variantToRemove === null) {
       return;
@@ -2990,6 +3224,8 @@ export const ProductForm = ({
     }
     append({
       id: undefined,
+      imageId: null,
+      imageUrl: "",
       name: "",
       sku: generateNextVariantSku(),
       initialOnHand: undefined,
@@ -3036,33 +3272,36 @@ export const ProductForm = ({
     .filter((variant) => variant.hasContent);
 
   type CompactVariantOption = {
+    key: string;
     name: string;
     values: string[];
   };
 
   const compactVariantOptions = useMemo<CompactVariantOption[]>(() => {
     const order: string[] = [];
-    const valuesByName = new Map<string, string[]>();
-    const seenByName = new Map<string, Set<string>>();
+    const namesByKey = new Map<string, string>();
+    const valuesByKey = new Map<string, string[]>();
+    const seenByKey = new Map<string, Set<string>>();
 
     watchedVariants.forEach((variant) => {
       const attributes = Array.isArray(variant.attributes) ? variant.attributes : [];
       attributes.forEach((entry) => {
-        const name = normalizeVariantOptionLabel(entry.key);
-        if (!name) {
+        const key = resolveVariantOptionKey(entry.key);
+        if (!key) {
           return;
         }
-        if (!valuesByName.has(name)) {
-          valuesByName.set(name, []);
-          seenByName.set(name, new Set<string>());
-          order.push(name);
+        if (!valuesByKey.has(key)) {
+          valuesByKey.set(key, []);
+          seenByKey.set(key, new Set<string>());
+          namesByKey.set(key, resolveVariantOptionDisplayName(key));
+          order.push(key);
         }
         const rawValues = Array.isArray(entry.value) ? entry.value : [entry.value];
         rawValues.forEach((rawValue) => {
           const value = normalizeVariantOptionLabel(String(rawValue ?? ""));
           const valueKey = value.toLocaleLowerCase("ru-RU");
-          const seen = seenByName.get(name);
-          const values = valuesByName.get(name);
+          const seen = seenByKey.get(key);
+          const values = valuesByKey.get(key);
           if (!value || !seen || !values || seen.has(valueKey)) {
             return;
           }
@@ -3073,9 +3312,9 @@ export const ProductForm = ({
     });
 
     return order
-      .map((name) => ({ name, values: valuesByName.get(name) ?? [] }))
+      .map((key) => ({ key, name: namesByKey.get(key) ?? key, values: valuesByKey.get(key) ?? [] }))
       .filter((option) => option.values.length > 0);
-  }, [watchedVariants]);
+  }, [resolveVariantOptionDisplayName, resolveVariantOptionKey, watchedVariants]);
 
   const compactVariantRows = watchedVariants
     .map((variant, index) => {
@@ -3083,9 +3322,7 @@ export const ProductForm = ({
       const optionValues = compactVariantOptions
         .map((option) => {
           const entry = attributes.find(
-            (attribute) =>
-              normalizeVariantOptionLabel(attribute.key).toLocaleLowerCase("ru-RU") ===
-              option.name.toLocaleLowerCase("ru-RU"),
+            (attribute) => resolveVariantOptionKey(attribute.key) === option.key,
           );
           const value = Array.isArray(entry?.value)
             ? entry.value.map((item) => String(item)).join(", ")
@@ -3111,11 +3348,16 @@ export const ProductForm = ({
       };
     })
     .filter((variant) => variant.hasContent);
+  const variantOptionPreviewValues = mergeVariantOptionValues(
+    variantOptionDraftValues,
+    parseVariantOptionValues(variantOptionValueDraft),
+  );
 
   const resetVariantOptionDraft = () => {
     setVariantOptionDraftName("");
     setVariantOptionValueDraft("");
     setVariantOptionDraftValues([]);
+    setVariantOptionDraftImages({});
     setVariantOptionEditorOpen(false);
   };
 
@@ -3129,32 +3371,69 @@ export const ProductForm = ({
     return true;
   };
 
+  const removeVariantOptionDraftValue = (value: string) => {
+    const valueKey = normalizeVariantOptionValueKey(value);
+    setVariantOptionDraftValues((current) => current.filter((item) => item !== value));
+    setVariantOptionValueDraft((current) => {
+      const currentValues = parseVariantOptionValues(current);
+      if (!currentValues.some((item) => normalizeVariantOptionValueKey(item) === valueKey)) {
+        return current;
+      }
+      return currentValues
+        .filter((item) => normalizeVariantOptionValueKey(item) !== valueKey)
+        .join(", ");
+    });
+    setVariantOptionDraftImages((current) => {
+      if (!(valueKey in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[valueKey];
+      return next;
+    });
+  };
+
+  const setVariantOptionDraftImageValue = (value: string, imageValue: string) => {
+    const valueKey = normalizeVariantOptionValueKey(value);
+    setVariantOptionDraftImages((current) => {
+      if (imageValue === "__none") {
+        if (!(valueKey in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[valueKey];
+        return next;
+      }
+      return { ...current, [valueKey]: imageValue };
+    });
+  };
+
   const buildVariantOptionSignature = (
     attributes: { key: string; value?: unknown }[] | undefined,
-    optionNames: string[],
+    optionKeys: string[],
   ) => {
-    const optionKeys = new Set(
-      optionNames.map((name) => normalizeVariantOptionLabel(name).toLocaleLowerCase("ru-RU")),
-    );
+    const allowedOptionKeys = new Set(optionKeys);
     return buildAttributeSignature(
       (attributes ?? [])
-        .filter((entry) =>
-          optionKeys.has(normalizeVariantOptionLabel(entry.key).toLocaleLowerCase("ru-RU")),
-        )
+        .filter((entry) => allowedOptionKeys.has(resolveVariantOptionKey(entry.key)))
         .map((entry) => ({
-          key: normalizeVariantOptionLabel(entry.key),
+          key: resolveVariantOptionKey(entry.key),
           value: entry.value,
         })),
     );
   };
 
-  const rebuildCompactVariantsFromOptions = (options: CompactVariantOption[]) => {
+  const rebuildCompactVariantsFromOptions = (
+    options: CompactVariantOption[],
+    imageAssignments?: { optionName: string; valuesByKey: Map<string, string> },
+  ) => {
     const normalizedOptions = options
       .map((option) => ({
-        name: normalizeVariantOptionLabel(option.name),
+        key: resolveVariantOptionKey(option.key || option.name),
+        name: resolveVariantOptionDisplayName(option.key || option.name),
         values: mergeVariantOptionValues([], option.values),
       }))
-      .filter((option) => option.name && option.values.length > 0);
+      .filter((option) => option.key && option.values.length > 0);
 
     if (!normalizedOptions.length) {
       replace([]);
@@ -3163,7 +3442,7 @@ export const ProductForm = ({
 
     const combinations = buildVariantMatrix(
       normalizedOptions.map((option) => ({
-        key: option.name,
+        key: option.key,
         values: option.values,
       })),
     );
@@ -3179,11 +3458,14 @@ export const ProductForm = ({
       return;
     }
 
-    const optionNames = normalizedOptions.map((option) => option.name);
+    const optionKeys = normalizedOptions.map((option) => option.key);
+    const assignedOptionKey = imageAssignments
+      ? resolveVariantOptionKey(imageAssignments.optionName)
+      : "";
     const existingVariants = form.getValues("variants") ?? [];
     const existingBySignature = new Map<string, VariantFormRow>();
     existingVariants.forEach((variant) => {
-      const signature = buildVariantOptionSignature(variant.attributes, optionNames);
+      const signature = buildVariantOptionSignature(variant.attributes, optionKeys);
       if (!existingBySignature.has(signature)) {
         existingBySignature.set(signature, variant);
       }
@@ -3191,14 +3473,31 @@ export const ProductForm = ({
     const usedVariantSkus = collectUsedVariantSkus();
     const nextVariants = combinations.map<VariantFormRow>((combo) => {
       const attributes = normalizedOptions.map((option) => ({
-        key: option.name,
-        value: combo[option.name],
+        key: option.key,
+        value: combo[option.key],
       }));
-      const signature = buildVariantOptionSignature(attributes, optionNames);
+      const signature = buildVariantOptionSignature(attributes, optionKeys);
       const existing = existingBySignature.get(signature);
+      const assignedImageValue = assignedOptionKey
+        ? (normalizedOptions
+            .map((option) => {
+              if (option.key !== assignedOptionKey) {
+                return null;
+              }
+              return imageAssignments?.valuesByKey.get(
+                normalizeVariantOptionValueKey(String(combo[option.key] ?? "")),
+              );
+            })
+            .find((value): value is string => Boolean(value)) ?? null)
+        : null;
+      const assignedImage = assignedImageValue
+        ? variantImageOptionByValue.get(assignedImageValue)
+        : null;
       return {
         id: existing?.id,
-        name: normalizedOptions.map((option) => String(combo[option.name])).join(" / "),
+        imageId: assignedImage ? (assignedImage.imageId ?? null) : (existing?.imageId ?? null),
+        imageUrl: assignedImage ? assignedImage.url : (existing?.imageUrl ?? ""),
+        name: normalizedOptions.map((option) => String(combo[option.key])).join(" / "),
         sku: existing?.sku?.trim() || generateNextVariantSku(usedVariantSkus),
         initialOnHand: existing?.initialOnHand,
         attributes,
@@ -3211,6 +3510,8 @@ export const ProductForm = ({
 
   const handleSaveVariantOption = () => {
     const name = normalizeVariantOptionLabel(variantOptionDraftName);
+    const optionKey = resolveVariantOptionKey(name);
+    const optionDisplayName = resolveVariantOptionDisplayName(name);
     const values = mergeVariantOptionValues(
       variantOptionDraftValues,
       parseVariantOptionValues(variantOptionValueDraft),
@@ -3224,28 +3525,34 @@ export const ProductForm = ({
       return;
     }
 
-    const existingIndex = compactVariantOptions.findIndex(
-      (option) => option.name.toLocaleLowerCase("ru-RU") === name.toLocaleLowerCase("ru-RU"),
-    );
+    const existingIndex = compactVariantOptions.findIndex((option) => option.key === optionKey);
     const nextOptions =
       existingIndex >= 0
         ? compactVariantOptions.map((option, index) =>
             index === existingIndex
-              ? { name: option.name, values: mergeVariantOptionValues(option.values, values) }
+              ? { ...option, values: mergeVariantOptionValues(option.values, values) }
               : option,
           )
-        : [...compactVariantOptions, { name, values }];
+        : [...compactVariantOptions, { key: optionKey, name: optionDisplayName, values }];
 
-    rebuildCompactVariantsFromOptions(nextOptions);
+    const assignedImages = new Map<string, string>();
+    values.forEach((value) => {
+      const valueKey = normalizeVariantOptionValueKey(value);
+      const imageValue = variantOptionDraftImages[valueKey];
+      if (imageValue && variantImageOptionByValue.has(imageValue)) {
+        assignedImages.set(valueKey, imageValue);
+      }
+    });
+
+    rebuildCompactVariantsFromOptions(
+      nextOptions,
+      assignedImages.size ? { optionName: optionKey, valuesByKey: assignedImages } : undefined,
+    );
     resetVariantOptionDraft();
   };
 
-  const handleRemoveVariantOption = (name: string) => {
-    rebuildCompactVariantsFromOptions(
-      compactVariantOptions.filter(
-        (option) => option.name.toLocaleLowerCase("ru-RU") !== name.toLocaleLowerCase("ru-RU"),
-      ),
-    );
+  const handleRemoveVariantOption = (key: string) => {
+    rebuildCompactVariantsFromOptions(compactVariantOptions.filter((option) => option.key !== key));
   };
 
   const pendingImageUploadStatusLabel = (status: PendingImageUploadStatus) => {
@@ -3368,7 +3675,10 @@ export const ProductForm = ({
           type="button"
           variant="secondary"
           className="w-full sm:w-auto"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            pendingVariantImageUploadTargetRef.current = null;
+            fileInputRef.current?.click();
+          }}
           disabled={readOnly || isUploadingImages}
         >
           {isUploadingImages ? (
@@ -3562,7 +3872,7 @@ export const ProductForm = ({
                 </div>
               ) : (
                 <FormControl>
-                  <Input {...field} disabled={readOnly} />
+                  <Input {...field} value={field.value ?? ""} disabled={readOnly} />
                 </FormControl>
               )}
               <FormMessage />
@@ -3765,7 +4075,10 @@ export const ProductForm = ({
             type="button"
             variant="secondary"
             className="w-full sm:w-auto"
-            onClick={() => quickFileInputRef.current?.click()}
+            onClick={() => {
+              pendingVariantImageUploadTargetRef.current = null;
+              quickFileInputRef.current?.click();
+            }}
             disabled={readOnly || isUploadingImages}
           >
             {isUploadingImages ? (
@@ -3813,7 +4126,7 @@ export const ProductForm = ({
               <FormItem>
                 <FormLabel>{t("photoUrl")}</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled={readOnly} />
+                  <Input {...field} value={field.value ?? ""} disabled={readOnly} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -3943,7 +4256,10 @@ export const ProductForm = ({
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => quickFileInputRef.current?.click()}
+          onClick={() => {
+            pendingVariantImageUploadTargetRef.current = null;
+            quickFileInputRef.current?.click();
+          }}
           disabled={readOnly || isUploadingImages}
         >
           {isUploadingImages ? (
@@ -4306,7 +4622,7 @@ export const ProductForm = ({
                     <FormItem>
                       <FormLabel>{t("packName")}</FormLabel>
                       <FormControl>
-                        <Input {...itemField} disabled={readOnly} />
+                        <Input {...itemField} value={itemField.value ?? ""} disabled={readOnly} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -4321,6 +4637,7 @@ export const ProductForm = ({
                       <FormControl>
                         <Input
                           {...itemField}
+                          value={itemField.value ?? ""}
                           type="number"
                           inputMode="numeric"
                           min={1}
@@ -4419,7 +4736,7 @@ export const ProductForm = ({
         <form
           id={formId}
           className="space-y-3 sm:space-y-4"
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
         >
           <TooltipProvider>
             <ProductEditorCard title={t("productInformationTitle")}>
@@ -4430,7 +4747,7 @@ export const ProductForm = ({
                   <FormItem>
                     <FormLabel>{t("name")}</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={readOnly} />
+                      <Input {...field} value={field.value ?? ""} disabled={readOnly} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -4524,6 +4841,7 @@ export const ProductForm = ({
                         <FormControl>
                           <Input
                             {...field}
+                            value={field.value ?? ""}
                             type="number"
                             inputMode="decimal"
                             step="0.01"
@@ -4545,6 +4863,7 @@ export const ProductForm = ({
                       <FormControl>
                         <Input
                           {...field}
+                          value={field.value ?? ""}
                           type="number"
                           inputMode="decimal"
                           step="0.01"
@@ -4571,6 +4890,7 @@ export const ProductForm = ({
                         <FormControl>
                           <Input
                             {...field}
+                            value={field.value ?? ""}
                             type="number"
                             inputMode="numeric"
                             min={0}
@@ -4594,6 +4914,7 @@ export const ProductForm = ({
                       <FormControl>
                         <Input
                           {...field}
+                          value={field.value ?? ""}
                           type="number"
                           inputMode="numeric"
                           min={0}
@@ -4615,7 +4936,7 @@ export const ProductForm = ({
                       <FormItem>
                         <FormLabel>{t("sku")}</FormLabel>
                         <FormControl>
-                          <Input {...field} disabled={readOnly} />
+                          <Input {...field} value={field.value ?? ""} disabled={readOnly} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -4766,6 +5087,7 @@ export const ProductForm = ({
                               <FormControl>
                                 <Input
                                   {...field}
+                                  value={field.value ?? ""}
                                   type="number"
                                   min={1}
                                   step={1}
@@ -4824,7 +5146,7 @@ export const ProductForm = ({
                 <div className="space-y-2">
                   {compactVariantOptions.map((option) => (
                     <div
-                      key={option.name}
+                      key={option.key}
                       className="rounded-md border border-border bg-background p-3"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -4832,7 +5154,7 @@ export const ProductForm = ({
                           <p className="text-sm font-medium text-foreground">{option.name}</p>
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {option.values.map((value) => (
-                              <Badge key={`${option.name}-${value}`} variant="muted">
+                              <Badge key={`${option.key}-${value}`} variant="muted">
                                 {value}
                               </Badge>
                             ))}
@@ -4844,7 +5166,7 @@ export const ProductForm = ({
                             variant="ghost"
                             size="sm"
                             className="shrink-0 text-danger hover:text-danger"
-                            onClick={() => handleRemoveVariantOption(option.name)}
+                            onClick={() => handleRemoveVariantOption(option.key)}
                           >
                             {t("variantOptionDelete")}
                           </Button>
@@ -4898,28 +5220,92 @@ export const ProductForm = ({
                       />
                     </div>
                   </ProductEditorFieldGrid>
-                  <div className="flex min-h-8 flex-wrap gap-1.5">
-                    {variantOptionDraftValues.length ? (
-                      variantOptionDraftValues.map((value) => (
-                        <Badge key={value} variant="muted" className="gap-1 pr-1">
-                          <span>{value}</span>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 shadow-none"
-                            aria-label={t("variantOptionRemoveValue")}
-                            onClick={() =>
-                              setVariantOptionDraftValues((current) =>
-                                current.filter((item) => item !== value),
-                              )
-                            }
-                            disabled={readOnly}
+                  <div className="min-h-8 space-y-2">
+                    {variantOptionPreviewValues.length ? (
+                      variantOptionPreviewValues.map((value) => {
+                        const valueKey = normalizeVariantOptionValueKey(value);
+                        const imageValue = variantOptionDraftImages[valueKey] ?? "__none";
+                        const selectedImageValue = variantImageOptionByValue.has(imageValue)
+                          ? imageValue
+                          : "__none";
+                        return (
+                          <div
+                            key={value}
+                            className="grid gap-2 rounded-md border border-border/70 bg-card p-2 sm:grid-cols-[minmax(0,1fr)_minmax(280px,360px)_32px] sm:items-center"
                           >
-                            <CloseIcon className="h-3 w-3" aria-hidden />
-                          </Button>
-                        </Badge>
-                      ))
+                            <Badge variant="muted" className="min-w-0 justify-start">
+                              <span className="truncate">{value}</span>
+                            </Badge>
+                            <div className="min-w-0">
+                              <Label className="sr-only">{t("variantImage")}</Label>
+                              {hasVariantImageOptions ? (
+                                <Select
+                                  value={selectedImageValue}
+                                  onValueChange={(nextValue) =>
+                                    setVariantOptionDraftImageValue(value, nextValue)
+                                  }
+                                  disabled={readOnly}
+                                >
+                                  <SelectTrigger className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate">
+                                    <SelectValue placeholder={t("variantImageNone")} />
+                                  </SelectTrigger>
+                                  <SelectContent className="min-w-[280px]">
+                                    <SelectItem
+                                      value="__none"
+                                      className="min-h-12 whitespace-nowrap"
+                                    >
+                                      {t("variantImageNone")}
+                                    </SelectItem>
+                                    {variantImageOptions.map((option) => (
+                                      <SelectItem
+                                        key={option.value}
+                                        value={option.value}
+                                        className="min-h-16 whitespace-nowrap"
+                                      >
+                                        <VariantImageOptionPreview
+                                          url={option.url}
+                                          label={option.label}
+                                        />
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  className="h-16 w-full justify-start px-3"
+                                  onClick={() =>
+                                    openVariantImageUpload({ type: "draftValue", valueKey })
+                                  }
+                                  disabled={readOnly || isUploadingImages}
+                                >
+                                  {isUploadingImages ? (
+                                    <Spinner className="h-4 w-4" />
+                                  ) : (
+                                    <ImagePlusIcon className="h-4 w-4" aria-hidden />
+                                  )}
+                                  <span className="min-w-0 truncate">
+                                    {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+                                  </span>
+                                </Button>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 justify-self-end shadow-none"
+                              aria-label={t("variantOptionRemoveValue")}
+                              onClick={() => removeVariantOptionDraftValue(value)}
+                              disabled={readOnly}
+                            >
+                              <CloseIcon className="h-3 w-3" aria-hidden />
+                            </Button>
+                          </div>
+                        );
+                      })
                     ) : (
                       <p className="text-xs text-muted-foreground">
                         {t("variantOptionValuesHint")}
@@ -4966,23 +5352,44 @@ export const ProductForm = ({
               ) : null}
 
               {compactVariantRows.length ? (
-                <div className="space-y-2">
+                <div className="space-y-2" data-variant-visual-anchor>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-foreground">
                       {t("variantGeneratedTitle", { count: compactVariantRows.length })}
                     </p>
+                    {!hasVariantImageOptions && !readOnly ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 shrink-0 px-3 text-xs"
+                        onClick={() => {
+                          const singleVariantRow =
+                            compactVariantRows.length === 1 ? compactVariantRows[0] : null;
+                          openVariantImageUpload(
+                            singleVariantRow
+                              ? { type: "variant", index: singleVariantRow.index }
+                              : undefined,
+                          );
+                        }}
+                        disabled={isUploadingImages}
+                      >
+                        {isUploadingImages ? (
+                          <Spinner className="h-3.5 w-3.5" />
+                        ) : (
+                          <ImagePlusIcon className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+                      </Button>
+                    ) : null}
                   </div>
-                  <div className="overflow-hidden rounded-md border border-border">
+                  <div className="overflow-x-auto rounded-md border border-border">
                     <div
-                      className={`hidden bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid ${
-                        enableSku && canEditInitialStock
-                          ? "sm:grid-cols-[minmax(0,1fr)_160px_120px_40px]"
-                          : enableSku || canEditInitialStock
-                            ? "sm:grid-cols-[minmax(0,1fr)_160px_40px]"
-                            : "sm:grid-cols-[minmax(0,1fr)_40px]"
-                      }`}
+                      className="hidden gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[var(--variant-grid-cols)]"
+                      style={compactVariantGridStyle}
                     >
                       <span>{t("variantTableVariant")}</span>
+                      {showVariantImagePicker ? <span>{t("variantTableImage")}</span> : null}
                       {enableSku ? <span>{t("variantTableSku")}</span> : null}
                       {canEditInitialStock ? <span>{t("variantTableStock")}</span> : null}
                       <span className="sr-only">{tCommon("actions")}</span>
@@ -4990,22 +5397,86 @@ export const ProductForm = ({
                     <div className="divide-y divide-border">
                       {compactVariantRows.map((variant) => {
                         const canDelete = variant.canDelete;
+                        const imageValue = resolveVariantImageValue(
+                          watchedVariants[variant.index] ?? {},
+                        );
+                        const selectedImageValue = variantImageOptionByValue.has(imageValue)
+                          ? imageValue
+                          : "__none";
                         return (
                           <div
                             key={variant.key}
-                            className={`grid gap-2 px-3 py-3 ${
-                              enableSku && canEditInitialStock
-                                ? "sm:grid-cols-[minmax(0,1fr)_160px_120px_40px]"
-                                : enableSku || canEditInitialStock
-                                  ? "sm:grid-cols-[minmax(0,1fr)_160px_40px]"
-                                  : "sm:grid-cols-[minmax(0,1fr)_40px]"
-                            } sm:items-start`}
+                            className="grid gap-2 px-3 py-3 sm:grid-cols-[var(--variant-grid-cols)] sm:items-center"
+                            style={compactVariantGridStyle}
                           >
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-foreground">
                                 {variant.name}
                               </p>
                             </div>
+                            {showVariantImagePicker ? (
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground sm:sr-only">
+                                  {t("variantTableImage")}
+                                </Label>
+                                {hasVariantImageOptions ? (
+                                  <Select
+                                    value={selectedImageValue}
+                                    onValueChange={(value) =>
+                                      setVariantImageValue(variant.index, value)
+                                    }
+                                    disabled={readOnly}
+                                  >
+                                    <SelectTrigger className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate">
+                                      <SelectValue placeholder={t("variantImageNone")} />
+                                    </SelectTrigger>
+                                    <SelectContent className="min-w-[280px]">
+                                      <SelectItem
+                                        value="__none"
+                                        className="min-h-12 whitespace-nowrap"
+                                      >
+                                        {t("variantImageNone")}
+                                      </SelectItem>
+                                      {variantImageOptions.map((option) => (
+                                        <SelectItem
+                                          key={option.value}
+                                          value={option.value}
+                                          className="min-h-16 whitespace-nowrap"
+                                        >
+                                          <VariantImageOptionPreview
+                                            url={option.url}
+                                            label={option.label}
+                                          />
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-16 w-full justify-start px-3"
+                                    onClick={() =>
+                                      openVariantImageUpload({
+                                        type: "variant",
+                                        index: variant.index,
+                                      })
+                                    }
+                                    disabled={readOnly || isUploadingImages}
+                                  >
+                                    {isUploadingImages ? (
+                                      <Spinner className="h-4 w-4" />
+                                    ) : (
+                                      <ImagePlusIcon className="h-4 w-4" aria-hidden />
+                                    )}
+                                    <span className="min-w-0 truncate">
+                                      {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+                                    </span>
+                                  </Button>
+                                )}
+                              </div>
+                            ) : null}
                             {enableSku ? (
                               <FormField
                                 control={form.control}
@@ -5016,7 +5487,12 @@ export const ProductForm = ({
                                       {t("variantTableSku")}
                                     </FormLabel>
                                     <FormControl>
-                                      <Input {...field} className="h-9" disabled={readOnly} />
+                                      <Input
+                                        {...field}
+                                        value={field.value ?? ""}
+                                        className="h-9"
+                                        disabled={readOnly}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -5035,6 +5511,7 @@ export const ProductForm = ({
                                     <FormControl>
                                       <Input
                                         {...field}
+                                        value={field.value ?? ""}
                                         type="number"
                                         inputMode="numeric"
                                         min={0}
@@ -5339,7 +5816,7 @@ export const ProductForm = ({
       <form
         id={formId}
         className="space-y-6 pb-28 md:pb-0"
-        onSubmit={form.handleSubmit(handleSubmit)}
+        onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
       >
         <TooltipProvider>
           <Card>
@@ -5394,7 +5871,7 @@ export const ProductForm = ({
                           <FormItem>
                             <FormLabel>{t("sku")}</FormLabel>
                             <FormControl>
-                              <Input {...field} disabled={readOnly} />
+                              <Input {...field} value={field.value ?? ""} disabled={readOnly} />
                             </FormControl>
                             {!productId && !compactCreate ? (
                               <FormDescription>{t("skuAutoGeneratedHint")}</FormDescription>
@@ -5411,7 +5888,7 @@ export const ProductForm = ({
                         <FormItem>
                           <FormLabel>{t("name")}</FormLabel>
                           <FormControl>
-                            <Input {...field} disabled={readOnly} />
+                            <Input {...field} value={field.value ?? ""} disabled={readOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -5649,6 +6126,7 @@ export const ProductForm = ({
                             <FormControl>
                               <Input
                                 {...field}
+                                value={field.value ?? ""}
                                 type="number"
                                 inputMode="decimal"
                                 step="0.01"
@@ -5673,6 +6151,7 @@ export const ProductForm = ({
                                 <FormControl>
                                   <Input
                                     {...field}
+                                    value={field.value ?? ""}
                                     type="number"
                                     inputMode="numeric"
                                     min={0}
@@ -5697,6 +6176,7 @@ export const ProductForm = ({
                               <FormControl>
                                 <Input
                                   {...field}
+                                  value={field.value ?? ""}
                                   type="number"
                                   inputMode="numeric"
                                   min={0}
@@ -5720,6 +6200,7 @@ export const ProductForm = ({
                               <FormControl>
                                 <Input
                                   {...field}
+                                  value={field.value ?? ""}
                                   type="number"
                                   inputMode="decimal"
                                   step="0.01"
@@ -5817,6 +6298,7 @@ export const ProductForm = ({
                             <FormControl>
                               <Input
                                 {...field}
+                                value={field.value ?? ""}
                                 type="number"
                                 inputMode="decimal"
                                 step="0.01"
@@ -6198,7 +6680,11 @@ export const ProductForm = ({
                                   <FormItem>
                                     <FormLabel>{t("packName")}</FormLabel>
                                     <FormControl>
-                                      <Input {...itemField} disabled={readOnly} />
+                                      <Input
+                                        {...itemField}
+                                        value={itemField.value ?? ""}
+                                        disabled={readOnly}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -6213,6 +6699,7 @@ export const ProductForm = ({
                                     <FormControl>
                                       <Input
                                         {...itemField}
+                                        value={itemField.value ?? ""}
                                         type="number"
                                         inputMode="numeric"
                                         min={1}
@@ -6366,6 +6853,10 @@ export const ProductForm = ({
                             !variantAttributes.some((entry) => entry.key === definition.key),
                         );
                         const selectedAttributeKey = attributeDrafts[field.id] ?? "";
+                        const imageValue = resolveVariantImageValue(watchedVariants[index] ?? {});
+                        const selectedImageValue = variantImageOptionByValue.has(imageValue)
+                          ? imageValue
+                          : "__none";
                         return (
                           <div
                             key={field.id}
@@ -6379,7 +6870,11 @@ export const ProductForm = ({
                                   <FormItem>
                                     <FormLabel>{t("variantName")}</FormLabel>
                                     <FormControl>
-                                      <Input {...itemField} disabled={readOnly} />
+                                      <Input
+                                        {...itemField}
+                                        value={itemField.value ?? ""}
+                                        disabled={readOnly}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -6393,7 +6888,11 @@ export const ProductForm = ({
                                     <FormItem>
                                       <FormLabel>{t("variantSku")}</FormLabel>
                                       <FormControl>
-                                        <Input {...itemField} disabled={readOnly} />
+                                        <Input
+                                          {...itemField}
+                                          value={itemField.value ?? ""}
+                                          disabled={readOnly}
+                                        />
                                       </FormControl>
                                       <FormMessage />
                                     </FormItem>
@@ -6410,6 +6909,7 @@ export const ProductForm = ({
                                       <FormControl>
                                         <Input
                                           {...itemField}
+                                          value={itemField.value ?? ""}
                                           type="number"
                                           inputMode="numeric"
                                           min={0}
@@ -6423,6 +6923,61 @@ export const ProductForm = ({
                                     </FormItem>
                                   )}
                                 />
+                              ) : null}
+                              {showVariantImagePicker ? (
+                                <FormItem>
+                                  <FormLabel>{t("variantImage")}</FormLabel>
+                                  {hasVariantImageOptions ? (
+                                    <Select
+                                      value={selectedImageValue}
+                                      onValueChange={(value) => setVariantImageValue(index, value)}
+                                      disabled={readOnly}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate">
+                                          <SelectValue placeholder={t("variantImageNone")} />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent className="min-w-[280px]">
+                                        <SelectItem
+                                          value="__none"
+                                          className="min-h-12 whitespace-nowrap"
+                                        >
+                                          {t("variantImageNone")}
+                                        </SelectItem>
+                                        {variantImageOptions.map((option) => (
+                                          <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                            className="min-h-16 whitespace-nowrap"
+                                          >
+                                            <VariantImageOptionPreview
+                                              url={option.url}
+                                              label={option.label}
+                                            />
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      className="h-16 w-full justify-start"
+                                      onClick={() =>
+                                        openVariantImageUpload({ type: "variant", index })
+                                      }
+                                      disabled={readOnly || isUploadingImages}
+                                    >
+                                      {isUploadingImages ? (
+                                        <Spinner className="h-4 w-4" />
+                                      ) : (
+                                        <ImagePlusIcon className="h-4 w-4" aria-hidden />
+                                      )}
+                                      {isUploadingImages ? tCommon("loading") : t("imagesAdd")}
+                                    </Button>
+                                  )}
+                                </FormItem>
                               ) : null}
                             </FormGrid>
 

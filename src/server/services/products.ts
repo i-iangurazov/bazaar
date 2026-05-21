@@ -74,6 +74,8 @@ export type CreateProductInput = {
   }[];
   variants?: {
     id?: string;
+    imageId?: string | null;
+    imageUrl?: string | null;
     name?: string | null;
     sku?: string | null;
     attributes?: Record<string, unknown>;
@@ -1154,6 +1156,7 @@ const syncBundleComponents = async (
 type NormalizedImage = {
   id?: string;
   url: string;
+  sourceUrl?: string;
   position: number;
 };
 
@@ -1163,8 +1166,9 @@ const normalizeImages = (images?: CreateProductInput["images"]): NormalizedImage
   }
   const cleaned = images
     .map((image, index) => ({
-      id: image.id,
+      id: image.id?.trim() || undefined,
       url: image.url.trim(),
+      sourceUrl: image.url.trim(),
       position:
         typeof image.position === "number" && Number.isFinite(image.position)
           ? Math.trunc(image.position)
@@ -1174,6 +1178,46 @@ const normalizeImages = (images?: CreateProductInput["images"]): NormalizedImage
     .sort((a, b) => a.position - b.position)
     .map((image, index) => ({ ...image, position: index }));
   return cleaned;
+};
+
+const withStableProductImageIds = (
+  images: NormalizedImage[],
+  options?: { preserveIds?: Set<string> },
+) =>
+  images.map((image) => ({
+    ...image,
+    id: image.id && options?.preserveIds?.has(image.id) ? image.id : randomUUID(),
+  }));
+
+const buildProductImageReferenceMap = (images: NormalizedImage[]) => {
+  const byId = new Map<string, string>();
+  const byUrl = new Map<string, string>();
+  for (const image of images) {
+    if (!image.id) {
+      continue;
+    }
+    byId.set(image.id, image.id);
+    byUrl.set(image.url, image.id);
+    if (image.sourceUrl) {
+      byUrl.set(image.sourceUrl, image.id);
+    }
+  }
+  return { byId, byUrl };
+};
+
+const resolveVariantImageId = (
+  variant: { imageId?: string | null; imageUrl?: string | null },
+  imageReferences: ReturnType<typeof buildProductImageReferenceMap>,
+) => {
+  const imageId = variant.imageId?.trim();
+  if (imageId && imageReferences.byId.has(imageId)) {
+    return imageId;
+  }
+  const imageUrl = variant.imageUrl?.trim();
+  if (!imageUrl) {
+    return null;
+  }
+  return imageReferences.byUrl.get(imageUrl) ?? null;
 };
 
 const ensurePackBarcodesAvailable = async (
@@ -1337,6 +1381,7 @@ const createVariants = async (
   variants: CreateProductInput["variants"],
   organizationId: string,
   definitions: AttributeDefinitionRow[],
+  imageReferences: ReturnType<typeof buildProductImageReferenceMap>,
 ) => {
   if (!variants?.length) {
     return [];
@@ -1349,6 +1394,7 @@ const createVariants = async (
       const created = await tx.productVariant.create({
         data: {
           productId,
+          imageId: resolveVariantImageId(variant, imageReferences),
           name: variant.name ?? null,
           sku: variant.sku ?? null,
           attributes: toJson(variant.attributes ?? {}),
@@ -1653,6 +1699,7 @@ const syncProductImages = async (
   }
   await tx.productImage.createMany({
     data: normalizedImages.map((image) => ({
+      id: image.id,
       organizationId,
       productId,
       url: image.url,
@@ -1681,7 +1728,7 @@ const resolveIncomingProductImages = async (input: {
     if (!resolved.url) {
       continue;
     }
-    resolvedImages.push({ ...image, url: resolved.url });
+    resolvedImages.push({ ...image, sourceUrl: image.sourceUrl ?? image.url, url: resolved.url });
   }
 
   const explicitPhotoResolved =
@@ -1745,7 +1792,8 @@ export const createProduct = async (input: CreateProductInput) => {
           .map((pack) => pack.packBarcode)
           .filter(Boolean) as string[];
         await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
-        const normalizedImages = resolvedMedia.images;
+        const normalizedImages = withStableProductImageIds(resolvedMedia.images);
+        const imageReferences = buildProductImageReferenceMap(normalizedImages);
         const normalizedCategories = resolveNormalizedProductCategories({
           category: input.category,
           categories: input.categories,
@@ -1808,6 +1856,7 @@ export const createProduct = async (input: CreateProductInput) => {
         if (normalizedImages.length) {
           await tx.productImage.createMany({
             data: normalizedImages.map((image) => ({
+              id: image.id,
               organizationId: input.organizationId,
               productId: product.id,
               url: image.url,
@@ -1822,6 +1871,7 @@ export const createProduct = async (input: CreateProductInput) => {
           input.variants,
           input.organizationId,
           attributeDefinitions,
+          imageReferences,
         );
         if (normalizedBundleComponents.length) {
           await syncBundleComponents(tx, {
@@ -2053,6 +2103,8 @@ export type UpdateProductInput = {
   packs?: CreateProductInput["packs"];
   variants?: {
     id?: string;
+    imageId?: string | null;
+    imageUrl?: string | null;
     name?: string | null;
     sku?: string | null;
     attributes?: Record<string, unknown>;
@@ -2100,7 +2152,24 @@ export const updateProduct = async (input: UpdateProductInput) => {
       }
     }
 
-    const normalizedImages = input.images ? resolvedMedia.images : undefined;
+    const existingImages = await tx.productImage.findMany({
+      where: { productId: input.productId },
+      select: { id: true, url: true, position: true },
+      orderBy: { position: "asc" },
+    });
+    const existingImageIds = new Set(existingImages.map((image) => image.id));
+    const normalizedImages = input.images
+      ? withStableProductImageIds(resolvedMedia.images, { preserveIds: existingImageIds })
+      : undefined;
+    const imageReferences = buildProductImageReferenceMap(
+      normalizedImages ??
+        existingImages.map((image) => ({
+          id: image.id,
+          url: image.url,
+          sourceUrl: image.url,
+          position: image.position,
+        })),
+    );
     const normalizedCategories = resolveNormalizedProductCategories({
       category: input.category,
       categories: input.categories,
@@ -2202,6 +2271,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
           await tx.productVariant.updateMany({
             where: { id: variant.id, productId: input.productId },
             data: {
+              imageId: resolveVariantImageId(variant, imageReferences),
               name: variant.name ?? null,
               sku: variant.sku ?? null,
               attributes: toJson(variant.attributes ?? {}),
@@ -2225,6 +2295,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
           const createdVariant = await tx.productVariant.create({
             data: {
               productId: input.productId,
+              imageId: resolveVariantImageId(variant, imageReferences),
               name: variant.name ?? null,
               sku: variant.sku ?? null,
               attributes: toJson(variant.attributes ?? {}),
@@ -2346,6 +2417,7 @@ export const duplicateProduct = async (input: {
           where: { isActive: true },
           select: {
             id: true,
+            imageId: true,
             name: true,
             sku: true,
             attributes: true,
@@ -2432,14 +2504,21 @@ export const duplicateProduct = async (input: {
       },
     });
 
+    const copiedImageIdBySourceId = new Map<string, string>();
     if (copyImages && source.images.length) {
-      await tx.productImage.createMany({
-        data: source.images.map((image) => ({
+      const copiedImages = source.images.map((image) => {
+        const nextId = randomUUID();
+        copiedImageIdBySourceId.set(image.id, nextId);
+        return {
+          id: nextId,
           organizationId: input.organizationId,
           productId: duplicate.id,
           url: image.url,
           position: image.position,
-        })),
+        };
+      });
+      await tx.productImage.createMany({
+        data: copiedImages,
       });
     }
 
@@ -2463,6 +2542,7 @@ export const duplicateProduct = async (input: {
         tx,
         duplicate.id,
         source.variants.map((variant) => ({
+          imageId: copyImages ? copiedImageIdBySourceId.get(variant.imageId ?? "") : null,
           name: variant.name,
           sku: null,
           attributes:
@@ -2472,6 +2552,14 @@ export const duplicateProduct = async (input: {
         })),
         input.organizationId,
         attributeDefinitions,
+        buildProductImageReferenceMap(
+          source.images.flatMap((image) => {
+            const copiedId = copiedImageIdBySourceId.get(image.id);
+            return copiedId
+              ? [{ id: copiedId, url: image.url, sourceUrl: image.url, position: image.position }]
+              : [];
+          }),
+        ),
       );
     }
 

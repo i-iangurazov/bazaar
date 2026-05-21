@@ -142,6 +142,38 @@ describeDb("products", () => {
     expect(movements.map((movement) => movement.qtyDelta)).toEqual([2, 5]);
   });
 
+  it("links created variants to uploaded product images by submitted image URL", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+    const imageUrl = `/uploads/product-images/${org.id}/variant-white.webp`;
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-variant-image-create",
+      sku: "VARIANT-IMAGE-1",
+      name: "Variant Image Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      images: [{ url: imageUrl, position: 0 }],
+      variants: [
+        {
+          name: "White",
+          sku: "VARIANT-IMAGE-1-WHITE",
+          imageId: "client-temp-image-id",
+          imageUrl,
+          attributes: { color: "White" },
+        },
+      ],
+    });
+
+    const [image, variant] = await Promise.all([
+      prisma.productImage.findFirstOrThrow({ where: { productId: product.id } }),
+      prisma.productVariant.findFirstOrThrow({ where: { productId: product.id } }),
+    ]);
+
+    expect(variant.imageId).toBe(image.id);
+  });
+
   it("duplicates products with selectable photos, fresh SKU, copied store price, and zero stock", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
@@ -215,9 +247,9 @@ describeDb("products", () => {
     expect(noPhotoProduct.inventorySnapshots.find((row) => row.storeId === store.id)?.onHand).toBe(
       0,
     );
-    expect(noPhotoProduct.storePrices.find((row) => row.storeId === store.id)?.priceKgs.toNumber()).toBe(
-      1234,
-    );
+    expect(
+      noPhotoProduct.storePrices.find((row) => row.storeId === store.id)?.priceKgs.toNumber(),
+    ).toBe(1234);
     expect(noPhotoProduct.storeProducts.find((row) => row.storeId === store.id)?.isActive).toBe(
       true,
     );

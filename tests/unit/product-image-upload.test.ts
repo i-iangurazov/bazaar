@@ -223,7 +223,7 @@ describe("product image upload preprocessing", () => {
 
   it("requests direct upload targets with normalized file metadata", async () => {
     const response = new Response(JSON.stringify({ message: "directUploadUnavailable" }), {
-      status: 409,
+      status: 200,
     });
     const fetchMock = vi.fn().mockResolvedValue(response);
     const fetchImpl = fetchMock as unknown as typeof fetch;

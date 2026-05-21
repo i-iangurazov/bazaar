@@ -65,7 +65,7 @@ export const POST = async (request: Request) => {
     });
 
     if (!target) {
-      return Response.json({ message: "directUploadUnavailable" }, { status: 409 });
+      return Response.json({ message: "directUploadUnavailable" }, { status: 200 });
     }
 
     return Response.json(target, { status: 200 });

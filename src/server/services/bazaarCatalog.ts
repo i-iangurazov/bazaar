@@ -192,7 +192,9 @@ export const listBazaarCatalogStores = async (organizationId: string, storeIds?:
     prisma.store.findMany({
       where: {
         organizationId,
-        ...(storeIds ? { id: { in: storeIds.length ? storeIds : ["__no_accessible_store__"] } } : {}),
+        ...(storeIds
+          ? { id: { in: storeIds.length ? storeIds : ["__no_accessible_store__"] } }
+          : {}),
       },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
@@ -227,7 +229,11 @@ export const listBazaarCatalogStores = async (organizationId: string, storeIds?:
   });
 };
 
-const ensureProductAccess = async (organizationId: string, storeId: string, productIds: string[]) => {
+const ensureProductAccess = async (
+  organizationId: string,
+  storeId: string,
+  productIds: string[],
+) => {
   const uniqueIds = Array.from(new Set(productIds.map((id) => id.trim()).filter(Boolean)));
   if (!uniqueIds.length) {
     return [];
@@ -707,6 +713,7 @@ type PublicCatalogPayload = {
       id: string;
       name: string;
       priceKgs: number;
+      imageUrl: string | null;
     }>;
   }>;
 };
@@ -759,11 +766,11 @@ export const getPublicBazaarCatalog = async (
     where: {
       organizationId: catalog.organizationId,
       isDeleted: false,
-	      hiddenInBazaarCatalogs: {
-	        none: { storeId: catalog.storeId },
-	      },
-	      storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
-	    },
+      hiddenInBazaarCatalogs: {
+        none: { storeId: catalog.storeId },
+      },
+      storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+    },
     select: {
       id: true,
       name: true,
@@ -775,6 +782,9 @@ export const getPublicBazaarCatalog = async (
         where: { isActive: true },
         select: {
           id: true,
+          image: {
+            select: { url: true },
+          },
           name: true,
         },
         orderBy: { name: "asc" },
@@ -853,6 +863,7 @@ export const getPublicBazaarCatalog = async (
         id: variant.id,
         name: normalizeOptionalText(variant.name) ?? variant.id.slice(0, 8),
         priceKgs: roundCatalogPrice(variantPrice, currencyCode, currencyRateKgsPerUnit),
+        imageUrl: sanitizeImageUrl(variant.image?.url),
       };
     });
 
@@ -970,11 +981,11 @@ export const createCatalogCheckoutOrder = async (input: {
           organizationId: catalog.organizationId,
           isDeleted: false,
           id: { in: productIds },
-	          hiddenInBazaarCatalogs: {
-	            none: { storeId: catalog.storeId },
-	          },
-	          storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
-	        },
+          hiddenInBazaarCatalogs: {
+            none: { storeId: catalog.storeId },
+          },
+          storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+        },
         select: {
           id: true,
           basePriceKgs: true,

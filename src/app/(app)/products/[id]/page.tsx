@@ -518,6 +518,9 @@ const ProductDetailPage = () => {
       })),
       variants: productQuery.data.variants.map((variant) => ({
         id: variant.id,
+        imageId: variant.imageId ?? variant.image?.id ?? null,
+        imageUrl: variant.image?.url ?? "",
+        image: variant.image ?? null,
         name: variant.name ?? "",
         sku: variant.sku ?? "",
         attributes: (variant.attributes as Record<string, unknown>) ?? {},

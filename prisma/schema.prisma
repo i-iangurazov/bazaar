@@ -1137,8 +1137,9 @@ model ProductImage {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  product      Product      @relation(fields: [productId], references: [id])
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  product      Product          @relation(fields: [productId], references: [id])
+  variants     ProductVariant[]
 
   @@index([organizationId])
   @@index([productId, position])
@@ -1225,6 +1226,7 @@ model ProductPack {
 model ProductVariant {
   id         String   @id @default(cuid())
   productId  String
+  imageId    String?
   name       String?
   sku        String?
   attributes Json
@@ -1233,6 +1235,7 @@ model ProductVariant {
   updatedAt  DateTime @updatedAt
 
   product            Product                  @relation(fields: [productId], references: [id])
+  image              ProductImage?            @relation(fields: [imageId], references: [id], onDelete: SetNull)
   inventorySnapshots InventorySnapshot[]
   stockMovements     StockMovement[]
   purchaseOrderLines PurchaseOrderLine[]
@@ -1246,6 +1249,7 @@ model ProductVariant {
   saleReturnLines    SaleReturnLine[]
 
   @@index([productId])
+  @@index([imageId])
   @@index([sku])
 }
 

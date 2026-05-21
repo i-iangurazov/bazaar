@@ -7,18 +7,18 @@ const {
   mockUploadProductImageBuffer,
   prisma,
 } = vi.hoisted(() => ({
-    mockCreateProductImageDirectUploadTarget: vi.fn(),
-    mockGetServerAuthToken: vi.fn(),
-    mockRecordFirstEvent: vi.fn(),
-    mockUploadProductImageBuffer: vi.fn(),
-    prisma: {
-      organization: { findUnique: vi.fn() },
-      store: { findUnique: vi.fn() },
-      product: { findMany: vi.fn(), findUnique: vi.fn() },
-      storePrice: { findMany: vi.fn() },
-      storePrinterSettings: { upsert: vi.fn() },
-    },
-  }));
+  mockCreateProductImageDirectUploadTarget: vi.fn(),
+  mockGetServerAuthToken: vi.fn(),
+  mockRecordFirstEvent: vi.fn(),
+  mockUploadProductImageBuffer: vi.fn(),
+  prisma: {
+    organization: { findUnique: vi.fn() },
+    store: { findUnique: vi.fn() },
+    product: { findMany: vi.fn(), findUnique: vi.fn() },
+    storePrice: { findMany: vi.fn() },
+    storePrinterSettings: { upsert: vi.fn() },
+  },
+}));
 
 vi.mock("@/server/auth/token", () => ({
   getServerAuthToken: () => mockGetServerAuthToken(),
@@ -512,7 +512,7 @@ describe("product image direct upload target route", () => {
       }),
     );
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       message: "directUploadUnavailable",
     });

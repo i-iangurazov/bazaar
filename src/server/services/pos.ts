@@ -1985,7 +1985,13 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
               baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
             },
           },
-          variant: { select: { id: true, name: true } },
+          variant: {
+            select: {
+              id: true,
+              name: true,
+              image: { select: { url: true } },
+            },
+          },
           markingCodeCaptures: {
             where: { status: MarkingCodeStatus.CAPTURED },
             select: { id: true, code: true, status: true, capturedAt: true },
@@ -2022,7 +2028,10 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
         product: {
           ...product,
           primaryImage:
-            sanitizeListImageUrl(images[0]?.url) ?? sanitizeListImageUrl(photoUrl) ?? null,
+            sanitizeListImageUrl(line.variant?.image?.url) ??
+            sanitizeListImageUrl(images[0]?.url) ??
+            sanitizeListImageUrl(photoUrl) ??
+            null,
         },
         unitPriceKgs: toMoney(line.unitPriceKgs),
         lineTotalKgs: toMoney(line.lineTotalKgs),
