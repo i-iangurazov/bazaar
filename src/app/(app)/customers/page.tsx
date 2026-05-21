@@ -113,6 +113,7 @@ const CustomerDatabasePage = () => {
     onSuccess: async () => {
       setFormOpen(false);
       setForm(emptyForm);
+      setPage(1);
       await invalidateCustomers();
       toast({ variant: "success", description: t("messages.created") });
     },
@@ -349,9 +350,7 @@ const CustomerDatabasePage = () => {
 
       {!storesQuery.isLoading && !stores.length ? (
         <Card>
-          <CardContent className="py-10 text-sm text-muted-foreground">
-            {t("noStores")}
-          </CardContent>
+          <CardContent className="py-10 text-sm text-muted-foreground">{t("noStores")}</CardContent>
         </Card>
       ) : null}
 
@@ -398,12 +397,18 @@ const CustomerDatabasePage = () => {
                       <TableCell className="font-medium">{customer.name}</TableCell>
                       <TableCell>{customer.email ?? "-"}</TableCell>
                       <TableCell>{customer.phone ?? "-"}</TableCell>
-                      <TableCell className="max-w-[260px] truncate">{customer.address ?? "-"}</TableCell>
+                      <TableCell className="max-w-[260px] truncate">
+                        {customer.address ?? "-"}
+                      </TableCell>
                       <TableCell>{renderSource(customer.source)}</TableCell>
                       <TableCell>{formatDateTime(customer.createdAt, locale)}</TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-2">
-                          <Button type="button" variant="secondary" onClick={() => openEdit(customer)}>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => openEdit(customer)}
+                          >
                             {tCommon("edit")}
                           </Button>
                           <Button
@@ -424,7 +429,10 @@ const CustomerDatabasePage = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell
+                      colSpan={7}
+                      className="py-10 text-center text-sm text-muted-foreground"
+                    >
                       {customersQuery.isLoading ? tCommon("loading") : t("empty")}
                     </TableCell>
                   </TableRow>
@@ -526,9 +534,7 @@ const CustomerDatabasePage = () => {
         mobileSheet
       >
         {customerDetailQuery.isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            {tCommon("loading")}
-          </div>
+          <div className="py-8 text-center text-sm text-muted-foreground">{tCommon("loading")}</div>
         ) : customerDetailQuery.error ? (
           <div className="border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
             {translateError(tErrors, customerDetailQuery.error)}
@@ -648,7 +654,9 @@ const CustomerDatabasePage = () => {
                 id="customer-email"
                 type="email"
                 value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, email: event.target.value }))
+                }
               />
             </div>
             <div>
@@ -656,7 +664,9 @@ const CustomerDatabasePage = () => {
               <Input
                 id="customer-phone"
                 value={form.phone}
-                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, phone: event.target.value }))
+                }
               />
             </div>
           </div>
@@ -665,7 +675,9 @@ const CustomerDatabasePage = () => {
             <Textarea
               id="customer-address"
               value={form.address}
-              onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, address: event.target.value }))
+              }
               rows={3}
             />
           </div>

@@ -68,6 +68,19 @@ describe("index page source layout", () => {
     );
     expect(detailSource).toContain("const productActions = canManageProducts ? (");
     expect(detailSource).toContain("{canManageProducts ? (\n        <ProductEditorSaveBar");
+    expect(createSource).toContain(
+      "const [productFormDirty, setProductFormDirty] = useState(false);",
+    );
+    expect(createSource).toContain('t("saveBarNewProduct")');
+    expect(createSource).toContain('t("saveBarUnsavedProduct")');
+    expect(createSource).toContain("onDirtyChange={setProductFormDirty}");
+    expect(detailSource).toContain(
+      "const productEditorDirty = productFormDirty || basePriceDraftDirty;",
+    );
+    expect(detailSource).toContain('t("saveBarSaved")');
+    expect(detailSource).toContain('t("saveBarUnsavedChanges")');
+    expect(detailSource).toContain("onDirtyChange={setProductFormDirty}");
+    expect(detailSource).toContain("savedRevision={productFormSavedRevision}");
     expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
 

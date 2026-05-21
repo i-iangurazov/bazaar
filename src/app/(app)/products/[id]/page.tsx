@@ -132,6 +132,8 @@ const ProductDetailPage = () => {
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [storeOnHandDrafts, setStoreOnHandDrafts] = useState<Record<string, string>>({});
   const [variantOnHandDrafts, setVariantOnHandDrafts] = useState<Record<string, string>>({});
+  const [productFormDirty, setProductFormDirty] = useState(false);
+  const [productFormSavedRevision, setProductFormSavedRevision] = useState(0);
   const [selectedComponent, setSelectedComponent] = useState<{
     id: string;
     name: string;
@@ -283,6 +285,8 @@ const ProductDetailPage = () => {
         trpcUtils.products.bootstrap.invalidate(),
         trpcUtils.products.list.invalidate(),
       ]);
+      setProductFormSavedRevision((revision) => revision + 1);
+      setProductFormDirty(false);
       toast({ variant: "success", description: t("saveSuccess") });
     },
     onError: (error) => {
@@ -609,6 +613,34 @@ const ProductDetailPage = () => {
       : basePriceFallbackCandidate
         ? t("storesCount", { count: basePriceFallbackCandidate.matchingStoreCount })
         : "";
+  const basePriceDraftDirty = useMemo(() => {
+    const raw = basePriceDraft.trim();
+    const nextValue = raw.length
+      ? (() => {
+          const parsed = parseDraftMoney(raw);
+          return parsed === null ? Number.NaN : convertSelectedMoneyToKgs(parsed);
+        })()
+      : currentBasePrice === null
+        ? (basePriceFallbackCandidate?.priceKgs ?? null)
+        : null;
+
+    if (Number.isNaN(nextValue)) {
+      return true;
+    }
+
+    if (currentBasePrice === null || nextValue === null) {
+      return currentBasePrice !== nextValue;
+    }
+
+    return Math.abs(currentBasePrice - nextValue) >= 0.01;
+  }, [
+    basePriceDraft,
+    basePriceFallbackCandidate?.priceKgs,
+    convertSelectedMoneyToKgs,
+    currentBasePrice,
+    parseDraftMoney,
+  ]);
+  const productEditorDirty = productFormDirty || basePriceDraftDirty;
   const previewImageUrl = productQuery.data?.images[0]?.url ?? productQuery.data?.photoUrl ?? null;
   const markupPct =
     avgCost && avgCost > 0 && effectivePrice !== null
@@ -1153,7 +1185,13 @@ const ProductDetailPage = () => {
 
       {canManageProducts ? (
         <ProductEditorSaveBar
-          label={t("saveBarUnsaved")}
+          label={
+            updateMutation.isLoading
+              ? t("saveBarSaving")
+              : productEditorDirty
+                ? t("saveBarUnsavedChanges")
+                : t("saveBarSaved")
+          }
           actions={
             <Button
               type="submit"
@@ -1188,6 +1226,8 @@ const ProductDetailPage = () => {
               }
               attributeDefinitions={attributesQuery.data ?? []}
               units={unitsQuery.data ?? []}
+              onDirtyChange={setProductFormDirty}
+              savedRevision={productFormSavedRevision}
               isSubmitting={updateMutation.isLoading}
               readOnly={!canManageProducts}
               productId={productId}

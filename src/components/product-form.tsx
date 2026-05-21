@@ -530,6 +530,8 @@ export const ProductForm = ({
   enableBarcode = true,
   enableSimilarProductCheck = true,
   categoryStoreId,
+  onDirtyChange,
+  savedRevision,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -550,6 +552,8 @@ export const ProductForm = ({
   enableBarcode?: boolean;
   enableSimilarProductCheck?: boolean;
   categoryStoreId?: string | null;
+  onDirtyChange?: (isDirty: boolean) => void;
+  savedRevision?: number;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -828,6 +832,22 @@ export const ProductForm = ({
         })) ?? [],
     },
   });
+  const formIsDirty = form.formState.isDirty;
+  const savedRevisionRef = useRef(savedRevision);
+
+  useEffect(() => {
+    onDirtyChange?.(formIsDirty);
+  }, [formIsDirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (savedRevision === undefined || savedRevisionRef.current === savedRevision) {
+      return;
+    }
+
+    savedRevisionRef.current = savedRevision;
+    form.reset(form.getValues());
+    onDirtyChange?.(false);
+  }, [form, onDirtyChange, savedRevision]);
 
   useEffect(() => {
     if (!form.getValues("baseUnitId") && unitOptions.length) {

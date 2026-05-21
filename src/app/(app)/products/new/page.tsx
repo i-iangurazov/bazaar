@@ -72,6 +72,7 @@ const NewProductPage = () => {
     [requestedStoreId, storeOptions],
   );
   const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [productFormDirty, setProductFormDirty] = useState(false);
 
   useEffect(() => {
     if (!storeOptions.length) {
@@ -193,7 +194,13 @@ const NewProductPage = () => {
         title={pageTitle}
       />
       <ProductEditorSaveBar
-        label={t("saveBarUnsaved")}
+        label={
+          createMutation.isLoading
+            ? t("saveBarSaving")
+            : productFormDirty
+              ? t("saveBarUnsavedProduct")
+              : t("saveBarNewProduct")
+        }
         actions={
           <Button
             type="submit"
@@ -244,6 +251,7 @@ const NewProductPage = () => {
               }}
               attributeDefinitions={attributesQuery.data ?? []}
               units={unitsQuery.data ?? []}
+              onDirtyChange={setProductFormDirty}
               onSubmit={(values) =>
                 createMutation.mutate({
                   ...values,

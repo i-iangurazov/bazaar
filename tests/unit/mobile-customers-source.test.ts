@@ -13,11 +13,11 @@ describe("mobile customers source", () => {
     expect(source).toContain("data-mobile-customers-toolbar");
     expect(source).toContain('className="hidden md:contents"');
     expect(source).toContain("<TableContainer>");
-    expect(source).toContain('mobileSearchPlaceholder');
-    expect(source).toContain('customer.lastOrderAt');
-    expect(source).toContain('customer.orderCount');
-    expect(source).toContain('href={`tel:${customer.phone}`}');
-    expect(source).toContain('viewCustomerSales(customer)');
+    expect(source).toContain("mobileSearchPlaceholder");
+    expect(source).toContain("customer.lastOrderAt");
+    expect(source).toContain("customer.orderCount");
+    expect(source).toContain("href={`tel:${customer.phone}`}");
+    expect(source).toContain("viewCustomerSales(customer)");
   });
 
   it("loads mobile customer detail through a store-scoped backend query", async () => {
@@ -33,6 +33,15 @@ describe("mobile customers source", () => {
     expect(serviceSource).toContain("export const getCustomerDetail");
     expect(serviceSource).toContain("assertUserCanAccessStore");
     expect(serviceSource).toContain("storeId: customer.storeId");
+  });
+
+  it("keeps the customer database ordered newest first", async () => {
+    const pageSource = await readSource("src/app/(app)/customers/page.tsx");
+    const serviceSource = await readSource("src/server/services/customers.ts");
+
+    expect(serviceSource).toContain('orderBy: [{ createdAt: "desc" }, { id: "desc" }]');
+    expect(pageSource).toContain("setPage(1);");
+    expect(pageSource).toContain("await invalidateCustomers();");
   });
 
   it("keeps the POS mobile customer selector on a bottom sheet backed by customer search", async () => {
