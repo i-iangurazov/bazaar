@@ -1021,6 +1021,7 @@
     },
     "productsEndpoint": "Products endpoint",
     "ordersEndpoint": "Orders endpoint",
+    "customersEndpoint": "Customers endpoint",
     "keysTitle": "API keys",
     "keyNamePlaceholder": "Key name, for example website",
     "createKey": "Create key",

@@ -1,8 +1,13 @@
 import { AttributeType } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { POST as createBazaarApiCustomerPost } from "@/app/api/bazaar/v1/customers/route";
 import { prisma } from "@/server/db/prisma";
-import { createBazaarApiOrder, listBazaarApiProducts } from "@/server/services/bazaarApi";
+import {
+  createBazaarApiKey,
+  createBazaarApiOrder,
+  listBazaarApiProducts,
+} from "@/server/services/bazaarApi";
 import { adjustStock } from "@/server/services/inventory";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -210,5 +215,89 @@ describeDb("bazaar api integration", () => {
       variantKey: "BASE",
       qty: 2,
     });
+  });
+
+  it("creates and upserts customer database records through POST customers", async () => {
+    const { org, store, adminUser } = await seedBase();
+    const { token } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-customer-key",
+      name: "customer-sync",
+    });
+
+    const createResponse = await createBazaarApiCustomerPost(
+      new Request("http://localhost/api/bazaar/v1/customers", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "API Customer",
+          email: "API.Customer@Example.COM",
+          phone: "+996 555 111 222",
+          address: "Bishkek, Manas 10",
+        }),
+      }),
+    );
+    const createPayload = await createResponse.json();
+
+    expect(createResponse.status).toBe(201);
+    expect(createPayload).toMatchObject({
+      action: "created",
+      customer: {
+        name: "API Customer",
+        email: "api.customer@example.com",
+        phone: "+996555111222",
+        address: "Bishkek, Manas 10",
+        source: "INTEGRATION",
+      },
+    });
+
+    const updateResponse = await createBazaarApiCustomerPost(
+      new Request("http://localhost/api/bazaar/v1/customers", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "API Customer Updated",
+          email: "api.customer@example.com",
+          phone: "+996555111222",
+          address: "Bishkek, Chui 20",
+        }),
+      }),
+    );
+    const updatePayload = await updateResponse.json();
+    const customers = await prisma.customer.findMany({
+      where: { organizationId: org.id, storeId: store.id, email: "api.customer@example.com" },
+    });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updatePayload).toMatchObject({
+      action: "updated",
+      customer: {
+        id: createPayload.customer.id,
+        name: "API Customer Updated",
+        phone: "+996555111222",
+      },
+    });
+    expect(customers).toHaveLength(1);
+  });
+
+  it("requires name, phone and email for POST customers", async () => {
+    const response = await createBazaarApiCustomerPost(
+      new Request("http://localhost/api/bazaar/v1/customers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "Missing Phone", email: "missing@example.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ message: "invalidInput" });
   });
 });

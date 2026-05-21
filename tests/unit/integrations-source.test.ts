@@ -18,6 +18,7 @@ describe("integration source structure", () => {
     expect(integrationsPage).toContain("trpc.bazaarApi.apiKeys");
     expect(apiPage).toContain("trpc.bazaarApi.createApiKey");
     expect(apiPage).toContain("trpc.bazaarApi.revokeApiKey");
+    expect(apiPage).toContain("{apiBaseUrl}/customers");
     expect(catalogPage).not.toContain("createApiKey");
     expect(catalogPage).not.toContain("revokeApiKey");
   });

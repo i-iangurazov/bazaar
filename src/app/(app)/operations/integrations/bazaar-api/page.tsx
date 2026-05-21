@@ -55,10 +55,7 @@ const BazaarApiSettingsPage = () => {
     });
   }, [stores]);
 
-  const apiKeysQuery = trpc.bazaarApi.apiKeys.useQuery(
-    { storeId },
-    { enabled: Boolean(storeId) },
-  );
+  const apiKeysQuery = trpc.bazaarApi.apiKeys.useQuery({ storeId }, { enabled: Boolean(storeId) });
   const utils = trpc.useUtils();
   const selectedStore = stores.find((store) => store.storeId === storeId) ?? null;
   const activeKeyCount = useMemo(
@@ -132,7 +129,7 @@ const BazaarApiSettingsPage = () => {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3 text-sm md:grid-cols-2">
+          <CardContent className="grid gap-3 text-sm md:grid-cols-3">
             <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("productsEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/products</p>
@@ -140,6 +137,10 @@ const BazaarApiSettingsPage = () => {
             <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">{t("ordersEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/orders</p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">{t("customersEndpoint")}</p>
+              <p className="break-all font-mono text-xs">{apiBaseUrl}/customers</p>
             </div>
           </CardContent>
         </Card>
@@ -197,9 +198,7 @@ const BazaarApiSettingsPage = () => {
                             type="button"
                             variant="danger"
                             disabled={Boolean(apiKey.revokedAt) || revokeMutation.isLoading}
-                            onClick={() =>
-                              revokeMutation.mutate({ storeId, apiKeyId: apiKey.id })
-                            }
+                            onClick={() => revokeMutation.mutate({ storeId, apiKeyId: apiKey.id })}
                           >
                             {t("revoke")}
                           </Button>
@@ -208,7 +207,10 @@ const BazaarApiSettingsPage = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="py-10 text-center text-sm text-muted-foreground"
+                      >
                         {apiKeysQuery.isLoading ? tCommon("loading") : t("empty")}
                       </TableCell>
                     </TableRow>

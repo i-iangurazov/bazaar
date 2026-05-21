@@ -1,5 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { CustomerOrderSource, CustomerOrderStatus, type Prisma } from "@prisma/client";
+import {
+  CustomerOrderSource,
+  CustomerOrderStatus,
+  CustomerSource,
+  type Prisma,
+} from "@prisma/client";
 
 import {
   convertFromKgs,
@@ -10,7 +15,11 @@ import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import { writeAuditLog } from "@/server/services/audit";
-import { upsertCustomerFromOrderTx } from "@/server/services/customers";
+import {
+  normalizeCustomerEmail,
+  normalizeCustomerPhone,
+  upsertCustomerFromOrderTx,
+} from "@/server/services/customers";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 
@@ -23,6 +32,7 @@ const normalizeOptionalText = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
 };
+const customerEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -386,7 +396,15 @@ export const listBazaarApiProducts = async (input: {
           .filter((url, index, urls) => urls.indexOf(url) === index),
         imageObjects: [
           ...(product.photoUrl
-            ? [{ id: null, url: product.photoUrl, position: 0, isPrimary: true, isAiGenerated: false }]
+            ? [
+                {
+                  id: null,
+                  url: product.photoUrl,
+                  position: 0,
+                  isPrimary: true,
+                  isAiGenerated: false,
+                },
+              ]
             : []),
           ...product.images.map((image) => ({
             id: image.id,
@@ -419,6 +437,145 @@ export const listBazaarApiProducts = async (input: {
         }),
       };
     }),
+  };
+};
+
+const normalizeBazaarApiCustomerInput = (input: {
+  name: string;
+  email: string;
+  phone: string;
+  address?: string | null;
+}) => {
+  const name = normalizeOptionalText(input.name);
+  const email = normalizeCustomerEmail(input.email);
+  const phone = normalizeCustomerPhone(input.phone);
+  const address = normalizeOptionalText(input.address);
+
+  if (!name || !email || !phone || !customerEmailPattern.test(email)) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  return { name, email, phone, address };
+};
+
+const findBazaarApiCustomer = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    storeId: string;
+    email: string;
+    phone: string;
+  },
+) => {
+  const byEmail = await tx.customer.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      email: { equals: input.email, mode: "insensitive" },
+      deletedAt: null,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (byEmail) {
+    return byEmail;
+  }
+
+  const phoneCandidates = await tx.customer.findMany({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      phone: { not: null },
+      deletedAt: null,
+    },
+    orderBy: { createdAt: "asc" },
+    take: 10_000,
+  });
+  return (
+    phoneCandidates.find((customer) => normalizeCustomerPhone(customer.phone) === input.phone) ??
+    null
+  );
+};
+
+export const createBazaarApiCustomer = async (input: {
+  organizationId: string;
+  storeId: string;
+  apiKeyId: string;
+  name: string;
+  email: string;
+  phone: string;
+  address?: string | null;
+}) => {
+  const normalized = normalizeBazaarApiCustomerInput(input);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const store = await tx.store.findUnique({
+      where: { id: input.storeId },
+      select: { id: true, organizationId: true },
+    });
+    if (!store || store.organizationId !== input.organizationId) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
+    const existing = await findBazaarApiCustomer(tx, {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+
+    if (existing) {
+      const updated = await tx.customer.update({
+        where: { id: existing.id },
+        data: {
+          name: normalized.name,
+          email: normalized.email,
+          phone: normalized.phone,
+          address: normalized.address ?? existing.address,
+          source:
+            existing.source === CustomerSource.MANUAL
+              ? existing.source
+              : CustomerSource.INTEGRATION,
+          metadata: {
+            ...(existing.metadata &&
+            typeof existing.metadata === "object" &&
+            !Array.isArray(existing.metadata)
+              ? existing.metadata
+              : {}),
+            bazaarApiKeyId: input.apiKeyId,
+          },
+        },
+      });
+      return { customer: updated, action: "updated" as const };
+    }
+
+    const customer = await tx.customer.create({
+      data: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        source: CustomerSource.INTEGRATION,
+        name: normalized.name,
+        email: normalized.email,
+        phone: normalized.phone,
+        address: normalized.address,
+        metadata: { bazaarApiKeyId: input.apiKeyId },
+      },
+    });
+    return { customer, action: "created" as const };
+  });
+
+  const customer = result.customer;
+  return {
+    action: result.action,
+    customer: {
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      address: customer.address,
+      source: customer.source,
+      createdAt: customer.createdAt.toISOString(),
+      updatedAt: customer.updatedAt.toISOString(),
+    },
   };
 };
 

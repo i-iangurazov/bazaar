@@ -1021,6 +1021,7 @@
     },
     "productsEndpoint": "Эндпоинт товаров",
     "ordersEndpoint": "Эндпоинт заказов",
+    "customersEndpoint": "Эндпоинт клиентов",
     "keysTitle": "API ключи",
     "keyNamePlaceholder": "Название ключа, например сайт",
     "createKey": "Создать ключ",

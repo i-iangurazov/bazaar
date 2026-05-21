@@ -1021,6 +1021,7 @@
     },
     "productsEndpoint": "Товарлар эндпоинти",
     "ordersEndpoint": "Заказдар эндпоинти",
+    "customersEndpoint": "Кардарлар эндпоинти",
     "keysTitle": "API ачкычтар",
     "keyNamePlaceholder": "Ачкыч аты, мисалы сайт",
     "createKey": "Ачкыч түзүү",
