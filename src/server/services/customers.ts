@@ -19,6 +19,12 @@ export type CustomerImportRow = {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  city?: string | null;
+  province?: string | null;
+  country?: string | null;
+  zip?: string | null;
   createdAt?: string | Date | null;
   rowNumber?: number;
 };
@@ -71,6 +77,39 @@ export const normalizeCustomerPhone = (value?: string | null) => {
 const normalizeOptionalText = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+};
+
+export const normalizeCustomerImportAddress = (row: {
+  address?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  city?: string | null;
+  province?: string | null;
+  country?: string | null;
+  zip?: string | null;
+}) => {
+  const seen = new Set<string>();
+  const parts = [
+    row.address1,
+    row.address2,
+    row.address,
+    row.city,
+    row.province,
+    row.country,
+    row.zip,
+  ]
+    .map((value) => normalizeOptionalText(value)?.replace(/\s+/g, " "))
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => {
+      const key = value.toLocaleLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+  return parts.length ? parts.join(", ") : null;
 };
 
 const normalizeCustomerNameForMatch = (value?: string | null) =>
@@ -126,7 +165,7 @@ const validateImportRow = (
   const phone = normalizeCustomerPhone(row.phone);
   const name =
     normalizeOptionalText(row.name) ?? (email ? email.split("@")[0] : null) ?? phone ?? "Без имени";
-  const address = normalizeOptionalText(row.address);
+  const address = normalizeCustomerImportAddress(row);
   const createdAt = parseCustomerImportDate(row.createdAt);
 
   if (!normalizeOptionalText(row.name) && !email && !phone) {

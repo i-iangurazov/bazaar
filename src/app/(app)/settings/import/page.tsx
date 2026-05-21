@@ -887,6 +887,13 @@ const CustomerImportPanel = ({
           ? normalizeValue(row[mapping.phoneFallback])
           : "";
         const phone = primaryPhone || fallbackPhone;
+        const address = mapping.address ? normalizeValue(row[mapping.address]) : "";
+        const address1 = mapping.address1 ? normalizeValue(row[mapping.address1]) : "";
+        const address2 = mapping.address2 ? normalizeValue(row[mapping.address2]) : "";
+        const city = mapping.city ? normalizeValue(row[mapping.city]) : "";
+        const province = mapping.province ? normalizeValue(row[mapping.province]) : "";
+        const country = mapping.country ? normalizeValue(row[mapping.country]) : "";
+        const zip = mapping.zip ? normalizeValue(row[mapping.zip]) : "";
         const name =
           [firstName, lastName].filter(Boolean).join(" ") ||
           fullName ||
@@ -895,22 +902,19 @@ const CustomerImportPanel = ({
           (email.includes("@") ? email.split("@")[0] : email) ||
           phone ||
           "Без имени";
-        const addressParts = [
-          mapping.address ? normalizeValue(row[mapping.address]) : "",
-          mapping.address1 ? normalizeValue(row[mapping.address1]) : "",
-          mapping.address2 ? normalizeValue(row[mapping.address2]) : "",
-          mapping.city ? normalizeValue(row[mapping.city]) : "",
-          mapping.province ? normalizeValue(row[mapping.province]) : "",
-          mapping.country ? normalizeValue(row[mapping.country]) : "",
-          mapping.zip ? normalizeValue(row[mapping.zip]) : "",
-        ].filter(Boolean);
         const createdAt = mapping.createdAt ? normalizeValue(row[mapping.createdAt]) : "";
         return {
           rowNumber: index + 2,
           name,
           email,
           phone,
-          address: addressParts.join(", "),
+          address,
+          address1,
+          address2,
+          city,
+          province,
+          country,
+          zip,
           createdAt: createdAt || undefined,
         };
       }),

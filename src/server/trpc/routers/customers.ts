@@ -26,6 +26,12 @@ const importRowSchema = z.object({
   email: z.string().max(254).optional().nullable(),
   phone: z.string().max(80).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
+  address1: z.string().max(500).optional().nullable(),
+  address2: z.string().max(500).optional().nullable(),
+  city: z.string().max(120).optional().nullable(),
+  province: z.string().max(120).optional().nullable(),
+  country: z.string().max(120).optional().nullable(),
+  zip: z.string().max(40).optional().nullable(),
   createdAt: z.union([z.string(), z.date()]).optional().nullable(),
   rowNumber: z.number().int().min(1).optional(),
 });
