@@ -1050,6 +1050,7 @@ export const ProductForm = ({
   } = useFieldArray({
     control: form.control,
     name: "images",
+    keyName: "fieldId",
   });
   const watchedImagesValue = useWatch({ control: form.control, name: "images" });
   const watchedPhotoUrl = useWatch({ control: form.control, name: "photoUrl" });
@@ -2507,7 +2508,7 @@ export const ProductForm = ({
       if (!uploadedUrl) {
         return;
       }
-      const editedImageFieldId = imageFields[imageEditorIndex]?.id;
+      const editedImageFieldId = imageFields[imageEditorIndex]?.fieldId;
       form.setValue(`images.${imageEditorIndex}.url`, uploadedUrl, {
         shouldDirty: true,
         shouldValidate: true,
@@ -3709,7 +3710,7 @@ export const ProductForm = ({
             const canMoveDown = index < imageFields.length - 1;
             return (
               <div
-                key={image.id}
+                key={image.fieldId}
                 className={`grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3 rounded-md border border-border bg-card p-3 sm:flex sm:items-start ${
                   draggedImageIndex === index ? "opacity-60" : ""
                 }`}
@@ -3739,7 +3740,7 @@ export const ProductForm = ({
                 <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-md bg-muted/30 sm:h-36 sm:w-36 sm:shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={withPreviewVersion(imageUrl, image.id)}
+                    src={withPreviewVersion(imageUrl, image.fieldId)}
                     alt={t("imageAlt", { index: index + 1 })}
                     className="h-full w-full object-cover"
                   />
@@ -3844,7 +3845,7 @@ export const ProductForm = ({
                 <div className="space-y-2">
                   {orderedImageUrls.map((image, index) => (
                     <a
-                      key={image.id}
+                      key={image.id ?? `${image.url}-${index}`}
                       href={image.url}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -4098,7 +4099,7 @@ export const ProductForm = ({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={withPreviewVersion(image.url, image.id)}
+                    src={withPreviewVersion(image.url, image.id ?? image.url)}
                     alt={t("imageAlt", { index: index + 1 })}
                     className="h-full w-full object-cover"
                   />
@@ -4280,7 +4281,7 @@ export const ProductForm = ({
             const canMoveDown = index < imageFields.length - 1;
             return (
               <div
-                key={image.id}
+                key={image.fieldId}
                 className={`group min-w-0 overflow-hidden rounded-md border border-border bg-card ${
                   draggedImageIndex === index ? "opacity-60" : ""
                 }`}
@@ -4318,7 +4319,7 @@ export const ProductForm = ({
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={withPreviewVersion(imageUrl, image.id)}
+                        src={withPreviewVersion(imageUrl, image.fieldId)}
                         alt={t("imageAlt", { index: index + 1 })}
                         className="h-full w-full object-cover"
                       />

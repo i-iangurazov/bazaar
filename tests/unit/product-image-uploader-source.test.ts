@@ -32,4 +32,13 @@ describe("product image uploader source", () => {
     expect(source).toContain("return { attempted: false, url: null };");
     expect(source).toContain("return uploadImageFileViaProxy(file);");
   });
+
+  it("preserves persisted product image ids for variant image selection on edit", async () => {
+    const source = await readSource("src/components/product-form.tsx");
+
+    expect(source).toContain('keyName: "fieldId"');
+    expect(source).toContain("const persistedImageId =");
+    expect(source).toContain('return imageUrl ? `url:${imageUrl}` : "__none";');
+    expect(source).toContain("src={withPreviewVersion(imageUrl, image.fieldId)}");
+  });
 });
