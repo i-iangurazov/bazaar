@@ -408,7 +408,7 @@ export const emailMarketingRouter = router({
     }),
 
   send: managerProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 3, prefix: "email-marketing-send" }))
+    .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "email-marketing-send" }))
     .input(campaignInputSchema)
     .mutation(async ({ ctx, input }) => {
       try {
@@ -430,7 +430,7 @@ export const emailMarketingRouter = router({
     }),
 
   sendCampaign: managerProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 3, prefix: "email-marketing-send-saved" }))
+    .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "email-marketing-send-saved" }))
     .input(z.object({ campaignId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {

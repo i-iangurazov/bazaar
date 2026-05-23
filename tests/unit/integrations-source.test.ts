@@ -32,6 +32,7 @@ describe("integration source structure", () => {
       "src/app/(app)/operations/integrations/email-marketing/workspace.tsx",
     );
     const emailRouter = await readSource("src/server/trpc/routers/emailMarketing.ts");
+    const emailDeliveryService = await readSource("src/server/services/email.ts");
     const emailService = await readSource("src/server/services/emailMarketing.ts");
     const imageStudioPage = await readSource(
       "src/app/(app)/operations/integrations/product-image-studio/page.tsx",
@@ -62,6 +63,8 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("Показывать описание");
     expect(emailWorkspace).toContain("Строка заказа");
     expect(emailWorkspace).toContain("{{orderPreviousStatus}}");
+    expect(emailWorkspace).toContain("Bazaar KG");
+    expect(emailWorkspace).not.toContain("Bazaar demo");
     expect(emailWorkspace).toContain("(min-width: 1280px) and (pointer: fine)");
     expect(emailWorkspace).toContain("Редактор писем доступен только на компьютере");
     expect(emailWorkspace).toContain("disabled={!builderAvailable}");
@@ -82,6 +85,7 @@ describe("integration source structure", () => {
     expect(emailRouter).toContain("logoGallery: managerProcedure");
     expect(emailRouter).toContain("senders: managerProcedure");
     expect(emailRouter).toContain("sendCampaign: managerProcedure");
+    expect(emailRouter).toContain('max: 20, prefix: "email-marketing-send-saved"');
     expect(emailRouter).toContain("automations: managerProcedure");
     expect(emailRouter).toContain("logoStoreId");
     expect(emailService).toContain("includeSelectableIds?: boolean");
@@ -94,6 +98,8 @@ describe("integration source structure", () => {
     expect(emailService).toContain("IMAGE_STORAGE_PROVIDER сейчас local");
     expect(emailService).toContain("EmailSenderDomain");
     expect(emailService).toContain("sendSavedEmailCampaignToAudience");
+    expect(emailService).toContain('status: config.ready ? "VERIFIED" : "NOT_CONFIGURED"');
+    expect(emailDeliveryService).toContain("ready: hasProvider");
     expect(emailService).toContain("processEmailAutomationTrigger");
     expect(imageStudioPage).toContain("<TableContainer>");
     expect(imageStudioPage).toContain('className="min-w-[860px]"');

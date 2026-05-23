@@ -483,7 +483,8 @@ const campaignStatusVariant = (status: EmailCampaignStatus) => {
 const senderStatusLabel = (status?: string | null) => {
   if (status === "VERIFIED") return "Подтвержден";
   if (status === "FAILED") return "Ошибка";
-  if (status === "AVAILABLE") return "Демо";
+  if (status === "AVAILABLE") return "Доступен";
+  if (status === "NOT_CONFIGURED") return "Не настроен";
   return "Ожидает DNS";
 };
 
@@ -776,6 +777,10 @@ export const EmailMarketingWorkspace = () => {
     () => sendersQuery.data?.senders.find((sender) => sender.id === senderIdentityId) ?? null,
     [senderIdentityId, sendersQuery.data?.senders],
   );
+  const defaultSender = sendersQuery.data?.defaultSender ?? null;
+  const defaultSenderReady = defaultSender?.status === "VERIFIED" || defaultSender?.status === "AVAILABLE";
+  const currentSenderReady = senderIdentityId ? selectedSender?.status === "VERIFIED" : defaultSenderReady;
+  const currentSenderLabel = selectedSender?.fromEmail ?? defaultSender?.fromEmail ?? "Bazaar KG";
 
   const selectedBlock = blocks.find((block) => block.id === selectedBlockId) ?? blocks[0] ?? null;
   const selectedBlockIndex = selectedBlock ? blocks.findIndex((block) => block.id === selectedBlock.id) : -1;
@@ -1297,7 +1302,7 @@ export const EmailMarketingWorkspace = () => {
       duplicatesRemoved: 0,
     };
   const validation = previewMutation.data?.validationChecklist ?? [
-    { key: "sender", label: "Отправитель подтвержден", ok: Boolean(selectedSender?.status === "VERIFIED"), critical: true },
+    { key: "sender", label: "Отправитель подтвержден", ok: Boolean(currentSenderReady), critical: true },
     { key: "subject", label: "Тема письма указана", ok: Boolean(subject.trim()), critical: true },
     { key: "content", label: "Письмо содержит контент", ok: blocks.some(blockHasContent), critical: true },
   ];
@@ -1434,7 +1439,9 @@ export const EmailMarketingWorkspace = () => {
                         <SelectValue placeholder="Выберите" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">Bazaar demo</SelectItem>
+                        <SelectItem value="__none__">
+                          Bazaar KG{defaultSender?.fromEmail ? ` · ${defaultSender.fromEmail}` : ""}
+                        </SelectItem>
                         {(sendersQuery.data?.senders ?? []).map((sender) => (
                           <SelectItem key={sender.id} value={sender.id}>
                             {sender.displayName} · {sender.fromEmail}
@@ -1766,7 +1773,7 @@ export const EmailMarketingWorkspace = () => {
               <p><strong>Кампания:</strong> {campaignName}</p>
               <p><strong>Тема:</strong> {subject}</p>
               <p><strong>Получателей:</strong> {audienceSummary.validRecipients}</p>
-              <p><strong>Отправитель:</strong> {selectedSender?.fromEmail ?? "Bazaar demo"}</p>
+              <p><strong>Отправитель:</strong> {currentSenderLabel}</p>
             </div>
             <ModalFooter>
               <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Отмена</Button>
@@ -2647,7 +2654,7 @@ const CampaignsDashboard = ({
               </div>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-xs text-muted-foreground">
-                  <p className="truncate">{campaign.senderIdentity?.fromEmail ?? "Bazaar demo"}</p>
+                  <p className="truncate">{campaign.senderIdentity?.fromEmail ?? "Bazaar KG"}</p>
                   <p>{formatDateTime(campaign.updatedAt ?? campaign.createdAt, locale)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2793,10 +2800,22 @@ const SendersPanel = ({
             <div className="rounded-md border border-border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold">Bazaar demo</p>
+                  <p className="font-semibold">Bazaar KG</p>
                   <p className="text-sm text-muted-foreground">{data.defaultSender.fromEmail}</p>
                 </div>
-                <Badge variant="muted">Демо</Badge>
+                <Badge
+                  variant={
+                    data.defaultSender.status === "VERIFIED"
+                      ? "success"
+                      : data.defaultSender.status === "FAILED"
+                        ? "danger"
+                        : data.defaultSender.status === "NOT_CONFIGURED"
+                          ? "warning"
+                          : "muted"
+                  }
+                >
+                  {senderStatusLabel(data.defaultSender.status)}
+                </Badge>
               </div>
             </div>
           ) : null}

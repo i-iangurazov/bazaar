@@ -348,7 +348,7 @@ export const getMarketingEmailConfiguration = () => {
     requiredFrom: MARKETING_EMAIL_FROM,
     hasRequiredFrom,
     hasProvider,
-    ready: hasRequiredFrom && hasProvider,
+    ready: hasProvider,
   };
 };
 

@@ -1256,8 +1256,8 @@ export const listEmailSenderSetup = async (input: {
       displayName: "Bazaar",
       fromEmail: MARKETING_EMAIL_FROM,
       replyToEmail: null,
-      status: config.ready ? "AVAILABLE" : "NOT_CONFIGURED",
-      demoOnly: true,
+      status: config.ready ? "VERIFIED" : "NOT_CONFIGURED",
+      demoOnly: false,
       provider: config.provider,
     },
   };
@@ -1593,9 +1593,7 @@ const resolveCampaignSender = async (input: {
   }
 
   const config = getMarketingEmailConfiguration();
-  const allowDefault =
-    process.env.NODE_ENV !== "production" || process.env.ALLOW_DEFAULT_MARKETING_SENDER === "1";
-  if (config.ready && (!input.requireVerified || allowDefault)) {
+  if (config.ready) {
     return {
       id: null,
       fromEmail: MARKETING_EMAIL_FROM,
@@ -1605,7 +1603,7 @@ const resolveCampaignSender = async (input: {
       }),
       replyTo: trimOptional(input.replyToEmail),
       displayName: trimOptional(input.senderDisplayName) ?? "Bazaar",
-      demoOnly: true,
+      demoOnly: false,
     };
   }
 
