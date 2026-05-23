@@ -11,6 +11,17 @@ import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/t
 const catalogFontsStylesheetHref =
   "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Lato:wght@400;700&family=PT+Sans:wght@400;700&family=Source+Sans+3:wght@400;600;700&family=Manrope:wght@400;600;700&display=swap&subset=cyrillic";
 
+const forceLandingLightThemeScript = `
+(function () {
+  try {
+    if (window.location.pathname === "/") {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.dataset.forceLightTheme = "landing";
+    }
+  } catch (_) {}
+})();
+`;
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -60,6 +71,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   return (
     <html lang={locale} className={htmlClassName} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: forceLandingLightThemeScript }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={catalogFontsStylesheetHref} />

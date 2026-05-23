@@ -21,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { ForceLightTheme } from "@/components/landing/ForceLightTheme";
 import { Reveal } from "@/components/landing/Reveal";
 import { StickyNav } from "@/components/landing/StickyNav";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -739,6 +740,7 @@ const RootPage = async () => {
 
   return (
     <main className="min-h-screen overflow-x-clip bg-white text-foreground">
+      <ForceLightTheme />
       <StickyNav
         links={navLinks}
         navAriaLabel="Навигация по Bazaar"

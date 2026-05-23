@@ -2,16 +2,67 @@ import { getLogger } from "@/server/logging";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 
-type EmailPayload = {
+export type EmailTag = {
+  name: string;
+  value: string;
+};
+
+export type EmailPayload = {
   to: string;
   subject: string;
   text: string;
   html: string;
   from?: string;
   replyTo?: string | null;
+  tags?: EmailTag[];
+  idempotencyKey?: string;
+};
+
+export type EmailSendResult = {
+  provider: "resend" | "log";
+  id: string | null;
+};
+
+export type ResendDnsRecord = {
+  record?: string | null;
+  name?: string | null;
+  type?: string | null;
+  ttl?: string | number | null;
+  status?: string | null;
+  value?: string | null;
+  priority?: number | null;
+};
+
+export type ResendDomainResponse = {
+  id: string;
+  name: string;
+  status: string;
+  records?: ResendDnsRecord[];
+  created_at?: string;
 };
 
 type EmailLocale = Locale;
+
+export class EmailProviderError extends Error {
+  public readonly provider: "resend";
+  public readonly status: number;
+  public readonly responseText: string;
+  public readonly providerMessage: string | null;
+
+  constructor(input: {
+    provider: "resend";
+    status: number;
+    responseText: string;
+    providerMessage?: string | null;
+  }) {
+    super(input.providerMessage ?? `emailProviderError:${input.status}`);
+    this.name = "EmailProviderError";
+    this.provider = input.provider;
+    this.status = input.status;
+    this.responseText = input.responseText;
+    this.providerMessage = input.providerMessage ?? null;
+  }
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export const MARKETING_EMAIL_FROM = "no-reply@bazaar.kg";
@@ -60,10 +111,77 @@ export const assertEmailConfigured = () => {
   }
 };
 
-const sendWithResend = async (payload: EmailPayload) => {
+const resendFetch = async <T>(path: string, init: RequestInit): Promise<T> => {
   const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("emailProviderNotConfigured");
+  }
+  const response = await fetch(`https://api.resend.com${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+  const text = await response.text();
+  let body: unknown = {};
+  if (text) {
+    try {
+      body = JSON.parse(text) as T;
+    } catch {
+      body = {};
+    }
+  }
+  if (!response.ok) {
+    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const nestedError =
+      record.error && typeof record.error === "object"
+        ? (record.error as Record<string, unknown>)
+        : null;
+    const providerMessage =
+      typeof record.message === "string"
+        ? record.message
+        : typeof nestedError?.message === "string"
+          ? nestedError.message
+          : null;
+    throw new EmailProviderError({
+      provider: "resend",
+      status: response.status,
+      responseText: text,
+      providerMessage,
+    });
+  }
+  return body as T;
+};
+
+export const createResendDomain = async (domain: string) =>
+  resendFetch<ResendDomainResponse>("/domains", {
+    method: "POST",
+    body: JSON.stringify({ name: domain }),
+  });
+
+export const retrieveResendDomain = async (domainId: string) =>
+  resendFetch<ResendDomainResponse>(`/domains/${encodeURIComponent(domainId)}`, {
+    method: "GET",
+  });
+
+export const verifyResendDomain = async (domainId: string) =>
+  resendFetch<{ object?: string; id: string }>(
+    `/domains/${encodeURIComponent(domainId)}/verify`,
+    {
+      method: "POST",
+    },
+  );
+
+export const listResendDomains = async () =>
+  resendFetch<{ data?: ResendDomainResponse[] } | ResendDomainResponse[]>("/domains", {
+    method: "GET",
+  });
+
+const sendWithResend = async (payload: EmailPayload): Promise<EmailSendResult> => {
   const from = payload.from ?? process.env.EMAIL_FROM;
-  if (!apiKey || !from) {
+  if (!process.env.RESEND_API_KEY || !from) {
     throw new Error("emailProviderNotConfigured");
   }
   const maxAttempts = 3;
@@ -72,8 +190,9 @@ const sendWithResend = async (payload: EmailPayload) => {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
+        ...(payload.idempotencyKey ? { "Idempotency-Key": payload.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,
@@ -82,11 +201,13 @@ const sendWithResend = async (payload: EmailPayload) => {
         html: payload.html,
         text: payload.text,
         ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
+        ...(payload.tags?.length ? { tags: payload.tags } : {}),
       }),
     });
 
     if (response.ok) {
-      return;
+      const body = (await response.json().catch(() => ({}))) as { id?: string };
+      return { provider: "resend", id: body.id ?? null };
     }
 
     const body = await response.text();
@@ -100,15 +221,66 @@ const sendWithResend = async (payload: EmailPayload) => {
     const retryDelayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 1000 * attempt;
     await sleep(retryDelayMs);
   }
+  throw new Error("emailProviderError");
 };
 
-const sendEmail = async (payload: EmailPayload) => {
+const sendWithResendBatch = async (
+  payloads: EmailPayload[],
+  idempotencyKey?: string,
+): Promise<EmailSendResult[]> => {
+  if (!payloads.length) {
+    return [];
+  }
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("emailProviderNotConfigured");
+  }
+  const response = await fetch("https://api.resend.com/emails/batch", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body: JSON.stringify(
+      payloads.map((payload) => {
+        const from = payload.from ?? process.env.EMAIL_FROM;
+        if (!from) {
+          throw new Error("emailProviderNotConfigured");
+        }
+        return {
+          from,
+          to: [payload.to],
+          subject: payload.subject,
+          html: payload.html,
+          text: payload.text,
+          ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
+          ...(payload.tags?.length ? { tags: payload.tags } : {}),
+        };
+      }),
+    ),
+  });
+
+  if (response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      data?: Array<{ id?: string }>;
+    };
+    return payloads.map((_payload, index) => ({
+      provider: "resend" as const,
+      id: body.data?.[index]?.id ?? null,
+    }));
+  }
+
+  const body = await response.text();
+  throw new Error(`emailProviderError:${response.status}:${body}`);
+};
+
+const sendEmail = async (payload: EmailPayload): Promise<EmailSendResult> => {
   const logger = getLogger();
   const provider = getEmailProvider();
 
   if (provider === "resend") {
-    await sendWithResend(payload);
-    return;
+    return sendWithResend(payload);
   }
 
   if (isProductionRuntime() && !allowLogEmailInProduction()) {
@@ -127,6 +299,37 @@ const sendEmail = async (payload: EmailPayload) => {
     },
     "email delivery fallback"
   );
+  return { provider: "log", id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` };
+};
+
+export const sendEmailBatch = async (
+  payloads: EmailPayload[],
+  options?: { idempotencyKey?: string },
+): Promise<EmailSendResult[]> => {
+  const logger = getLogger();
+  const provider = getEmailProvider();
+  if (!payloads.length) {
+    return [];
+  }
+  if (provider === "resend") {
+    return sendWithResendBatch(payloads, options?.idempotencyKey);
+  }
+  if (isProductionRuntime() && !allowLogEmailInProduction()) {
+    throw new Error("emailProviderRequiredInProduction");
+  }
+  logger.info(
+    {
+      count: payloads.length,
+      recipients: payloads.map((payload) => payload.to),
+      subjects: Array.from(new Set(payloads.map((payload) => payload.subject))),
+      provider: "log",
+    },
+    "email batch delivery fallback",
+  );
+  return payloads.map((_payload, index) => ({
+    provider: "log",
+    id: `log_batch_${Date.now()}_${index}`,
+  }));
 };
 
 export const getMarketingEmailConfiguration = () => {
@@ -149,14 +352,17 @@ export const getMarketingEmailConfiguration = () => {
   };
 };
 
-export const sendMarketingEmail = async (payload: Omit<EmailPayload, "from">) => {
+export const sendMarketingEmail = async (
+  payload: Omit<EmailPayload, "from"> & { from?: string },
+) => {
   const config = getMarketingEmailConfiguration();
-  if (!config.ready) {
+  const from = payload.from ?? MARKETING_EMAIL_FROM;
+  if (from === MARKETING_EMAIL_FROM && !config.ready) {
     throw new Error("emailMarketingNotConfigured");
   }
-  await sendEmail({
+  return sendEmail({
     ...payload,
-    from: MARKETING_EMAIL_FROM,
+    from,
   });
 };
 

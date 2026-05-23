@@ -1,13 +1,16 @@
-import { EmailCampaignFontFamily, EmailCampaignTemplate } from "@prisma/client";
+import { EmailCampaignFontFamily, EmailCampaignTemplate, EmailCampaignType } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import {
   buildEmailUnsubscribeUrl,
   collectNonPublicEmailImageUrls,
   isPublicEmailMarketingAssetUrl,
+  mapEmailSenderProviderError,
   renderEmailCampaign,
   resolveEmailMarketingAssetUrl,
+  validateEmailSenderAddress,
 } from "@/server/services/emailMarketing";
+import { EmailProviderError } from "@/server/services/email";
 
 const testStore = {
   id: "store-1",
@@ -23,7 +26,10 @@ const testStore = {
 };
 
 const testCampaign = {
+  id: null,
   storeId: "store-1",
+  campaignType: EmailCampaignType.MARKETING,
+  senderIdentityId: null,
   name: "Sale",
   audience: { mode: "segment" as const, segment: "all" as const, source: "ALL" as const },
   template: EmailCampaignTemplate.CUSTOM,
@@ -65,6 +71,55 @@ const testCampaign = {
 };
 
 describe("email marketing logo rendering", () => {
+  it("validates branded Resend sender domains and rejects public mailbox domains", () => {
+    expect(validateEmailSenderAddress("NEWS@Avantehnik.KG")).toEqual({
+      fromEmail: "news@avantehnik.kg",
+      domain: "avantehnik.kg",
+    });
+
+    expect(() => validateEmailSenderAddress("owner@gmail.com")).toThrow(
+      "emailSenderPublicDomain",
+    );
+    expect(() => validateEmailSenderAddress("not-an-email")).toThrow(
+      "emailSenderFromInvalid",
+    );
+  });
+
+  it("maps Resend sender setup failures to user-facing error keys", () => {
+    expect(
+      mapEmailSenderProviderError(
+        new EmailProviderError({
+          provider: "resend",
+          status: 401,
+          responseText: '{"message":"Invalid API key"}',
+          providerMessage: "Invalid API key",
+        }),
+      ).message,
+    ).toBe("emailSenderProviderAuthFailed");
+
+    expect(
+      mapEmailSenderProviderError(
+        new EmailProviderError({
+          provider: "resend",
+          status: 401,
+          responseText: '{"name":"restricted_api_key","message":"This API key is restricted to only send emails"}',
+          providerMessage: "This API key is restricted to only send emails",
+        }),
+      ).message,
+    ).toBe("emailSenderProviderRestrictedKey");
+
+    expect(
+      mapEmailSenderProviderError(
+        new EmailProviderError({
+          provider: "resend",
+          status: 409,
+          responseText: '{"message":"Domain already exists"}',
+          providerMessage: "Domain already exists",
+        }),
+      ).message,
+    ).toBe("emailSenderDomainAlreadyExists");
+  });
+
   it("resolves relative managed logo URLs against the public app URL", () => {
     const previousNextAuthUrl = process.env.NEXTAUTH_URL;
     process.env.NEXTAUTH_URL = "https://app.bazaar.kg";
@@ -185,6 +240,147 @@ describe("email marketing logo rendering", () => {
     expect(rendered.html).toContain('src="https://cdn.bazaar.kg/email/logo.png"');
     expect(rendered.html).toContain('src="https://cdn.bazaar.kg/email/banner.jpg"');
     expect(rendered.text).toContain("Новая коллекция");
+  });
+
+  it("escapes editor text and renders order variables safely", () => {
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "text",
+            type: "text",
+            heading: "Заказ {{orderNumber}}",
+            body: "<script>alert(1)</script> Статус: {{orderStatus}}",
+          },
+	          {
+	            id: "order",
+	            type: "orderSummary",
+	            title: "Order {{orderNumber}}",
+	            summaryText: "Status changed from {{orderPreviousStatus}} to {{orderStatus}}",
+	            itemsLabel: "Items",
+	            totalLabel: "Total",
+	            quantitySeparator: "x",
+	            showItems: true,
+	            showTotals: true,
+	          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+      order: {
+	        number: "ORD-7",
+	        previousStatus: "confirmed",
+	        status: "готов",
+	        totalText: "1 200 сом",
+	        lines: [{ name: "Футболка <XL>", qty: 2, totalText: "1 200 сом" }],
+	      },
+	    });
+
+	    expect(rendered.html).toContain("Заказ ORD-7");
+	    expect(rendered.html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+	    expect(rendered.html).toContain("Status changed from confirmed to");
+	    expect(rendered.html).toContain("Items");
+	    expect(rendered.html).toContain("Total: 1 200 сом");
+	    expect(rendered.html).toContain("Футболка &lt;XL&gt;");
+	    expect(rendered.text).toContain("Total: 1 200 сом");
+	  });
+
+  it("renders persisted edited blocks and omits deleted block content", () => {
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "edited-text",
+            type: "text",
+            heading: "Persisted canvas heading",
+            body: "Persisted inline body",
+          },
+          {
+            id: "edited-button",
+            type: "button",
+            text: "Persisted CTA",
+            url: "https://example.com/updated",
+          },
+          {
+            id: "footer",
+            type: "footer",
+            showUnsubscribe: false,
+            text: "Persisted footer",
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+    });
+
+    expect(rendered.html).toContain("Persisted canvas heading");
+    expect(rendered.html).toContain("Persisted inline body");
+    expect(rendered.html).toContain("Persisted CTA");
+    expect(rendered.html).not.toContain("Deleted block heading");
+    expect(rendered.text).not.toContain("Deleted block heading");
+  });
+
+  it("respects product description visibility in product blocks", () => {
+    const productsById = new Map([
+      [
+        "product-1",
+        {
+          id: "product-1",
+          name: "Product with description",
+          description: "Hidden product description",
+          imageUrl: null,
+          priceKgs: 1000,
+          priceText: "1 000 сом",
+          currencyCode: "KGS",
+          publicUrl: null,
+        },
+      ],
+    ]);
+    const visible = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "products",
+            type: "products",
+            productIds: ["product-1"],
+            showImage: false,
+            showDescription: true,
+            showPrice: true,
+            showButton: false,
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+      productsById,
+    });
+    const hidden = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "products",
+            type: "products",
+            productIds: ["product-1"],
+            showImage: false,
+            showDescription: false,
+            showPrice: true,
+            showButton: false,
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+      productsById,
+    });
+
+    expect(visible.html).toContain("Hidden product description");
+    expect(visible.text).toContain("Hidden product description");
+    expect(hidden.html).not.toContain("Hidden product description");
+    expect(hidden.text).not.toContain("Hidden product description");
   });
 
   it("flags localhost image URLs before test or final email send", () => {

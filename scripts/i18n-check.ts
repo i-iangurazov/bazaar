@@ -8,6 +8,7 @@ const LOCALES = ["ru", "kg", "en"] as const;
 const HARDCODED_COPY_ALLOWED_FILES = new Set([
   path.join(SRC_ROOT, "app", "page.tsx"),
   path.join(SRC_ROOT, "app", "(app)", "operations", "integrations", "email-marketing", "page.tsx"),
+  path.join(SRC_ROOT, "app", "(app)", "operations", "integrations", "email-marketing", "workspace.tsx"),
 ]);
 const EXTRA_KEYS = [
   "purchaseOrders.status.draft",

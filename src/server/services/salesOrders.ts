@@ -2,6 +2,7 @@ import {
   Prisma,
   CustomerOrderSource,
   CustomerOrderStatus,
+  EmailAutomationTrigger,
   StockMovementType,
 } from "@prisma/client";
 
@@ -15,6 +16,7 @@ import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
+import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
 
 const allowedTransitions: Record<CustomerOrderStatus, CustomerOrderStatus[]> = {
   DRAFT: [CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.CANCELED],
@@ -526,7 +528,7 @@ export const createCustomerOrderDraft = async (input: {
   actorId: string;
   requestId: string;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const store = await tx.store.findUnique({ where: { id: input.storeId } });
     if (!store) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -621,6 +623,26 @@ export const createCustomerOrderDraft = async (input: {
 
     return serializeOrder(order);
   });
+  eventBus.publish({
+    type: "customerOrder.created",
+    payload: {
+      customerOrderId: result.id,
+      storeId: result.storeId,
+      source: CustomerOrderSource.MANUAL,
+    },
+  });
+  void processEmailAutomationTrigger({
+    organizationId: input.organizationId,
+    storeId: result.storeId,
+    customerOrderId: result.id,
+    trigger: EmailAutomationTrigger.ORDER_CREATED,
+  }).catch((error: unknown) => {
+    getLogger(input.requestId).error(
+      { error, customerOrderId: result.id, storeId: result.storeId },
+      "email automation order-created trigger failed",
+    );
+  });
+  return result;
 };
 
 export const setCustomerOrderCustomer = async (input: {
@@ -869,7 +891,7 @@ const updateOrderStatus = async (input: {
   requestId: string;
   to: CustomerOrderStatus;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const order = await tx.customerOrder.findUnique({
       where: { id: input.customerOrderId },
       include: { lines: { select: { id: true } } },
@@ -909,8 +931,37 @@ const updateOrderStatus = async (input: {
       requestId: input.requestId,
     });
 
-    return serializeOrder(updated);
+    return { order: serializeOrder(updated), oldStatus: order.status, newStatus: updated.status };
   });
+  eventBus.publish({
+    type: "customerOrder.statusChanged",
+    payload: {
+      customerOrderId: result.order.id,
+      storeId: result.order.storeId,
+      oldStatus: result.oldStatus,
+      newStatus: result.newStatus,
+    },
+  });
+  void processEmailAutomationTrigger({
+    organizationId: input.organizationId,
+    storeId: result.order.storeId,
+    customerOrderId: result.order.id,
+    trigger: EmailAutomationTrigger.ORDER_STATUS_CHANGED,
+    oldStatus: result.oldStatus,
+    newStatus: result.newStatus,
+  }).catch((error: unknown) => {
+    getLogger(input.requestId).error(
+      {
+        error,
+        customerOrderId: result.order.id,
+        storeId: result.order.storeId,
+        oldStatus: result.oldStatus,
+        newStatus: result.newStatus,
+      },
+      "email automation order-status trigger failed",
+    );
+  });
+  return result.order;
 };
 
 export const confirmCustomerOrder = (input: {
