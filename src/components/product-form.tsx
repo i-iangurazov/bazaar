@@ -874,9 +874,6 @@ export const ProductForm = ({
       enabled: !readOnly && Boolean(categoryStoreId),
     },
   );
-  const legacyCategoryOptionsQuery = trpc.productCategories.list.useQuery(undefined, {
-    enabled: !readOnly && !categoryStoreId,
-  });
   const templateQuery = trpc.categoryTemplates.list.useQuery(
     { category: primaryCategoryValue },
     { enabled: !readOnly && Boolean(primaryCategoryValue) },
@@ -906,22 +903,6 @@ export const ProductForm = ({
       });
     });
 
-    if (!categoryStoreId) {
-      (legacyCategoryOptionsQuery.data ?? []).forEach((value) => {
-        const normalized = normalizeCategoryName(value);
-        const key = normalizeCategoryKey(value);
-        if (!normalized || !key) {
-          return;
-        }
-        categories.set(key, {
-          name: normalized,
-          productCount: 0,
-          isVisibleInForms: true,
-          isArchived: false,
-        });
-      });
-    }
-
     categoryValues.forEach((value) => {
       const normalized = normalizeCategoryName(value);
       const key = normalizeCategoryKey(value);
@@ -937,7 +918,7 @@ export const ProductForm = ({
     });
 
     return Array.from(categories.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [categoryOptionsQuery.data, categoryStoreId, categoryValues, legacyCategoryOptionsQuery.data]);
+  }, [categoryOptionsQuery.data, categoryValues]);
   const categoryDraftQuery = useDeferredValue(categoryDraft.trim().toLocaleLowerCase("ru-RU"));
   const showHiddenCategoryCount = useMemo(
     () =>

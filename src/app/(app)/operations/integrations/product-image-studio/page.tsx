@@ -157,20 +157,20 @@ const ProductImageStudioPage = () => {
 
   const overviewQuery = trpc.productImageStudio.overview.useQuery(undefined, {
     enabled: canView,
-    refetchInterval: 10_000,
+    refetchInterval: 5_000,
   });
   const jobsQuery = trpc.productImageStudio.jobs.useQuery(
     { limit: 50 },
     {
       enabled: canView,
-      refetchInterval: 5_000,
+      refetchInterval: 2_000,
     },
   );
   const selectedJobQuery = trpc.productImageStudio.job.useQuery(
     { jobId: selectedJobId ?? "" },
     {
       enabled: canView && Boolean(selectedJobId),
-      refetchInterval: 3_000,
+      refetchInterval: 1_500,
     },
   );
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -179,10 +179,10 @@ const ProductImageStudioPage = () => {
   );
 
   useEffect(() => {
-    if (!selectedJobId && jobsQuery.data?.length) {
+    if (!sourceImage && !selectedJobId && jobsQuery.data?.length) {
       setSelectedJobId(jobsQuery.data[0]?.id ?? null);
     }
-  }, [jobsQuery.data, selectedJobId]);
+  }, [jobsQuery.data, selectedJobId, sourceImage]);
 
   const createJobMutation = trpc.productImageStudio.create.useMutation({
     onSuccess: async (result) => {
@@ -190,7 +190,7 @@ const ProductImageStudioPage = () => {
       await Promise.all([
         overviewQuery.refetch(),
         jobsQuery.refetch(),
-        selectedJobQuery.refetch(),
+        trpcUtils.productImageStudio.job.invalidate({ jobId: result.jobId }),
       ]);
       toast({
         variant: result.deduplicated ? "info" : "success",
@@ -208,7 +208,7 @@ const ProductImageStudioPage = () => {
       await Promise.all([
         overviewQuery.refetch(),
         jobsQuery.refetch(),
-        selectedJobQuery.refetch(),
+        trpcUtils.productImageStudio.job.invalidate({ jobId: result.jobId }),
       ]);
       toast({ variant: "success", description: t("jobRetrySuccess") });
     },
@@ -222,7 +222,9 @@ const ProductImageStudioPage = () => {
       await Promise.all([
         overviewQuery.refetch(),
         jobsQuery.refetch(),
-        selectedJobQuery.refetch(),
+        selectedJobId
+          ? trpcUtils.productImageStudio.job.invalidate({ jobId: selectedJobId })
+          : Promise.resolve(),
         trpcUtils.products.bootstrap.invalidate(),
         trpcUtils.products.list.invalidate(),
       ]);
@@ -305,6 +307,7 @@ const ProductImageStudioPage = () => {
         size: body.size ?? prepared.file.size,
         mimeType: body.mimeType,
       });
+      setSelectedJobId(null);
       toast({ variant: "success", description: t("input.sourceUploadSuccess") });
     } catch (error) {
       toast({
@@ -334,7 +337,29 @@ const ProductImageStudioPage = () => {
     });
   };
 
-  const selectedJob = selectedJobQuery.data;
+  const activeJobFromList = useMemo(
+    () =>
+      (jobsQuery.data ?? []).find(
+        (job) =>
+          job.status === ProductImageStudioJobStatus.QUEUED ||
+          job.status === ProductImageStudioJobStatus.PROCESSING,
+      ) ?? null,
+    [jobsQuery.data],
+  );
+  const selectedJobFromList = useMemo(
+    () => (jobsQuery.data ?? []).find((job) => job.id === selectedJobId) ?? null,
+    [jobsQuery.data, selectedJobId],
+  );
+  const jobMutationInFlight = createJobMutation.isLoading || retryJobMutation.isLoading;
+
+  useEffect(() => {
+    if (!jobMutationInFlight || !activeJobFromList || selectedJobId === activeJobFromList.id) {
+      return;
+    }
+    setSelectedJobId(activeJobFromList.id);
+  }, [activeJobFromList, jobMutationInFlight, selectedJobId]);
+
+  const selectedJob = selectedJobId ? (selectedJobQuery.data ?? selectedJobFromList) : null;
   const overview = overviewQuery.data;
   const overviewLoading = overviewQuery.isLoading && !overview;
   const overviewStatus = overview?.status ?? "NOT_CONFIGURED";
@@ -351,11 +376,20 @@ const ProductImageStudioPage = () => {
   const targetProductId = selectedProduct?.id ?? selectedJob?.product?.id ?? null;
   const isBusy =
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
+  const previewIsWorking =
+    jobMutationInFlight ||
+    selectedJob?.status === ProductImageStudioJobStatus.QUEUED ||
+    selectedJob?.status === ProductImageStudioJobStatus.PROCESSING;
   const sourcePreviewUrl = selectedJob?.sourcePreviewPath
     ? selectedJob.sourcePreviewPath
     : sourceImage?.url
       ? `/api/product-images/source?url=${encodeURIComponent(sourceImage.url)}`
       : null;
+  const generatedPreviewUrl = selectedJob?.outputPreviewPath
+    ? `${selectedJob.outputPreviewPath}&v=${encodeURIComponent(
+        String(selectedJob.completedAt ?? selectedJob.updatedAt ?? selectedJob.id),
+      )}`
+    : null;
 
   const productSearchResults = useMemo(
     () => productSearchQuery.data ?? [],
@@ -710,18 +744,22 @@ const ProductImageStudioPage = () => {
                   ) : null}
                 </div>
                 <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
-                  {selectedJob?.outputPreviewPath ? (
+                  {previewIsWorking ? (
+                    <div className="flex h-[320px] flex-col items-center justify-center gap-4 px-6 text-center text-sm text-muted-foreground">
+                      <Spinner className="h-5 w-5" />
+                      <div className="w-full max-w-[240px] space-y-2">
+                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                          <div className="h-full w-2/3 rounded-full bg-primary/80 animate-pulse" />
+                        </div>
+                        <p>{t("preview.processing")}</p>
+                      </div>
+                    </div>
+                  ) : generatedPreviewUrl ? (
                     <img
-                      src={selectedJob.outputPreviewPath}
+                      src={generatedPreviewUrl}
                       alt={t("preview.generatedAlt")}
                       className="h-[320px] w-full object-contain"
                     />
-                  ) : selectedJob?.status === ProductImageStudioJobStatus.PROCESSING ||
-                    selectedJob?.status === ProductImageStudioJobStatus.QUEUED ? (
-                    <div className="flex h-[320px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-                      <Spinner className="h-5 w-5" />
-                      {t("preview.processing")}
-                    </div>
                   ) : (
                     <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
                       {t("preview.emptyGenerated")}

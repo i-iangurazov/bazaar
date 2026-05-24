@@ -4,7 +4,10 @@ import type { Logger } from "pino";
 
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
-import { listProductCategoriesFromDb } from "@/server/services/productCategories";
+import {
+  listProductCategoriesFromDb,
+  listStoreProductCategoriesFromDb,
+} from "@/server/services/productCategories";
 import { toCsv } from "@/server/services/csv";
 import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
@@ -1068,9 +1071,9 @@ export const getProductsBootstrap = async ({
     enableSimilarProductCheck: true,
     printerSettings: { select: { id: true } },
   } satisfies Prisma.StoreSelect;
-  const [stores, categories] = await Promise.all([
+  const stores =
     user && !userHasAllStoreAccess(user)
-      ? prisma.userStoreAccess
+      ? await prisma.userStoreAccess
           .findMany({
             where: {
               organizationId,
@@ -1081,17 +1084,24 @@ export const getProductsBootstrap = async ({
             orderBy: { store: { name: "asc" } },
           })
           .then((rows) => rows.map((row) => row.store))
-      : prisma.store.findMany({
+      : await prisma.store.findMany({
           where: { organizationId },
           select: storeSelect,
           orderBy: { name: "asc" },
-        }),
-    listProductCategoriesFromDb(prisma, organizationId),
-  ]);
+        });
   const selectedStoreId = resolveProductsBootstrapStoreId({
     preferredStoreId: input?.storeId,
     storeIds: stores.map((store) => store.id),
   });
+  const categories = selectedStoreId
+    ? (
+        await listStoreProductCategoriesFromDb(prisma, {
+          organizationId,
+          storeId: selectedStoreId,
+          includeHidden: false,
+        })
+      ).map((category) => category.name)
+    : await listProductCategoriesFromDb(prisma, organizationId);
   if (logger) {
     logProfileSection({
       logger,

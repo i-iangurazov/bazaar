@@ -135,12 +135,7 @@ export const listStoreProductCategoriesFromDb = async (
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
   }
 
-  const [savedCategories, products, templateCategories, preferences] = await Promise.all([
-    db.productCategory.findMany({
-      where: { organizationId: input.organizationId },
-      select: { name: true },
-      orderBy: { name: "asc" },
-    }),
+  const [products, preferences] = await Promise.all([
     db.product.findMany({
       where: {
         organizationId: input.organizationId,
@@ -153,11 +148,6 @@ export const listStoreProductCategoriesFromDb = async (
         },
       },
       select: { category: true, categories: true },
-    }),
-    db.categoryAttributeTemplate.findMany({
-      where: { organizationId: input.organizationId },
-      select: { category: true },
-      distinct: ["category"],
     }),
     db.storeCategoryPreference.findMany({
       where: { organizationId: input.organizationId, storeId: input.storeId },
@@ -172,8 +162,6 @@ export const listStoreProductCategoriesFromDb = async (
 
   const categories = new Map<string, CategoryAccumulatorValue>();
 
-  savedCategories.forEach((item) => addCategoryToAccumulator(categories, item.name));
-
   products.forEach((product) => {
     const uniqueProductCategoryKeys = new Set<string>();
     normalizeProductCategoryNames([product.category, ...product.categories]).forEach((name) => {
@@ -185,8 +173,6 @@ export const listStoreProductCategoriesFromDb = async (
       addCategoryToAccumulator(categories, name, { productCount: 1 });
     });
   });
-
-  templateCategories.forEach((item) => addCategoryToAccumulator(categories, item.category));
 
   preferences.forEach((preference) => {
     addCategoryToAccumulator(categories, preference.name);

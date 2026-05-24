@@ -106,5 +106,9 @@ describe("integration source structure", () => {
     expect(emailService).toContain("processEmailAutomationTrigger");
     expect(imageStudioPage).toContain("<TableContainer>");
     expect(imageStudioPage).toContain('className="min-w-[860px]"');
+    expect(imageStudioPage).toContain("activeJobFromList");
+    expect(imageStudioPage).toContain("previewIsWorking");
+    expect(imageStudioPage).toContain("generatedPreviewUrl");
+    expect(imageStudioPage).toContain("animate-pulse");
   });
 });

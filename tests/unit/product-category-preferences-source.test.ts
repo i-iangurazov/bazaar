@@ -36,6 +36,8 @@ describe("store category preferences source", () => {
     expect(source).toContain("categoryHiddenBadge");
     expect(source).toContain("categoryShowHidden");
     expect(source).toContain("categoryMetaByKey");
+    expect(source).not.toContain("legacyCategoryOptionsQuery");
+    expect(source).not.toContain("trpc.productCategories.list.useQuery");
   });
 
   it("adds a category management route", async () => {

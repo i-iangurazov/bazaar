@@ -24,18 +24,21 @@ describe("product image studio helpers", () => {
       brighterPresentation: true,
     });
 
-    expect(prompt).toContain("Edit the provided product photo");
+    expect(prompt).toContain("Retouch the provided product photo");
     expect(prompt).toContain("Sneaker X");
     expect(prompt).toContain("light gray studio background");
+    expect(prompt).toContain("not a new product generation");
     expect(prompt).toContain("Preserve the exact same real product");
     expect(prompt).toContain("Do not change the product variant");
+    expect(prompt).toContain("Do not replace the item with a similar product");
   });
 
   it("appends identity-preservation guardrails", () => {
     const guarded = ensurePromptPreservesProductIdentity("Base instruction");
 
     expect(guarded).toContain("Base instruction");
-    expect(guarded).toContain("Do not invent missing details");
+    expect(guarded).toContain("invent missing details");
+    expect(guarded).toContain("Only improve background");
     expect(guarded).toContain("Keep the result realistic");
   });
 

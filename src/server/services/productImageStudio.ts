@@ -25,8 +25,8 @@ export const PRODUCT_IMAGE_STUDIO_JOB_NAME = "product-image-studio-process";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_AI_MODEL = "gpt-5-nano";
-const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1-mini";
-const DEFAULT_OPENAI_IMAGE_QUALITY = "medium";
+const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1";
+const DEFAULT_OPENAI_IMAGE_QUALITY = "high";
 const PROVIDER_NAME = "openai";
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
@@ -131,7 +131,7 @@ const resolveOpenAiImageQuality = (value?: string | null): OpenAiImageQuality =>
 };
 
 const supportsOpenAiInputFidelity = (imageModel: string) =>
-  imageModel.trim().toLowerCase() !== "gpt-image-1-mini";
+  /^gpt-image-1(?:$|-mini$|\.5$)/i.test(imageModel.trim());
 
 const resolveProviderConfig = () => {
   const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
@@ -284,10 +284,13 @@ export const validatePresetSelection = (input: ProductImageStudioPresetInput) =>
 export const ensurePromptPreservesProductIdentity = (instruction: string) =>
   [
     instruction.trim(),
+    "This is an image edit of the provided product photo, not a new product generation.",
+    "Use the source image as the only authority for the product's identity and visible details.",
     "Preserve the exact same real product from the source image.",
     "Do not change the product variant, color, material, proportions, branding, packaging text, or visible features.",
-    "Do not invent missing details, remove real details, add props, add extra products, or stylize the product.",
-    "Keep the result realistic, faithful, and suitable for a marketplace catalog.",
+    "Do not replace the item with a similar product, redesign it, invent missing details, remove real details, add props, add extra products, add people, add mannequins, or stylize the product.",
+    "Only improve background, lighting, crop, sharpness, white balance, dust/noise cleanup, and presentation.",
+    "Keep the result realistic, faithful, and suitable for a marketplace catalog product card.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -299,10 +302,12 @@ export const buildProductImageEditInstruction = (
 ) => {
   const backgroundText =
     input.backgroundMode === ProductImageStudioBackground.LIGHT_GRAY
-      ? "a clean light gray studio background"
-      : "a clean white studio background";
+      ? "a clean light gray studio background (#f3f4f6)"
+      : "a clean pure white studio background (#ffffff)";
   const optionalEnhancements = [
-    input.softShadow ? "Add a soft, natural studio shadow under the product." : null,
+    input.softShadow
+      ? "Add only a subtle contact shadow that matches the source product shape."
+      : "Avoid dramatic shadows; keep lighting clean and catalog-neutral.",
     input.tighterCrop
       ? "Crop slightly tighter while keeping the entire product fully visible with comfortable padding."
       : "Keep comfortable padding around the fully visible product.",
@@ -312,11 +317,11 @@ export const buildProductImageEditInstruction = (
   ].filter(Boolean);
 
   const baseInstruction = [
-    "Edit the provided product photo into a marketplace-ready studio catalog image.",
+    "Retouch the provided product photo into a marketplace-ready studio catalog image.",
     input.productName ? `The product shown is "${input.productName}".` : null,
-    `Remove any messy or distracting background and place the product on ${backgroundText}.`,
-    "Center the product in a square composition.",
-    "Improve clarity, visibility, and overall presentation while staying faithful to the source.",
+    `Remove only the messy or distracting background and place the same product on ${backgroundText}.`,
+    "Center the original product in a square composition without changing its silhouette.",
+    "Improve clarity, edge cleanliness, visibility, and overall presentation while staying faithful to the source.",
     ...optionalEnhancements,
     "Return one clean catalog image only.",
   ]
@@ -486,7 +491,7 @@ const callOpenAiImageEnhancement = async (input: {
     size: "1024x1024",
     quality: config.imageQuality,
     output_format: "jpeg",
-    output_compression: 90,
+    output_compression: 95,
     background: "opaque",
   };
   if (supportsOpenAiInputFidelity(config.imageModel)) {
@@ -512,6 +517,15 @@ const callOpenAiImageEnhancement = async (input: {
   const requestBody = {
     model: config.model,
     input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: "You are a product photo retoucher. Preserve the input product exactly and perform only studio-background, lighting, cleanup, and crop edits.",
+          },
+        ],
+      },
       {
         role: "user",
         content: [

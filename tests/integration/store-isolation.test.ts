@@ -1,4 +1,12 @@
-import { CustomerOrderStatus, ExportJobStatus, ExportType, Prisma, Role, StockMovementType } from "@prisma/client";
+import {
+  AttributeType,
+  CustomerOrderStatus,
+  ExportJobStatus,
+  ExportType,
+  Prisma,
+  Role,
+  StockMovementType,
+} from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
@@ -196,6 +204,90 @@ describeDb("store isolation", () => {
 
     expect(storeAResult).toHaveLength(0);
     expect(storeBResult.map((item) => item.id)).toContain(product.id);
+  });
+
+  it("lists product form categories from the selected store only", async () => {
+    const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const storeB = await caller.stores.create({
+      name: "Second Store",
+      code: "SEC",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+    });
+
+    await prisma.productCategory.createMany({
+      data: [
+        { organizationId: org.id, name: "Saved Global Only" },
+        { organizationId: org.id, name: "Store A Saved Name" },
+      ],
+    });
+    await prisma.attributeDefinition.create({
+      data: {
+        organizationId: org.id,
+        key: "template_attr",
+        labelRu: "Template attr",
+        labelKg: "Template attr",
+        type: AttributeType.TEXT,
+      },
+    });
+    await prisma.categoryAttributeTemplate.create({
+      data: {
+        organizationId: org.id,
+        category: "Template Global Only",
+        attributeKey: "template_attr",
+      },
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-store-a-category",
+      sku: "STORE-A-CAT",
+      name: "Store A Category Product",
+      category: "Store A Only",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-store-b-category",
+      sku: "STORE-B-CAT",
+      name: "Store B Category Product",
+      category: "Store B Only",
+      baseUnitId: baseUnit.id,
+      storeId: storeB.id,
+    });
+    await caller.productCategories.setStoreVisibility({
+      storeId: storeB.id,
+      name: "Store B Manual",
+      isVisibleInForms: true,
+      isArchived: false,
+    });
+
+    const storeACategories = await caller.productCategories.listForStore({
+      storeId: store.id,
+      includeHidden: true,
+    });
+    const storeBCategories = await caller.productCategories.listForStore({
+      storeId: storeB.id,
+      includeHidden: true,
+    });
+
+    expect(storeACategories.map((category) => category.name)).toContain("Store A Only");
+    expect(storeACategories.map((category) => category.name)).not.toContain("Store B Only");
+    expect(storeACategories.map((category) => category.name)).not.toContain("Saved Global Only");
+    expect(storeACategories.map((category) => category.name)).not.toContain("Template Global Only");
+    expect(storeBCategories.map((category) => category.name)).toEqual([
+      "Store B Manual",
+      "Store B Only",
+    ]);
   });
 
   it("restricts cashier store selector and products to assigned stores", async () => {
