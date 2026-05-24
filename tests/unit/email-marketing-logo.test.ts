@@ -322,6 +322,45 @@ describe("email marketing logo rendering", () => {
     expect(rendered.text).not.toContain("Deleted block heading");
   });
 
+  it("renders saved block alignment in email-safe HTML", () => {
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "centered-header",
+            type: "header",
+            showStoreName: true,
+            showLogo: true,
+            heading: "Centered header",
+            alignment: "center",
+          },
+          {
+            id: "right-text",
+            type: "text",
+            heading: "Right heading",
+            body: "Right body",
+            alignment: "right",
+          },
+          {
+            id: "center-button",
+            type: "button",
+            text: "Centered CTA",
+            url: "https://example.com/cta",
+            alignment: "center",
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: "https://cdn.example.com/logo.png",
+    });
+
+    expect(rendered.html).toContain("text-align:center");
+    expect(rendered.html).toContain("text-align:right");
+    expect(rendered.html).toContain("margin:0 auto 8px");
+    expect(rendered.html).toContain("Centered CTA");
+  });
+
   it("respects product description visibility in product blocks", () => {
     const productsById = new Map([
       [

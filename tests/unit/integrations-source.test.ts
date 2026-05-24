@@ -61,6 +61,8 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("onLogoUploadClick={() => logoInputRef.current?.click()}");
     expect(emailWorkspace).toContain("Нужна прямая ссылка на файл изображения");
     expect(emailWorkspace).toContain("Показывать описание");
+    expect(emailWorkspace).toContain("Расположение");
+    expect(emailWorkspace).toContain("AlignmentControl");
     expect(emailWorkspace).toContain("Строка заказа");
     expect(emailWorkspace).toContain("{{orderPreviousStatus}}");
     expect(emailWorkspace).toContain("Bazaar KG");
@@ -69,6 +71,7 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("Редактор писем доступен только на компьютере");
     expect(emailWorkspace).toContain("disabled={!builderAvailable}");
     expect(emailRouter).toContain("showDescription: z.boolean().optional()");
+    expect(emailRouter).toContain('z.enum(["left", "center", "right"])');
     expect(emailRouter).toContain("summaryText: z.string().max(500).optional().nullable()");
     expect(emailRouter).toContain("fontFamily: z.nativeEnum(EmailCampaignFontFamily).optional()");
     expect(emailWorkspace).toContain('includeSelectableIds: audienceMode === "manual"');

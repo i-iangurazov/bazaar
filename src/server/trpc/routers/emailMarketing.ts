@@ -51,6 +51,7 @@ const audienceSchema = z
   })
   .optional()
   .nullable();
+const blockAlignmentSchema = z.enum(["left", "center", "right"]);
 
 const headerBlockSchema = z.object({
   id: z.string().min(1),
@@ -59,6 +60,7 @@ const headerBlockSchema = z.object({
   showLogo: z.boolean().optional(),
   storeName: z.string().max(180).optional().nullable(),
   heading: z.string().max(180).optional().nullable(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const heroBlockSchema = z.object({
@@ -69,6 +71,7 @@ const heroBlockSchema = z.object({
   subtitle: z.string().max(1_000).optional().nullable(),
   buttonText: z.string().max(80).optional().nullable(),
   buttonUrl: z.string().max(500).optional().nullable(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const textBlockSchema = z.object({
@@ -76,6 +79,7 @@ const textBlockSchema = z.object({
   type: z.literal("text"),
   heading: z.string().max(180).optional().nullable(),
   body: z.string().max(8_000).optional().nullable(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const buttonBlockSchema = z.object({
@@ -83,6 +87,7 @@ const buttonBlockSchema = z.object({
   type: z.literal("button"),
   text: z.string().max(80).optional().nullable(),
   url: z.string().max(500).optional().nullable(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const productsBlockSchema = z.object({
@@ -96,6 +101,7 @@ const productsBlockSchema = z.object({
   buttonText: z.string().max(80).optional().nullable(),
   buttonUrl: z.string().max(500).optional().nullable(),
   layout: z.enum(["one", "two"]).optional(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const orderSummaryBlockSchema = z.object({
@@ -111,6 +117,7 @@ const orderSummaryBlockSchema = z.object({
   showSummary: z.boolean().optional(),
   showItems: z.boolean().optional(),
   showTotals: z.boolean().optional(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const promoBlockSchema = z.object({
@@ -122,6 +129,7 @@ const promoBlockSchema = z.object({
   expiryText: z.string().max(180).optional().nullable(),
   buttonText: z.string().max(80).optional().nullable(),
   buttonUrl: z.string().max(500).optional().nullable(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const dividerBlockSchema = z.object({
@@ -138,6 +146,7 @@ const footerBlockSchema = z.object({
   text: z.string().max(800).optional().nullable(),
   unsubscribeText: z.string().max(500).optional().nullable(),
   showUnsubscribe: z.boolean().optional(),
+  alignment: blockAlignmentSchema.optional(),
 });
 
 const blockSchema = z.discriminatedUnion("type", [

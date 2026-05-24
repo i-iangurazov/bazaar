@@ -10,9 +10,9 @@ import {
 } from "@/app/(app)/operations/integrations/email-marketing/builder-utils";
 
 type TestBlock =
-  | { id: string; type: "text"; heading?: string; body?: string }
-  | { id: string; type: "products"; productIds?: string[] }
-  | { id: string; type: "footer"; text?: string };
+  | { id: string; type: "text"; heading?: string; body?: string; alignment?: "left" | "center" | "right" }
+  | { id: string; type: "products"; productIds?: string[]; alignment?: "left" | "center" | "right" }
+  | { id: string; type: "footer"; text?: string; alignment?: "left" | "center" | "right" };
 
 const blocks = (): TestBlock[] => [
   { id: "header", type: "text", heading: "Header" },
@@ -29,9 +29,12 @@ describe("email marketing builder block operations", () => {
 
   it("updates a block without mutating other blocks", () => {
     const current = blocks();
-    const next = updateBuilderBlock(current, "header", { heading: "Updated heading" });
+    const next = updateBuilderBlock(current, "header", {
+      heading: "Updated heading",
+      alignment: "center",
+    });
 
-    expect(next[0]).toMatchObject({ id: "header", heading: "Updated heading" });
+    expect(next[0]).toMatchObject({ id: "header", heading: "Updated heading", alignment: "center" });
     expect(next[1]).toBe(current[1]);
   });
 

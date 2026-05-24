@@ -49,6 +49,8 @@ export type EmailCampaignAudienceInput = {
   recentDays?: number | null;
 };
 
+type EmailBlockAlignment = "left" | "center" | "right";
+
 export type EmailCampaignBlock =
   | {
       id: string;
@@ -57,6 +59,7 @@ export type EmailCampaignBlock =
       showLogo?: boolean;
       storeName?: string | null;
       heading?: string | null;
+      alignment?: EmailBlockAlignment;
     }
   | {
       id: string;
@@ -66,18 +69,21 @@ export type EmailCampaignBlock =
       subtitle?: string | null;
       buttonText?: string | null;
       buttonUrl?: string | null;
+      alignment?: EmailBlockAlignment;
     }
   | {
       id: string;
       type: "text";
       heading?: string | null;
       body?: string | null;
+      alignment?: EmailBlockAlignment;
     }
   | {
       id: string;
       type: "button";
       text?: string | null;
       url?: string | null;
+      alignment?: EmailBlockAlignment;
     }
   | {
       id: string;
@@ -90,6 +96,7 @@ export type EmailCampaignBlock =
       buttonText?: string | null;
       buttonUrl?: string | null;
       layout?: "one" | "two";
+      alignment?: EmailBlockAlignment;
     }
 	  | {
 	      id: string;
@@ -104,6 +111,7 @@ export type EmailCampaignBlock =
 	      showSummary?: boolean;
 	      showItems?: boolean;
 	      showTotals?: boolean;
+	      alignment?: EmailBlockAlignment;
 	    }
   | {
       id: string;
@@ -114,6 +122,7 @@ export type EmailCampaignBlock =
       expiryText?: string | null;
       buttonText?: string | null;
       buttonUrl?: string | null;
+      alignment?: EmailBlockAlignment;
     }
   | {
       id: string;
@@ -128,6 +137,7 @@ export type EmailCampaignBlock =
       text?: string | null;
       unsubscribeText?: string | null;
       showUnsubscribe?: boolean;
+      alignment?: EmailBlockAlignment;
     };
 
 type EmailCampaignComposerInput = {
@@ -2189,6 +2199,19 @@ const textToHtml = (value: string) =>
 const renderButton = (input: { href: string; text: string; color: string; textColor: string }) =>
   `<a href="${escapeHtml(input.href)}" style="display:inline-block;background:${input.color};color:${input.textColor};text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700;">${escapeHtml(input.text)}</a>`;
 
+const normalizeBlockAlignment = (alignment?: string | null): EmailBlockAlignment =>
+  alignment === "center" || alignment === "right" ? alignment : "left";
+
+const imageMarginForAlignment = (alignment: EmailBlockAlignment, bottomMargin = 8) => {
+  if (alignment === "center") {
+    return `0 auto ${bottomMargin}px`;
+  }
+  if (alignment === "right") {
+    return `0 0 ${bottomMargin}px auto`;
+  }
+  return `0 0 ${bottomMargin}px`;
+};
+
 export const renderEmailCampaign = (input: {
   campaign: NormalizedEmailCampaign;
   store: EmailMarketingStore;
@@ -2241,16 +2264,17 @@ export const renderEmailCampaign = (input: {
 
   for (const block of input.campaign.blocks) {
     if (block.type === "header") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const heading = trimOptional(renderVariables(block.heading, variableContext));
       const headerStoreName =
         trimOptional(renderVariables(block.storeName, variableContext)) ?? storeName;
       const showLogo = block.showLogo ?? true;
       const showStoreName = block.showStoreName ?? true;
       htmlParts.push(`
-        <div style="padding:22px 24px;border-bottom:1px solid ${borderColor};text-align:left;">
+        <div style="padding:22px 24px;border-bottom:1px solid ${borderColor};text-align:${alignment};">
           ${
             showLogo && input.logoUrl
-              ? `<img src="${escapeHtml(input.logoUrl)}" alt="${escapeHtml(headerStoreName)}" width="140" style="display:block;width:140px;max-width:100%;max-height:120px;height:auto;object-fit:contain;margin:0 0 8px;" />`
+              ? `<img src="${escapeHtml(input.logoUrl)}" alt="${escapeHtml(headerStoreName)}" width="140" style="display:block;width:140px;max-width:100%;max-height:120px;height:auto;object-fit:contain;margin:${imageMarginForAlignment(alignment)};" />`
               : ""
           }
           ${showStoreName ? `<div style="font-size:18px;font-weight:800;color:${brandColor};">${escapeHtml(headerStoreName)}</div>` : ""}
@@ -2261,13 +2285,14 @@ export const renderEmailCampaign = (input: {
     }
 
     if (block.type === "hero") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const imageUrl = resolveEmailMarketingAssetUrl(block.imageUrl);
       const heading = trimOptional(renderVariables(block.heading, variableContext));
       const subtitle = trimOptional(renderVariables(block.subtitle, variableContext));
       const buttonText = trimOptional(renderVariables(block.buttonText, variableContext));
       const buttonUrl = resolveEmailLinkUrl(block.buttonUrl, input.baseUrl);
       htmlParts.push(`
-        <div style="padding:24px;">
+        <div style="padding:24px;text-align:${alignment};">
           ${
             imageUrl
               ? `<img src="${escapeHtml(imageUrl)}" alt="" style="display:block;width:100%;height:auto;max-height:300px;object-fit:cover;margin:0 0 20px;" />`
@@ -2286,10 +2311,11 @@ export const renderEmailCampaign = (input: {
     }
 
     if (block.type === "text") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const heading = trimOptional(renderVariables(block.heading, variableContext));
       const body = trimOptional(renderVariables(block.body, variableContext));
       htmlParts.push(`
-        <div style="padding:8px 24px 22px;">
+        <div style="padding:8px 24px 22px;text-align:${alignment};">
           ${heading ? `<h2 style="margin:0 0 10px;color:${textColor};font-size:20px;line-height:1.3;">${escapeHtml(heading)}</h2>` : ""}
           ${body ? `<div style="color:${mutedTextColor};font-size:15px;line-height:1.65;">${textToHtml(body)}</div>` : ""}
         </div>
@@ -2298,11 +2324,12 @@ export const renderEmailCampaign = (input: {
     }
 
     if (block.type === "button") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const text = trimOptional(renderVariables(block.text, variableContext));
       const href = resolveEmailLinkUrl(block.url, input.baseUrl);
       if (text && href) {
         htmlParts.push(`
-          <div style="padding:8px 24px 24px;text-align:left;">
+          <div style="padding:8px 24px 24px;text-align:${alignment};">
             ${renderButton({ href, text, color: buttonColor, textColor: buttonTextColor })}
           </div>
         `);
@@ -2311,6 +2338,7 @@ export const renderEmailCampaign = (input: {
     }
 
     if (block.type === "products") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const ids = block.productIds ?? [];
       const selectedProducts = ids.flatMap((id) => {
         const product = productsById.get(id);
@@ -2332,7 +2360,7 @@ export const renderEmailCampaign = (input: {
         const href = blockUrl ?? product.publicUrl ?? catalogUrl;
         return `
           <td style="width:${layout === "two" ? "50%" : "100%"};padding:8px;vertical-align:top;">
-            <div style="border:1px solid ${borderColor};padding:14px;background:${contentBackgroundColor};">
+            <div style="border:1px solid ${borderColor};padding:14px;background:${contentBackgroundColor};text-align:${alignment};">
               ${
                 showImage && product.imageUrl
                   ? `<img src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.name)}" style="display:block;width:100%;height:auto;margin:0 0 12px;" />`
@@ -2385,6 +2413,7 @@ export const renderEmailCampaign = (input: {
     }
 
 	    if (block.type === "orderSummary") {
+	      const alignment = normalizeBlockAlignment(block.alignment);
 	      const title =
 	        trimOptional(renderVariables(block.title, variableContext)) ?? "Сводка заказа";
 	      const summaryText = trimOptional(
@@ -2421,13 +2450,13 @@ export const renderEmailCampaign = (input: {
           : "";
       htmlParts.push(`
         <div style="padding:8px 24px 24px;">
-	          <div style="border:1px solid ${borderColor};padding:16px;background:${contentBackgroundColor};">
-	            <h2 style="margin:0 0 12px;color:${textColor};font-size:20px;line-height:1.3;">${escapeHtml(title)}</h2>
+	          <div style="border:1px solid ${borderColor};padding:16px;background:${contentBackgroundColor};text-align:${alignment};">
+	            <h2 style="margin:0 0 12px;color:${textColor};font-size:20px;line-height:1.3;text-align:${alignment};">${escapeHtml(title)}</h2>
 	            ${
 	              showSummary && summaryText
-	                ? `<p style="margin:0 0 12px;color:${mutedTextColor};font-size:14px;line-height:1.5;">${escapeHtml(summaryText)}</p>`
+	                ? `<p style="margin:0 0 12px;color:${mutedTextColor};font-size:14px;line-height:1.5;text-align:${alignment};">${escapeHtml(summaryText)}</p>`
 	                : !order && emptyOrderText
-	                  ? `<p style="margin:0 0 12px;color:${mutedTextColor};font-size:14px;line-height:1.5;">${escapeHtml(emptyOrderText)}</p>`
+	                  ? `<p style="margin:0 0 12px;color:${mutedTextColor};font-size:14px;line-height:1.5;text-align:${alignment};">${escapeHtml(emptyOrderText)}</p>`
 	                  : ""
 	            }
 	            ${
@@ -2437,7 +2466,7 @@ export const renderEmailCampaign = (input: {
 	            }
 	            ${
 	              order && showTotals
-	                ? `<p style="margin:14px 0 0;color:${textColor};font-size:16px;font-weight:800;text-align:right;">${escapeHtml(totalLabel)}: ${escapeHtml(order.totalText)}</p>`
+	                ? `<p style="margin:14px 0 0;color:${textColor};font-size:16px;font-weight:800;text-align:${alignment};">${escapeHtml(totalLabel)}: ${escapeHtml(order.totalText)}</p>`
 	                : ""
 	            }
 	          </div>
@@ -2462,6 +2491,7 @@ export const renderEmailCampaign = (input: {
 	    }
 
     if (block.type === "promo") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const title = trimOptional(renderVariables(block.title, variableContext));
       const code = trimOptional(renderVariables(block.discountCode, variableContext));
       const description = trimOptional(renderVariables(block.description, variableContext));
@@ -2470,7 +2500,7 @@ export const renderEmailCampaign = (input: {
       const buttonUrl = resolveEmailLinkUrl(block.buttonUrl, input.baseUrl);
       htmlParts.push(`
         <div style="padding:8px 24px 24px;">
-          <div style="border:1px solid ${brandColor};background:${backgroundColor};padding:18px;">
+          <div style="border:1px solid ${brandColor};background:${backgroundColor};padding:18px;text-align:${alignment};">
             ${title ? `<h2 style="margin:0 0 8px;color:${textColor};font-size:22px;line-height:1.25;">${escapeHtml(title)}</h2>` : ""}
             ${code ? `<div style="display:inline-block;border:1px dashed ${brandColor};background:${contentBackgroundColor};color:${textColor};padding:8px 12px;margin:4px 0 10px;font-size:18px;font-weight:800;letter-spacing:1px;">${escapeHtml(code)}</div>` : ""}
             ${description ? `<p style="margin:0 0 8px;color:${mutedTextColor};font-size:15px;line-height:1.6;">${textToHtml(description)}</p>` : ""}
@@ -2493,6 +2523,7 @@ export const renderEmailCampaign = (input: {
     }
 
     if (block.type === "footer") {
+      const alignment = normalizeBlockAlignment(block.alignment);
       const customStoreName = trimOptional(renderVariables(block.storeName, variableContext));
       const phone =
         trimOptional(renderVariables(block.phone, variableContext)) ?? input.store.phone;
@@ -2512,7 +2543,7 @@ export const renderEmailCampaign = (input: {
             ? escapeHtml(unsubscribeText)
             : "";
       htmlParts.push(`
-        <div style="padding:18px 24px;border-top:1px solid ${borderColor};color:${mutedTextColor};font-size:12px;line-height:1.55;">
+        <div style="padding:18px 24px;border-top:1px solid ${borderColor};color:${mutedTextColor};font-size:12px;line-height:1.55;text-align:${alignment};">
           <p style="margin:0 0 8px;">${escapeHtml(text)}</p>
           <p style="margin:0;">${escapeHtml(customStoreName ?? storeName)}${phone ? ` · ${escapeHtml(phone)}` : ""}${address ? ` · ${escapeHtml(address)}` : ""}</p>
           ${unsubscribeHtml ? `<p style="margin:8px 0 0;">${unsubscribeHtml}</p>` : ""}

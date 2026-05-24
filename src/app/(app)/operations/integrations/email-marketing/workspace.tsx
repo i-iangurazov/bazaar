@@ -37,6 +37,9 @@ import { useLocale, useTranslations } from "next-intl";
 
 import {
   AddIcon,
+  AlignCenterIcon,
+  AlignLeftIcon,
+  AlignRightIcon,
   ArchiveIcon,
   ArrowDownIcon,
   ArrowUpIcon,
@@ -96,6 +99,7 @@ type AudienceSegment = "all" | "new" | "source" | "withPurchases" | "withoutPurc
 type TabKey = "campaigns" | "automations" | "senders" | "templates";
 type PreviewMode = "desktop" | "mobile";
 type BuilderMode = "campaign" | "automation";
+type BlockAlignment = "left" | "center" | "right";
 
 const builderDesktopMediaQuery = "(min-width: 1280px) and (pointer: fine)";
 const builderUnavailableMessage =
@@ -161,6 +165,7 @@ type CampaignBlock =
       showLogo?: boolean;
       storeName?: string | null;
       heading?: string | null;
+      alignment?: BlockAlignment;
     }
   | {
       id: string;
@@ -170,18 +175,21 @@ type CampaignBlock =
       subtitle?: string | null;
       buttonText?: string | null;
       buttonUrl?: string | null;
+      alignment?: BlockAlignment;
     }
   | {
       id: string;
       type: "text";
       heading?: string | null;
       body?: string | null;
+      alignment?: BlockAlignment;
     }
   | {
       id: string;
       type: "button";
       text?: string | null;
       url?: string | null;
+      alignment?: BlockAlignment;
     }
   | {
       id: string;
@@ -194,6 +202,7 @@ type CampaignBlock =
       buttonText?: string | null;
       buttonUrl?: string | null;
       layout?: "one" | "two";
+      alignment?: BlockAlignment;
     }
 	  | {
 	      id: string;
@@ -208,6 +217,7 @@ type CampaignBlock =
 	      showSummary?: boolean;
 	      showItems?: boolean;
 	      showTotals?: boolean;
+	      alignment?: BlockAlignment;
 	    }
   | {
       id: string;
@@ -218,6 +228,7 @@ type CampaignBlock =
       expiryText?: string | null;
       buttonText?: string | null;
       buttonUrl?: string | null;
+      alignment?: BlockAlignment;
     }
   | {
       id: string;
@@ -232,6 +243,7 @@ type CampaignBlock =
       text?: string | null;
       unsubscribeText?: string | null;
       showUnsubscribe?: boolean;
+      alignment?: BlockAlignment;
     };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -245,6 +257,31 @@ const defaultEmailBorderColor = "#e5e7eb";
 const colorPattern = /^#[0-9a-fA-F]{6}$/;
 const checkboxClass =
   "h-4 w-4 rounded border border-border text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+const blockAlignmentOptions = [
+  { value: "left", label: "Слева", icon: AlignLeftIcon },
+  { value: "center", label: "По центру", icon: AlignCenterIcon },
+  { value: "right", label: "Справа", icon: AlignRightIcon },
+] satisfies Array<{ value: BlockAlignment; label: string; icon: typeof AlignLeftIcon }>;
+
+const normalizeBlockAlignment = (alignment?: BlockAlignment | null): BlockAlignment =>
+  alignment === "center" || alignment === "right" ? alignment : "left";
+
+const alignmentClassName = (alignment?: BlockAlignment | null) => {
+  const normalized = normalizeBlockAlignment(alignment);
+  if (normalized === "center") return "text-center";
+  if (normalized === "right") return "text-right";
+  return "text-left";
+};
+
+const logoAlignmentClassName = (alignment?: BlockAlignment | null) => {
+  const normalized = normalizeBlockAlignment(alignment);
+  if (normalized === "center") return "mx-auto";
+  if (normalized === "right") return "ml-auto";
+  return "";
+};
+
+const getBlockAlignment = (block: CampaignBlock): BlockAlignment =>
+  "alignment" in block ? normalizeBlockAlignment(block.alignment) : "left";
 
 const sourceValues = [
   CustomerSource.IMPORT,
@@ -2064,13 +2101,18 @@ const EmailBlockPreview = ({
   onLogoUploadClick?: () => void;
   onUpdate: (patch: Partial<CampaignBlock>) => void;
 }) => {
+  const alignment = getBlockAlignment(block);
+  const alignedClassName = alignmentClassName(alignment);
   if (block.type === "header") {
     return (
-      <div className="px-8 py-6">
+      <div className={cn("px-8 py-6", alignedClassName)}>
         {block.showLogo === false ? null : (
           <button
             type="button"
-            className="mb-3 block rounded-md outline-none transition hover:ring-2 hover:ring-primary/20 focus-visible:ring-2 focus-visible:ring-primary"
+            className={cn(
+              "mb-3 block rounded-md outline-none transition hover:ring-2 hover:ring-primary/20 focus-visible:ring-2 focus-visible:ring-primary",
+              logoAlignmentClassName(alignment),
+            )}
             onClick={(event) => {
               event.stopPropagation();
               onLogoUploadClick?.();
@@ -2112,7 +2154,7 @@ const EmailBlockPreview = ({
   }
   if (block.type === "hero") {
     return (
-      <div className="px-8 py-6">
+      <div className={cn("px-8 py-6", alignedClassName)}>
         <PreviewImageFrame
           src={block.imageUrl}
           alt=""
@@ -2153,7 +2195,7 @@ const EmailBlockPreview = ({
   }
   if (block.type === "text") {
     return (
-      <div className="px-8 py-5">
+      <div className={cn("px-8 py-5", alignedClassName)}>
         <EditableText value={block.heading} placeholder="Заголовок" selected={selected} className="text-xl font-semibold" onChange={(heading) => onUpdate({ heading })} />
         <EditableText value={block.body} placeholder="Текст письма" selected={selected} multiline className="mt-2 whitespace-pre-wrap text-sm leading-6" onChange={(body) => onUpdate({ body })} />
       </div>
@@ -2161,7 +2203,7 @@ const EmailBlockPreview = ({
   }
   if (block.type === "button") {
     return (
-      <div className="px-8 py-5">
+      <div className={cn("px-8 py-5", alignedClassName)}>
         <EditableText
           value={block.text}
           placeholder="Текст кнопки"
@@ -2180,7 +2222,7 @@ const EmailBlockPreview = ({
         {ids.length ? ids.map((id) => {
           const product = products.get(id);
           return (
-            <div key={id} className="rounded-md border p-3" style={{ borderColor }}>
+            <div key={id} className={cn("rounded-md border p-3", alignedClassName)} style={{ borderColor }}>
               {block.showImage === false ? null : (
                 <PreviewImageFrame
                   src={product?.imageUrl}
@@ -2222,7 +2264,7 @@ const EmailBlockPreview = ({
     const sampleItemName = block.sampleItemName ?? "Товар";
     return (
       <div className="px-8 py-5">
-        <div className="rounded-md border p-4" style={{ borderColor }}>
+        <div className={cn("rounded-md border p-4", alignedClassName)} style={{ borderColor }}>
           <EditableText value={block.title} placeholder="Состав заказа" selected={selected} className="font-semibold" onChange={(title) => onUpdate({ title })} />
           {block.showSummary === false ? null : (
             <EditableText
@@ -2276,7 +2318,7 @@ const EmailBlockPreview = ({
   if (block.type === "promo") {
     return (
       <div className="px-8 py-5">
-        <div className="rounded-md border p-5" style={{ borderColor: brandColor, backgroundColor: "#f9fafb" }}>
+        <div className={cn("rounded-md border p-5", alignedClassName)} style={{ borderColor: brandColor, backgroundColor: "#f9fafb" }}>
           <EditableText value={block.title} placeholder="Название акции" selected={selected} className="text-xl font-semibold" onChange={(title) => onUpdate({ title })} />
           <EditableText value={block.discountCode} placeholder="Промокод" selected={selected} className="mt-3 inline-flex border border-dashed px-3 py-2 font-bold" onChange={(discountCode) => onUpdate({ discountCode })} />
           <EditableText value={block.description} placeholder="Описание акции" selected={selected} multiline className="mt-3 text-sm leading-6" onChange={(description) => onUpdate({ description })} />
@@ -2297,13 +2339,48 @@ const EmailBlockPreview = ({
     return <div className="px-8 py-4"><div className="border-t" style={{ borderColor }} /></div>;
   }
   return (
-    <div className="border-t px-8 py-5 text-xs leading-5" style={{ borderColor, color: mutedTextColor }}>
+    <div className={cn("border-t px-8 py-5 text-xs leading-5", alignedClassName)} style={{ borderColor, color: mutedTextColor }}>
       <EditableText value={block.storeName} placeholder="Название магазина" selected={selected} className="mb-2 font-semibold" onChange={(storeName) => onUpdate({ storeName })} />
       <EditableText value={block.text} placeholder="Текст подвала" selected={selected} multiline onChange={(text) => onUpdate({ text })} />
       {block.showUnsubscribe === false ? null : (
         <EditableText value={block.unsubscribeText} placeholder="Текст ссылки отписки" selected={selected} className="mt-2 underline" onChange={(unsubscribeText) => onUpdate({ unsubscribeText })} />
       )}
     </div>
+  );
+};
+
+const AlignmentControl = ({
+  value,
+  onChange,
+}: {
+  value?: BlockAlignment | null;
+  onChange: (value: BlockAlignment) => void;
+}) => {
+  const current = normalizeBlockAlignment(value);
+  return (
+    <Field label="Расположение">
+      <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted/20 p-1">
+        {blockAlignmentOptions.map((option) => {
+          const Icon = option.icon;
+          const active = current === option.value;
+          return (
+            <Button
+              key={option.value}
+              type="button"
+              size="sm"
+              variant={active ? "secondary" : "ghost"}
+              className={cn("h-9 justify-center px-2", active && "bg-background shadow-sm")}
+              aria-pressed={active}
+              title={option.label}
+              onClick={() => onChange(option.value)}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              <span className="sr-only">{option.label}</span>
+            </Button>
+          );
+        })}
+      </div>
+    </Field>
   );
 };
 
@@ -2319,6 +2396,7 @@ const BlockSettings = ({
   if (block.type === "header") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Название магазина">
           <Input
             value={block.storeName ?? ""}
@@ -2341,6 +2419,7 @@ const BlockSettings = ({
   if (block.type === "hero") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Заголовок">
           <Input value={block.heading ?? ""} onChange={(event) => update({ heading: event.target.value })} />
         </Field>
@@ -2356,6 +2435,7 @@ const BlockSettings = ({
   if (block.type === "text") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Заголовок">
           <Input value={block.heading ?? ""} onChange={(event) => update({ heading: event.target.value })} />
         </Field>
@@ -2368,6 +2448,7 @@ const BlockSettings = ({
   if (block.type === "button") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Текст кнопки">
           <Input value={block.text ?? ""} onChange={(event) => update({ text: event.target.value })} />
         </Field>
@@ -2382,6 +2463,7 @@ const BlockSettings = ({
     const selectedProducts = products.filter((product) => selected.has(product.id));
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         {selectedProducts.length ? (
           <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
             <p className="text-xs font-semibold text-muted-foreground">Выбранные товары</p>
@@ -2454,6 +2536,7 @@ const BlockSettings = ({
   if (block.type === "orderSummary") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Заголовок">
           <Input value={block.title ?? ""} onChange={(event) => update({ title: event.target.value })} />
         </Field>
@@ -2506,6 +2589,7 @@ const BlockSettings = ({
   if (block.type === "promo") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Название акции"><Input value={block.title ?? ""} onChange={(event) => update({ title: event.target.value })} /></Field>
         <Field label="Промокод"><Input value={block.discountCode ?? ""} onChange={(event) => update({ discountCode: event.target.value })} /></Field>
         <Field label="Описание"><Textarea value={block.description ?? ""} onChange={(event) => update({ description: event.target.value })} rows={4} /></Field>
@@ -2518,6 +2602,7 @@ const BlockSettings = ({
   if (block.type === "footer") {
     return (
       <div className="space-y-3">
+        <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Название магазина"><Input value={block.storeName ?? ""} onChange={(event) => update({ storeName: event.target.value })} /></Field>
         <Field label="Текст подвала"><Textarea value={block.text ?? ""} onChange={(event) => update({ text: event.target.value })} rows={4} /></Field>
         <Field label="Телефон"><Input value={block.phone ?? ""} onChange={(event) => update({ phone: event.target.value })} /></Field>

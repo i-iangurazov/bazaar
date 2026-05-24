@@ -65,6 +65,9 @@ import {
   Sparkles,
   Smartphone,
   Share2,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
@@ -139,3 +142,6 @@ export const DesktopPreviewIcon = Monitor;
 export const MobilePreviewIcon = Smartphone;
 export const SparklesIcon = Sparkles;
 export const ShareIcon = Share2;
+export const AlignLeftIcon = AlignLeft;
+export const AlignCenterIcon = AlignCenter;
+export const AlignRightIcon = AlignRight;
