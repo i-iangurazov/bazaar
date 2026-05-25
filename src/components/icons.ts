@@ -16,6 +16,7 @@ import {
   Download,
   ArrowLeft,
   ArrowDownToLine,
+  ArrowUpDown,
   ArrowRightLeft,
   ArrowUp,
   ArrowDown,
@@ -91,6 +92,7 @@ export const IntegrationsIcon = Plug;
 export const DownloadIcon = Download;
 export const BackIcon = ArrowLeft;
 export const ReceiveIcon = ArrowDownToLine;
+export const SortIcon = ArrowUpDown;
 export const TransferIcon = ArrowRightLeft;
 export const ArrowUpIcon = ArrowUp;
 export const ArrowDownIcon = ArrowDown;

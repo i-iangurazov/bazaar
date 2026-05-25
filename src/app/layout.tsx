@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import "./globals.css";
 import { Providers } from "./providers";
+import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
 import { defaultLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
 import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/theme";
@@ -78,6 +79,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       </head>
       <body className="font-sans min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
+          <GlobalNumberInputGuard />
           {children}
         </Providers>
       </body>

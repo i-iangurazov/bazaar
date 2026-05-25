@@ -19,14 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -59,6 +51,9 @@ type ReceivingLine = {
   duplicateHint?: boolean;
 };
 
+type ReceivingInputField = "quantity" | "unitCost";
+type ReceivingInputViewport = "desktop" | "mobile";
+
 const toDateTimeLocalValue = (date: Date) => {
   const offsetMs = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
@@ -68,6 +63,11 @@ const parseDecimalInput = (value: string) => Number(value.replace(",", "."));
 const lineKey = (productId: string, variantId?: string | null) =>
   `${productId}:${variantId ?? "BASE"}`;
 const normalizeCode = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+const receivingInputRefKey = (
+  key: string,
+  field: ReceivingInputField,
+  viewport: ReceivingInputViewport,
+) => `${key}:${field}:${viewport}`;
 
 const InventoryReceivingPage = () => {
   const t = useTranslations("inventory");
@@ -90,7 +90,7 @@ const InventoryReceivingPage = () => {
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<ReceivingLine[]>([]);
-  const quantityRefs = useRef(new Map<string, HTMLInputElement>());
+  const receivingInputRefs = useRef(new Map<string, HTMLInputElement>());
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
   const enableSku = selectedStore?.enableSku ?? true;
@@ -150,15 +150,38 @@ const InventoryReceivingPage = () => {
     [enableBarcode],
   );
 
-  const focusQuantity = (key: string) => {
+  const setReceivingInputRef = (
+    key: string,
+    field: ReceivingInputField,
+    viewport: ReceivingInputViewport,
+    node: HTMLInputElement | null,
+  ) => {
+    const refKey = receivingInputRefKey(key, field, viewport);
+    if (node) {
+      receivingInputRefs.current.set(refKey, node);
+    } else {
+      receivingInputRefs.current.delete(refKey);
+    }
+  };
+
+  const focusReceivingInput = (
+    key: string,
+    field: ReceivingInputField,
+    viewport?: ReceivingInputViewport,
+  ) => {
     window.setTimeout(() => {
-      const viewportKey = window.matchMedia("(min-width: 768px)").matches ? "desktop" : "mobile";
+      const viewportKey =
+        viewport ?? (window.matchMedia("(min-width: 1024px)").matches ? "desktop" : "mobile");
       const input =
-        quantityRefs.current.get(`${key}:${viewportKey}`) ??
-        quantityRefs.current.get(`${key}:desktop`) ??
-        quantityRefs.current.get(`${key}:mobile`);
+        receivingInputRefs.current.get(receivingInputRefKey(key, field, viewportKey)) ??
+        receivingInputRefs.current.get(receivingInputRefKey(key, field, "desktop")) ??
+        receivingInputRefs.current.get(receivingInputRefKey(key, field, "mobile"));
       input?.focus();
     }, 0);
+  };
+
+  const focusQuantity = (key: string) => {
+    focusReceivingInput(key, "quantity");
   };
 
   const clearDuplicateHint = (key: string) => {
@@ -244,6 +267,39 @@ const InventoryReceivingPage = () => {
     }
     event.preventDefault();
     void handleSearchSubmit();
+  };
+
+  const handleReceivingInputKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    key: string,
+    field: ReceivingInputField,
+    viewport: ReceivingInputViewport,
+  ) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    const currentRow = event.currentTarget.closest("[data-receiving-line-row]");
+    const nextRow = event.shiftKey
+      ? currentRow?.previousElementSibling
+      : currentRow?.nextElementSibling;
+    const nextInput = nextRow?.querySelector<HTMLInputElement>(
+      `input[data-receiving-input="${field}"]`,
+    );
+    if (nextInput) {
+      window.setTimeout(() => nextInput.focus(), 0);
+      return;
+    }
+
+    const currentIndex = lines.findIndex((line) => line.key === key);
+    if (currentIndex === -1) {
+      return;
+    }
+    const nextIndex = currentIndex + (event.shiftKey ? -1 : 1);
+    const nextLine = lines[nextIndex];
+    if (nextLine) {
+      focusReceivingInput(nextLine.key, field, viewport);
+    }
   };
 
   const updateLine = (key: string, patch: Partial<ReceivingLine>) => {
@@ -401,111 +457,111 @@ const InventoryReceivingPage = () => {
         actionClassName="hidden md:flex"
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
-          <section className="rounded-md border border-border bg-card p-4 md:p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-foreground">
-                {t("receivingDetailsTitle")}
-              </h3>
-              <Button asChild variant="ghost" size="sm" className="md:hidden">
-                <Link href="/inventory">
-                  <BackIcon className="h-4 w-4" aria-hidden />
-                  {tCommon("back")}
-                </Link>
-              </Button>
+      <div className="space-y-6">
+        <section className="rounded-md border border-border bg-card p-4 md:p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-base font-semibold text-foreground">
+              {t("receivingDetailsTitle")}
+            </h3>
+            <Button asChild variant="ghost" size="sm" className="md:hidden">
+              <Link href="/inventory">
+                <BackIcon className="h-4 w-4" aria-hidden />
+                {tCommon("back")}
+              </Link>
+            </Button>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{tCommon("store")}</Label>
+              <Select value={storeId} onValueChange={setStoreId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={tCommon("selectStore")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{tCommon("store")}</Label>
-                <Select value={storeId} onValueChange={setStoreId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={tCommon("selectStore")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="receiving-date">{t("receivingDate")}</Label>
-                <Input
-                  id="receiving-date"
-                  type="datetime-local"
-                  value={dateTime}
-                  onChange={(event) => setDateTime(event.target.value)}
-                />
-              </div>
-              <details className="rounded-md border border-border bg-muted/20 p-3 lg:hidden">
-                <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                  {tCommon("additional")}
-                </summary>
-                <div className="mt-3 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="receiving-supplier-mobile">{t("receivingSupplier")}</Label>
-                    <Input
-                      id="receiving-supplier-mobile"
-                      value={supplierName}
-                      onChange={(event) => setSupplierName(event.target.value)}
-                      placeholder={t("receivingSupplierPlaceholder")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="receiving-reference-mobile">{t("receivingReference")}</Label>
-                    <Input
-                      id="receiving-reference-mobile"
-                      value={referenceNumber}
-                      onChange={(event) => setReferenceNumber(event.target.value)}
-                      placeholder={t("receivingReferencePlaceholder")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="receiving-note-mobile">{t("receivingNote")}</Label>
-                    <Textarea
-                      id="receiving-note-mobile"
-                      value={note}
-                      onChange={(event) => setNote(event.target.value)}
-                      placeholder={t("notePlaceholder")}
-                      rows={3}
-                    />
-                  </div>
+            <div className="space-y-2">
+              <Label htmlFor="receiving-date">{t("receivingDate")}</Label>
+              <Input
+                id="receiving-date"
+                type="datetime-local"
+                value={dateTime}
+                onChange={(event) => setDateTime(event.target.value)}
+              />
+            </div>
+            <details className="rounded-md border border-border bg-muted/20 p-3 lg:hidden">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                {tCommon("additional")}
+              </summary>
+              <div className="mt-3 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="receiving-supplier-mobile">{t("receivingSupplier")}</Label>
+                  <Input
+                    id="receiving-supplier-mobile"
+                    value={supplierName}
+                    onChange={(event) => setSupplierName(event.target.value)}
+                    placeholder={t("receivingSupplierPlaceholder")}
+                  />
                 </div>
-              </details>
-              <div className="hidden space-y-2 lg:block">
-                <Label htmlFor="receiving-supplier">{t("receivingSupplier")}</Label>
-                <Input
-                  id="receiving-supplier"
-                  value={supplierName}
-                  onChange={(event) => setSupplierName(event.target.value)}
-                  placeholder={t("receivingSupplierPlaceholder")}
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="receiving-reference-mobile">{t("receivingReference")}</Label>
+                  <Input
+                    id="receiving-reference-mobile"
+                    value={referenceNumber}
+                    onChange={(event) => setReferenceNumber(event.target.value)}
+                    placeholder={t("receivingReferencePlaceholder")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="receiving-note-mobile">{t("receivingNote")}</Label>
+                  <Textarea
+                    id="receiving-note-mobile"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder={t("notePlaceholder")}
+                    rows={3}
+                  />
+                </div>
               </div>
-              <div className="hidden space-y-2 lg:block">
-                <Label htmlFor="receiving-reference">{t("receivingReference")}</Label>
-                <Input
-                  id="receiving-reference"
-                  value={referenceNumber}
-                  onChange={(event) => setReferenceNumber(event.target.value)}
-                  placeholder={t("receivingReferencePlaceholder")}
-                />
-              </div>
-              <div className="hidden space-y-2 lg:col-span-2 lg:block">
-                <Label htmlFor="receiving-note">{t("receivingNote")}</Label>
-                <Textarea
-                  id="receiving-note"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder={t("notePlaceholder")}
-                  rows={3}
-                />
-              </div>
+            </details>
+            <div className="hidden space-y-2 lg:block">
+              <Label htmlFor="receiving-supplier">{t("receivingSupplier")}</Label>
+              <Input
+                id="receiving-supplier"
+                value={supplierName}
+                onChange={(event) => setSupplierName(event.target.value)}
+                placeholder={t("receivingSupplierPlaceholder")}
+              />
             </div>
-          </section>
+            <div className="hidden space-y-2 lg:block">
+              <Label htmlFor="receiving-reference">{t("receivingReference")}</Label>
+              <Input
+                id="receiving-reference"
+                value={referenceNumber}
+                onChange={(event) => setReferenceNumber(event.target.value)}
+                placeholder={t("receivingReferencePlaceholder")}
+              />
+            </div>
+            <div className="hidden space-y-2 lg:col-span-2 lg:block">
+              <Label htmlFor="receiving-note">{t("receivingNote")}</Label>
+              <Textarea
+                id="receiving-note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={t("notePlaceholder")}
+                rows={3}
+              />
+            </div>
+          </div>
+        </section>
 
+        <div className="grid items-start gap-4 xl:grid-cols-2">
           <section className="rounded-md border border-border bg-card p-4">
             <div className="mb-4">
               <h3 className="text-base font-semibold text-foreground">
@@ -527,7 +583,7 @@ const InventoryReceivingPage = () => {
                 autoComplete="off"
               />
             </div>
-            <div className="mt-3 max-h-72 overflow-y-auto border border-border bg-background">
+            <div className="mt-3 max-h-[25rem] overflow-y-auto border border-border bg-background">
               {searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -605,206 +661,135 @@ const InventoryReceivingPage = () => {
             </div>
 
             {lines.length ? (
-              <>
-                <div className="hidden overflow-x-auto lg:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{tCommon("product")}</TableHead>
-                        <TableHead className="w-32">{t("receiveQty")}</TableHead>
-                        <TableHead className="w-40">{t("unitCost")}</TableHead>
-                        <TableHead>{t("receivingLineTotal")}</TableHead>
-                        <TableHead>{t("receivingNewStock")}</TableHead>
-                        <TableHead className="w-14 text-right">{tCommon("actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {lines.map((line) => {
-                        const metric = metricByKey.get(line.key);
-                        return (
-                          <TableRow key={line.key}>
-                            <TableCell>
-                              <div className="flex min-w-64 items-center gap-3">
-                                {renderProductImage(line)}
-                                <div className="min-w-0">
-                                  <p className="truncate font-medium text-foreground">
-                                    {line.variantName
-                                      ? `${line.productName} • ${line.variantName}`
-                                      : line.productName}
-                                  </p>
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {[
-                                      enableSku ? line.sku : "",
-                                      enableBarcode ? line.barcode : "",
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" • ") ||
-                                      tCommon("notAvailable")}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {t("onHand")}: {formatNumber(line.currentStock, locale)}
-                                  </p>
-                                  {line.duplicateHint ? (
-                                    <p className="text-xs text-warning">
-                                      {t("receivingDuplicateHint")}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                ref={(node) => {
-                                  if (node) {
-                                    quantityRefs.current.set(`${line.key}:desktop`, node);
-                                  } else {
-                                    quantityRefs.current.delete(`${line.key}:desktop`);
-                                  }
-                                }}
-                                value={line.quantityInput}
-                                onChange={(event) =>
-                                  updateLine(line.key, { quantityInput: event.target.value })
-                                }
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                step={1}
-                                className={cn(!metric?.quantityValid && "border-danger/60")}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                value={line.unitCostInput}
-                                onChange={(event) =>
-                                  updateLine(line.key, { unitCostInput: event.target.value })
-                                }
-                                type="number"
-                                inputMode="decimal"
-                                min={0}
-                                step="0.01"
-                                className={cn(!metric?.unitCostValid && "border-danger/60")}
-                              />
-                            </TableCell>
-                            <TableCell>{formatMoney(metric?.lineTotal ?? 0)}</TableCell>
-                            <TableCell>
-                              {formatNumber(metric?.newStock ?? line.currentStock, locale)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={t("receivingRemoveLine")}
-                                onClick={() => removeLine(line.key)}
-                              >
-                                <DeleteIcon className="h-4 w-4" aria-hidden />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+              <div className="space-y-3">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:gap-2">
+                  <span>{tCommon("product")}</span>
+                  <span>{t("receiveQty")}</span>
+                  <span>{t("unitCost")}</span>
+                  <span>{t("receivingLineTotal")}</span>
+                  <span>{t("receivingNewStock")}</span>
+                  <span />
                 </div>
-
-                <div className="space-y-3 lg:hidden">
-                  {lines.map((line) => {
-                    const metric = metricByKey.get(line.key);
-                    return (
-                      <div key={line.key} className="rounded-md border border-border bg-background p-3">
-                        <div className="flex items-start gap-3">
-                          {renderProductImage(line)}
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-foreground">
-                              {line.variantName
-                                ? `${line.productName} • ${line.variantName}`
-                                : line.productName}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {[enableSku ? line.sku : "", enableBarcode ? line.barcode : ""]
-                                .filter(Boolean)
-                                .join(" • ") ||
-                                tCommon("notAvailable")}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {t("onHand")}: {formatNumber(line.currentStock, locale)}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={t("receivingRemoveLine")}
-                            onClick={() => removeLine(line.key)}
-                          >
-                            <DeleteIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                        </div>
-                        {line.duplicateHint ? (
-                          <p className="mt-2 text-xs text-warning">{t("receivingDuplicateHint")}</p>
-                        ) : null}
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label>{t("receiveQty")}</Label>
-                            <Input
-                              ref={(node) => {
-                                if (node) {
-                                  quantityRefs.current.set(`${line.key}:mobile`, node);
-                                } else {
-                                  quantityRefs.current.delete(`${line.key}:mobile`);
-                                }
-                              }}
-                              value={line.quantityInput}
-                              onChange={(event) =>
-                                updateLine(line.key, { quantityInput: event.target.value })
-                              }
-                              type="number"
-                              inputMode="numeric"
-                              min={1}
-                              step={1}
-                              className={cn(!metric?.quantityValid && "border-danger/60")}
+                {lines.map((line) => {
+                  const metric = metricByKey.get(line.key);
+                  return (
+                    <div
+                      key={line.key}
+                      data-receiving-line-row
+                      className="grid gap-3 rounded-md border border-border bg-background p-2.5 md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:items-center md:gap-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden border border-border bg-muted/30">
+                          {line.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={line.imageUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
                             />
-                          </div>
-                          <div className="space-y-1">
-                            <Label>{t("unitCost")}</Label>
-                            <Input
-                              value={line.unitCostInput}
-                              onChange={(event) =>
-                                updateLine(line.key, { unitCostInput: event.target.value })
-                              }
-                              type="number"
-                              inputMode="decimal"
-                              min={0}
-                              step="0.01"
-                              className={cn(!metric?.unitCostValid && "border-danger/60")}
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              {t("receivingLineTotal")}
+                          ) : (
+                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {line.variantName
+                              ? `${line.productName} • ${line.variantName}`
+                              : line.productName}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[enableSku ? line.sku : "", enableBarcode ? line.barcode : ""]
+                              .filter(Boolean)
+                              .join(" • ") || tCommon("notAvailable")}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground md:hidden">
+                            {t("onHand")}: {formatNumber(line.currentStock, locale)}
+                          </p>
+                          {line.duplicateHint ? (
+                            <p className="truncate text-xs text-warning">
+                              {t("receivingDuplicateHint")}
                             </p>
-                            <p className="font-medium text-foreground">
-                              {formatMoney(metric?.lineTotal ?? 0)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              {t("receivingNewStock")}
-                            </p>
-                            <p className="font-medium text-foreground">
-                              {formatNumber(metric?.newStock ?? line.currentStock, locale)}
-                            </p>
-                          </div>
+                          ) : null}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </>
+                      <div className="space-y-1 md:space-y-0">
+                        <Label className="block text-[11px] leading-4 md:hidden">
+                          {t("receiveQty")}
+                        </Label>
+                        <Input
+                          ref={(node) => {
+                            setReceivingInputRef(line.key, "quantity", "desktop", node);
+                          }}
+                          value={line.quantityInput}
+                          onChange={(event) =>
+                            updateLine(line.key, { quantityInput: event.target.value })
+                          }
+                          onKeyDown={(event) =>
+                            handleReceivingInputKeyDown(event, line.key, "quantity", "desktop")
+                          }
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          step={1}
+                          data-receiving-input="quantity"
+                          className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
+                        />
+                      </div>
+                      <div className="space-y-1 md:space-y-0">
+                        <Label className="block text-[11px] leading-4 md:hidden">
+                          {t("unitCost")}
+                        </Label>
+                        <Input
+                          ref={(node) => {
+                            setReceivingInputRef(line.key, "unitCost", "desktop", node);
+                          }}
+                          value={line.unitCostInput}
+                          onChange={(event) =>
+                            updateLine(line.key, { unitCostInput: event.target.value })
+                          }
+                          onKeyDown={(event) =>
+                            handleReceivingInputKeyDown(event, line.key, "unitCost", "desktop")
+                          }
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="0.01"
+                          data-receiving-input="unitCost"
+                          className={cn("h-8 px-2", !metric?.unitCostValid && "border-danger/60")}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] leading-4 text-muted-foreground md:hidden">
+                          {t("receivingLineTotal")}
+                        </p>
+                        <p className="flex h-8 items-center text-sm font-semibold text-foreground">
+                          {formatMoney(metric?.lineTotal ?? 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] leading-4 text-muted-foreground md:hidden">
+                          {t("receivingNewStock")}
+                        </p>
+                        <p className="flex h-8 items-center text-sm font-semibold text-foreground">
+                          {formatNumber(metric?.newStock ?? line.currentStock, locale)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="self-start md:h-8 md:w-8 md:self-center md:justify-self-end"
+                        aria-label={t("receivingRemoveLine")}
+                        onClick={() => removeLine(line.key)}
+                      >
+                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
+              <div className="flex min-h-[16rem] flex-col items-center justify-center border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
                 <EmptyIcon className="mx-auto mb-3 h-8 w-8" aria-hidden />
                 {t("receivingEmptyState")}
               </div>
@@ -812,12 +797,31 @@ const InventoryReceivingPage = () => {
           </section>
         </div>
 
-        <aside className="hidden md:block xl:sticky xl:top-4 xl:self-start">
+        <section className="hidden md:block">
           <div className="rounded-md border border-border bg-card p-4">
-            <h3 className="text-base font-semibold text-foreground">
-              {t("receivingSummaryTitle")}
-            </h3>
-            <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-base font-semibold text-foreground">
+                {t("receivingSummaryTitle")}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="secondary">
+                  <Link href="/inventory">{tCommon("cancel")}</Link>
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handlePost}
+                  disabled={postMutation.isLoading || Boolean(validationMessage)}
+                >
+                  {postMutation.isLoading ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <ReceiveIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {postMutation.isLoading ? tCommon("saving") : t("receivingPost")}
+                </Button>
+              </div>
+            </div>
+            <dl className="mt-4 grid gap-3 text-sm lg:grid-cols-4">
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">{tCommon("store")}</dt>
                 <dd className="text-right font-medium text-foreground">
@@ -856,25 +860,8 @@ const InventoryReceivingPage = () => {
               )}
               <span>{validationMessage || t("receivingValidationReady")}</span>
             </div>
-            <div className="mt-4 flex flex-col gap-2">
-              <Button asChild variant="secondary">
-                <Link href="/inventory">{tCommon("cancel")}</Link>
-              </Button>
-              <Button
-                type="button"
-                onClick={handlePost}
-                disabled={postMutation.isLoading || Boolean(validationMessage)}
-              >
-                {postMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <ReceiveIcon className="h-4 w-4" aria-hidden />
-                )}
-                {postMutation.isLoading ? tCommon("saving") : t("receivingPost")}
-              </Button>
-            </div>
           </div>
-        </aside>
+        </section>
       </div>
       <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40 border-t border-border bg-card p-2.5 shadow-2xl md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">

@@ -12,7 +12,9 @@ describe("mobile inventory source", () => {
 
     expect(source).toContain("data-mobile-inventory-toolbar");
     expect(source).toContain("data-mobile-inventory-actions");
-    expect(source).toContain('const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])');
+    expect(source).toContain(
+      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])',
+    );
     expect(source).toContain('stockFilter: "all"');
     expect(source).toContain('className="hidden md:contents"');
     expect(source).toContain('href="/inventory/receiving"');
@@ -24,7 +26,12 @@ describe("mobile inventory source", () => {
   it("keeps mobile inventory operations on existing protected backend procedures", async () => {
     const routerSource = await readSource("src/server/trpc/routers/inventory.ts");
 
-    expect(routerSource).toContain('const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])');
+    expect(routerSource).toContain(
+      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])',
+    );
+    expect(routerSource).toContain("normalizeInventorySearchTokens");
+    expect(routerSource).toContain("buildInventoryProductSearchWhere");
+    expect(routerSource).toContain("AND: searchTokens.map");
     expect(routerSource).toContain("buildLowStockSnapshotSql");
     expect(routerSource).toContain("postStockReceiving: adminProcedure");
     expect(routerSource).toContain("transfer: adminProcedure");
@@ -40,9 +47,17 @@ describe("mobile inventory source", () => {
     expect(inventorySource).toContain('variant: "success" as const');
     expect(inventorySource).toContain("mobileSheet");
     expect(receivingSource).toContain('className="overflow-x-hidden pb-[15rem] md:pb-0"');
-    expect(receivingSource).toContain('className="hidden md:block xl:sticky xl:top-4 xl:self-start"');
-    expect(receivingSource).toContain('className="hidden overflow-x-auto lg:block"');
-    expect(receivingSource).toContain("fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40");
+    expect(receivingSource).toContain('className="grid items-start gap-4 xl:grid-cols-2"');
+    expect(receivingSource).toContain(
+      "md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem]",
+    );
+    expect(receivingSource).toContain("data-receiving-line-row");
+    expect(receivingSource).not.toContain("lg:flex-1 lg:overflow-y-auto");
+    expect(receivingSource).toContain("handleReceivingInputKeyDown");
+    expect(receivingSource).toContain("focusReceivingInput(nextLine.key, field, viewport)");
+    expect(receivingSource).toContain(
+      "fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40",
+    );
     expect(receivingSource).toContain("receivingProductsCountShort");
     expect(receivingSource).toContain("receivingTotalQuantityShort");
     expect(receivingSource).toContain("pb-[env(safe-area-inset-bottom)]");

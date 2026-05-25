@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,7 +13,15 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { PopoverSurface } from "@/components/ui/popover";
 import { Select, SelectTrigger } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { TableContainer } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -84,5 +93,72 @@ describe("soft-rounded UI primitives", () => {
     const footer = screen.getByRole("button", { name: "Apply" }).parentElement;
     expect(footer?.className).toContain("flex-col-reverse");
     expect(footer?.className).toContain("sm:justify-end");
+  });
+
+  it("prevents trackpad wheel changes on focused number inputs", () => {
+    render(<Input aria-label="quantity" type="number" defaultValue="5" />);
+
+    const input = screen.getByLabelText("quantity");
+    input.focus();
+    const wheelEvent = new WheelEvent("wheel", { deltaY: -100, cancelable: true });
+
+    input.dispatchEvent(wheelEvent);
+
+    expect(wheelEvent.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("prevents trackpad wheel changes on native number inputs globally", () => {
+    render(
+      <div>
+        <GlobalNumberInputGuard />
+        <input aria-label="raw quantity" type="number" defaultValue="5" />
+      </div>,
+    );
+
+    const input = screen.getByLabelText("raw quantity");
+    input.focus();
+    const wheelEvent = new WheelEvent("wheel", { deltaY: 100, cancelable: true });
+
+    input.dispatchEvent(wheelEvent);
+
+    expect(wheelEvent.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("sorts table rows from reusable headers", () => {
+    const { container } = render(
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Qty</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell>Beta</TableCell>
+            <TableCell>10</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>Alpha</TableCell>
+            <TableCell>2</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+
+    const rowNames = () =>
+      Array.from(container.querySelectorAll("tbody tr")).map(
+        (row) => row.querySelector("td")?.textContent,
+      );
+
+    expect(rowNames()).toEqual(["Beta", "Alpha"]);
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    expect(rowNames()).toEqual(["Alpha", "Beta"]);
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    expect(rowNames()).toEqual(["Beta", "Alpha"]);
+    fireEvent.click(screen.getByRole("button", { name: "Qty" }));
+    expect(rowNames()).toEqual(["Alpha", "Beta"]);
   });
 });

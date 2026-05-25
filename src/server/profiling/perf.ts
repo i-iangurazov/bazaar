@@ -176,7 +176,9 @@ export const summarizeHotProcedureInput = (path: string, input: unknown) => {
       return {
         hasStoreId: typeof input.storeId === "string" && input.storeId.length > 0,
         includeRecentActivity:
-          typeof input.includeRecentActivity === "boolean" ? input.includeRecentActivity : undefined,
+          typeof input.includeRecentActivity === "boolean"
+            ? input.includeRecentActivity
+            : undefined,
         includeRecentMovements:
           typeof input.includeRecentMovements === "boolean"
             ? input.includeRecentMovements
@@ -200,6 +202,8 @@ export const summarizeHotProcedureInput = (path: string, input: unknown) => {
         page: typeof input.page === "number" ? input.page : 1,
         pageSize: typeof input.pageSize === "number" ? input.pageSize : 25,
         hasStoreId: typeof input.storeId === "string" && input.storeId.length > 0,
+        sortKey: typeof input.sortKey === "string" ? input.sortKey : "product",
+        sortDirection: typeof input.sortDirection === "string" ? input.sortDirection : "asc",
       };
     case "search.global":
       return {

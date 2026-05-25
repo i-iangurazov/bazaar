@@ -24,6 +24,18 @@ import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolici
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
+const inventorySortKeySchema = z.enum([
+  "sku",
+  "product",
+  "onHand",
+  "minStock",
+  "lowStock",
+  "onOrder",
+  "suggestedOrder",
+]);
+const inventorySortDirectionSchema = z.enum(["asc", "desc"]);
+type InventorySortKey = z.infer<typeof inventorySortKeySchema>;
+type InventorySortDirection = z.infer<typeof inventorySortDirectionSchema>;
 
 const inventoryListBaseInputSchema = z.object({
   storeId: z.string(),
@@ -34,6 +46,8 @@ const inventoryListBaseInputSchema = z.object({
 const inventoryListInputSchema = inventoryListBaseInputSchema.extend({
   page: z.number().int().min(1).optional(),
   pageSize: z.number().int().min(10).max(200).optional(),
+  sortKey: inventorySortKeySchema.optional().default("product"),
+  sortDirection: inventorySortDirectionSchema.optional().default("asc"),
 });
 
 const inventoryListIdsInputSchema = inventoryListBaseInputSchema;
@@ -44,43 +58,64 @@ const inventoryProductSearchInputSchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
 });
 
-const buildInventorySnapshotWhere = (
-  input: z.infer<typeof inventoryListIdsInputSchema>,
-): Prisma.InventorySnapshotWhereInput => ({
-  storeId: input.storeId,
-  ...(input.stockFilter === "negativeStock" ? { onHand: { lt: 0 } } : {}),
-  ...(input.stockFilter === "outOfStock" ? { onHand: { equals: 0 } } : {}),
-  product: {
-    isDeleted: false,
-    ...(input.search
-      ? {
+const normalizeInventorySearchTokens = (search?: string | null) =>
+  Array.from(
+    new Set(
+      (search ?? "")
+        .trim()
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 8);
+
+const buildInventoryProductSearchWhere = (
+  searchTokens: string[],
+): Prisma.ProductWhereInput =>
+  searchTokens.length
+    ? {
+        AND: searchTokens.map((token) => ({
           OR: [
-            { name: { contains: input.search, mode: "insensitive" as const } },
-            { sku: { contains: input.search, mode: "insensitive" as const } },
+            { name: { contains: token, mode: "insensitive" as const } },
+            { sku: { contains: token, mode: "insensitive" as const } },
             {
               barcodes: {
-                some: { value: { contains: input.search, mode: "insensitive" as const } },
+                some: { value: { contains: token, mode: "insensitive" as const } },
               },
             },
             {
               packs: {
-                some: { packBarcode: { contains: input.search, mode: "insensitive" as const } },
+                some: { packBarcode: { contains: token, mode: "insensitive" as const } },
               },
             },
           ],
-        }
-      : {}),
-  },
-});
+        })),
+      }
+    : {};
+
+const buildInventorySnapshotWhere = (
+  input: z.infer<typeof inventoryListIdsInputSchema>,
+): Prisma.InventorySnapshotWhereInput => {
+  const searchTokens = normalizeInventorySearchTokens(input.search);
+  return {
+    storeId: input.storeId,
+    ...(input.stockFilter === "negativeStock" ? { onHand: { lt: 0 } } : {}),
+    ...(input.stockFilter === "outOfStock" ? { onHand: { equals: 0 } } : {}),
+    product: {
+      isDeleted: false,
+      ...buildInventoryProductSearchWhere(searchTokens),
+    },
+  };
+};
 
 const buildLowStockSnapshotSql = (
   input: z.infer<typeof inventoryListIdsInputSchema>,
   organizationId: string,
 ) => {
-  const search = input.search?.trim();
-  const searchPattern = search ? `%${search}%` : "";
-  const searchSql = search
-    ? Prisma.sql`
+  const searchTokens = normalizeInventorySearchTokens(input.search);
+  const searchSql = searchTokens.reduce<Prisma.Sql>((sql, token) => {
+    const searchPattern = `%${token}%`;
+    return Prisma.sql`${sql}
       AND (
         p."name" ILIKE ${searchPattern}
         OR p."sku" ILIKE ${searchPattern}
@@ -93,8 +128,8 @@ const buildLowStockSnapshotSql = (
           WHERE pack."productId" = p."id" AND pack."packBarcode" ILIKE ${searchPattern}
         )
       )
-    `
-    : Prisma.empty;
+    `;
+  }, Prisma.empty);
 
   return Prisma.sql`
     FROM "InventorySnapshot" s
@@ -108,6 +143,53 @@ const buildLowStockSnapshotSql = (
       AND s."onHand" >= 0
       ${searchSql}
   `;
+};
+
+const fullSortInventoryKeys = new Set<InventorySortKey>(["minStock", "lowStock", "suggestedOrder"]);
+
+const inventorySortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+const getInventorySnapshotOrderBy = (
+  sortKey: InventorySortKey,
+  sortDirection: InventorySortDirection,
+): Prisma.InventorySnapshotOrderByWithRelationInput[] => {
+  const nameFallback: Prisma.InventorySnapshotOrderByWithRelationInput[] = [
+    { product: { name: "asc" } },
+    { variantKey: "asc" },
+    { id: "asc" },
+  ];
+
+  switch (sortKey) {
+    case "sku":
+      return [{ product: { sku: sortDirection } }, ...nameFallback];
+    case "onHand":
+      return [{ onHand: sortDirection }, ...nameFallback];
+    case "onOrder":
+      return [{ onOrder: sortDirection }, ...nameFallback];
+    case "product":
+    default:
+      return [
+        { product: { name: sortDirection } },
+        { variantKey: sortDirection },
+        { product: { sku: "asc" } },
+        { id: "asc" },
+      ];
+  }
+};
+
+const getLowStockOrderSql = (sortKey: InventorySortKey, sortDirection: InventorySortDirection) => {
+  const direction = sortDirection === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  switch (sortKey) {
+    case "sku":
+      return Prisma.sql`ORDER BY p."sku" ${direction}, p."name" ASC, s."variantKey" ASC, s."id" ASC`;
+    case "onHand":
+      return Prisma.sql`ORDER BY s."onHand" ${direction}, p."name" ASC, s."variantKey" ASC, s."id" ASC`;
+    case "onOrder":
+      return Prisma.sql`ORDER BY s."onOrder" ${direction}, p."name" ASC, s."variantKey" ASC, s."id" ASC`;
+    case "product":
+    default:
+      return Prisma.sql`ORDER BY p."name" ${direction}, s."variantKey" ${direction}, p."sku" ASC, s."id" ASC`;
+  }
 };
 
 const inventoryProductSelect = (storeId: string, organizationId: string) =>
@@ -207,10 +289,75 @@ const inventoryListSnapshotSelect = {
   },
 } satisfies Prisma.InventorySnapshotSelect;
 
+type InventoryListSnapshot = Prisma.InventorySnapshotGetPayload<{
+  select: typeof inventoryListSnapshotSelect;
+}>;
+type InventoryListItem = {
+  snapshot: InventoryListSnapshot;
+  product: InventoryListSnapshot["product"];
+  variant: InventoryListSnapshot["variant"];
+  minStock: number;
+  lowStock: boolean;
+  reorder: ReturnType<typeof buildReorderSuggestion>;
+};
+
+const sortInventoryItems = (
+  items: InventoryListItem[],
+  sortKey: InventorySortKey,
+  sortDirection: InventorySortDirection,
+) => {
+  const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+  return [...items].sort((left, right) => {
+    let result = 0;
+    switch (sortKey) {
+      case "sku":
+        result = inventorySortCollator.compare(left.product.sku, right.product.sku);
+        break;
+      case "product":
+        result = inventorySortCollator.compare(left.product.name, right.product.name);
+        break;
+      case "onHand":
+        result = left.snapshot.onHand - right.snapshot.onHand;
+        break;
+      case "minStock":
+        result = left.minStock - right.minStock;
+        break;
+      case "lowStock":
+        result = Number(left.lowStock) - Number(right.lowStock);
+        break;
+      case "onOrder":
+        result = left.snapshot.onOrder - right.snapshot.onOrder;
+        break;
+      case "suggestedOrder":
+        result = (left.reorder?.suggestedOrderQty ?? 0) - (right.reorder?.suggestedOrderQty ?? 0);
+        break;
+      default:
+        result = 0;
+    }
+
+    if (result === 0) {
+      result = inventorySortCollator.compare(left.product.name, right.product.name);
+    }
+    if (result === 0) {
+      result = inventorySortCollator.compare(left.product.sku, right.product.sku);
+    }
+    if (result === 0) {
+      result = inventorySortCollator.compare(left.snapshot.variantKey, right.snapshot.variantKey);
+    }
+    if (result === 0) {
+      result = left.snapshot.id.localeCompare(right.snapshot.id);
+    }
+    return result * directionMultiplier;
+  });
+};
+
 export const inventoryRouter = router({
   list: protectedProcedure.input(inventoryListInputSchema).query(async ({ ctx, input }) => {
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 25;
+    const sortKey = input.sortKey;
+    const sortDirection = input.sortDirection;
+    const useFullSort = fullSortInventoryKeys.has(sortKey);
     const storeAccessStartedAt = Date.now();
     await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
     logProfileSection({
@@ -231,6 +378,12 @@ export const inventoryRouter = router({
     > = [];
     if (input.stockFilter === "lowStock") {
       const lowStockSql = buildLowStockSnapshotSql(input, ctx.user.organizationId);
+      const lowStockOrderSql = useFullSort
+        ? Prisma.sql`ORDER BY p."name" ASC, s."variantKey" ASC, s."id" ASC`
+        : getLowStockOrderSql(sortKey, sortDirection);
+      const lowStockPaginationSql = useFullSort
+        ? Prisma.empty
+        : Prisma.sql`LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`;
       const [countRows, idRows] = await Promise.all([
         ctx.prisma.$queryRaw<Array<{ count: number | bigint }>>(
           Prisma.sql`SELECT COUNT(*)::int AS count ${lowStockSql}`,
@@ -239,9 +392,8 @@ export const inventoryRouter = router({
           Prisma.sql`
             SELECT s."id"
             ${lowStockSql}
-            ORDER BY p."name" ASC, s."variantKey" ASC
-            LIMIT ${pageSize}
-            OFFSET ${(page - 1) * pageSize}
+            ${lowStockOrderSql}
+            ${lowStockPaginationSql}
           `,
         ),
       ]);
@@ -269,9 +421,11 @@ export const inventoryRouter = router({
         ctx.prisma.inventorySnapshot.findMany({
           where,
           select: inventoryListSnapshotSelect,
-          orderBy: { product: { name: "asc" } },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          orderBy: useFullSort
+            ? [{ product: { name: "asc" } }, { variantKey: "asc" }, { id: "asc" }]
+            : getInventorySnapshotOrderBy(sortKey, sortDirection),
+          skip: useFullSort ? undefined : (page - 1) * pageSize,
+          take: useFullSort ? undefined : pageSize,
         }),
       ]);
     }
@@ -287,6 +441,9 @@ export const inventoryRouter = router({
         snapshots: snapshots.length,
         hasSearch: Boolean(input.search?.trim()),
         stockFilter: input.stockFilter,
+        sortKey,
+        sortDirection,
+        useFullSort,
       },
     });
 
@@ -320,7 +477,7 @@ export const inventoryRouter = router({
     const policyMap = new Map(policies.map((policy) => [policy.productId, policy]));
     const forecastMap = new Map(forecasts.map((forecast) => [forecast.productId, forecast]));
 
-    const items = snapshots.map((snapshot) => {
+    const enrichedItems = snapshots.map((snapshot) => {
       const policy = policyMap.get(snapshot.productId) ?? null;
       const minStock = policy?.minStock ?? 0;
       return {
@@ -336,6 +493,12 @@ export const inventoryRouter = router({
         ),
       };
     });
+    const items = useFullSort
+      ? sortInventoryItems(enrichedItems, sortKey, sortDirection).slice(
+          (page - 1) * pageSize,
+          page * pageSize,
+        )
+      : enrichedItems;
 
     return { items, total, page, pageSize };
   }),
@@ -369,31 +532,14 @@ export const inventoryRouter = router({
     .query(async ({ ctx, input }) => {
       await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
 
-      const search = input.search?.trim() ?? "";
+      const searchTokens = normalizeInventorySearchTokens(input.search);
       const limit = input.limit ?? 25;
       const where = {
         storeId: input.storeId,
         product: {
           organizationId: ctx.user.organizationId,
           isDeleted: false,
-          ...(search
-            ? {
-                OR: [
-                  { name: { contains: search, mode: "insensitive" as const } },
-                  { sku: { contains: search, mode: "insensitive" as const } },
-                  {
-                    barcodes: {
-                      some: { value: { contains: search, mode: "insensitive" as const } },
-                    },
-                  },
-                  {
-                    packs: {
-                      some: { packBarcode: { contains: search, mode: "insensitive" as const } },
-                    },
-                  },
-                ],
-              }
-            : {}),
+          ...buildInventoryProductSearchWhere(searchTokens),
         },
       };
 

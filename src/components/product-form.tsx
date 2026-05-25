@@ -88,6 +88,8 @@ import {
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 
+const showProductPacksSection = false;
+
 export type ProductFormValues = {
   sku: string;
   name: string;
@@ -5125,9 +5127,11 @@ export const ProductForm = ({
               </ProductEditorCard>
             ) : null}
 
-            <ProductEditorCard title={t("packagingTitle")} className={editorFormCardClassName}>
-              {shopifyPackRows}
-            </ProductEditorCard>
+            {showProductPacksSection ? (
+              <ProductEditorCard title={t("packagingTitle")} className={editorFormCardClassName}>
+                {shopifyPackRows}
+              </ProductEditorCard>
+            ) : null}
 
             <ProductEditorCard title={t("variants")} className={editorFormCardClassName}>
               {!compactVariantOptions.length && !variantOptionEditorOpen ? (
@@ -6653,166 +6657,172 @@ export const ProductForm = ({
                       <Separator />
                     </>
                   ) : null}
-                  <FormSection title={t("packsTitle")} className={mobileProductSectionClassName}>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full sm:w-auto"
-                        onClick={() =>
-                          appendPack({
-                            packName: "",
-                            packBarcode: "",
-                            multiplierToBase: 1,
-                            allowInPurchasing: true,
-                            allowInReceiving: true,
-                          })
-                        }
-                        disabled={readOnly}
+                  {showProductPacksSection ? (
+                    <>
+                      <FormSection
+                        title={t("packsTitle")}
+                        className={mobileProductSectionClassName}
                       >
-                        <AddIcon className="h-4 w-4" aria-hidden />
-                        {t("addPack")}
-                      </Button>
-                    </div>
-                    {packFields.length ? (
-                      <div className="space-y-4">
-                        {packFields.map((field, index) => (
-                          <div
-                            key={field.id}
-                            className="space-y-3 rounded-md border border-border/70 bg-card p-4"
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="w-full sm:w-auto"
+                            onClick={() =>
+                              appendPack({
+                                packName: "",
+                                packBarcode: "",
+                                multiplierToBase: 1,
+                                allowInPurchasing: true,
+                                allowInReceiving: true,
+                              })
+                            }
+                            disabled={readOnly}
                           >
-                            <FormGrid className="items-start">
-                              <FormField
-                                control={form.control}
-                                name={`packs.${index}.packName`}
-                                render={({ field: itemField }) => (
-                                  <FormItem>
-                                    <FormLabel>{t("packName")}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...itemField}
-                                        value={itemField.value ?? ""}
-                                        disabled={readOnly}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name={`packs.${index}.multiplierToBase`}
-                                render={({ field: itemField }) => (
-                                  <FormItem>
-                                    <FormLabel>{t("packMultiplier")}</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...itemField}
-                                        value={itemField.value ?? ""}
-                                        type="number"
-                                        inputMode="numeric"
-                                        min={1}
-                                        disabled={readOnly}
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {t("packMultiplierHint", {
-                                        unit: baseUnit
-                                          ? resolveUnitLabel(baseUnit)
-                                          : tCommon("notAvailable"),
-                                      })}
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              {enableBarcode ? (
-                                <FormField
-                                  control={form.control}
-                                  name={`packs.${index}.packBarcode`}
-                                  render={({ field: itemField }) => (
-                                    <FormItem>
-                                      <FormLabel>{t("packBarcode")}</FormLabel>
-                                      <FormControl>
-                                        <Input
-                                          {...(() => {
-                                            const { value: _value, ...rest } = itemField;
-                                            void _value;
-                                            return rest;
-                                          })()}
-                                          value={itemField.value ?? ""}
-                                          onChange={(event) =>
-                                            itemField.onChange(event.target.value)
-                                          }
-                                          disabled={readOnly}
-                                        />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              ) : null}
-                            </FormGrid>
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex flex-wrap items-center gap-4">
-                                <FormField
-                                  control={form.control}
-                                  name={`packs.${index}.allowInPurchasing`}
-                                  render={({ field: itemField }) => (
-                                    <FormItem className="flex items-center gap-2 space-y-0">
-                                      <FormControl>
-                                        <Switch
-                                          checked={itemField.value}
-                                          onCheckedChange={itemField.onChange}
-                                          disabled={readOnly}
-                                        />
-                                      </FormControl>
-                                      <FormLabel className="text-sm">
-                                        {t("packAllowPurchasing")}
-                                      </FormLabel>
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name={`packs.${index}.allowInReceiving`}
-                                  render={({ field: itemField }) => (
-                                    <FormItem className="flex items-center gap-2 space-y-0">
-                                      <FormControl>
-                                        <Switch
-                                          checked={itemField.value}
-                                          onCheckedChange={itemField.onChange}
-                                          disabled={readOnly}
-                                        />
-                                      </FormControl>
-                                      <FormLabel className="text-sm">
-                                        {t("packAllowReceiving")}
-                                      </FormLabel>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="h-9 px-3 text-danger"
-                                onClick={() => removePack(index)}
-                                disabled={readOnly}
+                            <AddIcon className="h-4 w-4" aria-hidden />
+                            {t("addPack")}
+                          </Button>
+                        </div>
+                        {packFields.length ? (
+                          <div className="space-y-4">
+                            {packFields.map((field, index) => (
+                              <div
+                                key={field.id}
+                                className="space-y-3 rounded-md border border-border/70 bg-card p-4"
                               >
-                                <DeleteIcon className="h-4 w-4" aria-hidden />
-                                {t("removePack")}
-                              </Button>
-                            </div>
+                                <FormGrid className="items-start">
+                                  <FormField
+                                    control={form.control}
+                                    name={`packs.${index}.packName`}
+                                    render={({ field: itemField }) => (
+                                      <FormItem>
+                                        <FormLabel>{t("packName")}</FormLabel>
+                                        <FormControl>
+                                          <Input
+                                            {...itemField}
+                                            value={itemField.value ?? ""}
+                                            disabled={readOnly}
+                                          />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name={`packs.${index}.multiplierToBase`}
+                                    render={({ field: itemField }) => (
+                                      <FormItem>
+                                        <FormLabel>{t("packMultiplier")}</FormLabel>
+                                        <FormControl>
+                                          <Input
+                                            {...itemField}
+                                            value={itemField.value ?? ""}
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={1}
+                                            disabled={readOnly}
+                                          />
+                                        </FormControl>
+                                        <FormDescription>
+                                          {t("packMultiplierHint", {
+                                            unit: baseUnit
+                                              ? resolveUnitLabel(baseUnit)
+                                              : tCommon("notAvailable"),
+                                          })}
+                                        </FormDescription>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  {enableBarcode ? (
+                                    <FormField
+                                      control={form.control}
+                                      name={`packs.${index}.packBarcode`}
+                                      render={({ field: itemField }) => (
+                                        <FormItem>
+                                          <FormLabel>{t("packBarcode")}</FormLabel>
+                                          <FormControl>
+                                            <Input
+                                              {...(() => {
+                                                const { value: _value, ...rest } = itemField;
+                                                void _value;
+                                                return rest;
+                                              })()}
+                                              value={itemField.value ?? ""}
+                                              onChange={(event) =>
+                                                itemField.onChange(event.target.value)
+                                              }
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  ) : null}
+                                </FormGrid>
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div className="flex flex-wrap items-center gap-4">
+                                    <FormField
+                                      control={form.control}
+                                      name={`packs.${index}.allowInPurchasing`}
+                                      render={({ field: itemField }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0">
+                                          <FormControl>
+                                            <Switch
+                                              checked={itemField.value}
+                                              onCheckedChange={itemField.onChange}
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                          <FormLabel className="text-sm">
+                                            {t("packAllowPurchasing")}
+                                          </FormLabel>
+                                        </FormItem>
+                                      )}
+                                    />
+                                    <FormField
+                                      control={form.control}
+                                      name={`packs.${index}.allowInReceiving`}
+                                      render={({ field: itemField }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0">
+                                          <FormControl>
+                                            <Switch
+                                              checked={itemField.value}
+                                              onCheckedChange={itemField.onChange}
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                          <FormLabel className="text-sm">
+                                            {t("packAllowReceiving")}
+                                          </FormLabel>
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-9 px-3 text-danger"
+                                    onClick={() => removePack(index)}
+                                    disabled={readOnly}
+                                  >
+                                    <DeleteIcon className="h-4 w-4" aria-hidden />
+                                    {t("removePack")}
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">{t("packsEmpty")}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">{t("packsHint")}</p>
-                  </FormSection>
-
-                  <Separator />
+                        ) : (
+                          <p className="text-xs text-muted-foreground">{t("packsEmpty")}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">{t("packsHint")}</p>
+                      </FormSection>
+                      <Separator />
+                    </>
+                  ) : null}
 
                   <div ref={variantsEditorRef} className="scroll-mt-24">
                     <FormSection title={t("variants")} className={mobileProductSectionClassName}>

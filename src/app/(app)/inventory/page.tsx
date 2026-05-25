@@ -66,6 +66,8 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   AddIcon,
   AdjustIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
   DownloadIcon,
   ReceiveIcon,
   PrintIcon,
@@ -76,6 +78,7 @@ import {
   GridViewIcon,
   MoreIcon,
   SearchIcon,
+  SortIcon,
   TableViewIcon,
   ViewIcon,
 } from "@/components/icons";
@@ -121,6 +124,16 @@ import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEd
 
 const inventoryViewModeSchema = z.enum(["table", "grid"]);
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
+const inventorySortKeySchema = z.enum([
+  "sku",
+  "product",
+  "onHand",
+  "minStock",
+  "lowStock",
+  "onOrder",
+  "suggestedOrder",
+]);
+const inventorySortDirectionSchema = z.enum(["asc", "desc"]);
 const inventoryVisibleColumnSchema = z.enum([
   "sku",
   "image",
@@ -141,6 +154,15 @@ const defaultInventoryVisibleColumns = [
   "onOrder",
   "suggestedOrder",
 ] as const;
+const defaultInventorySortDirectionByKey: Record<InventorySortKey, InventorySortDirection> = {
+  sku: "asc",
+  product: "asc",
+  onHand: "desc",
+  minStock: "desc",
+  lowStock: "desc",
+  onOrder: "desc",
+  suggestedOrder: "desc",
+};
 const inventoryTableStateSchema = z.object({
   storeId: z.string(),
   search: z.string(),
@@ -148,6 +170,13 @@ const inventoryTableStateSchema = z.object({
   stockFilter: inventoryStockFilterSchema.optional().default("all"),
   pageSize: z.number().int().min(1).max(200),
   showPlanning: z.boolean(),
+  sort: z
+    .object({
+      key: inventorySortKeySchema,
+      direction: inventorySortDirectionSchema,
+    })
+    .optional()
+    .default({ key: "product", direction: "asc" }),
   visibleColumns: z
     .array(inventoryVisibleColumnSchema)
     .optional()
@@ -160,6 +189,8 @@ const BULK_ON_HAND_CHUNK_SIZE = 100;
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
 type InventoryStockFilter = z.infer<typeof inventoryStockFilterSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
+type InventorySortKey = z.infer<typeof inventorySortKeySchema>;
+type InventorySortDirection = z.infer<typeof inventorySortDirectionSchema>;
 type InventoryProductOption = {
   key: string;
   productId: string;
@@ -378,6 +409,10 @@ const InventoryPage = () => {
       stockFilter: "all",
       pageSize: 25,
       showPlanning: false,
+      sort: {
+        key: "product",
+        direction: "asc",
+      },
       visibleColumns: [...defaultInventoryVisibleColumns],
     }),
     [],
@@ -442,6 +477,7 @@ const InventoryPage = () => {
   const stockFilter = inventoryTableState.stockFilter;
   const inventoryPageSize = inventoryTableState.pageSize;
   const showPlanning = inventoryTableState.showPlanning;
+  const inventorySort = inventoryTableState.sort;
   const visibleInventoryColumns = inventoryTableState.visibleColumns;
   const setStoreId = useCallback(
     (nextValue: string) =>
@@ -489,6 +525,25 @@ const InventoryPage = () => {
         ...current,
         showPlanning: nextValue,
       })),
+    [setInventoryTableState],
+  );
+  const toggleInventorySort = useCallback(
+    (key: InventorySortKey) => {
+      setInventoryTableState((current) => ({
+        ...current,
+        sort:
+          current.sort.key === key
+            ? {
+                key,
+                direction: current.sort.direction === "asc" ? "desc" : "asc",
+              }
+            : {
+                key,
+                direction: defaultInventorySortDirectionByKey[key],
+              },
+      }));
+      setInventoryPage(1);
+    },
     [setInventoryTableState],
   );
   const toggleVisibleInventoryColumn = useCallback(
@@ -764,8 +819,18 @@ const InventoryPage = () => {
       stockFilter,
       page: inventoryPage,
       pageSize: inventoryPageSize,
+      sortKey: inventorySort.key,
+      sortDirection: inventorySort.direction,
     }),
-    [inventoryPage, inventoryPageSize, search, stockFilter, storeId],
+    [
+      inventoryPage,
+      inventoryPageSize,
+      inventorySort.direction,
+      inventorySort.key,
+      search,
+      stockFilter,
+      storeId,
+    ],
   );
   const inventoryQuery = trpc.inventory.list.useQuery(inventoryListInput, {
     enabled: Boolean(storeId) && inventoryTableStateReady,
@@ -976,9 +1041,10 @@ const InventoryPage = () => {
       if (map.has(item.product.id)) {
         return;
       }
-      const label = enableSku && item.product.sku
-        ? `${item.product.name} (${item.product.sku})`
-        : item.product.name;
+      const label =
+        enableSku && item.product.sku
+          ? `${item.product.name} (${item.product.sku})`
+          : item.product.name;
       map.set(item.product.id, { productId: item.product.id, label });
     });
     return Array.from(map.values());
@@ -1137,7 +1203,7 @@ const InventoryPage = () => {
 
   useEffect(() => {
     setInventoryPage(1);
-  }, [storeId, search, stockFilter]);
+  }, [inventorySort.direction, inventorySort.key, search, stockFilter, storeId]);
 
   useEffect(() => {
     if (!poDraftOpen) {
@@ -1868,6 +1934,40 @@ const InventoryPage = () => {
     (visibleInventoryColumnSet.has("lowStock") ? 1 : 0) +
     (visibleInventoryColumnSet.has("onOrder") ? 1 : 0) +
     (showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? 1 : 0);
+  const renderInventorySortableHead = (
+    key: InventorySortKey,
+    label: string,
+    className?: string,
+  ) => (
+    <TableHead
+      className={className}
+      sortable={false}
+      aria-sort={
+        inventorySort.key === key
+          ? inventorySort.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+    >
+      <button
+        type="button"
+        className="inline-flex max-w-full items-center gap-1.5 text-left uppercase text-inherit"
+        onClick={() => toggleInventorySort(key)}
+      >
+        <span className="truncate">{label}</span>
+        {inventorySort.key === key ? (
+          inventorySort.direction === "asc" ? (
+            <ArrowUpIcon className="h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden />
+          ) : (
+            <ArrowDownIcon className="h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden />
+          )
+        ) : (
+          <SortIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
+        )}
+      </button>
+    </TableHead>
+  );
   const groupedDraftItems = useMemo(() => {
     const groups = new Map<string, typeof poDraftItems>();
     poDraftItems.forEach((item) => {
@@ -2072,7 +2172,10 @@ const InventoryPage = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[220px]">
                 {canManageStock ? (
-                  <DropdownMenuItem disabled={!storeId} onSelect={() => openActionDialog("transfer")}>
+                  <DropdownMenuItem
+                    disabled={!storeId}
+                    onSelect={() => openActionDialog("transfer")}
+                  >
                     <TransferIcon className="h-4 w-4" aria-hidden />
                     {t("transferStock")}
                   </DropdownMenuItem>
@@ -2086,7 +2189,10 @@ const InventoryPage = () => {
                   </DropdownMenuItem>
                 ) : null}
                 {canManage ? (
-                  <DropdownMenuItem disabled={!storeId} onSelect={() => openActionDialog("minStock")}>
+                  <DropdownMenuItem
+                    disabled={!storeId}
+                    onSelect={() => openActionDialog("minStock")}
+                  >
                     <StatusSuccessIcon className="h-4 w-4" aria-hidden />
                     {t("minStockTitle")}
                   </DropdownMenuItem>
@@ -2345,7 +2451,7 @@ const InventoryPage = () => {
                 <div className="overflow-x-auto">
                   <TooltipProvider>
                     <InlineEditTableProvider>
-                      <Table className="min-w-[640px]">
+                      <Table className="min-w-[640px]" sortable={false}>
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-10">
@@ -2357,32 +2463,38 @@ const InventoryPage = () => {
                                 aria-label={t("selectAll")}
                               />
                             </TableHead>
-                            {visibleInventoryColumnSet.has("sku") ? (
-                              <TableHead className="hidden sm:table-cell">{t("sku")}</TableHead>
-                            ) : null}
+                            {visibleInventoryColumnSet.has("sku")
+                              ? renderInventorySortableHead("sku", t("sku"), "hidden sm:table-cell")
+                              : null}
                             {visibleInventoryColumnSet.has("image") ? (
                               <TableHead>{t("imageLabel")}</TableHead>
                             ) : null}
-                            {visibleInventoryColumnSet.has("product") ? (
-                              <TableHead>{tCommon("product")}</TableHead>
-                            ) : null}
-                            {visibleInventoryColumnSet.has("onHand") ? (
-                              <TableHead>{t("onHand")}</TableHead>
-                            ) : null}
-                            {visibleInventoryColumnSet.has("minStock") ? (
-                              <TableHead className="hidden sm:table-cell">
-                                {t("minStock")}
-                              </TableHead>
-                            ) : null}
-                            {visibleInventoryColumnSet.has("lowStock") ? (
-                              <TableHead>{t("lowStock")}</TableHead>
-                            ) : null}
-                            {visibleInventoryColumnSet.has("onOrder") ? (
-                              <TableHead className="hidden md:table-cell">{t("onOrder")}</TableHead>
-                            ) : null}
-                            {showPlanning && visibleInventoryColumnSet.has("suggestedOrder") ? (
-                              <TableHead>{t("suggestedOrder")}</TableHead>
-                            ) : null}
+                            {visibleInventoryColumnSet.has("product")
+                              ? renderInventorySortableHead("product", tCommon("product"))
+                              : null}
+                            {visibleInventoryColumnSet.has("onHand")
+                              ? renderInventorySortableHead("onHand", t("onHand"))
+                              : null}
+                            {visibleInventoryColumnSet.has("minStock")
+                              ? renderInventorySortableHead(
+                                  "minStock",
+                                  t("minStock"),
+                                  "hidden sm:table-cell",
+                                )
+                              : null}
+                            {visibleInventoryColumnSet.has("lowStock")
+                              ? renderInventorySortableHead("lowStock", t("lowStock"))
+                              : null}
+                            {visibleInventoryColumnSet.has("onOrder")
+                              ? renderInventorySortableHead(
+                                  "onOrder",
+                                  t("onOrder"),
+                                  "hidden md:table-cell",
+                                )
+                              : null}
+                            {showPlanning && visibleInventoryColumnSet.has("suggestedOrder")
+                              ? renderInventorySortableHead("suggestedOrder", t("suggestedOrder"))
+                              : null}
                             <TableHead>{tCommon("actions")}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -2633,9 +2745,7 @@ const InventoryPage = () => {
                                 {label}
                               </p>
                               {enableSku ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {item.product.sku}
-                                </p>
+                                <p className="text-xs text-muted-foreground">{item.product.sku}</p>
                               ) : null}
                             </div>
                             <RowActions
@@ -2791,8 +2901,8 @@ const InventoryPage = () => {
                           <p
                             className={
                               item.snapshot.onHand < 0
-                                ? "text-lg font-semibold leading-tight text-danger tabular-nums"
-                                : "text-lg font-semibold leading-tight text-foreground tabular-nums"
+                                ? "text-lg font-semibold tabular-nums leading-tight text-danger"
+                                : "text-lg font-semibold tabular-nums leading-tight text-foreground"
                             }
                           >
                             {formatNumber(item.snapshot.onHand, locale)}
@@ -2800,13 +2910,13 @@ const InventoryPage = () => {
                         </div>
                         <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
                           <p className="truncate">{t("minStock")}</p>
-                          <p className="text-lg font-semibold leading-tight text-foreground tabular-nums">
+                          <p className="text-lg font-semibold tabular-nums leading-tight text-foreground">
                             {formatNumber(item.minStock, locale)}
                           </p>
                         </div>
                         <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
                           <p className="truncate">{t("onOrder")}</p>
-                          <p className="text-lg font-semibold leading-tight text-foreground tabular-nums">
+                          <p className="text-lg font-semibold tabular-nums leading-tight text-foreground">
                             {formatNumber(item.snapshot.onOrder, locale)}
                           </p>
                         </div>
@@ -3188,11 +3298,11 @@ const InventoryPage = () => {
                       <p className="mt-1 text-[11px] font-semibold text-foreground">
                         {t("rollPreviewPrice")}
                       </p>
-                        {enableSku ? (
-                          <p className="mt-1 text-[8px] text-muted-foreground">
-                            {rollPreviewItem?.product.sku || t("rollPreviewSku")}
-                          </p>
-                        ) : null}
+                      {enableSku ? (
+                        <p className="mt-1 text-[8px] text-muted-foreground">
+                          {rollPreviewItem?.product.sku || t("rollPreviewSku")}
+                        </p>
+                      ) : null}
                       <div className="mt-1 h-4 rounded-md bg-muted" />
                       <p className="mt-1 text-center text-[7px] text-muted-foreground">
                         {t("rollPreviewBarcode")}

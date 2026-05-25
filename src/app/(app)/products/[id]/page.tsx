@@ -100,6 +100,8 @@ const createIdempotencyKey = () => {
   return `inventory-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const showProductExpiryLotsSection = false;
+
 const ProductDetailPage = () => {
   const params = useParams();
   const productId = String(params?.id ?? "");
@@ -1711,89 +1713,91 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="product-editor-card-form rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
-              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>{t("expiryLotsTitle")}</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowLots((prev) => !prev)}
-                  disabled={!lotsEnabled}
-                >
-                  {showLots ? t("hideLots") : t("showLots")}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {!lotsEnabled ? (
-                  <p className="text-sm text-muted-foreground">{t("expiryLotsDisabled")}</p>
-                ) : showLots ? (
-                  lotsQuery.isLoading ? (
-                    <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                      <Spinner className="h-4 w-4" />
-                      {tCommon("loading")}
-                    </div>
-                  ) : lots.length ? (
-                    <ResponsiveDataList
-                      items={lots}
-                      getKey={(lot) => lot.id}
-                      renderDesktop={(visibleItems) => (
-                        <div className="overflow-x-auto">
-                          <Table className="min-w-[420px]">
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>{t("expiryDate")}</TableHead>
-                                <TableHead>{tInventory("onHand")}</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {visibleItems.map((lot) => (
-                                <TableRow key={lot.id}>
-                                  <TableCell>
-                                    {lot.expiryDate
-                                      ? formatDateTime(lot.expiryDate, locale)
-                                      : t("noExpiry")}
-                                  </TableCell>
-                                  <TableCell>{formatNumber(lot.onHandQty, locale)}</TableCell>
+            {showProductExpiryLotsSection ? (
+              <Card className="product-editor-card-form rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle>{t("expiryLotsTitle")}</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLots((prev) => !prev)}
+                    disabled={!lotsEnabled}
+                  >
+                    {showLots ? t("hideLots") : t("showLots")}
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {!lotsEnabled ? (
+                    <p className="text-sm text-muted-foreground">{t("expiryLotsDisabled")}</p>
+                  ) : showLots ? (
+                    lotsQuery.isLoading ? (
+                      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                        <Spinner className="h-4 w-4" />
+                        {tCommon("loading")}
+                      </div>
+                    ) : lots.length ? (
+                      <ResponsiveDataList
+                        items={lots}
+                        getKey={(lot) => lot.id}
+                        renderDesktop={(visibleItems) => (
+                          <div className="overflow-x-auto">
+                            <Table className="min-w-[420px]">
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>{t("expiryDate")}</TableHead>
+                                  <TableHead>{tInventory("onHand")}</TableHead>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                      renderMobile={(lot) => (
-                        <div className="rounded-md border border-border bg-card p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-xs text-muted-foreground">{t("expiryDate")}</p>
-                              <p className="text-sm font-medium text-foreground">
-                                {lot.expiryDate
-                                  ? formatDateTime(lot.expiryDate, locale)
-                                  : t("noExpiry")}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-muted-foreground">
-                                {tInventory("onHand")}
-                              </p>
-                              <p className="text-sm font-semibold text-foreground">
-                                {formatNumber(lot.onHandQty, locale)}
-                              </p>
+                              </TableHeader>
+                              <TableBody>
+                                {visibleItems.map((lot) => (
+                                  <TableRow key={lot.id}>
+                                    <TableCell>
+                                      {lot.expiryDate
+                                        ? formatDateTime(lot.expiryDate, locale)
+                                        : t("noExpiry")}
+                                    </TableCell>
+                                    <TableCell>{formatNumber(lot.onHandQty, locale)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                        renderMobile={(lot) => (
+                          <div className="rounded-md border border-border bg-card p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-xs text-muted-foreground">{t("expiryDate")}</p>
+                                <p className="text-sm font-medium text-foreground">
+                                  {lot.expiryDate
+                                    ? formatDateTime(lot.expiryDate, locale)
+                                    : t("noExpiry")}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-muted-foreground">
+                                  {tInventory("onHand")}
+                                </p>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {formatNumber(lot.onHandQty, locale)}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    />
+                        )}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <EmptyIcon className="h-4 w-4" aria-hidden />
+                        {t("noLots")}
+                      </div>
+                    )
                   ) : (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <EmptyIcon className="h-4 w-4" aria-hidden />
-                      {t("noLots")}
-                    </div>
-                  )
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t("lotsHiddenHint")}</p>
-                )}
-              </CardContent>
-            </Card>
+                    <p className="text-sm text-muted-foreground">{t("lotsHiddenHint")}</p>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
           </>
         }
         sidebar={sidebar}

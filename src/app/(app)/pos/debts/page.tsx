@@ -17,6 +17,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -236,48 +244,46 @@ const PosDebtsPage = () => {
 
           {debts.length > 0 ? (
             <div className="overflow-x-auto border border-border">
-              <table className="min-w-full divide-y divide-border text-sm">
-                <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-3 text-left font-medium">{t("debts.customer")}</th>
-                    <th className="px-3 py-3 text-left font-medium">{t("debts.sale")}</th>
-                    <th className="px-3 py-3 text-left font-medium">{t("debts.items")}</th>
-                    <th className="px-3 py-3 text-left font-medium">{t("debts.store")}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t("debts.amount")}</th>
-                    <th className="px-3 py-3 text-right font-medium">{t("debts.action")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border bg-card">
+              <Table className="min-w-full">
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead>{t("debts.customer")}</TableHead>
+                    <TableHead>{t("debts.sale")}</TableHead>
+                    <TableHead>{t("debts.items")}</TableHead>
+                    <TableHead>{t("debts.store")}</TableHead>
+                    <TableHead className="text-right">{t("debts.amount")}</TableHead>
+                    <TableHead className="text-right">{t("debts.action")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="bg-card">
                   {debts.map((debt) => (
-                    <tr key={debt.id} className="align-top">
-                      <td className="px-3 py-3">
+                    <TableRow key={debt.id} className="align-top">
+                      <TableCell>
                         <p className="font-medium text-foreground">
-                          {debt.debtCustomerName ??
-                            debt.customerName ??
-                            t("debts.unknownCustomer")}
+                          {debt.debtCustomerName ?? debt.customerName ?? t("debts.unknownCustomer")}
                         </p>
-                      </td>
-                      <td className="px-3 py-3">
+                      </TableCell>
+                      <TableCell>
                         <p className="font-medium text-foreground">{debt.number}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDateTime(debt.completedAt ?? debt.createdAt, locale)}
                         </p>
-                      </td>
-                      <td className="max-w-[360px] px-3 py-3 text-muted-foreground">
+                      </TableCell>
+                      <TableCell className="max-w-[360px] text-muted-foreground">
                         {summarizeDebtLines(debt)}
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
                         <p>{debt.store.name}</p>
                         <p className="text-xs">
                           {debt.register
                             ? `${debt.register.name} (${debt.register.code})`
                             : tCommon("notAvailable")}
                         </p>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-right font-semibold text-foreground">
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-right font-semibold text-foreground">
                         {formatDebtMoney(debt)}
-                      </td>
-                      <td className="px-3 py-3 text-right">
+                      </TableCell>
+                      <TableCell className="text-right">
                         <Button
                           type="button"
                           variant="secondary"
@@ -288,11 +294,11 @@ const PosDebtsPage = () => {
                           {settleDebtMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                           {t("debts.returnedDebt")}
                         </Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           ) : null}
 

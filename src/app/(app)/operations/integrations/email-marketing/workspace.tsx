@@ -75,6 +75,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
@@ -2938,33 +2946,40 @@ const SendersPanel = ({
                   <Badge variant={domain.status === "VERIFIED" ? "success" : domain.status === "FAILED" ? "danger" : "warning"}>{senderStatusLabel(domain.status)}</Badge>
                 </div>
                 <div className="mt-3 overflow-auto rounded-md border border-border">
-                  <table className="min-w-[820px] text-left text-xs">
-                    <thead className="bg-muted/40 text-muted-foreground"><tr><th className="w-[90px] p-2">Тип</th><th className="w-[260px] p-2">Имя</th><th className="p-2">Значение</th><th className="w-[140px] p-2">Статус</th></tr></thead>
-                    <tbody>
+                  <Table className="min-w-[820px] text-xs">
+                    <TableHeader className="bg-muted/40 text-muted-foreground">
+                      <TableRow>
+                        <TableHead className="h-9 w-[90px] p-2">Тип</TableHead>
+                        <TableHead className="h-9 w-[260px] p-2">Имя</TableHead>
+                        <TableHead className="h-9 p-2">Значение</TableHead>
+                        <TableHead className="h-9 w-[140px] p-2">Статус</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {records.map((record, index) => {
                         const name = String(record.name ?? "");
                         const value = String(record.value ?? "");
                         return (
-                          <tr key={index} className="border-t border-border">
-                            <td className="p-2">{String(record.type ?? "")}</td>
-                            <td className="p-2">
+                          <TableRow key={index} className="border-t border-border">
+                            <TableCell className="p-2">{String(record.type ?? "")}</TableCell>
+                            <TableCell className="p-2">
                               <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2">
                                 <code className="truncate font-mono" title={name}>{name}</code>
                                 <CopyDnsValue value={name} label="Скопировать имя записи" />
                               </div>
-                            </td>
-                            <td className="p-2">
+                            </TableCell>
+                            <TableCell className="p-2">
                               <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2">
                                 <code className="truncate font-mono" title={value}>{value}</code>
                                 <CopyDnsValue value={value} label="Скопировать значение записи" />
                               </div>
-                            </td>
-                            <td className="p-2">{String(record.status ?? "")}</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="p-2">{String(record.status ?? "")}</TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
                 <div className="mt-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
                   <p className="text-xs font-semibold text-muted-foreground">Рекомендуется добавить DMARC TXT</p>
