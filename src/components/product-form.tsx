@@ -3576,6 +3576,7 @@ export const ProductForm = ({
   };
   const mobileProductSectionClassName =
     "rounded-md border border-border/70 bg-background p-4 md:border-0 md:bg-transparent md:p-0";
+  const editorFormCardClassName = "product-editor-card-form";
 
   const pendingImageUploadCards = pendingImageUploads.length ? (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -4741,7 +4742,10 @@ export const ProductForm = ({
           onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
         >
           <TooltipProvider>
-            <ProductEditorCard title={t("productInformationTitle")}>
+            <ProductEditorCard
+              title={t("productInformationTitle")}
+              className={editorFormCardClassName}
+            >
               <FormField
                 control={form.control}
                 name="name"
@@ -4796,7 +4800,7 @@ export const ProductForm = ({
               {duplicateDiagnosticsPanel}
             </ProductEditorCard>
 
-            <ProductEditorCard title={t("category")}>
+            <ProductEditorCard title={t("category")} className={editorFormCardClassName}>
               {shopifyCategoryPicker}
               {!unitOptions.length ? (
                 <FormField
@@ -4831,7 +4835,7 @@ export const ProductForm = ({
               ) : null}
             </ProductEditorCard>
 
-            <ProductEditorCard title={t("pricingTitle")}>
+            <ProductEditorCard title={t("pricingTitle")} className={editorFormCardClassName}>
               <ProductEditorFieldGrid>
                 {showBasePriceField ? (
                   <FormField
@@ -4880,7 +4884,7 @@ export const ProductForm = ({
               </ProductEditorFieldGrid>
             </ProductEditorCard>
 
-            <ProductEditorCard title={t("inventoryTitle")}>
+            <ProductEditorCard title={t("inventoryTitle")} className={editorFormCardClassName}>
               <ProductEditorFieldGrid>
                 {canEditInitialStock ? (
                   <FormField
@@ -5022,6 +5026,7 @@ export const ProductForm = ({
               <ProductEditorCard
                 title={t("bundleComponentsTitle")}
                 description={t("bundleComponentsHint")}
+                className={editorFormCardClassName}
               >
                 <div className="relative">
                   <Input
@@ -5120,9 +5125,11 @@ export const ProductForm = ({
               </ProductEditorCard>
             ) : null}
 
-            <ProductEditorCard title={t("packagingTitle")}>{shopifyPackRows}</ProductEditorCard>
+            <ProductEditorCard title={t("packagingTitle")} className={editorFormCardClassName}>
+              {shopifyPackRows}
+            </ProductEditorCard>
 
-            <ProductEditorCard title={t("variants")}>
+            <ProductEditorCard title={t("variants")} className={editorFormCardClassName}>
               {!compactVariantOptions.length && !variantOptionEditorOpen ? (
                 <div className="rounded-md border border-dashed border-border bg-muted/20 p-4">
                   <p className="text-sm font-medium text-foreground">{t("variantsEmpty")}</p>

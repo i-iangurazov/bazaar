@@ -454,3 +454,13 @@
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+.product-editor-card-form {
+  background-color: #e7ebf0 !important;
+  border-color: #cfd6df !important;
+}
+
+.dark .product-editor-card-form {
+  background-color: #1f2937 !important;
+  border-color: hsl(var(--border)) !important;
+}

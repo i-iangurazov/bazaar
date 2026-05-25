@@ -1244,7 +1244,7 @@ const ProductDetailPage = () => {
               shopifyEditorLayout
             />
 
-            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+            <Card className="product-editor-card-form rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
               <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>{t("storePricingTitle")}</CardTitle>
                 <p className="text-xs text-muted-foreground">{t("storePricingHint")}</p>
@@ -1491,7 +1491,7 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+            <Card className="product-editor-card-form rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>{t("profitabilityTitle")}</CardTitle>
                 <div className="w-full sm:max-w-xs">
@@ -1548,7 +1548,7 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+            <Card className="product-editor-card-form rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>{t("bundleTitle")}</CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1711,7 +1711,7 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+            <Card className="product-editor-card-form rounded-lg border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>{t("expiryLotsTitle")}</CardTitle>
                 <Button
