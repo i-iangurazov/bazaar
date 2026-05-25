@@ -400,17 +400,6 @@ const InventoryReceivingPage = () => {
     });
   };
 
-  const renderProductImage = (line: ReceivingLine) => (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-border bg-muted/30">
-      {line.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={line.imageUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-      )}
-    </span>
-  );
-
   if (sessionStatus === "loading") {
     return (
       <div className="flex min-h-64 items-center justify-center">
