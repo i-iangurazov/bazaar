@@ -1,5 +1,8 @@
 import { getServerAuthToken } from "@/server/auth/token";
-import { normalizeImageMimeType } from "@/lib/productImageUpload";
+import {
+  normalizeImageMimeType,
+  resolveProductImageProxyUploadMaxBytes,
+} from "@/lib/productImageUpload";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
 
 export const runtime = "nodejs";
@@ -14,8 +17,15 @@ const resolveMaxImageBytes = () => {
 };
 
 const MAX_IMAGE_BYTES = resolveMaxImageBytes();
+const MAX_PROXY_IMAGE_BYTES = Math.min(
+  MAX_IMAGE_BYTES,
+  resolveProductImageProxyUploadMaxBytes(
+    process.env.PRODUCT_IMAGE_PROXY_MAX_BYTES ??
+      process.env.NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES,
+  ),
+);
 const MAX_MULTIPART_OVERHEAD_BYTES = 256 * 1024;
-const MAX_UPLOAD_REQUEST_BYTES = MAX_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD_BYTES;
+const MAX_UPLOAD_REQUEST_BYTES = MAX_PROXY_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD_BYTES;
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -74,7 +84,7 @@ export const POST = async (request: Request) => {
   if (!(file instanceof File)) {
     return Response.json({ message: "invalidInput" }, { status: 400 });
   }
-  if (file.size > MAX_IMAGE_BYTES) {
+  if (file.size > MAX_PROXY_IMAGE_BYTES) {
     return Response.json({ message: "imageTooLarge" }, { status: 413 });
   }
 

@@ -43,6 +43,14 @@ import {
   resolveClientImageMaxBytes,
   resolveClientImageMaxInputBytes,
 } from "@/lib/productImageClientUpload";
+import {
+  ProductImageUploadTimeoutError,
+  fetchProductImageDirectUploadTarget,
+  fetchProductImageUpload,
+  putProductImageDirectUpload,
+  resolveProductImageProxyUploadMaxBytes,
+  type ProductImageDirectUploadTarget,
+} from "@/lib/productImageUpload";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -61,8 +69,19 @@ const formatFileSize = (value?: number | null) => {
 
 const studioMaxImageBytes = resolveClientImageMaxBytes();
 const studioMaxInputImageBytes = resolveClientImageMaxInputBytes(studioMaxImageBytes);
+const studioMaxProxyImageBytes = Math.min(
+  studioMaxImageBytes,
+  resolveProductImageProxyUploadMaxBytes(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES),
+);
 const studioAcceptedFileTypes =
   "image/jpeg,image/png,image/webp,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.heic,.heics,.heif,.heifs,.hif";
+
+const isWorkingStudioJobStatus = (status?: ProductImageStudioJobStatus | null) =>
+  status === ProductImageStudioJobStatus.QUEUED ||
+  status === ProductImageStudioJobStatus.PROCESSING;
+
+const appendImageCacheBuster = (url: string, value: string) =>
+  `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(value)}`;
 
 const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name: string }) => {
   const fallbackLabel = name.trim().charAt(0).toUpperCase() || "#";
@@ -155,22 +174,31 @@ const ProductImageStudioPage = () => {
   const [saveAsPrimary, setSaveAsPrimary] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
-  const overviewQuery = trpc.productImageStudio.overview.useQuery(undefined, {
-    enabled: canView,
-    refetchInterval: 5_000,
-  });
   const jobsQuery = trpc.productImageStudio.jobs.useQuery(
     { limit: 50 },
     {
       enabled: canView,
-      refetchInterval: 2_000,
+      refetchInterval: (jobs) =>
+        jobs?.some((job) => isWorkingStudioJobStatus(job.status)) ? 2_000 : false,
     },
   );
+  const activeJobFromList = useMemo(
+    () => (jobsQuery.data ?? []).find((job) => isWorkingStudioJobStatus(job.status)) ?? null,
+    [jobsQuery.data],
+  );
+  const selectedJobFromList = useMemo(
+    () => (jobsQuery.data ?? []).find((job) => job.id === selectedJobId) ?? null,
+    [jobsQuery.data, selectedJobId],
+  );
+  const overviewQuery = trpc.productImageStudio.overview.useQuery(undefined, {
+    enabled: canView,
+    refetchInterval: activeJobFromList ? 5_000 : false,
+  });
   const selectedJobQuery = trpc.productImageStudio.job.useQuery(
     { jobId: selectedJobId ?? "" },
     {
       enabled: canView && Boolean(selectedJobId),
-      refetchInterval: 1_500,
+      refetchInterval: isWorkingStudioJobStatus(selectedJobFromList?.status) ? 1_500 : false,
     },
   );
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -235,6 +263,176 @@ const ProductImageStudioPage = () => {
     },
   });
 
+  const resolveSourceUploadErrorMessage = (code?: string | null, sizeBytes = studioMaxImageBytes) => {
+    if (code === "imageTooLargeInput") {
+      return t("input.errors.imageTooLargeInput", {
+        size: Math.round(studioMaxInputImageBytes / (1024 * 1024)),
+      });
+    }
+    if (code === "imageTooLarge" || code === "imageTooLargeAfterCompression") {
+      return t("input.errors.imageTooLargeAfterCompression", {
+        size: Math.round(sizeBytes / (1024 * 1024)),
+      });
+    }
+    if (
+      code === "imageInvalidType" ||
+      code === "productImageStudioUnsupportedFileType" ||
+      code === "unsupportedFileType"
+    ) {
+      return t("input.errors.unsupportedFileType");
+    }
+    if (code === "imageUploadTimedOut") {
+      return tErrors.has?.("imageUploadTimedOut")
+        ? tErrors("imageUploadTimedOut")
+        : t("input.errors.imageCompressionFailed");
+    }
+    if (code && tErrors.has?.(code)) {
+      return tErrors(code);
+    }
+    return t("input.errors.imageCompressionFailed");
+  };
+
+  const prepareSourceForProxyUpload = async (file: File) => {
+    if (file.size <= studioMaxProxyImageBytes) {
+      return file;
+    }
+
+    const prepared = await prepareManagedProductImageForUpload({
+      file,
+      maxImageBytes: studioMaxProxyImageBytes,
+      maxInputImageBytes: Math.max(studioMaxInputImageBytes, file.size),
+    });
+    if (!prepared.ok) {
+      throw new Error(resolveSourceUploadErrorMessage(prepared.code, studioMaxProxyImageBytes));
+    }
+    return prepared.file;
+  };
+
+  const uploadSourceImageDirectly = async (file: File) => {
+    let targetResponse: Response;
+    try {
+      targetResponse = await fetchProductImageDirectUploadTarget({
+        file,
+        productId: selectedProduct?.id,
+      });
+    } catch (error) {
+      if (error instanceof ProductImageUploadTimeoutError) {
+        throw new Error(resolveSourceUploadErrorMessage("imageUploadTimedOut"));
+      }
+      return { attempted: false, source: null };
+    }
+
+    const targetBody = (await targetResponse.json().catch(() => null)) as
+      | (Partial<ProductImageDirectUploadTarget> & { message?: string })
+      | null;
+
+    if (!targetResponse.ok) {
+      const code = targetBody?.message ?? (targetResponse.status === 413 ? "imageTooLarge" : null);
+      if (
+        code === "directUploadUnavailable" ||
+        targetResponse.status === 404 ||
+        targetResponse.status >= 500
+      ) {
+        return { attempted: false, source: null };
+      }
+      throw new Error(resolveSourceUploadErrorMessage(code));
+    }
+
+    if (targetBody?.message === "directUploadUnavailable") {
+      return { attempted: false, source: null };
+    }
+    if (
+      targetBody?.method !== "PUT" ||
+      typeof targetBody.uploadUrl !== "string" ||
+      typeof targetBody.url !== "string"
+    ) {
+      return { attempted: false, source: null };
+    }
+
+    const target: ProductImageDirectUploadTarget = {
+      method: "PUT",
+      uploadUrl: targetBody.uploadUrl,
+      url: targetBody.url,
+      headers: targetBody.headers,
+      expiresIn: targetBody.expiresIn,
+    };
+
+    let uploadResponse: Response;
+    try {
+      uploadResponse = await putProductImageDirectUpload({ target, file });
+    } catch (error) {
+      if (error instanceof ProductImageUploadTimeoutError) {
+        throw new Error(resolveSourceUploadErrorMessage("imageUploadTimedOut"));
+      }
+      return { attempted: false, source: null };
+    }
+
+    if (!uploadResponse.ok) {
+      if (
+        uploadResponse.status === 408 ||
+        uploadResponse.status === 429 ||
+        uploadResponse.status >= 500
+      ) {
+        return { attempted: false, source: null };
+      }
+      throw new Error(resolveSourceUploadErrorMessage(null));
+    }
+
+    const uploadedUrl = target.url.trim();
+    if (!uploadedUrl) {
+      return { attempted: false, source: null };
+    }
+
+    return {
+      attempted: true,
+      source: {
+        url: uploadedUrl,
+        fileName: file.name,
+        size: file.size,
+        mimeType: file.type,
+      } satisfies UploadedSource,
+    };
+  };
+
+  const uploadSourceImageViaProxy = async (file: File) => {
+    const uploadFile = await prepareSourceForProxyUpload(file);
+    const payload = new FormData();
+    payload.set("file", uploadFile);
+
+    let response: Response;
+    try {
+      response = await fetchProductImageUpload({
+        url: "/api/product-image-studio/upload",
+        formData: payload,
+      });
+    } catch (error) {
+      if (error instanceof ProductImageUploadTimeoutError) {
+        throw new Error(resolveSourceUploadErrorMessage("imageUploadTimedOut"));
+      }
+      throw new Error(tErrors("genericMessage"));
+    }
+
+    const body = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      url?: string;
+      fileName?: string;
+      size?: number;
+      mimeType?: string;
+    };
+
+    if (!response.ok || !body.url || !body.fileName || !body.mimeType) {
+      const code = body.message ?? (response.status === 413 ? "imageTooLarge" : null);
+      throw new Error(resolveSourceUploadErrorMessage(code, studioMaxProxyImageBytes));
+    }
+
+    return {
+      url: body.url,
+      fileName: body.fileName,
+      size: body.size ?? uploadFile.size,
+      mimeType: body.mimeType,
+    } satisfies UploadedSource;
+  };
+
   const handleSourceUpload = async (file: File | null) => {
     if (!file || !canEdit) {
       return;
@@ -248,65 +446,14 @@ const ProductImageStudioPage = () => {
         maxInputImageBytes: studioMaxInputImageBytes,
       });
       if (!prepared.ok) {
-        if (prepared.code === "imageTooLargeInput") {
-          throw new Error(
-            t("input.errors.imageTooLargeInput", {
-              size: Math.round(studioMaxInputImageBytes / (1024 * 1024)),
-            }),
-          );
-        }
-        if (prepared.code === "imageTooLargeAfterCompression") {
-          throw new Error(
-            t("input.errors.imageTooLargeAfterCompression", {
-              size: Math.round(studioMaxImageBytes / (1024 * 1024)),
-            }),
-          );
-        }
-        if (prepared.code === "imageInvalidType") {
-          throw new Error(t("input.errors.unsupportedFileType"));
-        }
-        throw new Error(t("input.errors.imageCompressionFailed"));
+        throw new Error(resolveSourceUploadErrorMessage(prepared.code));
       }
 
-      const payload = new FormData();
-      payload.set("file", prepared.file);
+      const directUpload = await uploadSourceImageDirectly(prepared.file);
+      const uploadedSource =
+        directUpload.source ?? (await uploadSourceImageViaProxy(prepared.file));
 
-      const response = await fetch("/api/product-image-studio/upload", {
-        method: "POST",
-        body: payload,
-      });
-      const body = (await response.json().catch(() => ({}))) as {
-        message?: string;
-        url?: string;
-        fileName?: string;
-        size?: number;
-        mimeType?: string;
-      };
-
-      if (!response.ok || !body.url || !body.fileName || !body.mimeType) {
-        if (body.message === "imageTooLarge") {
-          throw new Error(
-            t("input.errors.imageTooLarge", {
-              size: Math.round(studioMaxImageBytes / (1024 * 1024)),
-            }),
-          );
-        }
-        if (body.message === "imageInvalidType" || body.message === "productImageStudioUnsupportedFileType") {
-          throw new Error(t("input.errors.unsupportedFileType"));
-        }
-        throw new Error(
-          body.message && tErrors.has?.(body.message)
-            ? tErrors(body.message)
-            : tErrors("genericMessage"),
-        );
-      }
-
-      setSourceImage({
-        url: body.url,
-        fileName: body.fileName,
-        size: body.size ?? prepared.file.size,
-        mimeType: body.mimeType,
-      });
+      setSourceImage(uploadedSource);
       setSelectedJobId(null);
       toast({ variant: "success", description: t("input.sourceUploadSuccess") });
     } catch (error) {
@@ -337,19 +484,6 @@ const ProductImageStudioPage = () => {
     });
   };
 
-  const activeJobFromList = useMemo(
-    () =>
-      (jobsQuery.data ?? []).find(
-        (job) =>
-          job.status === ProductImageStudioJobStatus.QUEUED ||
-          job.status === ProductImageStudioJobStatus.PROCESSING,
-      ) ?? null,
-    [jobsQuery.data],
-  );
-  const selectedJobFromList = useMemo(
-    () => (jobsQuery.data ?? []).find((job) => job.id === selectedJobId) ?? null,
-    [jobsQuery.data, selectedJobId],
-  );
   const jobMutationInFlight = createJobMutation.isLoading || retryJobMutation.isLoading;
 
   useEffect(() => {
@@ -378,17 +512,13 @@ const ProductImageStudioPage = () => {
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
   const previewIsWorking =
     jobMutationInFlight ||
-    selectedJob?.status === ProductImageStudioJobStatus.QUEUED ||
-    selectedJob?.status === ProductImageStudioJobStatus.PROCESSING;
-  const sourcePreviewUrl = selectedJob?.sourcePreviewPath
-    ? selectedJob.sourcePreviewPath
-    : sourceImage?.url
-      ? `/api/product-images/source?url=${encodeURIComponent(sourceImage.url)}`
-      : null;
-  const generatedPreviewUrl = selectedJob?.outputPreviewPath
-    ? `${selectedJob.outputPreviewPath}&v=${encodeURIComponent(
+    isWorkingStudioJobStatus(selectedJob?.status);
+  const sourcePreviewUrl = selectedJob?.sourceImageUrl ?? sourceImage?.url ?? null;
+  const generatedPreviewUrl = selectedJob?.outputImageUrl
+    ? appendImageCacheBuster(
+        selectedJob.outputImageUrl,
         String(selectedJob.completedAt ?? selectedJob.updatedAt ?? selectedJob.id),
-      )}`
+      )
     : null;
 
   const productSearchResults = useMemo(

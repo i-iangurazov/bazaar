@@ -1,8 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ProductImageStudioBackground,
   ProductImageStudioOutputFormat,
 } from "@prisma/client";
+
+vi.mock("@/server/db/prisma", () => ({
+  prisma: {},
+}));
+vi.mock("@/server/jobs", () => ({
+  registerJob: vi.fn(),
+  runJob: vi.fn(),
+}));
+vi.mock("@/server/services/audit", () => ({
+  writeAuditLog: vi.fn(),
+}));
+vi.mock("@/server/services/productImageStorage", () => ({
+  downloadRemoteImage: vi.fn(),
+  isManagedProductImageUrl: vi.fn(),
+  normalizeProductImageUrl: vi.fn(),
+  uploadProductImageBuffer: vi.fn(),
+}));
 
 import {
   buildProductImageEditInstruction,
