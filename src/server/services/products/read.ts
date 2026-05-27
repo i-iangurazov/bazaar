@@ -1810,3 +1810,59 @@ export const exportProductsCsv = async ({
 
   return toCsv(header, rows, keys);
 };
+
+export const exportProductImagesData = async ({
+  prisma,
+  organizationId,
+  user,
+  storeId,
+}: {
+  prisma: PrismaDbClient;
+  organizationId: string;
+  user?: StoreAccessUser;
+  storeId?: string;
+}): Promise<{ name: string; images: string[] }[]> => {
+  const accessibleStoreIds = storeId ? undefined : await resolveProductStoreScopeIds(prisma, user);
+  if (storeId && user) {
+    try {
+      await assertUserCanAccessStore(prisma, user, storeId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }
+  const exportStore = storeId
+    ? await prisma.store.findFirst({
+        where: { id: storeId, organizationId },
+        select: { id: true },
+      })
+    : null;
+  const exportStoreId = exportStore?.id;
+  const products = await prisma.product.findMany({
+    where: {
+      organizationId,
+      isDeleted: false,
+      ...(exportStoreId
+        ? productStoreAssignmentWhere(exportStoreId)
+        : productStoreAssignmentInWhere(accessibleStoreIds)),
+    },
+    select: {
+      name: true,
+      photoUrl: true,
+      images: {
+        select: { url: true, position: true },
+        orderBy: { position: "asc" },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return products
+    .map((product) => {
+      const urls = [product.photoUrl, ...product.images.map((img) => img.url)]
+        .map((url) => sanitizeDetailImageUrl(url))
+        .filter((url): url is string => Boolean(url))
+        .filter((url, i, arr) => arr.indexOf(url) === i);
+      return { name: product.name, images: urls };
+    })
+    .filter((p) => p.images.length > 0);
+};

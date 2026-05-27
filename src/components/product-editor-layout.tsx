@@ -11,7 +11,7 @@ export const ProductEditorPage = ({
 }) => (
   <div
     className={cn(
-      "-mb-6 min-h-[calc(100vh-3rem)] bg-[#f1f1f1] px-0 pb-[calc(var(--mobile-bottom-nav-height)+5.5rem)] pt-4 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-5 md:-my-6 lg:-mx-10 lg:-my-8 lg:px-10 lg:py-6 dark:bg-background",
+      "-mb-6 min-h-[calc(100vh-3rem)] bg-muted px-0 pb-[calc(var(--mobile-bottom-nav-height)+5.5rem)] pt-4 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-5 md:-my-6 lg:-mx-10 lg:-my-8 lg:px-10 lg:py-6",
       className,
     )}
   >
@@ -48,7 +48,7 @@ export const ProductEditorSaveBar = ({
   label: ReactNode;
   actions: ReactNode;
 }) => (
-  <div className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.5rem)] z-30 rounded-lg border border-black/10 bg-[#202020] p-1.5 text-white shadow-[0_-4px_14px_rgba(15,23,42,0.1)] sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:mb-4 sm:rounded-lg sm:border sm:p-1.5 sm:shadow-[0_4px_14px_rgba(15,23,42,0.1)] dark:border-border dark:bg-card dark:text-card-foreground">
+  <div className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.5rem)] z-30 rounded-lg border border-foreground/10 bg-foreground p-1.5 text-background shadow-[0_-4px_14px_rgba(15,23,42,0.1)] sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:z-10 sm:mb-4 sm:rounded-lg sm:border sm:p-1.5 sm:shadow-[0_4px_14px_rgba(15,23,42,0.1)] dark:border-border dark:bg-card dark:text-card-foreground">
     <div className="mx-auto flex min-h-10 w-full max-w-[1120px] items-center justify-between gap-3 sm:min-h-9 sm:max-w-none">
       <div className="min-w-0 truncate px-2 text-sm font-medium">{label}</div>
       <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
@@ -82,7 +82,7 @@ export const ProductEditorCard = ({
 }) => (
   <section
     className={cn(
-      "rounded-lg border border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card",
+      "rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]",
       className,
     )}
   >

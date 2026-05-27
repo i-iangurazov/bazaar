@@ -4251,7 +4251,7 @@ export const ProductForm = ({
       </div>
       <div
         className={`rounded-lg border border-dashed px-4 py-6 text-center transition ${
-          isDragActive ? "border-ink bg-muted/40" : "border-black/20 bg-muted/20"
+          isDragActive ? "border-ink bg-muted/40" : "border-border bg-muted/20"
         }`}
         onDragOver={handleImageDragOver}
         onDragLeave={handleImageDragLeave}
@@ -4774,20 +4774,10 @@ export const ProductForm = ({
                           variant="secondary"
                           size="sm"
                           onClick={handleGenerateDescription}
-                          disabled={
-                            isUploadingImages ||
-                            generateDescriptionMutation.isLoading ||
-                            !descriptionSourceImageUrls.length
-                          }
+                          disabled
                         >
-                          {generateDescriptionMutation.isLoading ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" />
-                          )}
-                          {generateDescriptionMutation.isLoading
-                            ? t("aiDescriptionGenerating")
-                            : t("aiDescriptionGenerate")}
+                          <SparklesIcon className="h-4 w-4" />
+                          {t("aiDescriptionGenerate")}
                         </Button>
                       ) : null}
                     </div>
@@ -6450,20 +6440,10 @@ export const ProductForm = ({
                                 variant="secondary"
                                 size="sm"
                                 onClick={handleGenerateDescription}
-                                disabled={
-                                  isUploadingImages ||
-                                  generateDescriptionMutation.isLoading ||
-                                  !descriptionSourceImageUrls.length
-                                }
+                                disabled
                               >
-                                {generateDescriptionMutation.isLoading ? (
-                                  <Spinner className="h-4 w-4" />
-                                ) : (
-                                  <SparklesIcon className="h-4 w-4" />
-                                )}
-                                {generateDescriptionMutation.isLoading
-                                  ? t("aiDescriptionGenerating")
-                                  : t("aiDescriptionGenerate")}
+                                <SparklesIcon className="h-4 w-4" />
+                                {t("aiDescriptionGenerate")}
                               </Button>
                             ) : null}
                           </div>

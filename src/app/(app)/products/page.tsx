@@ -318,6 +318,14 @@ const ProductsPage = () => {
   const [legacyProductsPrintModalOpen, setLegacyProductsPrintModalOpen] = useState(false);
   const [printQueue, setPrintQueue] = useState<string[]>([]);
   const [printAdvancedOpen, setPrintAdvancedOpen] = useState(false);
+  const [exportImagesProgress, setExportImagesProgress] = useState<{
+    status: "running" | "zipping" | "done" | "error";
+    done: number;
+    total: number;
+    currentName: string;
+    elapsedSeconds: number;
+    startedAt: number;
+  } | null>(null);
   const [duplicateTarget, setDuplicateTarget] = useState<{
     id: string;
     name: string;
@@ -2007,6 +2015,80 @@ const ProductsPage = () => {
     return managementActions;
   };
 
+  const handleExportImages = () => {
+    const startedAt = Date.now();
+    setExportImagesProgress({
+      status: "running",
+      done: 0,
+      total: 0,
+      currentName: "",
+      elapsedSeconds: 0,
+      startedAt,
+    });
+
+    const params = new URLSearchParams();
+    if (storeId) params.set("storeId", storeId);
+    if (selectedStore?.name) params.set("storeName", selectedStore.name);
+
+    const es = new EventSource(`/api/products/export-images?${params.toString()}`);
+
+    const ticker = setInterval(() => {
+      setExportImagesProgress((prev) =>
+        prev ? { ...prev, elapsedSeconds: Math.floor((Date.now() - prev.startedAt) / 1000) } : prev,
+      );
+    }, 1000);
+
+    es.onmessage = (event: MessageEvent<string>) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const data = JSON.parse(event.data);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (data.type === "total") {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        setExportImagesProgress((prev) => prev ? { ...prev, total: data.count as number } : prev);
+      } else if (data.type === "progress") {
+        setExportImagesProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                done: data.done as number,
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                total: data.total as number,
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                currentName: (data.name as string) || prev.currentName,
+              }
+            : prev,
+        );
+      } else if (data.type === "zipping") {
+        setExportImagesProgress((prev) => prev ? { ...prev, status: "zipping" } : prev);
+      } else if (data.type === "ready") {
+        es.close();
+        clearInterval(ticker);
+        setExportImagesProgress((prev) =>
+          prev ? { ...prev, status: "done", elapsedSeconds: Math.floor((Date.now() - prev.startedAt) / 1000) } : prev,
+        );
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const downloadToken = data.token as string;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const filename = data.filename as string;
+        const link = document.createElement("a");
+        link.href = `/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`;
+        link.download = filename;
+        link.click();
+      } else if (data.type === "error") {
+        es.close();
+        clearInterval(ticker);
+        setExportImagesProgress((prev) => prev ? { ...prev, status: "error" } : prev);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      clearInterval(ticker);
+      setExportImagesProgress((prev) => prev ? { ...prev, status: "error" } : prev);
+    };
+  };
+
   const handleExport = async (format: DownloadFormat) => {
     const { data, error } = await exportQuery.refetch();
     if (error) {
@@ -2609,6 +2691,15 @@ const ProductsPage = () => {
                         <DownloadIcon className="h-4 w-4" aria-hidden />
                       )}
                       {t("exportXlsx")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={Boolean(exportImagesProgress && exportImagesProgress.status !== "done" && exportImagesProgress.status !== "error")}
+                      onSelect={() => {
+                        handleExportImages();
+                      }}
+                    >
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
+                      {t("exportImagesZip")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -4116,6 +4207,86 @@ const ProductsPage = () => {
                   variant="secondary"
                   className="w-full sm:w-auto"
                   onClick={() => setArrangeCategoriesProgress(null)}
+                >
+                  {tCommon("close")}
+                </Button>
+              </FormActions>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(exportImagesProgress)}
+        onOpenChange={(open) => {
+          if (!open && (exportImagesProgress?.status === "done" || exportImagesProgress?.status === "error")) {
+            setExportImagesProgress(null);
+          }
+        }}
+        title={t("exportImagesProgressTitle")}
+        subtitle={
+          exportImagesProgress?.status === "zipping"
+            ? t("exportImagesProgressZipping")
+            : exportImagesProgress?.status === "done"
+              ? t("exportImagesProgressDone")
+              : exportImagesProgress?.status === "error"
+                ? t("exportImagesProgressError")
+                : exportImagesProgress?.total === 0
+                  ? t("exportImagesProgressLoading")
+                  : t("exportImagesProgressRunning")
+        }
+      >
+        {exportImagesProgress ? (
+          <div className="space-y-4 p-1">
+            <div className="rounded-md border border-border bg-muted/30 p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="min-w-0 truncate font-medium text-foreground">
+                  {exportImagesProgress.status === "zipping"
+                    ? t("exportImagesProgressZipping")
+                    : exportImagesProgress.currentName || t("exportImagesProgressLoading")}
+                </p>
+                <span className="shrink-0 text-sm font-semibold text-foreground">
+                  {exportImagesProgress.total > 0
+                    ? `${Math.round((exportImagesProgress.done / exportImagesProgress.total) * 100)}%`
+                    : "—"}
+                </span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-md bg-border/70">
+                {exportImagesProgress.total > 0 ? (
+                  <div
+                    className="h-2 rounded-md bg-primary transition-all duration-300"
+                    style={{
+                      width: `${Math.round((exportImagesProgress.done / exportImagesProgress.total) * 100)}%`,
+                    }}
+                  />
+                ) : (
+                  <div className="h-2 w-1/3 animate-pulse rounded-md bg-primary/60" />
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span>
+                  {t("exportImagesProgressCount", {
+                    done: exportImagesProgress.done,
+                    total: exportImagesProgress.total,
+                  })}
+                </span>
+                <span>
+                  {t("exportImagesProgressElapsed", { seconds: exportImagesProgress.elapsedSeconds })}
+                </span>
+              </div>
+            </div>
+            {exportImagesProgress.status === "error" ? (
+              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+                {tErrors("genericMessage")}
+              </div>
+            ) : null}
+            {exportImagesProgress.status === "done" || exportImagesProgress.status === "error" ? (
+              <FormActions>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => setExportImagesProgress(null)}
                 >
                   {tCommon("close")}
                 </Button>
