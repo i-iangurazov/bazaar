@@ -89,6 +89,7 @@ import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 
 const showProductPacksSection = false;
+const aiFeaturesVisuallyDisabled = true;
 
 export type ProductFormValues = {
   sku: string;
@@ -4774,10 +4775,13 @@ export const ProductForm = ({
                           variant="secondary"
                           size="sm"
                           onClick={handleGenerateDescription}
-                          disabled
+                          disabled={aiFeaturesVisuallyDisabled}
                         >
                           <SparklesIcon className="h-4 w-4" />
                           {t("aiDescriptionGenerate")}
+                          <Badge variant="muted" className="ml-1">
+                            {t("aiUnavailableBadge")}
+                          </Badge>
                         </Button>
                       ) : null}
                     </div>
@@ -6440,10 +6444,13 @@ export const ProductForm = ({
                                 variant="secondary"
                                 size="sm"
                                 onClick={handleGenerateDescription}
-                                disabled
+                                disabled={aiFeaturesVisuallyDisabled}
                               >
                                 <SparklesIcon className="h-4 w-4" />
                                 {t("aiDescriptionGenerate")}
+                                <Badge variant="muted" className="ml-1">
+                                  {t("aiUnavailableBadge")}
+                                </Badge>
                               </Button>
                             ) : null}
                           </div>
@@ -6608,6 +6615,7 @@ export const ProductForm = ({
                                     size="sm"
                                     onClick={handleGenerateDescription}
                                     disabled={
+                                      aiFeaturesVisuallyDisabled ||
                                       isUploadingImages ||
                                       generateDescriptionMutation.isLoading ||
                                       !descriptionSourceImageUrls.length
@@ -6621,6 +6629,9 @@ export const ProductForm = ({
                                     {generateDescriptionMutation.isLoading
                                       ? t("aiDescriptionGenerating")
                                       : t("aiDescriptionGenerate")}
+                                    <Badge variant="muted" className="ml-1">
+                                      {t("aiUnavailableBadge")}
+                                    </Badge>
                                   </Button>
                                 ) : null}
                               </div>

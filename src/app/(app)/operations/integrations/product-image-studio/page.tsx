@@ -75,6 +75,7 @@ const studioMaxProxyImageBytes = Math.min(
 );
 const studioAcceptedFileTypes =
   "image/jpeg,image/png,image/webp,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.heic,.heics,.heif,.heifs,.hif";
+const productImageStudioVisuallyDisabled = true;
 
 const isWorkingStudioJobStatus = (status?: ProductImageStudioJobStatus | null) =>
   status === ProductImageStudioJobStatus.QUEUED ||
@@ -263,7 +264,10 @@ const ProductImageStudioPage = () => {
     },
   });
 
-  const resolveSourceUploadErrorMessage = (code?: string | null, sizeBytes = studioMaxImageBytes) => {
+  const resolveSourceUploadErrorMessage = (
+    code?: string | null,
+    sizeBytes = studioMaxImageBytes,
+  ) => {
     if (code === "imageTooLargeInput") {
       return t("input.errors.imageTooLargeInput", {
         size: Math.round(studioMaxInputImageBytes / (1024 * 1024)),
@@ -510,9 +514,7 @@ const ProductImageStudioPage = () => {
   const targetProductId = selectedProduct?.id ?? selectedJob?.product?.id ?? null;
   const isBusy =
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
-  const previewIsWorking =
-    jobMutationInFlight ||
-    isWorkingStudioJobStatus(selectedJob?.status);
+  const previewIsWorking = jobMutationInFlight || isWorkingStudioJobStatus(selectedJob?.status);
   const sourcePreviewUrl = selectedJob?.sourceImageUrl ?? sourceImage?.url ?? null;
   const generatedPreviewUrl = selectedJob?.outputImageUrl
     ? appendImageCacheBuster(
@@ -531,9 +533,16 @@ const ProductImageStudioPage = () => {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        action={<Badge variant="muted">{t("soonBadge")}</Badge>}
       />
 
-      <div className="space-y-6">
+      <div
+        className={
+          productImageStudioVisuallyDisabled
+            ? "pointer-events-none space-y-6 opacity-40"
+            : "space-y-6"
+        }
+      >
         <Card>
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -558,25 +567,19 @@ const ProductImageStudioPage = () => {
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.totalJobs")}
                 </p>
-                <p className="mt-2 text-2xl font-semibold">
-                  {overview?.totalJobs ?? 0}
-                </p>
+                <p className="mt-2 text-2xl font-semibold">{overview?.totalJobs ?? 0}</p>
               </div>
               <div className="rounded-md border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.succeeded")}
                 </p>
-                <p className="mt-2 text-2xl font-semibold">
-                  {overview?.succeededJobs ?? 0}
-                </p>
+                <p className="mt-2 text-2xl font-semibold">{overview?.succeededJobs ?? 0}</p>
               </div>
               <div className="rounded-md border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.failed")}
                 </p>
-                <p className="mt-2 text-2xl font-semibold">
-                  {overview?.failedJobs ?? 0}
-                </p>
+                <p className="mt-2 text-2xl font-semibold">{overview?.failedJobs ?? 0}</p>
               </div>
               <div className="rounded-md border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -665,7 +668,10 @@ const ProductImageStudioPage = () => {
                 {selectedProduct ? (
                   <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
                     <div className="flex items-center gap-3">
-                      <ProductImageThumb imageUrl={selectedProduct.imageUrl} name={selectedProduct.name} />
+                      <ProductImageThumb
+                        imageUrl={selectedProduct.imageUrl}
+                        name={selectedProduct.name}
+                      />
                       <div>
                         <p className="text-sm font-medium">{selectedProduct.name}</p>
                         <p className="text-xs text-muted-foreground">{selectedProduct.sku}</p>
@@ -790,7 +796,11 @@ const ProductImageStudioPage = () => {
                       {t("presets.optional.softShadowDescription")}
                     </p>
                   </div>
-                  <Switch checked={softShadow} onCheckedChange={setSoftShadow} disabled={!canEdit} />
+                  <Switch
+                    checked={softShadow}
+                    onCheckedChange={setSoftShadow}
+                    disabled={!canEdit}
+                  />
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -799,13 +809,15 @@ const ProductImageStudioPage = () => {
                       {t("presets.optional.tighterCropDescription")}
                     </p>
                   </div>
-                  <Switch checked={tighterCrop} onCheckedChange={setTighterCrop} disabled={!canEdit} />
+                  <Switch
+                    checked={tighterCrop}
+                    onCheckedChange={setTighterCrop}
+                    disabled={!canEdit}
+                  />
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium">
-                      {t("presets.optional.brighterTitle")}
-                    </p>
+                    <p className="text-sm font-medium">{t("presets.optional.brighterTitle")}</p>
                     <p className="text-xs text-muted-foreground">
                       {t("presets.optional.brighterDescription")}
                     </p>
@@ -819,11 +831,7 @@ const ProductImageStudioPage = () => {
               </div>
 
               <FormActions>
-                <Button
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={generateDisabled}
-                >
+                <Button type="button" onClick={handleGenerate} disabled={generateDisabled}>
                   {createJobMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                   {t("actions.generate")}
                 </Button>
@@ -870,7 +878,9 @@ const ProductImageStudioPage = () => {
                 <div className="flex items-center justify-between gap-3">
                   <Label>{t("preview.generated")}</Label>
                   {selectedJob ? (
-                    <Badge variant={jobBadgeVariant(selectedJob.status)}>{selectedJob.status}</Badge>
+                    <Badge variant={jobBadgeVariant(selectedJob.status)}>
+                      {selectedJob.status}
+                    </Badge>
                   ) : null}
                 </div>
                 <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
@@ -879,7 +889,7 @@ const ProductImageStudioPage = () => {
                       <Spinner className="h-5 w-5" />
                       <div className="w-full max-w-[240px] space-y-2">
                         <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                          <div className="h-full w-2/3 rounded-full bg-primary/80 animate-pulse" />
+                          <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/80" />
                         </div>
                         <p>{t("preview.processing")}</p>
                       </div>
@@ -907,7 +917,11 @@ const ProductImageStudioPage = () => {
 
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-3">
-                <Switch checked={saveAsPrimary} onCheckedChange={setSaveAsPrimary} disabled={!canEdit} />
+                <Switch
+                  checked={saveAsPrimary}
+                  onCheckedChange={setSaveAsPrimary}
+                  disabled={!canEdit}
+                />
                 <span className="text-sm text-muted-foreground">{t("preview.setAsPrimary")}</span>
               </div>
               <Button
@@ -940,7 +954,9 @@ const ProductImageStudioPage = () => {
                 {t("actions.saveToProduct")}
               </Button>
               {!targetProductId && selectedJob?.canSaveToProduct ? (
-                <span className="text-xs text-muted-foreground">{t("preview.productRequired")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("preview.productRequired")}
+                </span>
               ) : null}
             </div>
           </CardContent>
@@ -954,72 +970,77 @@ const ProductImageStudioPage = () => {
           <CardContent>
             <TableContainer>
               <Table className="min-w-[860px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("history.columns.status")}</TableHead>
-                  <TableHead>{t("history.columns.product")}</TableHead>
-                  <TableHead>{t("history.columns.createdBy")}</TableHead>
-                  <TableHead>{t("history.columns.createdAt")}</TableHead>
-                  <TableHead>{t("history.columns.completedAt")}</TableHead>
-                  <TableHead>{t("history.columns.actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(jobsQuery.data ?? []).map((job) => (
-                  <TableRow key={job.id} className={selectedJobId === job.id ? "bg-secondary/30" : undefined}>
-                    <TableCell>
-                      <Badge variant={jobBadgeVariant(job.status)}>{job.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {job.product ? (
-                        <div className="flex items-center gap-3">
-                          <ProductImageThumb
-                            imageUrl={job.productImageUrl}
-                            name={job.product.name}
-                          />
-                          <div>
-                            <p className="text-sm font-medium">{job.product.name}</p>
-                            <p className="text-xs text-muted-foreground">{job.product.sku}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">{t("history.unlinkedProduct")}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{job.createdBy.name}</TableCell>
-                    <TableCell>{formatDateTime(job.createdAt, locale)}</TableCell>
-                    <TableCell>
-                      {job.completedAt ? formatDateTime(job.completedAt, locale) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setSelectedJobId(job.id)}
-                        >
-                          {t("actions.preview")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => retryJobMutation.mutate({ jobId: job.id })}
-                          disabled={!canEdit || !job.canRetry}
-                        >
-                          {t("actions.regenerate")}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!jobsQuery.data?.length ? (
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                      {t("history.empty")}
-                    </TableCell>
+                    <TableHead>{t("history.columns.status")}</TableHead>
+                    <TableHead>{t("history.columns.product")}</TableHead>
+                    <TableHead>{t("history.columns.createdBy")}</TableHead>
+                    <TableHead>{t("history.columns.createdAt")}</TableHead>
+                    <TableHead>{t("history.columns.completedAt")}</TableHead>
+                    <TableHead>{t("history.columns.actions")}</TableHead>
                   </TableRow>
-                ) : null}
-              </TableBody>
+                </TableHeader>
+                <TableBody>
+                  {(jobsQuery.data ?? []).map((job) => (
+                    <TableRow
+                      key={job.id}
+                      className={selectedJobId === job.id ? "bg-secondary/30" : undefined}
+                    >
+                      <TableCell>
+                        <Badge variant={jobBadgeVariant(job.status)}>{job.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {job.product ? (
+                          <div className="flex items-center gap-3">
+                            <ProductImageThumb
+                              imageUrl={job.productImageUrl}
+                              name={job.product.name}
+                            />
+                            <div>
+                              <p className="text-sm font-medium">{job.product.name}</p>
+                              <p className="text-xs text-muted-foreground">{job.product.sku}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            {t("history.unlinkedProduct")}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>{job.createdBy.name}</TableCell>
+                      <TableCell>{formatDateTime(job.createdAt, locale)}</TableCell>
+                      <TableCell>
+                        {job.completedAt ? formatDateTime(job.completedAt, locale) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSelectedJobId(job.id)}
+                          >
+                            {t("actions.preview")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => retryJobMutation.mutate({ jobId: job.id })}
+                            disabled={!canEdit || !job.canRetry}
+                          >
+                            {t("actions.regenerate")}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!jobsQuery.data?.length ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        {t("history.empty")}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
               </Table>
             </TableContainer>
           </CardContent>

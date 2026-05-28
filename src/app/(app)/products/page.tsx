@@ -212,6 +212,7 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
 };
 
 const aiArrangeCategoriesBatchSize = 25;
+const aiFeaturesVisuallyDisabled = true;
 const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";
@@ -2044,7 +2045,7 @@ const ProductsPage = () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (data.type === "total") {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        setExportImagesProgress((prev) => prev ? { ...prev, total: data.count as number } : prev);
+        setExportImagesProgress((prev) => (prev ? { ...prev, total: data.count as number } : prev));
       } else if (data.type === "progress") {
         setExportImagesProgress((prev) =>
           prev
@@ -2060,12 +2061,18 @@ const ProductsPage = () => {
             : prev,
         );
       } else if (data.type === "zipping") {
-        setExportImagesProgress((prev) => prev ? { ...prev, status: "zipping" } : prev);
+        setExportImagesProgress((prev) => (prev ? { ...prev, status: "zipping" } : prev));
       } else if (data.type === "ready") {
         es.close();
         clearInterval(ticker);
         setExportImagesProgress((prev) =>
-          prev ? { ...prev, status: "done", elapsedSeconds: Math.floor((Date.now() - prev.startedAt) / 1000) } : prev,
+          prev
+            ? {
+                ...prev,
+                status: "done",
+                elapsedSeconds: Math.floor((Date.now() - prev.startedAt) / 1000),
+              }
+            : prev,
         );
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         const downloadToken = data.token as string;
@@ -2078,14 +2085,14 @@ const ProductsPage = () => {
       } else if (data.type === "error") {
         es.close();
         clearInterval(ticker);
-        setExportImagesProgress((prev) => prev ? { ...prev, status: "error" } : prev);
+        setExportImagesProgress((prev) => (prev ? { ...prev, status: "error" } : prev));
       }
     };
 
     es.onerror = () => {
       es.close();
       clearInterval(ticker);
-      setExportImagesProgress((prev) => prev ? { ...prev, status: "error" } : prev);
+      setExportImagesProgress((prev) => (prev ? { ...prev, status: "error" } : prev));
     };
   };
 
@@ -2636,7 +2643,9 @@ const ProductsPage = () => {
                       </DropdownMenuItem>
                     ) : null}
                     <DropdownMenuItem
-                      disabled={!products.length || arrangeCategoriesRunning}
+                      disabled={
+                        aiFeaturesVisuallyDisabled || !products.length || arrangeCategoriesRunning
+                      }
                       onSelect={() => void handleArrangeCategoriesWithAi()}
                     >
                       {arrangeCategoriesRunning ? (
@@ -2645,6 +2654,9 @@ const ProductsPage = () => {
                         <SparklesIcon className="h-4 w-4" aria-hidden />
                       )}
                       {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
+                      <Badge variant="muted" className="ml-auto">
+                        {t("aiUnavailableBadge")}
+                      </Badge>
                     </DropdownMenuItem>
                     {enableBarcode && selectedList.length ? (
                       <>
@@ -2693,7 +2705,11 @@ const ProductsPage = () => {
                       {t("exportXlsx")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={Boolean(exportImagesProgress && exportImagesProgress.status !== "done" && exportImagesProgress.status !== "error")}
+                      disabled={Boolean(
+                        exportImagesProgress &&
+                        exportImagesProgress.status !== "done" &&
+                        exportImagesProgress.status !== "error",
+                      )}
                       onSelect={() => {
                         handleExportImages();
                       }}
@@ -3142,14 +3158,18 @@ const ProductsPage = () => {
                           size="sm"
                           className="w-full sm:w-auto"
                           aria-label={t("bulkAiActions")}
+                          disabled={aiFeaturesVisuallyDisabled}
                         >
                           <SparklesIcon className="h-4 w-4" aria-hidden />
                           {t("bulkAiActions")}
+                          <Badge variant="muted" className="ml-1">
+                            {t("aiUnavailableBadge")}
+                          </Badge>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-[260px]">
                         <DropdownMenuItem
-                          disabled={arrangeCategoriesRunning}
+                          disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
                           onSelect={() => void handleArrangeCategoriesWithAi()}
                         >
                           {arrangeCategoriesRunning ? (
@@ -3158,9 +3178,12 @@ const ProductsPage = () => {
                             <SparklesIcon className="h-4 w-4" aria-hidden />
                           )}
                           {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
+                          <Badge variant="muted" className="ml-auto">
+                            {t("aiUnavailableBadge")}
+                          </Badge>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          disabled={bulkDescriptionRunning}
+                          disabled={aiFeaturesVisuallyDisabled || bulkDescriptionRunning}
                           onSelect={() => void handleBulkGenerateDescriptions()}
                         >
                           {bulkDescriptionRunning ? (
@@ -3171,6 +3194,9 @@ const ProductsPage = () => {
                           {bulkDescriptionRunning
                             ? tCommon("loading")
                             : t("bulkGenerateDescriptions")}
+                          <Badge variant="muted" className="ml-auto">
+                            {t("aiUnavailableBadge")}
+                          </Badge>
                         </DropdownMenuItem>
                         {enableBarcode ? (
                           <DropdownMenuItem
@@ -4219,7 +4245,10 @@ const ProductsPage = () => {
       <Modal
         open={Boolean(exportImagesProgress)}
         onOpenChange={(open) => {
-          if (!open && (exportImagesProgress?.status === "done" || exportImagesProgress?.status === "error")) {
+          if (
+            !open &&
+            (exportImagesProgress?.status === "done" || exportImagesProgress?.status === "error")
+          ) {
             setExportImagesProgress(null);
           }
         }}
@@ -4271,7 +4300,9 @@ const ProductsPage = () => {
                   })}
                 </span>
                 <span>
-                  {t("exportImagesProgressElapsed", { seconds: exportImagesProgress.elapsedSeconds })}
+                  {t("exportImagesProgressElapsed", {
+                    seconds: exportImagesProgress.elapsedSeconds,
+                  })}
                 </span>
               </div>
             </div>

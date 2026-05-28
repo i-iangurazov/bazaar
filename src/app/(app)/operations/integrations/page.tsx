@@ -23,6 +23,7 @@ const IntegrationTile = ({
   statusVariant,
   detail,
   actions,
+  className,
 }: {
   title: string;
   description: string;
@@ -30,8 +31,9 @@ const IntegrationTile = ({
   statusVariant: BadgeVariant;
   detail?: ReactNode;
   actions: ReactNode;
+  className?: string;
 }) => (
-  <Card className="flex min-h-[220px] flex-col">
+  <Card className={`flex min-h-[220px] flex-col ${className ?? ""}`}>
     <CardHeader className="px-5 py-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 gap-3">
@@ -185,13 +187,6 @@ const IntegrationsPage = () => {
       : productImageStudioOverviewQuery.data?.status === "ERROR"
         ? t("productImageStudio.status.error")
         : t("productImageStudio.status.notConfigured");
-  const imageStudioStatusVariant: BadgeVariant =
-    productImageStudioOverviewQuery.data?.status === "READY"
-      ? "success"
-      : productImageStudioOverviewQuery.data?.status === "ERROR"
-        ? "danger"
-        : "muted";
-
   return (
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
@@ -313,8 +308,14 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("productImageStudio.title")}
           description={t("productImageStudio.description")}
-          status={imageStudioStatus}
-          statusVariant={imageStudioStatusVariant}
+          status={t("productImageStudio.soonBadge")}
+          statusVariant="muted"
+          detail={
+            <span>
+              {t("productImageStudio.currentStatus")}: {imageStudioStatus}
+            </span>
+          }
+          className="pointer-events-none opacity-40"
           actions={
             <>
               <ActionLink href="/operations/integrations/product-image-studio">

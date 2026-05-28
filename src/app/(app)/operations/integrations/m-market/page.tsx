@@ -54,6 +54,7 @@ const ISSUE_CODES = [
   "MISSING_STOCK_MAPPING",
   "MISSING_SPECS",
 ] as const;
+const aiFeaturesVisuallyDisabled = true;
 
 type IssueCode = (typeof ISSUE_CODES)[number];
 
@@ -82,13 +83,7 @@ const formatCountdown = (seconds: number) => {
   return `${String(minutes).padStart(2, "0")}:${String(remSeconds).padStart(2, "0")}`;
 };
 
-const ProductImageThumb = ({
-  imageUrl,
-  name,
-}: {
-  imageUrl?: string | null;
-  name: string;
-}) => {
+const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name: string }) => {
   const fallbackLabel = name.trim().charAt(0).toUpperCase() || "#";
 
   if (imageUrl) {
@@ -576,10 +571,7 @@ const MMarketSettingsPage = () => {
       });
     } catch (error) {
       await preflightQuery.refetch();
-      const errorMessage = translateError(
-        tErrors,
-        error as Parameters<typeof translateError>[1],
-      );
+      const errorMessage = translateError(tErrors, error as Parameters<typeof translateError>[1]);
       setBulkProgress((current) =>
         current
           ? {
@@ -663,8 +655,7 @@ const MMarketSettingsPage = () => {
         const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
         const remainingAfterBatch = Math.max(
           0,
-          actionableMissingSpecsTargetIds.length -
-            (batchIndex + 1) * mMarketBulkProgressBatchSize,
+          actionableMissingSpecsTargetIds.length - (batchIndex + 1) * mMarketBulkProgressBatchSize,
         );
 
         summary.processedCount += handledInBatch;
@@ -779,10 +770,7 @@ const MMarketSettingsPage = () => {
       });
     } catch (error) {
       await preflightQuery.refetch();
-      const errorMessage = translateError(
-        tErrors,
-        error as Parameters<typeof translateError>[1],
-      );
+      const errorMessage = translateError(tErrors, error as Parameters<typeof translateError>[1]);
       setBulkProgress((current) =>
         current
           ? {
@@ -1426,7 +1414,11 @@ const MMarketSettingsPage = () => {
                             <TableCell>
                               {product.exportPriceKgs === null
                                 ? "-"
-                                : formatKgsMoney(product.exportPriceKgs, locale, baseAccountingCurrency)}
+                                : formatKgsMoney(
+                                    product.exportPriceKgs,
+                                    locale,
+                                    baseAccountingCurrency,
+                                  )}
                             </TableCell>
                             <TableCell>{product.onHandQty}</TableCell>
                             <TableCell>
@@ -1673,7 +1665,11 @@ const MMarketSettingsPage = () => {
                         <Button
                           type="button"
                           onClick={() => void handleAutofillSpecs()}
-                          disabled={bulkProgressRunning || bulkAutofillSpecsMutation.isLoading}
+                          disabled={
+                            aiFeaturesVisuallyDisabled ||
+                            bulkProgressRunning ||
+                            bulkAutofillSpecsMutation.isLoading
+                          }
                         >
                           {bulkAutofillSpecsMutation.isLoading ? (
                             <Spinner className="h-4 w-4" />
@@ -1681,6 +1677,9 @@ const MMarketSettingsPage = () => {
                             <SparklesIcon className="h-4 w-4" aria-hidden />
                           )}
                           {t("preflight.autofillSpecs")} ({actionableMissingSpecsCount})
+                          <Badge variant="muted" className="ml-1">
+                            {tProducts("aiUnavailableBadge")}
+                          </Badge>
                         </Button>
                       </>
                     ) : null}
@@ -1689,7 +1688,11 @@ const MMarketSettingsPage = () => {
                       <Button
                         type="button"
                         onClick={() => void handleGenerateShortDescriptions()}
-                        disabled={bulkProgressRunning || bulkGenerateDescriptionsMutation.isLoading}
+                        disabled={
+                          aiFeaturesVisuallyDisabled ||
+                          bulkProgressRunning ||
+                          bulkGenerateDescriptionsMutation.isLoading
+                        }
                       >
                         {bulkGenerateDescriptionsMutation.isLoading ? (
                           <Spinner className="h-4 w-4" />
@@ -1697,6 +1700,9 @@ const MMarketSettingsPage = () => {
                           <SparklesIcon className="h-4 w-4" aria-hidden />
                         )}
                         {tProducts("bulkGenerateDescriptions")} ({shortDescriptionCount})
+                        <Badge variant="muted" className="ml-1">
+                          {tProducts("aiUnavailableBadge")}
+                        </Badge>
                       </Button>
                     ) : null}
                   </FormActions>
@@ -1920,10 +1926,7 @@ const MMarketSettingsPage = () => {
                   {tProducts("bulkGenerateDescriptionsProgressBatch", {
                     current:
                       bulkProgress.batchCount > 0
-                        ? Math.min(
-                            bulkProgress.batchCount,
-                            Math.max(1, bulkProgress.batchIndex),
-                          )
+                        ? Math.min(bulkProgress.batchCount, Math.max(1, bulkProgress.batchIndex))
                         : 0,
                     total: bulkProgress.batchCount,
                   })}
