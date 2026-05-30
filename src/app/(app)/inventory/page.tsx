@@ -126,6 +126,7 @@ const inventoryViewModeSchema = z.enum(["table", "grid"]);
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventorySortKeySchema = z.enum([
   "sku",
+  "image",
   "product",
   "onHand",
   "minStock",
@@ -156,6 +157,7 @@ const defaultInventoryVisibleColumns = [
 ] as const;
 const defaultInventorySortDirectionByKey: Record<InventorySortKey, InventorySortDirection> = {
   sku: "asc",
+  image: "asc",
   product: "asc",
   onHand: "desc",
   minStock: "desc",
@@ -2466,9 +2468,9 @@ const InventoryPage = () => {
                             {visibleInventoryColumnSet.has("sku")
                               ? renderInventorySortableHead("sku", t("sku"), "hidden sm:table-cell")
                               : null}
-                            {visibleInventoryColumnSet.has("image") ? (
-                              <TableHead>{t("imageLabel")}</TableHead>
-                            ) : null}
+                            {visibleInventoryColumnSet.has("image")
+                              ? renderInventorySortableHead("image", t("imageLabel"))
+                              : null}
                             {visibleInventoryColumnSet.has("product")
                               ? renderInventorySortableHead("product", tCommon("product"))
                               : null}

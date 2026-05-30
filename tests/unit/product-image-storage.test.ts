@@ -31,6 +31,7 @@ describe("product image storage", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     process.env.IMAGE_STORAGE_PROVIDER = "local";
     process.env.R2_ACCOUNT_ID = "";
     process.env.R2_ACCESS_KEY_ID = "";
@@ -94,6 +95,23 @@ describe("product image storage", () => {
     expect(result.url).toMatch(/\.png$/);
   });
 
+  it("rejects SVG uploads before writing to storage", async () => {
+    const { uploadProductImageBuffer } =
+      await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      uploadProductImageBuffer({
+        organizationId: "org-1",
+        productId: "prod-1",
+        buffer: Buffer.from("<svg></svg>"),
+        contentType: "image/svg+xml",
+        sourceFileName: "icon.svg",
+      }),
+    ).rejects.toThrow("imageInvalidType");
+
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
   it("normalizes image URLs copied from JSON-like spreadsheet cells", async () => {
     const { normalizeProductImageUrl } =
       await import("../../src/server/services/productImageStorage");
@@ -132,6 +150,24 @@ describe("product image storage", () => {
       url: null,
       managed: false,
     });
+  });
+
+  it("does not follow remote image redirects to blocked hosts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: "http://127.0.0.1/private.png" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { downloadRemoteImage } =
+      await import("../../src/server/services/productImageStorage");
+
+    await expect(downloadRemoteImage("http://93.184.216.34/image.jpg")).resolves.toBeNull();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
   });
 
   it("keeps already-managed unassigned upload URLs without synchronous re-copying", async () => {

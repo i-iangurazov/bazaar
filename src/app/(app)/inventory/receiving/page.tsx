@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
   BackIcon,
+  AddIcon,
   DeleteIcon,
   EmptyIcon,
   ReceiveIcon,
@@ -53,6 +54,16 @@ type ReceivingLine = {
 
 type ReceivingInputField = "quantity" | "unitCost";
 type ReceivingInputViewport = "desktop" | "mobile";
+type ReceivingDraft = {
+  version: 1;
+  storeId: string;
+  dateTime: string;
+  supplierName: string;
+  referenceNumber: string;
+  note: string;
+  search: string;
+  lines: ReceivingLine[];
+};
 
 const toDateTimeLocalValue = (date: Date) => {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -68,6 +79,53 @@ const receivingInputRefKey = (
   field: ReceivingInputField,
   viewport: ReceivingInputViewport,
 ) => `${key}:${field}:${viewport}`;
+const receivingDraftStoragePrefix = "bazaar:inventory-receiving-draft:";
+const receivingReturnSource = "stockReceiving";
+
+const createReceivingDraftKey = () =>
+  `receiving-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const getReceivingDraftStorageKey = (key: string) => `${receivingDraftStoragePrefix}${key}`;
+
+const readReceivingDraft = (key: string): ReceivingDraft | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.sessionStorage.getItem(getReceivingDraftStorageKey(key));
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<ReceivingDraft>;
+    if (parsed.version !== 1 || !parsed.storeId || !Array.isArray(parsed.lines)) {
+      return null;
+    }
+    return {
+      version: 1,
+      storeId: parsed.storeId,
+      dateTime: parsed.dateTime ?? "",
+      supplierName: parsed.supplierName ?? "",
+      referenceNumber: parsed.referenceNumber ?? "",
+      note: parsed.note ?? "",
+      search: parsed.search ?? "",
+      lines: parsed.lines,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeReceivingDraft = (key: string, draft: ReceivingDraft) => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    window.sessionStorage.setItem(getReceivingDraftStorageKey(key), JSON.stringify(draft));
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const InventoryReceivingPage = () => {
   const t = useTranslations("inventory");
@@ -75,6 +133,10 @@ const InventoryReceivingPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returningDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
+  const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
+  const createdProductName = searchParams?.get("createdProductName")?.trim() ?? "";
   const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
@@ -90,6 +152,7 @@ const InventoryReceivingPage = () => {
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<ReceivingLine[]>([]);
+  const [restoredDraftKey, setRestoredDraftKey] = useState("");
   const receivingInputRefs = useRef(new Map<string, HTMLInputElement>());
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
@@ -116,9 +179,39 @@ const InventoryReceivingPage = () => {
   }, [storeId, stores]);
 
   useEffect(() => {
+    if (
+      !returningDraftKey ||
+      returnSource !== receivingReturnSource ||
+      restoredDraftKey === returningDraftKey
+    ) {
+      return;
+    }
+
+    const draft = readReceivingDraft(returningDraftKey);
+    if (!draft) {
+      setRestoredDraftKey(returningDraftKey);
+      return;
+    }
+
+    setStoreId(draft.storeId);
+    setDateTime(draft.dateTime || toDateTimeLocalValue(new Date()));
+    setSupplierName(draft.supplierName);
+    setReferenceNumber(draft.referenceNumber);
+    setNote(draft.note);
+    setLines(draft.lines);
+    setSearch(createdProductName || draft.search);
+    setRestoredDraftKey(returningDraftKey);
+    void trpcUtils.inventory.searchProducts.invalidate();
+  }, [createdProductName, restoredDraftKey, returningDraftKey, returnSource, trpcUtils.inventory.searchProducts]);
+
+  const handleStoreChange = (nextStoreId: string) => {
+    if (nextStoreId === storeId) {
+      return;
+    }
+    setStoreId(nextStoreId);
     setLines([]);
     setSearch("");
-  }, [storeId]);
+  };
 
   const getPreviewUrl = (result: SearchResult) => {
     const imageUrl = result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
@@ -267,6 +360,37 @@ const InventoryReceivingPage = () => {
     }
     event.preventDefault();
     void handleSearchSubmit();
+  };
+
+  const handleCreateProduct = () => {
+    if (!storeId) {
+      toast({ variant: "error", description: t("receivingValidationNoStore") });
+      return;
+    }
+
+    const draftKey = createReceivingDraftKey();
+    const saved = writeReceivingDraft(draftKey, {
+      version: 1,
+      storeId,
+      dateTime,
+      supplierName,
+      referenceNumber,
+      note,
+      search,
+      lines,
+    });
+    if (!saved) {
+      toast({ variant: "error", description: t("receivingDraftSaveFailed") });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      storeId,
+      returnTo: "/inventory/receiving",
+      returnSource: receivingReturnSource,
+      receivingDraftKey: draftKey,
+    });
+    router.push(`/products/new?${params.toString()}`);
   };
 
   const handleReceivingInputKeyDown = (
@@ -462,7 +586,7 @@ const InventoryReceivingPage = () => {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <Label>{tCommon("store")}</Label>
-              <Select value={storeId} onValueChange={setStoreId}>
+              <Select value={storeId} onValueChange={handleStoreChange}>
                 <SelectTrigger>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
@@ -552,10 +676,20 @@ const InventoryReceivingPage = () => {
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
           <section className="rounded-md border border-border bg-card p-4">
-            <div className="mb-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingSearchTitle")}
               </h3>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCreateProduct}
+                disabled={!storeId}
+              >
+                <AddIcon className="h-4 w-4" aria-hidden />
+                {t("receivingCreateProduct")}
+              </Button>
             </div>
             <div className="relative">
               <SearchIcon
@@ -632,8 +766,14 @@ const InventoryReceivingPage = () => {
                   );
                 })
               ) : (
-                <div className="px-3 py-3 text-sm text-muted-foreground">
-                  {storeId ? t("productSearchEmpty") : t("receivingValidationNoStore")}
+                <div className="space-y-3 px-3 py-3 text-sm text-muted-foreground">
+                  <p>{storeId ? t("productSearchEmpty") : t("receivingValidationNoStore")}</p>
+                  {storeId ? (
+                    <Button type="button" variant="secondary" size="sm" onClick={handleCreateProduct}>
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {t("receivingCreateProduct")}
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>

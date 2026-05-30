@@ -30,6 +30,7 @@ import type {
   ProductListInput,
   ProductDuplicateDiagnosticsInput,
   ProductBootstrapInput,
+  ProductExportColumnKey,
   ProductSortDirection,
   ProductSortKey,
 } from "@/server/trpc/routers/products.schemas";
@@ -45,6 +46,20 @@ import {
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
 const dbSortableProductListKeys = new Set<ProductSortKey>(["updatedAt", "name", "sku"]);
+const productExportColumns: Array<{ key: ProductExportColumnKey; header: string }> = [
+  { key: "sku", header: "SKU" },
+  { key: "name", header: "Название" },
+  { key: "unit", header: "Ед. измерения" },
+  { key: "categories", header: "Категории" },
+  { key: "description", header: "Описание" },
+  { key: "basePriceKgs", header: "Цена продажи" },
+  { key: "purchasePriceKgs", header: "Цена закупки" },
+  { key: "avgCostKgs", header: "Себестоимость" },
+  { key: "minStock", header: "Минимальный остаток" },
+  { key: "images", header: "Фото / ссылки на изображения" },
+  { key: "variants", header: "Варианты" },
+  { key: "barcodes", header: "Штрихкоды" },
+];
 
 const buildProductCategoryWhere = (category?: string) =>
   category
@@ -353,7 +368,88 @@ const productListSelect = {
 } satisfies Prisma.ProductSelect;
 
 type ProductPreviewRecord = Prisma.ProductGetPayload<{ select: typeof productPreviewSelect }>;
+type ProductListRecord = Prisma.ProductGetPayload<{ select: typeof productListSelect }>;
 type ProductListItem = ReturnType<typeof serializeProductListItem>;
+
+const productHasListImageWhere: Prisma.ProductWhereInput = {
+  OR: [
+    {
+      AND: [
+        { photoUrl: { not: null } },
+        { photoUrl: { not: "" } },
+        { photoUrl: { not: { startsWith: "data:image/" } } },
+      ],
+    },
+    {
+      images: {
+        some: {
+          url: {
+            not: { startsWith: "data:image/" },
+          },
+        },
+      },
+    },
+  ],
+};
+
+const readProductsByImageSort = async ({
+  prisma,
+  where,
+  sortDirection,
+  page,
+  pageSize,
+}: {
+  prisma: PrismaDbClient;
+  where: Prisma.ProductWhereInput;
+  sortDirection: ProductSortDirection;
+  page: number;
+  pageSize: number;
+}): Promise<{ total: number; products: ProductListRecord[] }> => {
+  const hasImageWhere: Prisma.ProductWhereInput = { AND: [where, productHasListImageWhere] };
+  const missingImageWhere: Prisma.ProductWhereInput = {
+    AND: [where, { NOT: productHasListImageWhere }],
+  };
+  const firstWhere = sortDirection === "desc" ? hasImageWhere : missingImageWhere;
+  const secondWhere = sortDirection === "desc" ? missingImageWhere : hasImageWhere;
+  const orderBy: Prisma.ProductOrderByWithRelationInput[] = [
+    { name: sortDirection },
+    { sku: sortDirection },
+    { id: sortDirection },
+  ];
+  const offset = (page - 1) * pageSize;
+  const [total, firstCount] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.count({ where: firstWhere }),
+  ]);
+  const products: ProductListRecord[] = [];
+
+  if (offset < firstCount) {
+    products.push(
+      ...(await prisma.product.findMany({
+        where: firstWhere,
+        select: productListSelect,
+        orderBy,
+        skip: offset,
+        take: pageSize,
+      })),
+    );
+  }
+
+  const remaining = pageSize - products.length;
+  if (remaining > 0) {
+    products.push(
+      ...(await prisma.product.findMany({
+        where: secondWhere,
+        select: productListSelect,
+        orderBy,
+        skip: Math.max(0, offset - firstCount),
+        take: remaining,
+      })),
+    );
+  }
+
+  return { total, products };
+};
 
 export const getSuggestedProductSku = async (organizationId: string) => {
   try {
@@ -693,6 +789,11 @@ const createProductListItemComparator = ({
       .filter(Boolean)
       .sort((left, right) => sortCollator.compare(left, right))
       .join(", ");
+  const hasProductImage = (product: ProductListItem) =>
+    [...(product.images ?? []).map((image) => image.url), product.photoUrl].some((url) => {
+      const trimmed = url?.trim();
+      return Boolean(trimmed && !trimmed.startsWith("data:image/"));
+    });
   const resolveStoreSortValue = (product: ProductListItem) =>
     Array.from(
       new Set(
@@ -709,6 +810,9 @@ const createProductListItemComparator = ({
     switch (sortKey) {
       case "sku":
         result = sortCollator.compare(left.sku, right.sku);
+        break;
+      case "image":
+        result = Number(hasProductImage(left)) - Number(hasProductImage(right));
         break;
       case "updatedAt":
         result = left.updatedAt.getTime() - right.updatedAt.getTime();
@@ -858,12 +962,23 @@ export const listProducts = async ({
     readinessProductIds,
     accessibleStoreIds,
   );
-  const paginatedOrderBy = searchQuery ? null : getDbProductOrderBy(sortKey, sortDirection);
+  const imageSortDbPaginated = !searchQuery && sortKey === "image";
+  const paginatedOrderBy =
+    searchQuery || imageSortDbPaginated ? null : getDbProductOrderBy(sortKey, sortDirection);
+  const databasePaginated = Boolean(paginatedOrderBy) || imageSortDbPaginated;
   const visibleSnapshotStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
 
   const baseReadStartedAt = Date.now();
-  const [total, products] = paginatedOrderBy
-    ? await Promise.all([
+  const [total, products] = imageSortDbPaginated
+    ? await readProductsByImageSort({
+        prisma,
+        where,
+        sortDirection,
+        page,
+        pageSize,
+      }).then((result) => [result.total, result.products] as const)
+    : paginatedOrderBy
+      ? await Promise.all([
         prisma.product.count({ where }),
         prisma.product.findMany({
           where,
@@ -873,19 +988,19 @@ export const listProducts = async ({
           take: pageSize,
         }),
       ])
-    : await (async () => {
-        const fullProducts = await prisma.product.findMany({
-          where,
-          select: productListSelect,
-          orderBy: [{ name: "asc" }, { sku: "asc" }],
-        });
-        return [fullProducts.length, fullProducts] as const;
-      })();
+      : await (async () => {
+          const fullProducts = await prisma.product.findMany({
+            where,
+            select: productListSelect,
+            orderBy: [{ name: "asc" }, { sku: "asc" }],
+          });
+          return [fullProducts.length, fullProducts] as const;
+        })();
   if (logger) {
     logProfileSection({
       logger,
       scope: "products.list",
-      section: paginatedOrderBy ? "paginatedRead" : "fullReadForSort",
+      section: databasePaginated ? "paginatedRead" : "fullReadForSort",
       startedAt: baseReadStartedAt,
       details: {
         total,
@@ -929,7 +1044,7 @@ export const listProducts = async ({
           orderBy: [{ productId: "asc" }, { purchaseOrder: { receivedAt: "desc" } }],
           distinct: ["productId"],
         }),
-        sortKey === "stores" || !paginatedOrderBy
+        sortKey === "stores" || !databasePaginated
           ? prisma.store.findMany({
               where: {
                 organizationId,
@@ -1016,7 +1131,7 @@ export const listProducts = async ({
         },
       });
     }
-  } else if (!paginatedOrderBy) {
+  } else if (!databasePaginated) {
     const sortStartedAt = Date.now();
     sortProductListItems({
       items,
@@ -1040,7 +1155,7 @@ export const listProducts = async ({
   }
 
   return {
-    items: paginatedOrderBy ? items : items.slice((page - 1) * pageSize, page * pageSize),
+    items: databasePaginated ? items : items.slice((page - 1) * pageSize, page * pageSize),
     total,
     page,
     pageSize,
@@ -1491,76 +1606,97 @@ export const getProductStorePricing = async ({
   });
   const storeIds = stores.map((store) => store.id);
 
-  const [overrides, cost, snapshots, variants, variantSnapshots] = await Promise.all([
-    prisma.storePrice.findMany({
-      where: {
-        organizationId,
-        productId,
-        variantKey: "BASE",
-        storeId: { in: storeIds },
-      },
-      select: {
-        storeId: true,
-        priceKgs: true,
-      },
-    }),
-    prisma.productCost.findUnique({
-      where: {
-        organizationId_productId_variantKey: {
+  const [overrides, variantOverrides, cost, snapshots, variants, variantSnapshots] =
+    await Promise.all([
+      prisma.storePrice.findMany({
+        where: {
           organizationId,
           productId,
           variantKey: "BASE",
+          storeId: { in: storeIds },
         },
-      },
-      select: { avgCostKgs: true },
-    }),
-    prisma.inventorySnapshot.findMany({
-      where: {
-        productId,
-        variantId: null,
-        storeId: { in: storeIds },
-        store: {
+        select: {
+          storeId: true,
+          priceKgs: true,
+        },
+      }),
+      prisma.storePrice.findMany({
+        where: {
           organizationId,
+          productId,
+          storeId: { in: storeIds },
+          variantKey: { not: "BASE" },
         },
-      },
-      select: {
-        storeId: true,
-        onHand: true,
-      },
-    }),
-    prisma.productVariant.findMany({
-      where: {
-        productId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-        attributes: true,
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    }),
-    prisma.inventorySnapshot.findMany({
-      where: {
-        productId,
-        variantId: { not: null },
-        storeId: { in: storeIds },
-        store: {
-          organizationId,
+        select: {
+          storeId: true,
+          variantId: true,
+          variantKey: true,
+          priceKgs: true,
         },
-      },
-      select: {
-        storeId: true,
-        variantId: true,
-        onHand: true,
-      },
-    }),
-  ]);
+      }),
+      prisma.productCost.findUnique({
+        where: {
+          organizationId_productId_variantKey: {
+            organizationId,
+            productId,
+            variantKey: "BASE",
+          },
+        },
+        select: { avgCostKgs: true },
+      }),
+      prisma.inventorySnapshot.findMany({
+        where: {
+          productId,
+          variantId: null,
+          storeId: { in: storeIds },
+          store: {
+            organizationId,
+          },
+        },
+        select: {
+          storeId: true,
+          onHand: true,
+        },
+      }),
+      prisma.productVariant.findMany({
+        where: {
+          productId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          attributes: true,
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
+      prisma.inventorySnapshot.findMany({
+        where: {
+          productId,
+          variantId: { not: null },
+          storeId: { in: storeIds },
+          store: {
+            organizationId,
+          },
+        },
+        select: {
+          storeId: true,
+          variantId: true,
+          onHand: true,
+        },
+      }),
+    ]);
 
   const basePrice = decimalToNumber(product.basePriceKgs);
   const overrideByStore = new Map(
     overrides.map((override) => [override.storeId, Number(override.priceKgs)]),
+  );
+  const variantOverrideByStoreAndVariant = new Map(
+    variantOverrides.map((override) => [
+      `${override.storeId}:${override.variantId ?? override.variantKey}`,
+      Number(override.priceKgs),
+    ]),
   );
   const onHandByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]));
   const variantOnHandByStore = new Map(
@@ -1589,13 +1725,19 @@ export const getProductStorePricing = async ({
         overridePriceKgs: override ?? null,
         priceOverridden: override !== undefined,
         onHand: onHandByStore.get(store.id) ?? 0,
-        variants: variants.map((variant) => ({
-          variantId: variant.id,
-          variantName: variant.name,
-          variantSku: variant.sku,
-          attributes: variant.attributes,
-          onHand: variantOnHandByStore.get(`${store.id}:${variant.id}`) ?? 0,
-        })),
+        variants: variants.map((variant) => {
+          const variantOverride = variantOverrideByStoreAndVariant.get(`${store.id}:${variant.id}`);
+          return {
+            variantId: variant.id,
+            variantName: variant.name,
+            variantSku: variant.sku,
+            attributes: variant.attributes,
+            effectivePriceKgs: variantOverride ?? effective,
+            overridePriceKgs: variantOverride ?? null,
+            priceOverridden: variantOverride !== undefined,
+            onHand: variantOnHandByStore.get(`${store.id}:${variant.id}`) ?? 0,
+          };
+        }),
       };
     }),
   };
@@ -1606,11 +1748,13 @@ export const exportProductsCsv = async ({
   organizationId,
   user,
   storeId,
+  columns,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
   user?: StoreAccessUser;
   storeId?: string;
+  columns?: ProductExportColumnKey[];
 }) => {
   const accessibleStoreIds = storeId ? undefined : await resolveProductStoreScopeIds(prisma, user);
   if (storeId && user) {
@@ -1757,34 +1901,12 @@ export const exportProductsCsv = async ({
     return urls.join(", ");
   };
 
-  const header = [
-    "SKU",
-    "Название",
-    "Ед. измерения",
-    "Категории",
-    "Описание",
-    "Цена продажи",
-    "Цена закупки",
-    "Себестоимость",
-    "Минимальный остаток",
-    "Фото / ссылки на изображения",
-    "Варианты",
-    "Штрихкоды",
-  ];
-  const keys = [
-    "sku",
-    "name",
-    "unit",
-    "categories",
-    "description",
-    "basePriceKgs",
-    "purchasePriceKgs",
-    "avgCostKgs",
-    "minStock",
-    "images",
-    "variants",
-    "barcodes",
-  ];
+  const selectedColumnSet = columns?.length ? new Set<ProductExportColumnKey>(columns) : null;
+  const selectedColumns = selectedColumnSet
+    ? productExportColumns.filter((column) => selectedColumnSet.has(column.key))
+    : productExportColumns;
+  const header = selectedColumns.map((column) => column.header);
+  const keys = selectedColumns.map((column) => column.key);
   const rows = products.map((product) => {
     const avgCostKgs = avgCostByProductId.get(product.id) ?? null;
     const purchasePriceKgs = purchasePriceByProductId.get(product.id) ?? avgCostKgs;

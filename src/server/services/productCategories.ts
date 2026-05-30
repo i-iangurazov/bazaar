@@ -232,11 +232,26 @@ export const createProductCategory = async (input: {
   actorId: string;
   requestId: string;
   name: string;
+  storeId?: string | null;
 }) =>
   prisma.$transaction(async (tx) => {
     const normalized = normalizeProductCategoryName(input.name);
+    const normalizedName = normalizeProductCategoryKey(input.name);
     if (!normalized) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+    if (input.storeId && !normalizedName) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+
+    if (input.storeId) {
+      const store = await tx.store.findFirst({
+        where: { id: input.storeId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      if (!store) {
+        throw new AppError("storeNotFound", "NOT_FOUND", 404);
+      }
     }
 
     const existing = await tx.productCategory.findUnique({
@@ -248,27 +263,75 @@ export const createProductCategory = async (input: {
       },
     });
 
-    if (existing) {
+    if (existing && !input.storeId) {
       throw new AppError("categoryNameExists", "CONFLICT", 409);
     }
 
-    const category = await tx.productCategory.create({
-      data: {
-        organizationId: input.organizationId,
-        name: normalized,
-      },
-    });
+    const category =
+      existing ??
+      (await tx.productCategory.create({
+        data: {
+          organizationId: input.organizationId,
+          name: normalized,
+        },
+      }));
 
-    await writeAuditLog(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      action: "PRODUCT_CATEGORY_CREATE",
-      entity: "ProductCategory",
-      entityId: category.id,
-      before: null,
-      after: toJson(category),
-      requestId: input.requestId,
-    });
+    if (!existing) {
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_CATEGORY_CREATE",
+        entity: "ProductCategory",
+        entityId: category.id,
+        before: null,
+        after: toJson(category),
+        requestId: input.requestId,
+      });
+    }
+
+    if (input.storeId && normalizedName) {
+      const before = await tx.storeCategoryPreference.findUnique({
+        where: {
+          storeId_normalizedName: {
+            storeId: input.storeId,
+            normalizedName,
+          },
+        },
+      });
+
+      const preference = await tx.storeCategoryPreference.upsert({
+        where: {
+          storeId_normalizedName: {
+            storeId: input.storeId,
+            normalizedName,
+          },
+        },
+        update: {
+          name: normalized,
+          isVisibleInForms: true,
+          isArchived: false,
+        },
+        create: {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          name: normalized,
+          normalizedName,
+          isVisibleInForms: true,
+          isArchived: false,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "STORE_CATEGORY_PREFERENCE_UPDATE",
+        entity: "StoreCategoryPreference",
+        entityId: preference.id,
+        before: before ? toJson(before) : null,
+        after: toJson(preference),
+        requestId: input.requestId,
+      });
+    }
 
     return category;
   });

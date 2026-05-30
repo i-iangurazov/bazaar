@@ -29,6 +29,37 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
 
+const productCreateReceivingReturnSource = "stockReceiving";
+
+const resolveSafeReturnTo = (value?: string | null) => {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null;
+  }
+  return trimmed;
+};
+
+const buildReturnPath = (input: {
+  returnTo: string;
+  productId: string;
+  productName: string;
+  storeId: string;
+  returnSource?: string;
+  receivingDraftKey?: string;
+}) => {
+  const url = new URL(input.returnTo, "https://local.invalid");
+  url.searchParams.set("createdProductId", input.productId);
+  url.searchParams.set("createdProductName", input.productName);
+  url.searchParams.set("storeId", input.storeId);
+  if (input.returnSource) {
+    url.searchParams.set("returnSource", input.returnSource);
+  }
+  if (input.receivingDraftKey) {
+    url.searchParams.set("receivingDraftKey", input.receivingDraftKey);
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+};
+
 const NewProductPage = () => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -38,6 +69,13 @@ const NewProductPage = () => {
   const barcode = searchParams?.get("barcode")?.trim() ?? "";
   const requestedStoreId = searchParams?.get("storeId")?.trim() ?? "";
   const requestedType = searchParams?.get("type")?.trim() ?? "";
+  const returnTo = resolveSafeReturnTo(searchParams?.get("returnTo"));
+  const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
+  const receivingDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
+  const isReceivingReturnFlow =
+    Boolean(returnTo) &&
+    returnSource === productCreateReceivingReturnSource &&
+    Boolean(receivingDraftKey);
   const isBundleDefault = requestedType === "bundle";
   const pageTitle = isBundleDefault ? t("newBundle") : t("newTitle");
   const pageSubtitle = isBundleDefault ? t("newBundleSubtitle") : t("newSubtitle");
@@ -57,8 +95,24 @@ const NewProductPage = () => {
 
   const createMutation = trpc.products.create.useMutation({
     onSuccess: async (product) => {
-      await trpcUtils.products.suggestSku.invalidate();
+      await Promise.all([
+        trpcUtils.products.suggestSku.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
       toast({ variant: "success", description: t("createSuccess") });
+      if (returnTo) {
+        router.push(
+          buildReturnPath({
+            returnTo,
+            productId: product.id,
+            productName: product.name,
+            storeId: selectedStoreId,
+            returnSource,
+            receivingDraftKey,
+          }),
+        );
+        return;
+      }
       router.push(`/products/${product.id}`);
     },
     onError: (error) => {
@@ -94,7 +148,7 @@ const NewProductPage = () => {
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
   const enableSimilarProductCheck = selectedStore?.enableSimilarProductCheck ?? true;
-  const storeSelectDisabled = storesQuery.isLoading || storeOptions.length <= 1;
+  const storeSelectDisabled = storesQuery.isLoading || storeOptions.length <= 1 || isReceivingReturnFlow;
   const productCreateFormId = "product-create-form";
 
   if (session && !canManageProducts) {

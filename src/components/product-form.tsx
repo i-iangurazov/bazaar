@@ -87,9 +87,10 @@ import {
 } from "@/lib/productImageUpload";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { isAiFeaturesEnabled, isProductPacksEnabled } from "@/lib/featureFlags";
 
-const showProductPacksSection = false;
-const aiFeaturesVisuallyDisabled = true;
+const showProductPacksSection = isProductPacksEnabled();
+const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
 
 export type ProductFormValues = {
   sku: string;
@@ -131,6 +132,7 @@ export type ProductFormValues = {
     name?: string;
     sku?: string;
     initialOnHand?: number;
+    storePriceKgs?: number;
     attributes: Record<string, unknown>;
     canDelete?: boolean;
   }[];
@@ -265,6 +267,69 @@ const normalizeCategoryKey = (value?: string | null) => {
 const normalizeVariantOptionLabel = (value?: string | null) => {
   const normalized = value?.trim().replace(/\s+/g, " ");
   return normalized ? normalized : "";
+};
+
+const formatUnknownDisplayValue = (value: unknown, depth = 0): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return normalizeVariantOptionLabel(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => formatUnknownDisplayValue(item, depth + 1))
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof value !== "object" || depth > 2) {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["name", "label", "title", "value", "code", "sku"]) {
+    const formatted = formatUnknownDisplayValue(record[key], depth + 1);
+    if (formatted) {
+      return formatted;
+    }
+  }
+
+  return Object.entries(record)
+    .map(([key, entryValue]) => {
+      const formatted = formatUnknownDisplayValue(entryValue, depth + 1);
+      return formatted ? `${key}: ${formatted}` : "";
+    })
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" / ");
+};
+
+const normalizeAttributeFormValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => formatUnknownDisplayValue(item)).filter(Boolean);
+  }
+  return formatUnknownDisplayValue(value);
+};
+
+const normalizeAttributeOptionValues = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+  const seen = new Set<string>();
+  const options: string[] = [];
+  value.forEach((item) => {
+    const label = formatUnknownDisplayValue(item);
+    const key = normalizeVariantOptionValueKey(label);
+    if (!label || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    options.push(label);
+  });
+  return options;
 };
 
 const normalizeVariantOptionValueKey = (value?: string | null) =>
@@ -565,6 +630,7 @@ export const ProductForm = ({
   const { toast } = useToast();
   const compactCreate = quickCreateMode && !productId && !readOnly;
   const shopifyEditor = shopifyEditorLayout || compactCreate;
+  const canEditVariantPrice = Boolean(categoryStoreId);
   const moneyCurrencyCode = normalizeCurrencyCode(currencyCode);
   const moneyCurrencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
     currencyRateKgsPerUnit,
@@ -632,7 +698,7 @@ export const ProductForm = ({
       return [] as string[];
     }
     const options = locale === "kg" ? definition.optionsKg : definition.optionsRu;
-    return Array.isArray(options) ? options : [];
+    return normalizeAttributeOptionValues(options);
   };
   const unitOptions = useMemo(() => units ?? [], [units]);
   const resolveUnitLabel = (unit: UnitOption) => (locale === "kg" ? unit.labelKg : unit.labelRu);
@@ -693,6 +759,7 @@ export const ProductForm = ({
             name: z.string().optional(),
             sku: z.string().optional(),
             initialOnHand: optionalStockQty,
+            storePriceKgs: optionalPrice,
             attributes: z
               .array(
                 z.object({
@@ -765,9 +832,7 @@ export const ProductForm = ({
   const toAttributeEntries = (attributes: Record<string, unknown>) => {
     const entries = Object.entries(attributes ?? {}).map(([key, value]) => ({
       key,
-      value: Array.isArray(value)
-        ? value.filter((item) => typeof item === "string").map((item) => item.trim())
-        : (value ?? ""),
+      value: normalizeAttributeFormValue(value),
     }));
     const seen = new Set(entries.map((entry) => entry.key));
     for (const definition of requiredDefinitions) {
@@ -810,6 +875,7 @@ export const ProductForm = ({
               name: variant.name ?? "",
               sku: variant.sku ?? "",
               initialOnHand: variant.initialOnHand,
+              storePriceKgs: displayMoneyFromKgs(variant.storePriceKgs),
               attributes: toAttributeEntries(variant.attributes ?? {}),
               canDelete: variant.canDelete ?? true,
             }))
@@ -821,6 +887,7 @@ export const ProductForm = ({
                 name: "",
                 sku: "",
                 initialOnHand: undefined,
+                storePriceKgs: undefined,
                 attributes: toAttributeEntries({}),
                 canDelete: true,
               },
@@ -1159,6 +1226,7 @@ export const ProductForm = ({
       "minmax(140px,1fr)",
       showVariantImagePicker ? "minmax(220px,280px)" : null,
       enableSku ? "160px" : null,
+      canEditVariantPrice ? "140px" : null,
       canEditInitialStock ? "120px" : null,
       "40px",
     ]
@@ -2932,6 +3000,7 @@ export const ProductForm = ({
         name,
         sku: generateNextVariantSku(usedVariantSkus),
         initialOnHand: undefined,
+        storePriceKgs: undefined,
         attributes,
         canDelete: true,
       });
@@ -3000,6 +3069,7 @@ export const ProductForm = ({
         (variant.initialOnHand !== undefined &&
           variant.initialOnHand !== null &&
           Number(variant.initialOnHand) > 0) ||
+        (variant.storePriceKgs !== undefined && variant.storePriceKgs !== null) ||
         attributes.some((entry) => {
           const value = entry.value;
           if (Array.isArray(value)) {
@@ -3008,7 +3078,7 @@ export const ProductForm = ({
           if (typeof value === "number") {
             return true;
           }
-          return Boolean(String(value ?? "").trim());
+          return Boolean(formatUnknownDisplayValue(value));
         });
       if (!hasContent) {
         continue;
@@ -3060,7 +3130,8 @@ export const ProductForm = ({
         }
 
         if (definition?.type === "NUMBER") {
-          const parsed = typeof rawValue === "number" ? rawValue : Number(String(rawValue));
+          const parsed =
+            typeof rawValue === "number" ? rawValue : Number(formatUnknownDisplayValue(rawValue));
           if (!Number.isFinite(parsed)) {
             form.setError(`variants.${index}.attributes.${attrIndex}.value`, {
               message: t("attributeNumberInvalid"),
@@ -3072,14 +3143,19 @@ export const ProductForm = ({
         }
 
         if (definition?.type === "MULTI_SELECT") {
-          const selected = Array.isArray(rawValue) ? rawValue.map((value) => String(value)) : [];
+          const selected = Array.isArray(rawValue)
+            ? rawValue.map((value) => formatUnknownDisplayValue(value)).filter(Boolean)
+            : [];
           if (selected.length) {
             parsedAttributes[entry.key] = selected;
           }
           continue;
         }
 
-        parsedAttributes[entry.key] = String(rawValue);
+        const formattedValue = formatUnknownDisplayValue(rawValue);
+        if (formattedValue) {
+          parsedAttributes[entry.key] = formattedValue;
+        }
       }
 
       parsedVariants.push({
@@ -3089,6 +3165,7 @@ export const ProductForm = ({
         name: variant.name?.trim() || undefined,
         sku: enableSku ? variant.sku?.trim() || undefined : undefined,
         initialOnHand: variant.initialOnHand,
+        storePriceKgs: submitMoneyToKgs(variant.storePriceKgs),
         attributes: parsedAttributes,
       });
     }
@@ -3205,12 +3282,13 @@ export const ProductForm = ({
         if (Array.isArray(value)) {
           return value.length > 0;
         }
-        return Boolean(String(value ?? "").trim());
+        return Boolean(formatUnknownDisplayValue(value));
       });
       return (
         !hasSavedId &&
         !variant.name?.trim() &&
         (!enableSku || !variant.sku?.trim()) &&
+        (variant.storePriceKgs === undefined || variant.storePriceKgs === null) &&
         !hasAttributeValue
       );
     });
@@ -3234,6 +3312,7 @@ export const ProductForm = ({
       name: "",
       sku: generateNextVariantSku(),
       initialOnHand: undefined,
+      storePriceKgs: undefined,
       attributes: toAttributeEntries({}),
       canDelete: true,
     });
@@ -3256,7 +3335,7 @@ export const ProductForm = ({
         if (Array.isArray(value)) {
           return value.length > 0;
         }
-        return Boolean(String(value ?? "").trim());
+        return Boolean(formatUnknownDisplayValue(value));
       });
       const hasContent =
         Boolean(variant.id) ||
@@ -3265,6 +3344,7 @@ export const ProductForm = ({
         (variant.initialOnHand !== undefined &&
           variant.initialOnHand !== null &&
           Number(variant.initialOnHand) > 0) ||
+        (variant.storePriceKgs !== undefined && variant.storePriceKgs !== null) ||
         hasAttributeValue;
       return {
         index,
@@ -3303,7 +3383,7 @@ export const ProductForm = ({
         }
         const rawValues = Array.isArray(entry.value) ? entry.value : [entry.value];
         rawValues.forEach((rawValue) => {
-          const value = normalizeVariantOptionLabel(String(rawValue ?? ""));
+          const value = normalizeVariantOptionLabel(formatUnknownDisplayValue(rawValue));
           const valueKey = value.toLocaleLowerCase("ru-RU");
           const seen = seenByKey.get(key);
           const values = valuesByKey.get(key);
@@ -3330,8 +3410,8 @@ export const ProductForm = ({
             (attribute) => resolveVariantOptionKey(attribute.key) === option.key,
           );
           const value = Array.isArray(entry?.value)
-            ? entry.value.map((item) => String(item)).join(", ")
-            : String(entry?.value ?? "");
+            ? entry.value.map((item) => formatUnknownDisplayValue(item)).join(", ")
+            : formatUnknownDisplayValue(entry?.value);
           return normalizeVariantOptionLabel(value);
         })
         .filter(Boolean);
@@ -3342,6 +3422,7 @@ export const ProductForm = ({
         (variant.initialOnHand !== undefined &&
           variant.initialOnHand !== null &&
           Number(variant.initialOnHand) > 0) ||
+        (variant.storePriceKgs !== undefined && variant.storePriceKgs !== null) ||
         optionValues.length > 0;
 
       return {
@@ -3490,7 +3571,7 @@ export const ProductForm = ({
                 return null;
               }
               return imageAssignments?.valuesByKey.get(
-                normalizeVariantOptionValueKey(String(combo[option.key] ?? "")),
+                normalizeVariantOptionValueKey(formatUnknownDisplayValue(combo[option.key])),
               );
             })
             .find((value): value is string => Boolean(value)) ?? null)
@@ -3502,9 +3583,12 @@ export const ProductForm = ({
         id: existing?.id,
         imageId: assignedImage ? (assignedImage.imageId ?? null) : (existing?.imageId ?? null),
         imageUrl: assignedImage ? assignedImage.url : (existing?.imageUrl ?? ""),
-        name: normalizedOptions.map((option) => String(combo[option.key])).join(" / "),
+        name: normalizedOptions
+          .map((option) => formatUnknownDisplayValue(combo[option.key]))
+          .join(" / "),
         sku: existing?.sku?.trim() || generateNextVariantSku(usedVariantSkus),
         initialOnHand: existing?.initialOnHand,
+        storePriceKgs: existing?.storePriceKgs,
         attributes,
         canDelete: existing?.canDelete ?? true,
       };
@@ -5398,6 +5482,7 @@ export const ProductForm = ({
                       <span>{t("variantTableVariant")}</span>
                       {showVariantImagePicker ? <span>{t("variantTableImage")}</span> : null}
                       {enableSku ? <span>{t("variantTableSku")}</span> : null}
+                      {canEditVariantPrice ? <span>{t("salePrice")}</span> : null}
                       {canEditInitialStock ? <span>{t("variantTableStock")}</span> : null}
                       <span className="sr-only">{tCommon("actions")}</span>
                     </div>
@@ -5498,6 +5583,31 @@ export const ProductForm = ({
                                         {...field}
                                         value={field.value ?? ""}
                                         className="h-9"
+                                        disabled={readOnly}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            ) : null}
+                            {canEditVariantPrice ? (
+                              <FormField
+                                control={form.control}
+                                name={`variants.${variant.index}.storePriceKgs`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="sr-only">{t("salePrice")}</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        value={field.value ?? ""}
+                                        type="number"
+                                        inputMode="decimal"
+                                        min={0}
+                                        step="0.01"
+                                        className="h-9"
+                                        placeholder={t("pricePlaceholder")}
                                         disabled={readOnly}
                                       />
                                     </FormControl>
@@ -6909,6 +7019,30 @@ export const ProductForm = ({
                                   )}
                                 />
                               ) : null}
+                              {canEditVariantPrice ? (
+                                <FormField
+                                  control={form.control}
+                                  name={`variants.${index}.storePriceKgs`}
+                                  render={({ field: itemField }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("salePrice")}</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          {...itemField}
+                                          value={itemField.value ?? ""}
+                                          type="number"
+                                          inputMode="decimal"
+                                          min={0}
+                                          step="0.01"
+                                          placeholder={t("pricePlaceholder")}
+                                          disabled={readOnly}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              ) : null}
                               {!productId && canEditInitialStock ? (
                                 <FormField
                                   control={form.control}
@@ -7069,13 +7203,17 @@ export const ProductForm = ({
                                     const fieldName =
                                       `variants.${index}.attributes.${attrIndex}.value` as const;
                                     const selectedValues = Array.isArray(attribute.value)
-                                      ? attribute.value.map((value) => String(value))
+                                      ? attribute.value
+                                          .map((value) => formatUnknownDisplayValue(value))
+                                          .filter(Boolean)
                                       : [];
                                     const currentValue =
                                       typeof attribute.value === "string" ||
                                       typeof attribute.value === "number"
-                                        ? String(attribute.value)
-                                        : "";
+                                        ? formatUnknownDisplayValue(attribute.value)
+                                        : attribute.value
+                                          ? formatUnknownDisplayValue(attribute.value)
+                                          : "";
                                     const selectOptions =
                                       currentValue && !options.includes(currentValue)
                                         ? [currentValue, ...options]

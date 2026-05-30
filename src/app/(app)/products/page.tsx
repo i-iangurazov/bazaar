@@ -97,6 +97,7 @@ import { translateError } from "@/lib/translateError";
 import { normalizeCurrencyCode } from "@/lib/currency";
 import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { isAiFeaturesEnabled } from "@/lib/featureFlags";
 import {
   buildScopedStorageKey,
   useScopedLocalStorageState,
@@ -119,6 +120,7 @@ import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 type ProductSortKey =
   | "updatedAt"
   | "sku"
+  | "image"
   | "name"
   | "category"
   | "unit"
@@ -145,6 +147,7 @@ const productViewModeSchema = z.enum(["table", "grid"]);
 const productSortKeySchema = z.enum([
   "updatedAt",
   "sku",
+  "image",
   "name",
   "category",
   "unit",
@@ -201,6 +204,7 @@ const legacyProductsPrintModalEnabled = process.env.NODE_ENV !== "production";
 const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = {
   updatedAt: "desc",
   sku: "asc",
+  image: "asc",
   name: "asc",
   category: "asc",
   unit: "asc",
@@ -212,11 +216,29 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
 };
 
 const aiArrangeCategoriesBatchSize = 25;
-const aiFeaturesVisuallyDisabled = true;
+const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
 const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";
 const priceTagQuickQuantities = [1, 2, 3, 5] as const;
+const productExportColumnKeys = [
+  "sku",
+  "name",
+  "unit",
+  "categories",
+  "description",
+  "basePriceKgs",
+  "purchasePriceKgs",
+  "avgCostKgs",
+  "minStock",
+  "images",
+  "variants",
+  "barcodes",
+] as const;
+type ProductExportColumnKey = (typeof productExportColumnKeys)[number];
+
+const normalizeProductCategoryKey = (value: string) =>
+  value.trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU");
 
 type AiArrangeCategoriesProgressState = {
   status: "running" | "done" | "error";
@@ -300,6 +322,11 @@ const ProductsPage = () => {
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
+  const [selectedExportColumns, setSelectedExportColumns] = useState<ProductExportColumnKey[]>([
+    ...productExportColumnKeys,
+  ]);
   const [assignExistingOpen, setAssignExistingOpen] = useState(false);
   const [assignExistingSearch, setAssignExistingSearch] = useState("");
   const [assignExistingSelectedIds, setAssignExistingSelectedIds] = useState<Set<string>>(
@@ -601,6 +628,18 @@ const ProductsPage = () => {
       }),
     [baseProductColumnOptions, enableBarcode, enableSku],
   );
+  const productExportColumns = useMemo(
+    () =>
+      productExportColumnKeys.map((key) => ({
+        key,
+        label: t(`exportColumns.${key}`),
+      })),
+    [t],
+  );
+  const selectedExportColumnSet = useMemo(
+    () => new Set(selectedExportColumns),
+    [selectedExportColumns],
+  );
   const visibleProductColumnSet = useMemo(
     () =>
       new Set<ProductVisibleColumnKey>(
@@ -682,7 +721,10 @@ const ProductsPage = () => {
     },
   });
   const exportQuery = trpc.products.exportCsv.useQuery(
-    { storeId: storeId || undefined },
+    {
+      storeId: storeId || undefined,
+      columns: selectedExportColumns.length ? selectedExportColumns : undefined,
+    },
     { enabled: false },
   );
   const archiveMutation = trpc.products.archive.useMutation({
@@ -742,8 +784,12 @@ const ProductsPage = () => {
   });
 
   const createCategoryMutation = trpc.productCategories.create.useMutation({
-    onSuccess: () => {
-      productsBootstrapQuery.refetch();
+    onSuccess: async () => {
+      await Promise.all([
+        productsBootstrapQuery.refetch(),
+        trpcUtils.productCategories.listForStore.invalidate(),
+        trpcUtils.productCategories.list.invalidate(),
+      ]);
       toast({ variant: "success", description: t("categoryCreateSuccess") });
       setCategoryInputValue("");
     },
@@ -938,6 +984,11 @@ const ProductsPage = () => {
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
   }, [getProductCategories, products, productsBootstrapQuery.data?.categories]);
   const mobileCategoryOptions = categories.slice(0, 8);
+  const categoryInputKey = normalizeProductCategoryKey(categoryInputValue);
+  const categoryAlreadyExists = Boolean(
+    categoryInputKey &&
+    categories.some((item) => normalizeProductCategoryKey(item) === categoryInputKey),
+  );
 
   useEffect(() => {
     if (!categoryManagerOpen) {
@@ -1543,10 +1594,18 @@ const ProductsPage = () => {
     photoUrl?: string | null;
     images?: { url: string }[];
   }) => product.images?.[0]?.url ?? product.photoUrl ?? null;
+  const hasProductImage = useCallback(
+    (product: { photoUrl?: string | null; images?: { url?: string | null }[] }) =>
+      [...(product.images ?? []).map((image) => image.url), product.photoUrl].some((url) => {
+        const trimmed = url?.trim();
+        return Boolean(trimmed && !trimmed.startsWith("data:image/"));
+      }),
+    [],
+  );
   type ProductRow = NonNullable<typeof products>[number];
   const getProductReadiness = (product: ProductRow) => {
     const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
-    const hasImage = Boolean(getProductPreviewUrl(product));
+    const hasImage = hasProductImage(product);
     return {
       missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
       missingImage: !hasImage,
@@ -1646,6 +1705,9 @@ const ProductsPage = () => {
         case "sku":
           result = sortCollator.compare(left.sku, right.sku);
           break;
+        case "image":
+          result = Number(hasProductImage(left)) - Number(hasProductImage(right));
+          break;
         case "name":
           result = sortCollator.compare(left.name, right.name);
           break;
@@ -1695,6 +1757,7 @@ const ProductsPage = () => {
   }, [
     productSort.direction,
     productSort.key,
+    hasProductImage,
     products,
     resolveBarcodeSortValue,
     resolveSalePriceForSort,
@@ -2096,7 +2159,27 @@ const ProductsPage = () => {
     };
   };
 
-  const handleExport = async (format: DownloadFormat) => {
+  const openExportDialog = (format: DownloadFormat = exportFormat) => {
+    setExportFormat(format);
+    setExportDialogOpen(true);
+  };
+
+  const toggleExportColumn = (columnKey: ProductExportColumnKey) => {
+    setSelectedExportColumns((current) =>
+      current.includes(columnKey)
+        ? current.filter((key) => key !== columnKey)
+        : productExportColumnKeys.filter((key) => key === columnKey || current.includes(key)),
+    );
+  };
+
+  const handleExport = async () => {
+    const selectedColumns = productExportColumnKeys.filter((key) =>
+      selectedExportColumnSet.has(key),
+    );
+    if (!selectedColumns.length) {
+      toast({ variant: "error", description: t("exportSelectColumnsRequired") });
+      return;
+    }
     const { data, error } = await exportQuery.refetch();
     if (error) {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -2111,11 +2194,12 @@ const ProductsPage = () => {
       return;
     }
     downloadTableFile({
-      format,
+      format: exportFormat,
       fileNameBase: `products-${locale}`,
       header,
       rows: body,
     });
+    setExportDialogOpen(false);
   };
 
   const handlePrintTags = async (
@@ -2332,7 +2416,11 @@ const ProductsPage = () => {
     if (!trimmed) {
       return;
     }
-    createCategoryMutation.mutate({ name: trimmed });
+    if (categoryAlreadyExists) {
+      toast({ variant: "error", description: t("categoriesManageDuplicate") });
+      return;
+    }
+    createCategoryMutation.mutate({ name: trimmed, storeId: storeId || undefined });
   };
 
   const handleCategoryRemove = () => {
@@ -2681,7 +2769,7 @@ const ProductsPage = () => {
                     <DropdownMenuItem
                       disabled={exportQuery.isFetching}
                       onSelect={() => {
-                        void handleExport("csv");
+                        openExportDialog("csv");
                       }}
                     >
                       {exportQuery.isFetching ? (
@@ -2694,7 +2782,7 @@ const ProductsPage = () => {
                     <DropdownMenuItem
                       disabled={exportQuery.isFetching}
                       onSelect={() => {
-                        void handleExport("xlsx");
+                        openExportDialog("xlsx");
                       }}
                     >
                       {exportQuery.isFetching ? (
@@ -3103,7 +3191,7 @@ const ProductsPage = () => {
                     variant="secondary"
                     size="sm"
                     className="w-full sm:w-auto"
-                    onClick={() => void handleExport("csv")}
+                    onClick={() => openExportDialog("csv")}
                     disabled={exportQuery.isFetching}
                   >
                     {exportQuery.isFetching ? (
@@ -3253,9 +3341,9 @@ const ProductsPage = () => {
                             {visibleProductColumnSet.has("sku")
                               ? renderSortableHead("sku", t("sku"))
                               : null}
-                            {visibleProductColumnSet.has("image") ? (
-                              <TableHead>{t("imageLabel")}</TableHead>
-                            ) : null}
+                            {visibleProductColumnSet.has("image")
+                              ? renderSortableHead("image", t("imageLabel"))
+                              : null}
                             {visibleProductColumnSet.has("name")
                               ? renderSortableHead("name", t("name"))
                               : null}
@@ -4614,6 +4702,96 @@ const ProductsPage = () => {
       </Modal>
 
       <Modal
+        open={exportDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setExportDialogOpen(false);
+          }
+        }}
+        title={t("exportModalTitle")}
+        subtitle={t("exportModalSubtitle")}
+      >
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">{t("exportFormatLabel")}</label>
+            <Select
+              value={exportFormat}
+              onValueChange={(value) => setExportFormat(value as DownloadFormat)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="csv">{t("exportCsv")}</SelectItem>
+                <SelectItem value="xlsx">{t("exportXlsx")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-foreground">{t("exportColumnsTitle")}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedExportColumns([...productExportColumnKeys])}
+                >
+                  {t("selectAll")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedExportColumns([])}
+                >
+                  {tCommon("clearSelection")}
+                </Button>
+              </div>
+            </div>
+            <div className="grid max-h-72 gap-2 overflow-y-auto rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2">
+              {productExportColumns.map((column) => (
+                <label
+                  key={column.key}
+                  className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary"
+                    checked={selectedExportColumnSet.has(column.key)}
+                    onChange={() => toggleExportColumn(column.key)}
+                  />
+                  <span>{column.label}</span>
+                </label>
+              ))}
+            </div>
+            {!selectedExportColumns.length ? (
+              <p className="text-sm text-danger">{t("exportSelectColumnsRequired")}</p>
+            ) : null}
+          </div>
+
+          <ModalFooter>
+            <Button type="button" variant="secondary" onClick={() => setExportDialogOpen(false)}>
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={exportQuery.isFetching || !selectedExportColumns.length}
+            >
+              {exportQuery.isFetching ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+              )}
+              {exportQuery.isFetching ? tCommon("loading") : t("exportDownload")}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      <Modal
         open={categoryManagerOpen}
         onOpenChange={(open) => {
           if (!open) {
@@ -4639,6 +4817,42 @@ const ProductsPage = () => {
               onChange={(event) => setCategoryInputValue(event.target.value)}
               placeholder={t("categoriesManagePlaceholder")}
             />
+            {categoryAlreadyExists ? (
+              <p className="text-sm text-danger">{t("categoriesManageDuplicate")}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-foreground">
+                {t("categoriesManageExistingTitle")}
+              </p>
+              {categories.length ? (
+                <Badge variant="muted">
+                  {t("categoriesManageExistingCount", { count: categories.length })}
+                </Badge>
+              ) : null}
+            </div>
+            {productsBootstrapQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
+            ) : productsBootstrapQuery.error ? (
+              <p className="text-sm text-danger">
+                {translateError(tErrors, productsBootstrapQuery.error)}
+              </p>
+            ) : categories.length ? (
+              <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
+                {categories.map((item) => (
+                  <Badge key={item} variant="default">
+                    {item}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("categoriesManageEmpty")}</p>
+            )}
           </div>
 
           <FormActions>
@@ -4653,7 +4867,7 @@ const ProductsPage = () => {
             <Button
               type="submit"
               className="w-full sm:w-auto"
-              disabled={createCategoryMutation.isLoading}
+              disabled={createCategoryMutation.isLoading || categoryAlreadyExists}
             >
               {createCategoryMutation.isLoading ? (
                 <Spinner className="h-4 w-4" />

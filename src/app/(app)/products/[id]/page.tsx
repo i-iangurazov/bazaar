@@ -102,6 +102,43 @@ const createIdempotencyKey = () => {
 
 const showProductExpiryLotsSection = false;
 
+const formatVariantAttributeDisplayValue = (value: unknown, depth = 0): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => formatVariantAttributeDisplayValue(item, depth + 1))
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof value !== "object" || depth > 2) {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["name", "label", "title", "value", "code", "sku"]) {
+    const formatted = formatVariantAttributeDisplayValue(record[key], depth + 1);
+    if (formatted) {
+      return formatted;
+    }
+  }
+  return Object.entries(record)
+    .map(([key, entryValue]) => {
+      const formatted = formatVariantAttributeDisplayValue(entryValue, depth + 1);
+      return formatted ? `${key}: ${formatted}` : "";
+    })
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" / ");
+};
+
 const ProductDetailPage = () => {
   const params = useParams();
   const productId = String(params?.id ?? "");
@@ -133,6 +170,7 @@ const ProductDetailPage = () => {
   const [basePriceDraft, setBasePriceDraft] = useState("");
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [storeOnHandDrafts, setStoreOnHandDrafts] = useState<Record<string, string>>({});
+  const [variantPriceDrafts, setVariantPriceDrafts] = useState<Record<string, string>>({});
   const [variantOnHandDrafts, setVariantOnHandDrafts] = useState<Record<string, string>>({});
   const [productFormDirty, setProductFormDirty] = useState(false);
   const [productFormSavedRevision, setProductFormSavedRevision] = useState(0);
@@ -143,6 +181,7 @@ const ProductDetailPage = () => {
   } | null>(null);
   const [assembleOpen, setAssembleOpen] = useState(false);
   const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
+  const [savingVariantPriceKey, setSavingVariantPriceKey] = useState<string | null>(null);
   const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
   const [savingVariantOnHandKey, setSavingVariantOnHandKey] = useState<string | null>(null);
   const [labelSetupOpen, setLabelSetupOpen] = useState(false);
@@ -430,8 +469,19 @@ const ProductDetailPage = () => {
         ]),
       ),
     );
+    const variantPriceDrafts = Object.fromEntries(
+      storePricingQuery.data.stores.flatMap((storeRow) =>
+        storeRow.variants.map((variant) => [
+          `${storeRow.storeId}:${variant.variantId}`,
+          variant.effectivePriceKgs !== null
+            ? formatDraftMoneyAmount(convertStoreMoneyFromKgs(variant.effectivePriceKgs, storeRow))
+            : "",
+        ]),
+      ),
+    );
     setStorePriceDrafts(priceDrafts);
     setStoreOnHandDrafts(onHandDrafts);
+    setVariantPriceDrafts(variantPriceDrafts);
     setVariantOnHandDrafts(variantDrafts);
   }, [convertStoreMoneyFromKgs, formatDraftMoneyAmount, storePricingQuery.data]);
 
@@ -487,6 +537,12 @@ const ProductDetailPage = () => {
     if (!productQuery.data) {
       return null;
     }
+    const selectedVariantPriceById = new Map(
+      (selectedSettingsStore?.variants ?? []).map((variant) => [
+        variant.variantId,
+        variant.effectivePriceKgs ?? undefined,
+      ]),
+    );
     return {
       sku: productQuery.data.sku,
       name: productQuery.data.name,
@@ -529,6 +585,7 @@ const ProductDetailPage = () => {
         image: variant.image ?? null,
         name: variant.name ?? "",
         sku: variant.sku ?? "",
+        storePriceKgs: selectedVariantPriceById.get(variant.id),
         attributes: (variant.attributes as Record<string, unknown>) ?? {},
         canDelete: variant.canDelete ?? true,
       })),
@@ -540,7 +597,7 @@ const ProductDetailPage = () => {
         componentSku: component.componentProduct.sku,
       })),
     };
-  }, [productQuery.data, bundleComponentsQuery.data]);
+  }, [productQuery.data, selectedSettingsStore?.variants, bundleComponentsQuery.data]);
 
   type BundleComponent = NonNullable<typeof bundleComponentsQuery.data>[number];
   type LotRow = NonNullable<typeof lotsQuery.data>[number];
@@ -791,6 +848,36 @@ const ProductDetailPage = () => {
     }
   };
 
+  const handleSaveStoreVariantPrice = async (
+    storeId: string,
+    variantId: string,
+    currentPriceKgs: number | null,
+  ) => {
+    const key = `${storeId}:${variantId}`;
+    const raw = variantPriceDrafts[key]?.trim() ?? "";
+    const parsedValue = parseDraftMoney(raw);
+    if (!raw.length || parsedValue === null) {
+      toast({ variant: "error", description: t("priceNonNegative") });
+      return;
+    }
+    const storeRow = storePricingQuery.data?.stores.find((store) => store.storeId === storeId);
+    const value = storeRow ? convertStoreMoneyToKgs(parsedValue, storeRow) : parsedValue;
+    if (currentPriceKgs !== null && Math.abs(value - currentPriceKgs) < 0.01) {
+      return;
+    }
+    setSavingVariantPriceKey(key);
+    try {
+      await storePriceMutation.mutateAsync({
+        storeId,
+        productId,
+        variantId,
+        priceKgs: value,
+      });
+    } finally {
+      setSavingVariantPriceKey(null);
+    }
+  };
+
   const handleSaveStoreVariantOnHand = async (
     storeId: string,
     variantId: string,
@@ -834,7 +921,7 @@ const ProductDetailPage = () => {
     }
     if (variant.attributes && typeof variant.attributes === "object") {
       const values = Object.values(variant.attributes as Record<string, unknown>)
-        .map((value) => (Array.isArray(value) ? value.join(", ") : String(value ?? "")))
+        .map((value) => formatVariantAttributeDisplayValue(value))
         .filter(Boolean);
       if (values.length) {
         return values.join(" / ");
@@ -1222,6 +1309,7 @@ const ProductDetailPage = () => {
               onSubmit={(values) =>
                 updateMutation.mutate({
                   productId,
+                  storeId: selectedSettingsStore?.storeId ?? undefined,
                   ...values,
                   basePriceKgs: resolveDraftBasePrice(),
                 })
@@ -1439,45 +1527,94 @@ const ProductDetailPage = () => {
                                     <p className="truncate text-xs font-medium text-foreground">
                                       {resolveVariantLabel(variant)}
                                     </p>
-                                    {canManageInventory ? (
-                                      <div className="mt-2 flex items-center gap-2">
-                                        <Input
-                                          type="number"
-                                          inputMode="numeric"
-                                          step="1"
-                                          className="h-9"
-                                          value={variantOnHandDrafts[key] ?? String(variant.onHand)}
-                                          onChange={(event) =>
-                                            setVariantOnHandDrafts((prev) => ({
-                                              ...prev,
-                                              [key]: event.target.value,
-                                            }))
-                                          }
-                                          onBlur={() =>
-                                            void handleSaveStoreVariantOnHand(
-                                              storeRow.storeId,
-                                              variant.variantId,
-                                              variant.onHand,
-                                            )
-                                          }
-                                          onKeyDown={(event) => {
-                                            if (event.key === "Enter") {
-                                              event.preventDefault();
-                                              event.currentTarget.blur();
+                                    <div className="mt-2 grid gap-2">
+                                      {canManageStorePrices ? (
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            type="number"
+                                            inputMode="decimal"
+                                            step="0.01"
+                                            className="h-9"
+                                            value={variantPriceDrafts[key] ?? ""}
+                                            onChange={(event) =>
+                                              setVariantPriceDrafts((prev) => ({
+                                                ...prev,
+                                                [key]: event.target.value,
+                                              }))
                                             }
-                                          }}
-                                          placeholder={tInventory("qtyPlaceholder")}
-                                          disabled={adjustStockMutation.isLoading}
-                                        />
-                                        {savingVariantOnHandKey === key ? (
-                                          <Spinner className="h-4 w-4 text-muted-foreground" />
-                                        ) : null}
-                                      </div>
-                                    ) : (
-                                      <p className="mt-1 text-xs text-muted-foreground">
-                                        {formatNumber(variant.onHand, locale)}
-                                      </p>
-                                    )}
+                                            onBlur={() =>
+                                              void handleSaveStoreVariantPrice(
+                                                storeRow.storeId,
+                                                variant.variantId,
+                                                variant.effectivePriceKgs,
+                                              )
+                                            }
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                event.currentTarget.blur();
+                                              }
+                                            }}
+                                            aria-label={t("salePrice")}
+                                            placeholder={t("pricePlaceholder")}
+                                            disabled={storePriceMutation.isLoading}
+                                          />
+                                          {savingVariantPriceKey === key ? (
+                                            <Spinner className="h-4 w-4 text-muted-foreground" />
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                          {t("salePrice")}:{" "}
+                                          {variant.effectivePriceKgs !== null
+                                            ? formatStoreMoney(variant.effectivePriceKgs, storeRow)
+                                            : tCommon("notAvailable")}
+                                        </p>
+                                      )}
+                                      {canManageInventory ? (
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            type="number"
+                                            inputMode="numeric"
+                                            step="1"
+                                            className="h-9"
+                                            value={
+                                              variantOnHandDrafts[key] ?? String(variant.onHand)
+                                            }
+                                            onChange={(event) =>
+                                              setVariantOnHandDrafts((prev) => ({
+                                                ...prev,
+                                                [key]: event.target.value,
+                                              }))
+                                            }
+                                            onBlur={() =>
+                                              void handleSaveStoreVariantOnHand(
+                                                storeRow.storeId,
+                                                variant.variantId,
+                                                variant.onHand,
+                                              )
+                                            }
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                event.currentTarget.blur();
+                                              }
+                                            }}
+                                            aria-label={tInventory("onHand")}
+                                            placeholder={tInventory("qtyPlaceholder")}
+                                            disabled={adjustStockMutation.isLoading}
+                                          />
+                                          {savingVariantOnHandKey === key ? (
+                                            <Spinner className="h-4 w-4 text-muted-foreground" />
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                          {tInventory("onHand")}:{" "}
+                                          {formatNumber(variant.onHand, locale)}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               })}

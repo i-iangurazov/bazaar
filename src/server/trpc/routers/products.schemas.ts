@@ -14,6 +14,7 @@ export const productReadinessFilterEnum = z.enum([
 export const productSortKeyEnum = z.enum([
   "updatedAt",
   "sku",
+  "image",
   "name",
   "category",
   "unit",
@@ -33,6 +34,22 @@ export const productEmptyValueBehaviorEnum = z.enum(["keep", "overwrite"]);
 export const productStockBehaviorEnum = z.enum(["ignore", "set", "add"]);
 export const productImportRowActionEnum = z.enum(["create", "update", "skip"]);
 export const bulkCategoryModeEnum = z.enum(["add", "setPrimary", "replace"]);
+export const productExportColumnKeyEnum = z.enum([
+  "sku",
+  "name",
+  "unit",
+  "categories",
+  "description",
+  "basePriceKgs",
+  "purchasePriceKgs",
+  "avgCostKgs",
+  "minStock",
+  "images",
+  "variants",
+  "barcodes",
+]);
+export const productExportColumnKeys = productExportColumnKeyEnum.options;
+export type ProductExportColumnKey = z.infer<typeof productExportColumnKeyEnum>;
 
 export const importUpdateFieldEnum = z.enum([
   "name",
@@ -79,6 +96,7 @@ export const productVariantInputSchema = z.object({
   sku: z.string().optional(),
   attributes: z.record(z.unknown()).optional(),
   initialOnHand: z.number().int().min(0).optional(),
+  storePriceKgs: z.number().min(0).optional(),
 });
 
 export const productListInputSchema = z
@@ -134,6 +152,11 @@ export const assignProductsToStoreInputSchema = z.object({
 export const exportProductsInputSchema = z
   .object({
     storeId: z.string().optional(),
+    columns: z
+      .array(productExportColumnKeyEnum)
+      .min(1)
+      .max(productExportColumnKeys.length)
+      .optional(),
   })
   .optional();
 
@@ -178,6 +201,7 @@ export const createProductInputSchema = z.object({
 
 export const updateProductInputSchema = z.object({
   productId: z.string(),
+  storeId: z.string().optional(),
   sku: z.string().min(2),
   name: z.string().min(2),
   category: z.string().optional(),

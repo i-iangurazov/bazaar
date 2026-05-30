@@ -17,6 +17,7 @@ describe("store category preferences source", () => {
     expect(service).toContain("listStoreProductCategoriesFromDb");
     expect(service).toContain("storeProducts:");
     expect(service).toContain("updateStoreProductCategoryPreference");
+    expect(service).toContain("storeCategoryPreference.upsert");
     expect(service).not.toContain("data: { category: null");
   });
 
@@ -24,8 +25,20 @@ describe("store category preferences source", () => {
     const router = await readSource("src/server/trpc/routers/productCategories.ts");
 
     expect(router).toContain("listForStore");
+    expect(router).toContain("storeId: z.string().min(1).optional()");
     expect(router).toContain("setStoreVisibility: adminOrOrgOwnerProcedure");
     expect(router).toContain("assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId)");
+  });
+
+  it("creates newly managed categories inside the selected store scope", async () => {
+    const page = await readSource("src/app/(app)/products/page.tsx");
+    const service = await readSource("src/server/services/productCategories.ts");
+
+    expect(page).toContain("createCategoryMutation.mutate({ name: trimmed, storeId:");
+    expect(page).toContain("trpcUtils.productCategories.listForStore.invalidate()");
+    expect(service).toContain("STORE_CATEGORY_PREFERENCE_UPDATE");
+    expect(service).toContain("isVisibleInForms: true");
+    expect(service).toContain("isArchived: false");
   });
 
   it("filters product-form suggestions while preserving hidden assigned categories", async () => {

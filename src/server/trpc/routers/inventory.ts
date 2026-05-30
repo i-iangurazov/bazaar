@@ -26,6 +26,7 @@ import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventorySortKeySchema = z.enum([
   "sku",
+  "image",
   "product",
   "onHand",
   "minStock",
@@ -69,9 +70,7 @@ const normalizeInventorySearchTokens = (search?: string | null) =>
     ),
   ).slice(0, 8);
 
-const buildInventoryProductSearchWhere = (
-  searchTokens: string[],
-): Prisma.ProductWhereInput =>
+const buildInventoryProductSearchWhere = (searchTokens: string[]): Prisma.ProductWhereInput =>
   searchTokens.length
     ? {
         AND: searchTokens.map((token) => ({
@@ -145,7 +144,11 @@ const buildLowStockSnapshotSql = (
   `;
 };
 
-const fullSortInventoryKeys = new Set<InventorySortKey>(["minStock", "lowStock", "suggestedOrder"]);
+const fullSortInventoryKeys = new Set<InventorySortKey>([
+  "minStock",
+  "lowStock",
+  "suggestedOrder",
+]);
 
 const inventorySortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -162,6 +165,15 @@ const getInventorySnapshotOrderBy = (
   switch (sortKey) {
     case "sku":
       return [{ product: { sku: sortDirection } }, ...nameFallback];
+    case "image":
+      return [
+        { product: { images: { _count: sortDirection } } },
+        { product: { photoUrl: sortDirection } },
+        { product: { name: sortDirection } },
+        { product: { sku: sortDirection } },
+        { variantKey: sortDirection },
+        { id: sortDirection },
+      ];
     case "onHand":
       return [{ onHand: sortDirection }, ...nameFallback];
     case "onOrder":
@@ -182,6 +194,20 @@ const getLowStockOrderSql = (sortKey: InventorySortKey, sortDirection: Inventory
   switch (sortKey) {
     case "sku":
       return Prisma.sql`ORDER BY p."sku" ${direction}, p."name" ASC, s."variantKey" ASC, s."id" ASC`;
+    case "image":
+      return Prisma.sql`
+        ORDER BY CASE WHEN (
+          (NULLIF(TRIM(COALESCE(p."photoUrl", '')), '') IS NOT NULL AND p."photoUrl" NOT LIKE 'data:image/%')
+          OR EXISTS (
+            SELECT 1 FROM "ProductImage" pi
+            WHERE pi."productId" = p."id" AND pi."url" NOT LIKE 'data:image/%'
+          )
+        ) THEN 1 ELSE 0 END ${direction},
+        p."name" ${direction},
+        p."sku" ${direction},
+        s."variantKey" ${direction},
+        s."id" ${direction}
+      `;
     case "onHand":
       return Prisma.sql`ORDER BY s."onHand" ${direction}, p."name" ASC, s."variantKey" ASC, s."id" ASC`;
     case "onOrder":
@@ -307,11 +333,21 @@ const sortInventoryItems = (
   sortDirection: InventorySortDirection,
 ) => {
   const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+  const hasInventoryItemImage = (item: InventoryListItem) =>
+    [...(item.product.images ?? []).map((image) => image.url), item.product.photoUrl].some(
+      (url) => {
+        const trimmed = url?.trim();
+        return Boolean(trimmed && !trimmed.startsWith("data:image/"));
+      },
+    );
   return [...items].sort((left, right) => {
     let result = 0;
     switch (sortKey) {
       case "sku":
         result = inventorySortCollator.compare(left.product.sku, right.product.sku);
+        break;
+      case "image":
+        result = Number(hasInventoryItemImage(left)) - Number(hasInventoryItemImage(right));
         break;
       case "product":
         result = inventorySortCollator.compare(left.product.name, right.product.name);

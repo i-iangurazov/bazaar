@@ -27,7 +27,6 @@ const imageMimeByExtension: Record<string, string> = {
   bmp: "image/bmp",
   tif: "image/tiff",
   tiff: "image/tiff",
-  svg: "image/svg+xml",
   heic: "image/heic",
   heif: "image/heif",
   heics: "image/heic",
@@ -57,6 +56,9 @@ const normalizeImageMimeType = (value: string) => {
 
 const resolveUploadContentType = (file: File) => {
   const normalizedType = normalizeImageMimeType(file.type);
+  if (normalizedType === "image/svg+xml") {
+    return null;
+  }
   if (normalizedType.startsWith("image/")) {
     return normalizedType;
   }

@@ -80,6 +80,7 @@ export type CreateProductInput = {
     sku?: string | null;
     attributes?: Record<string, unknown>;
     initialOnHand?: number | null;
+    storePriceKgs?: number | null;
   }[];
   isBundle?: boolean;
   bundleComponents?: {
@@ -892,6 +893,57 @@ const upsertBaseProductCost = async (
       costBasisQty: 1,
     },
   });
+};
+
+const upsertStoreVariantPrices = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    actorId: string;
+    storeId?: string | null;
+    productId: string;
+    variants: Array<{ id: string; storePriceKgs?: number | null }>;
+  },
+) => {
+  const variantsWithPrice = input.variants.filter(
+    (variant) => variant.storePriceKgs !== undefined && variant.storePriceKgs !== null,
+  );
+  if (!variantsWithPrice.length) {
+    return;
+  }
+  if (!input.storeId) {
+    throw new AppError("storeRequired", "BAD_REQUEST", 400);
+  }
+
+  for (const variant of variantsWithPrice) {
+    const priceKgs = variant.storePriceKgs ?? 0;
+    if (!Number.isFinite(priceKgs) || priceKgs < 0) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+
+    await tx.storePrice.upsert({
+      where: {
+        organizationId_storeId_productId_variantKey: {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          productId: input.productId,
+          variantKey: variant.id,
+        },
+      },
+      create: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: input.productId,
+        variantKey: variant.id,
+        priceKgs,
+        updatedById: input.actorId,
+      },
+      update: {
+        priceKgs,
+        updatedById: input.actorId,
+      },
+    });
+  }
 };
 
 const normalizeBarcodes = (barcodes?: string[]) => {
@@ -1907,6 +1959,16 @@ export const createProduct = async (input: CreateProductInput) => {
             initialOnHand: input.variants?.[index]?.initialOnHand,
           })),
         });
+        await upsertStoreVariantPrices(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          storeId: assignmentStores[0]?.id ?? input.storeId,
+          productId: product.id,
+          variants: createdVariants.map((variant, index) => ({
+            id: variant.id,
+            storePriceKgs: input.variants?.[index]?.storePriceKgs,
+          })),
+        });
         if (resolvedBaseCost !== undefined) {
           await upsertBaseProductCost(tx, {
             organizationId: input.organizationId,
@@ -2087,6 +2149,7 @@ export type UpdateProductInput = {
   organizationId: string;
   actorId: string;
   requestId: string;
+  storeId?: string | null;
   sku: string;
   name: string;
   category?: string | null;
@@ -2108,6 +2171,7 @@ export type UpdateProductInput = {
     name?: string | null;
     sku?: string | null;
     attributes?: Record<string, unknown>;
+    storePriceKgs?: number | null;
   }[];
   isBundle?: boolean;
   bundleComponents?: CreateProductInput["bundleComponents"];
@@ -2266,9 +2330,10 @@ export const updateProduct = async (input: UpdateProductInput) => {
           definition,
         ]),
       );
+      const variantPriceInputs: Array<{ id: string; storePriceKgs?: number | null }> = [];
       for (const variant of input.variants) {
         if (variant.id) {
-          await tx.productVariant.updateMany({
+          const updateResult = await tx.productVariant.updateMany({
             where: { id: variant.id, productId: input.productId },
             data: {
               imageId: resolveVariantImageId(variant, imageReferences),
@@ -2278,6 +2343,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
               isActive: true,
             },
           });
+          if (updateResult.count < 1) {
+            continue;
+          }
           await tx.variantAttributeValue.deleteMany({
             where: { variantId: variant.id },
           });
@@ -2291,6 +2359,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
             },
             definitionMap,
           );
+          variantPriceInputs.push({ id: variant.id, storePriceKgs: variant.storePriceKgs });
         } else {
           const createdVariant = await tx.productVariant.create({
             data: {
@@ -2311,8 +2380,19 @@ export const updateProduct = async (input: UpdateProductInput) => {
             },
             definitionMap,
           );
+          variantPriceInputs.push({
+            id: createdVariant.id,
+            storePriceKgs: variant.storePriceKgs,
+          });
         }
       }
+      await upsertStoreVariantPrices(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        storeId: input.storeId,
+        productId: input.productId,
+        variants: variantPriceInputs,
+      });
     }
 
     if (!nextIsBundle) {

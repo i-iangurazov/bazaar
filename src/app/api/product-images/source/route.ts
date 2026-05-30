@@ -47,9 +47,6 @@ const resolveImageMimeTypeByExtension = (extension: string) => {
   if (normalized === "tif" || normalized === "tiff") {
     return "image/tiff";
   }
-  if (normalized === "svg") {
-    return "image/svg+xml";
-  }
   if (normalized === "heic" || normalized === "heics") {
     return "image/heic";
   }
@@ -184,7 +181,7 @@ export const GET = async (request: Request) => {
         : byBytes
           ? byBytes
           : "";
-    if (!contentType) {
+    if (!contentType || contentType === "image/svg+xml") {
       return Response.json({ message: "imageInvalidType" }, { status: 400 });
     }
 

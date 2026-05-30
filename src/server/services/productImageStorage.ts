@@ -105,6 +105,8 @@ const remoteImageRetryCount = parseNonNegativeIntEnv(process.env.PRODUCT_IMAGE_R
 const fastRemoteImageCopyEnabled = parseForcedEnv(
   process.env.FAST_REMOTE_IMAGE_COPY ?? process.env.PRODUCT_IMAGE_FAST_STREAM,
 );
+const maxRemoteImageRedirects = 3;
+const remoteImageRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 const remoteHostAllowCache = new Map<string, boolean>();
 
 type ImageStorageProvider = "local" | "r2";
@@ -293,6 +295,14 @@ const isAppleHeifMimeType = (contentType: string | null | undefined) => {
   return normalizedType === "image/heic" || normalizedType === "image/heif";
 };
 
+const safeImageMimeType = (contentType: string | null | undefined) => {
+  const normalizedType = normalizeImageMimeType(contentType);
+  if (!normalizedType.startsWith("image/") || normalizedType === "image/svg+xml") {
+    return null;
+  }
+  return normalizedType;
+};
+
 const detectImageExtension = (contentType: string | null, sourceUrl?: string) => {
   const normalizedType = normalizeImageMimeType(contentType);
   if (normalizedType === "image/png") {
@@ -322,9 +332,6 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
   if (normalizedType === "image/tiff") {
     return "tiff";
   }
-  if (normalizedType === "image/svg+xml") {
-    return "svg";
-  }
   if (sourceUrl) {
     try {
       const ext = extname(new URL(sourceUrl).pathname).toLowerCase().replace(".", "");
@@ -344,7 +351,6 @@ const detectImageExtension = (contentType: string | null, sourceUrl?: string) =>
           "bmp",
           "tif",
           "tiff",
-          "svg",
         ].includes(ext)
       ) {
         if (ext === "heics") {
@@ -508,11 +514,14 @@ const transcodeAppleHeifToJpeg = async (buffer: Buffer) => {
 };
 
 const normalizeUploadImage = async (input: { buffer: Buffer; contentType: string }) => {
-  const normalizedType = normalizeImageMimeType(input.contentType);
+  const normalizedType = safeImageMimeType(input.contentType);
+  if (!normalizedType) {
+    throw new Error("imageInvalidType");
+  }
   if (!isAppleHeifMimeType(normalizedType)) {
     return {
       buffer: input.buffer,
-      contentType: normalizedType || input.contentType,
+      contentType: normalizedType,
     };
   }
 
@@ -600,31 +609,18 @@ const uploadRemoteImageStreamToR2 = async (input: {
     return { attempted: false, result: null };
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(input.sourceUrl);
-  } catch {
-    return { attempted: true, result: null };
-  }
-
-  const hostAllowed = await isRemoteHostAllowed(parsed.hostname);
-  if (!hostAllowed) {
-    return { attempted: true, result: null };
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
   try {
-    const response = await fetch(input.sourceUrl, { signal: controller.signal });
+    const response = await fetchAllowedRemoteImage(input.sourceUrl, controller.signal);
     clearTimeout(timeout);
-    if (!response.ok) {
+    if (!response?.ok) {
       return { attempted: true, result: null };
     }
 
-    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    const normalizedType = normalizeImageMimeType(contentType);
-    if (!normalizedType.startsWith("image/")) {
+    const normalizedType = safeImageMimeType(response.headers.get("content-type"));
+    if (!normalizedType) {
       return { attempted: true, result: null };
     }
     if (isAppleHeifMimeType(normalizedType)) {
@@ -681,8 +677,8 @@ const parseDataImage = (value: string) => {
     return null;
   }
 
-  const contentType = match[1].toLowerCase();
-  if (!contentType.startsWith("image/")) {
+  const contentType = safeImageMimeType(match[1]);
+  if (!contentType) {
     return null;
   }
 
@@ -754,8 +750,8 @@ const isBlockedHostName = (hostName: string) => {
 
 const isRemoteHostAllowed = async (hostName: string) => {
   const cached = remoteHostAllowCache.get(hostName);
-  if (cached !== undefined) {
-    return cached;
+  if (cached === false) {
+    return false;
   }
 
   if (isBlockedHostName(hostName)) {
@@ -765,7 +761,9 @@ const isRemoteHostAllowed = async (hostName: string) => {
 
   if (isIP(hostName)) {
     const allowed = !isBlockedIpAddress(hostName);
-    remoteHostAllowCache.set(hostName, allowed);
+    if (!allowed) {
+      remoteHostAllowCache.set(hostName, false);
+    }
     return allowed;
   }
 
@@ -776,7 +774,9 @@ const isRemoteHostAllowed = async (hostName: string) => {
       return false;
     }
     const allowed = records.every((record) => !isBlockedIpAddress(record.address));
-    remoteHostAllowCache.set(hostName, allowed);
+    if (!allowed) {
+      remoteHostAllowCache.set(hostName, false);
+    }
     return allowed;
   } catch {
     remoteHostAllowCache.set(hostName, false);
@@ -784,30 +784,60 @@ const isRemoteHostAllowed = async (hostName: string) => {
   }
 };
 
-export const downloadRemoteImage = async (url: string) => {
-  let parsed: URL;
+const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) => {
+  let currentUrl: URL;
   try {
-    parsed = new URL(url);
+    currentUrl = new URL(sourceUrl);
   } catch {
     return null;
   }
 
-  const hostAllowed = await isRemoteHostAllowed(parsed.hostname);
-  if (!hostAllowed) {
-    return null;
+  for (let redirectCount = 0; redirectCount <= maxRemoteImageRedirects; redirectCount += 1) {
+    if (currentUrl.protocol !== "http:" && currentUrl.protocol !== "https:") {
+      return null;
+    }
+
+    const hostAllowed = await isRemoteHostAllowed(currentUrl.hostname);
+    if (!hostAllowed) {
+      return null;
+    }
+
+    const response = await fetch(currentUrl.toString(), {
+      signal,
+      redirect: "manual",
+    });
+
+    if (!remoteImageRedirectStatuses.has(response.status)) {
+      return response;
+    }
+
+    const location = response.headers.get("location");
+    if (!location || redirectCount >= maxRemoteImageRedirects) {
+      return null;
+    }
+
+    try {
+      currentUrl = new URL(location, currentUrl);
+    } catch {
+      return null;
+    }
   }
 
+  return null;
+};
+
+export const downloadRemoteImage = async (url: string) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) {
+    const response = await fetchAllowedRemoteImage(url, controller.signal);
+    if (!response?.ok) {
       return null;
     }
 
-    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (!contentType.startsWith("image/")) {
+    const contentType = safeImageMimeType(response.headers.get("content-type"));
+    if (!contentType) {
       return null;
     }
 
@@ -994,7 +1024,7 @@ export const uploadProductImageBuffer = async (input: {
   if (!input.organizationId) {
     throw new Error("forbidden");
   }
-  if (!input.contentType.toLowerCase().startsWith("image/")) {
+  if (!safeImageMimeType(input.contentType)) {
     throw new Error("imageInvalidType");
   }
   if (!input.buffer.length || input.buffer.length > maxImageBytes) {

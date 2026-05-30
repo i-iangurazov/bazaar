@@ -44,7 +44,6 @@ const imageMimeByExtension: Record<string, string> = {
   ".bmp": "image/bmp",
   ".tif": "image/tiff",
   ".tiff": "image/tiff",
-  ".svg": "image/svg+xml",
   ".heic": "image/heic",
   ".heif": "image/heif",
 };
@@ -55,7 +54,6 @@ const imageMimeBySharpFormat: Record<string, string> = {
   webp: "image/webp",
   avif: "image/avif",
   gif: "image/gif",
-  svg: "image/svg+xml",
   heif: "image/heif",
   tiff: "image/tiff",
 };

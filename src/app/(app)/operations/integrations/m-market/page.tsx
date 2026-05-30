@@ -38,6 +38,7 @@ import { useToast } from "@/components/ui/toast";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { isAiFeaturesEnabled } from "@/lib/featureFlags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -54,7 +55,7 @@ const ISSUE_CODES = [
   "MISSING_STOCK_MAPPING",
   "MISSING_SPECS",
 ] as const;
-const aiFeaturesVisuallyDisabled = true;
+const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
 
 type IssueCode = (typeof ISSUE_CODES)[number];
 

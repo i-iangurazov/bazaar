@@ -46,6 +46,32 @@ describe("index page source layout", () => {
     expect(serviceSource).toContain("{ timeout: 10_000 }");
   });
 
+  it("sends selected export columns to the server instead of slicing CSV indexes locally", async () => {
+    const pageSource = await readSource("src/app/(app)/products/page.tsx");
+    const schemaSource = await readSource("src/server/trpc/routers/products.schemas.ts");
+    const serviceSource = await readSource("src/server/services/products/read.ts");
+
+    expect(schemaSource).toContain("productExportColumnKeyEnum");
+    expect(schemaSource).toContain("columns:");
+    expect(pageSource).toContain("columns: selectedExportColumns.length");
+    expect(pageSource).not.toContain("const indexes = productExportColumnKeys");
+    expect(serviceSource).toContain("selectedColumns.map((column) => column.header)");
+    expect(serviceSource).toContain("selectedColumns.map((column) => column.key)");
+  });
+
+  it("keeps variant sale prices in the product form contract", async () => {
+    const formSource = await readSource("src/components/product-form.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+    const serviceSource = await readSource("src/server/services/products.ts");
+
+    expect(formSource).toContain("storePriceKgs?: number");
+    expect(formSource).toContain('name={`variants.${variant.index}.storePriceKgs`}');
+    expect(formSource).toContain("storePriceKgs: submitMoneyToKgs");
+    expect(detailSource).toContain("storeId: selectedSettingsStore?.storeId");
+    expect(serviceSource).toContain("upsertStoreVariantPrices");
+    expect(serviceSource).toContain("variantKey: variant.id");
+  });
+
   it("uses manager-or-admin product management gates on product create and edit screens", async () => {
     const listSource = await readSource("src/app/(app)/products/page.tsx");
     const createSource = await readSource("src/app/(app)/products/new/page.tsx");

@@ -196,9 +196,12 @@ export const productsRouter = router({
 
   create: managerProcedure
     .input(createProductInputSchema)
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       if ((input.initialOnHand ?? 0) > 0 && ctx.user.role !== "ADMIN") {
         throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
+      }
+      if (input.storeId) {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
       return createProductMutation({
         organizationId: ctx.user.organizationId,
@@ -210,14 +213,17 @@ export const productsRouter = router({
 
   update: managerProcedure
     .input(updateProductInputSchema)
-    .mutation(({ ctx, input }) =>
-      updateProductMutation({
+    .mutation(async ({ ctx, input }) => {
+      if (input.storeId) {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      }
+      return updateProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   inlineUpdate: managerProcedure
     .input(inlineUpdateProductInputSchema)
@@ -359,6 +365,7 @@ export const productsRouter = router({
       organizationId: ctx.user.organizationId,
       user: ctx.user,
       storeId: input?.storeId,
+      columns: input?.columns,
     }),
   ),
 

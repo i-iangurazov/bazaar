@@ -1,6 +1,8 @@
 import { getServerAuthToken } from "@/server/auth/token";
+import { prisma } from "@/server/db/prisma";
 import { createBazaarCatalogLogoImage } from "@/server/services/bazaarCatalog";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +29,6 @@ const imageMimeByExtension: Record<string, string> = {
   bmp: "image/bmp",
   tif: "image/tiff",
   tiff: "image/tiff",
-  svg: "image/svg+xml",
   heic: "image/heic",
   heif: "image/heif",
   heics: "image/heic",
@@ -57,6 +58,9 @@ const normalizeImageMimeType = (value: string) => {
 
 const resolveUploadContentType = (file: File) => {
   const normalizedType = normalizeImageMimeType(file.type);
+  if (normalizedType === "image/svg+xml") {
+    return null;
+  }
   if (normalizedType.startsWith("image/")) {
     return normalizedType;
   }
@@ -77,7 +81,7 @@ export const POST = async (request: Request) => {
   if (!token) {
     return Response.json({ message: "unauthorized" }, { status: 401 });
   }
-  if (!token.organizationId || !isManagerOrAdmin(token.role)) {
+  if (!token.organizationId || !token.sub || !isManagerOrAdmin(token.role)) {
     return Response.json({ message: "forbidden" }, { status: 403 });
   }
 
@@ -110,6 +114,18 @@ export const POST = async (request: Request) => {
   }
 
   try {
+    await assertUserCanAccessStore(
+      prisma,
+      {
+        id: String(token.sub),
+        organizationId: String(token.organizationId),
+        role: String(token.role),
+        isOrgOwner: Boolean(token.isOrgOwner),
+        isPlatformOwner: Boolean(token.isPlatformOwner),
+      },
+      storeId,
+    );
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploaded = await uploadProductImageBuffer({
       organizationId: String(token.organizationId),
@@ -141,7 +157,7 @@ export const POST = async (request: Request) => {
     if (message === "imageInvalidType" || message === "invalidInput") {
       return Response.json({ message }, { status: 400 });
     }
-    if (message === "forbidden") {
+    if (message === "forbidden" || message === "storeAccessDenied") {
       return Response.json({ message }, { status: 403 });
     }
     if (message === "storeNotFound") {
