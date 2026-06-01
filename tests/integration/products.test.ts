@@ -175,12 +175,20 @@ describeDb("products", () => {
   });
 
   it("duplicates products with selectable photos, fresh SKU, copied store price, and zero stock", async () => {
-    const { org, store, adminUser, baseUnit } = await seedBase();
+    const { org, store, adminUser } = await seedBase();
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
       role: adminUser.role,
       organizationId: org.id,
+    });
+    const pcsUnit = await prisma.unit.create({
+      data: {
+        organizationId: org.id,
+        code: "pcs",
+        labelRu: "pcs",
+        labelKg: "pcs",
+      },
     });
 
     const source = await createProduct({
@@ -189,7 +197,7 @@ describeDb("products", () => {
       requestId: "req-product-duplicate-source",
       sku: "DUP-SOURCE-1",
       name: "Duplicate Source",
-      baseUnitId: baseUnit.id,
+      baseUnitId: pcsUnit.id,
       storeId: store.id,
       basePriceKgs: 100,
       initialOnHand: 9,
@@ -240,6 +248,8 @@ describeDb("products", () => {
     });
 
     expect(noPhotoProduct.sku).not.toBe(source.sku);
+    expect(noPhotoProduct.unit).toBe("pcs");
+    expect(noPhotoProduct.baseUnitId).toBe(pcsUnit.id);
     expect(noPhotoProduct.photoUrl).toBeNull();
     expect(noPhotoProduct.images).toHaveLength(0);
     expect(noPhotoProduct.barcodes).toHaveLength(0);
@@ -1416,6 +1426,18 @@ describeDb("products", () => {
       name: "Apple iPhone 15 Pro",
       baseUnitId: baseUnit.id,
     });
+    const archivedNameMatch = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-dup-name-archived",
+      sku: "DUP-NAME-ARCHIVED",
+      name: "Apple iPhone 15 Pro",
+      baseUnitId: baseUnit.id,
+    });
+    await prisma.product.update({
+      where: { id: archivedNameMatch.id },
+      data: { isDeleted: true },
+    });
 
     const diagnostics = await caller.products.duplicateDiagnostics({
       sku: "DUP-SKU-1",
@@ -1439,6 +1461,9 @@ describeDb("products", () => {
         name: "Apple iPhone 15 Pro",
       }),
     ]);
+    expect(diagnostics.likelyNameMatches).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ sku: "DUP-NAME-ARCHIVED" })]),
+    );
   });
 
   it("avoids false-positive duplicate diagnostics and excludes the current product on edit", async () => {

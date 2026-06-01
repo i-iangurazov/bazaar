@@ -1,14 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CustomerOrderStatus } from "@prisma/client";
+import { CustomerOrderEmailType, CustomerOrderStatus } from "@prisma/client";
 import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 
 import { FormGrid } from "@/components/form-layout";
-import { AddIcon, CheckIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
+import {
+  AddIcon,
+  CheckIcon,
+  CloseIcon,
+  DeleteIcon,
+  EditIcon,
+  EmptyIcon,
+  MailIcon,
+  SendIcon,
+  TruckIcon,
+} from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
@@ -50,6 +60,8 @@ type ProductSearchResult = {
   sku: string;
   isBundle?: boolean;
 };
+
+type ManualOrderEmailType = "CONFIRMATION" | "TRACKING";
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -132,6 +144,10 @@ const SalesOrderDetailPage = () => {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingCarrier, setTrackingCarrier] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
+  const [trackingStatus, setTrackingStatus] = useState("");
 
   const [lineDialogMode, setLineDialogMode] = useState<"add" | "edit" | null>(null);
   const [lineSearch, setLineSearch] = useState("");
@@ -169,6 +185,10 @@ const SalesOrderDetailPage = () => {
     setCustomerPhone(order.customerPhone ?? "");
     setCustomerAddress(order.customerAddress ?? "");
     setNotes(order.notes ?? "");
+    setTrackingNumber(order.trackingNumber ?? "");
+    setTrackingCarrier(order.trackingCarrier ?? "");
+    setTrackingUrl(order.trackingUrl ?? "");
+    setTrackingStatus(order.trackingStatus ?? "");
   }, [order]);
 
   const refetchAll = async () => {
@@ -179,6 +199,44 @@ const SalesOrderDetailPage = () => {
     onSuccess: async () => {
       await refetchAll();
       toast({ variant: "success", description: t("customerUpdated") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const updateTrackingMutation = trpc.salesOrders.updateTracking.useMutation({
+    onSuccess: async (result) => {
+      await refetchAll();
+      if (result.trackingEmail?.status === "sent") {
+        toast({ variant: "success", description: t("trackingUpdatedEmailSent") });
+        return;
+      }
+      if (result.trackingEmail?.status === "skipped") {
+        toast({ variant: "info", description: t("trackingUpdatedEmailSkipped") });
+        return;
+      }
+      if (result.trackingEmail?.status === "failed") {
+        toast({ variant: "error", description: t("trackingUpdatedEmailFailed") });
+        return;
+      }
+      toast({ variant: "success", description: t("trackingUpdated") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const sendEmailMutation = trpc.salesOrders.sendEmail.useMutation({
+    onSuccess: async (_result, variables) => {
+      await refetchAll();
+      toast({
+        variant: "success",
+        description:
+          variables.type === CustomerOrderEmailType.CONFIRMATION
+            ? t("confirmationEmailSent")
+            : t("trackingEmailSent"),
+      });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -309,6 +367,29 @@ const SalesOrderDetailPage = () => {
     });
   };
 
+  const handleSaveTracking = async () => {
+    if (!order) {
+      return;
+    }
+    await updateTrackingMutation.mutateAsync({
+      customerOrderId: order.id,
+      trackingNumber: trackingNumber.trim() || null,
+      trackingCarrier: trackingCarrier.trim() || null,
+      trackingUrl: trackingUrl.trim() || null,
+      trackingStatus: trackingStatus.trim() || null,
+    });
+  };
+
+  const handleSendEmail = async (type: ManualOrderEmailType) => {
+    if (!order) {
+      return;
+    }
+    await sendEmailMutation.mutateAsync({
+      customerOrderId: order.id,
+      type,
+    });
+  };
+
   const handleSubmitLine = async () => {
     if (!order) {
       return;
@@ -391,6 +472,10 @@ const SalesOrderDetailPage = () => {
 
   const lineActionsDisabled =
     addLineMutation.isLoading || updateLineMutation.isLoading || removeLineMutation.isLoading;
+  const trackingActionsDisabled = !canFinalize || updateTrackingMutation.isLoading;
+  const trackingNumberTrimmed = trackingNumber.trim();
+  const formatOptionalDate = (value?: Date | null) =>
+    value ? formatDate(value, locale) : tCommon("notAvailable");
 
   const canCancel =
     canFinalize &&
@@ -634,6 +719,133 @@ const SalesOrderDetailPage = () => {
                   {t("saveCustomer")}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TruckIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
+                {t("trackingSectionTitle")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormGrid>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">{t("trackingNumber")}</p>
+                  <Input
+                    value={trackingNumber}
+                    onChange={(event) => setTrackingNumber(event.target.value)}
+                    placeholder={t("trackingNumberPlaceholder")}
+                    maxLength={512}
+                    disabled={trackingActionsDisabled}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">{t("trackingCarrier")}</p>
+                  <Input
+                    value={trackingCarrier}
+                    onChange={(event) => setTrackingCarrier(event.target.value)}
+                    placeholder={t("trackingCarrierPlaceholder")}
+                    maxLength={512}
+                    disabled={trackingActionsDisabled}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">{t("trackingStatus")}</p>
+                  <Input
+                    value={trackingStatus}
+                    onChange={(event) => setTrackingStatus(event.target.value)}
+                    placeholder={t("trackingStatusPlaceholder")}
+                    maxLength={512}
+                    disabled={trackingActionsDisabled}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <p className="text-sm font-medium">{t("trackingUrl")}</p>
+                  <Input
+                    type="url"
+                    value={trackingUrl}
+                    onChange={(event) => setTrackingUrl(event.target.value)}
+                    placeholder={t("trackingUrlPlaceholder")}
+                    maxLength={512}
+                    disabled={trackingActionsDisabled}
+                  />
+                </div>
+              </FormGrid>
+
+              {canFinalize ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void handleSendEmail(CustomerOrderEmailType.TRACKING)}
+                    disabled={!trackingNumberTrimmed || sendEmailMutation.isLoading}
+                  >
+                    {sendEmailMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <SendIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {t("sendTrackingEmail")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void handleSaveTracking()}
+                    disabled={trackingActionsDisabled}
+                  >
+                    {updateTrackingMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {t("saveTracking")}
+                  </Button>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MailIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
+                {t("emailSectionTitle")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormGrid>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("confirmationEmailSentAt")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {formatOptionalDate(order.confirmationEmailSentAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("trackingEmailSentAt")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {formatOptionalDate(order.trackingEmailSentAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("followUpEmailSentAt")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {formatOptionalDate(order.followUpEmailSentAt)}
+                  </p>
+                </div>
+              </FormGrid>
+
+              {canFinalize ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void handleSendEmail(CustomerOrderEmailType.CONFIRMATION)}
+                    disabled={sendEmailMutation.isLoading}
+                  >
+                    {sendEmailMutation.isLoading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <MailIcon className="h-4 w-4" aria-hidden />
+                    )}
+                    {t("sendConfirmationEmail")}
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

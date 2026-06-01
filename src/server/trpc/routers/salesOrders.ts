@@ -1,4 +1,4 @@
-import { CustomerOrderStatus, type PrismaClient } from "@prisma/client";
+import { CustomerOrderEmailType, CustomerOrderStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
@@ -22,7 +22,9 @@ import {
   listCustomerOrders,
   markCustomerOrderReady,
   removeCustomerOrderLine,
+  sendCustomerOrderEmail,
   setCustomerOrderCustomer,
+  updateCustomerOrderTracking,
   updateCustomerOrderLine,
 } from "@/server/services/salesOrders";
 
@@ -33,6 +35,7 @@ const optionalEmailSchema = z
   .max(254)
   .optional()
   .nullable();
+const optionalTrackingTextSchema = z.string().trim().max(512).optional().nullable();
 
 const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
@@ -236,6 +239,55 @@ export const salesOrdersRouter = router({
           notes: input.notes,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  updateTracking: salesOrdersManagerProcedure
+    .input(
+      z.object({
+        customerOrderId: z.string(),
+        trackingNumber: optionalTrackingTextSchema,
+        trackingCarrier: optionalTrackingTextSchema,
+        trackingUrl: optionalTrackingTextSchema,
+        trackingStatus: optionalTrackingTextSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
+        return await updateCustomerOrderTracking({
+          organizationId: ctx.user.organizationId,
+          customerOrderId: input.customerOrderId,
+          trackingNumber: input.trackingNumber,
+          trackingCarrier: input.trackingCarrier,
+          trackingUrl: input.trackingUrl,
+          trackingStatus: input.trackingStatus,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  sendEmail: salesOrdersManagerProcedure
+    .input(
+      z.object({
+        customerOrderId: z.string(),
+        type: z.enum([CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.TRACKING]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
+        return await sendCustomerOrderEmail({
+          organizationId: ctx.user.organizationId,
+          customerOrderId: input.customerOrderId,
+          type: input.type,
+          actorId: ctx.user.id,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -9,10 +9,12 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { getLogger } from "@/server/logging";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { toJson } from "@/server/services/json";
+import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
@@ -1109,6 +1111,7 @@ export const createCatalogCheckoutOrder = async (input: {
       select: {
         id: true,
         number: true,
+        organizationId: true,
         storeId: true,
       },
     });
@@ -1132,6 +1135,20 @@ export const createCatalogCheckoutOrder = async (input: {
       source: CustomerOrderSource.CATALOG,
     },
   });
+  void sendOrderConfirmationEmail({
+    organizationId: result.organizationId,
+    customerOrderId: result.id,
+    throwOnMissingEmail: false,
+  }).catch((error: unknown) => {
+    getLogger().error(
+      { error, customerOrderId: result.id, storeId: result.storeId },
+      "catalogue order confirmation email send failed",
+    );
+  });
 
-  return result;
+  return {
+    id: result.id,
+    number: result.number,
+    storeId: result.storeId,
+  };
 };

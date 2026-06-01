@@ -25,6 +25,7 @@ import {
 import { AppError } from "@/server/services/errors";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
 import { toJson } from "@/server/services/json";
+import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 
 const API_TOKEN_PREFIX = "bz_live_";
 
@@ -370,6 +371,7 @@ export const listBazaarApiProducts = async (input: {
     items: products.map((product) => {
       const basePriceKgs =
         priceByProductVariant.get(`${product.id}:BASE`) ?? toMoney(product.basePriceKgs);
+      const baseStockQty = stockByProductVariant.get(`${product.id}:BASE`) ?? 0;
       return {
         id: product.id,
         sku: product.sku,
@@ -387,12 +389,14 @@ export const listBazaarApiProducts = async (input: {
         updatedAt: product.updatedAt.toISOString(),
         price: roundMoney(convertFromKgs(basePriceKgs, currencyRateKgsPerUnit, currencyCode)),
         priceKgs: roundMoney(basePriceKgs),
-        stockQty: stockByProductVariant.get(`${product.id}:BASE`) ?? 0,
+        stockQty: baseStockQty,
+        pcs: baseStockQty,
         stockByVariant: Array.from(stockByProductVariant.entries())
           .filter(([key]) => key.startsWith(`${product.id}:`))
           .map(([key, onHand]) => ({
             variantKey: key.slice(product.id.length + 1),
             stockQty: onHand,
+            pcs: onHand,
           })),
         images: [product.photoUrl, ...product.images.map((image) => image.url)]
           .filter((url): url is string => Boolean(url?.trim()))
@@ -423,6 +427,7 @@ export const listBazaarApiProducts = async (input: {
           const variantKey = variantKeyFrom(variant.id);
           const variantPriceKgs =
             priceByProductVariant.get(`${product.id}:${variantKey}`) ?? basePriceKgs;
+          const variantStockQty = stockByProductVariant.get(`${product.id}:${variantKey}`) ?? 0;
           return {
             id: variant.id,
             sku: variant.sku,
@@ -435,7 +440,8 @@ export const listBazaarApiProducts = async (input: {
               convertFromKgs(variantPriceKgs, currencyRateKgsPerUnit, currencyCode),
             ),
             priceKgs: roundMoney(variantPriceKgs),
-            stockQty: stockByProductVariant.get(`${product.id}:${variantKey}`) ?? 0,
+            stockQty: variantStockQty,
+            pcs: variantStockQty,
           };
         }),
       };
@@ -771,6 +777,16 @@ export const createBazaarApiOrder = async (input: {
     getLogger().error(
       { error, customerOrderId: result.id, storeId: result.storeId },
       "email automation API order-created trigger failed",
+    );
+  });
+  void sendOrderConfirmationEmail({
+    organizationId: input.organizationId,
+    customerOrderId: result.id,
+    throwOnMissingEmail: false,
+  }).catch((error: unknown) => {
+    getLogger().error(
+      { error, customerOrderId: result.id, storeId: result.storeId },
+      "API order confirmation email send failed",
     );
   });
 

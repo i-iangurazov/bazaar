@@ -63,6 +63,8 @@ import {
   Monitor,
   Plug,
   Printer,
+  Mail,
+  Send,
   Sparkles,
   Smartphone,
   Share2,
@@ -102,6 +104,9 @@ export const AdjustIcon = SlidersHorizontal;
 export const PdfIcon = FileDown;
 export const PrintIcon = Printer;
 export const InstallAppIcon = Smartphone;
+export const MailIcon = Mail;
+export const SendIcon = Send;
+export const TruckIcon = Truck;
 
 export const StatusSuccessIcon = CheckCircle2;
 export const StatusWarningIcon = AlertTriangle;

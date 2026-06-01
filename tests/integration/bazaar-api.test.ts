@@ -161,10 +161,11 @@ describeDb("bazaar api integration", () => {
       ]),
     );
     expect(item?.stockQty).toBe(7);
+    expect(item?.pcs).toBe(7);
     expect(item?.stockByVariant).toEqual(
       expect.arrayContaining([
-        { variantKey: "BASE", stockQty: 7 },
-        { variantKey: variant.id, stockQty: 3 },
+        { variantKey: "BASE", stockQty: 7, pcs: 7 },
+        { variantKey: variant.id, stockQty: 3, pcs: 3 },
       ]),
     );
     expect(item?.variants[0]).toMatchObject({
@@ -175,6 +176,7 @@ describeDb("bazaar api integration", () => {
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       stockQty: 3,
+      pcs: 3,
       priceKgs: 1200,
     });
     expect(item?.createdAt).toEqual(expect.any(String));

@@ -369,6 +369,18 @@ enum EmailAutomationDeliveryStatus {
   SKIPPED
 }
 
+enum CustomerOrderEmailType {
+  CONFIRMATION
+  TRACKING
+  FOLLOW_UP
+}
+
+enum CustomerOrderEmailStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model Organization {
   id                  String                         @id @default(cuid())
   name                String
@@ -394,6 +406,7 @@ model Organization {
   purchaseOrders              PurchaseOrder[]
   customerOrders              CustomerOrder[]
   customers                   Customer[]
+  customerOrderEmailLogs      CustomerOrderEmailLog[]
   emailCampaigns              EmailCampaign[]
   emailCampaignRecipients     EmailCampaignRecipient[]
   emailMarketingLogos         EmailMarketingLogo[]
@@ -478,6 +491,7 @@ model User {
   purchaseOrdersUpdated         PurchaseOrder[]           @relation("purchaseOrdersUpdated")
   customerOrdersCreated         CustomerOrder[]           @relation("customerOrdersCreated")
   customerOrdersUpdated         CustomerOrder[]           @relation("customerOrdersUpdated")
+  customerOrderEmailLogs        CustomerOrderEmailLog[]    @relation("customerOrderEmailLogsTriggered")
   customersCreated              Customer[]                @relation("customersCreated")
   emailCampaignsCreated         EmailCampaign[]           @relation("emailCampaignsCreated")
   emailMarketingLogosUpdated    EmailMarketingLogo[]      @relation("emailMarketingLogoUpdatedBy")
@@ -593,6 +607,7 @@ model Store {
   forecastSnapshots           ForecastSnapshot[]
   purchaseOrders              PurchaseOrder[]
   customerOrders              CustomerOrder[]
+  customerOrderEmailLogs      CustomerOrderEmailLog[]
   customers                   Customer[]
   emailCampaigns              EmailCampaign[]
   emailMarketingLogo          EmailMarketingLogo?
@@ -1408,6 +1423,14 @@ model CustomerOrder {
   customerEmail          String?
   customerPhone          String?
   customerAddress        String?
+  confirmationEmailSentAt DateTime?
+  trackingNumber         String?
+  trackingCarrier        String?
+  trackingUrl            String?
+  trackingStatus         String?
+  trackingAddedAt        DateTime?
+  trackingEmailSentAt    DateTime?
+  followUpEmailSentAt    DateTime?
   subtotalKgs            Decimal             @default(0) @db.Decimal(12, 2)
   discountKgs            Decimal             @default(0) @db.Decimal(12, 2)
   totalKgs               Decimal             @default(0) @db.Decimal(12, 2)
@@ -1436,6 +1459,7 @@ model CustomerOrder {
   register                  PosRegister?              @relation(fields: [registerId], references: [id])
   shift                     RegisterShift?            @relation(fields: [shiftId], references: [id])
   lines                     CustomerOrderLine[]
+  emailLogs                 CustomerOrderEmailLog[]
   payments                  SalePayment[]
   saleReturns               SaleReturn[]              @relation("saleReturnsOriginal")
   fiscalReceipts            FiscalReceipt[]
@@ -1455,6 +1479,8 @@ model CustomerOrder {
   @@index([organizationId, storeId, isDebt, debtSettledAt, status, completedAt])
   @@index([organizationId, storeId, status, completedAt])
   @@index([organizationId, source, createdAt])
+  @@index([followUpEmailSentAt, completedAt, createdAt])
+  @@index([trackingEmailSentAt, trackingAddedAt])
   @@index([shiftId, status, createdAt])
 }
 
@@ -1707,6 +1733,31 @@ model EmailAutomationDelivery {
   @@unique([automationId, triggerKey])
   @@index([organizationId, storeId, status])
   @@index([customerOrderId])
+  @@index([providerMessageId])
+}
+
+model CustomerOrderEmailLog {
+  id                String                   @id @default(cuid())
+  organizationId    String
+  storeId           String
+  customerOrderId   String
+  type              CustomerOrderEmailType
+  status            CustomerOrderEmailStatus
+  recipientEmail    String?
+  provider          String?
+  providerMessageId String?
+  errorMessage      String?                  @db.Text
+  triggeredById     String?
+  createdAt         DateTime                 @default(now())
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerOrder CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  triggeredBy   User?         @relation("customerOrderEmailLogsTriggered", fields: [triggeredById], references: [id])
+
+  @@index([organizationId, storeId, createdAt])
+  @@index([customerOrderId, createdAt])
+  @@index([type, status, createdAt])
   @@index([providerMessageId])
 }
 

@@ -56,8 +56,9 @@ export const listProductsByNormalizedNames = async ({
       btrim(regexp_replace(lower("name"), '[^[:alnum:]]+', ' ', 'g')) AS "normalizedName"
     FROM "Product"
     WHERE "organizationId" = ${organizationId}
+      AND "isDeleted" = false
       AND btrim(regexp_replace(lower("name"), '[^[:alnum:]]+', ' ', 'g')) IN (${Prisma.join(uniqueNames)})
-    ORDER BY "isDeleted" ASC, "name" ASC, "sku" ASC
+    ORDER BY "name" ASC, "sku" ASC
     LIMIT 250
   `);
 };

@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CustomerOrderStatus, StockMovementType } from "@prisma/client";
+import {
+  CustomerOrderEmailStatus,
+  CustomerOrderEmailType,
+  CustomerOrderStatus,
+  StockMovementType,
+} from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { runJob } from "@/server/jobs";
+import { CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME } from "@/server/jobs/customerOrderFollowUps";
 import { adjustStock } from "@/server/services/inventory";
 
 import { createTestCaller } from "../helpers/context";
@@ -44,6 +51,157 @@ describeDb("sales orders", () => {
     expect(dbOrder?.customerAddress).toBe("Bishkek, Chui 1");
     expect(dbOrder?.lines).toHaveLength(1);
     expect(dbOrder?.lines[0]?.qty).toBe(2);
+  });
+
+  it("sends and logs manual order confirmation emails", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Client Email",
+      customerEmail: "Client.Email@Example.COM",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    const result = await caller.salesOrders.sendEmail({
+      customerOrderId: order.id,
+      type: CustomerOrderEmailType.CONFIRMATION,
+    });
+    const dbOrder = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
+    const logs = await prisma.customerOrderEmailLog.findMany({
+      where: { customerOrderId: order.id, type: CustomerOrderEmailType.CONFIRMATION },
+    });
+
+    expect(result).toMatchObject({
+      status: "sent",
+      recipientEmail: "client.email@example.com",
+    });
+    expect(dbOrder.confirmationEmailSentAt).toBeInstanceOf(Date);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      status: CustomerOrderEmailStatus.SENT,
+      recipientEmail: "client.email@example.com",
+      triggeredById: adminUser.id,
+    });
+  });
+
+  it("auto-sends tracking email only when tracking details change", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Tracking Client",
+      customerEmail: "tracking@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    await expect(
+      caller.salesOrders.updateTracking({
+        customerOrderId: order.id,
+        trackingNumber: "TRK-1",
+        trackingCarrier: "Courier",
+        trackingUrl: "https://track.example.com/TRK-1",
+        trackingStatus: "Shipped",
+      }),
+    ).resolves.toMatchObject({ trackingEmail: { status: "sent" } });
+
+    await expect(
+      caller.salesOrders.updateTracking({
+        customerOrderId: order.id,
+        trackingNumber: "TRK-1",
+        trackingCarrier: "Courier",
+        trackingUrl: "https://track.example.com/TRK-1",
+        trackingStatus: "Shipped",
+      }),
+    ).resolves.toMatchObject({ trackingEmail: null });
+
+    await expect(
+      caller.salesOrders.updateTracking({
+        customerOrderId: order.id,
+        trackingNumber: "TRK-1",
+        trackingCarrier: "Courier",
+        trackingUrl: "https://track.example.com/TRK-1",
+        trackingStatus: "In transit",
+      }),
+    ).resolves.toMatchObject({ trackingEmail: { status: "sent" } });
+
+    const dbOrder = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
+    const sentLogs = await prisma.customerOrderEmailLog.findMany({
+      where: {
+        customerOrderId: order.id,
+        type: CustomerOrderEmailType.TRACKING,
+        status: CustomerOrderEmailStatus.SENT,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    expect(dbOrder.trackingNumber).toBe("TRK-1");
+    expect(dbOrder.trackingStatus).toBe("In transit");
+    expect(dbOrder.trackingEmailSentAt).toBeInstanceOf(Date);
+    expect(sentLogs).toHaveLength(2);
+  });
+
+  it("sends follow-up emails from the registered job idempotently", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Follow Up Client",
+      customerEmail: "followup@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    const completedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    await prisma.customerOrder.update({
+      where: { id: order.id },
+      data: { status: CustomerOrderStatus.COMPLETED, completedAt },
+    });
+
+    await expect(runJob(CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME, { limit: 10 })).resolves.toMatchObject({
+      job: CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME,
+      status: "ok",
+      details: { scanned: 1, sent: 1, skipped: 0, failed: 0 },
+    });
+    await expect(runJob(CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME, { limit: 10 })).resolves.toMatchObject({
+      job: CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME,
+      status: "ok",
+      details: { scanned: 0, sent: 0, skipped: 0, failed: 0 },
+    });
+
+    const dbOrder = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
+    const logs = await prisma.customerOrderEmailLog.findMany({
+      where: {
+        customerOrderId: order.id,
+        type: CustomerOrderEmailType.FOLLOW_UP,
+        status: CustomerOrderEmailStatus.SENT,
+      },
+    });
+
+    expect(dbOrder.followUpEmailSentAt).toBeInstanceOf(Date);
+    expect(logs).toHaveLength(1);
   });
 
   it("snapshots unit price and line total using store override price", async () => {

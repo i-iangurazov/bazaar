@@ -1,5 +1,6 @@
 import {
   Prisma,
+  CustomerOrderEmailType,
   CustomerOrderSource,
   CustomerOrderStatus,
   EmailAutomationTrigger,
@@ -17,6 +18,11 @@ import { getLogger } from "@/server/logging";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
+import {
+  sendOrderConfirmationEmail,
+  sendOrderTrackingEmail,
+  type OrderEmailSendResult,
+} from "@/server/services/orderEmails";
 
 const allowedTransitions: Record<CustomerOrderStatus, CustomerOrderStatus[]> = {
   DRAFT: [CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.CANCELED],
@@ -43,6 +49,10 @@ const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
   typeof value === "number" ? value : value ? Number(value) : 0;
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
+const normalizeOptionalText = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+};
 
 const nextSalesOrderNumber = async (
   tx: Prisma.TransactionClient,
@@ -705,6 +715,128 @@ export const setCustomerOrderCustomer = async (input: {
   });
 };
 
+export const updateCustomerOrderTracking = async (input: {
+  organizationId: string;
+  customerOrderId: string;
+  trackingNumber?: string | null;
+  trackingCarrier?: string | null;
+  trackingUrl?: string | null;
+  trackingStatus?: string | null;
+  actorId: string;
+  requestId: string;
+}) => {
+  let shouldSendTrackingEmail = false;
+
+  const order = await prisma.$transaction(async (tx) => {
+    const before = await tx.customerOrder.findUnique({ where: { id: input.customerOrderId } });
+    if (!before) {
+      throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+    }
+    if (before.organizationId !== input.organizationId) {
+      throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+    }
+
+    const nextTrackingNumber = normalizeOptionalText(input.trackingNumber);
+    const nextTrackingCarrier = normalizeOptionalText(input.trackingCarrier);
+    const nextTrackingUrl = normalizeOptionalText(input.trackingUrl);
+    const nextTrackingStatus = normalizeOptionalText(input.trackingStatus);
+    const changed =
+      normalizeOptionalText(before.trackingNumber) !== nextTrackingNumber ||
+      normalizeOptionalText(before.trackingCarrier) !== nextTrackingCarrier ||
+      normalizeOptionalText(before.trackingUrl) !== nextTrackingUrl ||
+      normalizeOptionalText(before.trackingStatus) !== nextTrackingStatus;
+
+    shouldSendTrackingEmail = changed && Boolean(nextTrackingNumber);
+
+    const updated = await tx.customerOrder.update({
+      where: { id: before.id },
+      data: {
+        trackingNumber: nextTrackingNumber,
+        trackingCarrier: nextTrackingCarrier,
+        trackingUrl: nextTrackingUrl,
+        trackingStatus: nextTrackingStatus,
+        trackingAddedAt: nextTrackingNumber ? (before.trackingAddedAt ?? new Date()) : null,
+        updatedById: input.actorId,
+      },
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "SALES_ORDER_TRACKING_UPDATE",
+      entity: "CustomerOrder",
+      entityId: before.id,
+      before: toJson({
+        trackingNumber: before.trackingNumber,
+        trackingCarrier: before.trackingCarrier,
+        trackingUrl: before.trackingUrl,
+        trackingStatus: before.trackingStatus,
+      }),
+      after: toJson({
+        trackingNumber: updated.trackingNumber,
+        trackingCarrier: updated.trackingCarrier,
+        trackingUrl: updated.trackingUrl,
+        trackingStatus: updated.trackingStatus,
+      }),
+      requestId: input.requestId,
+    });
+
+    return serializeOrder(updated);
+  });
+
+  let trackingEmail:
+    | OrderEmailSendResult
+    | { status: "failed"; reason: "sendFailed" }
+    | null = null;
+
+  if (shouldSendTrackingEmail) {
+    try {
+      trackingEmail = await sendOrderTrackingEmail({
+        organizationId: input.organizationId,
+        customerOrderId: input.customerOrderId,
+        triggeredById: input.actorId,
+        force: true,
+        throwOnMissingEmail: false,
+      });
+    } catch (error) {
+      getLogger(input.requestId).warn(
+        { error, customerOrderId: input.customerOrderId },
+        "tracking email send failed after order tracking update",
+      );
+      trackingEmail = { status: "failed", reason: "sendFailed" };
+    }
+  }
+
+  return { order, trackingEmail };
+};
+
+export const sendCustomerOrderEmail = async (input: {
+  organizationId: string;
+  customerOrderId: string;
+  type: CustomerOrderEmailType;
+  actorId: string;
+}) => {
+  if (input.type === CustomerOrderEmailType.CONFIRMATION) {
+    return sendOrderConfirmationEmail({
+      organizationId: input.organizationId,
+      customerOrderId: input.customerOrderId,
+      triggeredById: input.actorId,
+      force: true,
+    });
+  }
+
+  if (input.type === CustomerOrderEmailType.TRACKING) {
+    return sendOrderTrackingEmail({
+      organizationId: input.organizationId,
+      customerOrderId: input.customerOrderId,
+      triggeredById: input.actorId,
+      force: true,
+    });
+  }
+
+  throw new AppError("invalidInput", "BAD_REQUEST", 400);
+};
+
 export const addCustomerOrderLine = async (input: {
   organizationId: string;
   customerOrderId: string;
@@ -961,6 +1093,19 @@ const updateOrderStatus = async (input: {
       "email automation order-status trigger failed",
     );
   });
+  if (result.newStatus === CustomerOrderStatus.CONFIRMED) {
+    void sendOrderConfirmationEmail({
+      organizationId: input.organizationId,
+      customerOrderId: result.order.id,
+      triggeredById: input.actorId,
+      throwOnMissingEmail: false,
+    }).catch((error: unknown) => {
+      getLogger(input.requestId).error(
+        { error, customerOrderId: result.order.id, storeId: result.order.storeId },
+        "order confirmation email send failed",
+      );
+    });
+  }
   return result.order;
 };
 

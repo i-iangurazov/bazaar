@@ -24,6 +24,10 @@ import {
   EMAIL_CAMPAIGN_SEND_JOB_NAME,
   runEmailCampaignSendJob,
 } from "@/server/jobs/emailMarketing";
+import {
+  CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME,
+  runCustomerOrderFollowUpJob,
+} from "@/server/jobs/customerOrderFollowUps";
 
 type InMemoryLock = {
   ownerToken: string;
@@ -196,6 +200,11 @@ const jobs: Record<string, JobDefinition> = {
   },
   [EMAIL_CAMPAIGN_SEND_JOB_NAME]: {
     handler: runEmailCampaignSendJob,
+    maxAttempts: 3,
+    baseDelayMs: 1000,
+  },
+  [CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME]: {
+    handler: runCustomerOrderFollowUpJob,
     maxAttempts: 3,
     baseDelayMs: 1000,
   },

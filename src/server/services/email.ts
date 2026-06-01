@@ -302,6 +302,8 @@ const sendEmail = async (payload: EmailPayload): Promise<EmailSendResult> => {
   return { provider: "log", id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` };
 };
 
+export const sendTransactionalEmail = sendEmail;
+
 export const sendEmailBatch = async (
   payloads: EmailPayload[],
   options?: { idempotencyKey?: string },
