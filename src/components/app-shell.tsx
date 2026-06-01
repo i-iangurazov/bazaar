@@ -27,9 +27,11 @@ import {
   CirclePlusIcon,
   DashboardIcon,
   InventoryIcon,
+  InventoryOverviewIcon,
+  ProductMovementIcon,
+  StockCountsIcon,
   OrdersIcon,
   PosIcon,
-  ActivityIcon,
   CustomerDatabaseIcon,
   SalesOrdersIcon,
   PurchaseOrdersIcon,
@@ -42,10 +44,14 @@ import {
   HelpIcon,
   SupportIcon,
   MetricsIcon,
+  ReportsIcon,
+  DiagnosticsIcon,
+  PlatformIcon,
   JobsIcon,
   BillingIcon,
   WhatsNewIcon,
   PrintIcon,
+  ReceiveIcon,
   AdjustIcon,
   UploadIcon,
   IntegrationsIcon,
@@ -71,6 +77,7 @@ type NavItem = {
   key: string;
   href?: string;
   icon: ComponentType<{ className?: string }>;
+  exact?: boolean;
   adminOnly?: boolean;
   managerOnly?: boolean;
   platformOwnerOnly?: boolean;
@@ -209,9 +216,34 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           },
           {
             key: "inventory",
-            href: "/inventory",
             icon: InventoryIcon,
-            requiredPermission: "viewInventory",
+            children: [
+              {
+                key: "inventoryOverview",
+                href: "/inventory",
+                icon: InventoryOverviewIcon,
+                exact: true,
+                requiredPermission: "viewInventory",
+              },
+              {
+                key: "productMovements",
+                href: "/inventory/movements",
+                icon: ProductMovementIcon,
+                requiredPermission: "viewInventory",
+              },
+              {
+                key: "stockReceiving",
+                href: "/inventory/receiving",
+                icon: ReceiveIcon,
+                requiredPermission: "viewInventory",
+              },
+              {
+                key: "stockCounts",
+                href: "/inventory/counts",
+                icon: StockCountsIcon,
+                requiredPermission: "viewInventory",
+              },
+            ],
           },
           {
             key: "orders",
@@ -283,7 +315,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           {
             key: "reports",
             href: "/reports",
-            icon: ActivityIcon,
+            icon: ReportsIcon,
             managerOnly: true,
             requiredPermission: "viewReports",
           },
@@ -350,7 +382,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           {
             key: "platformOwner",
             href: "/platform",
-            icon: MetricsIcon,
+            icon: PlatformIcon,
             adminOnly: true,
             platformOwnerOnly: true,
             requiredPermission: "viewPlatform",
@@ -372,7 +404,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           {
             key: "diagnostics",
             href: "/settings/diagnostics",
-            icon: ActivityIcon,
+            icon: DiagnosticsIcon,
             orgOwnerOnly: true,
             requiredPermission: "viewDiagnostics",
           },
@@ -516,6 +548,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
   const isItemActive = (item: NavItem): boolean => {
     if (item.href) {
+      if (item.exact) {
+        return normalizedPath === item.href;
+      }
       return normalizedPath === item.href || normalizedPath.startsWith(`${item.href}/`);
     }
     if (item.children?.length) {
@@ -845,7 +880,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       key: "mobile-reports",
       label: tNav("reports"),
       href: "/reports",
-      icon: ActivityIcon,
+      icon: ReportsIcon,
       requiredPermission: "viewReports",
     },
     {

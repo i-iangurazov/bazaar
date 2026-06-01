@@ -98,6 +98,7 @@ export const updateProductMutation = async ({
       basePriceKgs: input.basePriceKgs,
       purchasePriceKgs: input.purchasePriceKgs,
       avgCostKgs: input.avgCostKgs,
+      minStock: input.minStock,
       description: input.description,
       photoUrl: input.photoUrl,
       images: input.images,

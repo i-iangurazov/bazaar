@@ -1,7 +1,9 @@
 import {
   LayoutDashboard,
   Boxes,
+  Warehouse,
   ClipboardList,
+  ClipboardCheck,
   ShoppingCart,
   Truck,
   Package,
@@ -18,6 +20,7 @@ import {
   ArrowDownToLine,
   ArrowUpDown,
   ArrowRightLeft,
+  Route,
   ArrowUp,
   ArrowDown,
   GripVertical,
@@ -29,6 +32,7 @@ import {
   XCircle,
   Clock,
   Activity,
+  SquareActivity,
   Menu,
   X,
   Inbox,
@@ -50,8 +54,10 @@ import {
   HelpCircle,
   LifeBuoy,
   BarChart3,
+  ChartNoAxesCombined,
   Server,
   CreditCard,
+  Banknote,
   Megaphone,
   Search,
   Tag,
@@ -63,6 +69,9 @@ import {
   Monitor,
   Plug,
   Printer,
+  ReceiptText,
+  Factory,
+  Landmark,
   Mail,
   Send,
   Sparkles,
@@ -74,13 +83,16 @@ import {
 } from "lucide-react";
 
 export const DashboardIcon = LayoutDashboard;
-export const InventoryIcon = Boxes;
+export const InventoryIcon = Warehouse;
+export const InventoryOverviewIcon = Boxes;
+export const ProductMovementIcon = Route;
+export const StockCountsIcon = ClipboardCheck;
 export const OrdersIcon = ClipboardList;
-export const SalesOrdersIcon = User;
+export const SalesOrdersIcon = ReceiptText;
 export const CustomerDatabaseIcon = BookUser;
 export const PurchaseOrdersIcon = ShoppingCart;
-export const PosIcon = CreditCard;
-export const SuppliersIcon = Truck;
+export const PosIcon = Banknote;
+export const SuppliersIcon = Factory;
 export const ProductsIcon = Package;
 export const StoresIcon = Store;
 export const UnitsIcon = Ruler;
@@ -135,6 +147,9 @@ export const OnboardingIcon = Rocket;
 export const HelpIcon = HelpCircle;
 export const SupportIcon = LifeBuoy;
 export const MetricsIcon = BarChart3;
+export const ReportsIcon = ChartNoAxesCombined;
+export const DiagnosticsIcon = SquareActivity;
+export const PlatformIcon = Landmark;
 export const JobsIcon = Server;
 export const BillingIcon = CreditCard;
 export const WhatsNewIcon = Megaphone;

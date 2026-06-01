@@ -12,6 +12,7 @@ describe("receiving product creation handoff source", () => {
 
     expect(source).toContain("bazaar:inventory-receiving-draft:");
     expect(source).toContain("writeReceivingDraft(draftKey");
+    expect(source).toContain("createReceivingReturnParams");
     expect(source).toContain('returnTo: "/inventory/receiving"');
     expect(source).toContain("returnSource: receivingReturnSource");
     expect(source).toContain("receivingDraftKey: draftKey");
@@ -19,26 +20,51 @@ describe("receiving product creation handoff source", () => {
     expect(source).toContain('t("receivingCreateProduct")');
   });
 
-  it("restores draft lines and searches for the newly-created product on return", async () => {
+  it("restores the receiving draft search without replacing it with the created product name", async () => {
     const source = await readSource("src/app/(app)/inventory/receiving/page.tsx");
 
     expect(source).toContain("readReceivingDraft(returningDraftKey)");
     expect(source).toContain("setLines(draft.lines)");
-    expect(source).toContain("setSearch(createdProductName || draft.search)");
+    expect(source).toContain("setSearch(draft.search)");
+    expect(source).not.toContain("createdProductName");
+    expect(source).not.toContain("setSearch((current) => current ||");
+    expect(source).toContain("createdProductId");
+    expect(source).toContain("productId: createdProductId");
+    expect(source).toContain('addSearchResult(result, "manual", { selectQuantity: true })');
     expect(source).toContain("trpcUtils.inventory.searchProducts.invalidate()");
     expect(source).toContain("onValueChange={handleStoreChange}");
   });
 
-  it("returns from product creation with the product identity while preserving normal creation", async () => {
+  it("returns from receiving duplicate creation without forcing the created product into search", async () => {
     const source = await readSource("src/app/(app)/products/new/page.tsx");
 
     expect(source).toContain("resolveSafeReturnTo");
     expect(source).toContain("buildReturnPath");
     expect(source).toContain("createdProductId");
-    expect(source).toContain("createdProductName");
+    expect(source).not.toContain("createdProductName");
+    expect(source).toContain("productId: isDuplicateFlow ? undefined : product.id");
     expect(source).toContain("receivingDraftKey");
     expect(source).toContain("isReceivingReturnFlow");
+    expect(source).toContain("duplicateFromProductId");
+    expect(source).toContain("trpc.products.getById.useQuery");
+    expect(source).toContain("trpc.products.storePricing.useQuery");
+    expect(source).toContain("minStock: duplicateSourceStore?.minStock");
+    expect(source).toContain("duplicateCreateSubtitle");
+    expect(source).toContain("barcodes: []");
     expect(source).toContain("trpcUtils.inventory.searchProducts.invalidate()");
     expect(source).toContain("router.push(`/products/${product.id}`)");
+  });
+
+  it("adds a duplicate product action to receiving search results without clearing search", async () => {
+    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const inventoryRouterSource = await readSource("src/server/trpc/routers/inventory.ts");
+
+    expect(receivingSource).toContain("receivingDuplicateProduct");
+    expect(receivingSource).toContain("handleDuplicateProduct");
+    expect(receivingSource).toContain('params.set("duplicateFrom", result.product.id)');
+    expect(receivingSource).not.toContain('setSearch("");\n    focusQuantity(key');
+    expect(inventoryRouterSource).toContain("productId: z.string().trim().optional()");
+    expect(inventoryRouterSource).toContain("input.productId");
+    expect(inventoryRouterSource).toContain("? { id: input.productId }");
   });
 });

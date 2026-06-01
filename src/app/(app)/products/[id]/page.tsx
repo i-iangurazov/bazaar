@@ -557,6 +557,7 @@ const ProductDetailPage = () => {
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
       purchasePriceKgs: productQuery.data.purchasePriceKgs ?? undefined,
       avgCostKgs: productQuery.data.avgCostKgs ?? undefined,
+      minStock: selectedSettingsStore?.minStock,
       description: productQuery.data.description ?? "",
       photoUrl: productQuery.data.photoUrl ?? "",
       images: (productQuery.data.images?.length
@@ -597,7 +598,12 @@ const ProductDetailPage = () => {
         componentSku: component.componentProduct.sku,
       })),
     };
-  }, [productQuery.data, selectedSettingsStore?.variants, bundleComponentsQuery.data]);
+  }, [
+    productQuery.data,
+    selectedSettingsStore?.minStock,
+    selectedSettingsStore?.variants,
+    bundleComponentsQuery.data,
+  ]);
 
   type BundleComponent = NonNullable<typeof bundleComponentsQuery.data>[number];
   type LotRow = NonNullable<typeof lotsQuery.data>[number];
@@ -1304,7 +1310,7 @@ const ProductDetailPage = () => {
         main={
           <>
             <ProductForm
-              key={`${productId}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
+              key={`${productId}:${selectedSettingsStore?.storeId ?? "store"}:${selectedSettingsStore?.minStock ?? "min"}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
               initialValues={formValues}
               onSubmit={(values) =>
                 updateMutation.mutate({

@@ -19,6 +19,13 @@ import {
   recomputeInventorySnapshots,
   transferStock,
 } from "@/server/services/inventory";
+import {
+  getProductMovementDocument,
+  listProductMovementJournal,
+  productMovementDocumentTypes,
+  productMovementPaymentStatuses,
+  productMovementSortKeys,
+} from "@/server/services/productMovements";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
@@ -35,6 +42,9 @@ const inventorySortKeySchema = z.enum([
   "suggestedOrder",
 ]);
 const inventorySortDirectionSchema = z.enum(["asc", "desc"]);
+const productMovementDocumentTypeSchema = z.enum(productMovementDocumentTypes);
+const productMovementPaymentStatusSchema = z.enum(productMovementPaymentStatuses);
+const productMovementSortKeySchema = z.enum(productMovementSortKeys);
 type InventorySortKey = z.infer<typeof inventorySortKeySchema>;
 type InventorySortDirection = z.infer<typeof inventorySortDirectionSchema>;
 
@@ -56,6 +66,7 @@ const inventoryListIdsInputSchema = inventoryListBaseInputSchema;
 const inventoryProductSearchInputSchema = z.object({
   storeId: z.string(),
   search: z.string().optional(),
+  productId: z.string().trim().optional(),
   limit: z.number().int().min(1).max(100).optional(),
 });
 
@@ -575,7 +586,9 @@ export const inventoryRouter = router({
         product: {
           organizationId: ctx.user.organizationId,
           isDeleted: false,
-          ...buildInventoryProductSearchWhere(searchTokens),
+          ...(input.productId
+            ? { id: input.productId }
+            : buildInventoryProductSearchWhere(searchTokens)),
         },
       };
 
@@ -684,6 +697,39 @@ export const inventoryRouter = router({
         take: 20,
       });
     }),
+
+  productMovements: protectedProcedure
+    .input(
+      z
+        .object({
+          search: z.string().trim().max(200).optional(),
+          dateFrom: z.string().trim().max(40).optional(),
+          dateTo: z.string().trim().max(40).optional(),
+          type: productMovementDocumentTypeSchema.optional(),
+          status: z.string().trim().max(40).optional(),
+          paymentStatus: productMovementPaymentStatusSchema.optional(),
+          orderStatus: z.string().trim().max(40).optional(),
+          storeId: z.string().trim().optional(),
+          authorId: z.string().trim().optional(),
+          authorSearch: z.string().trim().max(120).optional(),
+          senderSearch: z.string().trim().max(160).optional(),
+          recipientSearch: z.string().trim().max(160).optional(),
+          page: z.number().int().min(1).optional(),
+          pageSize: z.number().int().min(10).max(100).optional(),
+          sortBy: productMovementSortKeySchema.optional(),
+          sortDirection: inventorySortDirectionSchema.optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) =>
+      listProductMovementJournal(ctx.prisma, ctx.user, input ?? {}),
+    ),
+
+  productMovementDocument: protectedProcedure
+    .input(z.object({ documentKey: z.string().min(1).max(300) }))
+    .query(async ({ ctx, input }) =>
+      getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey),
+    ),
 
   adjust: adminProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-adjust" }))

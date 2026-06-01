@@ -41,15 +41,15 @@ const resolveSafeReturnTo = (value?: string | null) => {
 
 const buildReturnPath = (input: {
   returnTo: string;
-  productId: string;
-  productName: string;
+  productId?: string;
   storeId: string;
   returnSource?: string;
   receivingDraftKey?: string;
 }) => {
   const url = new URL(input.returnTo, "https://local.invalid");
-  url.searchParams.set("createdProductId", input.productId);
-  url.searchParams.set("createdProductName", input.productName);
+  if (input.productId) {
+    url.searchParams.set("createdProductId", input.productId);
+  }
   url.searchParams.set("storeId", input.storeId);
   if (input.returnSource) {
     url.searchParams.set("returnSource", input.returnSource);
@@ -69,6 +69,7 @@ const NewProductPage = () => {
   const barcode = searchParams?.get("barcode")?.trim() ?? "";
   const requestedStoreId = searchParams?.get("storeId")?.trim() ?? "";
   const requestedType = searchParams?.get("type")?.trim() ?? "";
+  const duplicateFromProductId = searchParams?.get("duplicateFrom")?.trim() ?? "";
   const returnTo = resolveSafeReturnTo(searchParams?.get("returnTo"));
   const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
   const receivingDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
@@ -76,9 +77,18 @@ const NewProductPage = () => {
     Boolean(returnTo) &&
     returnSource === productCreateReceivingReturnSource &&
     Boolean(receivingDraftKey);
+  const isDuplicateFlow = Boolean(duplicateFromProductId);
   const isBundleDefault = requestedType === "bundle";
-  const pageTitle = isBundleDefault ? t("newBundle") : t("newTitle");
-  const pageSubtitle = isBundleDefault ? t("newBundleSubtitle") : t("newSubtitle");
+  const pageTitle = isDuplicateFlow
+    ? t("duplicateDialogTitle")
+    : isBundleDefault
+      ? t("newBundle")
+      : t("newTitle");
+  const pageSubtitle = isDuplicateFlow
+    ? t("duplicateCreateSubtitle")
+    : isBundleDefault
+      ? t("newBundleSubtitle")
+      : t("newSubtitle");
   const { data: session, status } = useSession();
   const canManageProducts = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const canEditInitialStock = session?.user?.role === "ADMIN";
@@ -92,6 +102,19 @@ const NewProductPage = () => {
   const suggestedSkuQuery = trpc.products.suggestSku.useQuery(undefined, {
     enabled: status === "authenticated" && canManageProducts,
   });
+  const duplicateProductQuery = trpc.products.getById.useQuery(
+    { productId: duplicateFromProductId },
+    { enabled: status === "authenticated" && canManageProducts && isDuplicateFlow },
+  );
+  const duplicateBundleComponentsQuery = trpc.bundles.listComponents.useQuery(
+    { bundleProductId: duplicateFromProductId },
+    {
+      enabled:
+        status === "authenticated" &&
+        canManageProducts &&
+        Boolean(duplicateProductQuery.data?.isBundle),
+    },
+  );
 
   const createMutation = trpc.products.create.useMutation({
     onSuccess: async (product) => {
@@ -104,8 +127,7 @@ const NewProductPage = () => {
         router.push(
           buildReturnPath({
             returnTo,
-            productId: product.id,
-            productName: product.name,
+            productId: isDuplicateFlow ? undefined : product.id,
             storeId: selectedStoreId,
             returnSource,
             receivingDraftKey,
@@ -148,8 +170,13 @@ const NewProductPage = () => {
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
   const enableSimilarProductCheck = selectedStore?.enableSimilarProductCheck ?? true;
-  const storeSelectDisabled = storesQuery.isLoading || storeOptions.length <= 1 || isReceivingReturnFlow;
+  const storeSelectDisabled =
+    storesQuery.isLoading || storeOptions.length <= 1 || isReceivingReturnFlow;
   const productCreateFormId = "product-create-form";
+  const duplicateStorePricingQuery = trpc.products.storePricing.useQuery(
+    { productId: duplicateFromProductId },
+    { enabled: status === "authenticated" && canManageProducts && isDuplicateFlow },
+  );
 
   if (session && !canManageProducts) {
     return (
@@ -169,7 +196,16 @@ const NewProductPage = () => {
     );
   }
 
-  if (canManageProducts && (suggestedSkuQuery.isLoading || storesQuery.isLoading)) {
+  const duplicateSourceLoading =
+    isDuplicateFlow &&
+    (duplicateProductQuery.isLoading ||
+      duplicateStorePricingQuery.isLoading ||
+      (Boolean(duplicateProductQuery.data?.isBundle) && duplicateBundleComponentsQuery.isLoading));
+
+  if (
+    canManageProducts &&
+    (suggestedSkuQuery.isLoading || storesQuery.isLoading || duplicateSourceLoading)
+  ) {
     return (
       <div>
         <PageHeader title={pageTitle} subtitle={pageSubtitle} />
@@ -178,7 +214,100 @@ const NewProductPage = () => {
     );
   }
 
+  if (isDuplicateFlow && duplicateProductQuery.isSuccess && !duplicateProductQuery.data) {
+    return (
+      <div>
+        <PageHeader title={pageTitle} subtitle={pageSubtitle} />
+        <p className="mt-4 text-sm text-danger">{tErrors("productNotFound")}</p>
+      </div>
+    );
+  }
+
   const suggestedSku = suggestedSkuQuery.data ?? "";
+  const duplicateProduct = duplicateProductQuery.data ?? null;
+  const duplicateSourceStore =
+    duplicateStorePricingQuery.data?.stores.find((store) => store.storeId === selectedStoreId) ??
+    duplicateStorePricingQuery.data?.stores[0] ??
+    null;
+  const initialProductValues = duplicateProduct
+    ? {
+        sku: suggestedSku,
+        name: duplicateProduct.name,
+        isBundle: duplicateProduct.isBundle,
+        category: duplicateProduct.category ?? "",
+        categories: duplicateProduct.categories?.length
+          ? duplicateProduct.categories
+          : duplicateProduct.category
+            ? [duplicateProduct.category]
+            : [],
+        baseUnitId: duplicateProduct.baseUnitId,
+        basePriceKgs: duplicateProduct.basePriceKgs ?? undefined,
+        purchasePriceKgs: duplicateProduct.purchasePriceKgs ?? undefined,
+        avgCostKgs: duplicateProduct.avgCostKgs ?? undefined,
+        initialOnHand: undefined,
+        minStock: duplicateSourceStore?.minStock,
+        description: duplicateProduct.description ?? "",
+        photoUrl: duplicateProduct.photoUrl ?? "",
+        images: (duplicateProduct.images?.length
+          ? duplicateProduct.images
+          : duplicateProduct.photoUrl
+            ? [{ url: duplicateProduct.photoUrl, position: 0 }]
+            : []
+        ).map((image, index) => ({
+          id: undefined,
+          url: image.url,
+          position: image.position ?? index,
+        })),
+        barcodes: [],
+        packs: (duplicateProduct.packs ?? []).map((pack) => ({
+          id: undefined,
+          packName: pack.packName,
+          packBarcode: "",
+          multiplierToBase: pack.multiplierToBase,
+          allowInPurchasing: pack.allowInPurchasing,
+          allowInReceiving: pack.allowInReceiving,
+        })),
+        variants: duplicateProduct.variants.map((variant) => ({
+          id: undefined,
+          imageId: null,
+          imageUrl: variant.image?.url ?? "",
+          image: null,
+          name: variant.name ?? "",
+          sku: "",
+          initialOnHand: undefined,
+          storePriceKgs: undefined,
+          attributes: (variant.attributes as Record<string, unknown>) ?? {},
+          canDelete: true,
+        })),
+        bundleComponents:
+          duplicateBundleComponentsQuery.data?.map((component) => ({
+            componentProductId: component.componentProductId,
+            componentVariantId: component.componentVariantId ?? null,
+            qty: component.qty,
+            componentName: component.componentProduct.name,
+            componentSku: component.componentProduct.sku,
+          })) ?? [],
+      }
+    : {
+        sku: suggestedSku,
+        name: "",
+        isBundle: isBundleDefault,
+        category: "",
+        categories: [],
+        baseUnitId: "",
+        basePriceKgs: undefined,
+        purchasePriceKgs: undefined,
+        avgCostKgs: undefined,
+        initialOnHand: undefined,
+        minStock: undefined,
+        description: "",
+        photoUrl: "",
+        images: [],
+        barcodes: enableBarcode && barcode ? [barcode] : [],
+        packs: [],
+        variants: [],
+        bundleComponents: [],
+      };
 
   const storePicker = (
     <ProductEditorCard title={t("productAvailabilityTitle")} description={t("createStoreHint")}>
@@ -280,29 +409,10 @@ const NewProductPage = () => {
             </ProductEditorCard>
           ) : (
             <ProductForm
-              key={`new:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
+              key={`new:${duplicateFromProductId || "blank"}:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
               formId={productCreateFormId}
               hideActions
-              initialValues={{
-                sku: suggestedSku,
-                name: "",
-                isBundle: isBundleDefault,
-                category: "",
-                categories: [],
-                baseUnitId: "",
-                basePriceKgs: undefined,
-                purchasePriceKgs: undefined,
-                avgCostKgs: undefined,
-                initialOnHand: undefined,
-                minStock: undefined,
-                description: "",
-                photoUrl: "",
-                images: [],
-                barcodes: enableBarcode && barcode ? [barcode] : [],
-                packs: [],
-                variants: [],
-                bundleComponents: [],
-              }}
+              initialValues={initialProductValues}
               attributeDefinitions={attributesQuery.data ?? []}
               units={unitsQuery.data ?? []}
               onDirtyChange={setProductFormDirty}

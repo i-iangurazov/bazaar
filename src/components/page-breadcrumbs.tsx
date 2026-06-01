@@ -64,6 +64,8 @@ const segmentLabel = (
       return tNav("inventory");
     case "receiving":
       return tBreadcrumbs("receiving");
+    case "movements":
+      return tBreadcrumbs("productMovements");
     case "counts":
       return tBreadcrumbs("counts");
     case "products":

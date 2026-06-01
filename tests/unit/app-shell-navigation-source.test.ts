@@ -83,6 +83,17 @@ describe("conservative app shell navigation source", () => {
     expect(unitsSource).not.toContain("adminOnly: true");
   });
 
+  it("uses distinct sidebar icons for neighboring inventory pages", () => {
+    const inventoryStart = source.indexOf('key: "inventory"');
+    const inventorySource = source.slice(inventoryStart, inventoryStart + 900);
+
+    expect(inventorySource).toContain("icon: InventoryIcon");
+    expect(inventorySource).toContain("icon: InventoryOverviewIcon");
+    expect(inventorySource).toContain("icon: ProductMovementIcon");
+    expect(inventorySource).toContain("icon: ReceiveIcon");
+    expect(inventorySource).toContain("icon: StockCountsIcon");
+  });
+
   it("keeps integrations reachable from the mobile more menu", () => {
     const mobileMoreStart = source.indexOf("const mobileMoreCandidates");
     const mobileMoreSource = source.slice(mobileMoreStart, mobileMoreStart + 1800);

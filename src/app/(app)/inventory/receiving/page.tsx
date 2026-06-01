@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/toast";
 import {
   BackIcon,
   AddIcon,
+  CopyIcon,
   DeleteIcon,
   EmptyIcon,
   ReceiveIcon,
@@ -82,7 +83,10 @@ const receivingInputRefKey = (
 const receivingDraftStoragePrefix = "bazaar:inventory-receiving-draft:";
 const receivingReturnSource = "stockReceiving";
 
-const focusReceivingInputElement = (input: HTMLInputElement | null | undefined, selectContents = false) => {
+const focusReceivingInputElement = (
+  input: HTMLInputElement | null | undefined,
+  selectContents = false,
+) => {
   if (!input || input.disabled || input.readOnly) {
     return;
   }
@@ -161,7 +165,7 @@ const InventoryReceivingPage = () => {
   const searchParams = useSearchParams();
   const returningDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
   const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
-  const createdProductName = searchParams?.get("createdProductName")?.trim() ?? "";
+  const createdProductId = searchParams?.get("createdProductId")?.trim() ?? "";
   const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
@@ -179,6 +183,7 @@ const InventoryReceivingPage = () => {
   const [lines, setLines] = useState<ReceivingLine[]>([]);
   const [restoredDraftKey, setRestoredDraftKey] = useState("");
   const receivingInputRefs = useRef(new Map<string, HTMLInputElement>());
+  const handledCreatedProductRef = useRef("");
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
   const enableSku = selectedStore?.enableSku ?? true;
@@ -224,10 +229,10 @@ const InventoryReceivingPage = () => {
     setReferenceNumber(draft.referenceNumber);
     setNote(draft.note);
     setLines(draft.lines);
-    setSearch(createdProductName || draft.search);
+    setSearch(draft.search);
     setRestoredDraftKey(returningDraftKey);
     void trpcUtils.inventory.searchProducts.invalidate();
-  }, [createdProductName, restoredDraftKey, returningDraftKey, returnSource, trpcUtils.inventory.searchProducts]);
+  }, [restoredDraftKey, returningDraftKey, returnSource, trpcUtils.inventory.searchProducts]);
 
   const handleStoreChange = (nextStoreId: string) => {
     if (nextStoreId === storeId) {
@@ -238,13 +243,13 @@ const InventoryReceivingPage = () => {
     setSearch("");
   };
 
-  const getPreviewUrl = (result: SearchResult) => {
+  const getPreviewUrl = useCallback((result: SearchResult) => {
     const imageUrl = result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
     if (!imageUrl || imageUrl.startsWith("data:image/")) {
       return null;
     }
     return imageUrl;
-  };
+  }, []);
 
   const getDisplayName = (result: SearchResult) =>
     result.variant?.name ? `${result.product.name} • ${result.variant.name}` : result.product.name;
@@ -282,77 +287,136 @@ const InventoryReceivingPage = () => {
     }
   };
 
-  const focusReceivingInput = (
-    key: string,
-    field: ReceivingInputField,
-    viewport?: ReceivingInputViewport,
-    options?: { selectContents?: boolean },
-  ) => {
-    window.setTimeout(() => {
-      const viewportKey =
-        viewport ?? (window.matchMedia("(min-width: 1024px)").matches ? "desktop" : "mobile");
-      const input =
-        receivingInputRefs.current.get(receivingInputRefKey(key, field, viewportKey)) ??
-        receivingInputRefs.current.get(receivingInputRefKey(key, field, "desktop")) ??
-        receivingInputRefs.current.get(receivingInputRefKey(key, field, "mobile"));
-      focusReceivingInputElement(input, options?.selectContents ?? false);
-    }, 0);
-  };
+  const focusReceivingInput = useCallback(
+    (
+      key: string,
+      field: ReceivingInputField,
+      viewport?: ReceivingInputViewport,
+      options?: { selectContents?: boolean },
+    ) => {
+      window.setTimeout(() => {
+        const viewportKey =
+          viewport ?? (window.matchMedia("(min-width: 1024px)").matches ? "desktop" : "mobile");
+        const input =
+          receivingInputRefs.current.get(receivingInputRefKey(key, field, viewportKey)) ??
+          receivingInputRefs.current.get(receivingInputRefKey(key, field, "desktop")) ??
+          receivingInputRefs.current.get(receivingInputRefKey(key, field, "mobile"));
+        focusReceivingInputElement(input, options?.selectContents ?? false);
+      }, 0);
+    },
+    [],
+  );
 
-  const focusQuantity = (key: string) => {
-    focusReceivingInput(key, "quantity");
-  };
+  const focusQuantity = useCallback(
+    (key: string, options?: { selectContents?: boolean }) => {
+      focusReceivingInput(key, "quantity", undefined, options);
+    },
+    [focusReceivingInput],
+  );
 
-  const clearDuplicateHint = (key: string) => {
+  const clearDuplicateHint = useCallback((key: string) => {
     window.setTimeout(() => {
       setLines((current) =>
         current.map((line) => (line.key === key ? { ...line, duplicateHint: false } : line)),
       );
     }, 1800);
-  };
+  }, []);
 
-  const addSearchResult = (result: SearchResult, mode: "manual" | "scan") => {
-    const key = lineKey(result.product.id, result.snapshot.variantId);
-    setLines((current) => {
-      const existing = current.find((line) => line.key === key);
-      if (existing) {
-        return current.map((line) => {
-          if (line.key !== key) {
-            return line;
-          }
-          const currentQty = parseDecimalInput(line.quantityInput);
-          const nextQty =
-            mode === "scan" && Number.isInteger(currentQty) && currentQty > 0
-              ? currentQty + 1
-              : currentQty;
-          return {
-            ...line,
-            quantityInput: Number.isFinite(nextQty) ? String(nextQty) : line.quantityInput,
-            duplicateHint: true,
-          };
+  const addSearchResult = useCallback(
+    (result: SearchResult, mode: "manual" | "scan", options?: { selectQuantity?: boolean }) => {
+      const key = lineKey(result.product.id, result.snapshot.variantId);
+      setLines((current) => {
+        const existing = current.find((line) => line.key === key);
+        if (existing) {
+          return current.map((line) => {
+            if (line.key !== key) {
+              return line;
+            }
+            const currentQty = parseDecimalInput(line.quantityInput);
+            const nextQty =
+              mode === "scan" && Number.isInteger(currentQty) && currentQty > 0
+                ? currentQty + 1
+                : currentQty;
+            return {
+              ...line,
+              quantityInput: Number.isFinite(nextQty) ? String(nextQty) : line.quantityInput,
+              duplicateHint: true,
+            };
+          });
+        }
+        return [
+          ...current,
+          {
+            key,
+            productId: result.product.id,
+            variantId: result.snapshot.variantId ?? null,
+            productName: result.product.name,
+            variantName: result.variant?.name ?? null,
+            sku: enableSku ? result.product.sku : "",
+            barcode: enableBarcode ? result.primaryBarcode : null,
+            imageUrl: getPreviewUrl(result),
+            currentStock: result.snapshot.onHand,
+            quantityInput: "1",
+            unitCostInput: result.unitCostKgs !== null ? String(result.unitCostKgs) : "0",
+          },
+        ];
+      });
+      focusQuantity(key, { selectContents: options?.selectQuantity ?? false });
+      clearDuplicateHint(key);
+    },
+    [clearDuplicateHint, enableBarcode, enableSku, focusQuantity, getPreviewUrl],
+  );
+
+  useEffect(() => {
+    if (
+      !createdProductId ||
+      returnSource !== receivingReturnSource ||
+      !returningDraftKey ||
+      restoredDraftKey !== returningDraftKey ||
+      !storeId ||
+      !canManageStock
+    ) {
+      return;
+    }
+
+    const handledKey = `${returningDraftKey}:${createdProductId}`;
+    if (handledCreatedProductRef.current === handledKey) {
+      return;
+    }
+    handledCreatedProductRef.current = handledKey;
+
+    const addReturnedProduct = async () => {
+      try {
+        const results = await trpcUtils.inventory.searchProducts.fetch({
+          storeId,
+          productId: createdProductId,
+          limit: 100,
+        });
+        const result = results.find((item) => item.product.id === createdProductId) ?? results[0];
+        if (result) {
+          addSearchResult(result, "manual", { selectQuantity: true });
+        }
+      } catch (error) {
+        toast({
+          variant: "error",
+          description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
         });
       }
-      return [
-        ...current,
-        {
-          key,
-          productId: result.product.id,
-          variantId: result.snapshot.variantId ?? null,
-          productName: result.product.name,
-          variantName: result.variant?.name ?? null,
-          sku: enableSku ? result.product.sku : "",
-          barcode: enableBarcode ? result.primaryBarcode : null,
-          imageUrl: getPreviewUrl(result),
-          currentStock: result.snapshot.onHand,
-          quantityInput: "1",
-          unitCostInput: result.unitCostKgs !== null ? String(result.unitCostKgs) : "0",
-        },
-      ];
-    });
-    setSearch("");
-    focusQuantity(key);
-    clearDuplicateHint(key);
-  };
+    };
+
+    void addReturnedProduct();
+  }, [
+    addSearchResult,
+    canManageStock,
+    createdProductId,
+    restoredDraftKey,
+    returningDraftKey,
+    returnSource,
+    storeId,
+    tErrors,
+    toast,
+    trpcUtils.inventory.searchProducts,
+  ]);
 
   const handleSearchSubmit = async () => {
     if (!storeId || !search.trim()) {
@@ -388,10 +452,10 @@ const InventoryReceivingPage = () => {
     void handleSearchSubmit();
   };
 
-  const handleCreateProduct = () => {
+  const createReceivingReturnParams = () => {
     if (!storeId) {
       toast({ variant: "error", description: t("receivingValidationNoStore") });
-      return;
+      return null;
     }
 
     const draftKey = createReceivingDraftKey();
@@ -407,15 +471,31 @@ const InventoryReceivingPage = () => {
     });
     if (!saved) {
       toast({ variant: "error", description: t("receivingDraftSaveFailed") });
-      return;
+      return null;
     }
 
-    const params = new URLSearchParams({
+    return new URLSearchParams({
       storeId,
       returnTo: "/inventory/receiving",
       returnSource: receivingReturnSource,
       receivingDraftKey: draftKey,
     });
+  };
+
+  const handleCreateProduct = () => {
+    const params = createReceivingReturnParams();
+    if (!params) {
+      return;
+    }
+    router.push(`/products/new?${params.toString()}`);
+  };
+
+  const handleDuplicateProduct = (result: SearchResult) => {
+    const params = createReceivingReturnParams();
+    if (!params) {
+      return;
+    }
+    params.set("duplicateFrom", result.product.id);
     router.push(`/products/new?${params.toString()}`);
   };
 
@@ -743,59 +823,80 @@ const InventoryReceivingPage = () => {
                   const key = lineKey(result.product.id, result.snapshot.variantId);
                   const added = lines.some((line) => line.key === key);
                   return (
-                    <button
+                    <div
                       key={key}
-                      type="button"
-                      className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => addSearchResult(result, "manual")}
-                      disabled={!storeId}
+                      className="flex items-center border-b border-border last:border-b-0 hover:bg-secondary"
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden bg-muted/30">
-                        {getPreviewUrl(result) ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={getPreviewUrl(result) ?? ""}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-foreground">
-                          {getDisplayName(result)}
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => addSearchResult(result, "manual")}
+                        disabled={!storeId}
+                      >
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden bg-muted/30">
+                          {getPreviewUrl(result) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={getPreviewUrl(result) ?? ""}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                          )}
                         </span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {[
-                            enableSku ? result.product.sku : "",
-                            enableBarcode ? result.primaryBarcode : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" • ") || tCommon("notAvailable")}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-foreground">
+                            {getDisplayName(result)}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {[
+                              enableSku ? result.product.sku : "",
+                              enableBarcode ? result.primaryBarcode : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" • ") || tCommon("notAvailable")}
+                          </span>
+                          <span className="block text-xs text-muted-foreground lg:hidden">
+                            {t("onHand")}: {formatNumber(result.snapshot.onHand, locale)}
+                          </span>
+                          <span className="hidden truncate text-xs text-muted-foreground lg:block">
+                            {t("onHand")}: {formatNumber(result.snapshot.onHand, locale)}
+                            {result.unitCostKgs !== null
+                              ? ` • ${t("unitCost")}: ${formatMoney(result.unitCostKgs)}`
+                              : ""}
+                            {result.priceKgs !== null
+                              ? ` • ${t("price")}: ${formatMoney(result.priceKgs)}`
+                              : ""}
+                          </span>
                         </span>
-                        <span className="block text-xs text-muted-foreground lg:hidden">
-                          {t("onHand")}: {formatNumber(result.snapshot.onHand, locale)}
-                        </span>
-                        <span className="hidden truncate text-xs text-muted-foreground lg:block">
-                          {t("onHand")}: {formatNumber(result.snapshot.onHand, locale)}
-                          {result.unitCostKgs !== null
-                            ? ` • ${t("unitCost")}: ${formatMoney(result.unitCostKgs)}`
-                            : ""}
-                          {result.priceKgs !== null
-                            ? ` • ${t("price")}: ${formatMoney(result.priceKgs)}`
-                            : ""}
-                        </span>
-                      </span>
-                      {added ? <Badge variant="success">{t("receivingAdded")}</Badge> : null}
-                    </button>
+                        {added ? <Badge variant="success">{t("receivingAdded")}</Badge> : null}
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="mr-2 h-9 w-9 shrink-0"
+                        aria-label={t("receivingDuplicateProduct")}
+                        title={t("receivingDuplicateProduct")}
+                        onClick={() => handleDuplicateProduct(result)}
+                        disabled={!storeId}
+                      >
+                        <CopyIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </div>
                   );
                 })
               ) : (
                 <div className="space-y-3 px-3 py-3 text-sm text-muted-foreground">
                   <p>{storeId ? t("productSearchEmpty") : t("receivingValidationNoStore")}</p>
                   {storeId ? (
-                    <Button type="button" variant="secondary" size="sm" onClick={handleCreateProduct}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleCreateProduct}
+                    >
                       <AddIcon className="h-4 w-4" aria-hidden />
                       {t("receivingCreateProduct")}
                     </Button>

@@ -2158,6 +2158,7 @@ export type UpdateProductInput = {
   basePriceKgs?: number | null;
   purchasePriceKgs?: number | null;
   avgCostKgs?: number | null;
+  minStock?: number | null;
   description?: string | null;
   photoUrl?: string | null;
   images?: CreateProductInput["images"];
@@ -2200,6 +2201,13 @@ export const updateProduct = async (input: UpdateProductInput) => {
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
+
+    const selectedStore = input.storeId
+      ? await tx.store.findFirst({
+          where: { id: input.storeId, organizationId: input.organizationId },
+          select: { id: true, allowNegativeStock: true },
+        })
+      : null;
 
     await ensureSupplier(tx, input.organizationId, input.supplierId ?? undefined);
     const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
@@ -2417,6 +2425,17 @@ export const updateProduct = async (input: UpdateProductInput) => {
       });
     }
 
+    if (input.minStock !== undefined && input.minStock !== null) {
+      await applyInitialInventorySettings(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        requestId: input.requestId,
+        store: selectedStore,
+        productId: input.productId,
+        minStock: input.minStock,
+      });
+    }
+
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -2519,6 +2538,16 @@ export const duplicateProduct = async (input: {
           select: {
             storeId: true,
             priceKgs: true,
+          },
+        },
+        reorderPolicies: {
+          select: {
+            storeId: true,
+            minStock: true,
+            leadTimeDays: true,
+            reviewPeriodDays: true,
+            safetyStockDays: true,
+            minOrderQty: true,
           },
         },
         bundleComponents: {
@@ -2663,6 +2692,24 @@ export const duplicateProduct = async (input: {
           variantKey: "BASE",
           priceKgs: price.priceKgs,
           updatedById: input.actorId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const copiedReorderPolicies = source.reorderPolicies.filter((policy) =>
+      assignedStoreIds.has(policy.storeId),
+    );
+    if (copiedReorderPolicies.length) {
+      await tx.reorderPolicy.createMany({
+        data: copiedReorderPolicies.map((policy) => ({
+          storeId: policy.storeId,
+          productId: duplicate.id,
+          minStock: policy.minStock,
+          leadTimeDays: policy.leadTimeDays,
+          reviewPeriodDays: policy.reviewPeriodDays,
+          safetyStockDays: policy.safetyStockDays,
+          minOrderQty: policy.minOrderQty,
         })),
         skipDuplicates: true,
       });

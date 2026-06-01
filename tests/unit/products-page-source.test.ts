@@ -135,6 +135,9 @@ describe("index page source layout", () => {
     const formSource = await readSource("src/components/product-form.tsx");
     const storeRouterSource = await readSource("src/server/trpc/routers/stores.ts");
     const productServiceSource = await readSource("src/server/services/products.ts");
+    const productReadSource = await readSource("src/server/services/products/read.ts");
+    const productSchemasSource = await readSource("src/server/trpc/routers/products.schemas.ts");
+    const productMutationsSource = await readSource("src/server/services/products/mutations.ts");
 
     expect(storeRouterSource).toContain("updateProductSettings");
     expect(storeRouterSource).toContain("adminOrOrgOwnerProcedure");
@@ -145,6 +148,8 @@ describe("index page source layout", () => {
     expect(listSource).toContain('return t("searchPlaceholderNameOnly");');
     expect(listSource).toContain("placeholder={productSearchPlaceholder}");
     expect(detailSource).toContain("enableSimilarProductCheck={enableSimilarProductCheck}");
+    expect(detailSource).toContain("minStock: selectedSettingsStore?.minStock");
+    expect(detailSource).toContain("selectedSettingsStore?.minStock");
     expect(detailSource).toContain("handleSaveStoreVariantOnHand");
     expect(listSource).toContain("duplicateDialogTitle");
     expect(listSource).toContain("copyImages: false");
@@ -157,6 +162,13 @@ describe("index page source layout", () => {
     expect(formSource).toContain("!enableSku || !variant.sku?.trim()");
     expect(productServiceSource).toContain("copyImages ? source.photoUrl : null");
     expect(productServiceSource).toContain("sku: null");
+    expect(productServiceSource).toContain("minStock?: number | null");
+    expect(productServiceSource).toContain("minStock: input.minStock");
+    expect(productServiceSource).toContain("source.reorderPolicies.filter");
+    expect(productReadSource).toContain("prisma.reorderPolicy.findMany");
+    expect(productReadSource).toContain("minStock: minStockByStore.get(store.id) ?? 0");
+    expect(productSchemasSource).toContain("minStock: z.number().int().min(0).optional()");
+    expect(productMutationsSource).toContain("minStock: input.minStock");
   });
 
   it("exposes store-scoped product behavior settings on the profile page", async () => {

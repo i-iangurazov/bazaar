@@ -99,6 +99,59 @@ describeDb("products", () => {
     expect(policy?.minStock).toBe(3);
   });
 
+  it("updates product minimum stock through the product save flow", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-min-stock-update-create",
+      sku: "MIN-STOCK-UPDATE-1",
+      name: "Min Stock Update Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      minStock: 5,
+    });
+
+    await updateProduct({
+      productId: product.id,
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-min-stock-update-five",
+      sku: product.sku,
+      name: "Min Stock Update Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      minStock: 8,
+      barcodes: [],
+    });
+
+    const updatedPolicy = await prisma.reorderPolicy.findUnique({
+      where: { storeId_productId: { storeId: store.id, productId: product.id } },
+      select: { minStock: true },
+    });
+    expect(updatedPolicy?.minStock).toBe(8);
+
+    await updateProduct({
+      productId: product.id,
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-min-stock-update-zero",
+      sku: product.sku,
+      name: "Min Stock Update Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      minStock: 0,
+      barcodes: [],
+    });
+
+    const zeroPolicy = await prisma.reorderPolicy.findUnique({
+      where: { storeId_productId: { storeId: store.id, productId: product.id } },
+      select: { minStock: true },
+    });
+    expect(zeroPolicy?.minStock).toBe(0);
+  });
+
   it("applies initial on-hand per variant on store product creation", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
 
@@ -201,6 +254,7 @@ describeDb("products", () => {
       storeId: store.id,
       basePriceKgs: 100,
       initialOnHand: 9,
+      minStock: 4,
       photoUrl: `/uploads/imported-products/${org.id}/source-main.jpg`,
       images: [
         { url: `/uploads/imported-products/${org.id}/source-main.jpg`, position: 0 },
@@ -237,6 +291,7 @@ describeDb("products", () => {
         barcodes: true,
         images: true,
         inventorySnapshots: true,
+        reorderPolicies: true,
         storePrices: true,
         storeProducts: true,
         variants: true,
@@ -256,6 +311,9 @@ describeDb("products", () => {
     expect(noPhotoProduct.variants[0]?.sku).toBeNull();
     expect(noPhotoProduct.inventorySnapshots.find((row) => row.storeId === store.id)?.onHand).toBe(
       0,
+    );
+    expect(noPhotoProduct.reorderPolicies.find((row) => row.storeId === store.id)?.minStock).toBe(
+      4,
     );
     expect(
       noPhotoProduct.storePrices.find((row) => row.storeId === store.id)?.priceKgs.toNumber(),

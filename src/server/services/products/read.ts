@@ -1606,7 +1606,7 @@ export const getProductStorePricing = async ({
   });
   const storeIds = stores.map((store) => store.id);
 
-  const [overrides, variantOverrides, cost, snapshots, variants, variantSnapshots] =
+  const [overrides, variantOverrides, cost, snapshots, variants, variantSnapshots, policies] =
     await Promise.all([
       prisma.storePrice.findMany({
         where: {
@@ -1686,6 +1686,16 @@ export const getProductStorePricing = async ({
           onHand: true,
         },
       }),
+      prisma.reorderPolicy.findMany({
+        where: {
+          productId,
+          storeId: { in: storeIds },
+        },
+        select: {
+          storeId: true,
+          minStock: true,
+        },
+      }),
     ]);
 
   const basePrice = decimalToNumber(product.basePriceKgs);
@@ -1699,6 +1709,7 @@ export const getProductStorePricing = async ({
     ]),
   );
   const onHandByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]));
+  const minStockByStore = new Map(policies.map((policy) => [policy.storeId, policy.minStock]));
   const variantOnHandByStore = new Map(
     variantSnapshots.map((snapshot) => [
       `${snapshot.storeId}:${snapshot.variantId ?? ""}`,
@@ -1725,6 +1736,7 @@ export const getProductStorePricing = async ({
         overridePriceKgs: override ?? null,
         priceOverridden: override !== undefined,
         onHand: onHandByStore.get(store.id) ?? 0,
+        minStock: minStockByStore.get(store.id) ?? 0,
         variants: variants.map((variant) => {
           const variantOverride = variantOverrideByStoreAndVariant.get(`${store.id}:${variant.id}`);
           return {
