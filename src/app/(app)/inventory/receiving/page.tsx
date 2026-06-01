@@ -82,6 +82,31 @@ const receivingInputRefKey = (
 const receivingDraftStoragePrefix = "bazaar:inventory-receiving-draft:";
 const receivingReturnSource = "stockReceiving";
 
+const focusReceivingInputElement = (input: HTMLInputElement | null | undefined, selectContents = false) => {
+  if (!input || input.disabled || input.readOnly) {
+    return;
+  }
+  input.focus();
+  if (!selectContents) {
+    return;
+  }
+  const selectFocusedInput = () => {
+    if (document.activeElement !== input || input.disabled || input.readOnly) {
+      return;
+    }
+    try {
+      input.select();
+    } catch {
+      // Some mobile/browser input types may reject text selection.
+    }
+  };
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(selectFocusedInput);
+  } else {
+    window.setTimeout(selectFocusedInput, 0);
+  }
+};
+
 const createReceivingDraftKey = () =>
   `receiving-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -261,6 +286,7 @@ const InventoryReceivingPage = () => {
     key: string,
     field: ReceivingInputField,
     viewport?: ReceivingInputViewport,
+    options?: { selectContents?: boolean },
   ) => {
     window.setTimeout(() => {
       const viewportKey =
@@ -269,7 +295,7 @@ const InventoryReceivingPage = () => {
         receivingInputRefs.current.get(receivingInputRefKey(key, field, viewportKey)) ??
         receivingInputRefs.current.get(receivingInputRefKey(key, field, "desktop")) ??
         receivingInputRefs.current.get(receivingInputRefKey(key, field, "mobile"));
-      input?.focus();
+      focusReceivingInputElement(input, options?.selectContents ?? false);
     }, 0);
   };
 
@@ -411,7 +437,7 @@ const InventoryReceivingPage = () => {
       `input[data-receiving-input="${field}"]`,
     );
     if (nextInput) {
-      window.setTimeout(() => nextInput.focus(), 0);
+      window.setTimeout(() => focusReceivingInputElement(nextInput, true), 0);
       return;
     }
 
@@ -422,7 +448,7 @@ const InventoryReceivingPage = () => {
     const nextIndex = currentIndex + (event.shiftKey ? -1 : 1);
     const nextLine = lines[nextIndex];
     if (nextLine) {
-      focusReceivingInput(nextLine.key, field, viewport);
+      focusReceivingInput(nextLine.key, field, viewport, { selectContents: true });
     }
   };
 
@@ -799,8 +825,9 @@ const InventoryReceivingPage = () => {
                   <span>{t("receivingNewStock")}</span>
                   <span />
                 </div>
-                {lines.map((line) => {
+                {lines.map((line, index) => {
                   const metric = metricByKey.get(line.key);
+                  const lineNumber = index + 1;
                   return (
                     <div
                       key={line.key}
@@ -808,6 +835,9 @@ const InventoryReceivingPage = () => {
                       className="grid gap-3 rounded-md border border-border bg-background p-2.5 md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:items-center md:gap-2"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex h-7 min-w-7 shrink-0 items-center justify-center border border-border bg-muted/40 px-1 text-xs font-semibold tabular-nums text-muted-foreground">
+                          {lineNumber}
+                        </span>
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden border border-border bg-muted/30">
                           {line.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element

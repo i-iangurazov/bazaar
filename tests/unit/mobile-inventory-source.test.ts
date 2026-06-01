@@ -52,9 +52,13 @@ describe("mobile inventory source", () => {
       "md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem]",
     );
     expect(receivingSource).toContain("data-receiving-line-row");
+    expect(receivingSource).toContain("lines.map((line, index) =>");
+    expect(receivingSource).toContain("const lineNumber = index + 1");
+    expect(receivingSource).toContain("{lineNumber}");
     expect(receivingSource).not.toContain("lg:flex-1 lg:overflow-y-auto");
     expect(receivingSource).toContain("handleReceivingInputKeyDown");
-    expect(receivingSource).toContain("focusReceivingInput(nextLine.key, field, viewport)");
+    expect(receivingSource).toContain("focusReceivingInputElement(nextInput, true)");
+    expect(receivingSource).toContain("focusReceivingInput(nextLine.key, field, viewport, { selectContents: true })");
     expect(receivingSource).toContain(
       "fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40",
     );
