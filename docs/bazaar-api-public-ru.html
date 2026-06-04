@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BAZAAR API v1</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9;
+        --paper: #ffffff;
+        --text: #17202a;
+        --muted: #5d6673;
+        --border: #d9dee7;
+        --soft: #eef2f7;
+        --code: #101828;
+        --accent: #0f766e;
+        --accent-soft: #e6f4f1;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+
+      .page {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 40px 20px 56px;
+      }
+
+      .document {
+        background: var(--paper);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+      }
+
+      header {
+        padding: 36px 40px 30px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      }
+
+      main {
+        padding: 34px 40px 42px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.25;
+        margin: 0;
+        color: var(--text);
+      }
+
+      h1 {
+        font-size: 34px;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin-top: 34px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+        font-size: 24px;
+      }
+
+      h2:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      h3 {
+        margin-top: 24px;
+        font-size: 18px;
+      }
+
+      p {
+        margin: 12px 0;
+      }
+
+      .subtitle {
+        max-width: 720px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 20px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border: 1px solid #b7ded6;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: #115e59;
+        padding: 4px 12px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      ul,
+      ol {
+        margin: 12px 0 12px 24px;
+        padding: 0;
+      }
+
+      li {
+        margin: 6px 0;
+      }
+
+      code {
+        border-radius: 4px;
+        background: var(--soft);
+        color: var(--code);
+        padding: 2px 5px;
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow-x: auto;
+        margin: 14px 0;
+        border: 1px solid #243044;
+        border-radius: 8px;
+        background: #111827;
+        color: #eef2ff;
+        padding: 16px;
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      pre code {
+        display: block;
+        padding: 0;
+        background: transparent;
+        color: inherit;
+        font-size: inherit;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        margin: 14px 0 18px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 680px;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      th {
+        background: #f8fafc;
+        color: #334155;
+        font-weight: 700;
+      }
+
+      .note {
+        margin: 18px 0;
+        border-left: 4px solid var(--accent);
+        border-radius: 6px;
+        background: var(--accent-soft);
+        padding: 12px 14px;
+        color: #164e4a;
+      }
+
+      .endpoint {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 10px 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #f8fafc;
+        padding: 8px 10px;
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 14px;
+      }
+
+      .method {
+        border-radius: 4px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        padding: 2px 6px;
+        font-weight: 700;
+      }
+
+      .method.post {
+        background: #dcfce7;
+        color: #15803d;
+      }
+
+      footer {
+        padding: 18px 40px 26px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          padding: 16px 12px 28px;
+        }
+
+        header,
+        main,
+        footer {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+
+        h1 {
+          font-size: 28px;
+        }
+
+        h2 {
+          font-size: 21px;
+        }
+      }
+
+      @media print {
+        body {
+          background: #ffffff;
+        }
+
+        .page {
+          max-width: none;
+          padding: 0;
+        }
+
+        .document {
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        pre,
+        .table-wrap {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <article class="document">
+        <header>
+          <h1>BAZAAR API v1</h1>
+          <p class="subtitle">
+            Документация для интеграции внешних систем, сайтов и маркетплейсов с BAZAAR.
+          </p>
+          <div class="meta">
+            <span class="pill">Товары</span>
+            <span class="pill">Цены и остатки</span>
+            <span class="pill">Заказы</span>
+            <span class="pill">Клиенты</span>
+          </div>
+        </header>
+
+        <main>
+          <h2>Назначение API</h2>
+          <p>BAZAAR API позволяет внешней системе:</p>
+          <ul>
+            <li>получать товары магазина;</li>
+            <li>получать актуальные цены и остатки вместе с товарами;</li>
+            <li>передавать заказы в BAZAAR;</li>
+            <li>создавать или обновлять клиентов.</li>
+          </ul>
+          <p>
+            На текущий момент API работает в модели <code>store-scoped access</code>: каждый
+            API-ключ привязан к одному магазину. Внешняя система видит и создаёт данные только в
+            рамках этого магазина.
+          </p>
+
+          <h2>Базовый URL</h2>
+          <pre><code>https://bazaar.kg/api/bazaar/v1</code></pre>
+          <p>Пример:</p>
+          <pre><code>https://bazaar.kg/api/bazaar/v1</code></pre>
+
+          <h2>Авторизация</h2>
+          <p>Для всех запросов требуется API-ключ.</p>
+          <pre><code>Authorization: Bearer &lt;API_KEY&gt;
+Content-Type: application/json</code></pre>
+          <p>
+            API-ключ создаётся в BAZAAR в разделе интеграций. Новый ключ показывается один раз,
+            поэтому его нужно сохранить сразу после создания.
+          </p>
+          <p>Если ключ отозван или передан неверно, API возвращает:</p>
+          <pre><code>{
+  "message": "apiUnauthorized"
+}</code></pre>
+          <p>HTTP статус: <code>401</code>.</p>
+
+          <h2>Доступные методы</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Метод</th>
+                  <th>Endpoint</th>
+                  <th>Назначение</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>GET</code></td>
+                  <td><code>/products</code></td>
+                  <td>Получение товаров, цен, остатков, изображений и вариантов</td>
+                </tr>
+                <tr>
+                  <td><code>POST</code></td>
+                  <td><code>/orders</code></td>
+                  <td>Создание заказа во внутренней системе BAZAAR</td>
+                </tr>
+                <tr>
+                  <td><code>POST</code></td>
+                  <td><code>/customers</code></td>
+                  <td>Создание или обновление клиента</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>GET /products</h2>
+          <p>Возвращает список активных товаров магазина, доступных для интеграции.</p>
+          <p class="endpoint">
+            <span class="method">GET</span>
+            <span>/api/bazaar/v1/products?page=1&amp;pageSize=50&amp;search=coffee</span>
+          </p>
+
+          <h3>Query параметры</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Параметр</th>
+                  <th>Тип</th>
+                  <th>Обязательный</th>
+                  <th>Описание</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>page</code></td>
+                  <td>number</td>
+                  <td>Нет</td>
+                  <td>Номер страницы. По умолчанию <code>1</code></td>
+                </tr>
+                <tr>
+                  <td><code>pageSize</code></td>
+                  <td>number</td>
+                  <td>Нет</td>
+                  <td>Количество товаров на странице. По умолчанию <code>50</code>, максимум <code>100</code></td>
+                </tr>
+                <tr>
+                  <td><code>search</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>Поиск по названию или SKU. Максимум <code>200</code> символов</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Пример запроса</h3>
+          <pre><code>curl -X GET "https://bazaar.kg/api/bazaar/v1/products?page=1&amp;pageSize=50" \
+  -H "Authorization: Bearer &lt;API_KEY&gt;"</code></pre>
+
+          <h3>Пример ответа</h3>
+          <pre><code>{
+  "store": {
+    "id": "store_123",
+    "name": "Main Store"
+  },
+  "currencyCode": "KGS",
+  "currencyRateKgsPerUnit": 1,
+  "page": 1,
+  "pageSize": 50,
+  "total": 1,
+  "items": [
+    {
+      "id": "product_123",
+      "sku": "COFFEE-250",
+      "name": "Coffee 250g",
+      "category": "Coffee",
+      "categories": ["Coffee", "Beans"],
+      "description": "Single-origin whole bean coffee",
+      "unit": "pcs",
+      "baseUnit": {
+        "id": "unit_123",
+        "code": "pcs",
+        "labelRu": "шт",
+        "labelKg": "даана"
+      },
+      "supplier": {
+        "id": "supplier_123",
+        "name": "Supplier LLC"
+      },
+      "isBundle": false,
+      "barcodes": ["1234567890123"],
+      "packs": [
+        {
+          "id": "pack_123",
+          "packName": "Box",
+          "packBarcode": "BOX-123",
+          "multiplierToBase": 6,
+          "allowInPurchasing": true,
+          "allowInReceiving": true
+        }
+      ],
+      "createdAt": "2026-06-01T10:00:00.000Z",
+      "updatedAt": "2026-06-04T10:00:00.000Z",
+      "price": 900,
+      "priceKgs": 900,
+      "stockQty": 7,
+      "pcs": 7,
+      "stockByVariant": [
+        {
+          "variantKey": "BASE",
+          "stockQty": 7,
+          "pcs": 7
+        }
+      ],
+      "images": [
+        "https://cdn.example.com/products/coffee-main.jpg"
+      ],
+      "imageObjects": [
+        {
+          "id": null,
+          "url": "https://cdn.example.com/products/coffee-main.jpg",
+          "position": 0,
+          "isPrimary": true,
+          "isAiGenerated": false
+        }
+      ],
+      "variants": [
+        {
+          "id": "variant_123",
+          "sku": "COFFEE-1KG",
+          "name": "1 kg",
+          "attributes": {
+            "size": "1 kg"
+          },
+          "attributeValues": [
+            {
+              "key": "size",
+              "value": "1 kg"
+            }
+          ],
+          "createdAt": "2026-06-01T10:00:00.000Z",
+          "updatedAt": "2026-06-04T10:00:00.000Z",
+          "price": 1200,
+          "priceKgs": 1200,
+          "stockQty": 3,
+          "pcs": 3
+        }
+      ]
+    }
+  ]
+}</code></pre>
+
+          <h3>Важные поля</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Поле</th>
+                  <th>Описание</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td>ID товара. Используется при создании заказа</td>
+                </tr>
+                <tr>
+                  <td><code>sku</code></td>
+                  <td>Артикул товара</td>
+                </tr>
+                <tr>
+                  <td><code>price</code></td>
+                  <td>Цена в валюте магазина</td>
+                </tr>
+                <tr>
+                  <td><code>priceKgs</code></td>
+                  <td>Цена в KGS</td>
+                </tr>
+                <tr>
+                  <td><code>currencyCode</code></td>
+                  <td>Валюта магазина</td>
+                </tr>
+                <tr>
+                  <td><code>stockQty</code></td>
+                  <td>Остаток базового товара</td>
+                </tr>
+                <tr>
+                  <td><code>pcs</code></td>
+                  <td>Совместимый alias для <code>stockQty</code></td>
+                </tr>
+                <tr>
+                  <td><code>variants[].id</code></td>
+                  <td>ID варианта. Используется как <code>variantId</code> при создании заказа</td>
+                </tr>
+                <tr>
+                  <td><code>variants[].stockQty</code></td>
+                  <td>Остаток конкретного варианта</td>
+                </tr>
+                <tr>
+                  <td><code>stockByVariant</code></td>
+                  <td>Остатки по базовому товару и вариантам</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">
+            Закрытые внутренние поля, включая себестоимость и бухгалтерские данные, через API не
+            передаются.
+          </p>
+
+          <h2>POST /orders</h2>
+          <p>Создаёт заказ в BAZAAR для магазина, к которому привязан API-ключ.</p>
+          <p class="endpoint"><span class="method post">POST</span><span>/api/bazaar/v1/orders</span></p>
+
+          <h3>Тело запроса</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Поле</th>
+                  <th>Тип</th>
+                  <th>Обязательное</th>
+                  <th>Ограничение</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>externalId</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>До <code>160</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>customerName</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>До <code>160</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>customerEmail</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>Валидный email, до <code>254</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>customerPhone</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>До <code>64</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>customerAddress</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>До <code>512</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>comment</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>До <code>2000</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>lines</code></td>
+                  <td>array</td>
+                  <td>Да</td>
+                  <td>От <code>1</code> до <code>500</code> строк</td>
+                </tr>
+                <tr>
+                  <td><code>lines[].productId</code></td>
+                  <td>string</td>
+                  <td>Да</td>
+                  <td>ID товара из <code>GET /products</code></td>
+                </tr>
+                <tr>
+                  <td><code>lines[].variantId</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>ID варианта из <code>GET /products</code>; не передавать для базового товара</td>
+                </tr>
+                <tr>
+                  <td><code>lines[].qty</code></td>
+                  <td>number</td>
+                  <td>Да</td>
+                  <td>Целое число, минимум <code>1</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Пример запроса</h3>
+          <pre><code>curl -X POST "https://bazaar.kg/api/bazaar/v1/orders" \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "externalId": "MARKET-10001",
+    "customerName": "Ivan Ivanov",
+    "customerEmail": "ivan@example.com",
+    "customerPhone": "+996555111222",
+    "customerAddress": "Bishkek, Manas 10",
+    "comment": "Delivery after 18:00",
+    "lines": [
+      {
+        "productId": "product_123",
+        "qty": 2
+      },
+      {
+        "productId": "product_456",
+        "variantId": "variant_456_blue",
+        "qty": 1
+      }
+    ]
+  }'</code></pre>
+
+          <h3>Пример ответа</h3>
+          <pre><code>{
+  "order": {
+    "id": "order_123",
+    "number": "SO-000001",
+    "status": "CONFIRMED",
+    "totalKgs": 3000
+  }
+}</code></pre>
+          <p>HTTP статус при успешном создании: <code>201</code>.</p>
+
+          <h3>Правила создания заказов</h3>
+          <ul>
+            <li>Заказ создаётся только в магазине, к которому привязан API-ключ.</li>
+            <li>Товары в заказе должны быть активны и доступны в этом же магазине.</li>
+            <li>Для варианта товара нужно передавать <code>variantId</code> из ответа <code>GET /products</code>.</li>
+            <li>Если переданы данные клиента, BAZAAR создаст или обновит клиента в базе этого магазина.</li>
+            <li>Если email и телефон клиента не переданы, отдельная карточка клиента не создаётся.</li>
+            <li>Валютный snapshot магазина сохраняется в заказе на момент создания.</li>
+          </ul>
+
+          <h2>POST /customers</h2>
+          <p>Создаёт нового клиента или обновляет существующего клиента в магазине.</p>
+          <p class="endpoint"><span class="method post">POST</span><span>/api/bazaar/v1/customers</span></p>
+
+          <h3>Тело запроса</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Поле</th>
+                  <th>Тип</th>
+                  <th>Обязательное</th>
+                  <th>Ограничение</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>Да</td>
+                  <td>От <code>1</code> до <code>160</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>email</code></td>
+                  <td>string</td>
+                  <td>Да</td>
+                  <td>Валидный email, до <code>254</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>phone</code></td>
+                  <td>string</td>
+                  <td>Да</td>
+                  <td>От <code>1</code> до <code>64</code> символов</td>
+                </tr>
+                <tr>
+                  <td><code>address</code></td>
+                  <td>string</td>
+                  <td>Нет</td>
+                  <td>До <code>512</code> символов</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Пример запроса</h3>
+          <pre><code>curl -X POST "https://bazaar.kg/api/bazaar/v1/customers" \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Ivan Ivanov",
+    "email": "ivan@example.com",
+    "phone": "+996555111222",
+    "address": "Bishkek, Manas 10"
+  }'</code></pre>
+
+          <h3>Пример ответа при создании</h3>
+          <pre><code>{
+  "action": "created",
+  "customer": {
+    "id": "customer_123",
+    "name": "Ivan Ivanov",
+    "email": "ivan@example.com",
+    "phone": "+996555111222",
+    "address": "Bishkek, Manas 10",
+    "source": "INTEGRATION",
+    "createdAt": "2026-06-04T10:00:00.000Z",
+    "updatedAt": "2026-06-04T10:00:00.000Z"
+  }
+}</code></pre>
+          <p>HTTP статус при создании: <code>201</code>.</p>
+
+          <h3>Пример ответа при обновлении</h3>
+          <pre><code>{
+  "action": "updated",
+  "customer": {
+    "id": "customer_123",
+    "name": "Ivan Ivanov",
+    "email": "ivan@example.com",
+    "phone": "+996555111222",
+    "address": "Bishkek, Manas 10",
+    "source": "INTEGRATION",
+    "createdAt": "2026-06-04T10:00:00.000Z",
+    "updatedAt": "2026-06-04T10:05:00.000Z"
+  }
+}</code></pre>
+          <p>HTTP статус при обновлении: <code>200</code>.</p>
+
+          <h2>Ошибки</h2>
+          <p>Ошибки возвращаются в едином формате:</p>
+          <pre><code>{
+  "message": "invalidInput"
+}</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>HTTP статус</th>
+                  <th><code>message</code></th>
+                  <th>Описание</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>400</code></td>
+                  <td><code>invalidInput</code></td>
+                  <td>Неверный JSON, неверный формат полей или превышены лимиты</td>
+                </tr>
+                <tr>
+                  <td><code>400</code></td>
+                  <td><code>invalidQuantity</code></td>
+                  <td>Некорректное количество товара в заказе</td>
+                </tr>
+                <tr>
+                  <td><code>400</code></td>
+                  <td><code>salesOrderEmpty</code></td>
+                  <td>Заказ без строк</td>
+                </tr>
+                <tr>
+                  <td><code>401</code></td>
+                  <td><code>apiUnauthorized</code></td>
+                  <td>Не передан, неверный или отозван API-ключ</td>
+                </tr>
+                <tr>
+                  <td><code>404</code></td>
+                  <td><code>storeNotFound</code></td>
+                  <td>Магазин для API-ключа не найден</td>
+                </tr>
+                <tr>
+                  <td><code>404</code></td>
+                  <td><code>productNotFound</code></td>
+                  <td>Товар не найден или недоступен в магазине API-ключа</td>
+                </tr>
+                <tr>
+                  <td><code>404</code></td>
+                  <td><code>variantNotFound</code></td>
+                  <td>Вариант товара не найден или не относится к указанному товару</td>
+                </tr>
+                <tr>
+                  <td><code>500</code></td>
+                  <td><code>genericMessage</code></td>
+                  <td>Внутренняя ошибка сервера</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Ограничения и требования</h2>
+          <ul>
+            <li>Все запросы должны выполняться по HTTPS.</li>
+            <li>API-ключ нельзя передавать в query string; используйте только заголовок <code>Authorization</code>.</li>
+            <li>Один API-ключ даёт доступ только к одному магазину.</li>
+            <li><code>GET /products</code> возвращает максимум <code>100</code> товаров на страницу.</li>
+            <li><code>POST /orders</code> принимает максимум <code>500</code> строк заказа.</li>
+            <li>API отдаёт только активные товары, доступные в магазине.</li>
+            <li>API не отдаёт себестоимость, бухгалтерские и другие закрытые внутренние поля.</li>
+            <li>Для синхронизации товаров, цен и остатков маркетплейс должен регулярно читать <code>GET /products</code>.</li>
+            <li>Для передачи заказов маркетплейс должен вызывать <code>POST /orders</code>.</li>
+            <li>
+              Запись товаров, цен и остатков из внешней системы в BAZAAR через публичный API сейчас
+              не включена в базовый набор методов и обсуждается отдельно при необходимости.
+            </li>
+          </ul>
+
+          <h2>Рекомендуемый сценарий интеграции с маркетплейсом</h2>
+          <ol>
+            <li>В BAZAAR создаётся API-ключ для нужного магазина.</li>
+            <li>Маркетплейс периодически вызывает <code>GET /products</code>.</li>
+            <li>Маркетплейс сохраняет у себя <code>productId</code> и, при наличии вариантов, <code>variantId</code>.</li>
+            <li>При новом заказе маркетплейс вызывает <code>POST /orders</code>.</li>
+            <li>BAZAAR создаёт подтверждённый заказ и сохраняет данные клиента.</li>
+            <li>Маркетплейс повторно читает <code>GET /products</code> для обновления остатков и цен.</li>
+          </ol>
+        </main>
+
+        <footer>
+          BAZAAR API v1. Документ предназначен для внешних интеграций с магазинами BAZAAR.
+        </footer>
+      </article>
+    </div>
+  </body>
+</html>
