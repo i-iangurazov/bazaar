@@ -26,6 +26,8 @@ describe("receiving product creation handoff source", () => {
     expect(source).toContain("readReceivingDraft(returningDraftKey)");
     expect(source).toContain("setLines(draft.lines)");
     expect(source).toContain("setSearch(draft.search)");
+    expect(source).toContain("searchResultsScrollTop");
+    expect(source).toContain("focusedElement");
     expect(source).not.toContain("createdProductName");
     expect(source).not.toContain("setSearch((current) => current ||");
     expect(source).toContain("createdProductId");
@@ -66,5 +68,21 @@ describe("receiving product creation handoff source", () => {
     expect(inventoryRouterSource).toContain("productId: z.string().trim().optional()");
     expect(inventoryRouterSource).toContain("input.productId");
     expect(inventoryRouterSource).toContain("? { id: input.productId }");
+  });
+
+  it("opens product edit from receiving and returns through the preserved draft", async () => {
+    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const productDetailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+
+    expect(receivingSource).toContain("receivingEditProduct");
+    expect(receivingSource).toContain("handleEditProduct");
+    expect(receivingSource).toContain("router.push(`/products/${result.product.id}?");
+    expect(receivingSource).toContain("lastFocusedElementRef");
+    expect(productDetailSource).toContain("useSearchParams");
+    expect(productDetailSource).toContain("productEditReceivingReturnSource");
+    expect(productDetailSource).toContain("resolveSafeReturnTo");
+    expect(productDetailSource).toContain("buildReturnPath");
+    expect(productDetailSource).toContain("trpcUtils.inventory.searchProducts.invalidate()");
+    expect(productDetailSource).toContain("router.push(productEditReturnPath)");
   });
 });

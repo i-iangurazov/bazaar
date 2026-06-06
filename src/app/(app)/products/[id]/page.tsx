@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { z } from "zod";
@@ -101,6 +101,34 @@ const createIdempotencyKey = () => {
 };
 
 const showProductExpiryLotsSection = false;
+const productEditReceivingReturnSource = "stockReceiving";
+
+const resolveSafeReturnTo = (value?: string | null) => {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null;
+  }
+  return trimmed;
+};
+
+const buildReturnPath = (input: {
+  returnTo: string;
+  storeId?: string;
+  returnSource?: string;
+  receivingDraftKey?: string;
+}) => {
+  const url = new URL(input.returnTo, "https://local.invalid");
+  if (input.storeId) {
+    url.searchParams.set("storeId", input.storeId);
+  }
+  if (input.returnSource) {
+    url.searchParams.set("returnSource", input.returnSource);
+  }
+  if (input.receivingDraftKey) {
+    url.searchParams.set("receivingDraftKey", input.receivingDraftKey);
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+};
 
 const formatVariantAttributeDisplayValue = (value: unknown, depth = 0): string => {
   if (value === null || value === undefined) {
@@ -149,6 +177,11 @@ const ProductDetailPage = () => {
   const tErrors = useTranslations("errors");
   const tPrinting = useTranslations("printingSettings");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = resolveSafeReturnTo(searchParams?.get("returnTo"));
+  const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
+  const receivingDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
+  const returnStoreId = searchParams?.get("storeId")?.trim() ?? "";
   const locale = useLocale();
   const { data: session } = useSession();
   const trpcUtils = trpc.useUtils();
@@ -317,18 +350,37 @@ const ProductDetailPage = () => {
     pricingStoreId ? { storeId: pricingStoreId, productId } : { storeId: "", productId: "" },
     { enabled: Boolean(pricingStoreId && showLots && lotsEnabled) },
   );
+  const isReceivingReturnFlow =
+    Boolean(returnTo) &&
+    returnSource === productEditReceivingReturnSource &&
+    Boolean(receivingDraftKey);
+  const productEditReturnPath = returnTo
+    ? buildReturnPath({
+        returnTo,
+        storeId: returnStoreId || selectedSettingsStore?.storeId,
+        returnSource,
+        receivingDraftKey,
+      })
+    : "/products";
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: async () => {
-      await Promise.all([
+      const refreshes: Promise<unknown>[] = [
         productQuery.refetch(),
         storePricingQuery.refetch(),
         pricingQuery.refetch(),
         trpcUtils.products.bootstrap.invalidate(),
         trpcUtils.products.list.invalidate(),
-      ]);
+      ];
+      if (isReceivingReturnFlow) {
+        refreshes.push(trpcUtils.inventory.searchProducts.invalidate());
+      }
+      await Promise.all(refreshes);
       setProductFormSavedRevision((revision) => revision + 1);
       setProductFormDirty(false);
       toast({ variant: "success", description: t("saveSuccess") });
+      if (returnTo) {
+        router.push(productEditReturnPath);
+      }
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1265,7 +1317,10 @@ const ProductDetailPage = () => {
     <ProductEditorPage>
       <ProductEditorHeader
         eyebrow={
-          <Link href="/products" className="text-muted-foreground hover:text-foreground">
+          <Link
+            href={productEditReturnPath}
+            className="text-muted-foreground hover:text-foreground"
+          >
             {tCommon("back")}
           </Link>
         }

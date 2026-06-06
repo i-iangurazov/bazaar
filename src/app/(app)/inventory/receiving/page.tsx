@@ -26,6 +26,7 @@ import {
   AddIcon,
   CopyIcon,
   DeleteIcon,
+  EditIcon,
   EmptyIcon,
   ReceiveIcon,
   SearchIcon,
@@ -55,6 +56,9 @@ type ReceivingLine = {
 
 type ReceivingInputField = "quantity" | "unitCost";
 type ReceivingInputViewport = "desktop" | "mobile";
+type ReceivingDraftFocus =
+  | { target: "search" }
+  | { target: "lineInput"; key: string; field: ReceivingInputField };
 type ReceivingDraft = {
   version: 1;
   storeId: string;
@@ -64,6 +68,9 @@ type ReceivingDraft = {
   note: string;
   search: string;
   lines: ReceivingLine[];
+  pageScrollY?: number;
+  searchResultsScrollTop?: number;
+  focusedElement?: ReceivingDraftFocus | null;
 };
 
 const toDateTimeLocalValue = (date: Date) => {
@@ -138,6 +145,12 @@ const readReceivingDraft = (key: string): ReceivingDraft | null => {
       note: parsed.note ?? "",
       search: parsed.search ?? "",
       lines: parsed.lines,
+      pageScrollY: typeof parsed.pageScrollY === "number" ? parsed.pageScrollY : undefined,
+      searchResultsScrollTop:
+        typeof parsed.searchResultsScrollTop === "number"
+          ? parsed.searchResultsScrollTop
+          : undefined,
+      focusedElement: parsed.focusedElement ?? null,
     };
   } catch {
     return null;
@@ -183,6 +196,14 @@ const InventoryReceivingPage = () => {
   const [lines, setLines] = useState<ReceivingLine[]>([]);
   const [restoredDraftKey, setRestoredDraftKey] = useState("");
   const receivingInputRefs = useRef(new Map<string, HTMLInputElement>());
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
+  const lastFocusedElementRef = useRef<ReceivingDraftFocus | null>(null);
+  const pendingRestoreViewRef = useRef<{
+    pageScrollY?: number;
+    searchResultsScrollTop?: number;
+    focusedElement?: ReceivingDraftFocus | null;
+  } | null>(null);
   const handledCreatedProductRef = useRef("");
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
@@ -230,6 +251,11 @@ const InventoryReceivingPage = () => {
     setNote(draft.note);
     setLines(draft.lines);
     setSearch(draft.search);
+    pendingRestoreViewRef.current = {
+      pageScrollY: draft.pageScrollY,
+      searchResultsScrollTop: draft.searchResultsScrollTop,
+      focusedElement: draft.focusedElement ?? null,
+    };
     setRestoredDraftKey(returningDraftKey);
     void trpcUtils.inventory.searchProducts.invalidate();
   }, [restoredDraftKey, returningDraftKey, returnSource, trpcUtils.inventory.searchProducts]);
@@ -313,6 +339,39 @@ const InventoryReceivingPage = () => {
     },
     [focusReceivingInput],
   );
+
+  useEffect(() => {
+    if (restoredDraftKey !== returningDraftKey || !pendingRestoreViewRef.current) {
+      return;
+    }
+
+    const view = pendingRestoreViewRef.current;
+    const restoreView = (clearPending = false) => {
+      if (typeof view.searchResultsScrollTop === "number") {
+        searchResultsRef.current?.scrollTo({ top: view.searchResultsScrollTop });
+      }
+      if (typeof view.pageScrollY === "number") {
+        window.scrollTo({ top: view.pageScrollY, behavior: "auto" });
+      }
+      if (view.focusedElement?.target === "search") {
+        focusReceivingInputElement(searchInputRef.current);
+      } else if (view.focusedElement?.target === "lineInput") {
+        focusReceivingInput(view.focusedElement.key, view.focusedElement.field);
+      }
+      if (clearPending) {
+        pendingRestoreViewRef.current = null;
+      }
+    };
+
+    const timers = [
+      window.setTimeout(() => restoreView(), 0),
+      window.setTimeout(() => restoreView(), 150),
+      window.setTimeout(() => restoreView(true), 500),
+    ];
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [focusReceivingInput, restoredDraftKey, returningDraftKey]);
 
   const clearDuplicateHint = useCallback((key: string) => {
     window.setTimeout(() => {
@@ -468,6 +527,9 @@ const InventoryReceivingPage = () => {
       note,
       search,
       lines,
+      pageScrollY: window.scrollY,
+      searchResultsScrollTop: searchResultsRef.current?.scrollTop ?? 0,
+      focusedElement: lastFocusedElementRef.current,
     });
     if (!saved) {
       toast({ variant: "error", description: t("receivingDraftSaveFailed") });
@@ -497,6 +559,14 @@ const InventoryReceivingPage = () => {
     }
     params.set("duplicateFrom", result.product.id);
     router.push(`/products/new?${params.toString()}`);
+  };
+
+  const handleEditProduct = (result: SearchResult) => {
+    const params = createReceivingReturnParams();
+    if (!params) {
+      return;
+    }
+    router.push(`/products/${result.product.id}?${params.toString()}`);
   };
 
   const handleReceivingInputKeyDown = (
@@ -803,8 +873,12 @@ const InventoryReceivingPage = () => {
                 aria-hidden
               />
               <Input
+                ref={searchInputRef}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
+                onFocus={() => {
+                  lastFocusedElementRef.current = { target: "search" };
+                }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t("receivingSearchPlaceholderShort")}
                 disabled={!storeId}
@@ -812,7 +886,10 @@ const InventoryReceivingPage = () => {
                 autoComplete="off"
               />
             </div>
-            <div className="mt-3 max-h-[25rem] overflow-y-auto border border-border bg-background">
+            <div
+              ref={searchResultsRef}
+              className="mt-3 max-h-[25rem] overflow-y-auto border border-border bg-background"
+            >
               {searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -872,18 +949,32 @@ const InventoryReceivingPage = () => {
                         </span>
                         {added ? <Badge variant="success">{t("receivingAdded")}</Badge> : null}
                       </button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="mr-2 h-9 w-9 shrink-0"
-                        aria-label={t("receivingDuplicateProduct")}
-                        title={t("receivingDuplicateProduct")}
-                        onClick={() => handleDuplicateProduct(result)}
-                        disabled={!storeId}
-                      >
-                        <CopyIcon className="h-4 w-4" aria-hidden />
-                      </Button>
+                      <div className="mr-2 flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          aria-label={t("receivingEditProduct")}
+                          title={t("receivingEditProduct")}
+                          onClick={() => handleEditProduct(result)}
+                          disabled={!storeId}
+                        >
+                          <EditIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          aria-label={t("receivingDuplicateProduct")}
+                          title={t("receivingDuplicateProduct")}
+                          onClick={() => handleDuplicateProduct(result)}
+                          disabled={!storeId}
+                        >
+                          <CopyIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })
@@ -984,6 +1075,13 @@ const InventoryReceivingPage = () => {
                           onChange={(event) =>
                             updateLine(line.key, { quantityInput: event.target.value })
                           }
+                          onFocus={() => {
+                            lastFocusedElementRef.current = {
+                              target: "lineInput",
+                              key: line.key,
+                              field: "quantity",
+                            };
+                          }}
                           onKeyDown={(event) =>
                             handleReceivingInputKeyDown(event, line.key, "quantity", "desktop")
                           }
@@ -1007,6 +1105,13 @@ const InventoryReceivingPage = () => {
                           onChange={(event) =>
                             updateLine(line.key, { unitCostInput: event.target.value })
                           }
+                          onFocus={() => {
+                            lastFocusedElementRef.current = {
+                              target: "lineInput",
+                              key: line.key,
+                              field: "unitCost",
+                            };
+                          }}
                           onKeyDown={(event) =>
                             handleReceivingInputKeyDown(event, line.key, "unitCost", "desktop")
                           }
