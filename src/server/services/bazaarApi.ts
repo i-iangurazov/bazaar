@@ -28,6 +28,7 @@ import { toJson } from "@/server/services/json";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 
 const API_TOKEN_PREFIX = "bz_live_";
+const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
@@ -193,6 +194,7 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
       id: true,
       organizationId: true,
       storeId: true,
+      lastUsedAt: true,
       revokedAt: true,
       store: {
         select: {
@@ -208,9 +210,19 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
     throw new AppError("apiUnauthorized", "UNAUTHORIZED", 401);
   }
 
-  await prisma.bazaarApiKey
-    .update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } })
-    .catch(() => undefined);
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - API_KEY_LAST_USED_UPDATE_INTERVAL_MS);
+  if (!apiKey.lastUsedAt || apiKey.lastUsedAt <= staleBefore) {
+    await prisma.bazaarApiKey
+      .updateMany({
+        where: {
+          id: apiKey.id,
+          OR: [{ lastUsedAt: null }, { lastUsedAt: { lte: staleBefore } }],
+        },
+        data: { lastUsedAt: now },
+      })
+      .catch(() => undefined);
+  }
 
   return {
     apiKeyId: apiKey.id,

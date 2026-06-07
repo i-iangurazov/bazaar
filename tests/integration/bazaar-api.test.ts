@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { POST as createBazaarApiCustomerPost } from "@/app/api/bazaar/v1/customers/route";
 import { prisma } from "@/server/db/prisma";
 import {
+  authenticateBazaarApiRequest,
   createBazaarApiKey,
   createBazaarApiOrder,
   listBazaarApiProducts,
@@ -217,6 +218,49 @@ describeDb("bazaar api integration", () => {
       variantKey: "BASE",
       qty: 2,
     });
+  });
+
+  it("throttles API key last-used writes during request bursts", async () => {
+    const { org, store, adminUser } = await seedBase();
+    const { apiKey, token } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-last-used-key",
+      name: "bursting-storefront",
+    });
+    const request = () =>
+      new Request("http://localhost/api/bazaar/v1/products", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+    await authenticateBazaarApiRequest(request());
+    const first = await prisma.bazaarApiKey.findUniqueOrThrow({
+      where: { id: apiKey.id },
+      select: { lastUsedAt: true },
+    });
+
+    await authenticateBazaarApiRequest(request());
+    const second = await prisma.bazaarApiKey.findUniqueOrThrow({
+      where: { id: apiKey.id },
+      select: { lastUsedAt: true },
+    });
+
+    const oldLastUsedAt = new Date(Date.now() - 11 * 60 * 1000);
+    await prisma.bazaarApiKey.update({
+      where: { id: apiKey.id },
+      data: { lastUsedAt: oldLastUsedAt },
+    });
+
+    await authenticateBazaarApiRequest(request());
+    const refreshed = await prisma.bazaarApiKey.findUniqueOrThrow({
+      where: { id: apiKey.id },
+      select: { lastUsedAt: true },
+    });
+
+    expect(first.lastUsedAt).toBeInstanceOf(Date);
+    expect(second.lastUsedAt?.getTime()).toBe(first.lastUsedAt?.getTime());
+    expect(refreshed.lastUsedAt?.getTime()).toBeGreaterThan(oldLastUsedAt.getTime());
   });
 
   it("creates and upserts customer database records through POST customers", async () => {
