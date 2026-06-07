@@ -178,12 +178,13 @@ describeDb("bakai store integration", () => {
   });
 
   it("blocks products when both discount columns are populated", async () => {
-    const { org, product } = await prepareReadyBakaiData();
+    const { org, store, product } = await prepareReadyBakaiData();
 
     await prisma.bakaiStoreIncludedProduct.update({
       where: {
-        orgId_productId: {
+        orgId_storeId_productId: {
           orgId: org.id,
+          storeId: store.id,
           productId: product.id,
         },
       },
@@ -411,8 +412,9 @@ describeDb("bakai store integration", () => {
       const jobs = await listBakaiStoreExportJobs(org.id);
       const syncState = await prisma.bakaiStoreProductSyncState.findUnique({
         where: {
-          orgId_productId: {
+          orgId_storeId_productId: {
             orgId: org.id,
+            storeId: store.id,
             productId: product.id,
           },
         },

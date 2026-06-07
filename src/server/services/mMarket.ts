@@ -102,6 +102,11 @@ export type MMarketPreflightWarningCode =
 export type MMarketPreflightResult = {
   generatedAt: Date;
   canExport: boolean;
+  store: {
+    storeId: string;
+    storeName: string;
+    externalStoreId: string | null;
+  } | null;
   summary: {
     mode: "IN_STOCK_ONLY";
     storesTotal: number;
@@ -206,6 +211,15 @@ const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
 const nonDataImagePattern = /^data:image\//i;
 type MMarketDbClient = Prisma.TransactionClient | PrismaClient;
 
+type IntegrationStoreContext = {
+  storeId: string;
+  storeName: string;
+};
+
+type MMarketStoreMappingContext = IntegrationStoreContext & {
+  externalStoreId: string;
+};
+
 const mMarketListableImageWhere: Prisma.ProductWhereInput = {
   OR: [
     {
@@ -251,16 +265,17 @@ const resolveMMarketProductExportStatus = (input: {
 const hasExplicitMMarketProductSelection = async (
   db: MMarketDbClient,
   organizationId: string,
+  storeId?: string | null,
 ) => {
-  const auditLog = await db.auditLog.findFirst({
+  const scopedSelection = await db.mMarketIncludedProduct.findFirst({
     where: {
-      organizationId,
-      action: MMARKET_PRODUCT_SELECTION_AUDIT_ACTION,
+      orgId: organizationId,
+      storeId: normalizeStoreId(storeId),
     },
     select: { id: true },
   });
 
-  return Boolean(auditLog);
+  return Boolean(scopedSelection);
 };
 
 const MMARKET_BASE_TEMPLATE_DEFINITIONS = [
@@ -301,9 +316,70 @@ class MMarketRemoteError extends Error {
   }
 }
 
-const lockKeyByOrg = (orgId: string) => `${MMARKET_EXPORT_LOCK_PREFIX}${orgId}`;
+const lockKeyByOrgStore = (orgId: string, storeId: string) =>
+  `${MMARKET_EXPORT_LOCK_PREFIX}${orgId}:${storeId}`;
 
 const normalizeBranchId = (value?: string | null) => value?.trim() ?? "";
+
+const normalizeStoreId = (value?: string | null) => value?.trim() ?? "";
+
+const resolveIntegrationStoreContext = async (input: {
+  organizationId: string;
+  storeId?: string | null;
+}): Promise<IntegrationStoreContext> => {
+  const requestedStoreId = normalizeStoreId(input.storeId);
+  if (requestedStoreId) {
+    const store = await prisma.store.findFirst({
+      where: { id: requestedStoreId, organizationId: input.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!store) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+    return { storeId: store.id, storeName: store.name };
+  }
+
+  const stores = await prisma.store.findMany({
+    where: { organizationId: input.organizationId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+    take: 2,
+  });
+  if (stores.length !== 1) {
+    throw new AppError("integrationStoreRequired", "BAD_REQUEST", 400);
+  }
+  return { storeId: stores[0].id, storeName: stores[0].name };
+};
+
+const resolveMMarketStoreMappingContext = async (input: {
+  organizationId: string;
+  storeId?: string | null;
+}): Promise<MMarketStoreMappingContext> => {
+  const store = await resolveIntegrationStoreContext(input);
+  const mapping = await prisma.mMarketBranchMapping.findUnique({
+    where: {
+      orgId_storeId: {
+        orgId: input.organizationId,
+        storeId: store.storeId,
+      },
+    },
+    select: { mmarketBranchId: true },
+  });
+  const externalStoreId = normalizeBranchId(mapping?.mmarketBranchId);
+  if (!externalStoreId) {
+    throw new AppError("integrationStoreMappingRequired", "CONFLICT", 409);
+  }
+  return { ...store, externalStoreId };
+};
+
+const buildStoreProductWhere = (storeId: string): Prisma.ProductWhereInput => ({
+  storeProducts: {
+    some: {
+      storeId,
+      isActive: true,
+    },
+  },
+});
 
 const hasAllowedImageExtension = (value: string) => {
   const trimmed = value.trim();
@@ -331,6 +407,7 @@ const buildMMarketImageUrls = (inputUrls: string[]) => {
 
 const buildMMarketProductListWhere = async (input: {
   organizationId: string;
+  storeId: string;
   search?: string;
   selection?: MMarketProductSelectionFilter;
 }) => {
@@ -339,11 +416,13 @@ const buildMMarketProductListWhere = async (input: {
   const hasExplicitSelection = await hasExplicitMMarketProductSelection(
     prisma,
     input.organizationId,
+    input.storeId,
   );
 
   const baseWhere: Prisma.ProductWhereInput = {
     organizationId: input.organizationId,
     isDeleted: false,
+    ...buildStoreProductWhere(input.storeId),
     ...mMarketListableImageWhere,
   };
 
@@ -361,7 +440,7 @@ const buildMMarketProductListWhere = async (input: {
       ? hasExplicitSelection
         ? {
             mMarketInclusions: {
-              none: { orgId: input.organizationId },
+              none: { orgId: input.organizationId, storeId: input.storeId },
             },
           }
         : {}
@@ -369,7 +448,7 @@ const buildMMarketProductListWhere = async (input: {
         ? hasExplicitSelection
           ? {
               mMarketInclusions: {
-                some: { orgId: input.organizationId },
+                some: { orgId: input.organizationId, storeId: input.storeId },
               },
             }
           : { id: { in: [] } }
@@ -639,21 +718,22 @@ const normalizeCooldownSeconds = (ttlMs: number) => {
   return Math.ceil(ttlMs / 1000);
 };
 
-const getMemoryCooldownSeconds = (orgId: string) => {
-  const expiresAt = memoryCooldownStore.get(orgId) ?? 0;
+const getMemoryCooldownSeconds = (key: string) => {
+  const expiresAt = memoryCooldownStore.get(key) ?? 0;
   const remainingMs = expiresAt - Date.now();
   if (remainingMs <= 0) {
-    memoryCooldownStore.delete(orgId);
+    memoryCooldownStore.delete(key);
     return 0;
   }
   return normalizeCooldownSeconds(remainingMs);
 };
 
-const getCooldownSeconds = async (orgId: string) => {
+const getCooldownSeconds = async (orgId: string, storeId?: string | null) => {
+  const key = storeId ? lockKeyByOrgStore(orgId, storeId) : `${MMARKET_EXPORT_LOCK_PREFIX}${orgId}`;
   const redis = getRedisPublisher();
   if (redis) {
     try {
-      const ttlMs = await redis.pttl(lockKeyByOrg(orgId));
+      const ttlMs = await redis.pttl(key);
       if (ttlMs > 0) {
         return normalizeCooldownSeconds(ttlMs);
       }
@@ -664,15 +744,16 @@ const getCooldownSeconds = async (orgId: string) => {
       // Fallback to memory cooldown in non-redis environments.
     }
   }
-  return getMemoryCooldownSeconds(orgId);
+  return getMemoryCooldownSeconds(key);
 };
 
-const acquireCooldownLock = async (orgId: string) => {
+const acquireCooldownLock = async (orgId: string, storeId: string) => {
+  const key = lockKeyByOrgStore(orgId, storeId);
   const redis = getRedisPublisher();
   if (redis) {
     try {
       const result = await redis.set(
-        lockKeyByOrg(orgId),
+        key,
         String(Date.now() + MMARKET_EXPORT_COOLDOWN_MS),
         "PX",
         MMARKET_EXPORT_COOLDOWN_MS,
@@ -684,19 +765,19 @@ const acquireCooldownLock = async (orgId: string) => {
           remainingSeconds: normalizeCooldownSeconds(MMARKET_EXPORT_COOLDOWN_MS),
         };
       }
-      const remainingSeconds = await getCooldownSeconds(orgId);
+      const remainingSeconds = await getCooldownSeconds(orgId, storeId);
       return { acquired: false as const, remainingSeconds };
     } catch {
       // Fallback to memory lock in non-redis environments.
     }
   }
 
-  const remainingSeconds = getMemoryCooldownSeconds(orgId);
+  const remainingSeconds = getMemoryCooldownSeconds(key);
   if (remainingSeconds > 0) {
     return { acquired: false as const, remainingSeconds };
   }
 
-  memoryCooldownStore.set(orgId, Date.now() + MMARKET_EXPORT_COOLDOWN_MS);
+  memoryCooldownStore.set(key, Date.now() + MMARKET_EXPORT_COOLDOWN_MS);
   return {
     acquired: true as const,
     remainingSeconds: normalizeCooldownSeconds(MMARKET_EXPORT_COOLDOWN_MS),
@@ -968,6 +1049,7 @@ const buildMMarketErrorReport = (input: {
   endpoint: MMARKET_IMPORT_ENDPOINTS[input.environment],
   requestIdempotencyKey: input.requestIdempotencyKey,
   reason: input.reason,
+  store: input.preflight.store,
   payloadBytes: input.payloadBytes,
   summary: input.preflight.summary,
   blockers: input.preflight.blockers,
@@ -982,61 +1064,56 @@ const buildMMarketErrorReport = (input: {
 
 const buildMMarketExportPlan = async (input: {
   organizationId: string;
+  storeId?: string | null;
   environment: MMarketEnvironment;
   token: string | null;
   mode?: MMarketExportMode;
 }): Promise<MMarketExportPlan> => {
   const exportMode = normalizeMMarketExportMode(input.mode);
-  const [stores, mappings, hasExplicitSelection, rawIncludedCount] = await Promise.all([
-    prisma.store.findMany({
-      where: { organizationId: input.organizationId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.mMarketBranchMapping.findMany({
-      where: { orgId: input.organizationId },
-      select: { storeId: true, mmarketBranchId: true },
-    }),
-    hasExplicitMMarketProductSelection(prisma, input.organizationId),
+  const storeContext = await resolveMMarketStoreMappingContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  const [hasExplicitSelection, rawIncludedCount] = await Promise.all([
+    hasExplicitMMarketProductSelection(prisma, input.organizationId, storeContext.storeId),
     prisma.product.count({
       where: {
         organizationId: input.organizationId,
         isDeleted: false,
+        ...buildStoreProductWhere(storeContext.storeId),
         mMarketInclusions: {
-          some: { orgId: input.organizationId },
+          some: { orgId: input.organizationId, storeId: storeContext.storeId },
         },
       },
     }),
   ]);
   const activeIncludedCount = hasExplicitSelection ? rawIncludedCount : 0;
 
-  const storeIdList = stores.map((store) => store.id);
-  const positiveSnapshots = storeIdList.length && hasExplicitSelection
+  const positiveSnapshots = hasExplicitSelection
     ? await prisma.inventorySnapshot.findMany({
         where: {
-          storeId: { in: storeIdList },
+          storeId: storeContext.storeId,
           variantKey: "BASE",
           onHand: { gt: 0 },
           product: {
             organizationId: input.organizationId,
             isDeleted: false,
+            ...buildStoreProductWhere(storeContext.storeId),
             mMarketInclusions: {
-              some: { orgId: input.organizationId },
+              some: { orgId: input.organizationId, storeId: storeContext.storeId },
             },
           },
         },
         select: { storeId: true, productId: true, onHand: true },
       })
     : [];
-  const mappingByStoreId = new Map(
-    mappings.map((mapping) => [mapping.storeId, normalizeBranchId(mapping.mmarketBranchId)]),
-  );
-  const mappedStores = stores
-    .map((store) => ({ store, branchId: mappingByStoreId.get(store.id) ?? "" }))
-    .filter((item) => item.branchId.length > 0);
-  const missingStoreMappings = stores
-    .filter((store) => !(mappingByStoreId.get(store.id) ?? "").length)
-    .map((store) => ({ storeId: store.id, storeName: store.name }));
+  const mappedStores = [
+    {
+      store: { id: storeContext.storeId, name: storeContext.storeName },
+      branchId: storeContext.externalStoreId,
+    },
+  ];
+  const missingStoreMappings: Array<{ storeId: string; storeName: string }> = [];
 
   const inStockProductIdSet = new Set(positiveSnapshots.map((snapshot) => snapshot.productId));
   const inStockProductIds = Array.from(inStockProductIdSet);
@@ -1048,8 +1125,9 @@ const buildMMarketExportPlan = async (input: {
             organizationId: input.organizationId,
             isDeleted: false,
             id: { in: inStockProductIds },
+            ...buildStoreProductWhere(storeContext.storeId),
             mMarketInclusions: {
-              some: { orgId: input.organizationId },
+              some: { orgId: input.organizationId, storeId: storeContext.storeId },
             },
           },
           select: {
@@ -1058,6 +1136,15 @@ const buildMMarketExportPlan = async (input: {
             name: true,
             category: true,
             basePriceKgs: true,
+            storePrices: {
+              where: {
+                organizationId: input.organizationId,
+                storeId: storeContext.storeId,
+                variantKey: "BASE",
+              },
+              select: { priceKgs: true },
+              take: 1,
+            },
             description: true,
             photoUrl: true,
             images: {
@@ -1071,7 +1158,7 @@ const buildMMarketExportPlan = async (input: {
     inStockProductIds.length && hasExplicitSelection
       ? prisma.inventorySnapshot.findMany({
           where: {
-            storeId: { in: storeIdList },
+            storeId: storeContext.storeId,
             productId: { in: inStockProductIds },
             variantKey: "BASE",
           },
@@ -1179,7 +1266,8 @@ const buildMMarketExportPlan = async (input: {
     const name = product.name?.trim() ?? "";
     const category = product.category?.trim() ?? "";
     const description = product.description?.trim() ?? "";
-    const price = product.basePriceKgs === null ? null : Number(product.basePriceKgs);
+    const priceKgs = product.storePrices[0]?.priceKgs ?? product.basePriceKgs;
+    const price = priceKgs === null ? null : Number(priceKgs);
 
     const issues: MMarketPreflightIssueCode[] = [];
     const warnings: MMarketPreflightWarningCode[] = [];
@@ -1299,7 +1387,7 @@ const buildMMarketExportPlan = async (input: {
     warningCounts[globalWarning] = (warningCounts[globalWarning] ?? 0) + 1;
   }
 
-  const cooldownSeconds = await getCooldownSeconds(input.organizationId);
+  const cooldownSeconds = await getCooldownSeconds(input.organizationId, storeContext.storeId);
   const nextAllowedAt = cooldownSeconds ? new Date(Date.now() + cooldownSeconds * 1_000) : null;
   const canExport =
     exportMode === "READY_ONLY"
@@ -1309,9 +1397,14 @@ const buildMMarketExportPlan = async (input: {
   const preflight: MMarketPreflightResult = {
     generatedAt: new Date(),
     canExport,
+    store: {
+      storeId: storeContext.storeId,
+      storeName: storeContext.storeName,
+      externalStoreId: storeContext.externalStoreId,
+    },
     summary: {
       mode: "IN_STOCK_ONLY",
-      storesTotal: stores.length,
+      storesTotal: 1,
       storesMapped: mappedStores.length,
       productsConsidered: products.length,
       productsReady: readyProducts.length,
@@ -1339,9 +1432,12 @@ const buildMMarketExportPlan = async (input: {
   const payloadBytes = getPayloadBytes(payload);
   const payloadStats = {
     exportMode,
+    storeId: storeContext.storeId,
+    storeName: storeContext.storeName,
+    externalStoreId: storeContext.externalStoreId,
     productCount: payload.products.length,
     selectedProducts: activeIncludedCount,
-    storesTotal: stores.length,
+    storesTotal: 1,
     storesMapped: mappedStores.length,
     failedProducts: failedProducts.length,
     warningCount: preflight.warnings.total,
@@ -1381,16 +1477,22 @@ const ensureStoreOwnership = async (organizationId: string, storeIds: string[]) 
   }
 };
 
-const ensureProductOwnership = async (organizationId: string, productIds: string[]) => {
+const ensureProductOwnership = async (
+  organizationId: string,
+  productIds: string[],
+  storeId?: string | null,
+) => {
   const uniqueIds = Array.from(new Set(productIds.map((id) => id.trim()).filter(Boolean)));
   if (!uniqueIds.length) {
     return [];
   }
 
+  const scopedStoreId = normalizeStoreId(storeId);
   const products = await prisma.product.findMany({
     where: {
       organizationId,
       id: { in: uniqueIds },
+      ...(scopedStoreId ? buildStoreProductWhere(scopedStoreId) : {}),
     },
     select: { id: true },
   });
@@ -1563,15 +1665,21 @@ export const getMMarketSavedToken = async (organizationId: string) => {
 
 export const listMMarketProducts = async (input: {
   organizationId: string;
+  storeId?: string | null;
   search?: string;
   selection?: MMarketProductSelectionFilter;
   page?: number;
   pageSize?: number;
 }) => {
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
   const page = Math.max(1, Math.trunc(input.page ?? 1));
   const pageSize = Math.min(10, Math.max(1, Math.trunc(input.pageSize ?? 10)));
   const { hasExplicitSelection, baseWhere, where } = await buildMMarketProductListWhere({
     organizationId: input.organizationId,
+    storeId: storeContext.storeId,
     search: input.search,
     selection: input.selection,
   });
@@ -1583,7 +1691,7 @@ export const listMMarketProducts = async (input: {
           where: {
             ...baseWhere,
             mMarketInclusions: {
-              some: { orgId: input.organizationId },
+              some: { orgId: input.organizationId, storeId: storeContext.storeId },
             },
           },
         })
@@ -1597,6 +1705,15 @@ export const listMMarketProducts = async (input: {
         name: true,
         category: true,
         basePriceKgs: true,
+        storePrices: {
+          where: {
+            organizationId: input.organizationId,
+            storeId: storeContext.storeId,
+            variantKey: "BASE",
+          },
+          select: { priceKgs: true },
+          take: 1,
+        },
         photoUrl: true,
         images: {
           where: {
@@ -1607,7 +1724,7 @@ export const listMMarketProducts = async (input: {
           take: 1,
         },
         mMarketInclusions: {
-          where: { orgId: input.organizationId },
+          where: { orgId: input.organizationId, storeId: storeContext.storeId },
           select: { id: true, lastExportedAt: true },
           take: 1,
         },
@@ -1624,9 +1741,7 @@ export const listMMarketProducts = async (input: {
         where: {
           productId: { in: productIds },
           variantKey: "BASE",
-          store: {
-            organizationId: input.organizationId,
-          },
+          storeId: storeContext.storeId,
         },
         select: {
           productId: true,
@@ -1653,10 +1768,10 @@ export const listMMarketProducts = async (input: {
         sku: product.sku,
         name: product.name,
         category: product.category?.trim() || null,
-        exportPriceKgs:
-          product.basePriceKgs === null
-            ? null
-            : resolveMMarketExportPrice(Number(product.basePriceKgs)),
+        exportPriceKgs: (() => {
+          const priceKgs = product.storePrices[0]?.priceKgs ?? product.basePriceKgs;
+          return priceKgs === null ? null : resolveMMarketExportPrice(Number(priceKgs));
+        })(),
         imageUrl: resolveMMarketListImageUrl(product),
         onHandQty: onHandByProductId.get(product.id) ?? 0,
         included,
@@ -1671,6 +1786,8 @@ export const listMMarketProducts = async (input: {
     page,
     pageSize,
     summary: {
+      storeId: storeContext.storeId,
+      storeName: storeContext.storeName,
       totalProducts,
       includedProducts,
       excludedProducts: Math.max(0, totalProducts - includedProducts),
@@ -1680,10 +1797,18 @@ export const listMMarketProducts = async (input: {
 
 export const listMMarketProductIds = async (input: {
   organizationId: string;
+  storeId?: string | null;
   search?: string;
   selection?: MMarketProductSelectionFilter;
 }) => {
-  const { where } = await buildMMarketProductListWhere(input);
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  const { where } = await buildMMarketProductListWhere({
+    ...input,
+    storeId: storeContext.storeId,
+  });
   const products = await prisma.product.findMany({
     where,
     select: { id: true },
@@ -1695,12 +1820,21 @@ export const listMMarketProductIds = async (input: {
 
 export const updateMMarketProductSelection = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   productIds: string[];
   included: boolean;
 }) => {
-  const productIds = await ensureProductOwnership(input.organizationId, input.productIds);
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  const productIds = await ensureProductOwnership(
+    input.organizationId,
+    input.productIds,
+    storeContext.storeId,
+  );
   if (!productIds.length) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
@@ -1709,12 +1843,13 @@ export const updateMMarketProductSelection = async (input: {
     const hasExplicitSelection = await hasExplicitMMarketProductSelection(
       tx,
       input.organizationId,
+      storeContext.storeId,
     );
 
     if (!hasExplicitSelection) {
       // Drop legacy backfilled rows before the first explicit opt-in update.
       await tx.mMarketIncludedProduct.deleteMany({
-        where: { orgId: input.organizationId },
+        where: { orgId: input.organizationId, storeId: null },
       });
     }
 
@@ -1722,6 +1857,7 @@ export const updateMMarketProductSelection = async (input: {
       await tx.mMarketIncludedProduct.createMany({
         data: productIds.map((productId) => ({
           orgId: input.organizationId,
+          storeId: storeContext.storeId,
           productId,
         })),
         skipDuplicates: true,
@@ -1730,6 +1866,7 @@ export const updateMMarketProductSelection = async (input: {
       await tx.mMarketIncludedProduct.deleteMany({
         where: {
           orgId: input.organizationId,
+          storeId: storeContext.storeId,
           productId: { in: productIds },
         },
       });
@@ -1744,6 +1881,8 @@ export const updateMMarketProductSelection = async (input: {
       before: null,
       after: toJson({
         included: input.included,
+        storeId: storeContext.storeId,
+        storeName: storeContext.storeName,
         productIds,
       }),
       requestId: input.requestId,
@@ -1981,7 +2120,7 @@ export const validateMMarketLocally = async (organizationId: string) => {
   };
 };
 
-export const runMMarketPreflight = async (organizationId: string) => {
+export const runMMarketPreflight = async (organizationId: string, storeId?: string | null) => {
   const integration = await prisma.mMarketIntegration.findUnique({
     where: { orgId: organizationId },
     select: {
@@ -1993,6 +2132,7 @@ export const runMMarketPreflight = async (organizationId: string) => {
   const token = integration?.apiTokenEncrypted ? decryptToken(integration.apiTokenEncrypted) : null;
   const plan = await buildMMarketExportPlan({
     organizationId,
+    storeId,
     environment: integration?.environment ?? MMarketEnvironment.DEV,
     token,
   });
@@ -2002,13 +2142,14 @@ export const runMMarketPreflight = async (organizationId: string) => {
 
 export const bulkGenerateMMarketShortDescriptions = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   locale?: string | null;
   productIds?: string[];
   logger?: MMarketBulkDescriptionLogger;
 }) => {
-  const preflight = await runMMarketPreflight(input.organizationId);
+  const preflight = await runMMarketPreflight(input.organizationId, input.storeId);
   const requestedProductIds = input.productIds?.length
     ? new Set(input.productIds.map((value) => value.trim()).filter(Boolean))
     : null;
@@ -2050,11 +2191,12 @@ export const bulkGenerateMMarketShortDescriptions = async (input: {
 
 export const bulkCreateMMarketBaseTemplates = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   logger?: MMarketBaseTemplateLogger;
 }) => {
-  const preflight = await runMMarketPreflight(input.organizationId);
+  const preflight = await runMMarketPreflight(input.organizationId, input.storeId);
   const productIds = Array.from(
     new Set(
       preflight.failedProducts
@@ -2223,11 +2365,12 @@ export const bulkCreateMMarketBaseTemplates = async (input: {
 
 export const assignDefaultCategoryToMMarketProducts = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   logger?: MMarketBaseTemplateLogger;
 }) => {
-  const preflight = await runMMarketPreflight(input.organizationId);
+  const preflight = await runMMarketPreflight(input.organizationId, input.storeId);
   const productIds = Array.from(
     new Set(
       preflight.failedProducts
@@ -2274,12 +2417,13 @@ export const assignDefaultCategoryToMMarketProducts = async (input: {
 
 export const bulkAutofillMMarketSpecs = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   productIds?: string[];
   logger?: MMarketBulkSpecsLogger;
 }) => {
-  const preflight = await runMMarketPreflight(input.organizationId);
+  const preflight = await runMMarketPreflight(input.organizationId, input.storeId);
   const requestedProductIds = input.productIds?.length
     ? new Set(input.productIds.map((value) => value.trim()).filter(Boolean))
     : null;
@@ -2690,6 +2834,7 @@ export const getMMarketExportJob = async (organizationId: string, jobId: string)
 
 export const requestMMarketExport = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   mode?: MMarketExportMode;
@@ -2716,6 +2861,7 @@ export const requestMMarketExport = async (input: {
   const exportMode = normalizeMMarketExportMode(input.mode);
   const plan = await buildMMarketExportPlan({
     organizationId: input.organizationId,
+    storeId: input.storeId,
     environment: integration.environment,
     token,
     mode: exportMode,
@@ -2726,12 +2872,14 @@ export const requestMMarketExport = async (input: {
   }
 
   const requestIdempotencyKey = randomUUID();
-  const cooldown = await acquireCooldownLock(input.organizationId);
+  const storeId = String(plan.payloadStats.storeId);
+  const cooldown = await acquireCooldownLock(input.organizationId, storeId);
 
   if (!cooldown.acquired) {
     const rateLimitedJob = await prisma.mMarketExportJob.create({
       data: {
         orgId: input.organizationId,
+        storeId,
         environment: integration.environment,
         status: MMarketExportJobStatus.RATE_LIMITED,
         requestedById: input.actorId,
@@ -2758,6 +2906,7 @@ export const requestMMarketExport = async (input: {
   const queuedJob = await prisma.mMarketExportJob.create({
     data: {
       orgId: input.organizationId,
+      storeId,
       environment: integration.environment,
       status: MMarketExportJobStatus.QUEUED,
       requestedById: input.actorId,
@@ -2788,6 +2937,7 @@ export const requestMMarketExport = async (input: {
       jobId: queuedJob.id,
       organizationId: input.organizationId,
       requestId: input.requestId,
+      storeId,
       mode: exportMode,
     }).catch(() => null);
   }
@@ -2856,6 +3006,7 @@ const runMMarketExportJob = async (
     const exportMode = normalizeMMarketExportMode(asRecord(job.payloadStatsJson)?.exportMode);
     plan = await buildMMarketExportPlan({
       organizationId: job.orgId,
+      storeId: job.storeId,
       environment: job.environment,
       token,
       mode: exportMode,
@@ -2893,6 +3044,7 @@ const runMMarketExportJob = async (
       await prisma.mMarketIncludedProduct.updateMany({
         where: {
           orgId: job.orgId,
+          storeId: job.storeId ?? String(plan.payloadStats.storeId),
           productId: { in: plan.exportedProductIds },
         },
         data: {
@@ -3018,6 +3170,7 @@ export const __resetMMarketCooldownForTests = () => {
 export const __buildMMarketExportPlanForTests = async (
   organizationId: string,
   mode: MMarketExportMode = "ALL_INCLUDED",
+  storeId?: string | null,
 ) => {
   if (process.env.NODE_ENV !== "test") {
     throw new Error("testOnly");
@@ -3032,6 +3185,7 @@ export const __buildMMarketExportPlanForTests = async (
   const token = integration?.apiTokenEncrypted ? decryptToken(integration.apiTokenEncrypted) : null;
   return buildMMarketExportPlan({
     organizationId,
+    storeId,
     environment: integration?.environment ?? MMarketEnvironment.DEV,
     token,
     mode,

@@ -622,8 +622,13 @@ model Store {
   bazaarCatalog               BazaarCatalog?
   bazaarApiKeys               BazaarApiKey[]
   mMarketBranchMappings       MMarketBranchMapping[]
+  mMarketExportJobs           MMarketExportJob[]
+  mMarketIncludedProducts     MMarketIncludedProduct[]
   bakaiStoreMappings          BakaiStoreStockMapping[]
   bakaiStoreBranchMappings    BakaiStoreBranchMapping[]
+  bakaiStoreExportJobs        BakaiStoreExportJob[]
+  bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
+  bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
   featureFlags                StoreFeatureFlag[]
   complianceProfile           StoreComplianceProfile?
   exportJobs                  ExportJob[]
@@ -832,6 +837,7 @@ model MMarketBranchMapping {
 model MMarketExportJob {
   id                    String                 @id @default(cuid())
   orgId                 String
+  storeId               String?
   environment           MMarketEnvironment
   status                MMarketExportJobStatus @default(QUEUED)
   requestedById         String
@@ -844,26 +850,31 @@ model MMarketExportJob {
   createdAt             DateTime               @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
   requestedBy  User         @relation("mMarketExportRequestedBy", fields: [requestedById], references: [id])
 
   @@unique([requestIdempotencyKey])
   @@index([orgId, createdAt])
+  @@index([orgId, storeId, createdAt])
   @@index([orgId, status, createdAt])
 }
 
 model MMarketIncludedProduct {
   id             String    @id @default(cuid())
   orgId          String
+  storeId        String?
   productId      String
   createdAt      DateTime  @default(now())
   lastExportedAt DateTime?
   updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
   product      Product      @relation(fields: [productId], references: [id])
 
-  @@unique([orgId, productId])
+  @@unique([orgId, storeId, productId])
   @@index([orgId, productId])
+  @@index([orgId, storeId, productId])
   @@index([productId])
 }
 
@@ -927,6 +938,7 @@ model BakaiStoreBranchMapping {
 model BakaiStoreExportJob {
   id                    String                    @id @default(cuid())
   orgId                 String
+  storeId               String?
   jobType               BakaiStoreJobType         @default(TEMPLATE_EXPORT)
   status                BakaiStoreExportJobStatus @default(QUEUED)
   requestedById         String
@@ -947,16 +959,19 @@ model BakaiStoreExportJob {
   createdAt             DateTime                  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
   requestedBy  User         @relation("bakaiStoreExportRequestedBy", fields: [requestedById], references: [id])
 
   @@unique([requestIdempotencyKey])
   @@index([orgId, createdAt])
+  @@index([orgId, storeId, createdAt])
   @@index([orgId, status, createdAt])
 }
 
 model BakaiStoreIncludedProduct {
   id              String    @id @default(cuid())
   orgId           String
+  storeId         String?
   productId       String
   discountPercent Decimal?  @db.Decimal(5, 2)
   discountAmount  Decimal?  @db.Decimal(12, 2)
@@ -965,16 +980,19 @@ model BakaiStoreIncludedProduct {
   updatedAt       DateTime  @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
   product      Product      @relation(fields: [productId], references: [id])
 
-  @@unique([orgId, productId])
+  @@unique([orgId, storeId, productId])
   @@index([orgId, productId])
+  @@index([orgId, storeId, productId])
   @@index([productId])
 }
 
 model BakaiStoreProductSyncState {
   id                  String                    @id @default(cuid())
   orgId               String
+  storeId             String?
   productId           String
   bakaiExternalRef    String?
   lastSyncedAt        DateTime?
@@ -984,10 +1002,12 @@ model BakaiStoreProductSyncState {
   updatedAt           DateTime                  @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
   product      Product      @relation(fields: [productId], references: [id])
 
-  @@unique([orgId, productId])
+  @@unique([orgId, storeId, productId])
   @@index([orgId, productId])
+  @@index([orgId, storeId, productId])
   @@index([productId])
 }
 

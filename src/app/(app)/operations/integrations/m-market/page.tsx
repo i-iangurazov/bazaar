@@ -143,6 +143,7 @@ const MMarketSettingsPage = () => {
   const canEdit = role === "ADMIN" || role === "MANAGER";
   const [bulkProgress, setBulkProgress] = useState<MMarketBulkProgressState | null>(null);
   const [bulkElapsedSeconds, setBulkElapsedSeconds] = useState(0);
+  const [activeStoreId, setActiveStoreId] = useState("");
 
   const settingsQuery = trpc.mMarket.settings.useQuery(undefined, { enabled: canView });
   const jobsQuery = trpc.mMarket.jobs.useQuery(
@@ -159,11 +160,14 @@ const MMarketSettingsPage = () => {
           : false,
     },
   );
-  const preflightQuery = trpc.mMarket.preflight.useQuery(undefined, {
-    enabled: false,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
+  const preflightQuery = trpc.mMarket.preflight.useQuery(
+    activeStoreId ? { storeId: activeStoreId } : undefined,
+    {
+      enabled: false,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  );
   const revealTokenQuery = trpc.mMarket.revealToken.useQuery(undefined, {
     enabled: canEdit && Boolean(settingsQuery.data?.integration.hasToken),
     refetchOnWindowFocus: false,
@@ -320,13 +324,14 @@ const MMarketSettingsPage = () => {
 
   const productsQuery = trpc.mMarket.products.useQuery(
     {
+      storeId: activeStoreId || undefined,
       search: productSearch.trim() || undefined,
       selection: productSelectionFilter,
       page: productsPage,
       pageSize: productsPageSize,
     },
     {
-      enabled: canView,
+      enabled: canView && Boolean(activeStoreId),
       keepPreviousData: true,
       refetchInterval: hasActiveExportJob ? 5_000 : false,
     },
@@ -382,6 +387,17 @@ const MMarketSettingsPage = () => {
   }, [settingsQuery.data?.stores]);
 
   useEffect(() => {
+    const stores = settingsQuery.data?.stores ?? [];
+    if (!stores.length) {
+      setActiveStoreId("");
+      return;
+    }
+    if (!activeStoreId || !stores.some((store) => store.storeId === activeStoreId)) {
+      setActiveStoreId(stores[0].storeId);
+    }
+  }, [activeStoreId, settingsQuery.data?.stores]);
+
+  useEffect(() => {
     const initial = settingsQuery.data?.cooldown.remainingSeconds ?? 0;
     setCooldownRemainingSeconds(initial);
   }, [settingsQuery.data?.cooldown.remainingSeconds]);
@@ -415,7 +431,21 @@ const MMarketSettingsPage = () => {
     setProductsPage(1);
   }, [productSearch, productSelectionFilter]);
 
+  useEffect(() => {
+    setPreflightFresh(false);
+    setSelectedProductIds(new Set());
+    setProductsPage(1);
+  }, [activeStoreId]);
+
   const handleRunPreflight = async () => {
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
+    if (!activeStoreMapped) {
+      toast({ variant: "error", description: t("storeScope.mappingRequired") });
+      return;
+    }
     const result = await preflightQuery.refetch();
     if (result.data) {
       setPreflightFresh(true);
@@ -423,7 +453,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleGenerateShortDescriptions = async () => {
-    if (!canEdit || shortDescriptionTargetIds.length <= 0 || bulkProgressRunning) {
+    if (!canEdit || !activeStoreId || shortDescriptionTargetIds.length <= 0 || bulkProgressRunning) {
       return;
     }
     if (
@@ -479,6 +509,7 @@ const MMarketSettingsPage = () => {
         );
 
         const result = await bulkGenerateDescriptionsMutation.mutateAsync({
+          storeId: activeStoreId,
           locale: normalizeLocale(locale) ?? defaultLocale,
           productIds: batch,
         });
@@ -588,7 +619,12 @@ const MMarketSettingsPage = () => {
   };
 
   const handleAutofillSpecs = async () => {
-    if (!canEdit || actionableMissingSpecsTargetIds.length <= 0 || bulkProgressRunning) {
+    if (
+      !canEdit ||
+      !activeStoreId ||
+      actionableMissingSpecsTargetIds.length <= 0 ||
+      bulkProgressRunning
+    ) {
       return;
     }
     if (
@@ -651,6 +687,7 @@ const MMarketSettingsPage = () => {
         );
 
         const result = await bulkAutofillSpecsMutation.mutateAsync({
+          storeId: activeStoreId,
           productIds: batch,
         });
         const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
@@ -787,7 +824,7 @@ const MMarketSettingsPage = () => {
   };
 
   const handleCreateBaseTemplates = async () => {
-    if (!canEdit || actionableMissingSpecsCount <= 0) {
+    if (!canEdit || !activeStoreId || actionableMissingSpecsCount <= 0) {
       return;
     }
     if (
@@ -797,11 +834,11 @@ const MMarketSettingsPage = () => {
     ) {
       return;
     }
-    bulkCreateBaseTemplatesMutation.mutate();
+    bulkCreateBaseTemplatesMutation.mutate({ storeId: activeStoreId });
   };
 
   const handleAssignMissingCategory = async () => {
-    if (!canEdit || missingCategoryCount <= 0) {
+    if (!canEdit || !activeStoreId || missingCategoryCount <= 0) {
       return;
     }
     if (
@@ -814,7 +851,7 @@ const MMarketSettingsPage = () => {
     ) {
       return;
     }
-    assignMissingCategoryMutation.mutate();
+    assignMissingCategoryMutation.mutate({ storeId: activeStoreId });
   };
 
   const handleSaveConnection = () => {
@@ -900,9 +937,14 @@ const MMarketSettingsPage = () => {
   };
 
   const handleSelectAllProductResults = async () => {
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
     setSelectingAllProducts(true);
     try {
       const ids = await trpcUtils.mMarket.listIds.fetch({
+        storeId: activeStoreId || undefined,
         search: productSearch.trim() || undefined,
         selection: productSelectionFilter,
       });
@@ -921,16 +963,28 @@ const MMarketSettingsPage = () => {
     if (!canEdit) {
       return;
     }
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
     const targetIds = productIds ?? Array.from(selectedProductIds);
     if (!targetIds.length) {
       return;
     }
     updateProductsMutation.mutate({
+      storeId: activeStoreId,
       productIds: targetIds,
       included,
     });
   };
 
+  const activeStore = (settingsQuery.data?.stores ?? []).find(
+    (store) => store.storeId === activeStoreId,
+  );
+  const activeBranchId = activeStoreId
+    ? (branchMappings[activeStoreId] ?? activeStore?.mmarketBranchId ?? "").trim()
+    : "";
+  const activeStoreMapped = Boolean(activeStoreId && activeBranchId);
   const preflightData = preflightQuery.data;
   const preflightCanExport = preflightFresh && Boolean(preflightData?.canExport);
   const readyProductsCount = preflightData?.summary.productsReady ?? 0;
@@ -1025,7 +1079,9 @@ const MMarketSettingsPage = () => {
   }, [preflightData?.failedProducts, filterIssue, filterSku]);
 
   const exportDisabledReason =
-    !preflightFresh || !preflightData
+    !activeStoreMapped
+      ? t("storeScope.mappingRequired")
+      : !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
       : !preflightData.canExport
         ? t("export.disabledFailed")
@@ -1033,7 +1089,9 @@ const MMarketSettingsPage = () => {
           ? t("export.disabledCooldown", { countdown: formatCountdown(effectiveCooldownSeconds) })
           : "";
   const exportReadyDisabledReason =
-    !preflightFresh || !preflightData
+    !activeStoreMapped
+      ? t("storeScope.mappingRequired")
+      : !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
       : readyProductsCount === 0
         ? t("export.disabledNoReadyProducts")
@@ -1222,6 +1280,34 @@ const MMarketSettingsPage = () => {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("productsSelection.subtitle")}</p>
           <p className="text-xs text-muted-foreground">{t("productsSelection.note")}</p>
+
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">{t("storeScope.bazaarStore")}</p>
+              <Select
+                value={activeStoreId}
+                onValueChange={setActiveStoreId}
+                disabled={!canEdit && !canView}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={tCommon("selectStore")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(settingsQuery.data?.stores ?? []).map((store) => (
+                    <SelectItem key={store.storeId} value={store.storeId}>
+                      {store.storeName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">{t("storeScope.externalStore")}</p>
+              <p className="mt-1 text-sm font-medium text-foreground">
+                {activeBranchId || t("storeScope.mappingMissing")}
+              </p>
+            </div>
+          </div>
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border border-border p-3">
@@ -1547,7 +1633,12 @@ const MMarketSettingsPage = () => {
           <p className="text-sm text-muted-foreground">{t("preflight.subtitle")}</p>
 
           <FormActions className="justify-start">
-            <Button type="button" onClick={handleRunPreflight} disabled={preflightQuery.isFetching}>
+            <Button
+              type="button"
+              onClick={handleRunPreflight}
+              disabled={!activeStoreMapped || preflightQuery.isFetching}
+              title={!activeStoreMapped ? t("storeScope.mappingRequired") : undefined}
+            >
               {preflightQuery.isFetching ? tCommon("loading") : t("preflight.run")}
             </Button>
           </FormActions>
@@ -1561,6 +1652,14 @@ const MMarketSettingsPage = () => {
 
           {preflightData ? (
             <div className="space-y-4">
+              {preflightData.store ? (
+                <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+                  {t("storeScope.preflightStore", {
+                    store: preflightData.store.storeName,
+                    external: preflightData.store.externalStoreId ?? "-",
+                  })}
+                </div>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">
@@ -1779,9 +1878,10 @@ const MMarketSettingsPage = () => {
           <FormActions className="justify-start">
             <Button
               type="button"
-              onClick={() => exportMutation.mutate()}
+              onClick={() => exportMutation.mutate({ storeId: activeStoreId })}
               disabled={
                 !canEdit ||
+                !activeStoreMapped ||
                 exportMutation.isLoading ||
                 exportReadyMutation.isLoading ||
                 !preflightCanExport ||
@@ -1794,9 +1894,10 @@ const MMarketSettingsPage = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => exportReadyMutation.mutate()}
+              onClick={() => exportReadyMutation.mutate({ storeId: activeStoreId })}
               disabled={
                 !canEdit ||
+                !activeStoreMapped ||
                 exportMutation.isLoading ||
                 exportReadyMutation.isLoading ||
                 !preflightFresh ||
@@ -1851,6 +1952,11 @@ const MMarketSettingsPage = () => {
                           : {};
                       const productCount =
                         typeof stats.productCount === "number" ? stats.productCount : 0;
+                      const storeName =
+                        typeof stats.storeName === "string" && stats.storeName.trim()
+                          ? stats.storeName
+                          : job.storeId || "-";
+                      const summaryText = t("history.summary", { products: productCount });
 
                       return (
                         <TableRow key={job.id}>
@@ -1863,7 +1969,7 @@ const MMarketSettingsPage = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {t("history.summary", { products: productCount })}
+                            {`${summaryText} - ${storeName}`}
                           </TableCell>
                           <TableCell>
                             {job.errorReportJson ? (

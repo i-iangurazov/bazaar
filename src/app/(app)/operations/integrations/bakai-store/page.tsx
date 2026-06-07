@@ -169,6 +169,7 @@ const BakaiStorePage = () => {
   const role = session?.user?.role ?? "STAFF";
   const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
   const canEdit = role === "ADMIN" || role === "MANAGER";
+  const [activeStoreId, setActiveStoreId] = useState("");
 
   const settingsQuery = trpc.bakaiStore.settings.useQuery(undefined, { enabled: canView });
   const jobsQuery = trpc.bakaiStore.jobs.useQuery(
@@ -185,11 +186,14 @@ const BakaiStorePage = () => {
           : false,
     },
   );
-  const preflightQuery = trpc.bakaiStore.preflight.useQuery(undefined, {
-    enabled: false,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
+  const preflightQuery = trpc.bakaiStore.preflight.useQuery(
+    activeStoreId ? { storeId: activeStoreId } : undefined,
+    {
+      enabled: false,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  );
 
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
   const [branchMappingDraft, setBranchMappingDraft] = useState<Record<string, string>>({});
@@ -219,13 +223,14 @@ const BakaiStorePage = () => {
 
   const productsQuery = trpc.bakaiStore.products.useQuery(
     {
+      storeId: activeStoreId || undefined,
       search: productSearch.trim() || undefined,
       selection: productSelectionFilter,
       page: productsPage,
       pageSize: productsPageSize,
     },
     {
-      enabled: canView,
+      enabled: canView && Boolean(activeStoreId),
       keepPreviousData: true,
       refetchInterval: hasActiveExportJob ? 5_000 : false,
     },
@@ -359,6 +364,17 @@ const BakaiStorePage = () => {
   }, [settingsQuery.data?.branchMappings]);
 
   useEffect(() => {
+    const stores = settingsQuery.data?.stores ?? [];
+    if (!stores.length) {
+      setActiveStoreId("");
+      return;
+    }
+    if (!activeStoreId || !stores.some((store) => store.storeId === activeStoreId)) {
+      setActiveStoreId(stores[0].storeId);
+    }
+  }, [activeStoreId, settingsQuery.data?.stores]);
+
+  useEffect(() => {
     setConnectionMode(
       settingsQuery.data?.integration.connectionMode ?? BakaiStoreConnectionMode.TEMPLATE,
     );
@@ -367,6 +383,12 @@ const BakaiStorePage = () => {
   useEffect(() => {
     setProductsPage(1);
   }, [productSearch, productSelectionFilter]);
+
+  useEffect(() => {
+    setPreflightFresh(false);
+    setSelectedProductIds(new Set());
+    setProductsPage(1);
+  }, [activeStoreId]);
 
   const handleTemplateUpload = async (file: File | null) => {
     if (!file || !canEdit) {
@@ -402,6 +424,14 @@ const BakaiStorePage = () => {
   };
 
   const handleRunPreflight = async () => {
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
+    if (!activeStoreMapped) {
+      toast({ variant: "error", description: t("storeScope.mappingRequired") });
+      return;
+    }
     const result = await preflightQuery.refetch();
     if (result.data) {
       setPreflightFresh(true);
@@ -488,9 +518,14 @@ const BakaiStorePage = () => {
   };
 
   const handleSelectAllProductResults = async () => {
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
     setSelectingAllProducts(true);
     try {
       const ids = await trpcUtils.bakaiStore.listIds.fetch({
+        storeId: activeStoreId,
         search: productSearch.trim() || undefined,
         selection: productSelectionFilter,
       });
@@ -509,20 +544,42 @@ const BakaiStorePage = () => {
     if (!canEdit) {
       return;
     }
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
     const targetIds = productIds ?? Array.from(selectedProductIds);
     if (!targetIds.length) {
       return;
     }
     updateProductsMutation.mutate({
+      storeId: activeStoreId,
       productIds: targetIds,
       included,
     });
   };
 
+  const activeBranchId = activeStoreId
+    ? (
+        branchMappingDraft[activeStoreId] ??
+        settingsQuery.data?.branchMappings.find((mapping) => mapping.storeId === activeStoreId)
+          ?.branchId ??
+        ""
+      ).trim()
+    : "";
+  const activeTemplateColumns = activeStoreId
+    ? (settingsQuery.data?.mappings ?? [])
+        .filter((mapping) => (mappingDraft[mapping.columnKey] ?? mapping.storeId) === activeStoreId)
+        .map((mapping) => mapping.columnKey)
+    : [];
   const preflightData = preflightQuery.data;
   const activeMode =
     settingsQuery.data?.integration.connectionMode ?? BakaiStoreConnectionMode.TEMPLATE;
   const isApiMode = activeMode === BakaiStoreConnectionMode.API;
+  const activeExternalStoreId = isApiMode ? activeBranchId : activeTemplateColumns.join(", ");
+  const activeApiMapped = Boolean(activeStoreId && activeBranchId);
+  const activeTemplateMapped = Boolean(activeStoreId && activeTemplateColumns.length > 0);
+  const activeStoreMapped = isApiMode ? activeApiMapped : activeTemplateMapped;
   const hasConfiguredApiEndpoint = Boolean(settingsQuery.data?.integration.importEndpoint);
   const readyProductsCount = preflightData?.summary.productsReady ?? 0;
   const preflightCanExport =
@@ -559,7 +616,9 @@ const BakaiStorePage = () => {
     selectedProductIds.size === (productsQuery.data?.total ?? 0);
 
   const exportDisabledReason =
-    !preflightFresh || !preflightData
+    !activeStoreMapped
+      ? t("storeScope.mappingRequired")
+      : !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
       : !preflightData.actionability.canRunAll
         ? t("export.disabledFailed")
@@ -567,7 +626,9 @@ const BakaiStorePage = () => {
           ? t("export.disabledActiveJob")
           : "";
   const exportReadyDisabledReason =
-    !preflightFresh || !preflightData
+    !activeStoreMapped
+      ? t("storeScope.mappingRequired")
+      : !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
       : readyProductsCount === 0
         ? t("export.disabledNoReadyProducts")
@@ -575,7 +636,9 @@ const BakaiStorePage = () => {
           ? t("export.disabledActiveJob")
           : "";
   const apiSyncDisabledReason =
-    !hasConfiguredApiEndpoint
+    !activeStoreMapped
+      ? t("storeScope.mappingRequired")
+      : !hasConfiguredApiEndpoint
       ? t("export.apiEndpointMissing")
       : !preflightFresh || !preflightData
         ? t("export.disabledNeedPreflight")
@@ -585,7 +648,9 @@ const BakaiStorePage = () => {
             ? t("export.disabledActiveJob")
             : "";
   const apiReadyDisabledReason =
-    !hasConfiguredApiEndpoint
+    !activeStoreMapped
+      ? t("storeScope.mappingRequired")
+      : !hasConfiguredApiEndpoint
       ? t("export.apiEndpointMissing")
       : !preflightFresh || !preflightData
         ? t("export.disabledNeedPreflight")
@@ -594,6 +659,11 @@ const BakaiStorePage = () => {
           : hasActiveExportJob
             ? t("export.disabledActiveJob")
             : "";
+  const fallbackExportDisabledReason = !activeTemplateMapped
+    ? t("storeScope.mappingRequired")
+    : hasActiveExportJob
+      ? t("export.disabledActiveJob")
+      : "";
 
   if (!canView) {
     return null;
@@ -968,6 +1038,36 @@ const BakaiStorePage = () => {
             </div>
           ) : null}
 
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">{t("storeScope.bazaarStore")}</p>
+              <Select
+                value={activeStoreId}
+                onValueChange={setActiveStoreId}
+                disabled={!canEdit && !canView}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={tCommon("selectStore")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(settingsQuery.data?.stores ?? []).map((store) => (
+                    <SelectItem key={store.storeId} value={store.storeId}>
+                      {store.storeName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground">
+                {isApiMode ? t("storeScope.externalStore") : t("storeScope.templateColumns")}
+              </p>
+              <p className="mt-1 text-sm font-medium text-foreground">
+                {activeExternalStoreId || t("storeScope.mappingMissing")}
+              </p>
+            </div>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border border-border p-3">
               <p className="text-xs text-muted-foreground">
@@ -1256,7 +1356,12 @@ const BakaiStorePage = () => {
             {isApiMode ? t("preflight.subtitleApi") : t("preflight.subtitle")}
           </p>
           <FormActions className="justify-start">
-            <Button type="button" onClick={handleRunPreflight} disabled={preflightQuery.isFetching}>
+            <Button
+              type="button"
+              onClick={handleRunPreflight}
+              disabled={!activeStoreMapped || preflightQuery.isFetching}
+              title={!activeStoreMapped ? t("storeScope.mappingRequired") : undefined}
+            >
               {preflightQuery.isFetching ? tCommon("loading") : t("preflight.run")}
             </Button>
           </FormActions>
@@ -1270,6 +1375,14 @@ const BakaiStorePage = () => {
 
           {preflightData ? (
             <div className="space-y-4">
+              {preflightData.store ? (
+                <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+                  {t("storeScope.preflightStore", {
+                    store: preflightData.store.storeName,
+                    external: preflightData.store.externalStoreId ?? "-",
+                  })}
+                </div>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-md border border-border p-3">
                   <p className="text-xs text-muted-foreground">
@@ -1405,9 +1518,10 @@ const BakaiStorePage = () => {
               <>
                 <Button
                   type="button"
-                  onClick={() => apiSyncMutation.mutate()}
+                  onClick={() => apiSyncMutation.mutate({ storeId: activeStoreId })}
                   disabled={
                     !canEdit ||
+                    !activeStoreMapped ||
                     apiSyncMutation.isLoading ||
                     apiSyncReadyMutation.isLoading ||
                     !preflightFresh ||
@@ -1422,9 +1536,10 @@ const BakaiStorePage = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => apiSyncReadyMutation.mutate()}
+                  onClick={() => apiSyncReadyMutation.mutate({ storeId: activeStoreId })}
                   disabled={
                     !canEdit ||
+                    !activeStoreMapped ||
                     apiSyncMutation.isLoading ||
                     apiSyncReadyMutation.isLoading ||
                     !preflightFresh ||
@@ -1441,8 +1556,14 @@ const BakaiStorePage = () => {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => exportMutation.mutate()}
-                  disabled={!canEdit || exportMutation.isLoading || hasActiveExportJob}
+                  onClick={() => exportMutation.mutate({ storeId: activeStoreId })}
+                  disabled={
+                    !canEdit ||
+                    !activeTemplateMapped ||
+                    exportMutation.isLoading ||
+                    hasActiveExportJob
+                  }
+                  title={fallbackExportDisabledReason}
                 >
                   {exportMutation.isLoading ? tCommon("loading") : t("export.runFallback")}
                 </Button>
@@ -1451,9 +1572,10 @@ const BakaiStorePage = () => {
               <>
                 <Button
                   type="button"
-                  onClick={() => exportMutation.mutate()}
+                  onClick={() => exportMutation.mutate({ storeId: activeStoreId })}
                   disabled={
                     !canEdit ||
+                    !activeStoreMapped ||
                     exportMutation.isLoading ||
                     exportReadyMutation.isLoading ||
                     !preflightCanExport ||
@@ -1466,9 +1588,10 @@ const BakaiStorePage = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => exportReadyMutation.mutate()}
+                  onClick={() => exportReadyMutation.mutate({ storeId: activeStoreId })}
                   disabled={
                     !canEdit ||
+                    !activeStoreMapped ||
                     exportMutation.isLoading ||
                     exportReadyMutation.isLoading ||
                     !preflightFresh ||
@@ -1540,6 +1663,19 @@ const BakaiStorePage = () => {
                       typeof job.succeededCount === "number" ? job.succeededCount : 0;
                     const failed = typeof job.failedCount === "number" ? job.failedCount : 0;
                     const skipped = typeof job.skippedCount === "number" ? job.skippedCount : 0;
+                    const storeName =
+                      typeof stats.storeName === "string" && stats.storeName.trim()
+                        ? stats.storeName
+                        : null;
+                    const summaryText =
+                      job.jobType === BakaiStoreJobType.API_SYNC
+                        ? t("history.apiSummary", {
+                            attempted,
+                            succeeded,
+                            failed,
+                            skipped,
+                          })
+                        : t("history.summary", { products: productCount });
 
                     return (
                       <TableRow key={job.id}>
@@ -1560,14 +1696,7 @@ const BakaiStorePage = () => {
                           {job.requestedBy?.name ?? "-"}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {job.jobType === BakaiStoreJobType.API_SYNC
-                            ? t("history.apiSummary", {
-                                attempted,
-                                succeeded,
-                                failed,
-                                skipped,
-                              })
-                            : t("history.summary", { products: productCount })}
+                          {storeName ? `${summaryText} - ${storeName}` : summaryText}
                         </TableCell>
                         <TableCell className="space-x-3">
                           {job.storagePath ? (

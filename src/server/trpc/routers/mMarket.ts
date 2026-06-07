@@ -112,6 +112,7 @@ export const mMarketRouter = router({
     .input(
       z
         .object({
+          storeId: z.string().min(1).optional(),
           search: z.string().max(200).optional(),
           selection: z.enum(["all", "included", "excluded"]).optional(),
           page: z.number().int().min(1).optional(),
@@ -123,6 +124,7 @@ export const mMarketRouter = router({
       try {
         return await listMMarketProducts({
           organizationId: ctx.user.organizationId,
+          storeId: input?.storeId,
           search: input?.search,
           selection: input?.selection,
           page: input?.page,
@@ -137,6 +139,7 @@ export const mMarketRouter = router({
     .input(
       z
         .object({
+          storeId: z.string().min(1).optional(),
           search: z.string().max(200).optional(),
           selection: z.enum(["all", "included", "excluded"]).optional(),
         })
@@ -146,6 +149,7 @@ export const mMarketRouter = router({
       try {
         return await listMMarketProductIds({
           organizationId: ctx.user.organizationId,
+          storeId: input?.storeId,
           search: input?.search,
           selection: input?.selection,
         });
@@ -158,6 +162,7 @@ export const mMarketRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "mmarket-update-products" }))
     .input(
       z.object({
+        storeId: z.string().min(1),
         productIds: z.array(z.string().min(1)).min(1).max(500),
         included: z.boolean(),
       }),
@@ -166,6 +171,7 @@ export const mMarketRouter = router({
       try {
         return await updateMMarketProductSelection({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           productIds: input.productIds,
@@ -176,32 +182,34 @@ export const mMarketRouter = router({
       }
     }),
 
-  preflight: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      return await runMMarketPreflight(ctx.user.organizationId);
-    } catch (error) {
-      throw toTRPCError(error);
-    }
-  }),
+  preflight: protectedProcedure
+    .input(z.object({ storeId: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      try {
+        return await runMMarketPreflight(ctx.user.organizationId, input?.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   bulkGenerateDescriptions: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "mmarket-descriptions-bulk" }))
     .input(
-      z
-        .object({
-          locale: z.enum(locales).optional(),
-          productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
-        })
-        .optional(),
+      z.object({
+        storeId: z.string().min(1),
+        locale: z.enum(locales).optional(),
+        productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await bulkGenerateMMarketShortDescriptions({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
-          locale: input?.locale,
-          productIds: input?.productIds,
+          locale: input.locale,
+          productIds: input.productIds,
           logger: ctx.logger,
         });
       } catch (error) {
@@ -212,19 +220,19 @@ export const mMarketRouter = router({
   bulkAutofillSpecs: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "mmarket-specs-bulk" }))
     .input(
-      z
-        .object({
-          productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
-        })
-        .optional(),
+      z.object({
+        storeId: z.string().min(1),
+        productIds: z.array(z.string().min(1)).min(1).max(25).optional(),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         return await bulkAutofillMMarketSpecs({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
-          productIds: input?.productIds,
+          productIds: input.productIds,
           logger: ctx.logger,
         });
       } catch (error) {
@@ -234,10 +242,12 @@ export const mMarketRouter = router({
 
   bulkCreateBaseTemplates: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 1, prefix: "mmarket-templates-bulk" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await bulkCreateMMarketBaseTemplates({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           logger: ctx.logger,
@@ -249,10 +259,12 @@ export const mMarketRouter = router({
 
   assignMissingCategory: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-category-bulk" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await assignDefaultCategoryToMMarketProducts({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           logger: ctx.logger,
@@ -264,10 +276,12 @@ export const mMarketRouter = router({
 
   exportNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-export-now" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await requestMMarketExport({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
         });
@@ -278,10 +292,12 @@ export const mMarketRouter = router({
 
   exportReadyNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "mmarket-export-ready" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await requestMMarketExport({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           mode: "READY_ONLY",

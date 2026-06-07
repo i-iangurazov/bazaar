@@ -139,6 +139,7 @@ export const bakaiStoreRouter = router({
     .input(
       z
         .object({
+          storeId: z.string().min(1).optional(),
           search: z.string().max(200).optional(),
           selection: z.enum(["all", "included", "excluded"]).optional(),
           page: z.number().int().min(1).optional(),
@@ -150,6 +151,7 @@ export const bakaiStoreRouter = router({
       try {
         return await listBakaiStoreProducts({
           organizationId: ctx.user.organizationId,
+          storeId: input?.storeId,
           search: input?.search,
           selection: input?.selection,
           page: input?.page,
@@ -164,6 +166,7 @@ export const bakaiStoreRouter = router({
     .input(
       z
         .object({
+          storeId: z.string().min(1).optional(),
           search: z.string().max(200).optional(),
           selection: z.enum(["all", "included", "excluded"]).optional(),
         })
@@ -173,6 +176,7 @@ export const bakaiStoreRouter = router({
       try {
         return await listBakaiStoreProductIds({
           organizationId: ctx.user.organizationId,
+          storeId: input?.storeId,
           search: input?.search,
           selection: input?.selection,
         });
@@ -185,6 +189,7 @@ export const bakaiStoreRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "bakai-store-update-products" }))
     .input(
       z.object({
+        storeId: z.string().min(1),
         productIds: z.array(z.string().min(1)).min(1).max(500),
         included: z.boolean(),
       }),
@@ -193,6 +198,7 @@ export const bakaiStoreRouter = router({
       try {
         return await updateBakaiStoreProductSelection({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           productIds: input.productIds,
@@ -203,28 +209,34 @@ export const bakaiStoreRouter = router({
       }
     }),
 
-  preflight: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      return await runBakaiStorePreflight(ctx.user.organizationId);
-    } catch (error) {
-      throw toTRPCError(error);
-    }
-  }),
+  preflight: protectedProcedure
+    .input(z.object({ storeId: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      try {
+        return await runBakaiStorePreflight(ctx.user.organizationId, input?.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
-  apiPreflight: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      return await runBakaiStoreApiPreflight(ctx.user.organizationId);
-    } catch (error) {
-      throw toTRPCError(error);
-    }
-  }),
+  apiPreflight: protectedProcedure
+    .input(z.object({ storeId: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      try {
+        return await runBakaiStoreApiPreflight(ctx.user.organizationId, input?.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   exportNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-export-now" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await requestBakaiStoreExport({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
         });
@@ -235,10 +247,12 @@ export const bakaiStoreRouter = router({
 
   exportReadyNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-export-ready" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await requestBakaiStoreExport({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           mode: "READY_ONLY",
@@ -250,10 +264,12 @@ export const bakaiStoreRouter = router({
 
   apiSyncNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-api-sync-now" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await requestBakaiStoreApiSync({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
         });
@@ -264,10 +280,12 @@ export const bakaiStoreRouter = router({
 
   apiSyncReadyNow: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 2, prefix: "bakai-store-api-sync-ready-now" }))
-    .mutation(async ({ ctx }) => {
+    .input(z.object({ storeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
       try {
         return await requestBakaiStoreApiSync({
           organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           mode: "READY_ONLY",

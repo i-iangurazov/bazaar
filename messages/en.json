@@ -1263,6 +1263,14 @@
     "title": "bazaar + MMarket",
     "subtitle": "M market settings overview",
     "readOnlyHint": "Read only hint",
+    "storeScope": {
+      "bazaarStore": "Bazaar store",
+      "externalStore": "M-Market branch_id",
+      "mappingMissing": "Mapping missing",
+      "required": "Select a Bazaar store first.",
+      "mappingRequired": "Map the selected Bazaar store to an M-Market branch_id first.",
+      "preflightStore": "Store: {store}. External target: {external}."
+    },
     "connection": {
       "title": "Connection",
       "environment": "Environment",
@@ -1454,6 +1462,15 @@
     "title": "bazaar + Bakai Store",
     "subtitle": "Bakai store settings overview",
     "readOnlyHint": "Read only hint",
+    "storeScope": {
+      "bazaarStore": "Bazaar store",
+      "externalStore": "Bakai branch_id",
+      "templateColumns": "Bakai stock columns",
+      "mappingMissing": "Mapping missing",
+      "required": "Select a Bazaar store first.",
+      "mappingRequired": "Map the selected Bazaar store for the current Bakai mode first.",
+      "preflightStore": "Store: {store}. External target: {external}."
+    },
     "status": {
       "not_configured": "Not configured",
       "draft": "Draft",
@@ -4066,6 +4083,8 @@
     "serviceUnavailable": "Service unavailable",
     "tryAgain": "Try again.",
     "invalidInput": "Invalid input.",
+    "integrationStoreRequired": "Select a store before running this integration.",
+    "integrationStoreMappingRequired": "Map the selected store before running this integration.",
     "customerNameRequired": "Customer name is required.",
     "customerContactRequired": "Enter at least a customer email or phone.",
     "customerEmailInvalid": "Customer email is invalid.",

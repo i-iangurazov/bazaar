@@ -18,10 +18,16 @@ describe("m-market manager product tools source", () => {
     expect(routerSource).not.toContain("adminProcedure");
 
     expect(pageSource).toContain('const canEdit = role === "ADMIN" || role === "MANAGER";');
-    expect(pageSource).toContain("if (!canEdit || shortDescriptionTargetIds.length <= 0");
-    expect(pageSource).toContain("if (!canEdit || actionableMissingSpecsTargetIds.length <= 0");
-    expect(pageSource).toContain("if (!canEdit || actionableMissingSpecsCount <= 0)");
-    expect(pageSource).toContain("if (!canEdit || missingCategoryCount <= 0)");
+    expect(pageSource).toContain(
+      "if (!canEdit || !activeStoreId || shortDescriptionTargetIds.length <= 0",
+    );
+    expect(pageSource).toContain("!activeStoreId ||\n      actionableMissingSpecsTargetIds.length <= 0");
+    expect(pageSource).toContain(
+      "if (!canEdit || !activeStoreId || actionableMissingSpecsCount <= 0)",
+    );
+    expect(pageSource).toContain(
+      "if (!canEdit || !activeStoreId || missingCategoryCount <= 0)",
+    );
     expect(pageSource).not.toContain("const isAdmin = role ===");
   });
 });

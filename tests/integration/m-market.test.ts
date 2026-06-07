@@ -525,7 +525,7 @@ describeDb("m-market integration", () => {
   });
 
   it("marks successfully exported products as exported in the products table", async () => {
-    const { org, adminUser, product } = await prepareReadyMMarketData();
+    const { org, store, adminUser, product } = await prepareReadyMMarketData();
     const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
     delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
     const fetchMock = vi.fn().mockResolvedValue(
@@ -552,8 +552,9 @@ describeDb("m-market integration", () => {
       });
       const inclusion = await prisma.mMarketIncludedProduct.findUnique({
         where: {
-          orgId_productId: {
+          orgId_storeId_productId: {
             orgId: org.id,
+            storeId: store.id,
             productId: product.id,
           },
         },

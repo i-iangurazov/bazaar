@@ -1263,6 +1263,14 @@
     "title": "bazaar + MMarket",
     "subtitle": "Подключение, выбор товаров и полная синхронизация в M-маркет.",
     "readOnlyHint": "Режим просмотра: изменение доступно только администратору или менеджеру.",
+    "storeScope": {
+      "bazaarStore": "Магазин Bazaar",
+      "externalStore": "M-Market branch_id",
+      "mappingMissing": "Привязка не настроена",
+      "required": "Сначала выберите магазин Bazaar.",
+      "mappingRequired": "Сначала привяжите выбранный магазин Bazaar к branch_id M-Market.",
+      "preflightStore": "Магазин: {store}. Внешняя цель: {external}."
+    },
     "connection": {
       "title": "Подключение",
       "environment": "Окружение",
@@ -1454,6 +1462,15 @@
     "title": "bazaar + Bakai Store",
     "subtitle": "Прямая синхронизация по API или шаблонный XLSX-экспорт как fallback.",
     "readOnlyHint": "Режим просмотра: изменение доступно только администратору или менеджеру.",
+    "storeScope": {
+      "bazaarStore": "Магазин Bazaar",
+      "externalStore": "Bakai branch_id",
+      "templateColumns": "Колонки остатков Bakai",
+      "mappingMissing": "Привязка не настроена",
+      "required": "Сначала выберите магазин Bazaar.",
+      "mappingRequired": "Сначала настройте привязку выбранного магазина Bazaar для текущего режима Bakai.",
+      "preflightStore": "Магазин: {store}. Внешняя цель: {external}."
+    },
     "status": {
       "not_configured": "Не настроено",
       "draft": "Черновик",
@@ -4066,6 +4083,8 @@
     "serviceUnavailable": "Сервис временно недоступен. Проверьте подключение к базе данных и Redis.",
     "tryAgain": "Повторить",
     "invalidInput": "Некорректные данные. Проверьте поля и повторите попытку.",
+    "integrationStoreRequired": "Выберите магазин перед запуском интеграции.",
+    "integrationStoreMappingRequired": "Настройте привязку выбранного магазина перед запуском интеграции.",
     "customerNameRequired": "Имя клиента обязательно.",
     "customerContactRequired": "Укажите email или телефон клиента.",
     "customerEmailInvalid": "Некорректный email клиента.",

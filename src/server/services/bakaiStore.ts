@@ -97,6 +97,11 @@ export type BakaiStorePreflightResult = {
   mode: BakaiStorePreflightMode;
   generatedAt: Date;
   canExport: boolean;
+  store: {
+    storeId: string;
+    storeName: string;
+    externalStoreId: string | null;
+  } | null;
   summary: {
     productsConsidered: number;
     productsReady: number;
@@ -186,6 +191,26 @@ type BakaiStoreApiPreflightPlan = {
 };
 
 const normalizeSearch = (value?: string | null) => value?.trim() ?? "";
+
+type IntegrationStoreContext = {
+  storeId: string;
+  storeName: string;
+};
+
+type BakaiStoreBranchContext = IntegrationStoreContext & {
+  externalStoreId: string;
+};
+
+const normalizeStoreId = (value?: string | null) => value?.trim() ?? "";
+
+const buildStoreProductWhere = (storeId: string): Prisma.ProductWhereInput => ({
+  storeProducts: {
+    some: {
+      storeId,
+      isActive: true,
+    },
+  },
+});
 
 const nonDataImagePattern = /^data:image\//i;
 
@@ -716,15 +741,70 @@ const ensureStoreOwnership = async (organizationId: string, storeIds: string[]) 
   }
 };
 
-const ensureProductOwnership = async (organizationId: string, productIds: string[]) => {
+const resolveIntegrationStoreContext = async (input: {
+  organizationId: string;
+  storeId?: string | null;
+}): Promise<IntegrationStoreContext> => {
+  const requestedStoreId = normalizeStoreId(input.storeId);
+  if (requestedStoreId) {
+    const store = await prisma.store.findFirst({
+      where: { id: requestedStoreId, organizationId: input.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!store) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+    return { storeId: store.id, storeName: store.name };
+  }
+
+  const stores = await prisma.store.findMany({
+    where: { organizationId: input.organizationId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+    take: 2,
+  });
+  if (stores.length !== 1) {
+    throw new AppError("integrationStoreRequired", "BAD_REQUEST", 400);
+  }
+  return { storeId: stores[0].id, storeName: stores[0].name };
+};
+
+const resolveBakaiStoreBranchContext = async (input: {
+  organizationId: string;
+  storeId?: string | null;
+}): Promise<BakaiStoreBranchContext> => {
+  const store = await resolveIntegrationStoreContext(input);
+  const mapping = await prisma.bakaiStoreBranchMapping.findUnique({
+    where: {
+      orgId_storeId: {
+        orgId: input.organizationId,
+        storeId: store.storeId,
+      },
+    },
+    select: { bakaiBranchId: true },
+  });
+  const externalStoreId = mapping?.bakaiBranchId.trim() ?? "";
+  if (!externalStoreId) {
+    throw new AppError("integrationStoreMappingRequired", "CONFLICT", 409);
+  }
+  return { ...store, externalStoreId };
+};
+
+const ensureProductOwnership = async (
+  organizationId: string,
+  productIds: string[],
+  storeId?: string | null,
+) => {
   const uniqueIds = Array.from(new Set(productIds.map((value) => value.trim()).filter(Boolean)));
   if (!uniqueIds.length) {
     return [] as string[];
   }
+  const scopedStoreId = normalizeStoreId(storeId);
   const products = await prisma.product.findMany({
     where: {
       organizationId,
       id: { in: uniqueIds },
+      ...(scopedStoreId ? buildStoreProductWhere(scopedStoreId) : {}),
     },
     select: { id: true },
   });
@@ -736,6 +816,7 @@ const ensureProductOwnership = async (organizationId: string, productIds: string
 
 const buildBakaiProductListWhere = (input: {
   organizationId: string;
+  storeId: string;
   search?: string;
   selection?: BakaiStoreProductSelectionFilter;
 }) => {
@@ -745,6 +826,7 @@ const buildBakaiProductListWhere = (input: {
   const baseWhere: Prisma.ProductWhereInput = {
     organizationId: input.organizationId,
     isDeleted: false,
+    ...buildStoreProductWhere(input.storeId),
   };
 
   const searchWhere: Prisma.ProductWhereInput = search
@@ -760,13 +842,13 @@ const buildBakaiProductListWhere = (input: {
     selection === "included"
       ? {
           bakaiStoreInclusions: {
-            some: { orgId: input.organizationId },
+            some: { orgId: input.organizationId, storeId: input.storeId },
           },
         }
       : selection === "excluded"
         ? {
             bakaiStoreInclusions: {
-              none: { orgId: input.organizationId },
+              none: { orgId: input.organizationId, storeId: input.storeId },
             },
           }
         : {};
@@ -821,6 +903,7 @@ const buildBakaiErrorReport = (input: {
 }) => ({
   generatedAt: input.preflight.generatedAt.toISOString(),
   mode: input.mode,
+  store: input.preflight.store,
   templateSchema: input.templateSchema,
   summary: input.preflight.summary,
   blockers: input.preflight.blockers,
@@ -976,6 +1059,7 @@ type BakaiSelectedApiProduct = {
     category: string | null;
     description: string | null;
     basePriceKgs: Prisma.Decimal | null;
+    storePrices?: Array<{ priceKgs: Prisma.Decimal }>;
     photoUrl: string | null;
     supplier: { name: string } | null;
     images: Array<{ url: string; position: number }>;
@@ -1098,7 +1182,9 @@ export const mapBazaarProductToBakaiProduct = (input: {
   const name = input.selection.product.name?.trim() ?? "";
   const category = input.selection.product.category?.trim() ?? "";
   const description = input.selection.product.description?.trim() ?? "";
-  const price = normalizeBakaiNumericValue(input.selection.product.basePriceKgs);
+  const price = normalizeBakaiNumericValue(
+    input.selection.product.storePrices?.[0]?.priceKgs ?? input.selection.product.basePriceKgs,
+  );
   const discountPercent = normalizeBakaiNumericValue(input.selection.discountPercent);
   const discountAmount = normalizeBakaiNumericValue(input.selection.discountAmount);
 
@@ -1240,10 +1326,15 @@ export const normalizeBakaiApiError = (input: {
 
 export const buildBakaiStoreApiPayload = async (input: {
   organizationId: string;
+  storeId?: string | null;
   mode?: BakaiStoreExportMode;
 }): Promise<BakaiStoreApiPreflightPlan> => {
   const syncMode = normalizeBakaiExportMode(input.mode);
-  const [integration, selectedProducts, branchMappings, stores] = await Promise.all([
+  const storeContext = await resolveBakaiStoreBranchContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  const [integration, selectedProducts] = await Promise.all([
     prisma.bakaiStoreIntegration.findUnique({
       where: { orgId: input.organizationId },
       select: {
@@ -1255,9 +1346,11 @@ export const buildBakaiStoreApiPayload = async (input: {
     prisma.bakaiStoreIncludedProduct.findMany({
       where: {
         orgId: input.organizationId,
+        storeId: storeContext.storeId,
         product: {
           organizationId: input.organizationId,
           isDeleted: false,
+          ...buildStoreProductWhere(storeContext.storeId),
         },
       },
       select: {
@@ -1273,6 +1366,15 @@ export const buildBakaiStoreApiPayload = async (input: {
             category: true,
             description: true,
             basePriceKgs: true,
+            storePrices: {
+              where: {
+                organizationId: input.organizationId,
+                storeId: storeContext.storeId,
+                variantKey: "BASE",
+              },
+              select: { priceKgs: true },
+              take: 1,
+            },
             photoUrl: true,
             supplier: { select: { name: true } },
             images: {
@@ -1287,30 +1389,15 @@ export const buildBakaiStoreApiPayload = async (input: {
       },
       orderBy: [{ product: { name: "asc" } }, { product: { sku: "asc" } }],
     }),
-    prisma.bakaiStoreBranchMapping.findMany({
-      where: { orgId: input.organizationId },
-      select: {
-        storeId: true,
-        bakaiBranchId: true,
-        store: { select: { id: true, name: true } },
-      },
-      orderBy: { store: { name: "asc" } },
-    }),
-    prisma.store.findMany({
-      where: { organizationId: input.organizationId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
   ]);
 
   const selectedProductIds = selectedProducts.map((row) => row.productId);
-  const mappedStoreIds = branchMappings.map((mapping) => mapping.storeId);
   const [snapshots, categoryTemplates, variantValues] = await Promise.all([
-    selectedProductIds.length && mappedStoreIds.length
+    selectedProductIds.length
       ? prisma.inventorySnapshot.findMany({
           where: {
             productId: { in: selectedProductIds },
-            storeId: { in: mappedStoreIds },
+            storeId: storeContext.storeId,
             variantKey: "BASE",
           },
           select: {
@@ -1373,12 +1460,7 @@ export const buildBakaiStoreApiPayload = async (input: {
   );
   const valuesByProduct = buildVariantValuesByProduct(variantValues);
 
-  const missingStoreMappings = stores
-    .filter((store) => !branchMappings.some((mapping) => mapping.storeId === store.id))
-    .map((store) => ({
-      storeId: store.id,
-      storeName: store.name,
-    }));
+  const missingStoreMappings: Array<{ storeId: string; storeName: string }> = [];
 
   const payloadProducts: BakaiStoreApiProductPayload[] = [];
   const payloadByProductId = new Map<string, BakaiStoreApiProductPayload>();
@@ -1398,10 +1480,7 @@ export const buildBakaiStoreApiPayload = async (input: {
 
     const mapped = mapBazaarProductToBakaiProduct({
       selection,
-      mappedBranches: branchMappings.map((mapping) => ({
-        storeId: mapping.storeId,
-        branchId: mapping.bakaiBranchId,
-      })),
+      mappedBranches: [{ storeId: storeContext.storeId, branchId: storeContext.externalStoreId }],
       snapshotByStore: stockByProductStore.get(selection.productId) ?? new Map<string, number>(),
       templatesByCategory,
       valuesByProduct,
@@ -1468,6 +1547,11 @@ export const buildBakaiStoreApiPayload = async (input: {
     mode: "API",
     generatedAt: new Date(),
     canExport: canRunAll,
+    store: {
+      storeId: storeContext.storeId,
+      storeName: storeContext.storeName,
+      externalStoreId: storeContext.externalStoreId,
+    },
     summary: {
       productsConsidered: selectedProducts.length,
       productsReady: readyProductIds.length,
@@ -1508,6 +1592,9 @@ export const buildBakaiStoreApiPayload = async (input: {
   const payloadStats = {
     jobType: BakaiStoreJobType.API_SYNC,
     exportMode: syncMode,
+    storeId: storeContext.storeId,
+    storeName: storeContext.storeName,
+    externalStoreId: storeContext.externalStoreId,
     productCount: payload.products.length,
     selectedProducts: selectedProducts.length,
     readyProducts: readyProductIds.length,
@@ -1537,16 +1624,24 @@ export const buildBakaiStoreApiPayload = async (input: {
   };
 };
 
-export const runBakaiStoreApiPreflight = async (organizationId: string) => {
-  const plan = await buildBakaiStoreApiPayload({ organizationId });
+export const runBakaiStoreApiPreflight = async (
+  organizationId: string,
+  storeId?: string | null,
+) => {
+  const plan = await buildBakaiStoreApiPayload({ organizationId, storeId });
   return plan.preflight;
 };
 
 const buildBakaiStoreExportPlan = async (input: {
   organizationId: string;
+  storeId?: string | null;
   mode?: BakaiStoreExportMode;
 }): Promise<BakaiStoreExportPlan> => {
   const exportMode = normalizeBakaiExportMode(input.mode);
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
   const [integration, mappings, selectedProducts, stores] = await Promise.all([
     prisma.bakaiStoreIntegration.findUnique({
       where: { orgId: input.organizationId },
@@ -1570,9 +1665,11 @@ const buildBakaiStoreExportPlan = async (input: {
     prisma.bakaiStoreIncludedProduct.findMany({
       where: {
         orgId: input.organizationId,
+        storeId: storeContext.storeId,
         product: {
           organizationId: input.organizationId,
           isDeleted: false,
+          ...buildStoreProductWhere(storeContext.storeId),
         },
       },
       select: {
@@ -1586,6 +1683,15 @@ const buildBakaiStoreExportPlan = async (input: {
             sku: true,
             name: true,
             basePriceKgs: true,
+            storePrices: {
+              where: {
+                organizationId: input.organizationId,
+                storeId: storeContext.storeId,
+                variantKey: "BASE",
+              },
+              select: { priceKgs: true },
+              take: 1,
+            },
           },
         },
       },
@@ -1602,20 +1708,24 @@ const buildBakaiStoreExportPlan = async (input: {
   const mappedStoreIdByColumn = new Map(
     mappings.map((mapping) => [normalizeStockColumnKey(mapping.columnKey), mapping.storeId]),
   );
+  const selectedStockColumns =
+    storedTemplateSchema?.stockColumns.filter(
+      (columnKey) =>
+        mappedStoreIdByColumn.get(normalizeStockColumnKey(columnKey)) === storeContext.storeId,
+    ) ?? [];
   const missingStoreMappings =
-    storedTemplateSchema?.stockColumns
-      .filter((columnKey) => !mappedStoreIdByColumn.has(normalizeStockColumnKey(columnKey)))
-      .map((columnKey) => ({ columnKey })) ?? [];
+    storedTemplateSchema && selectedStockColumns.length === 0
+      ? [{ storeId: storeContext.storeId, storeName: storeContext.storeName }]
+      : [];
 
   const selectedProductIds = selectedProducts.map((row) => row.productId);
-  const mappedStoreIds = Array.from(new Set(Array.from(mappedStoreIdByColumn.values())));
 
   const snapshots =
-    selectedProductIds.length > 0 && mappedStoreIds.length > 0
+    selectedProductIds.length > 0
       ? await prisma.inventorySnapshot.findMany({
           where: {
             productId: { in: selectedProductIds },
-            storeId: { in: mappedStoreIds },
+            storeId: storeContext.storeId,
             variantKey: "BASE",
           },
           select: {
@@ -1645,7 +1755,9 @@ const buildBakaiStoreExportPlan = async (input: {
     const sku = selection.product.sku?.trim() ?? "";
     const name = selection.product.name?.trim() ?? "";
     const normalizedSku = normalizeSku(sku);
-    const price = normalizeBakaiNumericValue(selection.product.basePriceKgs);
+    const price = normalizeBakaiNumericValue(
+      selection.product.storePrices[0]?.priceKgs ?? selection.product.basePriceKgs,
+    );
     const discountPercent = normalizeBakaiNumericValue(selection.discountPercent);
     const discountAmount = normalizeBakaiNumericValue(selection.discountAmount);
 
@@ -1710,7 +1822,10 @@ const buildBakaiStoreExportPlan = async (input: {
       for (const columnKey of storedTemplateSchema.stockColumns) {
         const normalizedColumnKey = normalizeStockColumnKey(columnKey);
         const mappedStoreId = mappedStoreIdByColumn.get(normalizedColumnKey);
-        const quantity = mappedStoreId ? (snapshotByStore.get(mappedStoreId) ?? 0) : 0;
+        const quantity =
+          mappedStoreId === storeContext.storeId
+            ? (snapshotByStore.get(storeContext.storeId) ?? 0)
+            : 0;
         if (!Number.isInteger(quantity) || quantity < 0) {
           addIssue(issues, "INVALID_STOCK_VALUE");
         }
@@ -1763,6 +1878,11 @@ const buildBakaiStoreExportPlan = async (input: {
       exportMode === "READY_ONLY"
         ? readyProductIds.length > 0
         : selectedProducts.length > 0 && failedProducts.length === 0 && !globalTemplateError,
+    store: {
+      storeId: storeContext.storeId,
+      storeName: storeContext.storeName,
+      externalStoreId: selectedStockColumns.join(", ") || null,
+    },
     summary: {
       productsConsidered: selectedProducts.length,
       productsReady: readyProductIds.length,
@@ -1792,10 +1912,14 @@ const buildBakaiStoreExportPlan = async (input: {
 
   const payloadStats = {
     exportMode,
+    storeId: storeContext.storeId,
+    storeName: storeContext.storeName,
+    externalStoreId: selectedStockColumns.join(", ") || null,
     selectedProducts: selectedProducts.length,
     productCount: exportRows.length,
     failedProducts: failedProducts.length,
     stockColumns: storedTemplateSchema?.stockColumns ?? [],
+    selectedStockColumns,
     mappedColumns: Array.from(mappedStoreIdByColumn.keys()),
     mappedStores: mappings.length,
     totalStores: stores.length,
@@ -2728,14 +2852,22 @@ export const testBakaiStoreConnection = async (input: {
 
 export const listBakaiStoreProducts = async (input: {
   organizationId: string;
+  storeId?: string | null;
   search?: string;
   selection?: BakaiStoreProductSelectionFilter;
   page?: number;
   pageSize?: number;
 }) => {
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
   const page = Math.max(1, Math.trunc(input.page ?? 1));
   const pageSize = Math.min(10, Math.max(1, Math.trunc(input.pageSize ?? 10)));
-  const { baseWhere, where } = buildBakaiProductListWhere(input);
+  const { baseWhere, where } = buildBakaiProductListWhere({
+    ...input,
+    storeId: storeContext.storeId,
+  });
 
   const [totalProducts, includedProducts, total, products] = await Promise.all([
     prisma.product.count({ where: baseWhere }),
@@ -2743,7 +2875,7 @@ export const listBakaiStoreProducts = async (input: {
       where: {
         ...baseWhere,
         bakaiStoreInclusions: {
-          some: { orgId: input.organizationId },
+          some: { orgId: input.organizationId, storeId: storeContext.storeId },
         },
       },
     }),
@@ -2756,6 +2888,15 @@ export const listBakaiStoreProducts = async (input: {
         name: true,
         category: true,
         basePriceKgs: true,
+        storePrices: {
+          where: {
+            organizationId: input.organizationId,
+            storeId: storeContext.storeId,
+            variantKey: "BASE",
+          },
+          select: { priceKgs: true },
+          take: 1,
+        },
         photoUrl: true,
         images: {
           where: {
@@ -2766,7 +2907,7 @@ export const listBakaiStoreProducts = async (input: {
           take: 1,
         },
         bakaiStoreInclusions: {
-          where: { orgId: input.organizationId },
+          where: { orgId: input.organizationId, storeId: storeContext.storeId },
           select: { id: true, lastExportedAt: true },
           take: 1,
         },
@@ -2783,9 +2924,7 @@ export const listBakaiStoreProducts = async (input: {
         where: {
           productId: { in: productIds },
           variantKey: "BASE",
-          store: {
-            organizationId: input.organizationId,
-          },
+          storeId: storeContext.storeId,
         },
         select: {
           productId: true,
@@ -2811,7 +2950,10 @@ export const listBakaiStoreProducts = async (input: {
         sku: product.sku,
         name: product.name,
         category: product.category?.trim() || null,
-        priceKgs: product.basePriceKgs === null ? null : Number(product.basePriceKgs),
+        priceKgs: (() => {
+          const priceKgs = product.storePrices[0]?.priceKgs ?? product.basePriceKgs;
+          return priceKgs === null ? null : Number(priceKgs);
+        })(),
         imageUrl: resolveBakaiListImageUrl(product),
         onHandQty: onHandByProductId.get(product.id) ?? 0,
         included,
@@ -2826,6 +2968,8 @@ export const listBakaiStoreProducts = async (input: {
     page,
     pageSize,
     summary: {
+      storeId: storeContext.storeId,
+      storeName: storeContext.storeName,
       totalProducts,
       includedProducts,
       excludedProducts: Math.max(0, totalProducts - includedProducts),
@@ -2835,10 +2979,18 @@ export const listBakaiStoreProducts = async (input: {
 
 export const listBakaiStoreProductIds = async (input: {
   organizationId: string;
+  storeId?: string | null;
   search?: string;
   selection?: BakaiStoreProductSelectionFilter;
 }) => {
-  const { where } = buildBakaiProductListWhere(input);
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  const { where } = buildBakaiProductListWhere({
+    ...input,
+    storeId: storeContext.storeId,
+  });
   const products = await prisma.product.findMany({
     where,
     select: { id: true },
@@ -2849,12 +3001,21 @@ export const listBakaiStoreProductIds = async (input: {
 
 export const updateBakaiStoreProductSelection = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   productIds: string[];
   included: boolean;
 }) => {
-  const productIds = await ensureProductOwnership(input.organizationId, input.productIds);
+  const storeContext = await resolveIntegrationStoreContext({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  const productIds = await ensureProductOwnership(
+    input.organizationId,
+    input.productIds,
+    storeContext.storeId,
+  );
   if (!productIds.length) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
@@ -2864,6 +3025,7 @@ export const updateBakaiStoreProductSelection = async (input: {
       await tx.bakaiStoreIncludedProduct.createMany({
         data: productIds.map((productId) => ({
           orgId: input.organizationId,
+          storeId: storeContext.storeId,
           productId,
         })),
         skipDuplicates: true,
@@ -2872,6 +3034,7 @@ export const updateBakaiStoreProductSelection = async (input: {
       await tx.bakaiStoreIncludedProduct.deleteMany({
         where: {
           orgId: input.organizationId,
+          storeId: storeContext.storeId,
           productId: { in: productIds },
         },
       });
@@ -2886,6 +3049,8 @@ export const updateBakaiStoreProductSelection = async (input: {
       before: null,
       after: toJson({
         included: input.included,
+        storeId: storeContext.storeId,
+        storeName: storeContext.storeName,
         productIds,
       }),
       requestId: input.requestId,
@@ -2897,15 +3062,15 @@ export const updateBakaiStoreProductSelection = async (input: {
   };
 };
 
-export const runBakaiStorePreflight = async (organizationId: string) => {
+export const runBakaiStorePreflight = async (organizationId: string, storeId?: string | null) => {
   const integration = await prisma.bakaiStoreIntegration.findUnique({
     where: { orgId: organizationId },
     select: { connectionMode: true },
   });
   if (resolveConnectionMode(integration?.connectionMode) === BakaiStoreConnectionMode.API) {
-    return runBakaiStoreApiPreflight(organizationId);
+    return runBakaiStoreApiPreflight(organizationId, storeId);
   }
-  const plan = await buildBakaiStoreExportPlan({ organizationId });
+  const plan = await buildBakaiStoreExportPlan({ organizationId, storeId });
   return plan.preflight;
 };
 
@@ -2949,6 +3114,7 @@ export const getBakaiStoreExportJob = getBakaiStoreJob;
 
 export const requestBakaiStoreExport = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   mode?: BakaiStoreExportMode;
@@ -2983,6 +3149,7 @@ export const requestBakaiStoreExport = async (input: {
 
   const plan = await buildBakaiStoreExportPlan({
     organizationId: input.organizationId,
+    storeId: input.storeId,
     mode: input.mode,
   });
   if (!plan.preflight.canExport) {
@@ -2990,9 +3157,11 @@ export const requestBakaiStoreExport = async (input: {
   }
 
   const requestIdempotencyKey = randomUUID();
+  const storeId = String(plan.payloadStats.storeId);
   const queuedJob = await prisma.bakaiStoreExportJob.create({
     data: {
       orgId: input.organizationId,
+      storeId,
       jobType: BakaiStoreJobType.TEMPLATE_EXPORT,
       status: BakaiStoreExportJobStatus.QUEUED,
       requestedById: input.actorId,
@@ -3025,6 +3194,7 @@ export const requestBakaiStoreExport = async (input: {
       jobId: queuedJob.id,
       organizationId: input.organizationId,
       requestId: input.requestId,
+      storeId,
       mode: plan.mode,
     }).catch(() => null);
   }
@@ -3036,6 +3206,7 @@ export const requestBakaiStoreExport = async (input: {
 
 export const requestBakaiStoreApiSync = async (input: {
   organizationId: string;
+  storeId?: string | null;
   actorId: string;
   requestId: string;
   mode?: BakaiStoreExportMode;
@@ -3070,6 +3241,7 @@ export const requestBakaiStoreApiSync = async (input: {
 
   const plan = await buildBakaiStoreApiPayload({
     organizationId: input.organizationId,
+    storeId: input.storeId,
     mode: input.mode,
   });
   if (input.mode === "READY_ONLY" && !plan.preflight.actionability.canRunReadyOnly) {
@@ -3080,9 +3252,11 @@ export const requestBakaiStoreApiSync = async (input: {
   }
 
   const requestIdempotencyKey = randomUUID();
+  const storeId = String(plan.payloadStats.storeId);
   const queuedJob = await prisma.bakaiStoreExportJob.create({
     data: {
       orgId: input.organizationId,
+      storeId,
       jobType: BakaiStoreJobType.API_SYNC,
       status: BakaiStoreExportJobStatus.QUEUED,
       requestedById: input.actorId,
@@ -3117,6 +3291,7 @@ export const requestBakaiStoreApiSync = async (input: {
       jobId: queuedJob.id,
       organizationId: input.organizationId,
       requestId: input.requestId,
+      storeId,
       mode: plan.mode,
     }).catch(() => null);
   }
@@ -3174,6 +3349,7 @@ const runBakaiStoreExportJob = async (
   try {
     plan = await buildBakaiStoreExportPlan({
       organizationId: job.orgId,
+      storeId: job.storeId,
       mode: normalizeBakaiExportMode(asRecord(job.payloadStatsJson)?.exportMode),
     });
     if (!plan.preflight.canExport || !plan.templatePath || !plan.templateSchema) {
@@ -3217,6 +3393,7 @@ const runBakaiStoreExportJob = async (
       await prisma.bakaiStoreIncludedProduct.updateMany({
         where: {
           orgId: job.orgId,
+          storeId: job.storeId ?? String(plan.payloadStats.storeId),
           productId: { in: plan.preflight.readyProductIds },
         },
         data: {
@@ -3374,6 +3551,7 @@ const runBakaiStoreApiSyncJob = async (
 
     plan = await buildBakaiStoreApiPayload({
       organizationId: job.orgId,
+      storeId: job.storeId,
       mode: normalizeBakaiExportMode(asRecord(job.payloadStatsJson)?.exportMode),
     });
 
@@ -3457,6 +3635,7 @@ const runBakaiStoreApiSyncJob = async (
       await prisma.bakaiStoreIncludedProduct.updateMany({
         where: {
           orgId: job.orgId,
+          storeId: job.storeId ?? String(plan.payloadStats.storeId),
           productId: { in: Array.from(succeededProductIds) },
         },
         data: {
@@ -3469,8 +3648,9 @@ const runBakaiStoreApiSyncJob = async (
       const payloadProduct = plan.payloadByProductId.get(productId);
       await prisma.bakaiStoreProductSyncState.upsert({
         where: {
-          orgId_productId: {
+          orgId_storeId_productId: {
             orgId: job.orgId,
+            storeId: job.storeId ?? String(plan.payloadStats.storeId),
             productId,
           },
         },
@@ -3481,6 +3661,7 @@ const runBakaiStoreApiSyncJob = async (
         },
         create: {
           orgId: job.orgId,
+          storeId: job.storeId ?? String(plan.payloadStats.storeId),
           productId,
           lastSyncedAt: finishedAt,
           lastSyncStatus: BakaiStoreLastSyncStatus.SUCCESS,
@@ -3493,8 +3674,9 @@ const runBakaiStoreApiSyncJob = async (
       const payloadProduct = plan.payloadByProductId.get(productId);
       await prisma.bakaiStoreProductSyncState.upsert({
         where: {
-          orgId_productId: {
+          orgId_storeId_productId: {
             orgId: job.orgId,
+            storeId: job.storeId ?? String(plan.payloadStats.storeId),
             productId,
           },
         },
@@ -3504,6 +3686,7 @@ const runBakaiStoreApiSyncJob = async (
         },
         create: {
           orgId: job.orgId,
+          storeId: job.storeId ?? String(plan.payloadStats.storeId),
           productId,
           lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
           lastPayloadChecksum: payloadProduct ? computeBakaiPayloadChecksum(payloadProduct) : null,
@@ -3648,12 +3831,14 @@ registerJob(BAKAI_STORE_API_SYNC_JOB_NAME, {
 export const __buildBakaiStoreExportPlanForTests = async (
   organizationId: string,
   mode: BakaiStoreExportMode = "ALL_SELECTED",
+  storeId?: string | null,
 ) => {
   if (process.env.NODE_ENV !== "test") {
     throw new Error("testOnly");
   }
   return buildBakaiStoreExportPlan({
     organizationId,
+    storeId,
     mode,
   });
 };
