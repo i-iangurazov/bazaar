@@ -72,6 +72,17 @@ describe("receiving product creation handoff source", () => {
     expect(inventoryRouterSource).toContain("? { id: input.productId }");
   });
 
+  it("limits receiving add-products search to product names", async () => {
+    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const inventoryRouterSource = await readSource("src/server/trpc/routers/inventory.ts");
+
+    expect(receivingSource).toContain('const receivingProductSearchFields: ["name"] = ["name"]');
+    expect(receivingSource).toContain("searchFields: receivingProductSearchFields");
+    expect(receivingSource).not.toContain("exactBarcodeMatch");
+    expect(inventoryRouterSource).toContain("searchFields: z.array(inventoryProductSearchFieldSchema).optional()");
+    expect(inventoryRouterSource).toContain("buildInventoryProductSearchWhere(searchTokens, input.searchFields)");
+  });
+
   it("opens product edit from receiving and returns through the preserved draft", async () => {
     const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
     const productDetailSource = await readSource("src/app/(app)/products/[id]/page.tsx");

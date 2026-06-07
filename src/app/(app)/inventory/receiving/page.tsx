@@ -81,7 +81,6 @@ const toDateTimeLocalValue = (date: Date) => {
 const parseDecimalInput = (value: string) => Number(value.replace(",", "."));
 const lineKey = (productId: string, variantId?: string | null) =>
   `${productId}:${variantId ?? "BASE"}`;
-const normalizeCode = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 const receivingInputRefKey = (
   key: string,
   field: ReceivingInputField,
@@ -89,6 +88,7 @@ const receivingInputRefKey = (
 ) => `${key}:${field}:${viewport}`;
 const receivingDraftStoragePrefix = "bazaar:inventory-receiving-draft:";
 const receivingReturnSource = "stockReceiving";
+const receivingProductSearchFields: ["name"] = ["name"];
 
 const focusReceivingInputElement = (
   input: HTMLInputElement | null | undefined,
@@ -215,7 +215,12 @@ const InventoryReceivingPage = () => {
   );
 
   const searchQuery = trpc.inventory.searchProducts.useQuery(
-    { storeId, search: search.trim() || undefined, limit: 100 },
+    {
+      storeId,
+      search: search.trim() || undefined,
+      searchFields: receivingProductSearchFields,
+      limit: 100,
+    },
     {
       enabled: Boolean(storeId && canManageStock),
       keepPreviousData: true,
@@ -279,25 +284,6 @@ const InventoryReceivingPage = () => {
 
   const getDisplayName = (result: SearchResult) =>
     result.variant?.name ? `${result.product.name} • ${result.variant.name}` : result.product.name;
-
-  const exactBarcodeMatch = useCallback(
-    (result: SearchResult, rawCode: string) => {
-      if (!enableBarcode) {
-        return false;
-      }
-      const code = normalizeCode(rawCode);
-      if (!code) {
-        return false;
-      }
-      const barcodes = [
-        result.primaryBarcode,
-        ...result.product.barcodes.map((barcode) => barcode.value),
-        ...result.product.packs.map((pack) => pack.packBarcode),
-      ];
-      return barcodes.some((barcode) => normalizeCode(barcode) === code);
-    },
-    [enableBarcode],
-  );
 
   const setReceivingInputRef = (
     key: string,
@@ -485,13 +471,9 @@ const InventoryReceivingPage = () => {
       const results = await trpcUtils.inventory.searchProducts.fetch({
         storeId,
         search: search.trim(),
+        searchFields: receivingProductSearchFields,
         limit: 100,
       });
-      const exact = results.find((result) => exactBarcodeMatch(result, search));
-      if (exact) {
-        addSearchResult(exact, "scan");
-        return;
-      }
       if (!results.length) {
         toast({ variant: "error", description: t("receivingProductUnavailable") });
       }

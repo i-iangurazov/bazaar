@@ -11,6 +11,7 @@ import {
   transferStock,
 } from "@/server/services/inventory";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { createTestCaller } from "../helpers/context";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -222,6 +223,127 @@ describeDb("inventory service", () => {
 
     await assertSnapshotMatchesLedger(store.id, product.id);
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
+  });
+
+  it("can restrict inventory product search to product name only", async () => {
+    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+
+    const identifierOnlyProduct = await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        sku: "SKU-ONLY-123",
+        name: "Plain Flour",
+      },
+    });
+    await prisma.productBarcode.create({
+      data: {
+        organizationId: org.id,
+        productId: identifierOnlyProduct.id,
+        value: "BAR-ONLY-123",
+      },
+    });
+    await prisma.productPack.create({
+      data: {
+        organizationId: org.id,
+        productId: identifierOnlyProduct.id,
+        packName: "Box",
+        packBarcode: "PACK-ONLY-123",
+        multiplierToBase: 6,
+      },
+    });
+
+    const createSearchableProduct = async (input: {
+      sku: string;
+      name: string;
+      requestId: string;
+    }) => {
+      const created = await prisma.product.create({
+        data: {
+          organizationId: org.id,
+          supplierId: supplier.id,
+          sku: input.sku,
+          name: input.name,
+          unit: baseUnit.code,
+          baseUnitId: baseUnit.id,
+        },
+      });
+      await prisma.storeProduct.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          productId: created.id,
+          isActive: true,
+        },
+      });
+      await adjustStock({
+        storeId: store.id,
+        productId: created.id,
+        qtyDelta: 1,
+        reason: "Search fixture",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: input.requestId,
+        idempotencyKey: input.requestId,
+      });
+      return created;
+    };
+
+    const skuNameMatch = await createSearchableProduct({
+      sku: "OTHER-SKU-ONLY",
+      name: "SKU-ONLY-123 Display Name",
+      requestId: "req-search-name-sku-token",
+    });
+    const barcodeNameMatch = await createSearchableProduct({
+      sku: "OTHER-BAR-ONLY",
+      name: "BAR-ONLY-123 Display Name",
+      requestId: "req-search-name-barcode-token",
+    });
+    const packNameMatch = await createSearchableProduct({
+      sku: "OTHER-PACK-ONLY",
+      name: "PACK-ONLY-123 Display Name",
+      requestId: "req-search-name-pack-token",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: identifierOnlyProduct.id,
+      qtyDelta: 1,
+      reason: "Search fixture",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-search-identifier-product",
+      idempotencyKey: "req-search-identifier-product",
+    });
+
+    const searchIds = async (search: string, searchFields?: ["name"]) =>
+      (
+        await caller.inventory.searchProducts({
+          storeId: store.id,
+          search,
+          searchFields,
+          limit: 20,
+        })
+      ).map((row) => row.product.id);
+
+    await expect(searchIds("SKU-ONLY-123")).resolves.toEqual(
+      expect.arrayContaining([identifierOnlyProduct.id, skuNameMatch.id]),
+    );
+    await expect(searchIds("BAR-ONLY-123")).resolves.toEqual(
+      expect.arrayContaining([identifierOnlyProduct.id, barcodeNameMatch.id]),
+    );
+    await expect(searchIds("PACK-ONLY-123")).resolves.toEqual(
+      expect.arrayContaining([identifierOnlyProduct.id, packNameMatch.id]),
+    );
+
+    await expect(searchIds("SKU-ONLY-123", ["name"])).resolves.toEqual([skuNameMatch.id]);
+    await expect(searchIds("BAR-ONLY-123", ["name"])).resolves.toEqual([barcodeNameMatch.id]);
+    await expect(searchIds("PACK-ONLY-123", ["name"])).resolves.toEqual([packNameMatch.id]);
   });
 
   it("does not partially post stock receiving when one line is unavailable in the store", async () => {

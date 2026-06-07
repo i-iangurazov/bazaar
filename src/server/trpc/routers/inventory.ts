@@ -62,12 +62,21 @@ const inventoryListInputSchema = inventoryListBaseInputSchema.extend({
 });
 
 const inventoryListIdsInputSchema = inventoryListBaseInputSchema;
+const inventoryProductSearchFieldSchema = z.enum(["name", "sku", "barcode", "packBarcode"]);
+type InventoryProductSearchField = z.infer<typeof inventoryProductSearchFieldSchema>;
+const defaultInventoryProductSearchFields: InventoryProductSearchField[] = [
+  "name",
+  "sku",
+  "barcode",
+  "packBarcode",
+];
 
 const inventoryProductSearchInputSchema = z.object({
   storeId: z.string(),
   search: z.string().optional(),
   productId: z.string().trim().optional(),
   limit: z.number().int().min(1).max(100).optional(),
+  searchFields: z.array(inventoryProductSearchFieldSchema).optional(),
 });
 
 const normalizeInventorySearchTokens = (search?: string | null) =>
@@ -81,27 +90,42 @@ const normalizeInventorySearchTokens = (search?: string | null) =>
     ),
   ).slice(0, 8);
 
-const buildInventoryProductSearchWhere = (searchTokens: string[]): Prisma.ProductWhereInput =>
-  searchTokens.length
-    ? {
-        AND: searchTokens.map((token) => ({
-          OR: [
-            { name: { contains: token, mode: "insensitive" as const } },
-            { sku: { contains: token, mode: "insensitive" as const } },
-            {
-              barcodes: {
-                some: { value: { contains: token, mode: "insensitive" as const } },
-              },
-            },
-            {
-              packs: {
-                some: { packBarcode: { contains: token, mode: "insensitive" as const } },
-              },
-            },
-          ],
-        })),
+const buildInventoryProductSearchWhere = (
+  searchTokens: string[],
+  searchFields: InventoryProductSearchField[] = defaultInventoryProductSearchFields,
+): Prisma.ProductWhereInput => {
+  if (!searchTokens.length) {
+    return {};
+  }
+
+  const enabledFields = new Set(searchFields);
+  return {
+    AND: searchTokens.map((token) => {
+      const or: Prisma.ProductWhereInput[] = [];
+      if (enabledFields.has("name")) {
+        or.push({ name: { contains: token, mode: "insensitive" as const } });
       }
-    : {};
+      if (enabledFields.has("sku")) {
+        or.push({ sku: { contains: token, mode: "insensitive" as const } });
+      }
+      if (enabledFields.has("barcode")) {
+        or.push({
+          barcodes: {
+            some: { value: { contains: token, mode: "insensitive" as const } },
+          },
+        });
+      }
+      if (enabledFields.has("packBarcode")) {
+        or.push({
+          packs: {
+            some: { packBarcode: { contains: token, mode: "insensitive" as const } },
+          },
+        });
+      }
+      return or.length ? { OR: or } : { id: { in: [] } };
+    }),
+  };
+};
 
 const buildInventorySnapshotWhere = (
   input: z.infer<typeof inventoryListIdsInputSchema>,
@@ -588,7 +612,7 @@ export const inventoryRouter = router({
           isDeleted: false,
           ...(input.productId
             ? { id: input.productId }
-            : buildInventoryProductSearchWhere(searchTokens)),
+            : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),
         },
       };
 
