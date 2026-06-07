@@ -8,11 +8,7 @@ import {
   normalizeProductImageUrl,
 } from "@/server/services/productImageStorage";
 import { AppError } from "@/server/services/errors";
-import {
-  defaultLocale,
-  normalizeLocale as normalizeAppLocale,
-  type Locale,
-} from "@/lib/locales";
+import { defaultLocale, normalizeLocale as normalizeAppLocale, type Locale } from "@/lib/locales";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
@@ -390,6 +386,7 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
       "You write accurate, concise product descriptions for product cards.",
       "Write only in English.",
       "Describe only what is clearly visible in the images.",
+      "Use provided product metadata only as secondary context when it is useful and does not conflict with the images.",
       "Describe the product for a shopper, not the photo, package, or image-review process.",
       "If the packaging or visible text makes the product type or purpose clear, mention it naturally.",
       "Do not invent composition, sizes, materials, flavor, volume, specifications, or certifications if they are not obvious.",
@@ -404,6 +401,7 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
       "Сен товар карточкалары үчүн так жана кыска сүрөттөмө жазасың.",
       "Текстти кыргыз тилинде жаз.",
       "Сүрөттөрдө так көрүнгөн нерселерди гана сүрөттө.",
+      "Берилген товар метадайындарын сүрөттөргө каршы келбегенде гана кошумча контекст катары колдон.",
       "Сүрөттү же кутуну сүрөттөп жаткандай эмес, сатылып жаткан товарды кардар үчүн сүрөттө.",
       "Эгер таңгактагы жазуу жана көрүнүш боюнча товардын түрү же колдонуу максаты түшүнүктүү болсо, аны табигый түрдө айт.",
       "Курамы, өлчөмү, материалы, даамы, көлөмү же сертификаттары так көрүнбөсө, ойлоп таппа.",
@@ -417,6 +415,7 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
     "Ты пишешь точные и краткие описания для карточек товаров.",
     "Пиши только на русском языке.",
     "Описывай только то, что явно видно на изображениях.",
+    "Используй переданные метаданные товара только как вторичный контекст, если они полезны и не противоречат изображениям.",
     "Описывай сам товар для покупателя, а не фотографию, коробку или процесс просмотра изображения.",
     "Если по оформлению и надписям очевиден тип товара или его назначение, назови это естественным языком.",
     "Не выдумывай состав, размеры, материалы, вкус, объем, характеристики или сертификаты, если это не очевидно.",
@@ -426,18 +425,73 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
   ].join(" ");
 };
 
-const buildUserPrompt = (input: { locale: ProductDescriptionLocale }) => {
+const buildProductContextBlock = (input: {
+  locale: ProductDescriptionLocale;
+  name?: string | null;
+  category?: string | null;
+  isBundle?: boolean;
+}) => {
+  const context: string[] = [];
+  const name = input.name?.trim();
+  const category = input.category?.trim();
+  if (name) {
+    context.push(
+      input.locale === "en"
+        ? `Product name: ${name}`
+        : input.locale === "kg"
+          ? `Товардын аталышы: ${name}`
+          : `Название товара: ${name}`,
+    );
+  }
+  if (category) {
+    context.push(
+      input.locale === "en"
+        ? `Category: ${category}`
+        : input.locale === "kg"
+          ? `Категория: ${category}`
+          : `Категория: ${category}`,
+    );
+  }
+  if (input.isBundle) {
+    context.push(
+      input.locale === "en"
+        ? "Product type: bundle or set"
+        : input.locale === "kg"
+          ? "Түрү: комплект же топтом"
+          : "Тип товара: комплект или набор",
+    );
+  }
+  if (!context.length) {
+    return "";
+  }
+  const heading =
+    input.locale === "en"
+      ? "Secondary product context:"
+      : input.locale === "kg"
+        ? "Кошумча товар контексти:"
+        : "Дополнительный контекст товара:";
+  return `${heading}\n${context.join("\n")}`;
+};
+
+const buildUserPrompt = (input: {
+  locale: ProductDescriptionLocale;
+  name?: string | null;
+  category?: string | null;
+  isBundle?: boolean;
+}) => {
+  const contextBlock = buildProductContextBlock(input);
   const lines = [
     input.locale === "en"
-      ? "Create a product description using only the images."
+      ? "Create a product description primarily from the images."
       : input.locale === "kg"
-        ? "Сүрөттөргө гана таянып товар үчүн сүрөттөмө түз."
-        : "Сгенерируй описание товара, опираясь только на изображения.",
+        ? "Товар үчүн сүрөттөмөнү негизинен сүрөттөргө таянып түз."
+        : "Сгенерируй описание товара, опираясь прежде всего на изображения.",
     input.locale === "en"
-      ? `Include visible text, brand, color, shape, packaging, or purpose only when it is directly visible. Do not use the product name, category, or any other metadata outside the image. Return one description with at least ${MIN_DESCRIPTION_LENGTH} characters.`
+      ? `Include visible text, brand, color, shape, packaging, or purpose only when it is directly visible. Use secondary context only to clarify the product type or wording when the image supports it or lacks enough detail. Return one description with at least ${MIN_DESCRIPTION_LENGTH} characters.`
       : input.locale === "kg"
-        ? `Сүрөттөн түз көрүнгөн жазуу, бренд, түс, форма, таңгак же колдонуу мааниси бар болсо гана кош. Сырттан берилген аталыш, категория же башка метадайындарды колдонбо. Так бир сүрөттөмө кайтар жана аны ${MIN_DESCRIPTION_LENGTH} белгиден кыска кылба.`
-        : `Если на изображении видны надписи, бренд, цвет, форма, упаковка или назначение, укажи это. Не используй название, категорию или другие метаданные вне самой картинки. Верни одно описание длиной не меньше ${MIN_DESCRIPTION_LENGTH} символов.`,
+        ? `Сүрөттөн түз көрүнгөн жазуу, бренд, түс, форма, таңгак же колдонуу мааниси бар болсо гана кош. Кошумча контекстти сүрөт аны тастыктаганда же сүрөттө маалымат аз болгондо гана колдон. Так бир сүрөттөмө кайтар жана аны ${MIN_DESCRIPTION_LENGTH} белгиден кыска кылба.`
+        : `Если на изображении видны надписи, бренд, цвет, форма, упаковка или назначение, укажи это. Дополнительный контекст используй только для уточнения типа товара или формулировки, когда изображение это подтверждает или не дает достаточно деталей. Верни одно описание длиной не меньше ${MIN_DESCRIPTION_LENGTH} символов.`,
+    contextBlock,
   ].filter(Boolean);
 
   return lines.join("\n");
@@ -446,7 +500,11 @@ const buildUserPrompt = (input: { locale: ProductDescriptionLocale }) => {
 const buildRetryPrompt = (input: {
   locale: ProductDescriptionLocale;
   previousDescription: string;
+  name?: string | null;
+  category?: string | null;
+  isBundle?: boolean;
 }) => {
+  const contextBlock = buildProductContextBlock(input);
   if (input.locale === "en") {
     return [
       `The previous answer is not suitable: "${input.previousDescription}".`,
@@ -454,10 +512,11 @@ const buildRetryPrompt = (input: {
       "Write a new natural product-card description in plain language.",
       "Use only what is actually visible in the photo: shape, color, packaging, visible text, illustrations, appearance, and an obvious use case.",
       "Describe the product itself, not the image or what is printed on a box as an object of observation.",
-      "Do not write phrases like \"visible in the image\", \"the product is shown\", \"this text\", \"the description is based on\", \"the box shows\", or \"the name says\".",
-      "Do not use the product name, category, or external metadata.",
+      'Do not write phrases like "visible in the image", "the product is shown", "this text", "the description is based on", "the box shows", or "the name says".',
+      "Use secondary product context only when it helps avoid a generic description and does not add unsupported claims.",
       "If the visible text and design make the product type and use clear, state that naturally and directly.",
       `Make the final text ${MIN_DESCRIPTION_LENGTH}-${MIN_DESCRIPTION_LENGTH + 120} characters long.`,
+      contextBlock,
     ].join(" ");
   }
 
@@ -470,8 +529,9 @@ const buildRetryPrompt = (input: {
       "Жөн гана сүрөттө көрүнгөн нерселерди айт: түс, форма, таңгак, көрүнгөн жазуу, иллюстрация, сырткы көрүнүш жана ачык көрүнгөн колдонуу багыты.",
       "«Сүрөттө көрүнөт», «кадрда», «бул текст» сыяктуу мета сүйлөмдөрдү жазба.",
       "«кутуда сүрөттөлгөн», «аталышы жазылган» деген сыяктуу түз байкоону товар жөнүндө табигый сыпаттамага айлант.",
-      "Аталышты, категорияны же сырттан берилген маалыматты колдонбо.",
+      "Кошумча товар контексти жалпы, пайдасыз сүрөттөмөдөн качууга жардам берип, негизсиз маалымат кошпосо гана колдон.",
       `Жооптун узундугу ${MIN_DESCRIPTION_LENGTH}-${MIN_DESCRIPTION_LENGTH + 120} белги аралыгында болсун.`,
+      contextBlock,
     ].join(" ");
   }
 
@@ -482,9 +542,10 @@ const buildRetryPrompt = (input: {
     "Опирайся только на то, что реально видно на фото: форму, цвет, упаковку, заметные надписи, иллюстрации, внешний вид и очевидный сценарий использования.",
     "Описывай сам товар, а не то, что нарисовано на коробке как объект наблюдения.",
     "Не пиши фразы вроде «на изображении видно», «товар показан», «этот текст», «описание строится», «на коробке изображены», «название написано».",
-    "Не используй название, категорию и любые внешние метаданные.",
+    "Дополнительный контекст товара используй только если он помогает избежать общего описания и не добавляет неподтвержденных утверждений.",
     "Если по надписям и оформлению понятен тип товара, назови его и кратко передай, для чего он подходит.",
     `Сделай итоговый текст длиной ${MIN_DESCRIPTION_LENGTH}-${MIN_DESCRIPTION_LENGTH + 120} символов.`,
+    contextBlock,
   ].join(" ");
 };
 
@@ -782,7 +843,8 @@ export const generateProductDescriptionFromImages = async (
     });
     const providerDurationMs = Date.now() - providerStartedAt;
     const parseDurationMs = 0;
-    const providerError = (responseBody as OpenAiResponseBody | null)?.error?.message?.trim() ?? null;
+    const providerError =
+      (responseBody as OpenAiResponseBody | null)?.error?.message?.trim() ?? null;
     const retryAfterHeader = response.headers.get("retry-after");
 
     logger?.info(
@@ -931,7 +993,15 @@ export const generateProductDescriptionFromImages = async (
   };
 
   try {
-    let description = await runProviderRequest(buildUserPrompt({ locale }), "complete");
+    let description = await runProviderRequest(
+      buildUserPrompt({
+        locale,
+        name: input.name,
+        category: input.category,
+        isBundle: input.isBundle,
+      }),
+      "complete",
+    );
 
     for (let attempt = 2; attempt <= MAX_DESCRIPTION_ATTEMPTS; attempt += 1) {
       if (isAcceptableDescription(description)) {
@@ -950,7 +1020,13 @@ export const generateProductDescriptionFromImages = async (
         "generated product description needs rewrite",
       );
       description = await runProviderRequest(
-        buildRetryPrompt({ locale, previousDescription: description }),
+        buildRetryPrompt({
+          locale,
+          previousDescription: description,
+          name: input.name,
+          category: input.category,
+          isBundle: input.isBundle,
+        }),
         "rewrite-retry",
       );
     }

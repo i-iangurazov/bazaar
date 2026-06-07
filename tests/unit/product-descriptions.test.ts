@@ -101,6 +101,8 @@ describe("product description generation", () => {
     expect(body.model).toBe("gpt-5-mini");
     expect(body.reasoning?.effort).toBe("minimal");
     expect(body.input[1]?.content[0]?.type).toBe("input_text");
+    expect(body.input[1]?.content[0]?.text).toContain("Название товара: Test Product");
+    expect(body.input[1]?.content[0]?.text).toContain("Категория: Snacks");
     expect(body.input[1]?.content[1]?.type).toBe("input_image");
     expect(body.input[1]?.content[1]?.image_url).toMatch(/^data:image\/jpeg;base64,/);
   });
@@ -232,7 +234,7 @@ describe("product description generation", () => {
 
     expect(systemPrompt).toContain("Длина ответа должна быть не меньше 150 символов.");
     expect(userPrompt).toContain(
-      "Не используй название, категорию или другие метаданные вне самой картинки.",
+      "Дополнительный контекст используй только для уточнения типа товара или формулировки",
     );
     expect(userPrompt).not.toContain("Название:");
     expect(userPrompt).not.toContain("Категория:");
@@ -308,7 +310,9 @@ describe("product description generation", () => {
     expect(retryPrompt).toContain('Настольная игра "Тви"');
     expect(retryPrompt).toContain("Не пиши фразы вроде «на изображении видно», «товар показан»");
     expect(retryPrompt).toContain("Описывай сам товар, а не то, что нарисовано на коробке");
-    expect(retryPrompt).toContain("Не используй название, категорию и любые внешние метаданные.");
+    expect(retryPrompt).toContain(
+      "Дополнительный контекст товара используй только если он помогает избежать общего описания",
+    );
   });
 
   it("rewrites long caption-like descriptions into product-focused copy", async () => {

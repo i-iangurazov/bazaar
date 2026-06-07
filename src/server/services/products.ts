@@ -3009,6 +3009,12 @@ export const bulkGenerateProductDescriptions = async (input: {
       continue;
     }
 
+    const previousDescription = product.description?.trim() ?? "";
+    if (previousDescription) {
+      skippedCount += 1;
+      continue;
+    }
+
     const imageUrls = Array.from(
       new Set(
         [product.photoUrl, ...product.images.map((image) => image.url)]
@@ -3033,7 +3039,6 @@ export const bulkGenerateProductDescriptions = async (input: {
       });
 
       const nextDescription = result.description.trim();
-      const previousDescription = product.description?.trim() ?? "";
       if (!nextDescription || nextDescription === previousDescription) {
         skippedCount += 1;
         continue;

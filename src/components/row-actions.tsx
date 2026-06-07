@@ -33,7 +33,12 @@ type RowActionsProps = {
 
 export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: RowActionsProps) => {
   const resolveVariant = (variant?: string): "primary" | "secondary" | "ghost" | "danger" => {
-    if (variant === "primary" || variant === "secondary" || variant === "ghost" || variant === "danger") {
+    if (
+      variant === "primary" ||
+      variant === "secondary" ||
+      variant === "ghost" ||
+      variant === "danger"
+    ) {
       return variant;
     }
     return "ghost";
@@ -57,6 +62,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
           {action.href.startsWith("/api/") ? (
             <a
               href={action.href}
+              onClick={action.onSelect}
               target={openInNewTab ? "_blank" : undefined}
               rel={openInNewTab ? "noopener noreferrer" : undefined}
             >
@@ -65,6 +71,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
           ) : action.href.startsWith("/") ? (
             <Link
               href={action.href}
+              onClick={action.onSelect}
               target={openInNewTab ? "_blank" : undefined}
               rel={openInNewTab ? "noopener noreferrer" : undefined}
             >
@@ -73,6 +80,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
           ) : (
             <a
               href={action.href}
+              onClick={action.onSelect}
               target={openInNewTab ? "_blank" : undefined}
               rel={openInNewTab ? "noopener noreferrer" : undefined}
             >
@@ -86,8 +94,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
     return (
       <DropdownMenuItem
         key={action.key}
-        onSelect={(event) => {
-          event.preventDefault();
+        onSelect={() => {
           action.onSelect?.();
         }}
         disabled={action.disabled}
@@ -118,9 +125,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
               <IconButton icon={MoreIcon} label={moreLabel} variant="ghost" />
             </span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {menuActions.map(renderMenuAction)}
-          </DropdownMenuContent>
+          <DropdownMenuContent align="end">{menuActions.map(renderMenuAction)}</DropdownMenuContent>
         </DropdownMenu>
       ) : null}
     </div>

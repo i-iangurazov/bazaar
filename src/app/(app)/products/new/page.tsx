@@ -42,7 +42,7 @@ const resolveSafeReturnTo = (value?: string | null) => {
 const buildReturnPath = (input: {
   returnTo: string;
   productId?: string;
-  storeId: string;
+  storeId?: string;
   returnSource?: string;
   receivingDraftKey?: string;
 }) => {
@@ -50,7 +50,9 @@ const buildReturnPath = (input: {
   if (input.productId) {
     url.searchParams.set("createdProductId", input.productId);
   }
-  url.searchParams.set("storeId", input.storeId);
+  if (input.storeId) {
+    url.searchParams.set("storeId", input.storeId);
+  }
   if (input.returnSource) {
     url.searchParams.set("returnSource", input.returnSource);
   }
@@ -70,6 +72,11 @@ const NewProductPage = () => {
   const requestedStoreId = searchParams?.get("storeId")?.trim() ?? "";
   const requestedType = searchParams?.get("type")?.trim() ?? "";
   const duplicateFromProductId = searchParams?.get("duplicateFrom")?.trim() ?? "";
+  const duplicateCopyImagesParam = searchParams?.get("copyImages")?.trim().toLowerCase() ?? "";
+  const duplicateCopyImages =
+    duplicateCopyImagesParam !== "0" &&
+    duplicateCopyImagesParam !== "false" &&
+    duplicateCopyImagesParam !== "no";
   const returnTo = resolveSafeReturnTo(searchParams?.get("returnTo"));
   const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
   const receivingDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
@@ -120,6 +127,8 @@ const NewProductPage = () => {
     onSuccess: async (product) => {
       await Promise.all([
         trpcUtils.products.suggestSku.invalidate(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
         trpcUtils.inventory.searchProducts.invalidate(),
       ]);
       toast({ variant: "success", description: t("createSuccess") });
@@ -127,7 +136,7 @@ const NewProductPage = () => {
         router.push(
           buildReturnPath({
             returnTo,
-            productId: isDuplicateFlow ? undefined : product.id,
+            productId: isReceivingReturnFlow && !isDuplicateFlow ? product.id : undefined,
             storeId: selectedStoreId,
             returnSource,
             receivingDraftKey,
@@ -173,6 +182,14 @@ const NewProductPage = () => {
   const storeSelectDisabled =
     storesQuery.isLoading || storeOptions.length <= 1 || isReceivingReturnFlow;
   const productCreateFormId = "product-create-form";
+  const productCreateBackHref = returnTo
+    ? buildReturnPath({
+        returnTo,
+        storeId: selectedStoreId || requestedStoreId,
+        returnSource,
+        receivingDraftKey,
+      })
+    : "/products";
   const duplicateStorePricingQuery = trpc.products.storePricing.useQuery(
     { productId: duplicateFromProductId },
     { enabled: status === "authenticated" && canManageProducts && isDuplicateFlow },
@@ -247,17 +264,19 @@ const NewProductPage = () => {
         initialOnHand: undefined,
         minStock: duplicateSourceStore?.minStock,
         description: duplicateProduct.description ?? "",
-        photoUrl: duplicateProduct.photoUrl ?? "",
-        images: (duplicateProduct.images?.length
-          ? duplicateProduct.images
-          : duplicateProduct.photoUrl
-            ? [{ url: duplicateProduct.photoUrl, position: 0 }]
-            : []
-        ).map((image, index) => ({
-          id: undefined,
-          url: image.url,
-          position: image.position ?? index,
-        })),
+        photoUrl: duplicateCopyImages ? (duplicateProduct.photoUrl ?? "") : "",
+        images: duplicateCopyImages
+          ? (duplicateProduct.images?.length
+              ? duplicateProduct.images
+              : duplicateProduct.photoUrl
+                ? [{ url: duplicateProduct.photoUrl, position: 0 }]
+                : []
+            ).map((image, index) => ({
+              id: undefined,
+              url: image.url,
+              position: image.position ?? index,
+            }))
+          : [],
         barcodes: [],
         packs: (duplicateProduct.packs ?? []).map((pack) => ({
           id: undefined,
@@ -270,7 +289,7 @@ const NewProductPage = () => {
         variants: duplicateProduct.variants.map((variant) => ({
           id: undefined,
           imageId: null,
-          imageUrl: variant.image?.url ?? "",
+          imageUrl: duplicateCopyImages ? (variant.image?.url ?? "") : "",
           image: null,
           name: variant.name ?? "",
           sku: "",
@@ -370,7 +389,10 @@ const NewProductPage = () => {
     <ProductEditorPage>
       <ProductEditorHeader
         eyebrow={
-          <Link href="/products" className="text-muted-foreground hover:text-foreground">
+          <Link
+            href={productCreateBackHref}
+            className="text-muted-foreground hover:text-foreground"
+          >
             {tCommon("back")}
           </Link>
         }
@@ -409,7 +431,7 @@ const NewProductPage = () => {
             </ProductEditorCard>
           ) : (
             <ProductForm
-              key={`new:${duplicateFromProductId || "blank"}:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
+              key={`new:${duplicateFromProductId || "blank"}:${duplicateCopyImages ? "photos" : "no-photos"}:${selectedStore.id}:${selectedStore.currencyCode ?? "KGS"}:${selectedCurrencyRate}:${suggestedSku}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
               formId={productCreateFormId}
               hideActions
               initialValues={initialProductValues}

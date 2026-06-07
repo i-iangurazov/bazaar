@@ -87,10 +87,10 @@ import {
 } from "@/lib/productImageUpload";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
-import { isAiFeaturesEnabled, isProductPacksEnabled } from "@/lib/featureFlags";
+import { isAiDescriptionGenerationEnabled, isProductPacksEnabled } from "@/lib/featureFlags";
 
 const showProductPacksSection = isProductPacksEnabled();
-const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
+const aiDescriptionGenerationDisabled = !isAiDescriptionGenerationEnabled();
 
 export type ProductFormValues = {
   sku: string;
@@ -3049,9 +3049,17 @@ export const ProductForm = ({
     }
 
     const descriptionLocale = normalizeLocale(locale) ?? defaultLocale;
+    const currentValues = form.getValues();
+    const primaryCategory =
+      currentValues.categories?.find((value) => value.trim().length > 0) ??
+      initialValues.category ??
+      "";
     generateDescriptionMutation.mutate({
       locale: descriptionLocale,
-      imageUrls: descriptionSourceImageUrls,
+      name: currentValues.name,
+      category: primaryCategory,
+      isBundle: currentValues.isBundle,
+      imageUrls: descriptionSourceImageUrls.slice(0, 6),
     });
   };
 
@@ -4859,13 +4867,26 @@ export const ProductForm = ({
                           variant="secondary"
                           size="sm"
                           onClick={handleGenerateDescription}
-                          disabled={aiFeaturesVisuallyDisabled}
+                          disabled={
+                            aiDescriptionGenerationDisabled ||
+                            isUploadingImages ||
+                            generateDescriptionMutation.isLoading ||
+                            !descriptionSourceImageUrls.length
+                          }
                         >
-                          <SparklesIcon className="h-4 w-4" />
-                          {t("aiDescriptionGenerate")}
-                          <Badge variant="muted" className="ml-1">
-                            {t("aiUnavailableBadge")}
-                          </Badge>
+                          {generateDescriptionMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" />
+                          )}
+                          {generateDescriptionMutation.isLoading
+                            ? t("aiDescriptionGenerating")
+                            : t("aiDescriptionGenerate")}
+                          {aiDescriptionGenerationDisabled ? (
+                            <Badge variant="muted" className="ml-1">
+                              {t("aiUnavailableBadge")}
+                            </Badge>
+                          ) : null}
                         </Button>
                       ) : null}
                     </div>
@@ -6554,13 +6575,26 @@ export const ProductForm = ({
                                 variant="secondary"
                                 size="sm"
                                 onClick={handleGenerateDescription}
-                                disabled={aiFeaturesVisuallyDisabled}
+                                disabled={
+                                  aiDescriptionGenerationDisabled ||
+                                  isUploadingImages ||
+                                  generateDescriptionMutation.isLoading ||
+                                  !descriptionSourceImageUrls.length
+                                }
                               >
-                                <SparklesIcon className="h-4 w-4" />
-                                {t("aiDescriptionGenerate")}
-                                <Badge variant="muted" className="ml-1">
-                                  {t("aiUnavailableBadge")}
-                                </Badge>
+                                {generateDescriptionMutation.isLoading ? (
+                                  <Spinner className="h-4 w-4" />
+                                ) : (
+                                  <SparklesIcon className="h-4 w-4" />
+                                )}
+                                {generateDescriptionMutation.isLoading
+                                  ? t("aiDescriptionGenerating")
+                                  : t("aiDescriptionGenerate")}
+                                {aiDescriptionGenerationDisabled ? (
+                                  <Badge variant="muted" className="ml-1">
+                                    {t("aiUnavailableBadge")}
+                                  </Badge>
+                                ) : null}
                               </Button>
                             ) : null}
                           </div>
@@ -6725,7 +6759,7 @@ export const ProductForm = ({
                                     size="sm"
                                     onClick={handleGenerateDescription}
                                     disabled={
-                                      aiFeaturesVisuallyDisabled ||
+                                      aiDescriptionGenerationDisabled ||
                                       isUploadingImages ||
                                       generateDescriptionMutation.isLoading ||
                                       !descriptionSourceImageUrls.length
@@ -6739,9 +6773,11 @@ export const ProductForm = ({
                                     {generateDescriptionMutation.isLoading
                                       ? t("aiDescriptionGenerating")
                                       : t("aiDescriptionGenerate")}
-                                    <Badge variant="muted" className="ml-1">
-                                      {t("aiUnavailableBadge")}
-                                    </Badge>
+                                    {aiDescriptionGenerationDisabled ? (
+                                      <Badge variant="muted" className="ml-1">
+                                        {t("aiUnavailableBadge")}
+                                      </Badge>
+                                    ) : null}
                                   </Button>
                                 ) : null}
                               </div>

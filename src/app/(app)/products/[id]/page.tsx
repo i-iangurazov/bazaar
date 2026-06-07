@@ -362,6 +362,27 @@ const ProductDetailPage = () => {
         receivingDraftKey,
       })
     : "/products";
+  const openDuplicateCreateFlow = (copyImages: boolean) => {
+    const params = new URLSearchParams({
+      duplicateFrom: productId,
+      copyImages: copyImages ? "1" : "0",
+    });
+    const nextStoreId = pricingStoreId || returnStoreId || selectedSettingsStore?.storeId || "";
+    if (nextStoreId) {
+      params.set("storeId", nextStoreId);
+    }
+    if (returnTo) {
+      params.set("returnTo", returnTo);
+    }
+    if (returnSource) {
+      params.set("returnSource", returnSource);
+    }
+    if (receivingDraftKey) {
+      params.set("receivingDraftKey", receivingDraftKey);
+    }
+    setDuplicateDialogOpen(false);
+    router.push(`/products/new?${params.toString()}`);
+  };
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: async () => {
       const refreshes: Promise<unknown>[] = [
@@ -381,21 +402,6 @@ const ProductDetailPage = () => {
       if (returnTo) {
         router.push(productEditReturnPath);
       }
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-  const duplicateMutation = trpc.products.duplicate.useMutation({
-    onSuccess: (result) => {
-      setDuplicateDialogOpen(false);
-      toast({
-        variant: "success",
-        description: result.copiedBarcodes
-          ? t("duplicateSuccess")
-          : t("duplicateSuccessNoBarcodes"),
-      });
-      router.push(`/products/${result.productId}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1184,16 +1190,9 @@ const ProductDetailPage = () => {
             <ViewIcon className="h-4 w-4" aria-hidden />
             {tInventory("viewMovements")}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={duplicateMutation.isLoading}
-            onSelect={() => setDuplicateDialogOpen(true)}
-          >
-            {duplicateMutation.isLoading ? (
-              <Spinner className="h-4 w-4" />
-            ) : (
-              <CopyIcon className="h-4 w-4" aria-hidden />
-            )}
-            {duplicateMutation.isLoading ? tCommon("loading") : t("duplicate")}
+          <DropdownMenuItem onSelect={() => setDuplicateDialogOpen(true)}>
+            <CopyIcon className="h-4 w-4" aria-hidden />
+            {t("duplicate")}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-danger focus:text-danger"
@@ -2407,41 +2406,17 @@ const ProductDetailPage = () => {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>
           <FormActions>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setDuplicateDialogOpen(false)}
-              disabled={duplicateMutation.isLoading}
-            >
+            <Button type="button" variant="ghost" onClick={() => setDuplicateDialogOpen(false)}>
               {tCommon("cancel")}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() =>
-                duplicateMutation.mutate({
-                  productId,
-                  copyImages: false,
-                  storeId: pricingStoreId || undefined,
-                })
-              }
-              disabled={duplicateMutation.isLoading}
+              onClick={() => openDuplicateCreateFlow(false)}
             >
-              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("duplicateWithoutPhotos")}
             </Button>
-            <Button
-              type="button"
-              onClick={() =>
-                duplicateMutation.mutate({
-                  productId,
-                  copyImages: true,
-                  storeId: pricingStoreId || undefined,
-                })
-              }
-              disabled={duplicateMutation.isLoading}
-            >
-              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+            <Button type="button" onClick={() => openDuplicateCreateFlow(true)}>
               {t("duplicateWithPhotos")}
             </Button>
           </FormActions>

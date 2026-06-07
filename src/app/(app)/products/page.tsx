@@ -97,7 +97,7 @@ import { translateError } from "@/lib/translateError";
 import { normalizeCurrencyCode } from "@/lib/currency";
 import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
-import { isAiFeaturesEnabled } from "@/lib/featureFlags";
+import { isAiDescriptionGenerationEnabled, isAiFeaturesEnabled } from "@/lib/featureFlags";
 import {
   buildScopedStorageKey,
   useScopedLocalStorageState,
@@ -187,6 +187,7 @@ const productsTableStateSchema = z.object({
   storeId: z.string(),
   showArchived: z.boolean(),
   viewMode: productViewModeSchema,
+  page: z.number().int().min(1).optional().default(1),
   pageSize: z.number().int().min(1).max(200),
   defaultSortVersion: z.number().int().optional().default(productsDefaultSortVersion),
   sort: z.object({
@@ -217,6 +218,7 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
 
 const aiArrangeCategoriesBatchSize = 25;
 const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
+const aiDescriptionGenerationDisabled = !isAiDescriptionGenerationEnabled();
 const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";
@@ -310,7 +312,6 @@ const ProductsPage = () => {
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
-  const [productsPage, setProductsPage] = useState(1);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [categoryInputValue, setCategoryInputValue] = useState("");
@@ -369,6 +370,7 @@ const ProductsPage = () => {
       storeId: "",
       showArchived: false,
       viewMode: "table",
+      page: 1,
       pageSize: 25,
       defaultSortVersion: productsDefaultSortVersion,
       sort: {
@@ -425,6 +427,15 @@ const ProductsPage = () => {
       }),
     [session?.user?.id, session?.user?.organizationId],
   );
+  const productsReturnStateStorageKey = useMemo(
+    () =>
+      buildScopedStorageKey({
+        prefix: "products-return-state",
+        organizationId: session?.user?.organizationId,
+        userId: session?.user?.id,
+      }),
+    [session?.user?.id, session?.user?.organizationId],
+  );
   const parseProductsSavedViews = useCallback(
     (raw: string) =>
       parseSavedTableViews(raw, (value) => {
@@ -456,15 +467,29 @@ const ProductsPage = () => {
   const rawStoreId = productsTableState.storeId;
   const showArchived = productsTableState.showArchived;
   const viewMode = productsTableState.viewMode;
+  const productsPage = productsTableState.page;
   const productsPageSize = productsTableState.pageSize;
   const productSort = productsTableState.sort;
   const visibleProductColumns = productsTableState.visibleColumns;
   const readinessParam = searchParams.get("readiness");
+  const productsListSearch = searchParams?.toString() ?? "";
+  const productsListReturnPath = productsListSearch
+    ? `/products?${productsListSearch}`
+    : "/products";
+  const setProductsPage = useCallback(
+    (nextValue: number) =>
+      setProductsTableState((current) => ({
+        ...current,
+        page: nextValue,
+      })),
+    [setProductsTableState],
+  );
   const setSearch = useCallback(
     (nextValue: string) =>
       setProductsTableState((current) => ({
         ...current,
         search: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -473,6 +498,7 @@ const ProductsPage = () => {
       setProductsTableState((current) => ({
         ...current,
         category: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -481,6 +507,7 @@ const ProductsPage = () => {
       setProductsTableState((current) => ({
         ...current,
         productType: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -489,6 +516,7 @@ const ProductsPage = () => {
       setProductsTableState((current) => ({
         ...current,
         readiness: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -504,6 +532,7 @@ const ProductsPage = () => {
       setProductsTableState((current) => ({
         ...current,
         storeId: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -512,6 +541,7 @@ const ProductsPage = () => {
       setProductsTableState((current) => ({
         ...current,
         showArchived: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -528,6 +558,7 @@ const ProductsPage = () => {
       setProductsTableState((current) => ({
         ...current,
         pageSize: nextValue,
+        page: 1,
       })),
     [setProductsTableState],
   );
@@ -600,6 +631,31 @@ const ProductsPage = () => {
   const selectedStore = useMemo(
     () => stores.find((store) => store.id === storeId) ?? null,
     [storeId, stores],
+  );
+  const persistProductsReturnState = useCallback(() => {
+    if (typeof window === "undefined" || !productsReturnStateStorageKey) {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(
+        productsReturnStateStorageKey,
+        JSON.stringify({ pageScrollY: window.scrollY }),
+      );
+    } catch {
+      // Best-effort restore only.
+    }
+  }, [productsReturnStateStorageKey]);
+  const buildProductListLaunchedHref = useCallback(
+    (pathname: string, paramsInit?: Record<string, string>) => {
+      const params = new URLSearchParams(paramsInit);
+      params.set("returnTo", productsListReturnPath);
+      if (storeId) {
+        params.set("storeId", storeId);
+      }
+      const query = params.toString();
+      return query ? `${pathname}?${query}` : pathname;
+    },
+    [productsListReturnPath, storeId],
   );
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
@@ -680,6 +736,36 @@ const ProductsPage = () => {
     () => productsBootstrapQuery.data?.list.items ?? [],
     [productsBootstrapQuery.data?.list.items],
   );
+  useEffect(() => {
+    if (
+      !productsReturnStateStorageKey ||
+      !productsTableStateReady ||
+      productsBootstrapQuery.isLoading
+    ) {
+      return;
+    }
+    let pageScrollY = 0;
+    try {
+      const raw = window.sessionStorage.getItem(productsReturnStateStorageKey);
+      if (!raw) {
+        return;
+      }
+      window.sessionStorage.removeItem(productsReturnStateStorageKey);
+      const parsed = JSON.parse(raw) as { pageScrollY?: unknown };
+      pageScrollY =
+        typeof parsed.pageScrollY === "number" && Number.isFinite(parsed.pageScrollY)
+          ? Math.max(0, parsed.pageScrollY)
+          : 0;
+    } catch {
+      return;
+    }
+    window.requestAnimationFrame(() => window.scrollTo({ top: pageScrollY }));
+  }, [
+    productsBootstrapQuery.isLoading,
+    products.length,
+    productsReturnStateStorageKey,
+    productsTableStateReady,
+  ]);
   const productsTotal = productsBootstrapQuery.data?.list.total ?? 0;
   const hasProductFilters = Boolean(
     search || category || readiness !== "all" || productType !== "all" || showArchived,
@@ -751,23 +837,6 @@ const ProductsPage = () => {
   const inlineCategoryMutation = trpc.products.bulkUpdateCategory.useMutation();
   const inlineStorePriceMutation = trpc.storePrices.upsert.useMutation();
   const inlineInventoryAdjustMutation = trpc.inventory.adjust.useMutation();
-
-  const duplicateMutation = trpc.products.duplicate.useMutation({
-    onSuccess: (result) => {
-      productsBootstrapQuery.refetch();
-      setDuplicateTarget(null);
-      toast({
-        variant: "success",
-        description: result.copiedBarcodes
-          ? t("duplicateSuccess")
-          : t("duplicateSuccessNoBarcodes"),
-      });
-      router.push(`/products/${result.productId}`);
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
 
   const bulkPriceMutation = trpc.storePrices.bulkUpdate.useMutation({
     onSuccess: (result) => {
@@ -883,14 +952,6 @@ const ProductsPage = () => {
       setBulkCategoryValue("");
     }
   }, [bulkCategoryOpen]);
-
-  useEffect(() => {
-    setProductsPage(1);
-  }, [search, category, showArchived, storeId, productType]);
-
-  useEffect(() => {
-    setProductsPage(1);
-  }, [productSort.direction, productSort.key]);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -1455,8 +1516,7 @@ const ProductsPage = () => {
       if (!view) {
         return;
       }
-      setProductsTableState(view.state);
-      setProductsPage(1);
+      setProductsTableState({ ...view.state, page: 1 });
       setSelectedIds(new Set());
     },
     [productsSavedViewsState.views, setProductsTableState],
@@ -1768,6 +1828,7 @@ const ProductsPage = () => {
     (key: ProductSortKey) => {
       setProductsTableState((current) => ({
         ...current,
+        page: 1,
         sort:
           current.sort.key === key
             ? {
@@ -2035,8 +2096,9 @@ const ProductsPage = () => {
             key: "edit",
             label: tCommon("edit"),
             icon: EditIcon,
-            href: `/products/${product.id}`,
-            openInNewTab: true,
+            href: buildProductListLaunchedHref(`/products/${product.id}`),
+            openInNewTab: false,
+            onSelect: persistProductsReturnState,
           },
           ...(enableBarcode
             ? [
@@ -2058,7 +2120,9 @@ const ProductsPage = () => {
             key: "duplicate",
             label: t("duplicate"),
             icon: CopyIcon,
-            onSelect: () => setDuplicateTarget({ id: product.id, name: product.name }),
+            onSelect: () => {
+              setDuplicateTarget({ id: product.id, name: product.name });
+            },
           },
           {
             key: "archive",
@@ -2657,13 +2721,22 @@ const ProductsPage = () => {
     }
   };
 
+  const openDuplicateCreateFlow = (copyImages: boolean) => {
+    if (!duplicateTarget) {
+      return;
+    }
+    persistProductsReturnState();
+    const href = buildProductListLaunchedHref("/products/new", {
+      duplicateFrom: duplicateTarget.id,
+      copyImages: copyImages ? "1" : "0",
+    });
+    setDuplicateTarget(null);
+    router.push(href);
+  };
+
+  const newProductHref = buildProductListLaunchedHref("/products/new");
+  const newBundleHref = buildProductListLaunchedHref("/products/new", { type: "bundle" });
   const productCreateStoreQuery = storeId ? `storeId=${encodeURIComponent(storeId)}` : "";
-  const newProductHref = productCreateStoreQuery
-    ? `/products/new?${productCreateStoreQuery}`
-    : "/products/new";
-  const newBundleHref = productCreateStoreQuery
-    ? `/products/new?type=bundle&${productCreateStoreQuery}`
-    : "/products/new?type=bundle";
   const importProductsHref = productCreateStoreQuery
     ? `/settings/import?${productCreateStoreQuery}`
     : "/settings/import";
@@ -2677,7 +2750,11 @@ const ProductsPage = () => {
           canManageProducts ? (
             <TooltipProvider>
               <div className="hidden w-full flex-wrap items-center gap-2 md:flex md:w-auto">
-                <Link href={newProductHref} className="w-full sm:w-auto">
+                <Link
+                  href={newProductHref}
+                  className="w-full sm:w-auto"
+                  onClick={persistProductsReturnState}
+                >
                   <Button className="w-full sm:w-auto" data-tour="products-create">
                     <AddIcon className="h-4 w-4" aria-hidden />
                     {t("newProduct")}
@@ -2697,7 +2774,7 @@ const ProductsPage = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[240px]">
                     <DropdownMenuItem asChild>
-                      <Link href={newBundleHref}>
+                      <Link href={newBundleHref} onClick={persistProductsReturnState}>
                         <AddIcon className="h-4 w-4" aria-hidden />
                         {t("newBundle")}
                       </Link>
@@ -2928,7 +3005,11 @@ const ProductsPage = () => {
             onChange={(event) => setSearch(event.target.value)}
           />
           {canManageProducts ? (
-            <Link href={newProductHref} aria-label={t("newProduct")}>
+            <Link
+              href={newProductHref}
+              aria-label={t("newProduct")}
+              onClick={persistProductsReturnState}
+            >
               <Button type="button" size="icon" className="h-11 w-11">
                 <AddIcon className="h-5 w-5" aria-hidden />
               </Button>
@@ -3246,13 +3327,21 @@ const ProductsPage = () => {
                           size="sm"
                           className="w-full sm:w-auto"
                           aria-label={t("bulkAiActions")}
-                          disabled={aiFeaturesVisuallyDisabled}
+                          disabled={
+                            aiFeaturesVisuallyDisabled &&
+                            aiDescriptionGenerationDisabled &&
+                            !enableBarcode
+                          }
                         >
                           <SparklesIcon className="h-4 w-4" aria-hidden />
                           {t("bulkAiActions")}
-                          <Badge variant="muted" className="ml-1">
-                            {t("aiUnavailableBadge")}
-                          </Badge>
+                          {aiFeaturesVisuallyDisabled &&
+                          aiDescriptionGenerationDisabled &&
+                          !enableBarcode ? (
+                            <Badge variant="muted" className="ml-1">
+                              {t("aiUnavailableBadge")}
+                            </Badge>
+                          ) : null}
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-[260px]">
@@ -3271,7 +3360,7 @@ const ProductsPage = () => {
                           </Badge>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          disabled={aiFeaturesVisuallyDisabled || bulkDescriptionRunning}
+                          disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
                           onSelect={() => void handleBulkGenerateDescriptions()}
                         >
                           {bulkDescriptionRunning ? (
@@ -3282,9 +3371,11 @@ const ProductsPage = () => {
                           {bulkDescriptionRunning
                             ? tCommon("loading")
                             : t("bulkGenerateDescriptions")}
-                          <Badge variant="muted" className="ml-auto">
-                            {t("aiUnavailableBadge")}
-                          </Badge>
+                          {aiDescriptionGenerationDisabled ? (
+                            <Badge variant="muted" className="ml-auto">
+                              {t("aiUnavailableBadge")}
+                            </Badge>
+                          ) : null}
                         </DropdownMenuItem>
                         {enableBarcode ? (
                           <DropdownMenuItem
@@ -5492,47 +5583,17 @@ const ProductsPage = () => {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>
           <ModalFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setDuplicateTarget(null)}
-              disabled={duplicateMutation.isLoading}
-            >
+            <Button type="button" variant="ghost" onClick={() => setDuplicateTarget(null)}>
               {tCommon("cancel")}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => {
-                if (!duplicateTarget) {
-                  return;
-                }
-                duplicateMutation.mutate({
-                  productId: duplicateTarget.id,
-                  copyImages: false,
-                  storeId: storeId || undefined,
-                });
-              }}
-              disabled={duplicateMutation.isLoading}
+              onClick={() => openDuplicateCreateFlow(false)}
             >
-              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("duplicateWithoutPhotos")}
             </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                if (!duplicateTarget) {
-                  return;
-                }
-                duplicateMutation.mutate({
-                  productId: duplicateTarget.id,
-                  copyImages: true,
-                  storeId: storeId || undefined,
-                });
-              }}
-              disabled={duplicateMutation.isLoading}
-            >
-              {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+            <Button type="button" onClick={() => openDuplicateCreateFlow(true)}>
               {t("duplicateWithPhotos")}
             </Button>
           </ModalFooter>

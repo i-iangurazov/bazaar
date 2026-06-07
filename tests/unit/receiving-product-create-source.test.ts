@@ -44,7 +44,9 @@ describe("receiving product creation handoff source", () => {
     expect(source).toContain("buildReturnPath");
     expect(source).toContain("createdProductId");
     expect(source).not.toContain("createdProductName");
-    expect(source).toContain("productId: isDuplicateFlow ? undefined : product.id");
+    expect(source).toContain(
+      "productId: isReceivingReturnFlow && !isDuplicateFlow ? product.id : undefined",
+    );
     expect(source).toContain("receivingDraftKey");
     expect(source).toContain("isReceivingReturnFlow");
     expect(source).toContain("duplicateFromProductId");

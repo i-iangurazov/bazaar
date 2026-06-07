@@ -65,7 +65,7 @@ describe("index page source layout", () => {
     const serviceSource = await readSource("src/server/services/products.ts");
 
     expect(formSource).toContain("storePriceKgs?: number");
-    expect(formSource).toContain('name={`variants.${variant.index}.storePriceKgs`}');
+    expect(formSource).toContain("name={`variants.${variant.index}.storePriceKgs`}");
     expect(formSource).toContain("storePriceKgs: submitMoneyToKgs");
     expect(detailSource).toContain("storeId: selectedSettingsStore?.storeId");
     expect(serviceSource).toContain("upsertStoreVariantPrices");
@@ -152,7 +152,9 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("selectedSettingsStore?.minStock");
     expect(detailSource).toContain("handleSaveStoreVariantOnHand");
     expect(listSource).toContain("duplicateDialogTitle");
-    expect(listSource).toContain("copyImages: false");
+    expect(listSource).toContain('copyImages: copyImages ? "1" : "0"');
+    expect(listSource).toContain('buildProductListLaunchedHref("/products/new"');
+    expect(listSource).toContain('params.set("returnTo", productsListReturnPath)');
     expect(formSource).toContain("enableSimilarProductCheck &&");
     expect(formSource).toContain("{enableSku ? (");
     expect(formSource).toContain("{compactCreate && enableBarcode ? (");
