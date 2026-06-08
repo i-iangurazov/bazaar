@@ -94,9 +94,15 @@ export type ProductMovementDocumentLine = {
   productDetailUrl: string;
   storeName: string;
   productName: string;
+  sku: string | null;
+  barcode: string | null;
+  unit: string | null;
   variantName: string | null;
   movementType: string;
   qtyDelta: number;
+  linePosition: number | null;
+  unitCostKgs: number | null;
+  lineTotalKgs: number | null;
   note: string | null;
   createdAt: Date;
   authorName: string | null;
@@ -146,9 +152,15 @@ type ProductMovementDocumentLineSqlRow = {
   productId: string;
   storeName: string;
   productName: string;
+  sku: string | null;
+  barcode: string | null;
+  unit: string | null;
   variantName: string | null;
   movementType: string;
   qtyDelta: number | bigint;
+  linePosition: number | null;
+  unitCostKgs: Prisma.Decimal | number | string | null;
+  lineTotalKgs: Prisma.Decimal | number | string | null;
   note: string | null;
   createdAt: Date;
   authorName: string | null;
@@ -281,6 +293,9 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       m."variantId",
       m."type"::text AS "movementType",
       m."qtyDelta",
+      m."linePosition",
+      m."unitCostKgs",
+      m."lineTotalKgs",
       m."referenceType",
       m."referenceId",
       m."note",
@@ -320,6 +335,8 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ') AS "sourceStoreName",
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ') AS "destinationStoreName",
       STRING_AGG(DISTINCT b."productName", ', ') AS "productPreview",
+      SUM(b."lineTotalKgs") AS "movementLineTotalAmount",
+      BOOL_OR(b."lineTotalKgs" IS NOT NULL) AS "hasMovementLineTotal",
       (ARRAY_AGG(b."note" ORDER BY b."createdAt" DESC) FILTER (WHERE b."note" IS NOT NULL AND BTRIM(b."note") <> ''))[1] AS "comment",
       (ARRAY_AGG(b."createdById" ORDER BY b."createdAt" DESC) FILTER (WHERE b."createdById" IS NOT NULL))[1] AS "authorId",
       (ARRAY_AGG(b."authorName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."authorName" IS NOT NULL AND BTRIM(b."authorName") <> ''))[1] AS "authorName",
@@ -375,6 +392,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
         WHEN co."id" IS NOT NULL THEN co."totalKgs"
         WHEN sr."id" IS NOT NULL THEN sr."totalKgs"
         WHEN po."id" IS NOT NULL AND po_totals."hasCost" THEN po_totals."totalAmount"
+        WHEN g."documentType" IN ('STOCK_RECEIVING', 'TRANSFER') AND g."hasMovementLineTotal" THEN g."movementLineTotalAmount"
         ELSE NULL
       END AS "totalAmount",
       CASE
@@ -668,9 +686,15 @@ export const getProductMovementDocument = async (
         m."productId",
         s."name" AS "storeName",
         p."name" AS "productName",
+        p."sku",
+        p."unit",
+        pb."value" AS "barcode",
         v."name" AS "variantName",
         m."type"::text AS "movementType",
         m."qtyDelta",
+        m."linePosition",
+        m."unitCostKgs",
+        m."lineTotalKgs",
         m."note",
         m."createdAt",
         u."name" AS "authorName",
@@ -680,8 +704,15 @@ export const getProductMovementDocument = async (
       INNER JOIN "Product" p ON p."id" = m."productId"
       LEFT JOIN "ProductVariant" v ON v."id" = m."variantId"
       LEFT JOIN "User" u ON u."id" = m."createdById"
+      LEFT JOIN LATERAL (
+        SELECT b."value"
+        FROM "ProductBarcode" b
+        WHERE b."productId" = p."id"
+        ORDER BY b."createdAt" ASC, b."id" ASC
+        LIMIT 1
+      ) pb ON true
       ${buildWhereSql(lineConditions)}
-      ORDER BY m."createdAt" ASC, m."id" ASC
+      ORDER BY COALESCE(m."linePosition", 2147483647) ASC, m."createdAt" ASC, m."id" ASC
     `,
   );
 
@@ -693,9 +724,15 @@ export const getProductMovementDocument = async (
       productDetailUrl: `/products/${line.productId}`,
       storeName: line.storeName,
       productName: line.productName,
+      sku: line.sku,
+      barcode: line.barcode,
+      unit: line.unit,
       variantName: line.variantName,
       movementType: line.movementType,
       qtyDelta: Number(line.qtyDelta),
+      linePosition: line.linePosition,
+      unitCostKgs: toNumberOrNull(line.unitCostKgs),
+      lineTotalKgs: toNumberOrNull(line.lineTotalKgs),
       note: line.note,
       createdAt: line.createdAt,
       authorName: line.authorName,

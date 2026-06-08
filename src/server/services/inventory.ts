@@ -68,6 +68,9 @@ export type ApplyStockMovementInput = {
   type: StockMovementType;
   referenceType?: string;
   referenceId?: string;
+  linePosition?: number | null;
+  unitCostKgs?: number | null;
+  lineTotalKgs?: number | null;
   note?: string | null;
   actorId?: string | null;
   organizationId?: string;
@@ -154,6 +157,9 @@ export const applyStockMovement = async (
       variantId: input.variantId ?? undefined,
       type: input.type,
       qtyDelta: input.qtyDelta,
+      linePosition: input.linePosition ?? undefined,
+      unitCostKgs: input.unitCostKgs ?? undefined,
+      lineTotalKgs: input.lineTotalKgs ?? undefined,
       referenceType: input.referenceType,
       referenceId: input.referenceId,
       note: input.note ?? undefined,
@@ -736,7 +742,7 @@ export const postStockReceiving = async (
         }
 
         const lineResults: StockReceivingResult["lines"] = [];
-        for (const line of normalizedLines) {
+        for (const [index, line] of normalizedLines.entries()) {
           const before = await tx.inventorySnapshot.findUnique({
             where: {
               storeId_productId_variantKey: {
@@ -755,6 +761,9 @@ export const postStockReceiving = async (
             type: StockMovementType.RECEIVE,
             referenceType: "STOCK_RECEIVING",
             referenceId: receivingId,
+            linePosition: index + 1,
+            unitCostKgs: line.unitCost,
+            lineTotalKgs: line.quantity * line.unitCost,
             note: movementNote,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -926,6 +935,7 @@ export const transferStock = async (input: TransferStockInput) => {
           type: StockMovementType.TRANSFER_OUT,
           referenceType: "TRANSFER",
           referenceId: transferId,
+          linePosition: 1,
           note: input.note ?? undefined,
           actorId: input.actorId,
           organizationId: input.organizationId,
@@ -939,6 +949,7 @@ export const transferStock = async (input: TransferStockInput) => {
           type: StockMovementType.TRANSFER_IN,
           referenceType: "TRANSFER",
           referenceId: transferId,
+          linePosition: 1,
           note: input.note ?? undefined,
           actorId: input.actorId,
           organizationId: input.organizationId,

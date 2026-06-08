@@ -640,11 +640,17 @@ const InventoryReceivingPage = () => {
           : "";
 
   const postMutation = trpc.inventory.postStockReceiving.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await trpcUtils.inventory.list.invalidate();
       await trpcUtils.inventory.searchProducts.invalidate();
+      await trpcUtils.inventory.productMovements.invalidate();
+      await trpcUtils.inventory.productMovementDocument.invalidate();
       toast({ variant: "success", description: t("receivingSuccess") });
-      router.push("/inventory");
+      router.push(
+        `/inventory/movements/${encodeURIComponent(
+          `STOCK_RECEIVING:STOCK_RECEIVING:${result.receivingId}`,
+        )}`,
+      );
     },
     onError: (error) => {
       toast({

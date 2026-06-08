@@ -173,6 +173,13 @@ describeDb("inventory service", () => {
 
   it("posts bulk stock receiving with one movement reference", async () => {
     const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
     const secondProduct = await prisma.product.create({
       data: {
         organizationId: org.id,
@@ -217,9 +224,20 @@ describeDb("inventory service", () => {
         referenceId: result.receivingId,
         type: StockMovementType.RECEIVE,
       },
-      orderBy: { productId: "asc" },
+      orderBy: { linePosition: "asc" },
     });
     expect(movements).toHaveLength(2);
+    expect(movements.map((movement) => movement.productId)).toEqual([product.id, secondProduct.id]);
+    expect(movements.map((movement) => movement.linePosition)).toEqual([1, 2]);
+    expect(movements.map((movement) => Number(movement.unitCostKgs))).toEqual([5, 7]);
+    expect(movements.map((movement) => Number(movement.lineTotalKgs))).toEqual([15, 14]);
+
+    const document = await caller.inventory.productMovementDocument({
+      documentKey: `STOCK_RECEIVING:STOCK_RECEIVING:${result.receivingId}`,
+    });
+    expect(document?.totalAmount).toBe(29);
+    expect(document?.lines.map((line) => line.productId)).toEqual([product.id, secondProduct.id]);
+    expect(document?.lines.map((line) => line.unitCostKgs)).toEqual([5, 7]);
 
     await assertSnapshotMatchesLedger(store.id, product.id);
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
@@ -505,6 +523,13 @@ describeDb("inventory service", () => {
 
   it("creates paired transfer movements and updates both snapshots", async () => {
     const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
     const storeB = await prisma.store.create({
       data: {
         organizationId: org.id,
@@ -570,6 +595,25 @@ describeDb("inventory service", () => {
     });
 
     expect(movements).toHaveLength(2);
+    expect(movements.every((movement) => movement.referenceType === "TRANSFER")).toBe(true);
+    expect(movements.every((movement) => movement.linePosition === 1)).toBe(true);
+
+    const transferId = movements[0]?.referenceId;
+    expect(transferId).toBeTruthy();
+    const journal = await caller.inventory.productMovements({ type: "TRANSFER" });
+    const transferRow = journal.items.find((item) => item.documentId === transferId);
+    expect(transferRow?.detailUrl).toBe(
+      `/inventory/movements/${encodeURIComponent(`TRANSFER:TRANSFER:${transferId}`)}`,
+    );
+    const document = await caller.inventory.productMovementDocument({
+      documentKey: `TRANSFER:TRANSFER:${transferId}`,
+    });
+    expect(document?.senderName).toBe(store.name);
+    expect(document?.recipientName).toBe(storeB.name);
+    expect(document?.lines.map((line) => line.movementType).sort()).toEqual([
+      "TRANSFER_IN",
+      "TRANSFER_OUT",
+    ]);
   });
 
   it("rejects transfer quantity above available stock when negative stock is disabled", async () => {

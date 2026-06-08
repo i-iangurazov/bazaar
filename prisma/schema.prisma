@@ -1464,6 +1464,9 @@ model StockMovement {
   stockLotId    String?
   type          StockMovementType
   qtyDelta      Int
+  linePosition  Int?
+  unitCostKgs   Decimal?          @db.Decimal(12, 2)
+  lineTotalKgs  Decimal?          @db.Decimal(12, 2)
   referenceType String?
   referenceId   String?
   note          String?
