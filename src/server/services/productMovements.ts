@@ -69,6 +69,7 @@ export type ProductMovementJournalRow = {
   documentType: ProductMovementDocumentType;
   documentNumber: string | null;
   documentLabel: string;
+  organizationName: string | null;
   createdAt: Date;
   postedAt: Date | null;
   status: string;
@@ -128,6 +129,7 @@ type ProductMovementJournalSqlRow = {
   documentReferenceId: string;
   documentNumber: string | null;
   linkedCustomerOrderId: string | null;
+  organizationName: string | null;
   createdAt: Date;
   postedAt: Date | null;
   status: string;
@@ -302,6 +304,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       m."createdAt",
       m."createdById",
       s."name" AS "storeName",
+      o."name" AS "organizationName",
       p."name" AS "productName",
       u."name" AS "authorName",
       u."email" AS "authorEmail",
@@ -314,6 +317,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
     FROM "StockMovement" m
     INNER JOIN "Store" s ON s."id" = m."storeId"
     INNER JOIN "Product" p ON p."id" = m."productId"
+    INNER JOIN "Organization" o ON o."id" = s."organizationId"
     LEFT JOIN "User" u ON u."id" = m."createdById"
     ${baseWhereSql}
   ),
@@ -332,6 +336,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
         ELSE COALESCE(SUM(ABS(b."qtyDelta")), 0)::int
       END AS "totalQuantity",
       STRING_AGG(DISTINCT b."storeName", ', ') AS "storeName",
+      (ARRAY_AGG(b."organizationName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."organizationName" IS NOT NULL AND BTRIM(b."organizationName") <> ''))[1] AS "organizationName",
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ') AS "sourceStoreName",
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ') AS "destinationStoreName",
       STRING_AGG(DISTINCT b."productName", ', ') AS "productPreview",
@@ -353,6 +358,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       g."documentReferenceId" AS "documentReferenceId",
       COALESCE(co."number", sr."number", sc."code", g."documentReferenceId") AS "documentNumber",
       co_original."id" AS "linkedCustomerOrderId",
+      g."organizationName" AS "organizationName",
       g."documentDate" AS "createdAt",
       COALESCE(co."completedAt", sr."completedAt", po."receivedAt", sc."appliedAt", g."documentDate") AS "postedAt",
       COALESCE(co."status"::text, sr."status"::text, po."status"::text, sc."status"::text, 'POSTED') AS "status",
@@ -511,6 +517,7 @@ const normalizeProductMovementJournalRow = (
       documentNumber: row.documentNumber,
       documentId: row.documentId,
     }),
+    organizationName: row.organizationName,
     createdAt: row.createdAt,
     postedAt: row.postedAt,
     status: row.status,

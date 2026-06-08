@@ -235,6 +235,7 @@ describeDb("inventory service", () => {
     const document = await caller.inventory.productMovementDocument({
       documentKey: `STOCK_RECEIVING:STOCK_RECEIVING:${result.receivingId}`,
     });
+    expect(document?.organizationName).toBe(org.name);
     expect(document?.totalAmount).toBe(29);
     expect(document?.lines.map((line) => line.productId)).toEqual([product.id, secondProduct.id]);
     expect(document?.lines.map((line) => line.unitCostKgs)).toEqual([5, 7]);
@@ -608,6 +609,7 @@ describeDb("inventory service", () => {
     const document = await caller.inventory.productMovementDocument({
       documentKey: `TRANSFER:TRANSFER:${transferId}`,
     });
+    expect(document?.organizationName).toBe(org.name);
     expect(document?.senderName).toBe(store.name);
     expect(document?.recipientName).toBe(storeB.name);
     expect(document?.lines.map((line) => line.movementType).sort()).toEqual([
