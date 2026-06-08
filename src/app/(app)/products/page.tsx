@@ -3064,6 +3064,30 @@ const ProductsPage = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {canManageProducts ? (
+            <FormActions className="mb-3 justify-start">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
+                disabled={
+                  aiDescriptionGenerationDisabled ||
+                  bulkDescriptionRunning ||
+                  selectingAllResults ||
+                  productsTotal <= 0
+                }
+              >
+                {selectingAllResults || bulkDescriptionRunning ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {t("bulkGenerateDescriptions")} ({productsTotal})
+              </Button>
+            </FormActions>
+          ) : null}
           {products.length && canSelectProducts ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">

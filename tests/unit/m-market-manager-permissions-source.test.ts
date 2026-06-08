@@ -21,6 +21,11 @@ describe("m-market manager product tools source", () => {
     expect(pageSource).toContain('const canEdit = role === "ADMIN" || role === "MANAGER";');
     expect(pageSource).toContain("shortDescriptionTargetIds.length <= 0 ||");
     expect(pageSource).toContain("startDescriptionGenerationJobMutation.mutate({");
+    expect(pageSource).toContain("const handleGenerateDescriptionsForSelected = async () =>");
+    expect(pageSource).toContain("const handleGenerateDescriptionsForCurrentFilter = async () =>");
+    expect(pageSource).toContain("trpcUtils.mMarket.listIds.fetch({");
+    expect(pageSource).toContain("onClick={() => void handleGenerateDescriptionsForSelected()}");
+    expect(pageSource).toContain("onClick={() => void handleGenerateDescriptionsForCurrentFilter()}");
     expect(pageSource).toContain("!activeStoreId ||\n      actionableMissingSpecsTargetIds.length <= 0");
     expect(pageSource).toContain(
       "if (!canEdit || !activeStoreId || actionableMissingSpecsCount <= 0)",

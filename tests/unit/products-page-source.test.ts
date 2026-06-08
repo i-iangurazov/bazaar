@@ -59,6 +59,22 @@ describe("index page source layout", () => {
     expect(serviceSource).toContain("selectedColumns.map((column) => column.key)");
   });
 
+  it("exposes filtered AI description generation without requiring selected rows", async () => {
+    const pageSource = await readSource("src/app/(app)/products/page.tsx");
+    const tableCardStart = pageSource.indexOf('<CardTitle>{t("title")}</CardTitle>');
+    const contentStart = pageSource.indexOf("<CardContent>", tableCardStart);
+    const selectionToolbarStart = pageSource.indexOf("<SelectionToolbar", contentStart);
+    const filteredActionStart = pageSource.indexOf(
+      "handleBulkGenerateDescriptionsForCurrentFilter",
+      contentStart,
+    );
+
+    expect(pageSource).toContain("const handleBulkGenerateDescriptionsForCurrentFilter = async () =>");
+    expect(tableCardStart).toBeGreaterThan(-1);
+    expect(filteredActionStart).toBeGreaterThan(contentStart);
+    expect(selectionToolbarStart).toBeGreaterThan(filteredActionStart);
+  });
+
   it("keeps variant sale prices in the product form contract", async () => {
     const formSource = await readSource("src/components/product-form.tsx");
     const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");

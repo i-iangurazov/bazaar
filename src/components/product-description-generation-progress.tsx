@@ -106,6 +106,7 @@ export const ProductDescriptionGenerationProgress = ({
   retryDisabled?: boolean;
 }) => {
   const t = useTranslations("products");
+  const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
   const running = isDescriptionGenerationJobRunning(job.status);
   const progressPercent =
@@ -114,6 +115,12 @@ export const ProductDescriptionGenerationProgress = ({
       : job.totalCount > 0
         ? Math.round((job.processedCount / job.totalCount) * 100)
         : 0;
+  const formatErrorMessage = (message?: string | null) => {
+    if (!message) {
+      return "";
+    }
+    return tErrors.has?.(message) ? tErrors(message) : message;
+  };
 
   return (
     <div className="space-y-4">
@@ -164,7 +171,7 @@ export const ProductDescriptionGenerationProgress = ({
 
       {job.errorMessage ? (
         <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-          {job.errorMessage}
+          {formatErrorMessage(job.errorMessage)}
         </div>
       ) : null}
 
@@ -195,7 +202,7 @@ export const ProductDescriptionGenerationProgress = ({
                 </TableCell>
                 <TableCell className="max-w-md">
                   {item.errorMessage ? (
-                    <p className="text-sm text-danger">{item.errorMessage}</p>
+                    <p className="text-sm text-danger">{formatErrorMessage(item.errorMessage)}</p>
                   ) : item.generatedDescription ? (
                     <p className="line-clamp-2 text-sm text-muted-foreground">
                       {item.generatedDescription}

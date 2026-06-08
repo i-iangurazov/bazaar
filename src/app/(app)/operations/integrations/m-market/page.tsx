@@ -874,6 +874,62 @@ const MMarketSettingsPage = () => {
     });
   };
 
+  const startDescriptionGenerationForIds = async (targetIds: string[]) => {
+    if (!canEdit || descriptionGenerationRunning) {
+      return;
+    }
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
+    if (!targetIds.length) {
+      toast({ variant: "info", description: t("productsSelection.empty") });
+      return;
+    }
+    if (
+      !(await confirm({
+        description: tProducts("confirmBulkGenerateDescriptions", {
+          count: targetIds.length,
+        }),
+      }))
+    ) {
+      return;
+    }
+    startDescriptionGenerationJobMutation.mutate({
+      storeId: activeStoreId,
+      locale: normalizeLocale(locale) ?? defaultLocale,
+      productIds: targetIds,
+      overwriteExisting: false,
+    });
+  };
+
+  const handleGenerateDescriptionsForSelected = async () => {
+    await startDescriptionGenerationForIds(Array.from(selectedProductIds));
+  };
+
+  const handleGenerateDescriptionsForCurrentFilter = async () => {
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
+    setSelectingAllProducts(true);
+    try {
+      const ids = await trpcUtils.mMarket.listIds.fetch({
+        storeId: activeStoreId,
+        search: productSearch.trim() || undefined,
+        selection: productSelectionFilter,
+      });
+      await startDescriptionGenerationForIds(ids);
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setSelectingAllProducts(false);
+    }
+  };
+
   const activeStore = (settingsQuery.data?.stores ?? []).find(
     (store) => store.storeId === activeStoreId,
   );
@@ -1255,6 +1311,29 @@ const MMarketSettingsPage = () => {
 
           {!canEdit ? <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p> : null}
 
+          {canEdit && activeStoreId ? (
+            <FormActions className="justify-start">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleGenerateDescriptionsForCurrentFilter()}
+                disabled={
+                  aiFeaturesVisuallyDisabled ||
+                  descriptionGenerationRunning ||
+                  selectingAllProducts ||
+                  (productsQuery.data?.total ?? 0) <= 0
+                }
+              >
+                {selectingAllProducts || startDescriptionGenerationJobMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {tProducts("bulkGenerateDescriptions")} ({productsQuery.data?.total ?? 0})
+              </Button>
+            </FormActions>
+          ) : null}
+
           {canEdit && productItems.length ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">
@@ -1303,6 +1382,25 @@ const MMarketSettingsPage = () => {
                     : tCommon("selectAllResults", { count: productsQuery.data.total })}
                 </Button>
               ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => void handleGenerateDescriptionsForSelected()}
+                disabled={
+                  aiFeaturesVisuallyDisabled ||
+                  descriptionGenerationRunning ||
+                  startDescriptionGenerationJobMutation.isLoading
+                }
+              >
+                {startDescriptionGenerationJobMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {tProducts("bulkGenerateDescriptions")}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
