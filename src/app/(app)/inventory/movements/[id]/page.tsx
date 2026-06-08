@@ -185,7 +185,12 @@ const ProductMovementDocumentPage = () => {
                           <TableRow key={line.id}>
                             <TableCell>
                               <div className="min-w-0">
-                                <p className="font-medium text-foreground">{line.productName}</p>
+                                <Link
+                                  href={line.productDetailUrl}
+                                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                                >
+                                  {line.productName}
+                                </Link>
                                 {line.variantName ? (
                                   <p className="text-xs text-muted-foreground">{line.variantName}</p>
                                 ) : null}
@@ -217,7 +222,12 @@ const ProductMovementDocumentPage = () => {
                   <div className="rounded-md border border-border bg-card p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-foreground">{line.productName}</p>
+                        <Link
+                          href={line.productDetailUrl}
+                          className="text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                        >
+                          {line.productName}
+                        </Link>
                         {line.variantName ? (
                           <p className="text-xs text-muted-foreground">{line.variantName}</p>
                         ) : null}

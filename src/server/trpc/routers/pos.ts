@@ -51,7 +51,7 @@ import {
   updatePosSaleLine,
   updateSaleReturnLine,
 } from "@/server/services/pos";
-import { listCustomers } from "@/server/services/customers";
+import { createCustomer, listCustomers } from "@/server/services/customers";
 import {
   createConnectorPairingCode,
   listFiscalReceipts,
@@ -324,6 +324,29 @@ export const posRouter = router({
             search: input.search,
             page: 1,
             pageSize: input.pageSize ?? 20,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+    create: cashierProcedure
+      .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "pos-customer-create" }))
+      .input(
+        z.object({
+          storeId: z.string().min(1),
+          name: z.string().trim().min(1).max(180),
+          email: z.string().trim().max(254).optional().nullable(),
+          phone: z.string().trim().max(80).optional().nullable(),
+          address: z.string().trim().max(500).optional().nullable(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await createCustomer({
+            user: ctx.user,
+            actorId: ctx.user.id,
+            requestId: ctx.requestId,
+            ...input,
           });
         } catch (error) {
           throw toTRPCError(error);

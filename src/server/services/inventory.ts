@@ -729,37 +729,6 @@ export const postStockReceiving = async (
           }
         }
 
-        const [storeProducts, snapshots] = await Promise.all([
-          tx.storeProduct.findMany({
-            where: {
-              organizationId: input.organizationId,
-              storeId: input.storeId,
-              productId: { in: productIds },
-              isActive: true,
-            },
-            select: { productId: true },
-          }),
-          tx.inventorySnapshot.findMany({
-            where: {
-              storeId: input.storeId,
-              productId: { in: productIds },
-            },
-            select: { productId: true, variantKey: true },
-          }),
-        ]);
-        const assignedProductIds = new Set(storeProducts.map((row) => row.productId));
-        const snapshotKeys = new Set(
-          snapshots.map((snapshot) => `${snapshot.productId}:${snapshot.variantKey}`),
-        );
-        for (const line of normalizedLines) {
-          if (
-            !assignedProductIds.has(line.productId) &&
-            !snapshotKeys.has(`${line.productId}:${line.variantKey}`)
-          ) {
-            throw new AppError("productNotAvailableInStore", "FORBIDDEN", 403);
-          }
-        }
-
         const lineResults: StockReceivingResult["lines"] = [];
         for (const line of normalizedLines) {
           const before = await tx.inventorySnapshot.findUnique({

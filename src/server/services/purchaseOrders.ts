@@ -226,7 +226,8 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
         createdById: input.actorId,
         updatedById: input.actorId,
         lines: {
-          create: normalizedLines.map((line) => ({
+          create: normalizedLines.map((line, index) => ({
+            position: index,
             productId: line.productId,
             variantId: line.variantId ?? undefined,
             variantKey: line.variantId ?? "BASE",
@@ -381,7 +382,8 @@ export const createDraftsFromReorder = async (input: CreateDraftsFromReorderInpu
               createdById: input.actorId,
               updatedById: input.actorId,
               lines: {
-                create: lines.map((line) => ({
+                create: lines.map((line, index) => ({
+                  position: index,
                   productId: line.productId,
                   variantId: line.variantId ?? undefined,
                   variantKey: line.variantId ?? "BASE",
@@ -438,7 +440,7 @@ export const submitPurchaseOrder = async (input: {
   const result = await prisma.$transaction(async (tx) => {
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
-      include: { lines: true, store: true },
+      include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },
     });
 
     if (!po) {
@@ -590,7 +592,7 @@ export const receivePurchaseOrder = async (input: {
 
         const po = await tx.purchaseOrder.findUnique({
           where: { id: input.purchaseOrderId },
-          include: { lines: true, store: true },
+          include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },
         });
 
         if (!po) {
@@ -813,7 +815,7 @@ export const cancelPurchaseOrder = async (input: {
   const result = await prisma.$transaction(async (tx) => {
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
-      include: { lines: true, store: true },
+      include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },
     });
 
     if (!po) {
@@ -953,12 +955,19 @@ export const addPurchaseOrderLine = async (input: {
       throw new AppError("duplicateLineItem", "CONFLICT", 409);
     }
 
+    const lastLine = await tx.purchaseOrderLine.findFirst({
+      where: { purchaseOrderId: po.id },
+      select: { position: true },
+      orderBy: [{ position: "desc" }, { id: "desc" }],
+    });
+
     const line = await tx.purchaseOrderLine.create({
       data: {
         purchaseOrderId: po.id,
         productId: input.productId,
         variantId: input.variantId ?? undefined,
         variantKey,
+        position: (lastLine?.position ?? -1) + 1,
         qtyOrdered,
         unitCost: input.unitCost ?? undefined,
       },

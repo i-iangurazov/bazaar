@@ -71,7 +71,6 @@ const resolvePosCustomerSelectionTx = async (
       where: {
         id: input.customerId,
         organizationId: input.organizationId,
-        storeId: input.storeId,
         deletedAt: null,
       },
       select: {

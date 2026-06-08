@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import {
   BackIcon,
+  AddIcon,
   ChevronDownIcon,
   CloseIcon,
   DeleteIcon,
@@ -84,6 +85,17 @@ const createIdempotencyKey = () => {
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const useDebouncedValue = (value: string, delayMs: number) => {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debounced;
+};
+
 const hasTouchKeyboard = () => {
   if (typeof window === "undefined") {
     return false;
@@ -123,6 +135,10 @@ const PosSellPage = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSelection | null>(null);
   const [customerSelectorOpen, setCustomerSelectorOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [lastCompletedSale, setLastCompletedSale] = useState<{
     id: string;
     number: string;
@@ -240,8 +256,10 @@ const PosSellPage = () => {
     });
   }, []);
 
-  const searchTerm = lineSearch.trim();
-  const hasSearchTerm = searchTerm.length >= 1;
+  const debouncedLineSearch = useDebouncedValue(lineSearch.trim(), 180);
+  const debouncedCustomerSearch = useDebouncedValue(customerSearch.trim(), 200);
+  const searchTerm = debouncedLineSearch;
+  const hasSearchTerm = lineSearch.trim().length >= 1;
   const activeStoreId = shiftQuery.data?.store.id;
   const receiptPrintSettingsQuery = trpc.stores.hardware.useQuery(
     { storeId: activeStoreId ?? "" },
@@ -258,7 +276,7 @@ const PosSellPage = () => {
       category: selectedCategory || undefined,
       storeId: activeStoreId,
       page: 1,
-      pageSize: 200,
+      pageSize: 80,
       sortKey: "name",
       sortDirection: "asc",
     },
@@ -267,7 +285,7 @@ const PosSellPage = () => {
   const customerSearchQuery = trpc.pos.customers.search.useQuery(
     {
       storeId: activeStoreId ?? "",
-      search: customerSearch.trim() || undefined,
+      search: debouncedCustomerSearch || undefined,
       pageSize: 20,
     },
     {
@@ -338,6 +356,7 @@ const PosSellPage = () => {
       setSelectedCustomer(null);
       setCustomerSelectorOpen(false);
       setCustomerSearch("");
+      setCustomerCreateOpen(false);
       setMobileCheckoutOpen(true);
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
@@ -368,6 +387,11 @@ const PosSellPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const createCustomerMutation = trpc.pos.customers.create.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
 
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: async (result) => {
@@ -386,6 +410,7 @@ const PosSellPage = () => {
       setSelectedCustomer(null);
       setCustomerSelectorOpen(false);
       setCustomerSearch("");
+      setCustomerCreateOpen(false);
       setMobileCheckoutOpen(true);
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([
@@ -482,6 +507,7 @@ const PosSellPage = () => {
     setSelectedCustomer(null);
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
+    setCustomerCreateOpen(false);
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
@@ -504,6 +530,7 @@ const PosSellPage = () => {
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setMarkingInput({});
     setSelectedCustomer(null);
+    setCustomerCreateOpen(false);
   }, [saleId, saleQuery.data, saleQuery.isFetched, saleQuery.isFetching, saleQuery.isLoading]);
 
   useEffect(() => {
@@ -862,6 +889,7 @@ const PosSellPage = () => {
     setSelectedCustomer(customer);
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
+    setCustomerCreateOpen(false);
 
     const targetSaleId = saleId ?? activeDraft?.id ?? null;
     if (!targetSaleId) {
@@ -883,6 +911,7 @@ const PosSellPage = () => {
     setSelectedCustomer(null);
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
+    setCustomerCreateOpen(false);
 
     const targetSaleId = saleId ?? activeDraft?.id ?? null;
     if (!targetSaleId) {
@@ -896,6 +925,46 @@ const PosSellPage = () => {
       });
     } catch {
       setSelectedCustomer(previousCustomer);
+    }
+  };
+
+  const handleCreateCustomer = async () => {
+    if (!activeStoreId || createCustomerMutation.isLoading) {
+      return;
+    }
+    const name = newCustomerName.trim().replace(/\s+/g, " ");
+    const phone = newCustomerPhone.trim();
+    const email = newCustomerEmail.trim();
+    if (!name) {
+      toast({ variant: "error", description: t("sell.customerNameRequired") });
+      return;
+    }
+    if (!phone && !email) {
+      toast({ variant: "error", description: t("sell.customerContactRequired") });
+      return;
+    }
+
+    try {
+      const result = await createCustomerMutation.mutateAsync({
+        storeId: activeStoreId,
+        name,
+        phone: phone || null,
+        email: email || null,
+      });
+      const customer = result.customer;
+      setNewCustomerName("");
+      setNewCustomerPhone("");
+      setNewCustomerEmail("");
+      setCustomerCreateOpen(false);
+      await trpcUtils.pos.customers.search.invalidate();
+      await handleSelectCustomer({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      });
+    } catch {
+      // handled by mutation onError
     }
   };
 
@@ -996,6 +1065,7 @@ const PosSellPage = () => {
     setDiscountEditorOpen(false);
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
+    setCustomerCreateOpen(false);
     setSelectedCustomer(
       activeDraft.customerName || activeDraft.customerEmail || activeDraft.customerPhone
         ? {
@@ -1020,6 +1090,7 @@ const PosSellPage = () => {
     setDiscountEditorOpen(false);
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
+    setCustomerCreateOpen(false);
     autoPrintedSaleIdRef.current = null;
     setMobileCheckoutOpen(false);
     focusLineSearchInput();
@@ -1296,6 +1367,44 @@ const PosSellPage = () => {
     };
   };
 
+  const CustomerCreatePanel = () => (
+    <div className="space-y-2 border-t border-border px-3 py-3">
+      <Input
+        value={newCustomerName}
+        onChange={(event) => setNewCustomerName(event.target.value)}
+        placeholder={t("sell.customerNamePlaceholder")}
+        autoComplete="name"
+      />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          value={newCustomerPhone}
+          onChange={(event) => setNewCustomerPhone(event.target.value)}
+          placeholder={t("sell.customerPhonePlaceholder")}
+          autoComplete="tel"
+        />
+        <Input
+          value={newCustomerEmail}
+          onChange={(event) => setNewCustomerEmail(event.target.value)}
+          placeholder={t("sell.customerEmailPlaceholder")}
+          autoComplete="email"
+        />
+      </div>
+      <Button
+        type="button"
+        className="h-10 w-full justify-start"
+        onClick={() => void handleCreateCustomer()}
+        disabled={createCustomerMutation.isLoading || !activeStoreId}
+      >
+        {createCustomerMutation.isLoading ? (
+          <Spinner className="h-4 w-4" />
+        ) : (
+          <AddIcon className="h-4 w-4" aria-hidden />
+        )}
+        {t("sell.createCustomer")}
+      </Button>
+    </div>
+  );
+
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
@@ -1390,12 +1499,25 @@ const PosSellPage = () => {
               {customerSelectorOpen ? (
                 <PopoverSurface className="absolute left-0 top-full z-50 mt-2 max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto p-0 sm:left-auto sm:right-0">
                   <div className="space-y-3 p-3">
-                    <Input
-                      value={customerSearch}
-                      onChange={(event) => setCustomerSearch(event.target.value)}
-                      placeholder={t("sell.customerSearchPlaceholder")}
-                      autoFocus
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={customerSearch}
+                        onChange={(event) => setCustomerSearch(event.target.value)}
+                        placeholder={t("sell.customerSearchPlaceholder")}
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        variant={customerCreateOpen ? "default" : "secondary"}
+                        size="icon"
+                        className="h-10 w-10 shrink-0"
+                        onClick={() => setCustomerCreateOpen((current) => !current)}
+                        aria-label={t("sell.createCustomer")}
+                        title={t("sell.createCustomer")}
+                      >
+                        <AddIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </div>
                     <Button
                       type="button"
                       variant={currentCustomer ? "secondary" : "default"}
@@ -1406,6 +1528,8 @@ const PosSellPage = () => {
                       {t("sell.selectRetailCustomer")}
                     </Button>
                   </div>
+
+                  {customerCreateOpen ? <CustomerCreatePanel /> : null}
 
                   {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
                     <div className="flex items-center justify-center gap-2 border-t border-border py-5 text-sm text-muted-foreground">
@@ -2303,13 +2427,26 @@ const PosSellPage = () => {
           </div>
 
           <div className="mt-4 space-y-3">
-            <Input
-              value={customerSearch}
-              onChange={(event) => setCustomerSearch(event.target.value)}
-              placeholder={t("sell.customerSearchPlaceholder")}
-              autoFocus
-              className="h-12"
-            />
+            <div className="flex gap-2">
+              <Input
+                value={customerSearch}
+                onChange={(event) => setCustomerSearch(event.target.value)}
+                placeholder={t("sell.customerSearchPlaceholder")}
+                autoFocus
+                className="h-12"
+              />
+              <Button
+                type="button"
+                variant={customerCreateOpen ? "default" : "secondary"}
+                size="icon"
+                className="h-12 w-12 shrink-0"
+                onClick={() => setCustomerCreateOpen((current) => !current)}
+                aria-label={t("sell.createCustomer")}
+                title={t("sell.createCustomer")}
+              >
+                <AddIcon className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
             <Button
               type="button"
               variant={currentCustomer ? "secondary" : "default"}
@@ -2320,6 +2457,8 @@ const PosSellPage = () => {
               {t("sell.selectRetailCustomer")}
             </Button>
           </div>
+
+          {customerCreateOpen ? <CustomerCreatePanel /> : null}
 
           {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
             <div className="mt-4 flex items-center justify-center gap-2 border border-border bg-card py-5 text-sm text-muted-foreground">

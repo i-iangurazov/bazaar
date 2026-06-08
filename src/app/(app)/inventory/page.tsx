@@ -900,10 +900,41 @@ const InventoryPage = () => {
   );
 
   type InventoryRow = NonNullable<typeof inventoryItems>[number];
+  type InventorySelectorSnapshot = Pick<
+    InventoryRow["snapshot"],
+    | "id"
+    | "storeId"
+    | "productId"
+    | "variantId"
+    | "variantKey"
+    | "onHand"
+    | "onOrder"
+    | "allowNegativeStock"
+    | "updatedAt"
+  >;
+  type InventorySelectorProduct = {
+    id: string;
+    supplierId: string | null;
+    sku: string;
+    name: string;
+    baseUnitId: string;
+    basePriceKgs?: number | { toString(): string } | null;
+    photoUrl?: string | null;
+    baseUnit: { labelRu: string; labelKg: string };
+    barcodes?: Array<{ value: string }>;
+    packs: {
+      id: string;
+      packName: string;
+      multiplierToBase: number;
+      allowInPurchasing: boolean;
+      allowInReceiving: boolean;
+    }[];
+    images?: Array<{ url?: string | null }>;
+  };
   type InventorySelectorItem = {
-    snapshot: InventoryRow["snapshot"];
-    product: InventoryRow["product"];
-    variant: InventoryRow["variant"];
+    snapshot: InventorySelectorSnapshot;
+    product: InventorySelectorProduct;
+    variant: { id: string; name: string | null } | null;
     primaryBarcode?: string | null;
     unitCostKgs?: number | null;
     priceKgs?: number | null;

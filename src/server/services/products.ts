@@ -1939,7 +1939,7 @@ export const createProduct = async (input: CreateProductInput) => {
           productId: product.id,
           stores: assignmentStores,
         });
-        await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
+        await ensureBaseSnapshots(tx, input.organizationId, product.id);
         await applyInitialInventorySettings(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
@@ -2728,7 +2728,7 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id, resolvedAssignmentStores);
+    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id);
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,

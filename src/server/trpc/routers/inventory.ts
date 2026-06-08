@@ -606,70 +606,97 @@ export const inventoryRouter = router({
       const searchTokens = normalizeInventorySearchTokens(input.search);
       const limit = input.limit ?? 25;
       const where = {
-        storeId: input.storeId,
-        product: {
-          organizationId: ctx.user.organizationId,
-          isDeleted: false,
-          ...(input.productId
-            ? { id: input.productId }
-            : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),
-        },
+        organizationId: ctx.user.organizationId,
+        isDeleted: false,
+        ...(input.productId
+          ? { id: input.productId }
+          : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),
       };
 
-      const snapshots = await ctx.prisma.inventorySnapshot.findMany({
+      const products = await ctx.prisma.product.findMany({
         where,
         select: {
-          id: true,
-          storeId: true,
-          productId: true,
-          variantId: true,
-          variantKey: true,
-          onHand: true,
-          onOrder: true,
-          allowNegativeStock: true,
-          updatedAt: true,
-          product: { select: inventoryProductSelect(input.storeId, ctx.user.organizationId) },
-          variant: { select: { id: true, name: true } },
+          ...inventoryProductSelect(input.storeId, ctx.user.organizationId),
+          inventorySnapshots: {
+            where: { storeId: input.storeId },
+            select: {
+              id: true,
+              storeId: true,
+              productId: true,
+              variantId: true,
+              variantKey: true,
+              onHand: true,
+              onOrder: true,
+              allowNegativeStock: true,
+              updatedAt: true,
+            },
+            orderBy: [{ variantKey: "asc" }, { id: "asc" }],
+          },
+          variants: {
+            where: { isActive: true },
+            select: { id: true, name: true },
+          },
         },
-        orderBy: [{ product: { name: "asc" } }, { variantKey: "asc" }],
+        orderBy: [{ name: "asc" }, { sku: "asc" }, { id: "asc" }],
         take: limit,
       });
 
-      return snapshots.map((snapshot) => {
-        const variantKey = snapshot.variantKey;
-        const cost =
-          snapshot.product.productCosts.find((item) => item.variantKey === variantKey) ??
-          snapshot.product.productCosts.find((item) => item.variantKey === "BASE") ??
-          null;
-        const price =
-          snapshot.product.storePrices.find((item) => item.variantKey === variantKey) ??
-          snapshot.product.storePrices.find((item) => item.variantKey === "BASE") ??
-          null;
-        const product = {
-          id: snapshot.product.id,
-          supplierId: snapshot.product.supplierId,
-          sku: snapshot.product.sku,
-          name: snapshot.product.name,
-          basePriceKgs: snapshot.product.basePriceKgs,
-          baseUnitId: snapshot.product.baseUnitId,
-          photoUrl: snapshot.product.photoUrl,
-          baseUnit: snapshot.product.baseUnit,
-          packs: snapshot.product.packs,
-          images: snapshot.product.images,
-          barcodes: snapshot.product.barcodes,
-        };
-        return {
-          snapshot,
-          product,
-          variant: snapshot.variant,
-          primaryBarcode: product.barcodes[0]?.value ?? null,
-          unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
-          priceKgs: price
-            ? Number(price.priceKgs)
-            : product.basePriceKgs
-              ? Number(product.basePriceKgs)
-              : null,
-        };
+      return products.flatMap((product) => {
+        const snapshots = product.inventorySnapshots.length
+          ? product.inventorySnapshots
+          : [
+              {
+                id: `synthetic:${input.storeId}:${product.id}:BASE`,
+                storeId: input.storeId,
+                productId: product.id,
+                variantId: null,
+                variantKey: "BASE",
+                onHand: 0,
+                onOrder: 0,
+                allowNegativeStock: false,
+                updatedAt: new Date(0),
+              },
+            ];
+        return snapshots.map((snapshot) => {
+          const variantKey = snapshot.variantKey;
+          const cost =
+            product.productCosts.find((item) => item.variantKey === variantKey) ??
+            product.productCosts.find((item) => item.variantKey === "BASE") ??
+            null;
+          const price =
+            product.storePrices.find((item) => item.variantKey === variantKey) ??
+            product.storePrices.find((item) => item.variantKey === "BASE") ??
+            null;
+          const resultProduct = {
+            id: product.id,
+            supplierId: product.supplierId,
+            sku: product.sku,
+            name: product.name,
+            basePriceKgs: product.basePriceKgs,
+            baseUnitId: product.baseUnitId,
+            photoUrl: product.photoUrl,
+            baseUnit: product.baseUnit,
+            packs: product.packs,
+            images: product.images,
+            barcodes: product.barcodes,
+          };
+          const variant =
+            snapshot.variantId === null
+              ? null
+              : (product.variants.find((item) => item.id === snapshot.variantId) ?? null);
+          return {
+            snapshot,
+            product: resultProduct,
+            variant,
+            primaryBarcode: resultProduct.barcodes[0]?.value ?? null,
+            unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
+            priceKgs: price
+              ? Number(price.priceKgs)
+              : resultProduct.basePriceKgs
+                ? Number(resultProduct.basePriceKgs)
+                : null,
+          };
+        });
       });
     }),
 

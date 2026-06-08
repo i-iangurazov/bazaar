@@ -124,6 +124,7 @@ export const purchaseOrdersRouter = router({
         store: true,
         lines: {
           include: { product: { include: { baseUnit: true, packs: true } }, variant: true },
+          orderBy: [{ position: "asc" }, { id: "asc" }],
         },
       },
     });

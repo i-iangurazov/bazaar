@@ -346,7 +346,7 @@ describeDb("inventory service", () => {
     await expect(searchIds("PACK-ONLY-123", ["name"])).resolves.toEqual([packNameMatch.id]);
   });
 
-  it("does not partially post stock receiving when one line is unavailable in the store", async () => {
+  it("posts stock receiving for global catalog products without existing store stock", async () => {
     const { org, supplier, product, adminUser, baseUnit } = await seedBase();
     const otherStore = await prisma.store.create({
       data: {
@@ -374,24 +374,38 @@ describeDb("inventory service", () => {
       },
     });
 
-    await expect(
-      postStockReceiving({
-        storeId: otherStore.id,
-        lines: [
-          { productId: otherStoreProduct.id, quantity: 2, unitCost: 4 },
-          { productId: product.id, quantity: 1, unitCost: 3 },
-        ],
-        actorId: adminUser.id,
-        organizationId: org.id,
-        requestId: "req-bulk-receive-blocked",
-        idempotencyKey: "idem-bulk-receive-blocked",
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const result = await postStockReceiving({
+      storeId: otherStore.id,
+      lines: [
+        { productId: otherStoreProduct.id, quantity: 2, unitCost: 4 },
+        { productId: product.id, quantity: 1, unitCost: 3 },
+      ],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-receive-global",
+      idempotencyKey: "idem-bulk-receive-global",
+    });
 
     const movements = await prisma.stockMovement.findMany({
       where: { storeId: otherStore.id },
+      orderBy: { createdAt: "asc" },
     });
-    expect(movements).toHaveLength(0);
+    expect(result.lineCount).toBe(2);
+    expect(movements).toHaveLength(2);
+    expect(movements.map((movement) => movement.productId)).toEqual([
+      otherStoreProduct.id,
+      product.id,
+    ]);
+
+    const assigned = await prisma.storeProduct.findUnique({
+      where: { storeId_productId: { storeId: otherStore.id, productId: product.id } },
+    });
+    expect(assigned?.isActive).toBe(true);
+
+    const receivedSnapshot = await prisma.inventorySnapshot.findFirst({
+      where: { storeId: otherStore.id, productId: product.id, variantKey: "BASE" },
+    });
+    expect(Number(receivedSnapshot?.onHand ?? 0)).toBe(1);
   });
 
   it("allows negative stock when store policy permits it", async () => {

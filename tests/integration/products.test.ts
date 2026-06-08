@@ -99,6 +99,54 @@ describeDb("products", () => {
     expect(policy?.minStock).toBe(3);
   });
 
+  it("keeps product catalog visible across stores with store-specific stock", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Second Store",
+        code: "S2",
+      },
+    });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-global-store-stock",
+      sku: "GLOBAL-STOCK-1",
+      name: "Global Store Stock Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      initialOnHand: 6,
+    });
+
+    const otherStoreList = await caller.products.list({
+      storeId: otherStore.id,
+      search: product.sku,
+      page: 1,
+      pageSize: 10,
+    });
+    const otherStoreProduct = otherStoreList.items.find((item) => item.id === product.id);
+    const otherStoreSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: otherStore.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+
+    expect(otherStoreProduct?.onHandQty).toBe(0);
+    expect(otherStoreSnapshot?.onHand).toBe(0);
+  });
+
   it("updates product minimum stock through the product save flow", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
 
@@ -1716,7 +1764,7 @@ describeDb("products", () => {
     expect(generatedRows.every((row) => row.value.startsWith("BZ"))).toBe(true);
   });
 
-  it("initializes base snapshots only for the targeted store in multi-store orgs", async () => {
+  it("initializes create snapshots for every store while keeping imports scoped", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase();
 
     const storeB = await prisma.store.create({
@@ -1742,10 +1790,10 @@ describeDb("products", () => {
       where: { productId: product.id },
       orderBy: { storeId: "asc" },
     });
-    expect(snapshots).toHaveLength(1);
+    expect(snapshots).toHaveLength(2);
     const snapshotByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot]));
     expect(snapshotByStore.get(store.id)?.allowNegativeStock).toBe(false);
-    expect(snapshotByStore.get(storeB.id)).toBeUndefined();
+    expect(snapshotByStore.get(storeB.id)?.allowNegativeStock).toBe(true);
 
     await importProducts({
       organizationId: org.id,

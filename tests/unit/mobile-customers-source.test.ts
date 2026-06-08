@@ -20,7 +20,7 @@ describe("mobile customers source", () => {
     expect(source).toContain("viewCustomerSales(customer)");
   });
 
-  it("loads mobile customer detail through a store-scoped backend query", async () => {
+  it("loads mobile customer detail through an organization-wide backend query", async () => {
     const pageSource = await readSource("src/app/(app)/customers/page.tsx");
     const routerSource = await readSource("src/server/trpc/routers/customers.ts");
     const serviceSource = await readSource("src/server/services/customers.ts");
@@ -31,8 +31,9 @@ describe("mobile customers source", () => {
     expect(routerSource).toContain("detail: managerProcedure");
     expect(routerSource).toContain("getCustomerDetail");
     expect(serviceSource).toContain("export const getCustomerDetail");
-    expect(serviceSource).toContain("assertUserCanAccessStore");
-    expect(serviceSource).toContain("storeId: customer.storeId");
+    expect(serviceSource).toContain("resolveAccessibleStoreIds");
+    expect(serviceSource).toContain("organizationId: input.user.organizationId");
+    expect(serviceSource).toContain("OR: customerMatches");
   });
 
   it("keeps the customer database ordered newest first", async () => {

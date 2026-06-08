@@ -4,10 +4,7 @@ import type { Logger } from "pino";
 
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
-import {
-  listProductCategoriesFromDb,
-  listStoreProductCategoriesFromDb,
-} from "@/server/services/productCategories";
+import { listProductCategoriesFromDb } from "@/server/services/productCategories";
 import { toCsv } from "@/server/services/csv";
 import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
@@ -72,7 +69,6 @@ const buildProductListWhere = (
   organizationId: string,
   input: ProductListIdsInput,
   readinessProductIds?: string[],
-  accessibleStoreIds?: string[],
 ): Prisma.ProductWhereInput => {
   const filters: Prisma.ProductWhereInput[] = [];
   if (input?.search) {
@@ -130,12 +126,6 @@ const buildProductListWhere = (
   if (readinessProductIds) {
     filters.push({ id: { in: readinessProductIds.length ? readinessProductIds : ["__none__"] } });
   }
-  if (input?.storeId) {
-    filters.push(productStoreAssignmentWhere(input.storeId));
-  } else if (accessibleStoreIds) {
-    filters.push(productStoreAssignmentInWhere(accessibleStoreIds));
-  }
-
   return {
     ...(input?.includeArchived ? {} : { isDeleted: false }),
     organizationId,
@@ -473,7 +463,7 @@ export const lookupProductScan = async ({
   try {
     const accessibleStoreIds = await resolveProductStoreScopeIds(prisma, user);
     return await lookupScanProducts(prisma, organizationId, query, {
-      productWhere: productStoreAssignmentInWhere(accessibleStoreIds),
+      productWhere: {},
       storeIds: accessibleStoreIds,
     });
   } catch (error) {
@@ -498,13 +488,12 @@ export const findProductByBarcode = async ({
   }
 
   const accessibleStoreIds = await resolveProductStoreScopeIds(prisma, user);
-  const productScopeWhere = productStoreAssignmentInWhere(accessibleStoreIds);
 
   const match = await prisma.productBarcode.findFirst({
     where: {
       organizationId,
       value: normalized,
-      product: { isDeleted: false, ...productScopeWhere },
+      product: { isDeleted: false },
     },
     select: {
       product: {
@@ -523,7 +512,7 @@ export const findProductByBarcode = async ({
     where: {
       organizationId,
       packBarcode: normalized,
-      product: { isDeleted: false, ...productScopeWhere },
+      product: { isDeleted: false },
     },
     select: {
       product: {
@@ -542,7 +531,6 @@ export const findProductByBarcode = async ({
     where: {
       organizationId,
       isDeleted: false,
-      ...productScopeWhere,
       sku: { equals: normalized, mode: "insensitive" },
     },
     select: productPreviewSelect,
@@ -587,16 +575,13 @@ export const searchQuickProducts = async ({
   }
   const accessibleStoreIds = storeId ? undefined : await resolveProductStoreScopeIds(prisma, user);
   const visibleStoreIds = storeId ? [storeId] : accessibleStoreIds;
-  const storeAssignmentWhere = storeId
-    ? productStoreAssignmentWhere(storeId)
-    : productStoreAssignmentInWhere(accessibleStoreIds);
 
   const [exactBarcodeMatches, exactSkuMatches, fuzzyMatches] = await Promise.all([
     prisma.productBarcode.findMany({
       where: {
         organizationId,
         value: exactNeedle,
-        product: { isDeleted: false, ...storeAssignmentWhere },
+        product: { isDeleted: false },
       },
       select: {
         value: true,
@@ -610,7 +595,6 @@ export const searchQuickProducts = async ({
       where: {
         organizationId,
         isDeleted: false,
-        ...storeAssignmentWhere,
         sku: { equals: exactNeedle, mode: "insensitive" },
       },
       select: productPreviewSelect,
@@ -620,7 +604,6 @@ export const searchQuickProducts = async ({
       where: {
         organizationId,
         isDeleted: false,
-        ...storeAssignmentWhere,
         OR: [
           { name: { contains: fuzzyNeedle, mode: "insensitive" } },
           ...(fuzzyTokens.length > 1
@@ -960,7 +943,6 @@ export const listProducts = async ({
     organizationId,
     input,
     readinessProductIds,
-    accessibleStoreIds,
   );
   const imageSortDbPaginated = !searchQuery && sortKey === "image";
   const paginatedOrderBy =
@@ -1208,15 +1190,7 @@ export const getProductsBootstrap = async ({
     preferredStoreId: input?.storeId,
     storeIds: stores.map((store) => store.id),
   });
-  const categories = selectedStoreId
-    ? (
-        await listStoreProductCategoriesFromDb(prisma, {
-          organizationId,
-          storeId: selectedStoreId,
-          includeHidden: false,
-        })
-      ).map((category) => category.name)
-    : await listProductCategoriesFromDb(prisma, organizationId);
+  const categories = await listProductCategoriesFromDb(prisma, organizationId);
   if (logger) {
     logProfileSection({
       logger,
@@ -1282,7 +1256,6 @@ export const listProductIds = async ({
       organizationId,
       input,
       await resolveReadinessProductIds({ prisma, organizationId, input, accessibleStoreIds }),
-      accessibleStoreIds,
     ),
     select: { id: true },
     orderBy: { name: "asc" },
@@ -1317,7 +1290,7 @@ export const getProductDuplicateDiagnosticsQuery = async ({
 export const getProductsByIds = async ({
   prisma,
   organizationId,
-  user,
+  user: _user,
   ids,
 }: {
   prisma: PrismaDbClient;
@@ -1330,12 +1303,10 @@ export const getProductsByIds = async ({
     return [];
   }
 
-  const accessibleStoreIds = await resolveProductStoreScopeIds(prisma, user);
   const products = await prisma.product.findMany({
     where: {
       id: { in: uniqueIds },
       organizationId,
-      ...productStoreAssignmentInWhere(accessibleStoreIds),
     },
     select: {
       id: true,
@@ -1356,7 +1327,7 @@ export const getProductsByIds = async ({
 export const getProductById = async ({
   prisma,
   organizationId,
-  user,
+  user: _user,
   productId,
 }: {
   prisma: PrismaDbClient;
@@ -1364,13 +1335,11 @@ export const getProductById = async ({
   user?: StoreAccessUser;
   productId: string;
 }) => {
-  const accessibleStoreIds = await resolveProductStoreScopeIds(prisma, user);
   const product = await prisma.product.findFirst({
     where: {
       id: productId,
       organizationId,
       isDeleted: false,
-      ...productStoreAssignmentInWhere(accessibleStoreIds),
     },
     include: {
       barcodes: true,
@@ -1500,18 +1469,6 @@ export const getProductPricing = async ({
       }
     }
 
-    const assignment = await prisma.storeProduct.findFirst({
-      where: {
-        organizationId,
-        storeId,
-        productId,
-        isActive: true,
-      },
-      select: { id: true },
-    });
-    if (!assignment) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
-    }
   }
 
   const [storePrice, cost] = await Promise.all([

@@ -90,6 +90,8 @@ export type ProductMovementJournalRow = {
 
 export type ProductMovementDocumentLine = {
   id: string;
+  productId: string;
+  productDetailUrl: string;
   storeName: string;
   productName: string;
   variantName: string | null;
@@ -141,6 +143,7 @@ type ProductMovementJournalSqlRow = {
 
 type ProductMovementDocumentLineSqlRow = {
   id: string;
+  productId: string;
   storeName: string;
   productName: string;
   variantName: string | null;
@@ -662,6 +665,7 @@ export const getProductMovementDocument = async (
     Prisma.sql`
       SELECT
         m."id",
+        m."productId",
         s."name" AS "storeName",
         p."name" AS "productName",
         v."name" AS "variantName",
@@ -677,7 +681,7 @@ export const getProductMovementDocument = async (
       LEFT JOIN "ProductVariant" v ON v."id" = m."variantId"
       LEFT JOIN "User" u ON u."id" = m."createdById"
       ${buildWhereSql(lineConditions)}
-      ORDER BY m."createdAt" DESC, p."name" ASC, m."id" ASC
+      ORDER BY m."createdAt" ASC, m."id" ASC
     `,
   );
 
@@ -685,6 +689,8 @@ export const getProductMovementDocument = async (
     ...normalizeProductMovementJournalRow(row),
     lines: lines.map((line) => ({
       id: line.id,
+      productId: line.productId,
+      productDetailUrl: `/products/${line.productId}`,
       storeName: line.storeName,
       productName: line.productName,
       variantName: line.variantName,

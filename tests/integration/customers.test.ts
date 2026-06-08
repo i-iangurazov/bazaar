@@ -102,7 +102,7 @@ describeDb("customer database", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("imports customers with same-store dedupe and cross-store isolation", async () => {
+  it("imports customers with organization-wide dedupe and shared visibility", async () => {
     const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
     const otherStore = await prisma.store.create({
       data: {
@@ -155,8 +155,8 @@ describeDb("customer database", () => {
 
     expect(result.summary).toMatchObject({
       rows: 6,
-      created: 3,
-      updated: 1,
+      created: 2,
+      updated: 2,
       skipped: 2,
       errors: 2,
     });
@@ -173,12 +173,12 @@ describeDb("customer database", () => {
       "bad@example.com",
       "existing@example.com",
       "new@example.com",
-      "other@example.com",
     ]);
     expect(storeCustomers.find((customer) => customer.email === "existing@example.com")?.phone).toBe(
       "+996700000001",
     );
     expect(otherStoreCustomers).toHaveLength(1);
+    expect(otherStoreCustomers[0]?.email).toBe("other@example.com");
   });
 
   it("auto-creates customers from manual and bazaar API orders", async () => {
@@ -247,8 +247,7 @@ describeDb("customer database", () => {
       "Osh, Lenin 2",
     );
     expect(storeCustomers.every((customer) => customer.source === CustomerSource.ORDER)).toBe(true);
-    expect(otherStoreCustomers).toHaveLength(1);
-    expect(otherStoreCustomers[0]?.email).toBe("customer@example.com");
+    expect(otherStoreCustomers).toHaveLength(0);
   });
 
   it("builds email audiences from selected-store customers with email and sends from fixed sender", async () => {
