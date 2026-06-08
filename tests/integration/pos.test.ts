@@ -893,8 +893,9 @@ describeDb("pos", () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({
       plan: "BUSINESS",
     });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: org.id, userId: cashierUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
     });
 
     await prisma.product.update({
@@ -988,8 +989,9 @@ describeDb("pos", () => {
 
   it("blocks cashier from closing shifts outside assigned stores", async () => {
     const { org, store, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: org.id, userId: cashierUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
     });
     const otherStore = await prisma.store.create({
       data: { organizationId: org.id, name: "Other Store", code: "OTHER" },

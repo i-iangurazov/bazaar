@@ -239,6 +239,14 @@ describeDb("bakai store integration", () => {
         photoUrl: "https://cdn.example.com/images/bakai-duplicate.jpg",
       },
     });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: duplicateProduct.id,
+        isActive: true,
+      },
+    });
 
     await prisma.inventorySnapshot.create({
       data: {
@@ -279,6 +287,14 @@ describeDb("bakai store integration", () => {
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
         photoUrl: "https://cdn.example.com/images/bakai-broken.jpg",
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: brokenProduct.id,
+        isActive: true,
       },
     });
 
@@ -509,6 +525,14 @@ describeDb("bakai store integration", () => {
           category: "Смартфоны",
           description: "Коротко",
           photoUrl: "https://cdn.example.com/images/broken-api.jpg",
+        },
+      });
+      await prisma.storeProduct.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          productId: brokenProduct.id,
+          isActive: true,
         },
       });
 

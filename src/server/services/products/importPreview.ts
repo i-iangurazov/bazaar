@@ -427,6 +427,15 @@ export const previewProductImport = async ({
   const existingBarcodesByProductId = new Map<string, string[]>();
   const existingBaseCostByProductId = new Map<string, number | null>();
   const existingMinStockByProductId = new Map<string, number | null>();
+  const scopedStores = storeId
+    ? [{ id: storeId }]
+    : await prisma.store.findMany({
+        where: { organizationId },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take: 2,
+      });
+  const matchingStoreId = storeId ?? (scopedStores.length === 1 ? scopedStores[0]?.id : undefined);
 
   const loadExistingProductDetails = async (productId: string) => {
     if (productDetailsById.has(productId)) {
@@ -464,9 +473,9 @@ export const previewProductImport = async ({
       });
       existingBaseCostByProductId.set(productId, cost ? decimalToNumber(cost.avgCostKgs) : null);
     }
-    if (storeId && !existingMinStockByProductId.has(productId)) {
+    if (matchingStoreId && !existingMinStockByProductId.has(productId)) {
       const policy = await prisma.reorderPolicy.findUnique({
-        where: { storeId_productId: { storeId, productId } },
+        where: { storeId_productId: { storeId: matchingStoreId, productId } },
         select: { minStock: true },
       });
       existingMinStockByProductId.set(productId, policy?.minStock ?? null);
@@ -489,11 +498,11 @@ export const previewProductImport = async ({
     const normalizedRowColor = shouldApplyImportField(mode, updateMask, "color")
       ? normalizeRowColor(row.color)
       : null;
-    const match = storeId
+    const match = matchingStoreId
       ? await resolveProductImportMatch({
           prisma,
           organizationId,
-          storeId,
+          storeId: matchingStoreId,
           sku,
           barcodes: normalizedRowBarcodes,
           name,

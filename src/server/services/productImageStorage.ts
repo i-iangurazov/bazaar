@@ -863,7 +863,7 @@ export const downloadRemoteImage = async (url: string) => {
 };
 
 const getManagedUrlPrefixes = () => {
-  const prefixes = ["/uploads/imported-products/"];
+  const prefixes = ["/uploads/imported-products/", "/uploads/product-images/"];
   const { config } = resolveR2Config();
   if (config?.publicBaseUrl) {
     prefixes.push(config.publicBaseUrl.replace(/\/+$/, ""));

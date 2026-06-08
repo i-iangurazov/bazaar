@@ -134,8 +134,9 @@ describeDb("manager operational permissions", () => {
 
   it("allows managers to create and update registers only in accessible stores", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: org.id, userId: managerUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: managerUser.id, storeId: store.id }],
+      skipDuplicates: true,
     });
     const otherStore = await prisma.store.create({
       data: {

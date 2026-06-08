@@ -471,6 +471,7 @@ describeDb("import batches", () => {
       skipped: 0,
       warningCount: 0,
       blockingWarningCount: 0,
+      possibleDuplicateCount: 0,
       totalRows: 2,
       returnedRows: 2,
       truncated: false,
@@ -515,6 +516,7 @@ describeDb("import batches", () => {
       skipped: 1,
       warningCount: 1,
       blockingWarningCount: 0,
+      possibleDuplicateCount: 0,
       totalRows: 2,
       returnedRows: 2,
       truncated: false,
@@ -527,6 +529,13 @@ describeDb("import batches", () => {
 
   it("shows blocking barcode conflicts and likely duplicate-name warnings in import preview", async () => {
     const { org, adminUser, baseUnit, store } = await seedBase({ plan: "BUSINESS" });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Other Store",
+        code: "OTHER",
+      },
+    });
     const caller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -541,6 +550,16 @@ describeDb("import batches", () => {
       sku: "PREVIEW-DUP-1",
       name: "Organic Milk 1L",
       baseUnitId: baseUnit.id,
+      storeId: store.id,
+    });
+    await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-import-preview-cross-store-barcode",
+      sku: "PREVIEW-CROSS-1",
+      name: "Cross Store Product",
+      baseUnitId: baseUnit.id,
+      storeId: otherStore.id,
       barcodes: ["PREVIEW-BC-1"],
     });
 
@@ -571,7 +590,7 @@ describeDb("import batches", () => {
     expect(preview.summary.blockingWarningCount).toBe(1);
     expect(conflictingRow?.hasBlockingWarnings).toBe(true);
     expect(conflictingRow?.warnings).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "barcodeConflict" })]),
+      expect.arrayContaining([expect.objectContaining({ code: "crossStoreBarcodeConflict" })]),
     );
     expect(likelyDuplicateRow?.hasBlockingWarnings).toBe(false);
     expect(likelyDuplicateRow?.warnings).toEqual(

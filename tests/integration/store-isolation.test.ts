@@ -295,8 +295,9 @@ describeDb("store isolation", () => {
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "B" },
     });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: org.id, userId: cashierUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
     });
     const storeBProduct = await createProduct({
       organizationId: org.id,
@@ -356,8 +357,9 @@ describeDb("store isolation", () => {
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "B" },
     });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: org.id, userId: cashierUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
     });
     const [storeAOrder, storeBOrder] = await Promise.all([
       prisma.customerOrder.create({
@@ -418,8 +420,9 @@ describeDb("store isolation", () => {
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "B" },
     });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: org.id, userId: managerUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: managerUser.id, storeId: store.id }],
+      skipDuplicates: true,
     });
     const storeBProduct = await createProduct({
       organizationId: org.id,

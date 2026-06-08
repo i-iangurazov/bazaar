@@ -179,7 +179,7 @@ describeDb("products", () => {
         productId: product.id,
         variantId: { in: variants.map((variant) => variant.id) },
       },
-      orderBy: { variant: { name: "asc" } },
+      orderBy: { variant: { createdAt: "asc" } },
     });
     const movements = await prisma.stockMovement.findMany({
       where: {

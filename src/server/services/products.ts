@@ -3697,6 +3697,7 @@ export const importProductsTx = async (
     : orgStores.length === 1
       ? orgStores
       : [];
+  const matchingStoreId = input.storeId ?? (stores.length === 1 ? stores[0]?.id : undefined);
   if (input.storeId && stores.length !== 1) {
     throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
   }
@@ -4037,11 +4038,11 @@ export const importProductsTx = async (
       shouldApplyField("unit") && unitCode
         ? await ensureUnitByCode(tx, input.organizationId, unitCode)
         : null;
-    const importMatch = input.storeId
+    const importMatch = matchingStoreId
       ? await resolveProductImportMatch({
           prisma: tx,
           organizationId: input.organizationId,
-          storeId: input.storeId,
+          storeId: matchingStoreId,
           sku,
           barcodes,
           name: row.name,
@@ -4065,11 +4066,11 @@ export const importProductsTx = async (
           where: {
             id: existingId,
             organizationId: input.organizationId,
-            ...(input.storeId
+            ...(matchingStoreId
               ? {
                   storeProducts: {
                     some: {
-                      storeId: input.storeId,
+                      storeId: matchingStoreId,
                       isActive: true,
                     },
                   },

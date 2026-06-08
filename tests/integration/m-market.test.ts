@@ -185,7 +185,7 @@ describeDb("m-market integration", () => {
   });
 
   it("treats legacy backfilled inclusions as excluded until the first explicit selection", async () => {
-    const { org, product, adminUser, supplier, baseUnit } = await seedBase();
+    const { org, store, product, adminUser, supplier, baseUnit } = await seedBase();
 
     await prisma.product.update({
       where: { id: product.id },
@@ -202,6 +202,20 @@ describeDb("m-market integration", () => {
         baseUnitId: baseUnit.id,
         photoUrl: "https://cdn.example.com/images/second-product.jpg",
       },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: secondProduct.id,
+        isActive: true,
+      },
+    });
+    await updateMMarketBranchMappings({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "legacy-selection-mapping",
+      mappings: [{ storeId: store.id, mmarketBranchId: "branch-main" }],
     });
 
     await prisma.mMarketIncludedProduct.createMany({
@@ -472,6 +486,14 @@ describeDb("m-market integration", () => {
           unit: baseUnit.code,
           baseUnitId: baseUnit.id,
           photoUrl: "https://cdn.example.com/images/broken-ready-only.jpg",
+        },
+      });
+      await prisma.storeProduct.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          productId: brokenProduct.id,
+          isActive: true,
         },
       });
 

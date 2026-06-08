@@ -85,11 +85,11 @@ describeDb("tRPC contract smoke", () => {
   });
 
   it("returns TRPC errors for invalid inventory adjustments", async () => {
-    const { org, store, product, managerUser } = await seedBase();
+    const { org, store, product, adminUser } = await seedBase();
     const caller = createTestCaller({
-      id: managerUser.id,
-      email: managerUser.email,
-      role: managerUser.role,
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
       organizationId: org.id,
     });
 

@@ -73,8 +73,11 @@ describeDb("analytics", () => {
 
   it("scopes org-wide charts for staff to assigned stores", async () => {
     const { store, staffUser } = await seedBase({ plan: "BUSINESS" });
-    await prisma.userStoreAccess.create({
-      data: { organizationId: staffUser.organizationId!, userId: staffUser.id, storeId: store.id },
+    await prisma.userStoreAccess.createMany({
+      data: [
+        { organizationId: staffUser.organizationId!, userId: staffUser.id, storeId: store.id },
+      ],
+      skipDuplicates: true,
     });
     const staffCaller = createTestCaller({
       id: staffUser.id,

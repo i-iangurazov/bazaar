@@ -29,3 +29,4 @@ if (shouldRunDbTests) {
 }
 
 process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET ?? "test-secret";
+process.env.IMAGE_STORAGE_PROVIDER = "local";

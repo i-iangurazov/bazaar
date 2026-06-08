@@ -57,6 +57,16 @@ export const runProductImport = async (input: RunProductImportInput) => {
   if (input.storeId && !targetStore) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
   }
+  const matchingStores = input.storeId
+    ? [{ id: input.storeId }]
+    : await prisma.store.findMany({
+        where: { organizationId: input.organizationId },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take: 2,
+      });
+  const matchingStoreId =
+    input.storeId ?? (matchingStores.length === 1 ? matchingStores[0]?.id : undefined);
   const photoResolution = await resolveImportRowsPhotoUrlsForOrganization(
     input.rows,
     input.organizationId,
@@ -67,7 +77,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
   );
   let netNewProducts = 0;
 
-  if (input.storeId) {
+  if (matchingStoreId) {
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       const sourceRowNumber = row.sourceRowNumber ?? index + 1;
@@ -78,7 +88,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
       const match = await resolveProductImportMatch({
         prisma,
         organizationId: input.organizationId,
-        storeId: input.storeId,
+        storeId: matchingStoreId,
         sku: row.sku,
         barcodes: row.barcodes,
         name: row.name,

@@ -117,6 +117,14 @@ export const seedBase = async (options?: {
       emailVerifiedAt: new Date(),
     },
   });
+  await prisma.userStoreAccess.createMany({
+    data: [managerUser, staffUser, cashierUser].map((user) => ({
+      organizationId: org.id,
+      userId: user.id,
+      storeId: store.id,
+    })),
+    skipDuplicates: true,
+  });
 
   return {
     org,
