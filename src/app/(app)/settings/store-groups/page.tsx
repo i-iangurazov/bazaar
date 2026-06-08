@@ -39,7 +39,7 @@ const StoreGroupsPage = () => {
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
   const overviewQuery = trpc.stores.assortmentOverview.useQuery();
-  const stores = overviewQuery.data?.stores ?? [];
+  const stores = useMemo(() => overviewQuery.data?.stores ?? [], [overviewQuery.data?.stores]);
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [targetStoreIds, setTargetStoreIds] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");

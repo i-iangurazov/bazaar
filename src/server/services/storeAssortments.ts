@@ -11,17 +11,6 @@ import {
 
 type AssortmentTx = Prisma.TransactionClient;
 
-type StoreRow = {
-  id: string;
-  name: string;
-  code: string;
-  productCatalogId: string | null;
-  productCatalog: {
-    id: string;
-    name: string;
-  } | null;
-};
-
 type StoreProductAssignment = {
   storeId: string;
   productId: string;
