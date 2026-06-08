@@ -19,7 +19,8 @@ describe("mobile inventory source", () => {
     expect(source).toContain('className="hidden md:contents"');
     expect(source).toContain('href="/inventory/receiving"');
     expect(source).toContain('href="/inventory/counts"');
-    expect(source).toContain('onSelect={() => openActionDialog("transfer")}');
+    expect(source).toContain('return query ? `/inventory/transfers?${query}` : "/inventory/transfers"');
+    expect(source).toContain("router.push(buildTransferHref())");
     expect(source).toContain('onSelect={() => openActionDialog("minStock")}');
   });
 
