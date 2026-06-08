@@ -53,7 +53,9 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
 
   if (
     !document ||
-    (document.documentType !== "STOCK_RECEIVING" && document.documentType !== "TRANSFER")
+    (document.documentType !== "STOCK_RECEIVING" &&
+      document.documentType !== "RECEIVE" &&
+      document.documentType !== "TRANSFER")
   ) {
     notFound();
   }
@@ -88,6 +90,8 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     lineTotal: t("printLineTotal"),
     positions: t("positions"),
     amount: t("amount"),
+    technicalReference: t("printTechnicalReference"),
+    costNotSpecified: t("printCostNotSpecified"),
     shippedBy: t("printShippedBy"),
     releasedBy: t("printReleasedBy"),
     receivedBy: t("printReceivedBy"),

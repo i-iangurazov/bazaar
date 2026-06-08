@@ -49,7 +49,9 @@ const ProductMovementDocumentPage = () => {
   const documentTypeLabel = (value: string) => t(`type.${value}`);
   const documentNumber = document?.documentNumber || document?.documentId || "";
   const isPrintableDocument =
-    document?.documentType === "STOCK_RECEIVING" || document?.documentType === "TRANSFER";
+    document?.documentType === "STOCK_RECEIVING" ||
+    document?.documentType === "RECEIVE" ||
+    document?.documentType === "TRANSFER";
   const formatDocumentLabel = () => {
     if (!document) {
       return t("documentDetails");

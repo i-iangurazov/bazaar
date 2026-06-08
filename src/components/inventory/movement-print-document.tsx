@@ -20,6 +20,8 @@ export type MovementPrintDocumentLabels = {
   lineTotal: string;
   positions: string;
   amount: string;
+  technicalReference: string;
+  costNotSpecified: string;
   shippedBy: string;
   releasedBy: string;
   receivedBy: string;
@@ -37,7 +39,15 @@ type MovementPrintDocumentProps = {
 };
 
 export const getMovementPrintDocumentNumber = (document: ProductMovementDocumentDetail) =>
-  document.documentNumber || document.documentId;
+  document.documentNumber && document.documentNumber !== document.documentId
+    ? document.documentNumber
+    : `${document.documentType === "TRANSFER" ? "TRF" : "RCV"}-${document.createdAt
+        .toISOString()
+        .slice(0, 10)
+        .replaceAll("-", "")}-${document.documentId.slice(0, 8).toUpperCase()}`;
+
+export const getMovementPrintTechnicalReference = (document: ProductMovementDocumentDetail) =>
+  document.documentId;
 
 const getPrintableLines = (document: ProductMovementDocumentDetail) => {
   if (document.documentType !== "TRANSFER") {
@@ -50,8 +60,8 @@ const getPrintableLines = (document: ProductMovementDocumentDetail) => {
     : document.lines.filter((line) => line.movementType === "TRANSFER_IN");
 };
 
-const formatMaybeMoney = (value: number | null | undefined, locale: string, fallback: string) =>
-  typeof value === "number" ? formatCurrencyKGS(value, locale) : fallback;
+const formatMaybeMoney = (value: number | null | undefined, locale: string) =>
+  typeof value === "number" ? formatCurrencyKGS(value, locale) : null;
 
 const renderSkuBarcode = (
   sku: string | null,
@@ -63,10 +73,9 @@ const renderSkuBarcode = (
   }
 
   return (
-    <>
-      {sku ? <div>{sku}</div> : null}
-      {barcode ? <div className="movement-print-muted">{barcode}</div> : null}
-    </>
+    <span>
+      {[sku, barcode].filter(Boolean).join(" · ")}
+    </span>
   );
 };
 
@@ -94,58 +103,65 @@ export const MovementPrintDocument = ({
       <style>{`
         .movement-print-sheet {
           width: 210mm;
-          min-height: 297mm;
-          margin: 24px auto;
-          padding: 14mm;
+          max-width: calc(100vw - 24px);
+          margin: 12px auto;
+          padding: 9mm;
           color: #111827;
           background: #ffffff;
-          box-shadow: 0 18px 55px rgba(15, 23, 42, 0.16);
+          box-shadow: 0 12px 34px rgba(15, 23, 42, 0.14);
           font-family: Arial, Helvetica, sans-serif;
-          font-size: 11px;
-          line-height: 1.35;
+          font-size: 9px;
+          line-height: 1.16;
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
         }
 
         .movement-print-header {
           display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 18mm;
+          grid-template-columns: 1fr 46mm;
+          gap: 5mm;
           align-items: start;
-          padding-bottom: 8mm;
-          border-bottom: 2px solid #111827;
+          padding-bottom: 2mm;
+          border-bottom: 1.5px solid #111827;
         }
 
         .movement-print-company {
-          margin: 0 0 6mm;
+          margin: 0 0 1.4mm;
           color: #334155;
-          font-size: 11px;
+          font-size: 8px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.03em;
         }
 
         .movement-print-title {
           margin: 0;
-          font-size: 22px;
+          font-size: 14px;
           line-height: 1.15;
           font-weight: 700;
         }
 
         .movement-print-number {
-          margin: 2mm 0 0;
+          margin: 1mm 0 0;
           color: #334155;
-          font-size: 13px;
+          font-size: 9px;
           font-weight: 700;
         }
 
+        .movement-print-technical-reference {
+          margin: 0.5mm 0 0;
+          color: #64748b;
+          font-size: 7px;
+        }
+
         .movement-print-stamp {
-          min-width: 48mm;
           border: 1px solid #111827;
         }
 
         .movement-print-stamp-row {
           display: grid;
-          grid-template-columns: 20mm 1fr;
-          min-height: 8mm;
+          grid-template-columns: 15mm 1fr;
+          min-height: 4.6mm;
           border-bottom: 1px solid #111827;
         }
 
@@ -155,13 +171,13 @@ export const MovementPrintDocument = ({
 
         .movement-print-stamp-label,
         .movement-print-stamp-value {
-          padding: 2mm 2.5mm;
+          padding: 0.8mm 1mm;
         }
 
         .movement-print-stamp-label {
           border-right: 1px solid #111827;
           color: #475569;
-          font-size: 9px;
+          font-size: 6.8px;
           font-weight: 700;
           text-transform: uppercase;
         }
@@ -174,8 +190,8 @@ export const MovementPrintDocument = ({
         .movement-print-meta {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 3mm 8mm;
-          margin-top: 7mm;
+          gap: 1mm 5mm;
+          margin-top: 2mm;
         }
 
         .movement-print-meta dt,
@@ -185,9 +201,9 @@ export const MovementPrintDocument = ({
 
         .movement-print-meta-item {
           display: grid;
-          grid-template-columns: 34mm 1fr;
-          gap: 3mm;
-          min-height: 6mm;
+          grid-template-columns: 25mm 1fr;
+          gap: 1.5mm;
+          min-height: 3.4mm;
         }
 
         .movement-print-meta-label {
@@ -201,72 +217,85 @@ export const MovementPrintDocument = ({
 
         .movement-print-table {
           width: 100%;
-          margin-top: 8mm;
+          margin-top: 2.5mm;
           border-collapse: collapse;
           table-layout: fixed;
+          font-size: 7.4px;
+          line-height: 1.08;
         }
 
         .movement-print-table th,
         .movement-print-table td {
           border: 1px solid #111827;
-          padding: 2.2mm 2mm;
+          padding: 0.45mm 0.65mm;
           vertical-align: top;
         }
 
         .movement-print-table th {
           background: #f1f5f9;
-          font-size: 9px;
+          font-size: 6.4px;
           font-weight: 700;
           text-align: left;
           text-transform: uppercase;
         }
 
         .movement-print-num {
-          width: 9mm;
+          width: 6mm;
           text-align: center;
         }
 
         .movement-print-sku {
-          width: 34mm;
+          width: 36mm;
         }
 
         .movement-print-unit {
-          width: 15mm;
+          width: 9mm;
         }
 
         .movement-print-qty {
-          width: 18mm;
+          width: 12mm;
           text-align: right;
         }
 
         .movement-print-money {
-          width: 26mm;
+          width: 19mm;
           text-align: right;
+        }
+
+        .movement-print-product {
+          overflow-wrap: anywhere;
+        }
+
+        .movement-print-missing {
+          color: #64748b;
+          font-size: 6.5px;
+          white-space: nowrap;
         }
 
         .movement-print-muted {
           color: #64748b;
-          font-size: 10px;
+          font-size: 6.8px;
         }
 
         .movement-print-totals {
-          display: grid;
-          grid-template-columns: 1fr 52mm;
-          gap: 8mm;
-          margin-top: 6mm;
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 2mm;
         }
 
         .movement-print-total-box {
+          width: 44mm;
           border: 1px solid #111827;
           border-bottom: 0;
+          font-size: 8px;
         }
 
         .movement-print-total-row {
           display: flex;
           justify-content: space-between;
-          gap: 6mm;
+          gap: 4mm;
           border-bottom: 1px solid #111827;
-          padding: 2mm 2.5mm;
+          padding: 0.6mm 1mm;
         }
 
         .movement-print-total-row strong {
@@ -274,37 +303,41 @@ export const MovementPrintDocument = ({
         }
 
         .movement-print-signatures {
-          margin-top: 16mm;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 2mm 6mm;
+          margin-top: 3mm;
           page-break-inside: avoid;
+          break-inside: avoid;
         }
 
         .movement-print-signature-row {
           display: grid;
-          grid-template-columns: 28mm 1fr 4mm 1fr;
-          gap: 3mm;
+          grid-template-columns: max-content 1fr;
+          gap: 2mm;
           align-items: end;
-          margin-top: 9mm;
-          font-size: 12px;
+          min-height: 5mm;
+          font-size: 8px;
         }
 
         .movement-print-signature-line {
           border-bottom: 1px solid #111827;
-          min-height: 8mm;
+          min-height: 3.6mm;
         }
 
         .movement-print-signature-date {
           display: grid;
-          grid-template-columns: 28mm 56mm;
-          gap: 3mm;
+          grid-template-columns: max-content 1fr;
+          gap: 2mm;
           align-items: end;
-          margin-top: 9mm;
-          font-size: 12px;
+          min-height: 5mm;
+          font-size: 8px;
         }
 
         @media print {
           @page {
             size: A4;
-            margin: 12mm;
+            margin: 5mm;
           }
 
           html,
@@ -314,6 +347,7 @@ export const MovementPrintDocument = ({
 
           body {
             margin: 0 !important;
+            overflow: visible !important;
           }
 
           .movement-print-chrome {
@@ -329,9 +363,11 @@ export const MovementPrintDocument = ({
           .movement-print-sheet {
             width: auto !important;
             min-height: auto !important;
+            max-width: none !important;
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
+            font-size: 8px !important;
           }
 
           .movement-print-table {
@@ -351,6 +387,12 @@ export const MovementPrintDocument = ({
             page-break-inside: avoid;
           }
 
+          .movement-print-table th,
+          .movement-print-table td {
+            padding-top: 0.35mm;
+            padding-bottom: 0.35mm;
+          }
+
           .movement-print-meta,
           .movement-print-totals,
           .movement-print-signatures {
@@ -367,6 +409,9 @@ export const MovementPrintDocument = ({
           </p>
           <h1 className="movement-print-title">{labels.title}</h1>
           <p className="movement-print-number">{labels.documentNumber}</p>
+          <p className="movement-print-technical-reference">
+            {labels.technicalReference}: {getMovementPrintTechnicalReference(document)}
+          </p>
         </div>
 
         <div className="movement-print-stamp" aria-label={labels.status}>
@@ -408,8 +453,8 @@ export const MovementPrintDocument = ({
             <th className="movement-print-num">№</th>
             <th>{labels.product}</th>
             <th className="movement-print-sku">{labels.skuBarcode}</th>
-            <th className="movement-print-unit">{labels.unit}</th>
             <th className="movement-print-qty">{labels.quantity}</th>
+            <th className="movement-print-unit">{labels.unit}</th>
             <th className="movement-print-money">{labels.unitCost}</th>
             <th className="movement-print-money">{labels.lineTotal}</th>
           </tr>
@@ -418,7 +463,7 @@ export const MovementPrintDocument = ({
           {lines.map((line, index) => (
             <tr key={line.id}>
               <td className="movement-print-num">{index + 1}</td>
-              <td>
+              <td className="movement-print-product">
                 <div>{line.productName}</div>
                 {line.variantName ? (
                   <div className="movement-print-muted">{line.variantName}</div>
@@ -427,15 +472,19 @@ export const MovementPrintDocument = ({
               <td className="movement-print-sku">
                 {renderSkuBarcode(line.sku, line.barcode, labels.notAvailable)}
               </td>
-              <td>{line.unit || labels.notAvailable}</td>
               <td className="movement-print-qty">
                 {formatNumber(Math.abs(line.qtyDelta), locale)}
               </td>
+              <td>{line.unit || labels.notAvailable}</td>
               <td className="movement-print-money">
-                {formatMaybeMoney(line.unitCostKgs, locale, labels.notAvailable)}
+                {formatMaybeMoney(line.unitCostKgs, locale) ?? (
+                  <span className="movement-print-missing">{labels.costNotSpecified}</span>
+                )}
               </td>
               <td className="movement-print-money">
-                {formatMaybeMoney(line.lineTotalKgs, locale, labels.notAvailable)}
+                {formatMaybeMoney(line.lineTotalKgs, locale) ?? (
+                  <span className="movement-print-missing">{labels.costNotSpecified}</span>
+                )}
               </td>
             </tr>
           ))}
@@ -443,7 +492,6 @@ export const MovementPrintDocument = ({
       </table>
 
       <div className="movement-print-totals">
-        <div />
         <div className="movement-print-total-box">
           <div className="movement-print-total-row">
             <span>{labels.positions}</span>
@@ -455,7 +503,11 @@ export const MovementPrintDocument = ({
           </div>
           <div className="movement-print-total-row">
             <span>{labels.amount}</span>
-            <strong>{formatMaybeMoney(totalAmount, locale, labels.notAvailable)}</strong>
+            <strong>
+              {formatMaybeMoney(totalAmount, locale) ?? (
+                <span className="movement-print-missing">{labels.costNotSpecified}</span>
+              )}
+            </strong>
           </div>
         </div>
       </div>
@@ -464,19 +516,13 @@ export const MovementPrintDocument = ({
         <div className="movement-print-signature-row">
           <div>{firstSignatureLabel}:</div>
           <div className="movement-print-signature-line" />
-          <div>/</div>
-          <div className="movement-print-signature-line" />
         </div>
         <div className="movement-print-signature-row">
           <div>{labels.receivedBy}:</div>
           <div className="movement-print-signature-line" />
-          <div>/</div>
-          <div className="movement-print-signature-line" />
         </div>
         <div className="movement-print-signature-row">
           <div>{labels.responsible}:</div>
-          <div className="movement-print-signature-line" />
-          <div>/</div>
           <div className="movement-print-signature-line" />
         </div>
         <div className="movement-print-signature-date">

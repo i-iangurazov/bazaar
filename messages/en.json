@@ -2832,6 +2832,8 @@
       "printUnit": "Unit",
       "printUnitCost": "Unit cost",
       "printLineTotal": "Line total",
+      "printTechnicalReference": "Technical ID",
+      "printCostNotSpecified": "not specified",
       "printShippedBy": "Shipped / handed over",
       "printReleasedBy": "Released / shipped",
       "printReceivedBy": "Received / accepted",

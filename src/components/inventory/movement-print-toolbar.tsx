@@ -22,6 +22,8 @@ export const MovementPrintToolbar = ({
   labels,
 }: MovementPrintToolbarProps) => {
   useEffect(() => {
+    document.title = labels.printDocument;
+
     if (!autoPrint) {
       return;
     }
@@ -31,7 +33,7 @@ export const MovementPrintToolbar = ({
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [autoPrint]);
+  }, [autoPrint, labels.printDocument]);
 
   return (
     <div className="movement-print-chrome sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">

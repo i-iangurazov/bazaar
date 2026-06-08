@@ -384,7 +384,7 @@ const ProductMovementsPage = () => {
 
   const filterControls = (
     <div className="flex w-full flex-col gap-3">
-      <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(18rem,2fr)_minmax(18rem,1.5fr)_minmax(11rem,1fr)_minmax(11rem,1fr)_minmax(11rem,1fr)]">
+      <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(14rem,2fr)_minmax(15rem,1.5fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)]">
         <div className="space-y-1">
           <Label htmlFor="movement-search">{tCommon("search")}</Label>
           <div className="relative">
@@ -635,7 +635,7 @@ const ProductMovementsPage = () => {
             {t("totalLabel", { count: totalItems })}
           </span>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0 overflow-hidden">
           <ResponsiveDataList
             items={items}
             getKey={(movement) => movement.id}
@@ -651,8 +651,9 @@ const ProductMovementsPage = () => {
                 {movementQuery.isLoading ? tCommon("loading") : t("empty")}
               </div>
             }
+            desktopClassName="min-w-0"
             renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
+              <div className="w-full max-w-full overflow-x-auto">
                 <Table
                   sortable={false}
                   className="min-w-[1160px]"
