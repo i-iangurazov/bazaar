@@ -190,7 +190,7 @@ const ProductDetailPage = () => {
   const canManageBundles = role === "ADMIN" || role === "MANAGER";
   const canAssembleBundles = role === "ADMIN";
   const canManageStorePrices = role === "ADMIN" || role === "MANAGER";
-  const canManageInventory = role === "ADMIN";
+  const canManageInventory = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const [movementsOpen, setMovementsOpen] = useState(false);
@@ -238,6 +238,9 @@ const ProductDetailPage = () => {
     { productId },
     { enabled: Boolean(productId) },
   );
+  const storesQuery = trpc.stores.list.useQuery(undefined, {
+    enabled: Boolean(returnStoreId),
+  });
   const attributesQuery = trpc.attributes.list.useQuery();
   const unitsQuery = trpc.units.list.useQuery();
   const movementsQuery = trpc.inventory.movements.useQuery(
@@ -257,6 +260,13 @@ const ProductDetailPage = () => {
     [storePricingQuery.data?.stores],
   );
   const selectedPricingStore = assignedStoreRows.find((store) => store.storeId === pricingStoreId);
+  const requestedStore = storesQuery.data?.find((store) => store.id === returnStoreId) ?? null;
+  const requestedStoreNotAssigned = Boolean(
+    returnStoreId &&
+      storePricingQuery.isSuccess &&
+      !assignedStoreRows.some((store) => store.storeId === returnStoreId),
+  );
+  const requestedStoreName = requestedStore?.name ?? returnStoreId;
   const selectedSettingsStore = selectedPricingStore ?? assignedStoreRows[0] ?? null;
   const productSettingsLoaded = storePricingQuery.isSuccess;
   const enableSku = productSettingsLoaded ? (selectedSettingsStore?.enableSku ?? true) : false;
@@ -438,7 +448,14 @@ const ProductDetailPage = () => {
   });
   const adjustStockMutation = trpc.inventory.adjust.useMutation({
     onSuccess: async () => {
-      await storePricingQuery.refetch();
+      await Promise.all([
+        productQuery.refetch(),
+        storePricingQuery.refetch(),
+        pricingQuery.refetch(),
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+        trpcUtils.inventory.list.invalidate(),
+      ]);
       toast({ variant: "success", description: tInventory("adjustSuccess") });
     },
     onError: (error) => {
@@ -498,11 +515,17 @@ const ProductDetailPage = () => {
     if (!assignedStoreRows.length) {
       return;
     }
+    if (returnStoreId && assignedStoreRows.some((store) => store.storeId === returnStoreId)) {
+      if (pricingStoreId !== returnStoreId) {
+        setPricingStoreId(returnStoreId);
+      }
+      return;
+    }
     if (pricingStoreId && assignedStoreRows.some((store) => store.storeId === pricingStoreId)) {
       return;
     }
     setPricingStoreId(assignedStoreRows[0]?.storeId ?? "");
-  }, [assignedStoreRows, pricingStoreId]);
+  }, [assignedStoreRows, pricingStoreId, returnStoreId]);
 
   useEffect(() => {
     if (!storePricingQuery.data) {
@@ -1393,6 +1416,84 @@ const ProductDetailPage = () => {
               categoryStoreId={selectedSettingsStore?.storeId ?? null}
               shopifyEditorLayout
             />
+
+            <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>{t("currentStoreStockTitle")}</CardTitle>
+                {selectedPricingStore ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("currentStoreStockHint", { store: selectedPricingStore.storeName })}
+                  </p>
+                ) : null}
+              </CardHeader>
+              <CardContent>
+                {storePricingQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Spinner className="h-4 w-4" />
+                    {tCommon("loading")}
+                  </div>
+                ) : requestedStoreNotAssigned ? (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
+                    {t("currentStoreStockUnavailable", { store: requestedStoreName })}
+                  </div>
+                ) : selectedPricingStore ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <FormLabel htmlFor="current-store-on-hand">
+                        {t("currentStoreStockLabel", {
+                          store: selectedPricingStore.storeName,
+                        })}
+                      </FormLabel>
+                      <Input
+                        id="current-store-on-hand"
+                        type="number"
+                        inputMode="numeric"
+                        step="1"
+                        className="mt-2 w-full sm:max-w-[220px]"
+                        value={
+                          storeOnHandDrafts[selectedPricingStore.storeId] ??
+                          String(selectedPricingStore.onHand)
+                        }
+                        onChange={(event) =>
+                          setStoreOnHandDrafts((prev) => ({
+                            ...prev,
+                            [selectedPricingStore.storeId]: event.target.value,
+                          }))
+                        }
+                        onBlur={() =>
+                          void handleSaveStoreOnHand(
+                            selectedPricingStore.storeId,
+                            selectedPricingStore.onHand,
+                          )
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        placeholder={tInventory("qtyPlaceholder")}
+                        disabled={!canManageInventory || adjustStockMutation.isLoading}
+                      />
+                    </div>
+                    <div className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
+                      {savingStoreOnHandId === selectedPricingStore.storeId ? (
+                        <>
+                          <Spinner className="h-4 w-4" />
+                          {tCommon("saving")}
+                        </>
+                      ) : (
+                        t("currentStoreStockCurrent", {
+                          qty: formatNumber(selectedPricingStore.onHand, locale),
+                        })
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{tCommon("notAvailable")}</p>
+                )}
+              </CardContent>
+            </Card>
 
             <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
               <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

@@ -62,7 +62,7 @@ describe("inline edit registry", () => {
         ...context,
         storeId: "store-1",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       inlineEditRegistry.products.onHand.permissionCheck("ADMIN", row, {
         ...context,

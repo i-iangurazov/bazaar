@@ -101,7 +101,7 @@ describeDb("manager operational permissions", () => {
     ).resolves.toMatchObject({ isDeleted: false });
   });
 
-  it("blocks managers from manually changing inventory", async () => {
+  it("allows managers to manually adjust inventory in accessible stores", async () => {
     const { org, store, product, baseUnit, managerUser } = await seedBase();
     const caller = createTestCaller({
       id: managerUser.id,
@@ -121,15 +121,25 @@ describeDb("manager operational permissions", () => {
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
 
-    await expect(
-      caller.inventory.adjust({
-        storeId: store.id,
-        productId: product.id,
-        qtyDelta: 1,
-        reason: "manual test adjustment",
-        idempotencyKey: "manager-stock-adjust",
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const adjustment = await caller.inventory.adjust({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "manual test adjustment",
+      idempotencyKey: "manager-stock-adjust",
+    });
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+
+    expect(adjustment.onHand).toBe(1);
+    expect(snapshot?.onHand).toBe(1);
   });
 
   it("allows managers to create and update registers only in accessible stores", async () => {

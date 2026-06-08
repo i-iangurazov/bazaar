@@ -28,7 +28,7 @@ import {
 } from "@/server/services/productMovements";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
-import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import { assertUserCanAccessStore, productStoreAssignmentWhere } from "@/server/services/storeAccess";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventorySortKeySchema = z.enum([
@@ -137,6 +137,7 @@ const buildInventorySnapshotWhere = (
     ...(input.stockFilter === "outOfStock" ? { onHand: { equals: 0 } } : {}),
     product: {
       isDeleted: false,
+      ...productStoreAssignmentWhere(input.storeId),
       ...buildInventoryProductSearchWhere(searchTokens),
     },
   };
@@ -168,9 +169,14 @@ const buildLowStockSnapshotSql = (
   return Prisma.sql`
     FROM "InventorySnapshot" s
     JOIN "Product" p ON p."id" = s."productId"
+    JOIN "StoreProduct" sp
+      ON sp."storeId" = s."storeId"
+     AND sp."productId" = s."productId"
+     AND sp."isActive" = true
     JOIN "ReorderPolicy" rp ON rp."storeId" = s."storeId" AND rp."productId" = s."productId"
     WHERE s."storeId" = ${input.storeId}
       AND p."organizationId" = ${organizationId}
+      AND sp."organizationId" = ${organizationId}
       AND p."isDeleted" = false
       AND rp."minStock" > 0
       AND s."onHand" <= rp."minStock"
@@ -608,6 +614,7 @@ export const inventoryRouter = router({
       const where = {
         organizationId: ctx.user.organizationId,
         isDeleted: false,
+        ...productStoreAssignmentWhere(input.storeId),
         ...(input.productId
           ? { id: input.productId }
           : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),
@@ -782,7 +789,7 @@ export const inventoryRouter = router({
       getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey),
     ),
 
-  adjust: adminProcedure
+  adjust: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-adjust" }))
     .input(
       z.object({

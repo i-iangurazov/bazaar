@@ -346,7 +346,7 @@ describeDb("inventory service", () => {
     await expect(searchIds("PACK-ONLY-123", ["name"])).resolves.toEqual([packNameMatch.id]);
   });
 
-  it("posts stock receiving for global catalog products without existing store stock", async () => {
+  it("posts stock receiving to the target store for products without existing store stock", async () => {
     const { org, supplier, product, adminUser, baseUnit } = await seedBase();
     const otherStore = await prisma.store.create({
       data: {

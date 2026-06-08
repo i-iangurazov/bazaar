@@ -35,7 +35,7 @@ describe("mobile inventory source", () => {
     expect(routerSource).toContain("buildLowStockSnapshotSql");
     expect(routerSource).toContain("postStockReceiving: adminProcedure");
     expect(routerSource).toContain("transfer: adminProcedure");
-    expect(routerSource).toContain("adjust: adminProcedure");
+    expect(routerSource).toContain("adjust: managerProcedure");
     expect(routerSource).toContain("assertUserCanAccessStore");
   });
 

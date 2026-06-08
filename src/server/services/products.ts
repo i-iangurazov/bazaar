@@ -1939,7 +1939,7 @@ export const createProduct = async (input: CreateProductInput) => {
           productId: product.id,
           stores: assignmentStores,
         });
-        await ensureBaseSnapshots(tx, input.organizationId, product.id);
+        await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
         await applyInitialInventorySettings(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
@@ -2045,7 +2045,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
     const [store, products] = await Promise.all([
       tx.store.findFirst({
         where: { id: input.storeId, organizationId: input.organizationId },
-        select: { id: true },
+        select: { id: true, allowNegativeStock: true },
       }),
       tx.product.findMany({
         where: {
@@ -2117,6 +2117,11 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
     ]);
 
     const assignedCount = created.count + reactivated.count;
+    if (assignedCount > 0) {
+      for (const productId of [...createIds, ...reactivateIds]) {
+        await ensureBaseSnapshots(tx, input.organizationId, productId, [store]);
+      }
+    }
     const result = {
       requestedCount: productIds.length,
       eligibleCount: ownedProductIds.length,
@@ -2728,7 +2733,7 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id);
+    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id, resolvedAssignmentStores);
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,

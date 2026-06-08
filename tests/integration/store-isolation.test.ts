@@ -22,7 +22,7 @@ describeDb("store isolation", () => {
     await resetDatabase();
   });
 
-  it("shows global catalog products in a newly created second store with zero stock", async () => {
+  it("keeps products scoped to assigned stores until explicitly assigned", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
@@ -62,8 +62,8 @@ describeDb("store isolation", () => {
     });
 
     expect(storeAProducts.items.map((item) => item.id)).toContain(product.id);
-    expect(storeBProducts.items.map((item) => item.id)).toContain(product.id);
-    expect(storeBSnapshot?.onHand).toBe(0);
+    expect(storeBProducts.items.map((item) => item.id)).not.toContain(product.id);
+    expect(storeBSnapshot).toBeNull();
   });
 
   it("keeps store-pricing management assigned-scoped while pricing lookup is catalog-wide", async () => {
@@ -185,7 +185,7 @@ describeDb("store isolation", () => {
     expect(storeBSnapshot?.onHand).toBe(0);
   });
 
-  it("exposes products created in another store to POS lookup with selected-store stock", async () => {
+  it("keeps POS lookup scoped to products assigned to the selected store", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase();
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "B" },
@@ -211,7 +211,7 @@ describeDb("store isolation", () => {
     const storeAResult = await caller.products.searchQuick({ q: "B-ONLY-BC", storeId: store.id });
     const storeBResult = await caller.products.searchQuick({ q: "B-ONLY-BC", storeId: storeB.id });
 
-    expect(storeAResult.map((item) => item.id)).toContain(product.id);
+    expect(storeAResult.map((item) => item.id)).not.toContain(product.id);
     expect(storeBResult.map((item) => item.id)).toContain(product.id);
   });
 
@@ -350,14 +350,14 @@ describeDb("store isolation", () => {
 
     expect(stores.map((item) => item.id)).toEqual([store.id]);
     expect(bootstrap.selectedStoreId).toBe(store.id);
-    expect(bootstrap.list.items.map((item) => item.id)).toContain(storeBProduct.id);
-    expect(unscopedProducts.items.map((item) => item.id)).toContain(storeBProduct.id);
-    expect(unscopedIds).toContain(storeBProduct.id);
-    expect(storeAProducts.items.map((item) => item.id)).toContain(storeBProduct.id);
-    expect(storeBDetail?.id).toBe(storeBProduct.id);
-    expect(storeBBarcode?.id).toBe(storeBProduct.id);
-    expect(storeBScan.items.map((item) => item.id)).toContain(storeBProduct.id);
-    expect(productsByIds.map((item) => item.id)).toContain(storeBProduct.id);
+    expect(bootstrap.list.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(unscopedProducts.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(unscopedIds).not.toContain(storeBProduct.id);
+    expect(storeAProducts.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(storeBDetail).toBeNull();
+    expect(storeBBarcode).toBeNull();
+    expect(storeBScan.items.map((item) => item.id)).not.toContain(storeBProduct.id);
+    expect(productsByIds.map((item) => item.id)).not.toContain(storeBProduct.id);
     expect(searchResults.results.some((item) => item.id === storeBProduct.id)).toBe(false);
   });
 
@@ -583,7 +583,7 @@ describeDb("store isolation", () => {
       where: { storeId: storeB.id, productId: product.id },
     });
 
-    expect(storeASnapshot?.onHand).toBe(0);
+    expect(storeASnapshot).toBeNull();
     expect(storeBSnapshot?.onHand).toBe(5);
   });
 });
