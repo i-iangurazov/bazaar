@@ -33,6 +33,8 @@ describe("product movement journal source", () => {
     expect(serviceSource).toContain('o."name" AS "organizationName"');
     expect(serviceSource).toContain("encodeProductMovementDocumentKey");
     expect(serviceSource).toContain("getProductMovementDetailUrl");
+    expect(serviceSource).toContain('m."storeId"');
+    expect(serviceSource).toContain("encodeURIComponent(line.storeId)");
     expect(serviceSource).toContain("documentLabel: buildProductMovementDocumentLabel");
     expect(serviceSource).toContain("CustomerOrder");
     expect(serviceSource).toContain("SaleReturn");

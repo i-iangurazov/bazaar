@@ -92,6 +92,7 @@ export type ProductMovementJournalRow = {
 export type ProductMovementDocumentLine = {
   id: string;
   productId: string;
+  storeId: string;
   productDetailUrl: string;
   storeName: string;
   productName: string;
@@ -152,6 +153,7 @@ type ProductMovementJournalSqlRow = {
 type ProductMovementDocumentLineSqlRow = {
   id: string;
   productId: string;
+  storeId: string;
   storeName: string;
   productName: string;
   sku: string | null;
@@ -691,6 +693,7 @@ export const getProductMovementDocument = async (
       SELECT
         m."id",
         m."productId",
+        m."storeId",
         s."name" AS "storeName",
         p."name" AS "productName",
         p."sku",
@@ -728,7 +731,8 @@ export const getProductMovementDocument = async (
     lines: lines.map((line) => ({
       id: line.id,
       productId: line.productId,
-      productDetailUrl: `/products/${line.productId}`,
+      storeId: line.storeId,
+      productDetailUrl: `/products/${line.productId}?storeId=${encodeURIComponent(line.storeId)}`,
       storeName: line.storeName,
       productName: line.productName,
       sku: line.sku,

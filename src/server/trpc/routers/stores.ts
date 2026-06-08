@@ -19,6 +19,11 @@ import {
   updateStorePolicy,
 } from "@/server/services/stores";
 import {
+  applyStoreAssortmentShare,
+  listStoreAssortmentOverview,
+  previewStoreAssortmentShare,
+} from "@/server/services/storeAssortments";
+import {
   PRICE_TAG_ROLL_LIMITS,
   PRICE_TAG_TEMPLATES,
   ROLL_PRICE_TAG_TEMPLATE,
@@ -30,6 +35,60 @@ import {
 import { assertUserCanAccessStore, userHasAllStoreAccess } from "@/server/services/storeAccess";
 
 export const storesRouter = router({
+  assortmentOverview: adminOrOrgOwnerProcedure.query(async ({ ctx }) => {
+    try {
+      return await listStoreAssortmentOverview({
+        organizationId: ctx.user.organizationId,
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+
+  previewAssortmentShare: adminOrOrgOwnerProcedure
+    .input(
+      z.object({
+        sourceStoreId: z.string().min(1),
+        targetStoreIds: z.array(z.string().min(1)).min(1),
+        groupName: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await previewStoreAssortmentShare({
+          organizationId: ctx.user.organizationId,
+          sourceStoreId: input.sourceStoreId,
+          targetStoreIds: input.targetStoreIds,
+          groupName: input.groupName,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  applyAssortmentShare: adminOrOrgOwnerProcedure
+    .input(
+      z.object({
+        sourceStoreId: z.string().min(1),
+        targetStoreIds: z.array(z.string().min(1)).min(1),
+        groupName: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await applyStoreAssortmentShare({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          sourceStoreId: input.sourceStoreId,
+          targetStoreIds: input.targetStoreIds,
+          groupName: input.groupName,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   list: protectedProcedure.query(async ({ ctx }) => {
     const storeSelect = {
       id: true,

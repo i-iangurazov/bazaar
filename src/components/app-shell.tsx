@@ -347,6 +347,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             requiredPermission: "manageSettings",
           },
           {
+            key: "storeGroups",
+            href: "/settings/store-groups",
+            icon: StoresIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
+          {
             key: "attributes",
             href: "/settings/attributes",
             icon: AdjustIcon,

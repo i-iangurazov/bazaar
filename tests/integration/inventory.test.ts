@@ -238,6 +238,11 @@ describeDb("inventory service", () => {
     expect(document?.organizationName).toBe(org.name);
     expect(document?.totalAmount).toBe(29);
     expect(document?.lines.map((line) => line.productId)).toEqual([product.id, secondProduct.id]);
+    expect(document?.lines.map((line) => line.storeId)).toEqual([store.id, store.id]);
+    expect(document?.lines.map((line) => line.productDetailUrl)).toEqual([
+      `/products/${product.id}?storeId=${encodeURIComponent(store.id)}`,
+      `/products/${secondProduct.id}?storeId=${encodeURIComponent(store.id)}`,
+    ]);
     expect(document?.lines.map((line) => line.unitCostKgs)).toEqual([5, 7]);
 
     await assertSnapshotMatchesLedger(store.id, product.id);
@@ -616,6 +621,12 @@ describeDb("inventory service", () => {
       "TRANSFER_IN",
       "TRANSFER_OUT",
     ]);
+    expect(document?.lines.map((line) => line.productDetailUrl)).toEqual(
+      expect.arrayContaining([
+        `/products/${product.id}?storeId=${encodeURIComponent(store.id)}`,
+        `/products/${product.id}?storeId=${encodeURIComponent(storeB.id)}`,
+      ]),
+    );
   });
 
   it("rejects transfer quantity above available stock when negative stock is disabled", async () => {

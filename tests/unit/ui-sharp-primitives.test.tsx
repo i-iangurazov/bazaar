@@ -8,6 +8,7 @@ import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { PopoverSurface } from "@/components/ui/popover";
@@ -77,6 +78,20 @@ describe("soft-rounded UI primitives", () => {
     expect(screen.getByTestId("tabs-list").className).toContain("rounded-md");
     expect(screen.getByRole("tab", { name: "Overview" }).className).toContain("rounded-md");
     expect(screen.getByTestId("tabs-panel").className).toContain("rounded-md");
+  });
+
+  it("allows form labels in read-only detail contexts without form state", () => {
+    render(
+      <div>
+        <FormLabel htmlFor="standalone-stock">Остаток в магазине</FormLabel>
+        <FormItem>
+          <FormLabel htmlFor="readonly-comment">Комментарий</FormLabel>
+        </FormItem>
+      </div>,
+    );
+
+    expect(screen.getByText("Остаток в магазине").getAttribute("for")).toBe("standalone-stock");
+    expect(screen.getByText("Комментарий").getAttribute("for")).toBe("readonly-comment");
   });
 
   it("keeps dialogs and modal footers consistent", () => {

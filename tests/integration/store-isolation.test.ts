@@ -260,6 +260,144 @@ describeDb("store isolation", () => {
     expect(storeBSnapshot?.onHand).toBe(0);
   });
 
+  it("previews and applies branch assortment sharing without copying stock", async () => {
+    const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const branchStore = await caller.stores.create({
+      name: "Branch Store",
+      code: "BR",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+    });
+    const separateStore = await caller.stores.create({
+      name: "Separate Store",
+      code: "SEP",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+    });
+    const sourceProduct = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-assortment-source-product",
+      sku: "ASSORT-SRC",
+      name: "Source Assortment Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      initialOnHand: 5,
+    });
+    const branchProduct = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-assortment-branch-product",
+      sku: "ASSORT-BR",
+      name: "Branch Existing Product",
+      baseUnitId: baseUnit.id,
+      storeId: branchStore.id,
+      initialOnHand: 3,
+    });
+
+    const preview = await caller.stores.previewAssortmentShare({
+      sourceStoreId: store.id,
+      targetStoreIds: [branchStore.id],
+      groupName: "Explicit Branch Assortment",
+    });
+
+    expect(preview.sourceProductCount).toBeGreaterThanOrEqual(1);
+    expect(preview.totalSharedProductCount).toBe(
+      preview.sourceProductCount + preview.targetProductsSharedBackToSource,
+    );
+    expect(preview.targetProductsSharedBackToSource).toBe(1);
+    expect(preview.targetImpacts).toEqual([
+      expect.objectContaining({
+        storeId: branchStore.id,
+        productsToAdd: preview.sourceProductCount,
+        sourceProductsToAdd: preview.sourceProductCount,
+        zeroStockSnapshotsToCreate: preview.sourceProductCount,
+        existingPositiveStockRows: 1,
+      }),
+    ]);
+    expect(preview.stockWillBeCopied).toBe(false);
+    expect(preview.existingStockWillRemain).toBe(true);
+    expect(preview.customerSharingMode).toBe("STORE_SCOPED");
+
+    const applied = await caller.stores.applyAssortmentShare({
+      sourceStoreId: store.id,
+      targetStoreIds: [branchStore.id],
+      groupName: "Explicit Branch Assortment",
+    });
+    const [sourceList, branchList, separateList, sourceOwnSnapshot, sourceBranchSnapshot, branchSourceSnapshot, branchOwnSnapshot, overview] =
+      await Promise.all([
+        caller.products.list({ storeId: store.id }),
+        caller.products.list({ storeId: branchStore.id }),
+        caller.products.list({ storeId: separateStore.id }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: sourceProduct.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: branchProduct.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: branchStore.id,
+              productId: sourceProduct.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: branchStore.id,
+              productId: branchProduct.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        caller.stores.assortmentOverview(),
+      ]);
+
+    expect(applied.catalogName).toBe("Explicit Branch Assortment");
+    expect(sourceList.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([sourceProduct.id, branchProduct.id]),
+    );
+    expect(branchList.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([sourceProduct.id, branchProduct.id]),
+    );
+    expect(separateList.items.map((item) => item.id)).not.toContain(sourceProduct.id);
+    expect(separateList.items.map((item) => item.id)).not.toContain(branchProduct.id);
+    expect(sourceOwnSnapshot?.onHand).toBe(5);
+    expect(branchOwnSnapshot?.onHand).toBe(3);
+    expect(sourceBranchSnapshot?.onHand).toBe(0);
+    expect(branchSourceSnapshot?.onHand).toBe(0);
+    const sharedGroup = overview.groups.find((group) => group.id === applied.catalogId);
+    expect(sharedGroup).toMatchObject({
+      name: "Explicit Branch Assortment",
+      isShared: true,
+      customerSharingMode: "STORE_SCOPED",
+      productCount: preview.totalSharedProductCount,
+      storeCount: 2,
+    });
+  });
+
   it("keeps POS lookup scoped to products assigned to the selected store", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase();
     const storeB = await prisma.store.create({
