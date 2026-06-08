@@ -21,6 +21,19 @@ const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
 const isTestRuntime = process.env.NODE_ENV === "test";
 
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const OPENAI_REQUEST_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.PRODUCT_SPEC_AI_TIMEOUT_MS ?? process.env.OPENAI_REQUEST_TIMEOUT_MS,
+  30_000,
+);
+
 type DownloadedImage = {
   buffer: Buffer;
   contentType: string;
@@ -108,6 +121,10 @@ const parseRetryAfterMs = (value: string | null) => {
 
 const isQuotaLikeProviderMessage = (value: string) =>
   /quota|billing|insufficient_quota|exceeded your current quota/i.test(value);
+
+const isAbortLikeError = (error: unknown) =>
+  error instanceof Error &&
+  (error.name === "AbortError" || /aborted|abort/i.test(error.message));
 
 const resolveManagedLocalImagePath = (sourceUrl: string) => {
   try {
@@ -264,17 +281,46 @@ const callOpenAiResponses = async (input: {
   let lastResponseBody: OpenAiResponseBody | null = null;
 
   for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
-    const response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: input.body,
-    });
-    lastResponse = response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OPENAI_REQUEST_TIMEOUT_MS);
+    timeout.unref?.();
 
-    const responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
+    let response: Response;
+    let responseBody: OpenAiResponseBody | null = null;
+    try {
+      response = await fetch(OPENAI_RESPONSES_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: input.body,
+        signal: controller.signal,
+      });
+      responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
+    } catch (error) {
+      if (isAbortLikeError(error)) {
+        input.logger?.warn(
+          {
+            provider: "openai",
+            phase: "spec-suggestion-timeout",
+            attempt,
+            timeoutMs: OPENAI_REQUEST_TIMEOUT_MS,
+            loadedImageCount: input.loadedImageCount,
+            sourceImageBytes: input.sourceImageBytes,
+            payloadImageBytes: input.payloadImageBytes,
+            model: input.model,
+          },
+          "product spec suggestion provider request timed out",
+        );
+        throw new AppError("aiSpecsTimedOut", "INTERNAL_SERVER_ERROR", 504);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    lastResponse = response;
     lastResponseBody = responseBody;
     if (response.ok) {
       return { response, responseBody, attempts: attempt };

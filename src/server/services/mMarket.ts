@@ -204,6 +204,17 @@ type BulkAutofillSkipReasonCounts = {
   noResolvedValues: number;
 };
 
+type BulkAutofillItemStatus = "success" | "failed" | "skipped";
+
+type BulkAutofillItemResult = {
+  productId: string;
+  sku: string;
+  name: string;
+  status: BulkAutofillItemStatus;
+  filledValueCount: number;
+  errorMessage: string | null;
+};
+
 const MMARKET_DEFAULT_MANUFACTURER = process.env.MMARKET_SPECS_DEFAULT_MANUFACTURER?.trim() ?? "";
 const MMARKET_DEFAULT_MODEL = process.env.MMARKET_SPECS_DEFAULT_MODEL?.trim() ?? "";
 const MMARKET_DEFAULT_UNCATEGORIZED_NAME = "Без категории";
@@ -538,6 +549,19 @@ const createBulkAutofillSkipReasonCounts = (): BulkAutofillSkipReasonCounts => (
   noSupportedFields: 0,
   noResolvedValues: 0,
 });
+
+const resolveBulkAutofillFailureReason = (error: unknown) => {
+  if (error instanceof AppError) {
+    return error.message;
+  }
+  if (isAbortError(error)) {
+    return "aiSpecsTimedOut";
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "aiSpecsGenerationFailed";
+};
 
 const normalizeNumber = (value: unknown) => {
   if (typeof value === "number") {
@@ -2446,6 +2470,7 @@ export const bulkAutofillMMarketSpecs = async (input: {
       updatedProductIds: [] as string[],
       targetedCount: 0,
       skipReasonCounts: createBulkAutofillSkipReasonCounts(),
+      items: [] as BulkAutofillItemResult[],
     };
   }
 
@@ -2569,12 +2594,21 @@ export const bulkAutofillMMarketSpecs = async (input: {
   let rateLimited = false;
   const updatedProductIds: string[] = [];
   const skipReasonCounts = createBulkAutofillSkipReasonCounts();
+  const items: BulkAutofillItemResult[] = [];
 
   for (const productId of productIds) {
     const product = productById.get(productId);
     if (!product || !product.category?.trim()) {
       skippedCount += 1;
       skipReasonCounts.noCategory += 1;
+      items.push({
+        productId,
+        sku: product?.sku ?? "",
+        name: product?.name ?? "",
+        status: "skipped",
+        filledValueCount: 0,
+        errorMessage: "missingCategory",
+      });
       continue;
     }
 
@@ -2582,6 +2616,14 @@ export const bulkAutofillMMarketSpecs = async (input: {
     if (!templateSpecs.length) {
       skippedCount += 1;
       skipReasonCounts.noTemplate += 1;
+      items.push({
+        productId: product.id,
+        sku: product.sku,
+        name: product.name,
+        status: "skipped",
+        filledValueCount: 0,
+        errorMessage: "missingSpecTemplate",
+      });
       continue;
     }
 
@@ -2596,6 +2638,7 @@ export const bulkAutofillMMarketSpecs = async (input: {
       labelRu: string;
       options?: string[];
     }> = [];
+    let aiErrorMessage: string | null = null;
 
     for (const templateSpec of templateSpecs) {
       const hasValue = (currentValues.get(templateSpec.attributeKey) ?? []).length > 0;
@@ -2678,19 +2721,54 @@ export const bulkAutofillMMarketSpecs = async (input: {
           }
           if (error instanceof Error && error.message === "aiSpecNoUsableImages") {
             // Keep rule-based values if any; otherwise this product will be skipped below.
-          } else if (!(error instanceof Error && error.message === "rateLimited")) {
-            throw error;
+            aiErrorMessage = "aiSpecNoUsableImages";
+          } else if (error instanceof Error && error.message === "rateLimited") {
+            aiErrorMessage = "rateLimited";
+          } else {
+            aiErrorMessage = resolveBulkAutofillFailureReason(error);
+            input.logger?.warn(
+              {
+                phase: "bulk-specs-ai",
+                productId: product.id,
+                error: error instanceof Error ? { message: error.message, name: error.name } : error,
+              },
+              "bulk MMarket specs AI autofill failed for item",
+            );
           }
         }
       }
     }
 
     if (!nextValues.size) {
-      skippedCount += 1;
-      if (supportedFieldCount === 0) {
-        skipReasonCounts.noSupportedFields += 1;
+      if (aiErrorMessage && aiErrorMessage !== "aiSpecNoUsableImages") {
+        failedCount += 1;
+        items.push({
+          productId: product.id,
+          sku: product.sku,
+          name: product.name,
+          status: "failed",
+          filledValueCount: 0,
+          errorMessage: aiErrorMessage,
+        });
       } else {
-        skipReasonCounts.noResolvedValues += 1;
+        skippedCount += 1;
+        if (supportedFieldCount === 0) {
+          skipReasonCounts.noSupportedFields += 1;
+        } else {
+          skipReasonCounts.noResolvedValues += 1;
+        }
+        items.push({
+          productId: product.id,
+          sku: product.sku,
+          name: product.name,
+          status: "skipped",
+          filledValueCount: 0,
+          errorMessage:
+            supportedFieldCount === 0 ? "noSupportedSpecFields" : "noResolvedSpecValues",
+        });
+      }
+      if (stopAfterCurrentProduct) {
+        break;
       }
       continue;
     }
@@ -2781,8 +2859,24 @@ export const bulkAutofillMMarketSpecs = async (input: {
       updatedCount += 1;
       filledValueCount += updated;
       updatedProductIds.push(product.id);
+      items.push({
+        productId: product.id,
+        sku: product.sku,
+        name: product.name,
+        status: "success",
+        filledValueCount: updated,
+        errorMessage: null,
+      });
     } catch (error) {
       failedCount += 1;
+      items.push({
+        productId: product.id,
+        sku: product.sku,
+        name: product.name,
+        status: "failed",
+        filledValueCount: 0,
+        errorMessage: resolveBulkAutofillFailureReason(error),
+      });
       input.logger?.warn(
         {
           phase: "bulk-specs-item",
@@ -2811,6 +2905,7 @@ export const bulkAutofillMMarketSpecs = async (input: {
     updatedProductIds,
     targetedCount: productIds.length,
     skipReasonCounts,
+    items,
   };
 };
 

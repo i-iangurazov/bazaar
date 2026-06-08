@@ -136,6 +136,33 @@ describe("product description generation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("maps provider aborts to explicit timeout errors", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    mockDownloadRemoteImage.mockResolvedValue({
+      buffer: Buffer.from([9, 9, 9]),
+      contentType: "image/png",
+    });
+    const abortError = new Error("This operation was aborted");
+    abortError.name = "AbortError";
+    const fetchMock = vi.fn().mockRejectedValue(abortError);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { generateProductDescriptionFromImages } =
+      await import("../../src/server/services/productDescriptions");
+
+    await expect(
+      generateProductDescriptionFromImages({
+        locale: "ru",
+        imageUrls: ["https://cdn.example.com/photo.png"],
+      }),
+    ).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "aiDescriptionTimedOut",
+      status: 504,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("retries a transient 429 and returns the next successful response", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({

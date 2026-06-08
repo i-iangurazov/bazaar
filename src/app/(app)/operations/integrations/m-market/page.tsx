@@ -42,7 +42,7 @@ import { useToast } from "@/components/ui/toast";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
-import { isAiDescriptionGenerationEnabled, isAiFeaturesEnabled } from "@/lib/featureFlags";
+import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -59,12 +59,20 @@ const ISSUE_CODES = [
   "MISSING_STOCK_MAPPING",
   "MISSING_SPECS",
 ] as const;
-const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
 const aiDescriptionGenerationFlagDisabled = !isAiDescriptionGenerationEnabled();
 
 type IssueCode = (typeof ISSUE_CODES)[number];
 
 const mMarketBulkProgressBatchSize = 25;
+
+type MMarketBulkProgressItem = {
+  productId: string;
+  sku: string;
+  name: string;
+  status: "pending" | "processing" | "success" | "failed" | "skipped" | "deferred";
+  filledValueCount: number;
+  errorMessage: string | null;
+};
 
 type MMarketBulkProgressState = {
   kind: "descriptions" | "specs";
@@ -80,6 +88,7 @@ type MMarketBulkProgressState = {
   batchCount: number;
   startedAt: number;
   errorMessage: string | null;
+  items: MMarketBulkProgressItem[];
 };
 
 const formatCountdown = (seconds: number) => {
@@ -117,6 +126,19 @@ const statusBadgeVariant = (status: MMarketExportJobStatus) => {
     return "danger" as const;
   }
   if (status === MMarketExportJobStatus.RUNNING) {
+    return "warning" as const;
+  }
+  return "muted" as const;
+};
+
+const bulkItemStatusBadgeVariant = (status: MMarketBulkProgressItem["status"]) => {
+  if (status === "success") {
+    return "success" as const;
+  }
+  if (status === "failed") {
+    return "danger" as const;
+  }
+  if (status === "processing") {
     return "warning" as const;
   }
   return "muted" as const;
@@ -560,6 +582,22 @@ const MMarketSettingsPage = () => {
         noCategory: 0,
       },
     };
+    const targetProductById = new Map(
+      (preflightData?.failedProducts ?? []).map((product) => [product.productId, product]),
+    );
+    const initialItems: MMarketBulkProgressItem[] = actionableMissingSpecsTargetIds.map(
+      (productId) => {
+        const product = targetProductById.get(productId);
+        return {
+          productId,
+          sku: product?.sku ?? "",
+          name: product?.name ?? productId,
+          status: "pending",
+          filledValueCount: 0,
+          errorMessage: null,
+        };
+      },
+    );
 
     setBulkProgress({
       kind: "specs",
@@ -575,6 +613,7 @@ const MMarketSettingsPage = () => {
       batchCount: batches.length,
       startedAt: Date.now(),
       errorMessage: null,
+      items: initialItems,
     });
 
     try {
@@ -584,6 +623,11 @@ const MMarketSettingsPage = () => {
             ? {
                 ...current,
                 batchIndex: batchIndex + 1,
+                items: current.items.map((item) =>
+                  batch.includes(item.productId)
+                    ? { ...item, status: "processing" as const, errorMessage: null }
+                    : item,
+                ),
               }
             : current,
         );
@@ -592,6 +636,9 @@ const MMarketSettingsPage = () => {
           storeId: activeStoreId,
           productIds: batch,
         });
+        const resultItemByProductId = new Map(
+          result.items.map((item) => [item.productId, item] as const),
+        );
         const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
         const remainingAfterBatch = Math.max(
           0,
@@ -622,6 +669,20 @@ const MMarketSettingsPage = () => {
                   deferredCount: summary.deferredCount,
                   filledCount: summary.filledCount,
                   batchIndex: batchIndex + 1,
+                  items: current.items.map((item) => {
+                    const resultItem = resultItemByProductId.get(item.productId);
+                    if (resultItem) {
+                      return {
+                        ...item,
+                        status: resultItem.status,
+                        filledValueCount: resultItem.filledValueCount,
+                        errorMessage: resultItem.errorMessage,
+                      };
+                    }
+                    return item.status === "pending" || item.status === "processing"
+                      ? { ...item, status: "deferred" as const }
+                      : item;
+                  }),
                 }
               : current,
           );
@@ -650,6 +711,17 @@ const MMarketSettingsPage = () => {
                 deferredCount: 0,
                 filledCount: summary.filledCount,
                 batchIndex: batchIndex + 1,
+                items: current.items.map((item) => {
+                  const resultItem = resultItemByProductId.get(item.productId);
+                  return resultItem
+                    ? {
+                        ...item,
+                        status: resultItem.status,
+                        filledValueCount: resultItem.filledValueCount,
+                        errorMessage: resultItem.errorMessage,
+                      }
+                    : item;
+                }),
               }
             : current,
         );
@@ -667,6 +739,7 @@ const MMarketSettingsPage = () => {
               deferredCount: 0,
               filledCount: summary.filledCount,
               batchIndex: batches.length,
+              items: current.items,
             }
           : current,
       );
@@ -718,6 +791,11 @@ const MMarketSettingsPage = () => {
               status: "error",
               deferredCount: Math.max(0, current.totalCount - current.processedCount),
               errorMessage,
+              items: current.items.map((item) =>
+                item.status === "pending" || item.status === "processing"
+                  ? { ...item, status: "deferred" as const, errorMessage }
+                  : item,
+              ),
             }
           : current,
       );
@@ -1019,6 +1097,23 @@ const MMarketSettingsPage = () => {
   const shortDescriptionDisabledReason =
     baseDescriptionGenerationDisabledReason ??
     (shortDescriptionCount <= 0 ? tProducts("aiDescriptionDisabledNoProducts") : null);
+  const specsAutofillDisabledReason = !canEdit
+    ? tProducts("aiDescriptionDisabledNoPermission")
+    : !activeStoreId
+      ? tProducts("aiDescriptionDisabledNoStore")
+      : !activeStoreMapped
+        ? tProducts("aiDescriptionDisabledNoStoreMapping")
+        : descriptionGenerationAvailabilityQuery.isLoading
+          ? tProducts("aiDescriptionDisabledChecking")
+          : !descriptionGenerationProviderConfigured
+            ? tErrors("aiSpecsNotConfigured")
+            : bulkProgressRunning
+              ? tProducts("aiDescriptionDisabledRunning")
+              : bulkAutofillSpecsMutation.isLoading
+                ? tCommon("loading")
+                : actionableMissingSpecsCount <= 0
+                  ? tProducts("aiDescriptionDisabledNoProducts")
+                  : null;
   const bulkProgressTitle = bulkProgress
     ? bulkProgress.kind === "specs"
       ? t("preflight.autofillSpecsProgressTitle")
@@ -1805,11 +1900,8 @@ const MMarketSettingsPage = () => {
                         <Button
                           type="button"
                           onClick={() => void handleAutofillSpecs()}
-                          disabled={
-                            aiFeaturesVisuallyDisabled ||
-                            bulkProgressRunning ||
-                            bulkAutofillSpecsMutation.isLoading
-                          }
+                          disabled={Boolean(specsAutofillDisabledReason)}
+                          title={specsAutofillDisabledReason ?? undefined}
                         >
                           {bulkAutofillSpecsMutation.isLoading ? (
                             <Spinner className="h-4 w-4" />
@@ -1817,9 +1909,11 @@ const MMarketSettingsPage = () => {
                             <SparklesIcon className="h-4 w-4" aria-hidden />
                           )}
                           {t("preflight.autofillSpecs")} ({actionableMissingSpecsCount})
-                          <Badge variant="muted" className="ml-1">
-                            {tProducts("aiUnavailableBadge")}
-                          </Badge>
+                          {specsAutofillDisabledReason ? (
+                            <Badge variant="muted" className="ml-1">
+                              {specsAutofillDisabledReason}
+                            </Badge>
+                          ) : null}
                         </Button>
                       </>
                     ) : null}
@@ -2139,6 +2233,48 @@ const MMarketSettingsPage = () => {
             {bulkProgress.errorMessage ? (
               <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {bulkProgress.errorMessage}
+              </div>
+            ) : null}
+
+            {bulkProgress.kind === "specs" && bulkProgress.items.length ? (
+              <div className="max-h-80 overflow-auto rounded-md border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{tProducts("aiDescriptionJobProduct")}</TableHead>
+                      <TableHead>{tProducts("aiDescriptionJobItemStatus")}</TableHead>
+                      <TableHead>{t("preflight.bulkProgressFilled")}</TableHead>
+                      <TableHead>{tProducts("aiDescriptionJobResult")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bulkProgress.items.map((item) => (
+                      <TableRow key={item.productId}>
+                        <TableCell>
+                          <p className="font-medium text-foreground">{item.name}</p>
+                          <p className="font-mono text-xs text-muted-foreground">{item.sku}</p>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={bulkItemStatusBadgeVariant(item.status)}>
+                            {t(`preflight.bulkItemStatus.${item.status}`)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{item.filledValueCount}</TableCell>
+                        <TableCell className="max-w-sm">
+                          {item.errorMessage ? (
+                            <p className="text-sm text-danger">
+                              {tErrors.has?.(item.errorMessage)
+                                ? tErrors(item.errorMessage)
+                                : item.errorMessage}
+                            </p>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : null}
 

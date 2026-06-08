@@ -146,4 +146,31 @@ describe("product spec suggestions", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(6);
   });
+
+  it("maps provider aborts to explicit timeout errors", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    mockDownloadRemoteImage.mockResolvedValue({
+      buffer: Buffer.from([9, 9, 9]),
+      contentType: "image/png",
+    });
+    const abortError = new Error("This operation was aborted");
+    abortError.name = "AbortError";
+    const fetchMock = vi.fn().mockRejectedValue(abortError);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { suggestProductSpecsFromImages } =
+      await import("../../src/server/services/productSpecSuggestions");
+
+    await expect(
+      suggestProductSpecsFromImages({
+        imageUrls: ["https://cdn.example.com/photo.png"],
+        requestedSpecs: [{ kind: "type", labelRu: "Тип" }],
+      }),
+    ).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "aiSpecsTimedOut",
+      status: 504,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -24,6 +24,23 @@ const MAX_GENERATION_PRODUCTS = 5_000;
 const MAX_IMAGES_PER_PRODUCT = 3;
 const ITEM_BATCH_SIZE = 10;
 
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const PROCESSING_ITEM_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.PRODUCT_DESCRIPTION_ITEM_TIMEOUT_MS,
+  5 * 60 * 1000,
+);
+const PROCESSING_JOB_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.PRODUCT_DESCRIPTION_JOB_TIMEOUT_MS,
+  60 * 60 * 1000,
+);
+
 type ProductDescriptionGenerationLogger = Pick<Logger, "info" | "warn" | "error">;
 
 const normalizeProductIds = (values: string[]) =>
@@ -304,6 +321,102 @@ const refreshJobCounts = async (jobId: string) => {
   });
 };
 
+const timeoutAbandonedProductDescriptionWork = async (
+  logger: ProductDescriptionGenerationLogger,
+) => {
+  const itemTimeoutBefore = new Date(Date.now() - PROCESSING_ITEM_TIMEOUT_MS);
+  const staleProcessingItems = await prisma.productDescriptionGenerationJobItem.findMany({
+    where: {
+      status: ProductDescriptionGenerationItemStatus.PROCESSING,
+      updatedAt: { lt: itemTimeoutBefore },
+    },
+    select: { jobId: true },
+    distinct: ["jobId"],
+  });
+
+  if (staleProcessingItems.length) {
+    await prisma.productDescriptionGenerationJobItem.updateMany({
+      where: {
+        status: ProductDescriptionGenerationItemStatus.PROCESSING,
+        updatedAt: { lt: itemTimeoutBefore },
+      },
+      data: {
+        status: ProductDescriptionGenerationItemStatus.FAILED,
+        errorMessage: "aiDescriptionTimedOut",
+        completedAt: new Date(),
+      },
+    });
+
+    for (const item of staleProcessingItems) {
+      await refreshJobCounts(item.jobId);
+    }
+    logger.warn(
+      {
+        jobIds: staleProcessingItems.map((item) => item.jobId),
+        timeoutMs: PROCESSING_ITEM_TIMEOUT_MS,
+      },
+      "timed out abandoned product description generation items",
+    );
+  }
+
+  const jobTimeoutBefore = new Date(Date.now() - PROCESSING_JOB_TIMEOUT_MS);
+  const staleJobs = await prisma.productDescriptionGenerationJob.findMany({
+    where: {
+      status: {
+        in: [
+          ProductDescriptionGenerationJobStatus.QUEUED,
+          ProductDescriptionGenerationJobStatus.PROCESSING,
+        ],
+      },
+      OR: [
+        { startedAt: { lt: jobTimeoutBefore } },
+        { startedAt: null, createdAt: { lt: jobTimeoutBefore } },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (!staleJobs.length) {
+    return;
+  }
+
+  const staleJobIds = staleJobs.map((job) => job.id);
+  await prisma.productDescriptionGenerationJobItem.updateMany({
+    where: {
+      jobId: { in: staleJobIds },
+      status: {
+        in: [
+          ProductDescriptionGenerationItemStatus.PENDING,
+          ProductDescriptionGenerationItemStatus.PROCESSING,
+        ],
+      },
+    },
+    data: {
+      status: ProductDescriptionGenerationItemStatus.FAILED,
+      errorMessage: "aiDescriptionJobTimedOut",
+      completedAt: new Date(),
+    },
+  });
+  for (const jobId of staleJobIds) {
+    await refreshJobCounts(jobId);
+    await prisma.productDescriptionGenerationJob.update({
+      where: { id: jobId },
+      data: {
+        status: ProductDescriptionGenerationJobStatus.FAILED,
+        errorMessage: "aiDescriptionJobTimedOut",
+        completedAt: new Date(),
+      },
+    });
+  }
+  logger.warn(
+    {
+      jobIds: staleJobIds,
+      timeoutMs: PROCESSING_JOB_TIMEOUT_MS,
+    },
+    "timed out abandoned product description generation jobs",
+  );
+};
+
 const markItem = async (input: {
   itemId: string;
   status: ProductDescriptionGenerationItemStatus;
@@ -488,18 +601,7 @@ const processQueuedProductDescriptionGenerationJob = async (
   requestedJobId?: string,
 ): Promise<JobResult> => {
   const logger = getLogger();
-  const recoverBefore = new Date(Date.now() - 15 * 60 * 1000);
-  await prisma.productDescriptionGenerationJobItem.updateMany({
-    where: {
-      status: ProductDescriptionGenerationItemStatus.PROCESSING,
-      updatedAt: { lt: recoverBefore },
-    },
-    data: {
-      status: ProductDescriptionGenerationItemStatus.PENDING,
-      errorMessage: null,
-      completedAt: null,
-    },
-  });
+  await timeoutAbandonedProductDescriptionWork(logger);
 
   const job = await prisma.productDescriptionGenerationJob.findFirst({
     where: {
