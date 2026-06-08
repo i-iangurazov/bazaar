@@ -12,15 +12,15 @@ describe("m-market manager product tools source", () => {
     const pageSource = await readSource("src/app/(app)/operations/integrations/m-market/page.tsx");
 
     expect(routerSource).toContain("bulkGenerateDescriptions: managerProcedure");
+    expect(routerSource).toContain("startDescriptionGenerationJob: managerProcedure");
     expect(routerSource).toContain("bulkAutofillSpecs: managerProcedure");
     expect(routerSource).toContain("bulkCreateBaseTemplates: managerProcedure");
     expect(routerSource).toContain("assignMissingCategory: managerProcedure");
     expect(routerSource).not.toContain("adminProcedure");
 
     expect(pageSource).toContain('const canEdit = role === "ADMIN" || role === "MANAGER";');
-    expect(pageSource).toContain(
-      "if (!canEdit || !activeStoreId || shortDescriptionTargetIds.length <= 0",
-    );
+    expect(pageSource).toContain("shortDescriptionTargetIds.length <= 0 ||");
+    expect(pageSource).toContain("startDescriptionGenerationJobMutation.mutate({");
     expect(pageSource).toContain("!activeStoreId ||\n      actionableMissingSpecsTargetIds.length <= 0");
     expect(pageSource).toContain(
       "if (!canEdit || !activeStoreId || actionableMissingSpecsCount <= 0)",

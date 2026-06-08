@@ -1,4 +1,4 @@
-import { BakaiStoreConnectionMode } from "@prisma/client";
+import { BakaiStoreConnectionMode, ProductDescriptionGenerationSource } from "@prisma/client";
 import { z } from "zod";
 
 import {
@@ -21,6 +21,8 @@ import {
 } from "@/server/services/bakaiStore";
 import { toTRPCError } from "@/server/trpc/errors";
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { locales } from "@/lib/locales";
+import { startProductDescriptionGenerationJob } from "@/server/services/productDescriptionGenerationJobs";
 
 export const bakaiStoreRouter = router({
   overview: protectedProcedure.query(async ({ ctx }) => {
@@ -203,6 +205,34 @@ export const bakaiStoreRouter = router({
           requestId: ctx.requestId,
           productIds: input.productIds,
           included: input.included,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  startDescriptionGenerationJob: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "bakai-store-descriptions-job-start" }))
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        locale: z.enum(locales).optional(),
+        productIds: z.array(z.string().min(1)).min(1).max(5000),
+        overwriteExisting: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await startProductDescriptionGenerationJob({
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          source: ProductDescriptionGenerationSource.BAKAI_STORE,
+          locale: input.locale,
+          productIds: input.productIds,
+          overwriteExisting: input.overwriteExisting,
+          logger: ctx.logger,
         });
       } catch (error) {
         throw toTRPCError(error);

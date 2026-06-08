@@ -8,9 +8,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ProductDescriptionGenerationJobStatus,
+  ProductDescriptionGenerationSource,
+} from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
+import {
+  isDescriptionGenerationJobRunning,
+  ProductDescriptionGenerationProgress,
+} from "@/components/product-description-generation-progress";
 import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -219,7 +227,6 @@ const defaultSortDirectionByKey: Record<ProductSortKey, ProductSortDirection> = 
 const aiArrangeCategoriesBatchSize = 25;
 const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
 const aiDescriptionGenerationDisabled = !isAiDescriptionGenerationEnabled();
-const bulkGenerateDescriptionsBatchSize = 25;
 const customCategorySelectValue = "__custom__";
 const clearCategorySelectValue = "__clear__";
 const priceTagQuickQuantities = [1, 2, 3, 5] as const;
@@ -250,20 +257,6 @@ type AiArrangeCategoriesProgressState = {
   eligibleCount: number;
   updatedCount: number;
   skippedCount: number;
-  batchIndex: number;
-  batchCount: number;
-  startedAt: number;
-  errorMessage: string | null;
-};
-
-type BulkDescriptionProgressState = {
-  status: "running" | "done" | "rateLimited" | "error";
-  totalCount: number;
-  processedCount: number;
-  updatedCount: number;
-  skippedCount: number;
-  failedCount: number;
-  deferredCount: number;
   batchIndex: number;
   batchCount: number;
   startedAt: number;
@@ -337,9 +330,7 @@ const ProductsPage = () => {
   const [arrangeCategoriesProgress, setArrangeCategoriesProgress] =
     useState<AiArrangeCategoriesProgressState | null>(null);
   const [arrangeCategoriesElapsedSeconds, setArrangeCategoriesElapsedSeconds] = useState(0);
-  const [bulkDescriptionProgress, setBulkDescriptionProgress] =
-    useState<BulkDescriptionProgressState | null>(null);
-  const [bulkDescriptionElapsedSeconds, setBulkDescriptionElapsedSeconds] = useState(0);
+  const [descriptionGenerationJobId, setDescriptionGenerationJobId] = useState<string | null>(null);
   const [printSetupOpen, setPrintSetupOpen] = useState(false);
   const [quickPrintLoading, setQuickPrintLoading] = useState(false);
   // Dev-only fallback for the old all-in-one print modal. Normal product and inventory
@@ -924,7 +915,50 @@ const ProductsPage = () => {
       });
     },
   });
-  const bulkGenerateDescriptionsMutation = trpc.products.bulkGenerateDescriptions.useMutation();
+  const startDescriptionGenerationJobMutation =
+    trpc.products.startDescriptionGenerationJob.useMutation({
+      onSuccess: (job) => {
+        setDescriptionGenerationJobId(job.id);
+      },
+      onError: (error) => {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      },
+    });
+  const retryDescriptionGenerationJobMutation =
+    trpc.products.retryDescriptionGenerationJobFailed.useMutation({
+      onSuccess: async (job) => {
+        setDescriptionGenerationJobId(job.id);
+        await Promise.all([
+          trpcUtils.products.bootstrap.invalidate(),
+          trpcUtils.products.list.invalidate(),
+        ]);
+      },
+      onError: (error) => {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      },
+    });
+  const descriptionGenerationJobQuery = trpc.products.descriptionGenerationJob.useQuery(
+    { jobId: descriptionGenerationJobId ?? "" },
+    {
+      enabled: Boolean(descriptionGenerationJobId),
+      refetchInterval: (job) =>
+        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      onSuccess: async (job) => {
+        if (!isDescriptionGenerationJobRunning(job.status)) {
+          await Promise.all([
+            trpcUtils.products.bootstrap.invalidate(),
+            trpcUtils.products.list.invalidate(),
+          ]);
+          if (
+            job.status === ProductDescriptionGenerationJobStatus.DONE &&
+            job.failedCount === 0
+          ) {
+            setSelectedIds(new Set());
+          }
+        }
+      },
+    },
+  );
 
   useEffect(() => {
     if (!productsTableStateReady || !productsSavedViewsReady || hasStoredProductsTableState) {
@@ -990,27 +1024,6 @@ const ProductsPage = () => {
     const timer = window.setInterval(updateElapsed, 1_000);
     return () => window.clearInterval(timer);
   }, [arrangeCategoriesProgress]);
-
-  useEffect(() => {
-    if (!bulkDescriptionProgress) {
-      setBulkDescriptionElapsedSeconds(0);
-      return;
-    }
-    if (bulkDescriptionProgress.status !== "running") {
-      setBulkDescriptionElapsedSeconds(
-        Math.max(0, Math.floor((Date.now() - bulkDescriptionProgress.startedAt) / 1000)),
-      );
-      return;
-    }
-    const updateElapsed = () => {
-      setBulkDescriptionElapsedSeconds(
-        Math.max(0, Math.floor((Date.now() - bulkDescriptionProgress.startedAt) / 1000)),
-      );
-    };
-    updateElapsed();
-    const timer = window.setInterval(updateElapsed, 1_000);
-    return () => window.clearInterval(timer);
-  }, [bulkDescriptionProgress]);
 
   const getProductCategories = useCallback(
     (product: { category?: string | null; categories?: string[] }) => {
@@ -1358,13 +1371,10 @@ const ProductsPage = () => {
       )
     : 0;
   const arrangeCategoriesRunning = arrangeCategoriesProgress?.status === "running";
-  const bulkDescriptionProgressPercent = bulkDescriptionProgress
-    ? Math.round(
-        (bulkDescriptionProgress.processedCount / Math.max(1, bulkDescriptionProgress.totalCount)) *
-          100,
-      )
-    : 0;
-  const bulkDescriptionRunning = bulkDescriptionProgress?.status === "running";
+  const descriptionGenerationJob = descriptionGenerationJobQuery.data;
+  const bulkDescriptionRunning =
+    startDescriptionGenerationJobMutation.isLoading ||
+    isDescriptionGenerationJobRunning(descriptionGenerationJob?.status);
 
   const queueIdsForQuery = useMemo(() => Array.from(new Set(printQueue)).sort(), [printQueue]);
   const queueProductsQuery = trpc.products.byIds.useQuery(
@@ -1444,16 +1454,19 @@ const ProductsPage = () => {
     });
   };
 
+  const fetchFilteredProductIds = () =>
+    trpcUtils.products.listIds.fetch({
+      search: search || undefined,
+      category: category || undefined,
+      type: productType,
+      includeArchived: canManageProducts ? showArchived : undefined,
+      storeId: storeId || undefined,
+    });
+
   const handleSelectAllResults = async () => {
     setSelectingAllResults(true);
     try {
-      const ids = await trpcUtils.products.listIds.fetch({
-        search: search || undefined,
-        category: category || undefined,
-        type: productType,
-        includeArchived: canManageProducts ? showArchived : undefined,
-        storeId: storeId || undefined,
-      });
+      const ids = await fetchFilteredProductIds();
       setSelectedIds(new Set(ids));
     } catch (error) {
       toast({
@@ -2546,11 +2559,10 @@ const ProductsPage = () => {
     });
   };
 
-  const handleBulkGenerateDescriptions = async () => {
-    if (!selectedList.length || !canManageProducts || bulkDescriptionRunning) {
+  const startDescriptionGenerationForIds = async (targetIds: string[]) => {
+    if (!targetIds.length || !canManageProducts || bulkDescriptionRunning) {
       return;
     }
-    const targetIds = [...selectedList];
     if (
       !(await confirm({
         description: t("confirmBulkGenerateDescriptions", {
@@ -2560,164 +2572,34 @@ const ProductsPage = () => {
     ) {
       return;
     }
-    const batches = Array.from(
-      { length: Math.ceil(targetIds.length / bulkGenerateDescriptionsBatchSize) },
-      (_value, index) =>
-        targetIds.slice(
-          index * bulkGenerateDescriptionsBatchSize,
-          (index + 1) * bulkGenerateDescriptionsBatchSize,
-        ),
-    ).filter((batch) => batch.length > 0);
-    const summary = {
-      processedCount: 0,
-      updatedCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      deferredCount: 0,
-    };
-
-    setBulkDescriptionProgress({
-      status: "running",
-      totalCount: targetIds.length,
-      processedCount: 0,
-      updatedCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      deferredCount: 0,
-      batchIndex: 0,
-      batchCount: batches.length,
-      startedAt: Date.now(),
-      errorMessage: null,
+    startDescriptionGenerationJobMutation.mutate({
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      storeId: storeId || undefined,
+      productIds: targetIds,
+      locale: normalizeLocale(locale) ?? defaultLocale,
+      overwriteExisting: false,
     });
+  };
 
+  const handleBulkGenerateDescriptions = async () => {
+    await startDescriptionGenerationForIds([...selectedList]);
+  };
+
+  const handleBulkGenerateDescriptionsForCurrentFilter = async () => {
+    if (!canManageProducts || bulkDescriptionRunning) {
+      return;
+    }
+    setSelectingAllResults(true);
     try {
-      for (const [batchIndex, batch] of batches.entries()) {
-        setBulkDescriptionProgress((current) =>
-          current
-            ? {
-                ...current,
-                batchIndex: batchIndex + 1,
-              }
-            : current,
-        );
-
-        const result = await bulkGenerateDescriptionsMutation.mutateAsync({
-          productIds: batch,
-          locale: normalizeLocale(locale) ?? defaultLocale,
-        });
-        const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
-        const remainingAfterBatch = Math.max(
-          0,
-          targetIds.length - (batchIndex + 1) * bulkGenerateDescriptionsBatchSize,
-        );
-
-        summary.processedCount += handledInBatch;
-        summary.updatedCount += result.updatedCount;
-        summary.skippedCount += result.skippedCount;
-        summary.failedCount += result.failedCount;
-
-        if (result.rateLimited) {
-          summary.deferredCount += result.deferredCount + remainingAfterBatch;
-          setBulkDescriptionProgress((current) =>
-            current
-              ? {
-                  ...current,
-                  status: "rateLimited",
-                  processedCount: summary.processedCount,
-                  updatedCount: summary.updatedCount,
-                  skippedCount: summary.skippedCount,
-                  failedCount: summary.failedCount,
-                  deferredCount: summary.deferredCount,
-                  batchIndex: batchIndex + 1,
-                }
-              : current,
-          );
-          await Promise.all([
-            trpcUtils.products.bootstrap.invalidate(),
-            trpcUtils.products.list.invalidate(),
-          ]);
-          toast({
-            variant: "info",
-            description: t("bulkGenerateDescriptionsRateLimited", {
-              updated: summary.updatedCount,
-              skipped: summary.skippedCount,
-              failed: summary.failedCount,
-              deferred: summary.deferredCount,
-            }),
-          });
-          return;
-        }
-
-        setBulkDescriptionProgress((current) =>
-          current
-            ? {
-                ...current,
-                processedCount: summary.processedCount,
-                updatedCount: summary.updatedCount,
-                skippedCount: summary.skippedCount,
-                failedCount: summary.failedCount,
-                deferredCount: 0,
-                batchIndex: batchIndex + 1,
-              }
-            : current,
-        );
-      }
-
-      setBulkDescriptionProgress((current) =>
-        current
-          ? {
-              ...current,
-              status: "done",
-              processedCount: summary.processedCount,
-              updatedCount: summary.updatedCount,
-              skippedCount: summary.skippedCount,
-              failedCount: summary.failedCount,
-              deferredCount: 0,
-              batchIndex: batches.length,
-            }
-          : current,
-      );
-      await Promise.all([
-        trpcUtils.products.bootstrap.invalidate(),
-        trpcUtils.products.list.invalidate(),
-      ]);
-      if (summary.failedCount === 0) {
-        setSelectedIds(new Set());
-      }
-      toast({
-        variant: summary.failedCount > 0 ? "info" : "success",
-        description:
-          summary.failedCount > 0
-            ? t("bulkGenerateDescriptionsPartial", {
-                updated: summary.updatedCount,
-                skipped: summary.skippedCount,
-                failed: summary.failedCount,
-              })
-            : t("bulkGenerateDescriptionsSuccess", {
-                updated: summary.updatedCount,
-                skipped: summary.skippedCount,
-              }),
-      });
+      const ids = await fetchFilteredProductIds();
+      await startDescriptionGenerationForIds(ids);
     } catch (error) {
-      await Promise.all([
-        trpcUtils.products.bootstrap.invalidate(),
-        trpcUtils.products.list.invalidate(),
-      ]);
-      const errorMessage = translateError(tErrors, error as Parameters<typeof translateError>[1]);
-      setBulkDescriptionProgress((current) =>
-        current
-          ? {
-              ...current,
-              status: "error",
-              deferredCount: Math.max(0, current.totalCount - current.processedCount),
-              errorMessage,
-            }
-          : current,
-      );
       toast({
         variant: "error",
-        description: errorMessage,
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
       });
+    } finally {
+      setSelectingAllResults(false);
     }
   };
 
@@ -3376,6 +3258,22 @@ const ProductsPage = () => {
                               {t("aiUnavailableBadge")}
                             </Badge>
                           ) : null}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={
+                            aiDescriptionGenerationDisabled ||
+                            bulkDescriptionRunning ||
+                            selectingAllResults ||
+                            productsTotal <= 0
+                          }
+                          onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
+                        >
+                          {selectingAllResults || bulkDescriptionRunning ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {t("bulkGenerateDescriptions")} ({productsTotal})
                         </DropdownMenuItem>
                         {enableBarcode ? (
                           <DropdownMenuItem
@@ -4507,121 +4405,38 @@ const ProductsPage = () => {
       </Modal>
 
       <Modal
-        open={Boolean(bulkDescriptionProgress)}
+        open={Boolean(descriptionGenerationJobId)}
         onOpenChange={(open) => {
           if (!open && !bulkDescriptionRunning) {
-            setBulkDescriptionProgress(null);
+            setDescriptionGenerationJobId(null);
           }
         }}
         title={t("bulkGenerateDescriptionsProgressTitle")}
         subtitle={
-          bulkDescriptionProgress
-            ? bulkDescriptionProgress.status === "running"
+          descriptionGenerationJob
+            ? isDescriptionGenerationJobRunning(descriptionGenerationJob.status)
               ? t("bulkGenerateDescriptionsProgressRunning")
-              : bulkDescriptionProgress.status === "rateLimited"
-                ? t("bulkGenerateDescriptionsProgressRateLimited")
-                : bulkDescriptionProgress.status === "error"
-                  ? t("bulkGenerateDescriptionsProgressError")
-                  : bulkDescriptionProgress.failedCount > 0
-                    ? t("bulkGenerateDescriptionsProgressPartial")
-                    : t("bulkGenerateDescriptionsProgressDone")
+              : descriptionGenerationJob.failedCount > 0
+                ? t("bulkGenerateDescriptionsProgressPartial")
+                : t("bulkGenerateDescriptionsProgressDone")
             : undefined
         }
       >
-        {bulkDescriptionProgress ? (
-          <div className="space-y-4">
-            <div className="rounded-md border border-border bg-muted/30 p-4">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <p className="font-medium text-foreground">
-                  {t("bulkGenerateDescriptionsProgressLabel", {
-                    processed: bulkDescriptionProgress.processedCount,
-                    total: bulkDescriptionProgress.totalCount,
-                  })}
-                </p>
-                <span className="text-sm font-semibold text-foreground">
-                  {bulkDescriptionProgressPercent}%
-                </span>
-              </div>
-              <div className="mt-3 h-2 rounded-md bg-border/70">
-                <div
-                  className="h-2 rounded-md bg-primary transition-all duration-300"
-                  style={{ width: `${bulkDescriptionProgressPercent}%` }}
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                <span>
-                  {t("bulkGenerateDescriptionsProgressBatch", {
-                    current:
-                      bulkDescriptionProgress.batchCount > 0
-                        ? Math.min(
-                            bulkDescriptionProgress.batchCount,
-                            Math.max(1, bulkDescriptionProgress.batchIndex),
-                          )
-                        : 0,
-                    total: bulkDescriptionProgress.batchCount,
-                  })}
-                </span>
-                <span>
-                  {t("bulkGenerateDescriptionsProgressElapsed", {
-                    seconds: bulkDescriptionElapsedSeconds,
-                  })}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-md border border-border bg-card p-3">
-                <p className="text-xs text-muted-foreground">
-                  {t("bulkGenerateDescriptionsProgressUpdated")}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {bulkDescriptionProgress.updatedCount}
-                </p>
-              </div>
-              <div className="rounded-md border border-border bg-card p-3">
-                <p className="text-xs text-muted-foreground">
-                  {t("bulkGenerateDescriptionsProgressSkipped")}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {bulkDescriptionProgress.skippedCount}
-                </p>
-              </div>
-              <div className="rounded-md border border-border bg-card p-3">
-                <p className="text-xs text-muted-foreground">
-                  {t("bulkGenerateDescriptionsProgressFailed")}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {bulkDescriptionProgress.failedCount}
-                </p>
-              </div>
-              <div className="rounded-md border border-border bg-card p-3">
-                <p className="text-xs text-muted-foreground">
-                  {t("bulkGenerateDescriptionsProgressDeferred")}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {bulkDescriptionProgress.deferredCount}
-                </p>
-              </div>
-            </div>
-
-            {bulkDescriptionProgress.errorMessage ? (
-              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-                {bulkDescriptionProgress.errorMessage}
-              </div>
-            ) : null}
-
-            {!bulkDescriptionRunning ? (
-              <FormActions>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full sm:w-auto"
-                  onClick={() => setBulkDescriptionProgress(null)}
-                >
-                  {tCommon("close")}
-                </Button>
-              </FormActions>
-            ) : null}
+        {descriptionGenerationJob ? (
+          <ProductDescriptionGenerationProgress
+            job={descriptionGenerationJob}
+            retryDisabled={retryDescriptionGenerationJobMutation.isLoading}
+            onRetryFailed={() =>
+              retryDescriptionGenerationJobMutation.mutate({
+                jobId: descriptionGenerationJob.id,
+              })
+            }
+            onClose={() => setDescriptionGenerationJobId(null)}
+          />
+        ) : descriptionGenerationJobQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
           </div>
         ) : null}
       </Modal>

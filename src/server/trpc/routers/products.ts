@@ -52,6 +52,7 @@ import {
   inlineUpdateProductInputSchema,
   lookupProductScanInputSchema,
   previewProductsImportCsvInputSchema,
+  productDescriptionGenerationJobInputSchema,
   productDetailInputSchema,
   productBootstrapInputSchema,
   productDuplicateDiagnosticsInputSchema,
@@ -61,9 +62,15 @@ import {
   productStorePricingInputSchema,
   productsByIdsInputSchema,
   searchQuickProductsInputSchema,
+  startProductDescriptionGenerationJobInputSchema,
   updateProductInputSchema,
 } from "@/server/trpc/routers/products.schemas";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import {
+  getProductDescriptionGenerationJob,
+  retryFailedProductDescriptionGenerationItems,
+  startProductDescriptionGenerationJob,
+} from "@/server/services/productDescriptionGenerationJobs";
 
 export const productsRouter = router({
   suggestSku: managerProcedure.query(({ ctx }) =>
@@ -306,6 +313,45 @@ export const productsRouter = router({
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
+        logger: ctx.logger,
+      }),
+    ),
+
+  startDescriptionGenerationJob: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "products-descriptions-job-start" }))
+    .input(startProductDescriptionGenerationJobInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (input.storeId) {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      }
+      return startProductDescriptionGenerationJob({
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        requestId: ctx.requestId,
+        source: input.source,
+        storeId: input.storeId,
+        productIds: input.productIds,
+        locale: input.locale,
+        overwriteExisting: input.overwriteExisting,
+        logger: ctx.logger,
+      });
+    }),
+
+  descriptionGenerationJob: protectedProcedure
+    .input(productDescriptionGenerationJobInputSchema)
+    .query(({ ctx, input }) =>
+      getProductDescriptionGenerationJob(ctx.user.organizationId, input.jobId),
+    ),
+
+  retryDescriptionGenerationJobFailed: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "products-descriptions-job-retry" }))
+    .input(productDescriptionGenerationJobInputSchema)
+    .mutation(({ ctx, input }) =>
+      retryFailedProductDescriptionGenerationItems({
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        requestId: ctx.requestId,
+        jobId: input.jobId,
         logger: ctx.logger,
       }),
     ),

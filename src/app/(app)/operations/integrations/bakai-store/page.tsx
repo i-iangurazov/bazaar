@@ -12,14 +12,19 @@ import {
 } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
+import {
+  isDescriptionGenerationJobRunning,
+  ProductDescriptionGenerationProgress,
+} from "@/components/product-description-generation-progress";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormActions, FormGrid } from "@/components/form-layout";
-import { IntegrationsIcon } from "@/components/icons";
+import { IntegrationsIcon, SparklesIcon } from "@/components/icons";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -29,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import {
   Table,
   TableBody,
@@ -39,6 +45,8 @@ import {
 } from "@/components/ui/table";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { isAiFeaturesEnabled } from "@/lib/featureFlags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -83,6 +91,7 @@ const ISSUE_CODES = [
 type IssueCode = (typeof ISSUE_CODES)[number];
 
 const NONE_STORE_VALUE = "__none__";
+const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
 
 const formatFileSize = (value?: number | null) => {
   if (!value || value <= 0) {
@@ -160,9 +169,11 @@ const BakaiStorePage = () => {
   const t = useTranslations("bakaiStoreSettings");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tProducts = useTranslations("products");
   const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
   const templateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -209,6 +220,7 @@ const BakaiStorePage = () => {
   const [productsPageSize, setProductsPageSize] = useState(10);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [selectingAllProducts, setSelectingAllProducts] = useState(false);
+  const [descriptionGenerationJobId, setDescriptionGenerationJobId] = useState<string | null>(null);
   const [filterSku, setFilterSku] = useState("");
   const [filterIssue, setFilterIssue] = useState<string>("ALL");
   const [preflightFresh, setPreflightFresh] = useState(false);
@@ -304,6 +316,39 @@ const BakaiStorePage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+
+  const startDescriptionGenerationJobMutation =
+    trpc.bakaiStore.startDescriptionGenerationJob.useMutation({
+      onSuccess: (job) => {
+        setDescriptionGenerationJobId(job.id);
+      },
+      onError: (error) => {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      },
+    });
+  const retryDescriptionGenerationJobMutation =
+    trpc.products.retryDescriptionGenerationJobFailed.useMutation({
+      onSuccess: async (job) => {
+        setDescriptionGenerationJobId(job.id);
+        await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
+      },
+      onError: (error) => {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      },
+    });
+  const descriptionGenerationJobQuery = trpc.products.descriptionGenerationJob.useQuery(
+    { jobId: descriptionGenerationJobId ?? "" },
+    {
+      enabled: Boolean(descriptionGenerationJobId),
+      refetchInterval: (job) =>
+        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      onSuccess: async (job) => {
+        if (!isDescriptionGenerationJobRunning(job.status)) {
+          await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
+        }
+      },
+    },
+  );
 
   const exportMutation = trpc.bakaiStore.exportNow.useMutation({
     onSuccess: async () => {
@@ -559,6 +604,62 @@ const BakaiStorePage = () => {
     });
   };
 
+  const startDescriptionGenerationForIds = async (targetIds: string[]) => {
+    if (!canEdit || descriptionGenerationRunning) {
+      return;
+    }
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
+    if (!targetIds.length) {
+      toast({ variant: "info", description: t("productsSelection.empty") });
+      return;
+    }
+    if (
+      !(await confirm({
+        description: tProducts("confirmBulkGenerateDescriptions", {
+          count: targetIds.length,
+        }),
+      }))
+    ) {
+      return;
+    }
+    startDescriptionGenerationJobMutation.mutate({
+      storeId: activeStoreId,
+      locale: normalizeLocale(locale) ?? defaultLocale,
+      productIds: targetIds,
+      overwriteExisting: false,
+    });
+  };
+
+  const handleGenerateDescriptionsForSelected = async () => {
+    await startDescriptionGenerationForIds(Array.from(selectedProductIds));
+  };
+
+  const handleGenerateDescriptionsForCurrentFilter = async () => {
+    if (!activeStoreId) {
+      toast({ variant: "error", description: t("storeScope.required") });
+      return;
+    }
+    setSelectingAllProducts(true);
+    try {
+      const ids = await trpcUtils.bakaiStore.listIds.fetch({
+        storeId: activeStoreId,
+        search: productSearch.trim() || undefined,
+        selection: productSelectionFilter,
+      });
+      await startDescriptionGenerationForIds(ids);
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
+    } finally {
+      setSelectingAllProducts(false);
+    }
+  };
+
   const activeBranchId = activeStoreId
     ? (
         branchMappingDraft[activeStoreId] ??
@@ -609,6 +710,10 @@ const BakaiStorePage = () => {
 
   const productItems = productsQuery.data?.items ?? [];
   const productSummary = productsQuery.data?.summary;
+  const descriptionGenerationJob = descriptionGenerationJobQuery.data;
+  const descriptionGenerationRunning =
+    startDescriptionGenerationJobMutation.isLoading ||
+    isDescriptionGenerationJobRunning(descriptionGenerationJob?.status);
   const allProductsSelectedOnPage =
     productItems.length > 0 && productItems.every((product) => selectedProductIds.has(product.id));
   const allProductResultsSelected =
@@ -1114,6 +1219,29 @@ const BakaiStorePage = () => {
 
           {!canEdit ? <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p> : null}
 
+          {canEdit && activeStoreId ? (
+            <FormActions className="justify-start">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleGenerateDescriptionsForCurrentFilter()}
+                disabled={
+                  aiFeaturesVisuallyDisabled ||
+                  descriptionGenerationRunning ||
+                  selectingAllProducts ||
+                  (productsQuery.data?.total ?? 0) <= 0
+                }
+              >
+                {selectingAllProducts || startDescriptionGenerationJobMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {tProducts("bulkGenerateDescriptions")} ({productsQuery.data?.total ?? 0})
+              </Button>
+            </FormActions>
+          ) : null}
+
           {canEdit && selectedProductIds.size > 0 ? (
             <SelectionToolbar
               count={selectedProductIds.size}
@@ -1138,6 +1266,25 @@ const BakaiStorePage = () => {
                     : tCommon("selectAllResults", { count: productsQuery.data.total })}
                 </Button>
               ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => void handleGenerateDescriptionsForSelected()}
+                disabled={
+                  aiFeaturesVisuallyDisabled ||
+                  descriptionGenerationRunning ||
+                  startDescriptionGenerationJobMutation.isLoading
+                }
+              >
+                {startDescriptionGenerationJobMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {tProducts("bulkGenerateDescriptions")}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -1731,6 +1878,45 @@ const BakaiStorePage = () => {
           )}
         </CardContent>
       </Card>
+
+      <Modal
+        open={Boolean(descriptionGenerationJobId)}
+        onOpenChange={(open) => {
+          if (!open && !descriptionGenerationRunning) {
+            setDescriptionGenerationJobId(null);
+          }
+        }}
+        title={tProducts("bulkGenerateDescriptionsProgressTitle")}
+        subtitle={
+          descriptionGenerationJob
+            ? isDescriptionGenerationJobRunning(descriptionGenerationJob.status)
+              ? tProducts("bulkGenerateDescriptionsProgressRunning")
+              : descriptionGenerationJob.failedCount > 0
+                ? tProducts("bulkGenerateDescriptionsProgressPartial")
+                : tProducts("bulkGenerateDescriptionsProgressDone")
+            : undefined
+        }
+      >
+        {descriptionGenerationJob ? (
+          <ProductDescriptionGenerationProgress
+            job={descriptionGenerationJob}
+            retryDisabled={retryDescriptionGenerationJobMutation.isLoading}
+            onRetryFailed={() =>
+              retryDescriptionGenerationJobMutation.mutate({
+                jobId: descriptionGenerationJob.id,
+              })
+            }
+            onClose={() => setDescriptionGenerationJobId(null)}
+          />
+        ) : descriptionGenerationJobQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
+          </div>
+        ) : null}
+      </Modal>
+
+      {confirmDialog}
     </div>
   );
 };

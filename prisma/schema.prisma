@@ -288,6 +288,30 @@ enum ProductImageStudioJobStatus {
   FAILED
 }
 
+enum ProductDescriptionGenerationSource {
+  PRODUCTS_PAGE
+  M_MARKET
+  BAKAI_STORE
+}
+
+enum ProductDescriptionGenerationJobStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  DONE_WITH_ERRORS
+  FAILED
+  CANCELLED
+}
+
+enum ProductDescriptionGenerationItemStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
 enum ProductImageStudioBackground {
   WHITE
   LIGHT_GRAY
@@ -432,6 +456,8 @@ model Organization {
   bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
   bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
   productImageStudioJobs      ProductImageStudioJob[]
+  productDescriptionJobs      ProductDescriptionGenerationJob[]
+  productDescriptionJobItems  ProductDescriptionGenerationJobItem[]
   productCosts                ProductCost[]
   productBundleComponents     ProductBundleComponent[]
   stockLots                   StockLot[]
@@ -530,6 +556,7 @@ model User {
   bazaarApiKeysCreated          BazaarApiKey[]            @relation("bazaarApiKeyCreatedBy")
   mMarketExportJobsRequested    MMarketExportJob[]        @relation("mMarketExportRequestedBy")
   productImageStudioJobsCreated ProductImageStudioJob[]   @relation("productImageStudioRequestedBy")
+  productDescriptionJobsCreated ProductDescriptionGenerationJob[] @relation("productDescriptionGenerationRequestedBy")
   markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
   ettnReferencesCreated         EttnReference[]           @relation("ettnReferenceCreatedBy")
   esfReferencesCreated          EsfReference[]            @relation("esfReferenceCreatedBy")
@@ -629,6 +656,7 @@ model Store {
   bakaiStoreExportJobs        BakaiStoreExportJob[]
   bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
   bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
+  productDescriptionJobs      ProductDescriptionGenerationJob[]
   featureFlags                StoreFeatureFlag[]
   complianceProfile           StoreComplianceProfile?
   exportJobs                  ExportJob[]
@@ -1174,6 +1202,7 @@ model Product {
   bakaiStoreInclusions   BakaiStoreIncludedProduct[]
   bakaiStoreSyncStates   BakaiStoreProductSyncState[]
   productImageStudioJobs ProductImageStudioJob[]
+  descriptionJobItems    ProductDescriptionGenerationJobItem[]
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]
   customerOrderLines     CustomerOrderLine[]
   saleReturnLines        SaleReturnLine[]
@@ -1263,6 +1292,62 @@ model ProductImageStudioJob {
   @@index([organizationId, status, createdAt])
   @@index([productId, createdAt])
   @@index([createdById, createdAt])
+}
+
+model ProductDescriptionGenerationJob {
+  id                String                                @id @default(cuid())
+  organizationId    String
+  storeId           String?
+  createdById       String
+  source            ProductDescriptionGenerationSource
+  status            ProductDescriptionGenerationJobStatus @default(QUEUED)
+  locale            String?
+  overwriteExisting Boolean                               @default(false)
+  totalCount        Int                                   @default(0)
+  processedCount    Int                                   @default(0)
+  successCount      Int                                   @default(0)
+  failedCount       Int                                   @default(0)
+  skippedCount      Int                                   @default(0)
+  errorMessage      String?                               @db.Text
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime                              @default(now())
+  updatedAt         DateTime                              @updatedAt
+
+  organization Organization                          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?                                @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  createdBy    User                                  @relation("productDescriptionGenerationRequestedBy", fields: [createdById], references: [id])
+  items        ProductDescriptionGenerationJobItem[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, storeId, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model ProductDescriptionGenerationJobItem {
+  id                   String                                 @id @default(cuid())
+  organizationId       String
+  jobId                String
+  productId            String
+  status               ProductDescriptionGenerationItemStatus @default(PENDING)
+  errorMessage         String?                                @db.Text
+  generatedDescription String?                                @db.Text
+  previousDescription  String?                                @db.Text
+  imageCount           Int                                    @default(0)
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime                               @default(now())
+  updatedAt            DateTime                               @updatedAt
+
+  organization Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job          ProductDescriptionGenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  product      Product                         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, productId])
+  @@index([organizationId, jobId, status])
+  @@index([organizationId, productId, createdAt])
+  @@index([jobId, status, createdAt])
 }
 
 model ProductBarcode {

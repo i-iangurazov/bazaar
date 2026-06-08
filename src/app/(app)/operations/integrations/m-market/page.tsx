@@ -8,6 +8,10 @@ import { useSession } from "next-auth/react";
 import { MMarketEnvironment, MMarketExportJobStatus } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
+import {
+  isDescriptionGenerationJobRunning,
+  ProductDescriptionGenerationProgress,
+} from "@/components/product-description-generation-progress";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +147,7 @@ const MMarketSettingsPage = () => {
   const canEdit = role === "ADMIN" || role === "MANAGER";
   const [bulkProgress, setBulkProgress] = useState<MMarketBulkProgressState | null>(null);
   const [bulkElapsedSeconds, setBulkElapsedSeconds] = useState(0);
+  const [descriptionGenerationJobId, setDescriptionGenerationJobId] = useState<string | null>(null);
   const [activeStoreId, setActiveStoreId] = useState("");
 
   const settingsQuery = trpc.mMarket.settings.useQuery(undefined, { enabled: canView });
@@ -257,7 +262,38 @@ const MMarketSettingsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const bulkGenerateDescriptionsMutation = trpc.mMarket.bulkGenerateDescriptions.useMutation();
+  const startDescriptionGenerationJobMutation =
+    trpc.mMarket.startDescriptionGenerationJob.useMutation({
+      onSuccess: (job) => {
+        setDescriptionGenerationJobId(job.id);
+      },
+      onError: (error) => {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      },
+    });
+  const retryDescriptionGenerationJobMutation =
+    trpc.products.retryDescriptionGenerationJobFailed.useMutation({
+      onSuccess: async (job) => {
+        setDescriptionGenerationJobId(job.id);
+        await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
+      },
+      onError: (error) => {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      },
+    });
+  const descriptionGenerationJobQuery = trpc.products.descriptionGenerationJob.useQuery(
+    { jobId: descriptionGenerationJobId ?? "" },
+    {
+      enabled: Boolean(descriptionGenerationJobId),
+      refetchInterval: (job) =>
+        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      onSuccess: async (job) => {
+        if (!isDescriptionGenerationJobRunning(job.status)) {
+          await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
+        }
+      },
+    },
+  );
   const bulkAutofillSpecsMutation = trpc.mMarket.bulkAutofillSpecs.useMutation();
   const bulkCreateBaseTemplatesMutation = trpc.mMarket.bulkCreateBaseTemplates.useMutation({
     onSuccess: async (result) => {
@@ -453,7 +489,12 @@ const MMarketSettingsPage = () => {
   };
 
   const handleGenerateShortDescriptions = async () => {
-    if (!canEdit || !activeStoreId || shortDescriptionTargetIds.length <= 0 || bulkProgressRunning) {
+    if (
+      !canEdit ||
+      !activeStoreId ||
+      shortDescriptionTargetIds.length <= 0 ||
+      descriptionGenerationRunning
+    ) {
       return;
     }
     if (
@@ -465,157 +506,12 @@ const MMarketSettingsPage = () => {
     ) {
       return;
     }
-    const batches = Array.from(
-      { length: Math.ceil(shortDescriptionTargetIds.length / mMarketBulkProgressBatchSize) },
-      (_value, index) =>
-        shortDescriptionTargetIds.slice(
-          index * mMarketBulkProgressBatchSize,
-          (index + 1) * mMarketBulkProgressBatchSize,
-        ),
-    ).filter((batch) => batch.length > 0);
-    const summary = {
-      processedCount: 0,
-      updatedCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      deferredCount: 0,
-    };
-
-    setBulkProgress({
-      kind: "descriptions",
-      status: "running",
-      totalCount: shortDescriptionTargetIds.length,
-      processedCount: 0,
-      updatedCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      deferredCount: 0,
-      filledCount: 0,
-      batchIndex: 0,
-      batchCount: batches.length,
-      startedAt: Date.now(),
-      errorMessage: null,
+    startDescriptionGenerationJobMutation.mutate({
+      storeId: activeStoreId,
+      locale: normalizeLocale(locale) ?? defaultLocale,
+      productIds: shortDescriptionTargetIds,
+      overwriteExisting: false,
     });
-
-    try {
-      for (const [batchIndex, batch] of batches.entries()) {
-        setBulkProgress((current) =>
-          current
-            ? {
-                ...current,
-                batchIndex: batchIndex + 1,
-              }
-            : current,
-        );
-
-        const result = await bulkGenerateDescriptionsMutation.mutateAsync({
-          storeId: activeStoreId,
-          locale: normalizeLocale(locale) ?? defaultLocale,
-          productIds: batch,
-        });
-        const handledInBatch = result.updatedCount + result.skippedCount + result.failedCount;
-        const remainingAfterBatch = Math.max(
-          0,
-          shortDescriptionTargetIds.length - (batchIndex + 1) * mMarketBulkProgressBatchSize,
-        );
-
-        summary.processedCount += handledInBatch;
-        summary.updatedCount += result.updatedCount;
-        summary.skippedCount += result.skippedCount;
-        summary.failedCount += result.failedCount;
-
-        if (result.rateLimited) {
-          summary.deferredCount += result.deferredCount + remainingAfterBatch;
-          setBulkProgress((current) =>
-            current
-              ? {
-                  ...current,
-                  status: "rateLimited",
-                  processedCount: summary.processedCount,
-                  updatedCount: summary.updatedCount,
-                  skippedCount: summary.skippedCount,
-                  failedCount: summary.failedCount,
-                  deferredCount: summary.deferredCount,
-                  batchIndex: batchIndex + 1,
-                }
-              : current,
-          );
-          await preflightQuery.refetch();
-          toast({
-            variant: "info",
-            description: tProducts("bulkGenerateDescriptionsRateLimited", {
-              updated: summary.updatedCount,
-              skipped: summary.skippedCount,
-              failed: summary.failedCount,
-              deferred: summary.deferredCount,
-            }),
-          });
-          return;
-        }
-
-        setBulkProgress((current) =>
-          current
-            ? {
-                ...current,
-                processedCount: summary.processedCount,
-                updatedCount: summary.updatedCount,
-                skippedCount: summary.skippedCount,
-                failedCount: summary.failedCount,
-                deferredCount: 0,
-                batchIndex: batchIndex + 1,
-              }
-            : current,
-        );
-      }
-
-      setBulkProgress((current) =>
-        current
-          ? {
-              ...current,
-              status: "done",
-              processedCount: summary.processedCount,
-              updatedCount: summary.updatedCount,
-              skippedCount: summary.skippedCount,
-              failedCount: summary.failedCount,
-              deferredCount: 0,
-              batchIndex: batches.length,
-            }
-          : current,
-      );
-      await preflightQuery.refetch();
-      if (summary.processedCount === 0) {
-        toast({ variant: "info", description: t("preflight.generateDescriptionsNothingToDo") });
-        return;
-      }
-      toast({
-        variant: summary.failedCount > 0 ? "info" : "success",
-        description:
-          summary.failedCount > 0
-            ? tProducts("bulkGenerateDescriptionsPartial", {
-                updated: summary.updatedCount,
-                skipped: summary.skippedCount,
-                failed: summary.failedCount,
-              })
-            : tProducts("bulkGenerateDescriptionsSuccess", {
-                updated: summary.updatedCount,
-                skipped: summary.skippedCount,
-              }),
-      });
-    } catch (error) {
-      await preflightQuery.refetch();
-      const errorMessage = translateError(tErrors, error as Parameters<typeof translateError>[1]);
-      setBulkProgress((current) =>
-        current
-          ? {
-              ...current,
-              status: "error",
-              deferredCount: Math.max(0, current.totalCount - current.processedCount),
-              errorMessage,
-            }
-          : current,
-      );
-      toast({ variant: "error", description: errorMessage });
-    }
   };
 
   const handleAutofillSpecs = async () => {
@@ -1024,6 +920,10 @@ const MMarketSettingsPage = () => {
     ? Math.round((bulkProgress.processedCount / Math.max(1, bulkProgress.totalCount)) * 100)
     : 0;
   const bulkProgressRunning = bulkProgress?.status === "running";
+  const descriptionGenerationJob = descriptionGenerationJobQuery.data;
+  const descriptionGenerationRunning =
+    startDescriptionGenerationJobMutation.isLoading ||
+    isDescriptionGenerationJobRunning(descriptionGenerationJob?.status);
   const bulkProgressTitle = bulkProgress
     ? bulkProgress.kind === "specs"
       ? t("preflight.autofillSpecsProgressTitle")
@@ -1790,11 +1690,11 @@ const MMarketSettingsPage = () => {
                         onClick={() => void handleGenerateShortDescriptions()}
                         disabled={
                           aiFeaturesVisuallyDisabled ||
-                          bulkProgressRunning ||
-                          bulkGenerateDescriptionsMutation.isLoading
+                          descriptionGenerationRunning ||
+                          startDescriptionGenerationJobMutation.isLoading
                         }
                       >
-                        {bulkGenerateDescriptionsMutation.isLoading ? (
+                        {startDescriptionGenerationJobMutation.isLoading ? (
                           <Spinner className="h-4 w-4" />
                         ) : (
                           <SparklesIcon className="h-4 w-4" aria-hidden />
@@ -2115,6 +2015,43 @@ const MMarketSettingsPage = () => {
                 </Button>
               </FormActions>
             ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(descriptionGenerationJobId)}
+        onOpenChange={(open) => {
+          if (!open && !descriptionGenerationRunning) {
+            setDescriptionGenerationJobId(null);
+          }
+        }}
+        title={tProducts("bulkGenerateDescriptionsProgressTitle")}
+        subtitle={
+          descriptionGenerationJob
+            ? isDescriptionGenerationJobRunning(descriptionGenerationJob.status)
+              ? tProducts("bulkGenerateDescriptionsProgressRunning")
+              : descriptionGenerationJob.failedCount > 0
+                ? tProducts("bulkGenerateDescriptionsProgressPartial")
+                : tProducts("bulkGenerateDescriptionsProgressDone")
+            : undefined
+        }
+      >
+        {descriptionGenerationJob ? (
+          <ProductDescriptionGenerationProgress
+            job={descriptionGenerationJob}
+            retryDisabled={retryDescriptionGenerationJobMutation.isLoading}
+            onRetryFailed={() =>
+              retryDescriptionGenerationJobMutation.mutate({
+                jobId: descriptionGenerationJob.id,
+              })
+            }
+            onClose={() => setDescriptionGenerationJobId(null)}
+          />
+        ) : descriptionGenerationJobQuery.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
           </div>
         ) : null}
       </Modal>

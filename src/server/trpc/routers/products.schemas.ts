@@ -1,3 +1,4 @@
+import { ProductDescriptionGenerationSource } from "@prisma/client";
 import { z } from "zod";
 
 import { locales } from "@/lib/locales";
@@ -286,6 +287,18 @@ export const bulkGenerateProductDescriptionsInputSchema = z.object({
   locale: productLocaleEnum.optional(),
 });
 
+export const startProductDescriptionGenerationJobInputSchema = z.object({
+  source: z.nativeEnum(ProductDescriptionGenerationSource),
+  storeId: z.string().min(1).optional(),
+  productIds: z.array(z.string().min(1)).min(1).max(5000),
+  locale: productLocaleEnum.optional(),
+  overwriteExisting: z.boolean().optional(),
+});
+
+export const productDescriptionGenerationJobInputSchema = z.object({
+  jobId: z.string().min(1),
+});
+
 export const bulkUpdateProductCategoryInputSchema = z.object({
   productIds: z.array(z.string()).min(1),
   category: z.string().optional().nullable(),
@@ -371,6 +384,9 @@ export type BulkGenerateProductBarcodesInput = z.infer<
 >;
 export type BulkGenerateProductDescriptionsInput = z.infer<
   typeof bulkGenerateProductDescriptionsInputSchema
+>;
+export type StartProductDescriptionGenerationJobInput = z.infer<
+  typeof startProductDescriptionGenerationJobInputSchema
 >;
 export type BulkUpdateProductCategoryInput = z.infer<typeof bulkUpdateProductCategoryInputSchema>;
 export type ArrangeClothingCategoriesInput = z.infer<typeof arrangeClothingCategoriesInputSchema>;
