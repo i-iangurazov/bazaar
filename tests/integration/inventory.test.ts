@@ -28,6 +28,30 @@ const assertSnapshotMatchesLedger = async (storeId: string, productId: string) =
   expect(snapshot?.onHand).toBe(total._sum.qtyDelta ?? 0);
 };
 
+const assignProductToStoreForTest = async ({
+  organizationId,
+  storeId,
+  productId,
+  assignedById,
+}: {
+  organizationId: string;
+  storeId: string;
+  productId: string;
+  assignedById?: string;
+}) => {
+  await prisma.storeProduct.upsert({
+    where: { storeId_productId: { storeId, productId } },
+    create: {
+      organizationId,
+      storeId,
+      productId,
+      assignedById,
+      isActive: true,
+    },
+    update: { isActive: true, assignedById },
+  });
+};
+
 describeDb("inventory service", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -544,6 +568,12 @@ describeDb("inventory service", () => {
         allowNegativeStock: false,
       },
     });
+    await assignProductToStoreForTest({
+      organizationId: org.id,
+      storeId: storeB.id,
+      productId: product.id,
+      assignedById: adminUser.id,
+    });
 
     await adjustStock({
       storeId: store.id,
@@ -629,6 +659,43 @@ describeDb("inventory service", () => {
     );
   });
 
+  it("rejects transfer when the product is not assigned to the destination store", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const storeB = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Backup Store",
+        code: "BCK",
+        allowNegativeStock: false,
+      },
+    });
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 12,
+      reason: "Seed",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-unassigned-seed",
+      idempotencyKey: "idem-transfer-unassigned-seed",
+    });
+
+    await expect(
+      transferStock({
+        fromStoreId: store.id,
+        toStoreId: storeB.id,
+        productId: product.id,
+        qty: 5,
+        note: "Move stock",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-transfer-unassigned",
+        idempotencyKey: "idem-transfer-unassigned",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "invalidTransferProducts" });
+  });
+
   it("rejects transfer quantity above available stock when negative stock is disabled", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const storeB = await prisma.store.create({
@@ -638,6 +705,12 @@ describeDb("inventory service", () => {
         code: "BCK",
         allowNegativeStock: false,
       },
+    });
+    await assignProductToStoreForTest({
+      organizationId: org.id,
+      storeId: storeB.id,
+      productId: product.id,
+      assignedById: adminUser.id,
     });
 
     await adjustStock({
@@ -686,6 +759,12 @@ describeDb("inventory service", () => {
         code: "BCK",
         allowNegativeStock: false,
       },
+    });
+    await assignProductToStoreForTest({
+      organizationId: org.id,
+      storeId: storeB.id,
+      productId: product.id,
+      assignedById: adminUser.id,
     });
 
     await adjustStock({

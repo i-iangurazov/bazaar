@@ -57,6 +57,14 @@ describeDb("tRPC contract smoke", () => {
         allowNegativeStock: false,
       },
     });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: storeB.id,
+        productId: product.id,
+        assignedById: adminUser.id,
+      },
+    });
 
     await caller.inventory.transfer({
       fromStoreId: store.id,

@@ -28,7 +28,10 @@ import {
 } from "@/server/services/productMovements";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
-import { assertUserCanAccessStore, productStoreAssignmentWhere } from "@/server/services/storeAccess";
+import {
+  assertUserCanAccessStore,
+  productStoreAssignmentWhere,
+} from "@/server/services/storeAccess";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventorySortKeySchema = z.enum([
@@ -185,11 +188,7 @@ const buildLowStockSnapshotSql = (
   `;
 };
 
-const fullSortInventoryKeys = new Set<InventorySortKey>([
-  "minStock",
-  "lowStock",
-  "suggestedOrder",
-]);
+const fullSortInventoryKeys = new Set<InventorySortKey>(["minStock", "lowStock", "suggestedOrder"]);
 
 const inventorySortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -779,9 +778,7 @@ export const inventoryRouter = router({
         })
         .optional(),
     )
-    .query(async ({ ctx, input }) =>
-      listProductMovementJournal(ctx.prisma, ctx.user, input ?? {}),
-    ),
+    .query(async ({ ctx, input }) => listProductMovementJournal(ctx.prisma, ctx.user, input ?? {})),
 
   productMovementDocument: protectedProcedure
     .input(z.object({ documentKey: z.string().min(1).max(300) }))
@@ -946,9 +943,23 @@ export const inventoryRouter = router({
       z.object({
         fromStoreId: z.string(),
         toStoreId: z.string(),
-        productId: z.string(),
-        variantId: z.string().optional(),
-        qty: z.number().int().positive(),
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              variantId: z.string().optional().nullable(),
+              qty: z.number().int().positive(),
+              unitId: z.string().optional().nullable(),
+              packId: z.string().optional().nullable(),
+              expiryDate: z.string().optional().nullable(),
+            }),
+          )
+          .min(1)
+          .max(500)
+          .optional(),
+        productId: z.string().optional(),
+        variantId: z.string().optional().nullable(),
+        qty: z.number().int().positive().optional(),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         note: z.string().optional(),
@@ -965,6 +976,14 @@ export const inventoryRouter = router({
         return await transferStock({
           fromStoreId: input.fromStoreId,
           toStoreId: input.toStoreId,
+          lines: input.lines?.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId,
+            qty: line.qty,
+            unitId: line.unitId,
+            packId: line.packId,
+            expiryDate: line.expiryDate ? new Date(line.expiryDate) : undefined,
+          })),
           productId: input.productId,
           variantId: input.variantId,
           qty: input.qty,

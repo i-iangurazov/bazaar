@@ -324,7 +324,7 @@ describeDb("store isolation", () => {
     ]);
     expect(preview.stockWillBeCopied).toBe(false);
     expect(preview.existingStockWillRemain).toBe(true);
-    expect(preview.customerSharingMode).toBe("STORE_SCOPED");
+    expect(preview.customerSharingMode).toBe("ORGANIZATION_WIDE");
 
     const applied = await caller.stores.applyAssortmentShare({
       sourceStoreId: store.id,
@@ -392,7 +392,7 @@ describeDb("store isolation", () => {
     expect(sharedGroup).toMatchObject({
       name: "Explicit Branch Assortment",
       isShared: true,
-      customerSharingMode: "STORE_SCOPED",
+      customerSharingMode: "ORGANIZATION_WIDE",
       productCount: preview.totalSharedProductCount,
       storeCount: 2,
     });

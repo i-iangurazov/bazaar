@@ -1613,6 +1613,24 @@ const InventoryPage = () => {
     }
   };
 
+  const buildTransferHref = useCallback(
+    (item?: InventoryRow) => {
+      const params = new URLSearchParams();
+      if (storeId) {
+        params.set("fromStoreId", storeId);
+      }
+      if (item) {
+        params.set("productId", item.product.id);
+        if (item.snapshot.variantId) {
+          params.set("variantId", item.snapshot.variantId);
+        }
+      }
+      const query = params.toString();
+      return query ? `/inventory/transfers?${query}` : "/inventory/transfers";
+    },
+    [storeId],
+  );
+
   const openActionDialog = useCallback(
     (type: "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
       if ((type === "adjust" || type === "transfer") && !canManageStock) {
@@ -1667,7 +1685,16 @@ const InventoryPage = () => {
       return;
     }
 
-    if (action === "adjust" || action === "transfer" || action === "minStock") {
+    if (action === "transfer") {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("action");
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      router.push(buildTransferHref());
+      return;
+    }
+
+    if (action === "adjust" || action === "minStock") {
       openActionDialog(action);
     }
 
@@ -1678,6 +1705,7 @@ const InventoryPage = () => {
   }, [
     canManage,
     canManageStock,
+    buildTransferHref,
     openActionDialog,
     pathname,
     router,
@@ -1712,7 +1740,7 @@ const InventoryPage = () => {
               key: "transfer",
               label: t("transferStock"),
               icon: TransferIcon,
-              onSelect: () => openActionDialog("transfer", item),
+              onSelect: () => router.push(buildTransferHref(item)),
             },
           ]
         : []),
@@ -2071,7 +2099,7 @@ const InventoryPage = () => {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={!storeId || !canManageStock}
-                      onSelect={() => openActionDialog("transfer")}
+                      onSelect={() => router.push(buildTransferHref())}
                       data-tour="inventory-transfer"
                     >
                       <TransferIcon className="h-4 w-4" aria-hidden />
@@ -2207,7 +2235,7 @@ const InventoryPage = () => {
                 {canManageStock ? (
                   <DropdownMenuItem
                     disabled={!storeId}
-                    onSelect={() => openActionDialog("transfer")}
+                    onSelect={() => router.push(buildTransferHref())}
                   >
                     <TransferIcon className="h-4 w-4" aria-hidden />
                     {t("transferStock")}
@@ -2903,7 +2931,9 @@ const InventoryPage = () => {
                               </DropdownMenuItem>
                             ) : null}
                             {canManageStock ? (
-                              <DropdownMenuItem onSelect={() => openActionDialog("transfer", item)}>
+                              <DropdownMenuItem
+                                onSelect={() => router.push(buildTransferHref(item))}
+                              >
                                 <TransferIcon className="h-4 w-4" aria-hidden />
                                 {t("transferStock")}
                               </DropdownMenuItem>

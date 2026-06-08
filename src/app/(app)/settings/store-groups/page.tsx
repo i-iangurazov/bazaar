@@ -18,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -226,12 +225,15 @@ const StoreGroupsPage = () => {
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+          <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/30 p-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <Label>{t("customerSharing")}</Label>
-              <p className="text-sm text-muted-foreground">{t("customerSharingStoreScoped")}</p>
+              <p className="text-sm text-muted-foreground">{t("customerSharingOrganizationWide")}</p>
+              <p className="text-xs text-muted-foreground">{t("customerSharingOrganizationWideHint")}</p>
             </div>
-            <Switch checked={false} disabled aria-label={t("customerSharing")} />
+            <Badge variant="success" className="w-fit shrink-0">
+              {t("customersOrganizationWideBadge")}
+            </Badge>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -313,7 +315,7 @@ const StoreGroupsPage = () => {
                 <li>{t("confirmationNoStockCopy")}</li>
                 <li>{t("confirmationZeroStock")}</li>
                 <li>{t("confirmationNoDelete")}</li>
-                <li>{t("confirmationCustomerScoped")}</li>
+                <li>{t("confirmationCustomerOrganizationWide")}</li>
               </ul>
 
               <Button type="button" onClick={applyChanges} disabled={applyMutation.isLoading}>
@@ -356,7 +358,7 @@ const StoreGroupsPage = () => {
                   <Badge variant={group.isShared ? "success" : "muted"}>
                     {group.isShared ? t("sharedAssortment") : t("separateStore")}
                   </Badge>
-                  <Badge variant="muted">{t("customersStoreScopedBadge")}</Badge>
+                  <Badge variant="success">{t("customersOrganizationWideBadge")}</Badge>
                 </div>
               </div>
 

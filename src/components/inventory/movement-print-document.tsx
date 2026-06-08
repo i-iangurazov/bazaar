@@ -63,27 +63,15 @@ const getPrintableLines = (document: ProductMovementDocumentDetail) => {
 const formatMaybeMoney = (value: number | null | undefined, locale: string) =>
   typeof value === "number" ? formatCurrencyKGS(value, locale) : null;
 
-const renderSkuBarcode = (
-  sku: string | null,
-  barcode: string | null,
-  fallback: string,
-) => {
+const renderSkuBarcode = (sku: string | null, barcode: string | null, fallback: string) => {
   if (!sku && !barcode) {
     return fallback;
   }
 
-  return (
-    <span>
-      {[sku, barcode].filter(Boolean).join(" · ")}
-    </span>
-  );
+  return <span>{[sku, barcode].filter(Boolean).join(" · ")}</span>;
 };
 
-export const MovementPrintDocument = ({
-  document,
-  labels,
-  locale,
-}: MovementPrintDocumentProps) => {
+export const MovementPrintDocument = ({ document, labels, locale }: MovementPrintDocumentProps) => {
   const lines = getPrintableLines(document);
   const hasLineAmount = lines.some((line) => typeof line.lineTotalKgs === "number");
   const totalAmount = hasLineAmount
@@ -105,30 +93,30 @@ export const MovementPrintDocument = ({
           width: 210mm;
           max-width: calc(100vw - 24px);
           margin: 12px auto;
-          padding: 9mm;
+          padding: 7mm;
           color: #111827;
           background: #ffffff;
           box-shadow: 0 12px 34px rgba(15, 23, 42, 0.14);
           font-family: Arial, Helvetica, sans-serif;
-          font-size: 9px;
-          line-height: 1.16;
+          font-size: 8px;
+          line-height: 1.1;
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
         }
 
         .movement-print-header {
           display: grid;
-          grid-template-columns: 1fr 46mm;
-          gap: 5mm;
+          grid-template-columns: 1fr 42mm;
+          gap: 4mm;
           align-items: start;
-          padding-bottom: 2mm;
+          padding-bottom: 1.4mm;
           border-bottom: 1.5px solid #111827;
         }
 
         .movement-print-company {
-          margin: 0 0 1.4mm;
+          margin: 0 0 0.9mm;
           color: #334155;
-          font-size: 8px;
+          font-size: 6.8px;
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.03em;
@@ -136,22 +124,22 @@ export const MovementPrintDocument = ({
 
         .movement-print-title {
           margin: 0;
-          font-size: 14px;
-          line-height: 1.15;
+          font-size: 12px;
+          line-height: 1.1;
           font-weight: 700;
         }
 
         .movement-print-number {
-          margin: 1mm 0 0;
+          margin: 0.6mm 0 0;
           color: #334155;
-          font-size: 9px;
+          font-size: 7.6px;
           font-weight: 700;
         }
 
         .movement-print-technical-reference {
-          margin: 0.5mm 0 0;
+          margin: 0.3mm 0 0;
           color: #64748b;
-          font-size: 7px;
+          font-size: 6px;
         }
 
         .movement-print-stamp {
@@ -161,7 +149,7 @@ export const MovementPrintDocument = ({
         .movement-print-stamp-row {
           display: grid;
           grid-template-columns: 15mm 1fr;
-          min-height: 4.6mm;
+          min-height: 3.6mm;
           border-bottom: 1px solid #111827;
         }
 
@@ -177,7 +165,7 @@ export const MovementPrintDocument = ({
         .movement-print-stamp-label {
           border-right: 1px solid #111827;
           color: #475569;
-          font-size: 6.8px;
+          font-size: 6px;
           font-weight: 700;
           text-transform: uppercase;
         }
@@ -190,8 +178,8 @@ export const MovementPrintDocument = ({
         .movement-print-meta {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 1mm 5mm;
-          margin-top: 2mm;
+          gap: 0.7mm 4mm;
+          margin-top: 1.4mm;
         }
 
         .movement-print-meta dt,
@@ -201,9 +189,9 @@ export const MovementPrintDocument = ({
 
         .movement-print-meta-item {
           display: grid;
-          grid-template-columns: 25mm 1fr;
+          grid-template-columns: 22mm 1fr;
           gap: 1.5mm;
-          min-height: 3.4mm;
+          min-height: 2.7mm;
         }
 
         .movement-print-meta-label {
@@ -217,23 +205,23 @@ export const MovementPrintDocument = ({
 
         .movement-print-table {
           width: 100%;
-          margin-top: 2.5mm;
+          margin-top: 1.6mm;
           border-collapse: collapse;
           table-layout: fixed;
-          font-size: 7.4px;
-          line-height: 1.08;
+          font-size: 6.5px;
+          line-height: 1.03;
         }
 
         .movement-print-table th,
         .movement-print-table td {
           border: 1px solid #111827;
-          padding: 0.45mm 0.65mm;
+          padding: 0.25mm 0.45mm;
           vertical-align: top;
         }
 
         .movement-print-table th {
           background: #f1f5f9;
-          font-size: 6.4px;
+          font-size: 5.6px;
           font-weight: 700;
           text-align: left;
           text-transform: uppercase;
@@ -245,20 +233,22 @@ export const MovementPrintDocument = ({
         }
 
         .movement-print-sku {
-          width: 36mm;
+          width: 31mm;
         }
 
         .movement-print-unit {
-          width: 9mm;
+          width: 8mm;
         }
 
         .movement-print-qty {
-          width: 12mm;
+          width: 11mm;
           text-align: right;
         }
 
         .movement-print-money {
-          width: 19mm;
+          width: 22mm;
+          font-size: 5.7px;
+          white-space: nowrap;
           text-align: right;
         }
 
@@ -268,34 +258,34 @@ export const MovementPrintDocument = ({
 
         .movement-print-missing {
           color: #64748b;
-          font-size: 6.5px;
+          font-size: 5.8px;
           white-space: nowrap;
         }
 
         .movement-print-muted {
           color: #64748b;
-          font-size: 6.8px;
+          font-size: 5.8px;
         }
 
         .movement-print-totals {
           display: flex;
           justify-content: flex-end;
-          margin-top: 2mm;
+          margin-top: 1.3mm;
         }
 
         .movement-print-total-box {
-          width: 44mm;
+          width: 40mm;
           border: 1px solid #111827;
           border-bottom: 0;
-          font-size: 8px;
+          font-size: 6.8px;
         }
 
         .movement-print-total-row {
           display: flex;
           justify-content: space-between;
-          gap: 4mm;
+          gap: 3mm;
           border-bottom: 1px solid #111827;
-          padding: 0.6mm 1mm;
+          padding: 0.35mm 0.8mm;
         }
 
         .movement-print-total-row strong {
@@ -305,8 +295,8 @@ export const MovementPrintDocument = ({
         .movement-print-signatures {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 2mm 6mm;
-          margin-top: 3mm;
+          gap: 1.3mm 5mm;
+          margin-top: 1.8mm;
           page-break-inside: avoid;
           break-inside: avoid;
         }
@@ -314,24 +304,24 @@ export const MovementPrintDocument = ({
         .movement-print-signature-row {
           display: grid;
           grid-template-columns: max-content 1fr;
-          gap: 2mm;
+          gap: 1.5mm;
           align-items: end;
-          min-height: 5mm;
-          font-size: 8px;
+          min-height: 3.9mm;
+          font-size: 6.8px;
         }
 
         .movement-print-signature-line {
           border-bottom: 1px solid #111827;
-          min-height: 3.6mm;
+          min-height: 2.8mm;
         }
 
         .movement-print-signature-date {
           display: grid;
           grid-template-columns: max-content 1fr;
-          gap: 2mm;
+          gap: 1.5mm;
           align-items: end;
-          min-height: 5mm;
-          font-size: 8px;
+          min-height: 3.9mm;
+          font-size: 6.8px;
         }
 
         @media print {
@@ -367,7 +357,7 @@ export const MovementPrintDocument = ({
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
-            font-size: 8px !important;
+            font-size: 7px !important;
           }
 
           .movement-print-table {
@@ -389,8 +379,8 @@ export const MovementPrintDocument = ({
 
           .movement-print-table th,
           .movement-print-table td {
-            padding-top: 0.35mm;
-            padding-bottom: 0.35mm;
+            padding-top: 0.18mm;
+            padding-bottom: 0.18mm;
           }
 
           .movement-print-meta,

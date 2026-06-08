@@ -149,7 +149,7 @@ export const listStoreAssortmentOverview = async (input: { organizationId: strin
         id: group.id,
         name: group.name,
         isShared: group.stores.length > 1,
-        customerSharingMode: "STORE_SCOPED" as const,
+        customerSharingMode: "ORGANIZATION_WIDE" as const,
         productCount: group.productIds.size,
         storeCount: group.stores.length,
         stores: group.stores.sort((left, right) => left.name.localeCompare(right.name)),
@@ -162,7 +162,7 @@ export const listStoreAssortmentOverview = async (input: { organizationId: strin
       });
 
     return {
-      customerSharingMode: "STORE_SCOPED" as const,
+      customerSharingMode: "ORGANIZATION_WIDE" as const,
       stores,
       groups,
     };
@@ -349,7 +349,7 @@ const buildStoreAssortmentPreview = async (
     stockWillBeCopied: false,
     existingStockWillRemain: true,
     destructiveActions: [] as string[],
-    customerSharingMode: "STORE_SCOPED" as const,
+    customerSharingMode: "ORGANIZATION_WIDE" as const,
   };
 };
 
@@ -419,7 +419,7 @@ export const applyStoreAssortmentShare = async (input: {
         syncSummary,
         stockWillBeCopied: false,
         existingStockWillRemain: true,
-        customerSharingMode: "STORE_SCOPED",
+        customerSharingMode: "ORGANIZATION_WIDE",
       }),
       requestId: input.requestId,
     });

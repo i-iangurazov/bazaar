@@ -852,12 +852,22 @@ export const postStockReceiving = async (
   return result;
 };
 
-export type TransferStockInput = {
-  fromStoreId: string;
-  toStoreId: string;
+export type TransferStockLineInput = {
   productId: string;
   variantId?: string | null;
   qty: number;
+  unitId?: string | null;
+  packId?: string | null;
+  expiryDate?: Date | null;
+};
+
+export type TransferStockInput = {
+  fromStoreId: string;
+  toStoreId: string;
+  lines?: TransferStockLineInput[];
+  productId?: string;
+  variantId?: string | null;
+  qty?: number;
   unitId?: string | null;
   packId?: string | null;
   note?: string | null;
@@ -873,10 +883,50 @@ export const transferStock = async (input: TransferStockInput) => {
   if (input.fromStoreId === input.toStoreId) {
     throw new AppError("transferSameStore", "BAD_REQUEST", 400);
   }
-  if (input.qty <= 0) {
+  const inputLines = input.lines?.length
+    ? input.lines
+    : input.productId && typeof input.qty === "number"
+      ? [
+          {
+            productId: input.productId,
+            variantId: input.variantId,
+            qty: input.qty,
+            unitId: input.unitId,
+            packId: input.packId,
+            expiryDate: input.expiryDate,
+          },
+        ]
+      : [];
+  if (!inputLines.length) {
     throw new AppError("invalidTransferQty", "BAD_REQUEST", 400);
   }
+  const normalizedInputLines = inputLines.map((line) => ({
+    productId: line.productId,
+    variantId: line.variantId ?? null,
+    variantKey: resolveVariantKey(line.variantId),
+    qty: line.qty,
+    unitId: line.unitId ?? null,
+    packId: line.packId ?? null,
+    expiryDate: line.expiryDate ?? null,
+  }));
+  const lineKeys = new Set<string>();
+  for (const line of normalizedInputLines) {
+    const key = `${line.productId}:${line.variantKey}`;
+    if (lineKeys.has(key)) {
+      throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+    }
+    lineKeys.add(key);
+    if (!Number.isInteger(line.qty) || line.qty <= 0) {
+      throw new AppError("invalidTransferQty", "BAD_REQUEST", 400);
+    }
+  }
   const transferId = randomUUID();
+  const changedItems: Array<{
+    storeId: string;
+    productId: string;
+    variantId: string | null;
+    onHand: number;
+  }> = [];
   const result = await prisma.$transaction(async (tx) => {
     const { result: transfer } = await withIdempotency(
       tx,
@@ -886,129 +936,245 @@ export const transferStock = async (input: TransferStockInput) => {
         userId: input.actorId,
       },
       async () => {
-        const product = await tx.product.findUnique({
-          where: { id: input.productId },
-          select: { organizationId: true, isDeleted: true, baseUnitId: true },
-        });
-        if (!product || product.isDeleted) {
-          throw new AppError("productNotFound", "NOT_FOUND", 404);
-        }
-        if (product.organizationId !== input.organizationId) {
-          throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
-        }
-
-        const qty = await resolveBaseQuantity(tx, {
-          organizationId: input.organizationId,
-          productId: input.productId,
-          baseUnitId: product.baseUnitId,
-          qty: input.qty,
-          unitId: input.unitId,
-          packId: input.packId,
-          mode: "inventory",
-        });
-
-        const outBefore = await tx.inventorySnapshot.findUnique({
+        const productIds = Array.from(new Set(normalizedInputLines.map((line) => line.productId)));
+        const products = await tx.product.findMany({
           where: {
-            storeId_productId_variantKey: {
+            id: { in: productIds },
+            organizationId: input.organizationId,
+            isDeleted: false,
+            AND: [
+              {
+                storeProducts: {
+                  some: {
+                    storeId: input.fromStoreId,
+                    isActive: true,
+                  },
+                },
+              },
+              {
+                storeProducts: {
+                  some: {
+                    storeId: input.toStoreId,
+                    isActive: true,
+                  },
+                },
+              },
+            ],
+          },
+          select: { id: true, baseUnitId: true },
+        });
+        if (products.length !== productIds.length) {
+          throw new AppError("invalidTransferProducts", "FORBIDDEN", 403);
+        }
+        const productMap = new Map(products.map((product) => [product.id, product]));
+
+        const variantIds = Array.from(
+          new Set(normalizedInputLines.map((line) => line.variantId).filter(Boolean) as string[]),
+        );
+        if (variantIds.length) {
+          const variants = await tx.productVariant.findMany({
+            where: {
+              id: { in: variantIds },
+              isActive: true,
+              product: { organizationId: input.organizationId, isDeleted: false },
+            },
+            select: { id: true, productId: true },
+          });
+          const variantProductMap = new Map(
+            variants.map((variant) => [variant.id, variant.productId]),
+          );
+          for (const line of normalizedInputLines) {
+            if (line.variantId && variantProductMap.get(line.variantId) !== line.productId) {
+              throw new AppError("variantMismatch", "BAD_REQUEST", 400);
+            }
+          }
+          if (variants.length !== variantIds.length) {
+            throw new AppError("variantNotFound", "NOT_FOUND", 404);
+          }
+        }
+
+        const costs = await tx.productCost.findMany({
+          where: {
+            organizationId: input.organizationId,
+            productId: { in: productIds },
+          },
+          select: { productId: true, variantKey: true, avgCostKgs: true },
+        });
+        const costMap = new Map(
+          costs.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
+        );
+
+        const lineResults: Array<{
+          productId: string;
+          variantId: string | null;
+          quantity: number;
+          unitCost: number | null;
+          outSnapshotId: string;
+          inSnapshotId: string;
+          outOnHand: number;
+          inOnHand: number;
+          outMovementId: string;
+          inMovementId: string;
+        }> = [];
+
+        for (const [index, line] of normalizedInputLines.entries()) {
+          const product = productMap.get(line.productId);
+          if (!product) {
+            throw new AppError("productNotFound", "NOT_FOUND", 404);
+          }
+          const qty = await resolveBaseQuantity(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            baseUnitId: product.baseUnitId,
+            qty: line.qty,
+            unitId: line.unitId,
+            packId: line.packId,
+            mode: "inventory",
+          });
+          if (!Number.isInteger(qty) || qty <= 0) {
+            throw new AppError("invalidTransferQty", "BAD_REQUEST", 400);
+          }
+          const unitCost = costMap.get(`${line.productId}:${line.variantKey}`) ?? null;
+          const lineTotal = unitCost !== null ? unitCost * qty : null;
+
+          const outBefore = await tx.inventorySnapshot.findUnique({
+            where: {
+              storeId_productId_variantKey: {
+                storeId: input.fromStoreId,
+                productId: line.productId,
+                variantKey: line.variantKey,
+              },
+            },
+          });
+
+          const inBefore = await tx.inventorySnapshot.findUnique({
+            where: {
+              storeId_productId_variantKey: {
+                storeId: input.toStoreId,
+                productId: line.productId,
+                variantKey: line.variantKey,
+              },
+            },
+          });
+
+          const outMovement = await applyStockMovement(tx, {
+            storeId: input.fromStoreId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyDelta: -Math.abs(qty),
+            type: StockMovementType.TRANSFER_OUT,
+            referenceType: "TRANSFER",
+            referenceId: transferId,
+            linePosition: index + 1,
+            unitCostKgs: unitCost,
+            lineTotalKgs: lineTotal,
+            note: input.note ?? undefined,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+          });
+
+          const inMovement = await applyStockMovement(tx, {
+            storeId: input.toStoreId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyDelta: Math.abs(qty),
+            type: StockMovementType.TRANSFER_IN,
+            referenceType: "TRANSFER",
+            referenceId: transferId,
+            linePosition: index + 1,
+            note: input.note ?? undefined,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+          });
+
+          const outLot = await applyStockLotAdjustment(tx, {
+            storeId: input.fromStoreId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyDelta: -Math.abs(qty),
+            expiryDate: line.expiryDate ?? null,
+            organizationId: input.organizationId,
+          });
+          if (outLot) {
+            await tx.stockMovement.update({
+              where: { id: outMovement.movementId },
+              data: { stockLotId: outLot.id },
+            });
+          }
+          const inLot = await applyStockLotAdjustment(tx, {
+            storeId: input.toStoreId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyDelta: Math.abs(qty),
+            expiryDate: line.expiryDate ?? null,
+            organizationId: input.organizationId,
+          });
+          if (inLot) {
+            await tx.stockMovement.update({
+              where: { id: inMovement.movementId },
+              data: { stockLotId: inLot.id },
+            });
+          }
+
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "INVENTORY_TRANSFER_OUT",
+            entity: "InventorySnapshot",
+            entityId: outMovement.snapshot.id,
+            before: outBefore ? toJson(outBefore) : null,
+            after: toJson(outMovement.snapshot),
+            requestId: input.requestId,
+          });
+
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "INVENTORY_TRANSFER_IN",
+            entity: "InventorySnapshot",
+            entityId: inMovement.snapshot.id,
+            before: inBefore ? toJson(inBefore) : null,
+            after: toJson(inMovement.snapshot),
+            requestId: input.requestId,
+          });
+
+          changedItems.push(
+            {
               storeId: input.fromStoreId,
-              productId: input.productId,
-              variantKey: resolveVariantKey(input.variantId),
+              productId: line.productId,
+              variantId: line.variantId,
+              onHand: outMovement.snapshot.onHand,
             },
-          },
-        });
-
-        const inBefore = await tx.inventorySnapshot.findUnique({
-          where: {
-            storeId_productId_variantKey: {
+            {
               storeId: input.toStoreId,
-              productId: input.productId,
-              variantKey: resolveVariantKey(input.variantId),
+              productId: line.productId,
+              variantId: line.variantId,
+              onHand: inMovement.snapshot.onHand,
             },
-          },
-        });
-
-        const outMovement = await applyStockMovement(tx, {
-          storeId: input.fromStoreId,
-          productId: input.productId,
-          variantId: input.variantId,
-          qtyDelta: -Math.abs(qty),
-          type: StockMovementType.TRANSFER_OUT,
-          referenceType: "TRANSFER",
-          referenceId: transferId,
-          linePosition: 1,
-          note: input.note ?? undefined,
-          actorId: input.actorId,
-          organizationId: input.organizationId,
-        });
-
-        const inMovement = await applyStockMovement(tx, {
-          storeId: input.toStoreId,
-          productId: input.productId,
-          variantId: input.variantId,
-          qtyDelta: Math.abs(qty),
-          type: StockMovementType.TRANSFER_IN,
-          referenceType: "TRANSFER",
-          referenceId: transferId,
-          linePosition: 1,
-          note: input.note ?? undefined,
-          actorId: input.actorId,
-          organizationId: input.organizationId,
-        });
-
-        const outLot = await applyStockLotAdjustment(tx, {
-          storeId: input.fromStoreId,
-          productId: input.productId,
-          variantId: input.variantId,
-          qtyDelta: -Math.abs(qty),
-          expiryDate: input.expiryDate ?? null,
-          organizationId: input.organizationId,
-        });
-        if (outLot) {
-          await tx.stockMovement.update({
-            where: { id: outMovement.movementId },
-            data: { stockLotId: outLot.id },
+          );
+          lineResults.push({
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: qty,
+            unitCost,
+            outSnapshotId: outMovement.snapshot.id,
+            inSnapshotId: inMovement.snapshot.id,
+            outOnHand: outMovement.snapshot.onHand,
+            inOnHand: inMovement.snapshot.onHand,
+            outMovementId: outMovement.movementId,
+            inMovementId: inMovement.movementId,
           });
         }
-        const inLot = await applyStockLotAdjustment(tx, {
-          storeId: input.toStoreId,
-          productId: input.productId,
-          variantId: input.variantId,
-          qtyDelta: Math.abs(qty),
-          expiryDate: input.expiryDate ?? null,
-          organizationId: input.organizationId,
-        });
-        if (inLot) {
-          await tx.stockMovement.update({
-            where: { id: inMovement.movementId },
-            data: { stockLotId: inLot.id },
-          });
-        }
-
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "INVENTORY_TRANSFER_OUT",
-          entity: "InventorySnapshot",
-          entityId: outMovement.snapshot.id,
-          before: outBefore ? toJson(outBefore) : null,
-          after: toJson(outMovement.snapshot),
-          requestId: input.requestId,
-        });
-
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "INVENTORY_TRANSFER_IN",
-          entity: "InventorySnapshot",
-          entityId: inMovement.snapshot.id,
-          before: inBefore ? toJson(inBefore) : null,
-          after: toJson(inMovement.snapshot),
-          requestId: input.requestId,
-        });
 
         return {
-          outSnapshot: outMovement.snapshot,
-          inSnapshot: inMovement.snapshot,
+          transferId,
+          fromStoreId: input.fromStoreId,
+          toStoreId: input.toStoreId,
+          lineCount: lineResults.length,
+          totalQuantity: lineResults.reduce((sum, line) => sum + line.quantity, 0),
+          lines: lineResults,
+          outSnapshot: lineResults[0]?.outSnapshotId ?? null,
+          inSnapshot: lineResults[0]?.inSnapshotId ?? null,
         };
       },
     );
@@ -1016,40 +1182,34 @@ export const transferStock = async (input: TransferStockInput) => {
     return transfer;
   });
 
-  eventBus.publish({
-    type: "inventory.updated",
-    payload: {
-      storeId: input.fromStoreId,
-      productId: input.productId,
-      variantId: input.variantId ?? null,
-    },
+  changedItems.forEach((item) => {
+    eventBus.publish({
+      type: "inventory.updated",
+      payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
+    });
   });
-  eventBus.publish({
-    type: "inventory.updated",
-    payload: {
-      storeId: input.toStoreId,
-      productId: input.productId,
-      variantId: input.variantId ?? null,
-    },
-  });
+  await Promise.all(
+    changedItems
+      .filter((item) => item.storeId === input.fromStoreId)
+      .map((item) =>
+        maybeEmitLowStock({
+          storeId: item.storeId,
+          productId: item.productId,
+          variantId: item.variantId,
+          onHand: item.onHand,
+          requestId: input.requestId,
+        }),
+      ),
+  );
 
   logger.info(
     {
       fromStoreId: input.fromStoreId,
       toStoreId: input.toStoreId,
-      productId: input.productId,
-      qty: input.qty,
+      lineCount: inputLines.length,
     },
     "inventory transferred",
   );
-
-  await maybeEmitLowStock({
-    storeId: input.fromStoreId,
-    productId: input.productId,
-    variantId: input.variantId ?? null,
-    onHand: result.outSnapshot.onHand,
-    requestId: input.requestId,
-  });
 
   return result;
 };
