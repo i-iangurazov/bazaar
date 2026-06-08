@@ -99,6 +99,8 @@ const resolveProviderConfig = (): {
     : null;
 };
 
+export const isProductDescriptionGenerationConfigured = () => Boolean(resolveProviderConfig());
+
 const slowPhaseThresholdMs = 2_000;
 const isTestRuntime = process.env.NODE_ENV === "test";
 

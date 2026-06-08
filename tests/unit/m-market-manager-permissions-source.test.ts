@@ -19,13 +19,36 @@ describe("m-market manager product tools source", () => {
     expect(routerSource).not.toContain("adminProcedure");
 
     expect(pageSource).toContain('const canEdit = role === "ADMIN" || role === "MANAGER";');
-    expect(pageSource).toContain("shortDescriptionTargetIds.length <= 0 ||");
+    expect(pageSource).toContain("shortDescriptionTargetIds.length <= 0");
+    expect(pageSource).toContain("baseDescriptionGenerationDisabledReason");
     expect(pageSource).toContain("startDescriptionGenerationJobMutation.mutate({");
     expect(pageSource).toContain("const handleGenerateDescriptionsForSelected = async () =>");
     expect(pageSource).toContain("const handleGenerateDescriptionsForCurrentFilter = async () =>");
     expect(pageSource).toContain("trpcUtils.mMarket.listIds.fetch({");
     expect(pageSource).toContain("onClick={() => void handleGenerateDescriptionsForSelected()}");
     expect(pageSource).toContain("onClick={() => void handleGenerateDescriptionsForCurrentFilter()}");
+    expect(pageSource).toContain(
+      "const aiDescriptionGenerationFlagDisabled = !isAiDescriptionGenerationEnabled();",
+    );
+    expect(pageSource).toContain("trpc.products.descriptionGenerationAvailability.useQuery");
+    expect(pageSource).toContain("const currentFilterDescriptionDisabledReason =");
+    expect(pageSource).toContain("const selectedDescriptionDisabledReason =");
+    expect(pageSource).toContain("const shortDescriptionDisabledReason =");
+    expect(pageSource).toContain("disabled={Boolean(currentFilterDescriptionDisabledReason)}");
+    expect(pageSource).toContain("disabled={Boolean(selectedDescriptionDisabledReason)}");
+    expect(pageSource).toContain("disabled={Boolean(shortDescriptionDisabledReason)}");
+    expect(pageSource).not.toContain(
+      "aiFeaturesVisuallyDisabled ||\n                  descriptionGenerationRunning",
+    );
+    const shortDescriptionButtonStart = pageSource.indexOf(
+      "onClick={() => void handleGenerateShortDescriptions()}",
+    );
+    const shortDescriptionButtonEnd = pageSource.indexOf("</Button>", shortDescriptionButtonStart);
+    const shortDescriptionButtonSource = pageSource.slice(
+      shortDescriptionButtonStart,
+      shortDescriptionButtonEnd,
+    );
+    expect(shortDescriptionButtonSource).not.toContain('tProducts("aiUnavailableBadge")');
     expect(pageSource).toContain("!activeStoreId ||\n      actionableMissingSpecsTargetIds.length <= 0");
     expect(pageSource).toContain(
       "if (!canEdit || !activeStoreId || actionableMissingSpecsCount <= 0)",

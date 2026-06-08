@@ -3202,6 +3202,13 @@
     "aiDescriptionJobItemStatus": "Status",
     "aiDescriptionJobResult": "Error / description preview",
     "aiDescriptionRetryFailed": "Retry failed",
+    "aiDescriptionDisabledChecking": "Checking AI settings",
+    "aiDescriptionDisabledNoPermission": "No permission",
+    "aiDescriptionDisabledNoStore": "Select a store first",
+    "aiDescriptionDisabledNoStoreMapping": "Map the store first",
+    "aiDescriptionDisabledNotConfigured": "AI is not configured",
+    "aiDescriptionDisabledRunning": "Generation is already running",
+    "aiDescriptionDisabledNoProducts": "Select products",
     "aiDescriptionJobStatus": {
       "QUEUED": "Pending",
       "PROCESSING": "Processing",

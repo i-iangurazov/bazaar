@@ -3202,6 +3202,13 @@
     "aiDescriptionJobItemStatus": "Статус",
     "aiDescriptionJobResult": "Ошибка / превью описания",
     "aiDescriptionRetryFailed": "Повторить ошибки",
+    "aiDescriptionDisabledChecking": "Проверяем настройки AI",
+    "aiDescriptionDisabledNoPermission": "Нет прав для запуска генерации",
+    "aiDescriptionDisabledNoStore": "Сначала выберите магазин",
+    "aiDescriptionDisabledNoStoreMapping": "Сначала привяжите магазин",
+    "aiDescriptionDisabledNotConfigured": "AI не настроен",
+    "aiDescriptionDisabledRunning": "Генерация уже запущена",
+    "aiDescriptionDisabledNoProducts": "Выберите товары",
     "aiDescriptionJobStatus": {
       "QUEUED": "Ожидает",
       "PROCESSING": "В работе",

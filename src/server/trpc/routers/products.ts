@@ -71,8 +71,15 @@ import {
   retryFailedProductDescriptionGenerationItems,
   startProductDescriptionGenerationJob,
 } from "@/server/services/productDescriptionGenerationJobs";
+import { isProductDescriptionGenerationConfigured } from "@/server/services/productDescriptions";
+import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
 
 export const productsRouter = router({
+  descriptionGenerationAvailability: protectedProcedure.query(() => ({
+    enabled: isAiDescriptionGenerationEnabled(),
+    configured: isProductDescriptionGenerationConfigured(),
+  })),
+
   suggestSku: managerProcedure.query(({ ctx }) =>
     getSuggestedProductSku(ctx.user.organizationId),
   ),

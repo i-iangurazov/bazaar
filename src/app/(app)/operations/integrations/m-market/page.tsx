@@ -42,7 +42,7 @@ import { useToast } from "@/components/ui/toast";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
-import { isAiFeaturesEnabled } from "@/lib/featureFlags";
+import { isAiDescriptionGenerationEnabled, isAiFeaturesEnabled } from "@/lib/featureFlags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -60,6 +60,7 @@ const ISSUE_CODES = [
   "MISSING_SPECS",
 ] as const;
 const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
+const aiDescriptionGenerationFlagDisabled = !isAiDescriptionGenerationEnabled();
 
 type IssueCode = (typeof ISSUE_CODES)[number];
 
@@ -151,6 +152,11 @@ const MMarketSettingsPage = () => {
   const [activeStoreId, setActiveStoreId] = useState("");
 
   const settingsQuery = trpc.mMarket.settings.useQuery(undefined, { enabled: canView });
+  const descriptionGenerationAvailabilityQuery =
+    trpc.products.descriptionGenerationAvailability.useQuery(undefined, {
+      enabled: canView,
+      staleTime: 60_000,
+    });
   const jobsQuery = trpc.mMarket.jobs.useQuery(
     { limit: 100 },
     {
@@ -489,12 +495,12 @@ const MMarketSettingsPage = () => {
   };
 
   const handleGenerateShortDescriptions = async () => {
-    if (
-      !canEdit ||
-      !activeStoreId ||
-      shortDescriptionTargetIds.length <= 0 ||
-      descriptionGenerationRunning
-    ) {
+    if (baseDescriptionGenerationDisabledReason) {
+      toast({ variant: "info", description: baseDescriptionGenerationDisabledReason });
+      return;
+    }
+    if (shortDescriptionTargetIds.length <= 0) {
+      toast({ variant: "info", description: tProducts("aiDescriptionDisabledNoProducts") });
       return;
     }
     if (
@@ -875,7 +881,8 @@ const MMarketSettingsPage = () => {
   };
 
   const startDescriptionGenerationForIds = async (targetIds: string[]) => {
-    if (!canEdit || descriptionGenerationRunning) {
+    if (baseDescriptionGenerationDisabledReason) {
+      toast({ variant: "info", description: baseDescriptionGenerationDisabledReason });
       return;
     }
     if (!activeStoreId) {
@@ -980,6 +987,38 @@ const MMarketSettingsPage = () => {
   const descriptionGenerationRunning =
     startDescriptionGenerationJobMutation.isLoading ||
     isDescriptionGenerationJobRunning(descriptionGenerationJob?.status);
+  const descriptionGenerationFeatureEnabled =
+    descriptionGenerationAvailabilityQuery.data?.enabled ?? !aiDescriptionGenerationFlagDisabled;
+  const descriptionGenerationProviderConfigured =
+    descriptionGenerationAvailabilityQuery.data?.configured ?? true;
+  const baseDescriptionGenerationDisabledReason = !canEdit
+    ? tProducts("aiDescriptionDisabledNoPermission")
+    : !activeStoreId
+      ? tProducts("aiDescriptionDisabledNoStore")
+      : !activeStoreMapped
+        ? tProducts("aiDescriptionDisabledNoStoreMapping")
+        : !descriptionGenerationFeatureEnabled
+          ? tProducts("aiDescriptionDisabledNotConfigured")
+          : descriptionGenerationAvailabilityQuery.isLoading
+            ? tProducts("aiDescriptionDisabledChecking")
+            : !descriptionGenerationProviderConfigured
+              ? tProducts("aiDescriptionDisabledNotConfigured")
+              : descriptionGenerationRunning
+                ? tProducts("aiDescriptionDisabledRunning")
+                : null;
+  const currentFilterDescriptionDisabledReason =
+    baseDescriptionGenerationDisabledReason ??
+    (selectingAllProducts
+      ? tCommon("loading")
+      : (productsQuery.data?.total ?? 0) <= 0
+        ? tProducts("aiDescriptionDisabledNoProducts")
+        : null);
+  const selectedDescriptionDisabledReason =
+    baseDescriptionGenerationDisabledReason ??
+    (selectedProductIds.size <= 0 ? tProducts("aiDescriptionDisabledNoProducts") : null);
+  const shortDescriptionDisabledReason =
+    baseDescriptionGenerationDisabledReason ??
+    (shortDescriptionCount <= 0 ? tProducts("aiDescriptionDisabledNoProducts") : null);
   const bulkProgressTitle = bulkProgress
     ? bulkProgress.kind === "specs"
       ? t("preflight.autofillSpecsProgressTitle")
@@ -1311,18 +1350,14 @@ const MMarketSettingsPage = () => {
 
           {!canEdit ? <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p> : null}
 
-          {canEdit && activeStoreId ? (
+          {canEdit ? (
             <FormActions className="justify-start">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => void handleGenerateDescriptionsForCurrentFilter()}
-                disabled={
-                  aiFeaturesVisuallyDisabled ||
-                  descriptionGenerationRunning ||
-                  selectingAllProducts ||
-                  (productsQuery.data?.total ?? 0) <= 0
-                }
+                disabled={Boolean(currentFilterDescriptionDisabledReason)}
+                title={currentFilterDescriptionDisabledReason ?? undefined}
               >
                 {selectingAllProducts || startDescriptionGenerationJobMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -1330,6 +1365,11 @@ const MMarketSettingsPage = () => {
                   <SparklesIcon className="h-4 w-4" aria-hidden />
                 )}
                 {tProducts("bulkGenerateDescriptions")} ({productsQuery.data?.total ?? 0})
+                {currentFilterDescriptionDisabledReason ? (
+                  <Badge variant="muted" className="ml-1">
+                    {currentFilterDescriptionDisabledReason}
+                  </Badge>
+                ) : null}
               </Button>
             </FormActions>
           ) : null}
@@ -1388,11 +1428,8 @@ const MMarketSettingsPage = () => {
                 size="sm"
                 className="w-full sm:w-auto"
                 onClick={() => void handleGenerateDescriptionsForSelected()}
-                disabled={
-                  aiFeaturesVisuallyDisabled ||
-                  descriptionGenerationRunning ||
-                  startDescriptionGenerationJobMutation.isLoading
-                }
+                disabled={Boolean(selectedDescriptionDisabledReason)}
+                title={selectedDescriptionDisabledReason ?? undefined}
               >
                 {startDescriptionGenerationJobMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -1400,6 +1437,11 @@ const MMarketSettingsPage = () => {
                   <SparklesIcon className="h-4 w-4" aria-hidden />
                 )}
                 {tProducts("bulkGenerateDescriptions")}
+                {selectedDescriptionDisabledReason ? (
+                  <Badge variant="muted" className="ml-1">
+                    {selectedDescriptionDisabledReason}
+                  </Badge>
+                ) : null}
               </Button>
               <Button
                 type="button"
@@ -1786,11 +1828,8 @@ const MMarketSettingsPage = () => {
                       <Button
                         type="button"
                         onClick={() => void handleGenerateShortDescriptions()}
-                        disabled={
-                          aiFeaturesVisuallyDisabled ||
-                          descriptionGenerationRunning ||
-                          startDescriptionGenerationJobMutation.isLoading
-                        }
+                        disabled={Boolean(shortDescriptionDisabledReason)}
+                        title={shortDescriptionDisabledReason ?? undefined}
                       >
                         {startDescriptionGenerationJobMutation.isLoading ? (
                           <Spinner className="h-4 w-4" />
@@ -1798,9 +1837,11 @@ const MMarketSettingsPage = () => {
                           <SparklesIcon className="h-4 w-4" aria-hidden />
                         )}
                         {tProducts("bulkGenerateDescriptions")} ({shortDescriptionCount})
-                        <Badge variant="muted" className="ml-1">
-                          {tProducts("aiUnavailableBadge")}
-                        </Badge>
+                        {shortDescriptionDisabledReason ? (
+                          <Badge variant="muted" className="ml-1">
+                            {shortDescriptionDisabledReason}
+                          </Badge>
+                        ) : null}
                       </Button>
                     ) : null}
                   </FormActions>

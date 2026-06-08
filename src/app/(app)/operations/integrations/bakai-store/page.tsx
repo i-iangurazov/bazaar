@@ -46,7 +46,7 @@ import {
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
-import { isAiFeaturesEnabled } from "@/lib/featureFlags";
+import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -91,7 +91,7 @@ const ISSUE_CODES = [
 type IssueCode = (typeof ISSUE_CODES)[number];
 
 const NONE_STORE_VALUE = "__none__";
-const aiFeaturesVisuallyDisabled = !isAiFeaturesEnabled();
+const aiDescriptionGenerationFlagDisabled = !isAiDescriptionGenerationEnabled();
 
 const formatFileSize = (value?: number | null) => {
   if (!value || value <= 0) {
@@ -183,6 +183,11 @@ const BakaiStorePage = () => {
   const [activeStoreId, setActiveStoreId] = useState("");
 
   const settingsQuery = trpc.bakaiStore.settings.useQuery(undefined, { enabled: canView });
+  const descriptionGenerationAvailabilityQuery =
+    trpc.products.descriptionGenerationAvailability.useQuery(undefined, {
+      enabled: canView,
+      staleTime: 60_000,
+    });
   const jobsQuery = trpc.bakaiStore.jobs.useQuery(
     { limit: 100 },
     {
@@ -605,7 +610,8 @@ const BakaiStorePage = () => {
   };
 
   const startDescriptionGenerationForIds = async (targetIds: string[]) => {
-    if (!canEdit || descriptionGenerationRunning) {
+    if (baseDescriptionGenerationDisabledReason) {
+      toast({ variant: "info", description: baseDescriptionGenerationDisabledReason });
       return;
     }
     if (!activeStoreId) {
@@ -714,6 +720,35 @@ const BakaiStorePage = () => {
   const descriptionGenerationRunning =
     startDescriptionGenerationJobMutation.isLoading ||
     isDescriptionGenerationJobRunning(descriptionGenerationJob?.status);
+  const descriptionGenerationFeatureEnabled =
+    descriptionGenerationAvailabilityQuery.data?.enabled ?? !aiDescriptionGenerationFlagDisabled;
+  const descriptionGenerationProviderConfigured =
+    descriptionGenerationAvailabilityQuery.data?.configured ?? true;
+  const baseDescriptionGenerationDisabledReason = !canEdit
+    ? tProducts("aiDescriptionDisabledNoPermission")
+    : !activeStoreId
+      ? tProducts("aiDescriptionDisabledNoStore")
+      : !activeStoreMapped
+        ? tProducts("aiDescriptionDisabledNoStoreMapping")
+        : !descriptionGenerationFeatureEnabled
+          ? tProducts("aiDescriptionDisabledNotConfigured")
+          : descriptionGenerationAvailabilityQuery.isLoading
+            ? tProducts("aiDescriptionDisabledChecking")
+            : !descriptionGenerationProviderConfigured
+              ? tProducts("aiDescriptionDisabledNotConfigured")
+              : descriptionGenerationRunning
+                ? tProducts("aiDescriptionDisabledRunning")
+                : null;
+  const currentFilterDescriptionDisabledReason =
+    baseDescriptionGenerationDisabledReason ??
+    (selectingAllProducts
+      ? tCommon("loading")
+      : (productsQuery.data?.total ?? 0) <= 0
+        ? tProducts("aiDescriptionDisabledNoProducts")
+        : null);
+  const selectedDescriptionDisabledReason =
+    baseDescriptionGenerationDisabledReason ??
+    (selectedProductIds.size <= 0 ? tProducts("aiDescriptionDisabledNoProducts") : null);
   const allProductsSelectedOnPage =
     productItems.length > 0 && productItems.every((product) => selectedProductIds.has(product.id));
   const allProductResultsSelected =
@@ -1219,18 +1254,14 @@ const BakaiStorePage = () => {
 
           {!canEdit ? <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p> : null}
 
-          {canEdit && activeStoreId ? (
+          {canEdit ? (
             <FormActions className="justify-start">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => void handleGenerateDescriptionsForCurrentFilter()}
-                disabled={
-                  aiFeaturesVisuallyDisabled ||
-                  descriptionGenerationRunning ||
-                  selectingAllProducts ||
-                  (productsQuery.data?.total ?? 0) <= 0
-                }
+                disabled={Boolean(currentFilterDescriptionDisabledReason)}
+                title={currentFilterDescriptionDisabledReason ?? undefined}
               >
                 {selectingAllProducts || startDescriptionGenerationJobMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -1238,6 +1269,11 @@ const BakaiStorePage = () => {
                   <SparklesIcon className="h-4 w-4" aria-hidden />
                 )}
                 {tProducts("bulkGenerateDescriptions")} ({productsQuery.data?.total ?? 0})
+                {currentFilterDescriptionDisabledReason ? (
+                  <Badge variant="muted" className="ml-1">
+                    {currentFilterDescriptionDisabledReason}
+                  </Badge>
+                ) : null}
               </Button>
             </FormActions>
           ) : null}
@@ -1272,11 +1308,8 @@ const BakaiStorePage = () => {
                 size="sm"
                 className="w-full sm:w-auto"
                 onClick={() => void handleGenerateDescriptionsForSelected()}
-                disabled={
-                  aiFeaturesVisuallyDisabled ||
-                  descriptionGenerationRunning ||
-                  startDescriptionGenerationJobMutation.isLoading
-                }
+                disabled={Boolean(selectedDescriptionDisabledReason)}
+                title={selectedDescriptionDisabledReason ?? undefined}
               >
                 {startDescriptionGenerationJobMutation.isLoading ? (
                   <Spinner className="h-4 w-4" />
@@ -1284,6 +1317,11 @@ const BakaiStorePage = () => {
                   <SparklesIcon className="h-4 w-4" aria-hidden />
                 )}
                 {tProducts("bulkGenerateDescriptions")}
+                {selectedDescriptionDisabledReason ? (
+                  <Badge variant="muted" className="ml-1">
+                    {selectedDescriptionDisabledReason}
+                  </Badge>
+                ) : null}
               </Button>
               <Button
                 type="button"

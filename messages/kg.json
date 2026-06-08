@@ -3201,6 +3201,13 @@
     "aiDescriptionJobItemStatus": "Статус",
     "aiDescriptionJobResult": "Ката / сүрөттөмө үзүндүсү",
     "aiDescriptionRetryFailed": "Каталарды кайталоо",
+    "aiDescriptionDisabledChecking": "AI жөндөөлөрү текшерилүүдө",
+    "aiDescriptionDisabledNoPermission": "Генерацияны баштоого укук жок",
+    "aiDescriptionDisabledNoStore": "Адегенде дүкөн тандаңыз",
+    "aiDescriptionDisabledNoStoreMapping": "Адегенде дүкөндү байланыштырыңыз",
+    "aiDescriptionDisabledNotConfigured": "AI жөндөлгөн эмес",
+    "aiDescriptionDisabledRunning": "Генерация буга чейин башталган",
+    "aiDescriptionDisabledNoProducts": "Товар тандаңыз",
     "aiDescriptionJobStatus": {
       "QUEUED": "Күтүүдө",
       "PROCESSING": "Иштелүүдө",
