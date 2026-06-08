@@ -591,6 +591,7 @@
   },
   "nav": {
     "platform": "Platform",
+    "platformOwner": "Platform owner",
     "brand": "BAZAAR",
     "groups": {
       "core": "Core",
