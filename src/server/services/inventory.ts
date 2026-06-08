@@ -697,6 +697,12 @@ export const postStockReceiving = async (
             id: { in: productIds },
             organizationId: input.organizationId,
             isDeleted: false,
+            storeProducts: {
+              some: {
+                storeId: input.storeId,
+                isActive: true,
+              },
+            },
           },
           select: { id: true },
         });

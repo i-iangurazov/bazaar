@@ -101,9 +101,17 @@ describeDb("products", () => {
 
   it("keeps product catalog visible across stores with store-specific stock", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
+    const branchCatalog = await prisma.productCatalog.create({
+      data: { organizationId: org.id, name: "Branch Catalog" },
+    });
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { productCatalogId: branchCatalog.id },
+    });
     const otherStore = await prisma.store.create({
       data: {
         organizationId: org.id,
+        productCatalogId: branchCatalog.id,
         name: "Second Store",
         code: "S2",
       },
@@ -1764,15 +1772,30 @@ describeDb("products", () => {
     expect(generatedRows.every((row) => row.value.startsWith("BZ"))).toBe(true);
   });
 
-  it("initializes create snapshots for every store while keeping imports scoped", async () => {
+  it("initializes snapshots for shared-catalog stores while keeping separate stores scoped", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase();
+    const branchCatalog = await prisma.productCatalog.create({
+      data: { organizationId: org.id, name: "Snapshot Branch Catalog" },
+    });
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { productCatalogId: branchCatalog.id },
+    });
 
     const storeB = await prisma.store.create({
       data: {
         organizationId: org.id,
+        productCatalogId: branchCatalog.id,
         name: "Secondary Store",
         code: "SEC",
         allowNegativeStock: true,
+      },
+    });
+    const separateStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Separate Store",
+        code: "SEP",
       },
     });
 
@@ -1794,6 +1817,7 @@ describeDb("products", () => {
     const snapshotByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot]));
     expect(snapshotByStore.get(store.id)?.allowNegativeStock).toBe(false);
     expect(snapshotByStore.get(storeB.id)?.allowNegativeStock).toBe(true);
+    expect(snapshotByStore.has(separateStore.id)).toBe(false);
 
     await importProducts({
       organizationId: org.id,
@@ -1817,8 +1841,13 @@ describeDb("products", () => {
     const importSnapshots = await prisma.inventorySnapshot.findMany({
       where: { productId: imported!.id },
     });
-    expect(importSnapshots).toHaveLength(1);
-    expect(importSnapshots[0]?.storeId).toBe(storeB.id);
+    expect(importSnapshots).toHaveLength(2);
+    const importSnapshotByStore = new Map(
+      importSnapshots.map((snapshot) => [snapshot.storeId, snapshot]),
+    );
+    expect(importSnapshotByStore.get(store.id)?.onHand).toBe(0);
+    expect(importSnapshotByStore.get(storeB.id)?.onHand).toBe(0);
+    expect(importSnapshotByStore.has(separateStore.id)).toBe(false);
   });
 
   it("blocks variant removal when movements exist", async () => {

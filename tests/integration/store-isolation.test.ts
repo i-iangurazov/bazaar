@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { createProduct } from "@/server/services/products";
-import { adjustStock } from "@/server/services/inventory";
+import { adjustStock, postStockReceiving } from "@/server/services/inventory";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
 
@@ -64,6 +64,81 @@ describeDb("store isolation", () => {
     expect(storeAProducts.items.map((item) => item.id)).toContain(product.id);
     expect(storeBProducts.items.map((item) => item.id)).not.toContain(product.id);
     expect(storeBSnapshot).toBeNull();
+  });
+
+  it("shares products only across stores configured with the same product catalog", async () => {
+    const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const branchCatalog = await prisma.productCatalog.create({
+      data: { organizationId: org.id, name: "Branch catalog" },
+    });
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { productCatalogId: branchCatalog.id },
+    });
+    const storeB = await caller.stores.create({
+      name: "Second Branch",
+      code: "BR2",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+      productCatalogId: branchCatalog.id,
+    });
+    const separateStore = await caller.stores.create({
+      name: "Separate Store",
+      code: "SEP",
+      allowNegativeStock: false,
+      trackExpiryLots: false,
+    });
+
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-shared-catalog-create",
+      sku: "SHARED-001",
+      name: "Shared Branch Product",
+      baseUnitId: baseUnit.id,
+      initialOnHand: 6,
+      storeId: store.id,
+    });
+
+    const [storeAProducts, storeBProducts, separateProducts, storeASnapshot, storeBSnapshot] =
+      await Promise.all([
+        caller.products.list({ storeId: store.id }),
+        caller.products.list({ storeId: storeB.id }),
+        caller.products.list({ storeId: separateStore.id }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: storeB.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+      ]);
+    const storeBSearch = await caller.products.searchQuick({ q: "SHARED-001", storeId: storeB.id });
+
+    expect(storeAProducts.items.find((item) => item.id === product.id)?.onHandQty).toBe(6);
+    expect(storeBProducts.items.find((item) => item.id === product.id)?.onHandQty).toBe(0);
+    expect(separateProducts.items.map((item) => item.id)).not.toContain(product.id);
+    expect(storeASnapshot?.onHand).toBe(6);
+    expect(storeBSnapshot?.onHand).toBe(0);
+    expect(storeBSearch.map((item) => item.id)).toContain(product.id);
   });
 
   it("keeps store-pricing management assigned-scoped while pricing lookup is catalog-wide", async () => {
@@ -585,5 +660,32 @@ describeDb("store isolation", () => {
 
     expect(storeASnapshot).toBeNull();
     expect(storeBSnapshot?.onHand).toBe(5);
+  });
+
+  it("rejects stock receiving for products not visible in the selected store", async () => {
+    const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const storeB = await prisma.store.create({
+      data: { organizationId: org.id, name: "Store B", code: "B" },
+    });
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-receiving-hidden-product",
+      sku: "RECEIVE-B",
+      name: "Receive Store B Product",
+      baseUnitId: baseUnit.id,
+      storeId: storeB.id,
+    });
+
+    await expect(
+      postStockReceiving({
+        storeId: store.id,
+        lines: [{ productId: product.id, quantity: 1, unitCost: 10 }],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-receive-hidden-product",
+        idempotencyKey: "idem-receive-hidden-product",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "invalidProducts" });
   });
 });

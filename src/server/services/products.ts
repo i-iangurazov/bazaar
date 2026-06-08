@@ -32,6 +32,7 @@ import {
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore } from "@/server/services/storeAccess";
+import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
 import { getLogger } from "@/server/logging";
 import { applyStockMovement } from "@/server/services/inventory";
 import {
@@ -1720,14 +1721,10 @@ const resolveProductCreateStores = async (
   },
 ) => {
   if (input.storeId) {
-    const store = await client.store.findFirst({
-      where: { id: input.storeId, organizationId: input.organizationId },
-      select: { id: true, allowNegativeStock: true },
+    return resolveProductCatalogStoresForStore(client, {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
     });
-    if (!store) {
-      throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-    }
-    return [store];
   }
 
   const stores = await client.store.findMany({
@@ -2572,17 +2569,10 @@ export const duplicateProduct = async (input: {
     const copyImages = input.copyImages ?? true;
     const requestedStoreId = input.storeId?.trim() || null;
     const assignmentStores = requestedStoreId
-      ? await tx.store
-          .findFirst({
-            where: { id: requestedStoreId, organizationId: input.organizationId },
-            select: { id: true, allowNegativeStock: true },
-          })
-          .then((store) => {
-            if (!store) {
-              throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-            }
-            return [store];
-          })
+      ? await resolveProductCatalogStoresForStore(tx, {
+          organizationId: input.organizationId,
+          storeId: requestedStoreId,
+        })
       : source.storeProducts.map((row) => row.store);
     const resolvedAssignmentStores = assignmentStores.length
       ? assignmentStores
@@ -3692,20 +3682,22 @@ export const importProductsTx = async (
   const rowDecisionByNumber = new Map(
     (input.rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),
   );
-  const orgStores = await tx.store.findMany({
-    where: { organizationId: input.organizationId },
-    select: { id: true, allowNegativeStock: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const orgStores = input.storeId
+    ? []
+    : await tx.store.findMany({
+        where: { organizationId: input.organizationId },
+        select: { id: true, allowNegativeStock: true },
+        orderBy: { createdAt: "asc" },
+      });
   const stores = input.storeId
-    ? orgStores.filter((store) => store.id === input.storeId)
+    ? await resolveProductCatalogStoresForStore(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+      })
     : orgStores.length === 1
       ? orgStores
       : [];
   const matchingStoreId = input.storeId ?? (stores.length === 1 ? stores[0]?.id : undefined);
-  if (input.storeId && stores.length !== 1) {
-    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-  }
 
   const recordImportedEntity = async (entityType: string, entityId: string) => {
     if (!input.batchId) {

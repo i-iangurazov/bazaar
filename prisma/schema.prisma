@@ -418,6 +418,7 @@ model Organization {
   users                       User[]
   userStoreAccesses           UserStoreAccess[]
   stores                      Store[]
+  productCatalogs             ProductCatalog[]
   storeProducts               StoreProduct[]
   suppliers                   Supplier[]
   products                    Product[]
@@ -610,6 +611,7 @@ model UserGuideState {
 model Store {
   id                        String           @id @default(cuid())
   organizationId            String
+  productCatalogId          String?
   name                      String
   code                      String
   allowNegativeStock        Boolean          @default(false)
@@ -628,6 +630,7 @@ model Store {
   updatedAt                 DateTime         @updatedAt
 
   organization                Organization                 @relation(fields: [organizationId], references: [id])
+  productCatalog             ProductCatalog?               @relation(fields: [productCatalogId], references: [id], onDelete: Restrict)
   inventorySnapshots          InventorySnapshot[]
   stockMovements              StockMovement[]
   reorderPolicies             ReorderPolicy[]
@@ -680,6 +683,21 @@ model Store {
   categoryPreferences         StoreCategoryPreference[]
 
   @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([organizationId, productCatalogId])
+  @@index([organizationId, name])
+}
+
+model ProductCatalog {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stores       Store[]
+
   @@index([organizationId])
   @@index([organizationId, name])
 }

@@ -5,6 +5,11 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { assertWithinLimits } from "@/server/services/planLimits";
+import {
+  createDefaultProductCatalog,
+  resolveProductCatalog,
+  syncProductCatalogAssignments,
+} from "@/server/services/productCatalogs";
 
 export type UpdateStorePolicyInput = {
   storeId: string;
@@ -36,6 +41,7 @@ export type CreateStoreInput = {
   enableSku?: boolean;
   enableBarcode?: boolean;
   enableSimilarProductCheck?: boolean;
+  productCatalogId?: string | null;
 };
 
 export type UpdateStoreProductSettingsInput = {
@@ -78,10 +84,21 @@ export const createStore = async (input: CreateStoreInput) =>
     if (inn && !/^\d{10,14}$/.test(inn)) {
       throw new AppError("invalidInn", "BAD_REQUEST", 400);
     }
+    const requestedCatalog = await resolveProductCatalog(tx, {
+      organizationId: input.organizationId,
+      productCatalogId: normalizeOptional(input.productCatalogId),
+    });
+    const productCatalog =
+      requestedCatalog ??
+      (await createDefaultProductCatalog(tx, {
+        organizationId: input.organizationId,
+        name: input.name,
+      }));
 
     const store = await tx.store.create({
       data: {
         organizationId: input.organizationId,
+        productCatalogId: productCatalog.id,
         name: input.name,
         code: input.code,
         allowNegativeStock: input.allowNegativeStock,
@@ -275,6 +292,14 @@ export const createStore = async (input: CreateStoreInput) =>
 	      };
     }
 
+    const catalogSyncSummary = requestedCatalog
+      ? await syncProductCatalogAssignments(tx, {
+          organizationId: input.organizationId,
+          productCatalogId: productCatalog.id,
+          actorId: input.actorId,
+        })
+      : null;
+
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -282,7 +307,7 @@ export const createStore = async (input: CreateStoreInput) =>
       entity: "Store",
       entityId: store.id,
       before: null,
-      after: toJson({ store, cloneSummary }),
+      after: toJson({ store, cloneSummary, productCatalogId: productCatalog.id, catalogSyncSummary }),
       requestId: input.requestId,
     });
 
@@ -296,6 +321,14 @@ export type UpdateStoreInput = {
   requestId: string;
   name: string;
   code: string;
+};
+
+export type UpdateStoreProductCatalogInput = {
+  storeId: string;
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productCatalogId?: string | null;
 };
 
 export const updateStore = async (input: UpdateStoreInput) =>
@@ -318,6 +351,51 @@ export const updateStore = async (input: UpdateStoreInput) =>
       entityId: updated.id,
       before: toJson(store),
       after: toJson(updated),
+      requestId: input.requestId,
+    });
+
+    return updated;
+  });
+
+export const updateStoreProductCatalog = async (input: UpdateStoreProductCatalogInput) =>
+  prisma.$transaction(async (tx) => {
+    const store = await tx.store.findUnique({ where: { id: input.storeId } });
+    if (!store || store.organizationId !== input.organizationId) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+    const requestedCatalogId = normalizeOptional(input.productCatalogId);
+    const catalog =
+      requestedCatalogId !== null
+        ? await resolveProductCatalog(tx, {
+            organizationId: input.organizationId,
+            productCatalogId: requestedCatalogId,
+          })
+        : await createDefaultProductCatalog(tx, {
+            organizationId: input.organizationId,
+            name: store.name,
+          });
+    if (!catalog) {
+      throw new AppError("productCatalogNotFound", "NOT_FOUND", 404);
+    }
+
+    const updated = await tx.store.update({
+      where: { id: input.storeId },
+      data: { productCatalogId: catalog.id },
+    });
+    const syncSummary = await syncProductCatalogAssignments(tx, {
+      organizationId: input.organizationId,
+      productCatalogId: catalog.id,
+      actorId: input.actorId,
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "STORE_PRODUCT_CATALOG_UPDATE",
+      entity: "Store",
+      entityId: updated.id,
+      before: toJson({ productCatalogId: store.productCatalogId }),
+      after: toJson({ productCatalogId: updated.productCatalogId, syncSummary }),
       requestId: input.requestId,
     });
 

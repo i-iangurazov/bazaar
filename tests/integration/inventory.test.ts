@@ -373,6 +373,14 @@ describeDb("inventory service", () => {
         isActive: true,
       },
     });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: otherStore.id,
+        productId: product.id,
+        isActive: true,
+      },
+    });
 
     const result = await postStockReceiving({
       storeId: otherStore.id,

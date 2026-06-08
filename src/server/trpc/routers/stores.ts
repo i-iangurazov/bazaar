@@ -14,6 +14,7 @@ import {
   createStore,
   updateStore,
   updateStoreLegalDetails,
+  updateStoreProductCatalog,
   updateStoreProductSettings,
   updateStorePolicy,
 } from "@/server/services/stores";
@@ -46,6 +47,13 @@ export const storesRouter = router({
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
+      productCatalogId: true,
+      productCatalog: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       complianceProfile: {
         select: {
           enableKkm: true,
@@ -120,6 +128,7 @@ export const storesRouter = router({
         enableSku: z.boolean().optional(),
         enableBarcode: z.boolean().optional(),
         enableSimilarProductCheck: z.boolean().optional(),
+        productCatalogId: z.string().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -127,7 +136,8 @@ export const storesRouter = router({
         const customProductSettingsRequested =
           input.enableSku !== undefined ||
           input.enableBarcode !== undefined ||
-          input.enableSimilarProductCheck !== undefined;
+          input.enableSimilarProductCheck !== undefined ||
+          Boolean(input.productCatalogId);
         if (customProductSettingsRequested && ctx.user.role !== "ADMIN" && !ctx.user.isOrgOwner) {
           throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
         }
@@ -155,6 +165,7 @@ export const storesRouter = router({
           enableSku: input.enableSku,
           enableBarcode: input.enableBarcode,
           enableSimilarProductCheck: input.enableSimilarProductCheck,
+          productCatalogId: input.productCatalogId,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -180,6 +191,27 @@ export const storesRouter = router({
           enableSku: input.enableSku,
           enableBarcode: input.enableBarcode,
           enableSimilarProductCheck: input.enableSimilarProductCheck,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  updateProductCatalog: adminOrOrgOwnerProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        productCatalogId: z.string().min(1).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateStoreProductCatalog({
+          storeId: input.storeId,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          productCatalogId: input.productCatalogId,
         });
       } catch (error) {
         throw toTRPCError(error);

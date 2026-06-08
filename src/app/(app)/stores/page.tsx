@@ -156,6 +156,7 @@ const StoresPage = () => {
         enableSku: z.boolean(),
         enableBarcode: z.boolean(),
         enableSimilarProductCheck: z.boolean(),
+        productCatalogId: z.string().optional(),
       }),
     [t],
   );
@@ -180,6 +181,7 @@ const StoresPage = () => {
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
+      productCatalogId: "",
     },
   });
 
@@ -248,6 +250,15 @@ const StoresPage = () => {
     onSuccess: () => {
       storesQuery.refetch();
       toast({ variant: "success", description: t("productSettingsUpdateSuccess") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const updateProductCatalogMutation = trpc.stores.updateProductCatalog.useMutation({
+    onSuccess: () => {
+      storesQuery.refetch();
+      toast({ variant: "success", description: t("productCatalogUpdateSuccess") });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -361,6 +372,7 @@ const StoresPage = () => {
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
+      productCatalogId: "",
     });
     setStoreDialogOpen(true);
   }, [storeForm]);
@@ -400,6 +412,7 @@ const StoresPage = () => {
       enableSku: store.enableSku ?? true,
       enableBarcode: store.enableBarcode ?? true,
       enableSimilarProductCheck: store.enableSimilarProductCheck ?? true,
+      productCatalogId: store.productCatalogId ?? "",
     });
     setStoreDialogOpen(true);
   };
@@ -410,7 +423,19 @@ const StoresPage = () => {
     updateMutation.isLoading ||
     updatePolicyMutation.isLoading ||
     updateLegalMutation.isLoading ||
-    updateProductSettingsMutation.isLoading;
+    updateProductSettingsMutation.isLoading ||
+    updateProductCatalogMutation.isLoading;
+  const productCatalogOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const store of storesQuery.data ?? []) {
+      if (store.productCatalog?.id) {
+        options.set(store.productCatalog.id, store.productCatalog.name);
+      }
+    }
+    return Array.from(options.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [storesQuery.data]);
   const selectedCloneFromStoreId = storeForm.watch("cloneFromStoreId");
   const copyInventoryEnabled = storeForm.watch("copyInventory");
   const selectedPriceAdjustmentMode = storeForm.watch("priceAdjustmentMode");
@@ -447,6 +472,7 @@ const StoresPage = () => {
                       <TableRow>
                         <TableHead>{t("name")}</TableHead>
                         <TableHead className="hidden sm:table-cell">{t("code")}</TableHead>
+                        <TableHead className="hidden lg:table-cell">{t("productCatalog")}</TableHead>
                         <TableHead className="hidden md:table-cell">{t("legalType")}</TableHead>
                         <TableHead className="hidden lg:table-cell">{t("inn")}</TableHead>
                         <TableHead>{t("allowNegativeStock")}</TableHead>
@@ -494,6 +520,9 @@ const StoresPage = () => {
                                 enabled={inlineEditingEnabled}
                                 executeMutation={executeInlineStoreMutation}
                               />
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                              {store.productCatalog?.name ?? t("productCatalogStandalone")}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                               <InlineEditableCell
@@ -732,6 +761,9 @@ const StoresPage = () => {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{store.name}</p>
                       <p className="text-xs text-muted-foreground">{store.code}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {store.productCatalog?.name ?? t("productCatalogStandalone")}
+                      </p>
                     </div>
                     <RowActions
                       actions={actions}
@@ -828,6 +860,7 @@ const StoresPage = () => {
                 enableSku: values.enableSku,
                 enableBarcode: values.enableBarcode,
                 enableSimilarProductCheck: values.enableSimilarProductCheck,
+                productCatalogId: values.productCatalogId?.trim() || null,
               };
 
               if (editingStore) {
@@ -851,6 +884,9 @@ const StoresPage = () => {
                     normalized.enableBarcode !== (editingStore.enableBarcode ?? true) ||
                     normalized.enableSimilarProductCheck !==
                       (editingStore.enableSimilarProductCheck ?? true));
+                const productCatalogChanged =
+                  canManageProductSettings &&
+                  normalized.productCatalogId !== (editingStore.productCatalogId ?? null);
 
                 if (nameChanged || codeChanged) {
                   tasks.push(
@@ -892,6 +928,14 @@ const StoresPage = () => {
                     }),
                   );
                 }
+                if (productCatalogChanged) {
+                  tasks.push(
+                    updateProductCatalogMutation.mutateAsync({
+                      storeId: editingStore.id,
+                      productCatalogId: normalized.productCatalogId,
+                    }),
+                  );
+                }
 
                 if (!tasks.length) {
                   setEditingStore(null);
@@ -929,6 +973,7 @@ const StoresPage = () => {
                       enableSku: normalized.enableSku,
                       enableBarcode: normalized.enableBarcode,
                       enableSimilarProductCheck: normalized.enableSimilarProductCheck,
+                      productCatalogId: normalized.productCatalogId,
                     }
                   : {}),
               });
@@ -972,6 +1017,46 @@ const StoresPage = () => {
                   )}
                 />
               </FormGrid>
+            </FormSection>
+
+            <FormSection
+              title={t("productCatalogTitle")}
+              description={
+                canManageProductSettings
+                  ? t("productCatalogHint")
+                  : t("productCatalogAdminOnly")
+              }
+            >
+              <FormField
+                control={storeForm.control}
+                name="productCatalogId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("productCatalog")}</FormLabel>
+                    <Select
+                      value={field.value || "new"}
+                      onValueChange={(value) => field.onChange(value === "new" ? "" : value)}
+                      disabled={!canManageProductSettings}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("productCatalogPlaceholder")} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="new">{t("productCatalogNew")}</SelectItem>
+                        {productCatalogOptions.map((catalog) => (
+                          <SelectItem key={catalog.id} value={catalog.id}>
+                            {catalog.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>{t("productCatalogDescription")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </FormSection>
 
             <FormSection title={t("sectionPolicy")}>
