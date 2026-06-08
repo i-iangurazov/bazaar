@@ -2574,12 +2574,6 @@ export const duplicateProduct = async (input: {
           storeId: requestedStoreId,
         })
       : source.storeProducts.map((row) => row.store);
-    const resolvedAssignmentStores = assignmentStores.length
-      ? assignmentStores
-      : await tx.store.findMany({
-          where: { organizationId: input.organizationId },
-          select: { id: true, allowNegativeStock: true },
-        });
 
     const nextSku = await resolveDuplicateSku(tx, {
       organizationId: input.organizationId,
@@ -2671,10 +2665,10 @@ export const duplicateProduct = async (input: {
       organizationId: input.organizationId,
       actorId: input.actorId,
       productId: duplicate.id,
-      stores: resolvedAssignmentStores,
+      stores: assignmentStores,
     });
 
-    const assignedStoreIds = new Set(resolvedAssignmentStores.map((store) => store.id));
+    const assignedStoreIds = new Set(assignmentStores.map((store) => store.id));
     const copiedBaseStorePrices = source.storePrices.filter((price) =>
       assignedStoreIds.has(price.storeId),
     );
@@ -2723,7 +2717,7 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id, resolvedAssignmentStores);
+    await ensureBaseSnapshots(tx, input.organizationId, duplicate.id, assignmentStores);
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,

@@ -380,6 +380,41 @@ describeDb("products", () => {
     expect(photoProduct.images).toHaveLength(2);
   });
 
+  it("does not assign a duplicate to every store when no store context exists", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Separate Store",
+        code: "SEP",
+      },
+    });
+    const source = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        sku: "DUP-NO-SCOPE-1",
+        name: "Duplicate No Scope Source",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+
+    const duplicate = await caller.products.duplicate({ productId: source.id });
+
+    await expect(
+      prisma.storeProduct.findMany({ where: { productId: duplicate.productId } }),
+    ).resolves.toHaveLength(0);
+    await expect(
+      prisma.inventorySnapshot.findMany({ where: { productId: duplicate.productId } }),
+    ).resolves.toHaveLength(0);
+  });
+
   it("stores multiple categories and keeps the first one as primary", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
 
