@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import {
   DropdownMenu,
@@ -1439,11 +1440,11 @@ const ProductDetailPage = () => {
                 ) : selectedPricingStore ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div className="min-w-0 flex-1">
-                      <FormLabel htmlFor="current-store-on-hand">
+                      <Label htmlFor="current-store-on-hand">
                         {t("currentStoreStockLabel", {
                           store: selectedPricingStore.storeName,
                         })}
-                      </FormLabel>
+                      </Label>
                       <Input
                         id="current-store-on-hand"
                         type="number"
@@ -2136,7 +2137,7 @@ const ProductDetailPage = () => {
             })}
           >
             <div>
-              <FormLabel>{t("bundleSearch")}</FormLabel>
+              <Label>{t("bundleSearch")}</Label>
               <div className="relative mt-2">
                 <Input
                   value={componentSearch}
