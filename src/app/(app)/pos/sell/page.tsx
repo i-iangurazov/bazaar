@@ -167,6 +167,116 @@ const CustomerCreatePanel = ({
   </div>
 );
 
+type PosCartProduct = {
+  id: string;
+  sku?: string | null;
+  name: string;
+  isBundle?: boolean;
+  basePriceKgs?: number | null;
+  effectivePriceKgs?: number | null;
+  photoUrl?: string | null;
+  primaryImage?: string | null;
+  images?: Array<{ url: string }>;
+  complianceFlags?: {
+    requiresMarking: boolean;
+    markingType?: string | null;
+  } | null;
+};
+
+type PosCartLine = {
+  id: string;
+  productId?: string;
+  variantId?: string | null;
+  variantKey?: string | null;
+  qty: number;
+  unitPriceKgs: number;
+  lineTotalKgs: number;
+  unitCostKgs?: number | null;
+  lineCostTotalKgs?: number | null;
+  markingCodes: string[];
+  product: {
+    id: string;
+    sku?: string | null;
+    name: string;
+    primaryImage?: string | null;
+    isBundle?: boolean;
+    complianceFlags?: {
+      requiresMarking: boolean;
+      markingType?: string | null;
+    } | null;
+  };
+};
+
+type LineInputDraft = {
+  price?: string;
+  qty?: string;
+};
+
+type PendingLinePatch = {
+  qty?: number;
+  unitPriceKgs?: number;
+};
+
+const optimisticLinePrefix = "optimistic:";
+
+const isOptimisticLineId = (lineId: string) => lineId.startsWith(optimisticLinePrefix);
+
+const optimisticLineIdForProduct = (productId: string, variantKey = "BASE") =>
+  `${optimisticLinePrefix}${productId}:${variantKey}`;
+
+const getCartLineProductId = (line: PosCartLine) => line.productId ?? line.product.id;
+
+const parseDraftNumber = (raw: string) => {
+  const normalized = raw.replace(/\s+/g, "").replace(",", ".");
+  if (!normalized.length) {
+    return null;
+  }
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+};
+
+const recalculateCartLine = (line: PosCartLine, patch: PendingLinePatch): PosCartLine => {
+  const qty = patch.qty ?? line.qty;
+  const unitPriceKgs = patch.unitPriceKgs ?? line.unitPriceKgs;
+
+  return {
+    ...line,
+    qty,
+    unitPriceKgs,
+    lineTotalKgs: roundMoney(unitPriceKgs * qty),
+    lineCostTotalKgs:
+      line.unitCostKgs === null || line.unitCostKgs === undefined
+        ? (line.lineCostTotalKgs ?? null)
+        : roundMoney(line.unitCostKgs * qty),
+  };
+};
+
+const buildOptimisticLine = (product: PosCartProduct): PosCartLine => {
+  const unitPriceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? 0;
+  const primaryImage = product.primaryImage ?? product.images?.[0]?.url ?? product.photoUrl ?? null;
+
+  return {
+    id: optimisticLineIdForProduct(product.id),
+    productId: product.id,
+    variantId: null,
+    variantKey: "BASE",
+    qty: 1,
+    unitPriceKgs,
+    lineTotalKgs: roundMoney(unitPriceKgs),
+    unitCostKgs: null,
+    lineCostTotalKgs: null,
+    markingCodes: [],
+    product: {
+      id: product.id,
+      sku: product.sku ?? "",
+      name: product.name,
+      primaryImage,
+      isBundle: Boolean(product.isBundle),
+      complianceFlags: product.complianceFlags ?? null,
+    },
+  };
+};
+
 const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
@@ -192,6 +302,9 @@ const PosSellPage = () => {
   const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [optimisticSaleLines, setOptimisticSaleLinesState] = useState<PosCartLine[] | null>(null);
+  const [lineInputDrafts, setLineInputDrafts] = useState<Record<string, LineInputDraft>>({});
+  const [pendingCartMutationCount, setPendingCartMutationCount] = useState(0);
   const [lastCompletedSale, setLastCompletedSale] = useState<{
     id: string;
     number: string;
@@ -212,6 +325,13 @@ const PosSellPage = () => {
   const keyboardScanBufferRef = useRef("");
   const keyboardScanResetTimerRef = useRef<number | null>(null);
   const keyboardScanSubmittingRef = useRef(false);
+  const optimisticSaleLinesRef = useRef<PosCartLine[] | null>(null);
+  const pendingCartMutationCountRef = useRef(0);
+  const draftCreationRef = useRef<Promise<{ id: string }> | null>(null);
+  const lineSyncTimersRef = useRef<Record<string, number>>({});
+  const lineSyncDraftsRef = useRef<Record<string, PendingLinePatch>>({});
+  const lineSyncInFlightRef = useRef<Set<string>>(new Set());
+  const lineSyncPendingRef = useRef<Set<string>>(new Set());
   const autoPrintedSaleIdRef = useRef<string | null>(null);
   const paymentAutoFillRef = useRef<PosPaymentAutoFillState>({
     saleId: null,
@@ -411,6 +531,8 @@ const PosSellPage = () => {
       setCustomerSearch("");
       setCustomerCreateOpen(false);
       setMobileCheckoutOpen(true);
+      setOptimisticSaleLines(null);
+      setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
     },
@@ -446,6 +568,40 @@ const PosSellPage = () => {
     },
   });
 
+  const setOptimisticSaleLines = useCallback(
+    (
+      updater:
+        | PosCartLine[]
+        | null
+        | ((current: PosCartLine[] | null) => PosCartLine[] | null),
+    ) => {
+      setOptimisticSaleLinesState((current) => {
+        const next = typeof updater === "function" ? updater(current) : updater;
+        optimisticSaleLinesRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
+
+  const beginCartSync = useCallback(() => {
+    pendingCartMutationCountRef.current += 1;
+    setPendingCartMutationCount(pendingCartMutationCountRef.current);
+  }, []);
+
+  const endCartSync = useCallback(
+    (targetSaleId?: string | null) => {
+      pendingCartMutationCountRef.current = Math.max(0, pendingCartMutationCountRef.current - 1);
+      const nextCount = pendingCartMutationCountRef.current;
+      setPendingCartMutationCount(nextCount);
+
+      if (nextCount === 0 && targetSaleId) {
+        void trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId });
+      }
+    },
+    [trpcUtils.pos.sales.get],
+  );
+
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: async (result) => {
       setLastCompletedSale({
@@ -465,6 +621,8 @@ const PosSellPage = () => {
       setCustomerSearch("");
       setCustomerCreateOpen(false);
       setMobileCheckoutOpen(true);
+      setOptimisticSaleLines(null);
+      setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([
         shiftQuery.refetch(),
@@ -486,13 +644,44 @@ const PosSellPage = () => {
       shiftQuery.data?.store ?? selectedRegister?.store ?? null,
     ),
   );
-  const saleIdForPaymentInit = saleQuery.data?.id;
-  const saleTotalForPaymentInit = saleQuery.data?.totalKgs;
+  const saleLines = optimisticSaleLines ?? sale?.lines ?? [];
+  const hasCartLines = saleLines.length > 0;
+  const cartSubtotalKgs = roundMoney(
+    saleLines.reduce((sum, line) => {
+      const lineTotal = Number(line.lineTotalKgs);
+      return Number.isFinite(lineTotal) ? sum + lineTotal : sum;
+    }, 0),
+  );
+  const discountDraftActive = discountEditorOpen || discountDraft.trim().length > 0;
+  const parsedDiscountDraft = discountDraftActive
+    ? discountDraft.trim().length > 0
+      ? parseDraftNumber(discountDraft)
+      : 0
+    : null;
+  const draftDiscountKgs =
+    parsedDiscountDraft === null
+      ? null
+      : roundMoney(displayMoneyToKgs(parsedDiscountDraft, currencySource));
+  const cartDiscountKgs = Math.min(
+    cartSubtotalKgs,
+    Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
+  );
+  const cartTotalKgs = roundMoney(Math.max(0, cartSubtotalKgs - cartDiscountKgs));
+  const cartSyncPending = pendingCartMutationCount > 0;
+  const saleIdForPaymentInit = sale?.id ?? (saleId && hasCartLines ? saleId : undefined);
+  const saleTotalForPaymentInit = hasCartLines ? cartTotalKgs : sale?.totalKgs;
   const saleCustomerName = sale?.customerName ?? null;
   const saleCustomerEmail = sale?.customerEmail ?? null;
   const saleCustomerPhone = sale?.customerPhone ?? null;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
+
+  useEffect(() => {
+    if (!sale?.id || pendingCartMutationCountRef.current > 0) {
+      return;
+    }
+    setOptimisticSaleLines(null);
+  }, [sale?.id, sale?.updatedAt, sale?.lines, setOptimisticSaleLines]);
 
   useSse({
     "shift.opened": () => {
@@ -546,8 +735,11 @@ const PosSellPage = () => {
       setDiscountDraft("");
       return;
     }
+    if (discountEditorOpen) {
+      return;
+    }
     setDiscountDraft(String(displayMoneyFromKgs(sale.discountKgs ?? 0, currencySource)));
-  }, [currencySource, sale?.discountKgs, sale?.id, sale]);
+  }, [currencySource, discountEditorOpen, sale?.discountKgs, sale?.id, sale]);
 
   useEffect(() => {
     setSaleId(null);
@@ -561,12 +753,14 @@ const PosSellPage = () => {
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
     setCustomerCreateOpen(false);
+    setOptimisticSaleLines(null);
+    setLineInputDrafts({});
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
     setMobileCheckoutOpen(false);
     autoPrintedSaleIdRef.current = null;
-  }, [registerId]);
+  }, [registerId, setOptimisticSaleLines]);
 
   useEffect(() => {
     if (!saleId) {
@@ -614,9 +808,6 @@ const PosSellPage = () => {
 
   const hasOpenShift = Boolean(shiftQuery.data?.id);
   const isLineBusy =
-    createDraftMutation.isLoading ||
-    addLineMutation.isLoading ||
-    updateLineMutation.isLoading ||
     removeLineMutation.isLoading ||
     updateDiscountMutation.isLoading ||
     updateCustomerMutation.isLoading ||
@@ -632,64 +823,267 @@ const PosSellPage = () => {
     }, 0),
   );
   const totalPaymentKgs = roundMoney(displayMoneyToKgs(totalPayment, currencySource));
+  const productResults = activeStoreId ? (catalogProductsQuery.data?.items ?? []) : [];
+  const visibleProducts = productResults;
+  const productGridLoading = Boolean(activeStoreId && catalogProductsQuery.isFetching);
+  const productCategories = productsBootstrapQuery.data?.categories ?? [];
+
+  const getCurrentCartLines = useCallback(
+    () => optimisticSaleLinesRef.current ?? (sale?.lines as PosCartLine[] | undefined) ?? [],
+    [sale?.lines],
+  );
+
+  const applyOptimisticAdd = useCallback(
+    (product: PosCartProduct) => {
+      setOptimisticSaleLines((current) => {
+        const baseLines = current ?? getCurrentCartLines();
+        const existingIndex = baseLines.findIndex(
+          (line) =>
+            getCartLineProductId(line) === product.id && (line.variantKey ?? "BASE") === "BASE",
+        );
+
+        if (existingIndex >= 0) {
+          return baseLines.map((line, index) =>
+            index === existingIndex ? recalculateCartLine(line, { qty: line.qty + 1 }) : line,
+          );
+        }
+
+        return [...baseLines, buildOptimisticLine(product)];
+      });
+    },
+    [getCurrentCartLines, setOptimisticSaleLines],
+  );
+
+  const patchOptimisticLine = useCallback(
+    (lineId: string, patch: PendingLinePatch) => {
+      setOptimisticSaleLines((current) => {
+        const baseLines = current ?? getCurrentCartLines();
+        return baseLines.map((line) =>
+          line.id === lineId ? recalculateCartLine(line, patch) : line,
+        );
+      });
+    },
+    [getCurrentCartLines, setOptimisticSaleLines],
+  );
+
+  const markLineSyncPending = useCallback(
+    (lineId: string) => {
+      if (lineSyncPendingRef.current.has(lineId)) {
+        return;
+      }
+      lineSyncPendingRef.current.add(lineId);
+      beginCartSync();
+    },
+    [beginCartSync],
+  );
+
+  const releaseLineSyncPending = useCallback(
+    (lineId: string, targetSaleId?: string | null) => {
+      if (!lineSyncPendingRef.current.has(lineId)) {
+        return;
+      }
+      lineSyncPendingRef.current.delete(lineId);
+      endCartSync(targetSaleId);
+    },
+    [endCartSync],
+  );
+
+  const flushLineSync = useCallback(
+    (lineId: string) => {
+      if (isOptimisticLineId(lineId) || lineSyncInFlightRef.current.has(lineId)) {
+        return;
+      }
+
+      const patch = lineSyncDraftsRef.current[lineId];
+      if (!patch) {
+        releaseLineSyncPending(lineId, saleId);
+        return;
+      }
+
+      delete lineSyncDraftsRef.current[lineId];
+      lineSyncInFlightRef.current.add(lineId);
+
+      void (async () => {
+        try {
+          await updateLineMutation.mutateAsync({ lineId, ...patch });
+        } catch {
+          setOptimisticSaleLines(null);
+          if (saleId) {
+            void trpcUtils.pos.sales.get.invalidate({ saleId });
+          }
+        } finally {
+          lineSyncInFlightRef.current.delete(lineId);
+          if (lineSyncDraftsRef.current[lineId]) {
+            lineSyncTimersRef.current[lineId] = window.setTimeout(() => {
+              delete lineSyncTimersRef.current[lineId];
+              flushLineSync(lineId);
+            }, 0);
+            return;
+          }
+          releaseLineSyncPending(lineId, saleId);
+        }
+      })();
+    },
+    [
+      releaseLineSyncPending,
+      saleId,
+      setOptimisticSaleLines,
+      trpcUtils.pos.sales.get,
+      updateLineMutation,
+    ],
+  );
+
+  const scheduleLineSync = useCallback(
+    (lineId: string, patch: PendingLinePatch) => {
+      if (isOptimisticLineId(lineId)) {
+        return;
+      }
+
+      lineSyncDraftsRef.current[lineId] = {
+        ...lineSyncDraftsRef.current[lineId],
+        ...patch,
+      };
+      markLineSyncPending(lineId);
+
+      const existingTimer = lineSyncTimersRef.current[lineId];
+      if (existingTimer !== undefined) {
+        window.clearTimeout(existingTimer);
+      }
+      lineSyncTimersRef.current[lineId] = window.setTimeout(() => {
+        delete lineSyncTimersRef.current[lineId];
+        flushLineSync(lineId);
+      }, 180);
+    },
+    [flushLineSync, markLineSyncPending],
+  );
+
+  const ensureSaleDraftId = useCallback(async () => {
+    const existingSaleId = saleId ?? activeDraft?.id ?? null;
+    if (existingSaleId) {
+      setSaleId(existingSaleId);
+      return existingSaleId;
+    }
+
+    if (!draftCreationRef.current) {
+      draftCreationRef.current = createDraftMutation
+        .mutateAsync({
+          registerId,
+          customerId: selectedCustomer?.id || undefined,
+          customerName: selectedCustomer && !selectedCustomer.id ? selectedCustomer.name : undefined,
+          customerEmail:
+            selectedCustomer && !selectedCustomer.id ? selectedCustomer.email : undefined,
+          customerPhone:
+            selectedCustomer && !selectedCustomer.id ? selectedCustomer.phone : undefined,
+        })
+        .then((draft) => ({ id: draft.id }))
+        .finally(() => {
+          draftCreationRef.current = null;
+        });
+    }
+
+    const draft = await draftCreationRef.current;
+    setSaleId(draft.id);
+    return draft.id;
+  }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer]);
 
   const handleAddLine = useCallback(
-    async (productId: string): Promise<boolean> => {
+    async (productId: string, product?: PosCartProduct): Promise<boolean> => {
       if (!registerId) {
         return false;
       }
 
+      const productForCart =
+        product ?? visibleProducts.find((visibleProduct) => visibleProduct.id === productId);
+      const optimisticLineId = optimisticLineIdForProduct(productId);
+      if (productForCart) {
+        applyOptimisticAdd(productForCart);
+        setLastCompletedSale(null);
+        setAutoReceiptStatus("idle");
+        setMobileCheckoutOpen(true);
+        setLineSearch("");
+        focusLineSearchInput();
+      }
+
+      beginCartSync();
+      let targetSaleId: string | null = null;
       try {
-        let targetSaleId = saleId ?? activeDraft?.id ?? null;
-        if (!targetSaleId) {
-          const draft = await createDraftMutation.mutateAsync({
-            registerId,
-            customerId: selectedCustomer?.id || undefined,
-            customerName:
-              selectedCustomer && !selectedCustomer.id ? selectedCustomer.name : undefined,
-            customerEmail:
-              selectedCustomer && !selectedCustomer.id ? selectedCustomer.email : undefined,
-            customerPhone:
-              selectedCustomer && !selectedCustomer.id ? selectedCustomer.phone : undefined,
-          });
-          targetSaleId = draft.id;
-        }
+        targetSaleId = await ensureSaleDraftId();
         setSaleId(targetSaleId);
 
-        await addLineMutation.mutateAsync({
+        const updatedLine = await addLineMutation.mutateAsync({
           saleId: targetSaleId,
           productId,
           qty: 1,
         });
-        setLastCompletedSale(null);
-        setAutoReceiptStatus("idle");
-        setMobileCheckoutOpen(true);
 
-        // UI refresh should not turn a successful add into a failed scan flow.
-        void Promise.allSettled([
-          trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }),
-          trpcUtils.pos.sales.list.invalidate(),
-          activeDraftQuery.refetch(),
-        ]);
+        setOptimisticSaleLines((current) =>
+          current
+            ? current.map((line) => {
+                if (
+                  line.id !== optimisticLineId &&
+                  getCartLineProductId(line) !== productId
+                ) {
+                  return line;
+                }
+                return {
+                  ...line,
+                  id: updatedLine.id,
+                  productId: updatedLine.productId,
+                  variantId: updatedLine.variantId,
+                  variantKey: updatedLine.variantKey,
+                };
+              })
+            : current,
+        );
+        setLineInputDrafts((current) => {
+          const draft = current[optimisticLineId];
+          if (!draft) {
+            return current;
+          }
+          const next = { ...current };
+          delete next[optimisticLineId];
+          return { ...next, [updatedLine.id]: draft };
+        });
+
+        const localLine = optimisticSaleLinesRef.current?.find(
+          (line) => line.id === updatedLine.id || getCartLineProductId(line) === productId,
+        );
+        const patch: PendingLinePatch = {};
+        if (localLine?.qty && localLine.qty !== updatedLine.qty) {
+          patch.qty = localLine.qty;
+        }
+        if (
+          localLine &&
+          Math.abs(roundMoney(localLine.unitPriceKgs - updatedLine.unitPriceKgs)) > 0.009
+        ) {
+          patch.unitPriceKgs = localLine.unitPriceKgs;
+        }
+        if (patch.qty !== undefined || patch.unitPriceKgs !== undefined) {
+          scheduleLineSync(updatedLine.id, patch);
+        }
 
         focusLineSearchInput();
         return true;
       } catch {
+        setOptimisticSaleLines(null);
+        setLineInputDrafts({});
         // handled by mutation onError
         return false;
+      } finally {
+        endCartSync(targetSaleId);
       }
     },
     [
-      activeDraft?.id,
-      activeDraftQuery,
       addLineMutation,
-      createDraftMutation,
+      applyOptimisticAdd,
+      beginCartSync,
+      endCartSync,
+      ensureSaleDraftId,
       focusLineSearchInput,
       registerId,
-      saleId,
-      selectedCustomer,
-      trpcUtils.pos.sales.get,
-      trpcUtils.pos.sales.list,
+      scheduleLineSync,
+      setOptimisticSaleLines,
+      visibleProducts,
     ],
   );
 
@@ -709,7 +1103,7 @@ const PosSellPage = () => {
       if (result.kind === "multiple") {
         return true;
       }
-      return handleAddLine(result.item.id);
+      return handleAddLine(result.item.id, result.item);
     },
     [handleAddLine, t, toast],
   );
@@ -719,6 +1113,8 @@ const PosSellPage = () => {
       if (keyboardScanResetTimerRef.current !== null) {
         window.clearTimeout(keyboardScanResetTimerRef.current);
       }
+      Object.values(lineSyncTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+      lineSyncTimersRef.current = {};
     };
   }, []);
 
@@ -824,19 +1220,36 @@ const PosSellPage = () => {
     };
   }, [hasOpenShift, handleScanResolved, tErrors, toast, trpcUtils.products.lookupScan]);
 
-  const handleUpdateQty = async (lineId: string, raw: string) => {
+  const handleUpdateQty = (lineId: string, raw: string) => {
+    setLineInputDrafts((current) => ({
+      ...current,
+      [lineId]: { ...current[lineId], qty: raw },
+    }));
+
     const qty = Math.trunc(Number(raw));
     if (!Number.isFinite(qty) || qty <= 0) {
       return;
     }
-    try {
-      await updateLineMutation.mutateAsync({ lineId, qty });
-      if (saleId) {
-        await trpcUtils.pos.sales.get.invalidate({ saleId });
-      }
-    } catch {
-      // handled by mutation onError
+
+    patchOptimisticLine(lineId, { qty });
+    scheduleLineSync(lineId, { qty });
+  };
+
+  const handleQtyBlur = (line: PosCartLine) => {
+    const raw = lineInputDrafts[line.id]?.qty ?? String(line.qty);
+    const qty = Math.trunc(Number(raw));
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setLineInputDrafts((current) => ({
+        ...current,
+        [line.id]: { ...current[line.id], qty: String(line.qty) },
+      }));
+      return;
     }
+
+    setLineInputDrafts((current) => ({
+      ...current,
+      [line.id]: { ...current[line.id], qty: String(qty) },
+    }));
   };
 
   const formatSaleMoneyDraft = (amountKgs: number) => {
@@ -845,38 +1258,47 @@ const PosSellPage = () => {
   };
 
   const parseSaleMoneyDraft = (raw: string) => {
-    const normalized = raw.replace(/\s+/g, "").replace(",", ".");
-    if (!normalized.length) {
-      return null;
-    }
-    const amount = Number(normalized);
-    return Number.isFinite(amount) && amount >= 0 ? amount : null;
+    return parseDraftNumber(raw);
   };
 
-  const handleUpdateLinePrice = async (
+  const handleUpdateLinePrice = (
     lineId: string,
     raw: string,
-    currentUnitPriceKgs: number,
   ) => {
+    setLineInputDrafts((current) => ({
+      ...current,
+      [lineId]: { ...current[lineId], price: raw },
+    }));
+
     const amount = parseSaleMoneyDraft(raw);
     if (amount === null) {
-      toast({ variant: "error", description: t("sell.invalidAmount") });
       return;
     }
 
     const unitPriceKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
-    if (unitPriceKgs === roundMoney(currentUnitPriceKgs)) {
+    patchOptimisticLine(lineId, { unitPriceKgs });
+    scheduleLineSync(lineId, { unitPriceKgs });
+  };
+
+  const handleLinePriceBlur = (line: PosCartLine) => {
+    const raw = lineInputDrafts[line.id]?.price ?? formatSaleMoneyDraft(line.unitPriceKgs);
+    const amount = parseSaleMoneyDraft(raw);
+    if (amount === null) {
+      toast({ variant: "error", description: t("sell.invalidAmount") });
+      setLineInputDrafts((current) => ({
+        ...current,
+        [line.id]: { ...current[line.id], price: formatSaleMoneyDraft(line.unitPriceKgs) },
+      }));
       return;
     }
 
-    try {
-      await updateLineMutation.mutateAsync({ lineId, unitPriceKgs });
-      if (saleId) {
-        await trpcUtils.pos.sales.get.invalidate({ saleId });
-      }
-    } catch {
-      // handled by mutation onError
-    }
+    const unitPriceKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
+    patchOptimisticLine(line.id, { unitPriceKgs });
+    scheduleLineSync(line.id, { unitPriceKgs });
+    setLineInputDrafts((current) => ({
+      ...current,
+      [line.id]: { ...current[line.id], price: formatSaleMoneyDraft(unitPriceKgs) },
+    }));
   };
 
   const handleRemoveLine = async (lineId: string) => {
@@ -901,7 +1323,7 @@ const PosSellPage = () => {
       return;
     }
     const discountKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
-    if (discountKgs > sale.subtotalKgs) {
+    if (discountKgs > cartSubtotalKgs) {
       toast({ variant: "error", description: t("sell.discountTooLarge") });
       return;
     }
@@ -1058,7 +1480,7 @@ const PosSellPage = () => {
       return;
     }
 
-    if (Math.abs(roundMoney(totalPaymentKgs - sale.totalKgs)) > 0.009) {
+    if (Math.abs(roundMoney(totalPaymentKgs - cartTotalKgs)) > 0.009) {
       toast({ variant: "error", description: t("sell.paymentMismatch") });
       focusPaymentsInput();
       return;
@@ -1301,20 +1723,16 @@ const PosSellPage = () => {
     toast,
   ]);
 
-  const productResults = activeStoreId ? (catalogProductsQuery.data?.items ?? []) : [];
-  const visibleProducts = productResults;
-  const productGridLoading = Boolean(activeStoreId && catalogProductsQuery.isFetching);
-  const productCategories = productsBootstrapQuery.data?.categories ?? [];
   const lineDiscountById = new Map<string, number>();
-  if (sale && sale.lines.length && sale.discountKgs > 0 && sale.subtotalKgs > 0) {
-    let remainingDiscount = roundMoney(sale.discountKgs);
-    sale.lines.forEach((line, index) => {
-      const isLastLine = index === sale.lines.length - 1;
+  if (saleLines.length && cartDiscountKgs > 0 && cartSubtotalKgs > 0) {
+    let remainingDiscount = roundMoney(cartDiscountKgs);
+    saleLines.forEach((line, index) => {
+      const isLastLine = index === saleLines.length - 1;
       const lineDiscount = isLastLine
         ? remainingDiscount
         : Math.min(
             line.lineTotalKgs,
-            roundMoney((sale.discountKgs * line.lineTotalKgs) / sale.subtotalKgs),
+            roundMoney((cartDiscountKgs * line.lineTotalKgs) / cartSubtotalKgs),
           );
       lineDiscountById.set(line.id, lineDiscount);
       remainingDiscount = roundMoney(remainingDiscount - lineDiscount);
@@ -1330,19 +1748,17 @@ const PosSellPage = () => {
       }).format(new Date(shiftQuery.data.openedAt))
     : null;
   const paymentTotalLabel = formatKgsMoney(totalPaymentKgs, locale, currencySource);
-  const paymentDeltaKgs = sale ? roundMoney(totalPaymentKgs - sale.totalKgs) : 0;
+  const paymentDeltaKgs = hasCartLines ? roundMoney(totalPaymentKgs - cartTotalKgs) : 0;
   const showPaymentTotalSummary = Boolean(
-    sale && !sellInDebt && (payments.length > 1 || Math.abs(paymentDeltaKgs) > 0.004),
+    hasCartLines && !sellInDebt && (payments.length > 1 || Math.abs(paymentDeltaKgs) > 0.004),
   );
   const discountCurrencyCode = resolveCurrency(currencySource).currencyCode;
-  const showDiscountEditor = discountEditorOpen || Boolean(sale && sale.discountKgs > 0);
+  const showDiscountEditor = discountEditorOpen || cartDiscountKgs > 0;
   const currentCustomer = selectedCustomer;
   const currentCustomerDetails = currentCustomer
     ? [currentCustomer.phone, currentCustomer.email].filter(Boolean).join(" · ")
     : "";
   const currentCustomerLabel = currentCustomer?.name || t("sell.retailCustomer");
-  const saleLines = sale?.lines ?? [];
-  const hasCartLines = saleLines.length > 0;
   const cartItemCount = saleLines.reduce((sum, line) => sum + line.qty, 0);
   const showCompletedSale = Boolean(lastCompletedSale && !saleId);
   const checkoutPanelTitle = showCompletedSale
@@ -1365,10 +1781,11 @@ const PosSellPage = () => {
     : hasCartLines
       ? t("sell.cartSummary", {
           count: cartItemCount,
-          total: sale ? formatSaleMoney(sale.totalKgs) : formatSaleMoney(0),
+          total: formatSaleMoney(cartTotalKgs),
         })
       : t("sell.emptyCartTitle");
-  const completeDisabled = !sale || completeMutation.isLoading || isLineBusy || !hasCartLines;
+  const completeDisabled =
+    !sale || completeMutation.isLoading || isLineBusy || cartSyncPending || !hasCartLines;
   const isDemoCategory = (category: string) =>
     ["test", "tests", "demo", "sample", "samples"].includes(category.trim().toLowerCase());
   const categoryLabel = (category: string) => {
@@ -1735,11 +2152,13 @@ const PosSellPage = () => {
                       <button
                         key={product.id}
                         type="button"
+                        data-testid="pos-product-button"
+                        data-product-id={product.id}
                         onClick={() => {
                           blurLineSearchInput();
-                          void handleAddLine(product.id);
+                          void handleAddLine(product.id, product);
                         }}
-                        disabled={isLineBusy || completeMutation.isLoading}
+                        disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
                         className="group relative flex min-h-[236px] flex-col overflow-hidden rounded-md border border-border bg-card text-left transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[256px] dark:hover:bg-accent/40"
                       >
                         <div
@@ -1821,8 +2240,8 @@ const PosSellPage = () => {
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-base font-bold text-foreground">
-                  {sale
-                    ? formatSaleMoney(sale.totalKgs)
+                  {hasCartLines
+                    ? formatSaleMoney(cartTotalKgs)
                     : showCompletedSale
                       ? t("sell.done")
                       : formatSaleMoney(0)}
@@ -1963,14 +2382,14 @@ const PosSellPage = () => {
                     </div>
                   ) : null}
 
-                  {saleId && saleQuery.isLoading ? (
+                  {saleId && saleQuery.isLoading && !hasCartLines ? (
                     <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                       <Spinner className="h-4 w-4" />
                       {tCommon("loading")}
                     </div>
                   ) : null}
 
-                  {!saleId || (!hasCartLines && !saleQuery.isLoading && !saleQuery.error) ? (
+                  {!hasCartLines && !saleQuery.isLoading && !saleQuery.error ? (
                     <div className="grid min-h-[300px] place-items-center p-6 text-center">
                       <div>
                         <div className="mx-auto grid h-12 w-12 place-items-center rounded-md border border-dashed border-border bg-muted/30 text-muted-foreground">
@@ -1995,7 +2414,12 @@ const PosSellPage = () => {
                         );
 
                         return (
-                          <div key={line.id} className="px-3 py-2">
+                          <div
+                            key={line.id}
+                            className="px-3 py-2"
+                            data-testid="pos-cart-line"
+                            data-product-id={getCartLineProductId(line)}
+                          >
                             <div className="flex gap-2.5">
                               {line.product.primaryImage ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -2037,32 +2461,39 @@ const PosSellPage = () => {
                                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                                     <div className="flex min-w-0 items-center gap-1.5">
                                       <Input
-                                        key={`${line.id}:price:${line.unitPriceKgs}`}
-                                        defaultValue={formatSaleMoneyDraft(line.unitPriceKgs)}
+                                        data-testid="pos-line-price"
+                                        value={
+                                          lineInputDrafts[line.id]?.price ??
+                                          formatSaleMoneyDraft(line.unitPriceKgs)
+                                        }
                                         aria-label={t("sell.unitPrice")}
                                         title={t("sell.unitPrice")}
                                         inputMode="decimal"
                                         className="h-8 w-24 rounded-md px-2 text-[12px] font-medium text-foreground shadow-none focus-visible:ring-1"
                                         onFocus={(event) => event.currentTarget.select()}
-                                        onBlur={(event) =>
-                                          handleUpdateLinePrice(
-                                            line.id,
-                                            event.currentTarget.value,
-                                            line.unitPriceKgs,
-                                          )
+                                        onChange={(event) =>
+                                          handleUpdateLinePrice(line.id, event.currentTarget.value)
                                         }
+                                        onBlur={() => handleLinePriceBlur(line)}
                                         onKeyDown={(event) => {
                                           if (event.key === "Enter") {
+                                            event.preventDefault();
                                             event.currentTarget.blur();
                                           }
                                           if (event.key === "Escape") {
-                                            event.currentTarget.value = formatSaleMoneyDraft(
-                                              line.unitPriceKgs,
-                                            );
+                                            setLineInputDrafts((current) => ({
+                                              ...current,
+                                              [line.id]: {
+                                                ...current[line.id],
+                                                price: formatSaleMoneyDraft(line.unitPriceKgs),
+                                              },
+                                            }));
                                             event.currentTarget.blur();
                                           }
                                         }}
-                                        disabled={isLineBusy || completeMutation.isLoading}
+                                        disabled={
+                                          cancelDraftMutation.isLoading || completeMutation.isLoading
+                                        }
                                       />
                                       {lineDiscountKgs > 0 ? (
                                         <span className="truncate text-[11px] leading-4 text-muted-foreground">
@@ -2083,21 +2514,27 @@ const PosSellPage = () => {
                                           )
                                         }
                                         disabled={
-                                          line.qty <= 1 || isLineBusy || completeMutation.isLoading
+                                          line.qty <= 1 ||
+                                          cancelDraftMutation.isLoading ||
+                                          completeMutation.isLoading
                                         }
                                         aria-label={t("sell.decreaseQty")}
                                       >
                                         -
                                       </Button>
                                       <Input
-                                        key={`${line.id}:${line.qty}`}
-                                        defaultValue={String(line.qty)}
-                                        onBlur={(event) =>
-                                          handleUpdateQty(line.id, event.target.value)
+                                        data-testid="pos-line-qty"
+                                        value={lineInputDrafts[line.id]?.qty ?? String(line.qty)}
+                                        onChange={(event) =>
+                                          handleUpdateQty(line.id, event.currentTarget.value)
                                         }
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        onBlur={() => handleQtyBlur(line)}
                                         className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
                                         inputMode="numeric"
-                                        disabled={isLineBusy || completeMutation.isLoading}
+                                        disabled={
+                                          cancelDraftMutation.isLoading || completeMutation.isLoading
+                                        }
                                       />
                                       <Button
                                         type="button"
@@ -2107,14 +2544,19 @@ const PosSellPage = () => {
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
-                                        disabled={isLineBusy || completeMutation.isLoading}
+                                        disabled={
+                                          cancelDraftMutation.isLoading || completeMutation.isLoading
+                                        }
                                         aria-label={t("sell.increaseQty")}
                                       >
                                         +
                                       </Button>
                                     </div>
                                   </div>
-                                  <p className="text-right text-sm font-semibold leading-none text-foreground">
+                                  <p
+                                    className="text-right text-sm font-semibold leading-none text-foreground"
+                                    data-testid="pos-line-total"
+                                  >
                                     {formatSaleMoney(lineNetTotalKgs)}
                                   </p>
                                 </div>
@@ -2165,7 +2607,7 @@ const PosSellPage = () => {
                   ) : null}
                 </div>
 
-                {saleId && sale && hasCartLines ? (
+                {hasCartLines ? (
                   <div ref={paymentsSectionRef} className="border-t border-border bg-card">
                     <div className="space-y-2 px-4 py-2">
                       <div className="px-1">
@@ -2173,7 +2615,7 @@ const PosSellPage = () => {
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-muted-foreground">{t("sell.subtotal")}</span>
                             <span className="font-medium text-muted-foreground">
-                              {formatSaleMoney(sale.subtotalKgs)}
+                              {formatSaleMoney(cartSubtotalKgs)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-3">
@@ -2192,7 +2634,7 @@ const PosSellPage = () => {
                                 </Button>
                               ) : null}
                               <span className="font-medium text-muted-foreground">
-                                {formatSaleMoney(sale.discountKgs ?? 0)}
+                                {formatSaleMoney(cartDiscountKgs)}
                               </span>
                             </div>
                           </div>
@@ -2201,8 +2643,11 @@ const PosSellPage = () => {
                           <span className="text-sm font-semibold leading-none text-foreground">
                             {t("sell.amountDue")}
                           </span>
-                          <span className="text-xl font-bold leading-none text-foreground">
-                            {formatSaleMoney(sale.totalKgs)}
+                          <span
+                            className="text-xl font-bold leading-none text-foreground"
+                            data-testid="pos-cart-total"
+                          >
+                            {formatSaleMoney(cartTotalKgs)}
                           </span>
                         </div>
                       </div>
@@ -2727,9 +3172,11 @@ const PosSellPage = () => {
                       type="button"
                       onClick={() => {
                         blurLineSearchInput();
-                        void handleAddLine(product.id);
+                        void handleAddLine(product.id, product);
                       }}
-                      disabled={!hasOpenShift || isLineBusy || completeMutation.isLoading}
+                      disabled={
+                        !hasOpenShift || cancelDraftMutation.isLoading || completeMutation.isLoading
+                      }
                       className="grid min-h-20 w-full grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 border border-border bg-card p-2 text-left shadow-sm transition hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <span className="grid h-16 w-16 place-items-center overflow-hidden border border-border bg-muted/30">
@@ -2975,7 +3422,7 @@ const PosSellPage = () => {
                       </div>
                     </div>
 
-                    {!saleId || (!hasCartLines && !saleQuery.isLoading && !saleQuery.error) ? (
+                    {!hasCartLines && !saleQuery.isLoading && !saleQuery.error ? (
                       <div className="grid min-h-40 place-items-center border border-dashed border-border bg-card p-6 text-center">
                         <div>
                           <EmptyIcon
@@ -2992,7 +3439,7 @@ const PosSellPage = () => {
                       </div>
                     ) : null}
 
-                    {saleId && saleQuery.isLoading ? (
+                    {saleId && saleQuery.isLoading && !hasCartLines ? (
                       <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                         <Spinner className="h-4 w-4" />
                         {tCommon("loading")}
@@ -3008,7 +3455,12 @@ const PosSellPage = () => {
                           );
 
                           return (
-                            <div key={line.id} className="rounded-md border border-border bg-card p-3">
+                            <div
+                              key={line.id}
+                              className="rounded-md border border-border bg-card p-3"
+                              data-testid="pos-cart-line"
+                              data-product-id={getCartLineProductId(line)}
+                            >
                               <div className="flex gap-3">
                                 {line.product.primaryImage ? (
                                   // eslint-disable-next-line @next/next/no-img-element
@@ -3049,31 +3501,38 @@ const PosSellPage = () => {
 
                                   <div className="mt-3 grid grid-cols-[minmax(0,1fr)_132px] gap-2">
                                     <Input
-                                      key={`${line.id}:mobile-price:${line.unitPriceKgs}`}
-                                      defaultValue={formatSaleMoneyDraft(line.unitPriceKgs)}
+                                      data-testid="pos-line-price"
+                                      value={
+                                        lineInputDrafts[line.id]?.price ??
+                                        formatSaleMoneyDraft(line.unitPriceKgs)
+                                      }
                                       aria-label={t("sell.unitPrice")}
                                       inputMode="decimal"
                                       className="h-11 text-right"
                                       onFocus={(event) => event.currentTarget.select()}
-                                      onBlur={(event) =>
-                                        handleUpdateLinePrice(
-                                          line.id,
-                                          event.currentTarget.value,
-                                          line.unitPriceKgs,
-                                        )
+                                      onChange={(event) =>
+                                        handleUpdateLinePrice(line.id, event.currentTarget.value)
                                       }
+                                      onBlur={() => handleLinePriceBlur(line)}
                                       onKeyDown={(event) => {
                                         if (event.key === "Enter") {
+                                          event.preventDefault();
                                           event.currentTarget.blur();
                                         }
                                         if (event.key === "Escape") {
-                                          event.currentTarget.value = formatSaleMoneyDraft(
-                                            line.unitPriceKgs,
-                                          );
+                                          setLineInputDrafts((current) => ({
+                                            ...current,
+                                            [line.id]: {
+                                              ...current[line.id],
+                                              price: formatSaleMoneyDraft(line.unitPriceKgs),
+                                            },
+                                          }));
                                           event.currentTarget.blur();
                                         }
                                       }}
-                                      disabled={isLineBusy || completeMutation.isLoading}
+                                      disabled={
+                                        cancelDraftMutation.isLoading || completeMutation.isLoading
+                                      }
                                     />
                                     <div className="inline-flex h-11 w-[132px] items-center overflow-hidden border border-border bg-background">
                                       <Button
@@ -3088,21 +3547,27 @@ const PosSellPage = () => {
                                           )
                                         }
                                         disabled={
-                                          line.qty <= 1 || isLineBusy || completeMutation.isLoading
+                                          line.qty <= 1 ||
+                                          cancelDraftMutation.isLoading ||
+                                          completeMutation.isLoading
                                         }
                                         aria-label={t("sell.decreaseQty")}
                                       >
                                         -
                                       </Button>
                                       <Input
-                                        key={`${line.id}:mobile-qty:${line.qty}`}
-                                        defaultValue={String(line.qty)}
-                                        onBlur={(event) =>
-                                          handleUpdateQty(line.id, event.target.value)
+                                        data-testid="pos-line-qty"
+                                        value={lineInputDrafts[line.id]?.qty ?? String(line.qty)}
+                                        onChange={(event) =>
+                                          handleUpdateQty(line.id, event.currentTarget.value)
                                         }
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        onBlur={() => handleQtyBlur(line)}
                                         className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-0"
                                         inputMode="numeric"
-                                        disabled={isLineBusy || completeMutation.isLoading}
+                                        disabled={
+                                          cancelDraftMutation.isLoading || completeMutation.isLoading
+                                        }
                                       />
                                       <Button
                                         type="button"
@@ -3112,7 +3577,9 @@ const PosSellPage = () => {
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
-                                        disabled={isLineBusy || completeMutation.isLoading}
+                                        disabled={
+                                          cancelDraftMutation.isLoading || completeMutation.isLoading
+                                        }
                                         aria-label={t("sell.increaseQty")}
                                       >
                                         +
@@ -3128,7 +3595,10 @@ const PosSellPage = () => {
                                         </p>
                                       ) : null}
                                     </div>
-                                    <p className="text-right text-base font-semibold text-foreground">
+                                    <p
+                                      className="text-right text-base font-semibold text-foreground"
+                                      data-testid="pos-line-total"
+                                    >
                                       {formatSaleMoney(lineNetTotalKgs)}
                                     </p>
                                   </div>
@@ -3173,13 +3643,13 @@ const PosSellPage = () => {
                       </div>
                     ) : null}
 
-                    {saleId && sale && hasCartLines ? (
+                    {hasCartLines ? (
                       <div className="mt-4 space-y-3">
                         <div className="rounded-md border border-border bg-card p-3">
                           <div className="flex items-center justify-between gap-3 text-sm">
                             <span className="text-muted-foreground">{t("sell.subtotal")}</span>
                             <span className="font-medium text-foreground">
-                              {formatSaleMoney(sale.subtotalKgs)}
+                              {formatSaleMoney(cartSubtotalKgs)}
                             </span>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-3 text-sm">
@@ -3192,8 +3662,8 @@ const PosSellPage = () => {
                               onClick={() => setDiscountEditorOpen((current) => !current)}
                               disabled={isLineBusy || completeMutation.isLoading}
                             >
-                              {sale.discountKgs > 0
-                                ? formatSaleMoney(sale.discountKgs)
+                              {cartDiscountKgs > 0
+                                ? formatSaleMoney(cartDiscountKgs)
                                 : `+ ${t("sell.addDiscount")}`}
                             </Button>
                           </div>
@@ -3224,8 +3694,11 @@ const PosSellPage = () => {
                             <span className="text-sm font-semibold text-foreground">
                               {t("sell.amountDue")}
                             </span>
-                            <span className="text-xl font-bold text-foreground">
-                              {formatSaleMoney(sale.totalKgs)}
+                            <span
+                              className="text-xl font-bold text-foreground"
+                              data-testid="pos-cart-total"
+                            >
+                              {formatSaleMoney(cartTotalKgs)}
                             </span>
                           </div>
                         </div>
@@ -3357,7 +3830,7 @@ const PosSellPage = () => {
                     ) : null}
                   </div>
 
-                  {saleId && sale && hasCartLines ? (
+                  {hasCartLines ? (
                     <div className="border-t border-border bg-background p-4">
                       <Button
                         className="h-12 w-full bg-success text-base font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"

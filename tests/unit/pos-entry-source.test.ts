@@ -53,7 +53,7 @@ describe("pos entry navigation", () => {
     const source = await readSource("src/app/(app)/pos/sell/page.tsx");
 
     expect(source).toContain("const priceMissing = priceKgs === null;");
-    expect(source).toContain("void handleAddLine(product.id);");
+    expect(source).toContain("void handleAddLine(product.id, product);");
     expect(source).toContain('priceMissing ? t("sell.priceMissing") : formatSaleMoney(priceKgs)');
     expect(source).not.toContain("const productBlocked = priceMissing;");
     expect(source).not.toContain("aria-disabled={productBlocked}");
@@ -69,7 +69,8 @@ describe("pos entry navigation", () => {
 
     expect(pageSource).toContain("handleUpdateLinePrice");
     expect(pageSource).toContain("formatSaleMoneyDraft(line.unitPriceKgs)");
-    expect(pageSource).toContain("await updateLineMutation.mutateAsync({ lineId, unitPriceKgs })");
+    expect(pageSource).toContain("patchOptimisticLine(lineId, { unitPriceKgs });");
+    expect(pageSource).toContain("scheduleLineSync(lineId, { unitPriceKgs });");
     expect(routerSource).toContain("unitPriceKgs: z.number().min(0).optional()");
     expect(serviceSource).toContain("unitPriceKgs: nextUnitPriceKgs");
     expect(serviceSource).toContain("lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty)");
@@ -118,7 +119,8 @@ describe("pos entry navigation", () => {
     );
     expect(pageSource).toContain("currentCustomerLabel");
     expect(pageSource).toContain("handleSelectCustomer({");
-    expect(pageSource).toContain("key={`${line.id}:mobile-price:${line.unitPriceKgs}`}");
+    expect(pageSource).toContain("lineInputDrafts[line.id]?.price");
+    expect(pageSource).not.toContain("key={`${line.id}:mobile-price:${line.unitPriceKgs}`}");
     expect(pageSource).toContain("handleUpdateLinePrice(");
     expect(pageSource).toContain('t("sell.saleDiscount")');
     expect(pageSource).toContain("handleComplete");
