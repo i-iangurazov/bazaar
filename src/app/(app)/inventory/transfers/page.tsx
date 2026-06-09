@@ -113,7 +113,6 @@ const InventoryTransfersPage = () => {
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
-  const [validatingKey, setValidatingKey] = useState("");
   const transferInputRefs = useRef(new Map<string, HTMLInputElement>());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const handledPrefillRef = useRef("");
@@ -257,7 +256,7 @@ const InventoryTransfersPage = () => {
       }
 
       const key = lineKey(result.product.id, result.snapshot.variantId);
-      setValidatingKey(key);
+      let destinationStock = 0;
       try {
         const destinationResults = await trpcUtils.inventory.searchProducts.fetch({
           storeId: toStoreId,
@@ -267,59 +266,54 @@ const InventoryTransfersPage = () => {
         const destination = destinationResults.find(
           (item) => lineKey(item.product.id, item.snapshot.variantId) === key,
         );
-        if (!destination) {
-          toast({ variant: "error", description: t("transferProductUnavailableDestination") });
-          return;
-        }
-
-        setLines((current) => {
-          const existing = current.find((line) => line.key === key);
-          if (existing) {
-            return current.map((line) => {
-              if (line.key !== key) {
-                return line;
-              }
-              const currentQty = parseDecimalInput(line.quantityInput);
-              const nextQty =
-                mode === "scan" && Number.isInteger(currentQty) && currentQty > 0
-                  ? currentQty + 1
-                  : currentQty;
-              return {
-                ...line,
-                quantityInput: Number.isFinite(nextQty) ? String(nextQty) : line.quantityInput,
-                duplicateHint: true,
-              };
-            });
-          }
-          return [
-            ...current,
-            {
-              key,
-              productId: result.product.id,
-              variantId: result.snapshot.variantId ?? null,
-              productName: result.product.name,
-              variantName: result.variant?.name ?? null,
-              sku: enableSku ? result.product.sku : "",
-              barcode: enableBarcode ? result.primaryBarcode : null,
-              imageUrl: getPreviewUrl(result),
-              unitLabel: getBaseUnitLabel(result),
-              sourceStock: result.snapshot.onHand,
-              destinationStock: destination.snapshot.onHand,
-              unitCostKgs: result.unitCostKgs,
-              quantityInput: "1",
-            },
-          ];
-        });
-        focusTransferQuantity(key, undefined, { selectContents: options?.selectQuantity ?? false });
-        clearDuplicateHint(key);
+        destinationStock = destination?.snapshot.onHand ?? 0;
       } catch (error) {
         toast({
           variant: "error",
           description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
         });
-      } finally {
-        setValidatingKey("");
+        return;
       }
+      setLines((current) => {
+        const existing = current.find((line) => line.key === key);
+        if (existing) {
+          return current.map((line) => {
+            if (line.key !== key) {
+              return line;
+            }
+            const currentQty = parseDecimalInput(line.quantityInput);
+            const nextQty =
+              mode === "scan" && Number.isInteger(currentQty) && currentQty > 0
+                ? currentQty + 1
+                : currentQty;
+            return {
+              ...line,
+              quantityInput: Number.isFinite(nextQty) ? String(nextQty) : line.quantityInput,
+              duplicateHint: true,
+            };
+          });
+        }
+        return [
+          ...current,
+          {
+            key,
+            productId: result.product.id,
+            variantId: result.snapshot.variantId ?? null,
+            productName: result.product.name,
+            variantName: result.variant?.name ?? null,
+            sku: enableSku ? result.product.sku : "",
+            barcode: enableBarcode ? result.primaryBarcode : null,
+            imageUrl: getPreviewUrl(result),
+            unitLabel: getBaseUnitLabel(result),
+            sourceStock: result.snapshot.onHand,
+            destinationStock,
+            unitCostKgs: result.unitCostKgs,
+            quantityInput: "1",
+          },
+        ];
+      });
+      focusTransferQuantity(key, undefined, { selectContents: options?.selectQuantity ?? false });
+      clearDuplicateHint(key);
     },
     [
       clearDuplicateHint,
@@ -691,7 +685,6 @@ const InventoryTransfersPage = () => {
                 (searchQuery.data ?? []).map((result) => {
                   const key = lineKey(result.product.id, result.snapshot.variantId);
                   const added = lines.some((line) => line.key === key);
-                  const validating = validatingKey === key;
                   return (
                     <div
                       key={key}
@@ -701,7 +694,7 @@ const InventoryTransfersPage = () => {
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm disabled:cursor-wait disabled:opacity-60"
                         onClick={() => void addSearchResult(result, "manual")}
-                        disabled={!canSearch || validating}
+                        disabled={!canSearch}
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden bg-muted/30">
                           {getPreviewUrl(result) ? (
@@ -735,7 +728,6 @@ const InventoryTransfersPage = () => {
                               : ""}
                           </span>
                         </span>
-                        {validating ? <Spinner className="h-4 w-4" /> : null}
                         {added ? <Badge variant="success">{t("transferAdded")}</Badge> : null}
                       </button>
                     </div>

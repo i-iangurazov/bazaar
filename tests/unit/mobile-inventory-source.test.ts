@@ -67,4 +67,14 @@ describe("mobile inventory source", () => {
     expect(receivingSource).toContain("receivingTotalQuantityShort");
     expect(receivingSource).toContain("pb-[env(safe-area-inset-bottom)]");
   });
+
+  it("allows transfers to assign products to the destination store", async () => {
+    const transferSource = await readSource("src/app/(app)/inventory/transfers/page.tsx");
+    const inventoryServiceSource = await readSource("src/server/services/inventory.ts");
+
+    expect(transferSource).toContain("destinationStock = destination?.snapshot.onHand ?? 0");
+    expect(transferSource).not.toContain('description: t("transferProductUnavailableDestination")');
+    expect(inventoryServiceSource).toContain("storeId: input.fromStoreId");
+    expect(inventoryServiceSource).not.toMatch(/storeId:\s*input\.toStoreId,\s*isActive:\s*true/);
+  });
 });

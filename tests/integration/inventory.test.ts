@@ -659,7 +659,7 @@ describeDb("inventory service", () => {
     );
   });
 
-  it("rejects transfer when the product is not assigned to the destination store", async () => {
+  it("assigns the product to the destination store when transferring stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const storeB = await prisma.store.create({
       data: {
@@ -681,19 +681,31 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-transfer-unassigned-seed",
     });
 
-    await expect(
-      transferStock({
-        fromStoreId: store.id,
-        toStoreId: storeB.id,
-        productId: product.id,
-        qty: 5,
-        note: "Move stock",
-        actorId: adminUser.id,
-        organizationId: org.id,
-        requestId: "req-transfer-unassigned",
-        idempotencyKey: "idem-transfer-unassigned",
-      }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "invalidTransferProducts" });
+    const result = await transferStock({
+      fromStoreId: store.id,
+      toStoreId: storeB.id,
+      productId: product.id,
+      qty: 5,
+      note: "Move stock",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-unassigned",
+      idempotencyKey: "idem-transfer-unassigned",
+    });
+
+    expect(result.lines[0]?.inOnHand).toBe(5);
+    expect(result.lines[0]?.outOnHand).toBe(7);
+
+    const destinationAssignment = await prisma.storeProduct.findUnique({
+      where: {
+        storeId_productId: {
+          storeId: storeB.id,
+          productId: product.id,
+        },
+      },
+    });
+    expect(destinationAssignment?.isActive).toBe(true);
+    expect(destinationAssignment?.assignedById).toBe(adminUser.id);
   });
 
   it("rejects transfer quantity above available stock when negative stock is disabled", async () => {

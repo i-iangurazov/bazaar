@@ -942,24 +942,12 @@ export const transferStock = async (input: TransferStockInput) => {
             id: { in: productIds },
             organizationId: input.organizationId,
             isDeleted: false,
-            AND: [
-              {
-                storeProducts: {
-                  some: {
-                    storeId: input.fromStoreId,
-                    isActive: true,
-                  },
-                },
+            storeProducts: {
+              some: {
+                storeId: input.fromStoreId,
+                isActive: true,
               },
-              {
-                storeProducts: {
-                  some: {
-                    storeId: input.toStoreId,
-                    isActive: true,
-                  },
-                },
-              },
-            ],
+            },
           },
           select: { id: true, baseUnitId: true },
         });
