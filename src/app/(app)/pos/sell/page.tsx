@@ -113,6 +113,60 @@ type PosCustomerSelection = {
   phone: string | null;
 };
 
+type CustomerCreatePanelProps = {
+  name: string;
+  phone: string;
+  namePlaceholder: string;
+  phonePlaceholder: string;
+  createLabel: string;
+  isLoading: boolean;
+  disabled: boolean;
+  onNameChange: (value: string) => void;
+  onPhoneChange: (value: string) => void;
+  onCreate: () => void;
+};
+
+const CustomerCreatePanel = ({
+  name,
+  phone,
+  namePlaceholder,
+  phonePlaceholder,
+  createLabel,
+  isLoading,
+  disabled,
+  onNameChange,
+  onPhoneChange,
+  onCreate,
+}: CustomerCreatePanelProps) => (
+  <div className="space-y-2 border-t border-border px-3 py-3">
+    <Input
+      value={name}
+      onChange={(event) => onNameChange(event.target.value)}
+      placeholder={namePlaceholder}
+      autoComplete="name"
+    />
+    <Input
+      value={phone}
+      onChange={(event) => onPhoneChange(event.target.value)}
+      placeholder={phonePlaceholder}
+      autoComplete="tel"
+    />
+    <Button
+      type="button"
+      className="h-10 w-full justify-start"
+      onClick={onCreate}
+      disabled={disabled}
+    >
+      {isLoading ? (
+        <Spinner className="h-4 w-4" />
+      ) : (
+        <AddIcon className="h-4 w-4" aria-hidden />
+      )}
+      {createLabel}
+    </Button>
+  </div>
+);
+
 const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
@@ -138,7 +192,6 @@ const PosSellPage = () => {
   const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
-  const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [lastCompletedSale, setLastCompletedSale] = useState<{
     id: string;
     number: string;
@@ -934,12 +987,11 @@ const PosSellPage = () => {
     }
     const name = newCustomerName.trim().replace(/\s+/g, " ");
     const phone = newCustomerPhone.trim();
-    const email = newCustomerEmail.trim();
     if (!name) {
       toast({ variant: "error", description: t("sell.customerNameRequired") });
       return;
     }
-    if (!phone && !email) {
+    if (!phone) {
       toast({ variant: "error", description: t("sell.customerContactRequired") });
       return;
     }
@@ -949,12 +1001,11 @@ const PosSellPage = () => {
         storeId: activeStoreId,
         name,
         phone: phone || null,
-        email: email || null,
+        email: null,
       });
       const customer = result.customer;
       setNewCustomerName("");
       setNewCustomerPhone("");
-      setNewCustomerEmail("");
       setCustomerCreateOpen(false);
       await trpcUtils.pos.customers.search.invalidate();
       await handleSelectCustomer({
@@ -1367,44 +1418,6 @@ const PosSellPage = () => {
     };
   };
 
-  const CustomerCreatePanel = () => (
-    <div className="space-y-2 border-t border-border px-3 py-3">
-      <Input
-        value={newCustomerName}
-        onChange={(event) => setNewCustomerName(event.target.value)}
-        placeholder={t("sell.customerNamePlaceholder")}
-        autoComplete="name"
-      />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          value={newCustomerPhone}
-          onChange={(event) => setNewCustomerPhone(event.target.value)}
-          placeholder={t("sell.customerPhonePlaceholder")}
-          autoComplete="tel"
-        />
-        <Input
-          value={newCustomerEmail}
-          onChange={(event) => setNewCustomerEmail(event.target.value)}
-          placeholder={t("sell.customerEmailPlaceholder")}
-          autoComplete="email"
-        />
-      </div>
-      <Button
-        type="button"
-        className="h-10 w-full justify-start"
-        onClick={() => void handleCreateCustomer()}
-        disabled={createCustomerMutation.isLoading || !activeStoreId}
-      >
-        {createCustomerMutation.isLoading ? (
-          <Spinner className="h-4 w-4" />
-        ) : (
-          <AddIcon className="h-4 w-4" aria-hidden />
-        )}
-        {t("sell.createCustomer")}
-      </Button>
-    </div>
-  );
-
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
@@ -1529,7 +1542,20 @@ const PosSellPage = () => {
                     </Button>
                   </div>
 
-                  {customerCreateOpen ? <CustomerCreatePanel /> : null}
+                  {customerCreateOpen ? (
+                    <CustomerCreatePanel
+                      name={newCustomerName}
+                      phone={newCustomerPhone}
+                      namePlaceholder={t("sell.customerNamePlaceholder")}
+                      phonePlaceholder={t("sell.customerPhonePlaceholder")}
+                      createLabel={t("sell.createCustomer")}
+                      isLoading={createCustomerMutation.isLoading}
+                      disabled={createCustomerMutation.isLoading || !activeStoreId}
+                      onNameChange={setNewCustomerName}
+                      onPhoneChange={setNewCustomerPhone}
+                      onCreate={() => void handleCreateCustomer()}
+                    />
+                  ) : null}
 
                   {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
                     <div className="flex items-center justify-center gap-2 border-t border-border py-5 text-sm text-muted-foreground">
@@ -2445,7 +2471,20 @@ const PosSellPage = () => {
             </Button>
           </div>
 
-          {customerCreateOpen ? <CustomerCreatePanel /> : null}
+          {customerCreateOpen ? (
+            <CustomerCreatePanel
+              name={newCustomerName}
+              phone={newCustomerPhone}
+              namePlaceholder={t("sell.customerNamePlaceholder")}
+              phonePlaceholder={t("sell.customerPhonePlaceholder")}
+              createLabel={t("sell.createCustomer")}
+              isLoading={createCustomerMutation.isLoading}
+              disabled={createCustomerMutation.isLoading || !activeStoreId}
+              onNameChange={setNewCustomerName}
+              onPhoneChange={setNewCustomerPhone}
+              onCreate={() => void handleCreateCustomer()}
+            />
+          ) : null}
 
           {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
             <div className="mt-4 flex items-center justify-center gap-2 border border-border bg-card py-5 text-sm text-muted-foreground">
@@ -3335,7 +3374,7 @@ const PosSellPage = () => {
           </div>
         ) : null}
 
-        <MobileCustomerSheet />
+        {MobileCustomerSheet()}
       </div>
     );
   };

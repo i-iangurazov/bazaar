@@ -83,9 +83,23 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("const MobilePosView = () => {");
     expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
     expect(pageSource).toContain("const MobileCustomerSheet = () => {");
+    expect(pageSource).toContain("{MobileCustomerSheet()}");
+    expect(pageSource).not.toContain("<MobileCustomerSheet />");
     expect(pageSource).toContain('t("sell.openCart")');
     expect(pageSource).toContain('t("sell.customerSelectorTitle")');
     expect(pageSource).toContain('t("sell.paymentsTitle")');
+  });
+
+  it("keeps POS customer quick-create focused and phone-only", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(pageSource).toContain("type CustomerCreatePanelProps = {");
+    expect(pageSource).toContain("const CustomerCreatePanel = ({");
+    expect(pageSource).toContain("phonePlaceholder={t(\"sell.customerPhonePlaceholder\")}");
+    expect(pageSource).toContain("email: null");
+    expect(pageSource).not.toContain("newCustomerEmail");
+    expect(pageSource).not.toContain("setNewCustomerEmail");
+    expect(pageSource).not.toContain("customerEmailPlaceholder");
   });
 
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
