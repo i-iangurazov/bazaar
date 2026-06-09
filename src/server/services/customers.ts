@@ -141,11 +141,15 @@ const normalizeManualCustomerInput = (input: {
 }) => {
   const name = normalizeOptionalText(input.name);
   const email = normalizeCustomerEmail(input.email);
+  const rawPhone = normalizeOptionalText(input.phone);
   const phone = normalizeCustomerPhone(input.phone);
   const address = normalizeOptionalText(input.address);
 
   if (!name) {
     throw new AppError("customerNameRequired", "BAD_REQUEST", 400);
+  }
+  if (rawPhone && !phone) {
+    throw new AppError("customerPhoneDigitsRequired", "BAD_REQUEST", 400);
   }
   ensureCustomerContact({ email, phone });
   if (email && !emailPattern.test(email)) {

@@ -92,14 +92,19 @@ describe("pos entry navigation", () => {
 
   it("keeps POS customer quick-create focused and phone-only", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const customerServiceSource = await readSource("src/server/services/customers.ts");
 
     expect(pageSource).toContain("type CustomerCreatePanelProps = {");
     expect(pageSource).toContain("const CustomerCreatePanel = ({");
     expect(pageSource).toContain("phonePlaceholder={t(\"sell.customerPhonePlaceholder\")}");
+    expect(pageSource).toContain('const phoneDigits = phone.replace(/\\D/g, "");');
+    expect(pageSource).toContain("if (!phoneDigits) {");
     expect(pageSource).toContain("email: null");
     expect(pageSource).not.toContain("newCustomerEmail");
     expect(pageSource).not.toContain("setNewCustomerEmail");
     expect(pageSource).not.toContain("customerEmailPlaceholder");
+    expect(customerServiceSource).toContain("const rawPhone = normalizeOptionalText(input.phone)");
+    expect(customerServiceSource).toContain('throw new AppError("customerPhoneDigitsRequired"');
   });
 
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {

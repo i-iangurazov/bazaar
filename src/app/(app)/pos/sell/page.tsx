@@ -987,11 +987,12 @@ const PosSellPage = () => {
     }
     const name = newCustomerName.trim().replace(/\s+/g, " ");
     const phone = newCustomerPhone.trim();
+    const phoneDigits = phone.replace(/\D/g, "");
     if (!name) {
       toast({ variant: "error", description: t("sell.customerNameRequired") });
       return;
     }
-    if (!phone) {
+    if (!phoneDigits) {
       toast({ variant: "error", description: t("sell.customerContactRequired") });
       return;
     }
