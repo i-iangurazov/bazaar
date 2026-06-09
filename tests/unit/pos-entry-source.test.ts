@@ -49,10 +49,15 @@ describe("pos entry navigation", () => {
     expect(source).not.toContain("text-emerald-");
   });
 
-  it("does not block adding out-of-stock products to a POS sale", async () => {
+  it("does not block adding out-of-stock or missing-price products to a POS sale", async () => {
     const source = await readSource("src/app/(app)/pos/sell/page.tsx");
 
-    expect(source).toContain("const productBlocked = priceMissing;");
+    expect(source).toContain("const priceMissing = priceKgs === null;");
+    expect(source).toContain("void handleAddLine(product.id);");
+    expect(source).toContain('priceMissing ? t("sell.priceMissing") : formatSaleMoney(priceKgs)');
+    expect(source).not.toContain("const productBlocked = priceMissing;");
+    expect(source).not.toContain("aria-disabled={productBlocked}");
+    expect(source).not.toContain('t("sell.priceMissingCannotSell")');
     expect(source).not.toContain("stockBlocked");
     expect(source).not.toContain('t("sell.insufficientStock")');
   });

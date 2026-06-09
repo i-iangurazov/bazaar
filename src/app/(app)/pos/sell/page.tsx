@@ -1703,30 +1703,17 @@ const PosSellPage = () => {
                     const primaryImage = product.images[0]?.url ?? product.photoUrl;
                     const stock = stockMeta(stockQty);
                     const priceMissing = priceKgs === null;
-                    const productBlocked = priceMissing;
 
                     return (
                       <button
                         key={product.id}
                         type="button"
                         onClick={() => {
-                          if (priceMissing) {
-                            toast({
-                              variant: "error",
-                              description: t("sell.priceMissingCannotSell"),
-                            });
-                            return;
-                          }
                           blurLineSearchInput();
                           void handleAddLine(product.id);
                         }}
                         disabled={isLineBusy || completeMutation.isLoading}
-                        aria-disabled={productBlocked}
-                        className={`group relative flex min-h-[236px] flex-col overflow-hidden rounded-md border border-border bg-card text-left transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[256px] dark:hover:bg-accent/40 ${
-                          productBlocked
-                            ? "cursor-not-allowed opacity-75 hover:border-border hover:bg-card"
-                            : ""
-                        }`}
+                        className="group relative flex min-h-[236px] flex-col overflow-hidden rounded-md border border-border bg-card text-left transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[256px] dark:hover:bg-accent/40"
                       >
                         <div
                           className={`absolute right-2 top-2 z-10 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${stock.className}`}
@@ -2699,13 +2686,6 @@ const PosSellPage = () => {
                       key={product.id}
                       type="button"
                       onClick={() => {
-                        if (priceMissing) {
-                          toast({
-                            variant: "error",
-                            description: t("sell.priceMissingCannotSell"),
-                          });
-                          return;
-                        }
                         blurLineSearchInput();
                         void handleAddLine(product.id);
                       }}
