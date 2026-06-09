@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PosPaymentMethod } from "@prisma/client";
 import { useSearchParams } from "next/navigation";
@@ -183,8 +183,14 @@ type PosCartProduct = {
   } | null;
 };
 
+type PosCatalogProduct = PosCartProduct & {
+  onHandQty?: number | null;
+  barcodes?: Array<{ value: string }>;
+};
+
 type PosCartLine = {
   id: string;
+  serverLineId?: string;
   productId?: string;
   variantId?: string | null;
   variantKey?: string | null;
@@ -225,6 +231,11 @@ const optimisticLineIdForProduct = (productId: string, variantKey = "BASE") =>
   `${optimisticLinePrefix}${productId}:${variantKey}`;
 
 const getCartLineProductId = (line: PosCartLine) => line.productId ?? line.product.id;
+
+const findCartLineForProduct = (lines: PosCartLine[], productId: string, variantKey = "BASE") =>
+  lines.find(
+    (line) => getCartLineProductId(line) === productId && (line.variantKey ?? "BASE") === variantKey,
+  );
 
 const parseDraftNumber = (raw: string) => {
   const normalized = raw.replace(/\s+/g, "").replace(",", ".");
@@ -277,6 +288,154 @@ const buildOptimisticLine = (product: PosCartProduct): PosCartLine => {
   };
 };
 
+type ProductStockMeta = {
+  label: string;
+  className: string;
+  showWarningIcon: boolean;
+};
+
+type PosProductButtonProps = {
+  product: PosCatalogProduct;
+  variant: "desktop" | "mobile";
+  enableSku: boolean;
+  enableBarcode: boolean;
+  disabled: boolean;
+  priceMissingLabel: string;
+  formatSaleMoney: (amountKgs: number) => string;
+  stockMeta: (stockQty: number | null) => ProductStockMeta;
+  onProductClick: (product: PosCatalogProduct) => void;
+};
+
+const PosProductButton = memo(function PosProductButton({
+  product,
+  variant,
+  enableSku,
+  enableBarcode,
+  disabled,
+  priceMissingLabel,
+  formatSaleMoney,
+  stockMeta,
+  onProductClick,
+}: PosProductButtonProps) {
+  const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
+  const stockQty = product.onHandQty ?? null;
+  const barcode = product.barcodes?.[0]?.value ?? null;
+  const productIdentity = [enableSku ? product.sku : "", enableBarcode && barcode ? barcode : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
+  const stock = stockMeta(stockQty);
+  const priceMissing = priceKgs === null;
+
+  if (variant === "mobile") {
+    return (
+      <button
+        type="button"
+        data-testid="pos-product-button"
+        data-product-id={product.id}
+        onClick={() => onProductClick(product)}
+        disabled={disabled}
+        className="grid min-h-20 w-full grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 border border-border bg-card p-2 text-left shadow-sm transition hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="grid h-16 w-16 place-items-center overflow-hidden border border-border bg-muted/30">
+          {primaryImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={primaryImage}
+              alt={product.name}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <EmptyIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="line-clamp-2 text-sm font-semibold text-foreground">
+            {product.name}
+          </span>
+          {productIdentity ? (
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {productIdentity}
+            </span>
+          ) : null}
+          <span
+            className={`mt-1 inline-flex max-w-full items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold ${stock.className}`}
+          >
+            {stock.showWarningIcon ? (
+              <StatusWarningIcon className="h-3 w-3 shrink-0" aria-hidden />
+            ) : null}
+            <span className="truncate">{stock.label}</span>
+          </span>
+        </span>
+        <span className="shrink-0 text-right text-sm font-semibold text-foreground">
+          {priceMissing ? priceMissingLabel : formatSaleMoney(priceKgs)}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid="pos-product-button"
+      data-product-id={product.id}
+      onClick={() => onProductClick(product)}
+      disabled={disabled}
+      className="group relative flex min-h-[236px] flex-col overflow-hidden rounded-md border border-border bg-card text-left transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[256px] dark:hover:bg-accent/40"
+    >
+      <div
+        className={`absolute right-2 top-2 z-10 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${stock.className}`}
+      >
+        {stock.showWarningIcon ? (
+          <StatusWarningIcon className="h-3 w-3 shrink-0" aria-hidden />
+        ) : null}
+        <span className="truncate">{stock.label}</span>
+      </div>
+      <div className="flex h-28 items-center justify-center bg-muted/30 px-3 py-3 sm:h-32">
+        {primaryImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={primaryImage}
+            alt={product.name}
+            loading="lazy"
+            decoding="async"
+            className="max-h-full max-w-full rounded-md object-contain"
+          />
+        ) : (
+          <span className="grid h-20 w-20 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
+            <EmptyIcon className="h-6 w-6" aria-hidden />
+          </span>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col justify-between gap-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
+        <div>
+          <p className="line-clamp-2 min-h-10 text-sm font-medium text-foreground">
+            {product.name}
+          </p>
+          {productIdentity ? (
+            <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">
+              {productIdentity}
+            </p>
+          ) : null}
+        </div>
+        <div className="border-t border-border/70 pt-3">
+          <p
+            className={
+              priceMissing
+                ? "text-sm font-medium text-muted-foreground"
+                : "text-base font-bold text-foreground"
+            }
+          >
+            {priceMissing ? priceMissingLabel : formatSaleMoney(priceKgs)}
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+});
+
 const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
@@ -304,7 +463,6 @@ const PosSellPage = () => {
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [optimisticSaleLines, setOptimisticSaleLinesState] = useState<PosCartLine[] | null>(null);
   const [lineInputDrafts, setLineInputDrafts] = useState<Record<string, LineInputDraft>>({});
-  const [pendingCartMutationCount, setPendingCartMutationCount] = useState(0);
   const [lastCompletedSale, setLastCompletedSale] = useState<{
     id: string;
     number: string;
@@ -327,11 +485,14 @@ const PosSellPage = () => {
   const keyboardScanSubmittingRef = useRef(false);
   const optimisticSaleLinesRef = useRef<PosCartLine[] | null>(null);
   const pendingCartMutationCountRef = useRef(0);
+  const removedOptimisticLineIdsRef = useRef<Set<string>>(new Set());
+  const pendingAddProductIdsRef = useRef<Set<string>>(new Set());
   const draftCreationRef = useRef<Promise<{ id: string }> | null>(null);
   const lineSyncTimersRef = useRef<Record<string, number>>({});
   const lineSyncDraftsRef = useRef<Record<string, PendingLinePatch>>({});
   const lineSyncInFlightRef = useRef<Set<string>>(new Set());
   const lineSyncPendingRef = useRef<Set<string>>(new Set());
+  const visibleProductsRef = useRef<PosCatalogProduct[]>([]);
   const autoPrintedSaleIdRef = useRef<string | null>(null);
   const paymentAutoFillRef = useRef<PosPaymentAutoFillState>({
     saleId: null,
@@ -386,9 +547,10 @@ const PosSellPage = () => {
     { enabled: Boolean(registerId), refetchOnWindowFocus: true },
   );
 
+  const hasLocalCartLines = Boolean(optimisticSaleLines?.length);
   const saleQuery = trpc.pos.sales.get.useQuery(
     { saleId: saleId ?? "" },
-    { enabled: Boolean(saleId), refetchOnWindowFocus: true },
+    { enabled: Boolean(saleId && !hasLocalCartLines), refetchOnWindowFocus: true },
   );
   const activeDraftQuery = trpc.pos.sales.activeDraft.useQuery(
     { registerId },
@@ -453,7 +615,7 @@ const PosSellPage = () => {
       sortKey: "name",
       sortDirection: "asc",
     },
-    { enabled: Boolean(activeStoreId) },
+    { enabled: Boolean(activeStoreId), keepPreviousData: true, staleTime: 30_000 },
   );
   const customerSearchQuery = trpc.pos.customers.search.useQuery(
     {
@@ -480,7 +642,6 @@ const PosSellPage = () => {
   const addLineMutation = trpc.pos.sales.addLine.useMutation({
     onSuccess: () => {
       setLineSearch("");
-      focusLineSearchInput();
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -586,21 +747,11 @@ const PosSellPage = () => {
 
   const beginCartSync = useCallback(() => {
     pendingCartMutationCountRef.current += 1;
-    setPendingCartMutationCount(pendingCartMutationCountRef.current);
   }, []);
 
-  const endCartSync = useCallback(
-    (targetSaleId?: string | null) => {
-      pendingCartMutationCountRef.current = Math.max(0, pendingCartMutationCountRef.current - 1);
-      const nextCount = pendingCartMutationCountRef.current;
-      setPendingCartMutationCount(nextCount);
-
-      if (nextCount === 0 && targetSaleId) {
-        void trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId });
-      }
-    },
-    [trpcUtils.pos.sales.get],
-  );
+  const endCartSync = useCallback(() => {
+    pendingCartMutationCountRef.current = Math.max(0, pendingCartMutationCountRef.current - 1);
+  }, []);
 
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: async (result) => {
@@ -667,7 +818,6 @@ const PosSellPage = () => {
     Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
   );
   const cartTotalKgs = roundMoney(Math.max(0, cartSubtotalKgs - cartDiscountKgs));
-  const cartSyncPending = pendingCartMutationCount > 0;
   const saleIdForPaymentInit = sale?.id ?? (saleId && hasCartLines ? saleId : undefined);
   const saleTotalForPaymentInit = hasCartLines ? cartTotalKgs : sale?.totalKgs;
   const saleCustomerName = sale?.customerName ?? null;
@@ -675,13 +825,6 @@ const PosSellPage = () => {
   const saleCustomerPhone = sale?.customerPhone ?? null;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
-
-  useEffect(() => {
-    if (!sale?.id || pendingCartMutationCountRef.current > 0) {
-      return;
-    }
-    setOptimisticSaleLines(null);
-  }, [sale?.id, sale?.updatedAt, sale?.lines, setOptimisticSaleLines]);
 
   useSse({
     "shift.opened": () => {
@@ -823,24 +966,44 @@ const PosSellPage = () => {
     }, 0),
   );
   const totalPaymentKgs = roundMoney(displayMoneyToKgs(totalPayment, currencySource));
-  const productResults = activeStoreId ? (catalogProductsQuery.data?.items ?? []) : [];
+  const productResults: PosCatalogProduct[] = activeStoreId
+    ? (catalogProductsQuery.data?.items ?? [])
+    : [];
   const visibleProducts = productResults;
-  const productGridLoading = Boolean(activeStoreId && catalogProductsQuery.isFetching);
+  const productGridLoading = Boolean(
+    activeStoreId && catalogProductsQuery.isLoading && !catalogProductsQuery.data,
+  );
   const productCategories = productsBootstrapQuery.data?.categories ?? [];
+
+  useEffect(() => {
+    visibleProductsRef.current = visibleProducts;
+  }, [visibleProducts]);
 
   const getCurrentCartLines = useCallback(
     () => optimisticSaleLinesRef.current ?? (sale?.lines as PosCartLine[] | undefined) ?? [],
     [sale?.lines],
   );
 
+  const resolveRemoteLineId = useCallback(
+    (lineId: string) => {
+      const line = getCurrentCartLines().find((item) => item.id === lineId);
+      if (line?.serverLineId) {
+        return line.serverLineId;
+      }
+      if (line && !isOptimisticLineId(line.id)) {
+        return line.id;
+      }
+      return isOptimisticLineId(lineId) ? null : lineId;
+    },
+    [getCurrentCartLines],
+  );
+
   const applyOptimisticAdd = useCallback(
     (product: PosCartProduct) => {
       setOptimisticSaleLines((current) => {
         const baseLines = current ?? getCurrentCartLines();
-        const existingIndex = baseLines.findIndex(
-          (line) =>
-            getCartLineProductId(line) === product.id && (line.variantKey ?? "BASE") === "BASE",
-        );
+        const existingLine = findCartLineForProduct(baseLines, product.id);
+        const existingIndex = existingLine ? baseLines.indexOf(existingLine) : -1;
 
         if (existingIndex >= 0) {
           return baseLines.map((line, index) =>
@@ -878,25 +1041,30 @@ const PosSellPage = () => {
   );
 
   const releaseLineSyncPending = useCallback(
-    (lineId: string, targetSaleId?: string | null) => {
+    (lineId: string) => {
       if (!lineSyncPendingRef.current.has(lineId)) {
         return;
       }
       lineSyncPendingRef.current.delete(lineId);
-      endCartSync(targetSaleId);
+      endCartSync();
     },
     [endCartSync],
   );
 
   const flushLineSync = useCallback(
     (lineId: string) => {
-      if (isOptimisticLineId(lineId) || lineSyncInFlightRef.current.has(lineId)) {
+      if (lineSyncInFlightRef.current.has(lineId)) {
+        return;
+      }
+
+      const remoteLineId = resolveRemoteLineId(lineId);
+      if (!remoteLineId) {
         return;
       }
 
       const patch = lineSyncDraftsRef.current[lineId];
       if (!patch) {
-        releaseLineSyncPending(lineId, saleId);
+        releaseLineSyncPending(lineId);
         return;
       }
 
@@ -905,12 +1073,9 @@ const PosSellPage = () => {
 
       void (async () => {
         try {
-          await updateLineMutation.mutateAsync({ lineId, ...patch });
+          await updateLineMutation.mutateAsync({ lineId: remoteLineId, ...patch });
         } catch {
-          setOptimisticSaleLines(null);
-          if (saleId) {
-            void trpcUtils.pos.sales.get.invalidate({ saleId });
-          }
+          // Keep the cashier's local cart intact. Final sale submission will validate server state.
         } finally {
           lineSyncInFlightRef.current.delete(lineId);
           if (lineSyncDraftsRef.current[lineId]) {
@@ -920,25 +1085,19 @@ const PosSellPage = () => {
             }, 0);
             return;
           }
-          releaseLineSyncPending(lineId, saleId);
+          releaseLineSyncPending(lineId);
         }
       })();
     },
     [
       releaseLineSyncPending,
-      saleId,
-      setOptimisticSaleLines,
-      trpcUtils.pos.sales.get,
+      resolveRemoteLineId,
       updateLineMutation,
     ],
   );
 
   const scheduleLineSync = useCallback(
     (lineId: string, patch: PendingLinePatch) => {
-      if (isOptimisticLineId(lineId)) {
-        return;
-      }
-
       lineSyncDraftsRef.current[lineId] = {
         ...lineSyncDraftsRef.current[lineId],
         ...patch,
@@ -987,24 +1146,43 @@ const PosSellPage = () => {
   }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer]);
 
   const handleAddLine = useCallback(
-    async (productId: string, product?: PosCartProduct): Promise<boolean> => {
+    async (
+      productId: string,
+      product?: PosCartProduct,
+      options: { refocusSearch?: boolean } = {},
+    ): Promise<boolean> => {
       if (!registerId) {
         return false;
       }
 
       const productForCart =
-        product ?? visibleProducts.find((visibleProduct) => visibleProduct.id === productId);
+        product ?? visibleProductsRef.current.find((visibleProduct) => visibleProduct.id === productId);
       const optimisticLineId = optimisticLineIdForProduct(productId);
+      const existingLineBeforeAdd = productForCart
+        ? findCartLineForProduct(getCurrentCartLines(), productId)
+        : null;
       if (productForCart) {
         applyOptimisticAdd(productForCart);
         setLastCompletedSale(null);
         setAutoReceiptStatus("idle");
         setMobileCheckoutOpen(true);
         setLineSearch("");
-        focusLineSearchInput();
+        if (options.refocusSearch) {
+          focusLineSearchInput();
+        }
+      }
+
+      if (existingLineBeforeAdd || pendingAddProductIdsRef.current.has(productId)) {
+        const localLineId = existingLineBeforeAdd?.id ?? optimisticLineId;
+        const nextQty = (existingLineBeforeAdd?.qty ?? 0) + 1;
+        if (nextQty > 0) {
+          scheduleLineSync(localLineId, { qty: nextQty });
+        }
+        return true;
       }
 
       beginCartSync();
+      pendingAddProductIdsRef.current.add(productId);
       let targetSaleId: string | null = null;
       try {
         targetSaleId = await ensureSaleDraftId();
@@ -1016,18 +1194,32 @@ const PosSellPage = () => {
           qty: 1,
         });
 
+        const currentLocalLine = findCartLineForProduct(
+          optimisticSaleLinesRef.current ?? [],
+          productId,
+        );
+        const localLineId = currentLocalLine?.id ?? optimisticLineId;
+        const lineWasRemoved =
+          removedOptimisticLineIdsRef.current.has(localLineId) || !currentLocalLine;
+
+        if (lineWasRemoved) {
+          removedOptimisticLineIdsRef.current.delete(localLineId);
+          await removeLineMutation.mutateAsync({ lineId: updatedLine.id });
+          return true;
+        }
+
         setOptimisticSaleLines((current) =>
           current
             ? current.map((line) => {
                 if (
-                  line.id !== optimisticLineId &&
+                  line.id !== localLineId &&
                   getCartLineProductId(line) !== productId
                 ) {
                   return line;
                 }
                 return {
                   ...line,
-                  id: updatedLine.id,
+                  serverLineId: updatedLine.id,
                   productId: updatedLine.productId,
                   variantId: updatedLine.variantId,
                   variantKey: updatedLine.variantKey,
@@ -1035,19 +1227,8 @@ const PosSellPage = () => {
               })
             : current,
         );
-        setLineInputDrafts((current) => {
-          const draft = current[optimisticLineId];
-          if (!draft) {
-            return current;
-          }
-          const next = { ...current };
-          delete next[optimisticLineId];
-          return { ...next, [updatedLine.id]: draft };
-        });
 
-        const localLine = optimisticSaleLinesRef.current?.find(
-          (line) => line.id === updatedLine.id || getCartLineProductId(line) === productId,
-        );
+        const localLine = optimisticSaleLinesRef.current?.find((line) => line.id === localLineId);
         const patch: PendingLinePatch = {};
         if (localLine?.qty && localLine.qty !== updatedLine.qty) {
           patch.qty = localLine.qty;
@@ -1059,18 +1240,18 @@ const PosSellPage = () => {
           patch.unitPriceKgs = localLine.unitPriceKgs;
         }
         if (patch.qty !== undefined || patch.unitPriceKgs !== undefined) {
-          scheduleLineSync(updatedLine.id, patch);
+          scheduleLineSync(localLineId, patch);
+        } else {
+          flushLineSync(localLineId);
         }
 
-        focusLineSearchInput();
         return true;
       } catch {
-        setOptimisticSaleLines(null);
-        setLineInputDrafts({});
         // handled by mutation onError
         return false;
       } finally {
-        endCartSync(targetSaleId);
+        pendingAddProductIdsRef.current.delete(productId);
+        endCartSync();
       }
     },
     [
@@ -1079,11 +1260,13 @@ const PosSellPage = () => {
       beginCartSync,
       endCartSync,
       ensureSaleDraftId,
+      flushLineSync,
       focusLineSearchInput,
+      getCurrentCartLines,
       registerId,
+      removeLineMutation,
       scheduleLineSync,
       setOptimisticSaleLines,
-      visibleProducts,
     ],
   );
 
@@ -1092,7 +1275,7 @@ const PosSellPage = () => {
       return;
     }
     focusLineSearchInput();
-  }, [focusLineSearchInput, hasOpenShift, saleId]);
+  }, [focusLineSearchInput, hasOpenShift]);
 
   const handleScanResolved = useCallback(
     async (result: ScanResolvedResult): Promise<boolean> => {
@@ -1103,7 +1286,7 @@ const PosSellPage = () => {
       if (result.kind === "multiple") {
         return true;
       }
-      return handleAddLine(result.item.id, result.item);
+      return handleAddLine(result.item.id, result.item, { refocusSearch: true });
     },
     [handleAddLine, t, toast],
   );
@@ -1302,18 +1485,41 @@ const PosSellPage = () => {
   };
 
   const handleRemoveLine = async (lineId: string) => {
-    try {
-      await removeLineMutation.mutateAsync({ lineId });
-      if (saleId) {
-        await trpcUtils.pos.sales.get.invalidate({ saleId });
+    const currentLines = getCurrentCartLines();
+    const lineToRemove = currentLines.find((line) => line.id === lineId);
+    if (!lineToRemove) {
+      return;
+    }
+
+    setOptimisticSaleLines(currentLines.filter((line) => line.id !== lineId));
+    setLineInputDrafts((current) => {
+      if (!current[lineId]) {
+        return current;
       }
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
+
+    const remoteLineId = resolveRemoteLineId(lineId);
+    if (!remoteLineId) {
+      removedOptimisticLineIdsRef.current.add(lineId);
+      return;
+    }
+
+    beginCartSync();
+    try {
+      await removeLineMutation.mutateAsync({ lineId: remoteLineId });
     } catch {
+      setOptimisticSaleLines(currentLines);
       // handled by mutation onError
+    } finally {
+      endCartSync();
     }
   };
 
   const handleUpdateDiscount = async () => {
-    if (!saleId || !sale) {
+    if (!saleId) {
       return;
     }
     const raw = discountDraft.trim();
@@ -1327,7 +1533,7 @@ const PosSellPage = () => {
       toast({ variant: "error", description: t("sell.discountTooLarge") });
       return;
     }
-    if (Math.abs(discountKgs - (sale.discountKgs ?? 0)) < 0.009) {
+    if (Math.abs(discountKgs - (sale?.discountKgs ?? 0)) < 0.009) {
       return;
     }
     try {
@@ -1442,8 +1648,34 @@ const PosSellPage = () => {
     }
   };
 
+  const flushPendingLineSyncs = useCallback(async () => {
+    const pendingEntries = Object.entries(lineSyncDraftsRef.current);
+    if (!pendingEntries.length) {
+      return;
+    }
+
+    Object.values(lineSyncTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    lineSyncTimersRef.current = {};
+
+    await Promise.all(
+      pendingEntries.map(async ([localLineId, patch]) => {
+        const remoteLineId = resolveRemoteLineId(localLineId);
+        if (!remoteLineId) {
+          return;
+        }
+
+        delete lineSyncDraftsRef.current[localLineId];
+        try {
+          await updateLineMutation.mutateAsync({ lineId: remoteLineId, ...patch });
+        } finally {
+          releaseLineSyncPending(localLineId);
+        }
+      }),
+    );
+  }, [releaseLineSyncPending, resolveRemoteLineId, updateLineMutation]);
+
   const handleComplete = async () => {
-    if (!saleId || !sale) {
+    if (!saleId) {
       return;
     }
 
@@ -1454,6 +1686,7 @@ const PosSellPage = () => {
         return;
       }
       try {
+        await flushPendingLineSyncs();
         await completeMutation.mutateAsync({
           saleId,
           idempotencyKey: createIdempotencyKey(),
@@ -1487,6 +1720,7 @@ const PosSellPage = () => {
     }
 
     try {
+      await flushPendingLineSyncs();
       await completeMutation.mutateAsync({
         saleId,
         idempotencyKey: createIdempotencyKey(),
@@ -1498,7 +1732,10 @@ const PosSellPage = () => {
     }
   };
 
-  const formatSaleMoney = (amountKgs: number) => formatKgsMoney(amountKgs, locale, currencySource);
+  const formatSaleMoney = useCallback(
+    (amountKgs: number) => formatKgsMoney(amountKgs, locale, currencySource),
+    [currencySource, locale],
+  );
 
   const addPaymentRow = () => {
     setPayments((current) => [...current, createDefaultPosPaymentDraft()]);
@@ -1785,7 +2022,7 @@ const PosSellPage = () => {
         })
       : t("sell.emptyCartTitle");
   const completeDisabled =
-    !sale || completeMutation.isLoading || isLineBusy || cartSyncPending || !hasCartLines;
+    !saleId || completeMutation.isLoading || isLineBusy || !hasCartLines;
   const isDemoCategory = (category: string) =>
     ["test", "tests", "demo", "sample", "samples"].includes(category.trim().toLowerCase());
   const categoryLabel = (category: string) => {
@@ -1799,7 +2036,7 @@ const PosSellPage = () => {
   const visibleProductCategories = productCategories.filter(
     (category) => !isDemoCategory(category),
   );
-  const stockMeta = (stockQty: number | null) => {
+  const stockMeta = useCallback((stockQty: number | null): ProductStockMeta => {
     if (stockQty === null) {
       return {
         label: tCommon("notAvailable"),
@@ -1834,7 +2071,14 @@ const PosSellPage = () => {
       className: "border-success bg-success text-success-foreground",
       showWarningIcon: false,
     };
-  };
+  }, [locale, t, tCommon]);
+  const handleProductClick = useCallback(
+    (product: PosCatalogProduct) => {
+      blurLineSearchInput();
+      void handleAddLine(product.id, product);
+    },
+    [blurLineSearchInput, handleAddLine],
+  );
 
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
@@ -2134,81 +2378,20 @@ const PosSellPage = () => {
 
               {visibleProducts.length ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4 2xl:grid-cols-5">
-                  {visibleProducts.map((product) => {
-                    const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
-                    const stockQty = product.onHandQty ?? null;
-                    const barcode = product.barcodes?.[0]?.value ?? null;
-                    const productIdentity = [
-                      enableSku ? product.sku : "",
-                      enableBarcode && barcode ? barcode : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ");
-                    const primaryImage = product.images[0]?.url ?? product.photoUrl;
-                    const stock = stockMeta(stockQty);
-                    const priceMissing = priceKgs === null;
-
-                    return (
-                      <button
-                        key={product.id}
-                        type="button"
-                        data-testid="pos-product-button"
-                        data-product-id={product.id}
-                        onClick={() => {
-                          blurLineSearchInput();
-                          void handleAddLine(product.id, product);
-                        }}
-                        disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
-                        className="group relative flex min-h-[236px] flex-col overflow-hidden rounded-md border border-border bg-card text-left transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[256px] dark:hover:bg-accent/40"
-                      >
-                        <div
-                          className={`absolute right-2 top-2 z-10 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold ${stock.className}`}
-                        >
-                          {stock.showWarningIcon ? (
-                            <StatusWarningIcon className="h-3 w-3 shrink-0" aria-hidden />
-                          ) : null}
-                          <span className="truncate">{stock.label}</span>
-                        </div>
-                        <div className="flex h-28 items-center justify-center bg-muted/30 px-3 py-3 sm:h-32">
-                          {primaryImage ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={primaryImage}
-                              alt={product.name}
-                              className="max-h-full max-w-full rounded-md object-contain"
-                            />
-                          ) : (
-                            <span className="grid h-20 w-20 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
-                              <EmptyIcon className="h-6 w-6" aria-hidden />
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-1 flex-col justify-between gap-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
-                          <div>
-                            <p className="line-clamp-2 min-h-10 text-sm font-medium text-foreground">
-                              {product.name}
-                            </p>
-                            {productIdentity ? (
-                              <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">
-                                {productIdentity}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="border-t border-border/70 pt-3">
-                            <p
-                              className={
-                                priceMissing
-                                  ? "text-sm font-medium text-muted-foreground"
-                                  : "text-base font-bold text-foreground"
-                              }
-                            >
-                              {priceMissing ? t("sell.priceMissing") : formatSaleMoney(priceKgs)}
-                            </p>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {visibleProducts.map((product) => (
+                    <PosProductButton
+                      key={product.id}
+                      product={product}
+                      variant="desktop"
+                      enableSku={enableSku}
+                      enableBarcode={enableBarcode}
+                      disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
+                      priceMissingLabel={t("sell.priceMissing")}
+                      formatSaleMoney={formatSaleMoney}
+                      stockMeta={stockMeta}
+                      onProductClick={handleProductClick}
+                    />
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -2426,6 +2609,8 @@ const PosSellPage = () => {
                                 <img
                                   src={line.product.primaryImage}
                                   alt={line.product.name}
+                                  loading="lazy"
+                                  decoding="async"
                                   className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
                                 />
                               ) : (
@@ -3152,69 +3337,22 @@ const PosSellPage = () => {
 
             {visibleProducts.length ? (
               <div className="grid gap-2">
-                {visibleProducts.map((product) => {
-                  const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
-                  const stockQty = product.onHandQty ?? null;
-                  const barcode = product.barcodes?.[0]?.value ?? null;
-                  const primaryImage = product.images[0]?.url ?? product.photoUrl;
-                  const stock = stockMeta(stockQty);
-                  const productIdentity = [
-                    enableSku ? product.sku : "",
-                    enableBarcode && barcode ? barcode : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ");
-                  const priceMissing = priceKgs === null;
-
-                  return (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() => {
-                        blurLineSearchInput();
-                        void handleAddLine(product.id, product);
-                      }}
-                      disabled={
-                        !hasOpenShift || cancelDraftMutation.isLoading || completeMutation.isLoading
-                      }
-                      className="grid min-h-20 w-full grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 border border-border bg-card p-2 text-left shadow-sm transition hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <span className="grid h-16 w-16 place-items-center overflow-hidden border border-border bg-muted/30">
-                        {primaryImage ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={primaryImage}
-                            alt={product.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <EmptyIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
-                        )}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="line-clamp-2 text-sm font-semibold text-foreground">
-                          {product.name}
-                        </span>
-                        {productIdentity ? (
-                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            {productIdentity}
-                          </span>
-                        ) : null}
-                        <span
-                          className={`mt-1 inline-flex max-w-full items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold ${stock.className}`}
-                        >
-                          {stock.showWarningIcon ? (
-                            <StatusWarningIcon className="h-3 w-3 shrink-0" aria-hidden />
-                          ) : null}
-                          <span className="truncate">{stock.label}</span>
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-right text-sm font-semibold text-foreground">
-                        {priceMissing ? t("sell.priceMissing") : formatSaleMoney(priceKgs)}
-                      </span>
-                    </button>
-                  );
-                })}
+                {visibleProducts.map((product) => (
+                  <PosProductButton
+                    key={product.id}
+                    product={product}
+                    variant="mobile"
+                    enableSku={enableSku}
+                    enableBarcode={enableBarcode}
+                    disabled={
+                      !hasOpenShift || cancelDraftMutation.isLoading || completeMutation.isLoading
+                    }
+                    priceMissingLabel={t("sell.priceMissing")}
+                    formatSaleMoney={formatSaleMoney}
+                    stockMeta={stockMeta}
+                    onProductClick={handleProductClick}
+                  />
+                ))}
               </div>
             ) : null}
           </section>
@@ -3467,6 +3605,8 @@ const PosSellPage = () => {
                                   <img
                                     src={line.product.primaryImage}
                                     alt={line.product.name}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="h-14 w-14 shrink-0 border border-border object-cover"
                                   />
                                 ) : (

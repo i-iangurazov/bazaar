@@ -54,7 +54,8 @@ describe("pos entry navigation", () => {
 
     expect(source).toContain("const priceMissing = priceKgs === null;");
     expect(source).toContain("void handleAddLine(product.id, product);");
-    expect(source).toContain('priceMissing ? t("sell.priceMissing") : formatSaleMoney(priceKgs)');
+    expect(source).toContain("priceMissing ? priceMissingLabel : formatSaleMoney(priceKgs)");
+    expect(source).toContain('priceMissingLabel={t("sell.priceMissing")}');
     expect(source).not.toContain("const productBlocked = priceMissing;");
     expect(source).not.toContain("aria-disabled={productBlocked}");
     expect(source).not.toContain('t("sell.priceMissingCannotSell")');
@@ -74,6 +75,25 @@ describe("pos entry navigation", () => {
     expect(routerSource).toContain("unitPriceKgs: z.number().min(0).optional()");
     expect(serviceSource).toContain("unitPriceKgs: nextUnitPriceKgs");
     expect(serviceSource).toContain("lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty)");
+  });
+
+  it("keeps POS cart interactions local-first without remounting rows or refetching sale lines", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(pageSource).toContain("serverLineId?: string;");
+    expect(pageSource).toContain("serverLineId: updatedLine.id");
+    expect(pageSource).toContain("const resolveRemoteLineId = useCallback");
+    expect(pageSource).toContain("{ enabled: Boolean(saleId && !hasLocalCartLines)");
+    expect(pageSource).toContain("const PosProductButton = memo(function PosProductButton");
+    expect(pageSource).toContain("const handleProductClick = useCallback");
+    expect(pageSource).toContain("removedOptimisticLineIdsRef.current.add(lineId);");
+    expect(pageSource).toContain("pendingAddProductIdsRef.current.has(productId)");
+    expect(pageSource).toContain("scheduleLineSync(localLineId, { qty: nextQty });");
+    expect(pageSource).toContain("await flushPendingLineSyncs();");
+    expect(pageSource).not.toContain("id: updatedLine.id");
+    expect(pageSource).not.toContain("endCartSync(targetSaleId)");
+    expect(pageSource).not.toContain("setPendingCartMutationCount");
+    expect(pageSource).not.toContain("[focusLineSearchInput, hasOpenShift, saleId]");
   });
 
   it("keeps the new POS view for desktop and uses the dedicated mobile quick-sale flow only for phones", async () => {
@@ -114,9 +134,8 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain(
       '<header className="sticky top-0 z-30 border-b border-border bg-background/95 px-3 py-3 shadow-sm backdrop-blur md:hidden">',
     );
-    expect(pageSource).toContain(
-      "const primaryImage = product.images[0]?.url ?? product.photoUrl;",
-    );
+    expect(pageSource).toContain("const primaryImage = product.images?.[0]?.url ?? product.photoUrl;");
+    expect(pageSource).toContain('variant="mobile"');
     expect(pageSource).toContain("currentCustomerLabel");
     expect(pageSource).toContain("handleSelectCustomer({");
     expect(pageSource).toContain("lineInputDrafts[line.id]?.price");
