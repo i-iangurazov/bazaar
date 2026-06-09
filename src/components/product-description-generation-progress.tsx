@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type ProductDescriptionGenerationJobView = {
+export type ProductDescriptionGenerationJobView = {
   status: ProductDescriptionGenerationJobStatus;
   totalCount: number;
   processedCount: number;
@@ -40,6 +40,17 @@ type ProductDescriptionGenerationJobView = {
       name: string;
     };
   }>;
+};
+
+type ProductDescriptionGenerationDisplayStatus = ProductDescriptionGenerationJobStatus | "TIMED_OUT";
+
+type NormalizedProductDescriptionGenerationJobView = Omit<
+  ProductDescriptionGenerationJobView,
+  "status"
+> & {
+  status: ProductDescriptionGenerationJobStatus;
+  displayStatus: ProductDescriptionGenerationDisplayStatus;
+  progressPercent: number;
 };
 
 const runningJobStatuses = new Set<ProductDescriptionGenerationJobStatus>([
@@ -94,6 +105,64 @@ export const isDescriptionGenerationJobRunning = (
   status?: ProductDescriptionGenerationJobStatus | null,
 ) => Boolean(status && runningJobStatuses.has(status));
 
+const countItemsByStatus = (
+  items: ProductDescriptionGenerationJobView["items"],
+  status: ProductDescriptionGenerationItemStatus,
+) => items.filter((item) => item.status === status).length;
+
+const getProgressPercent = (processedCount: number, totalCount: number) =>
+  totalCount > 0 ? Math.min(100, Math.round((processedCount / totalCount) * 100)) : 0;
+
+export const normalizeProductDescriptionGenerationJobView = (
+  job: ProductDescriptionGenerationJobView,
+): NormalizedProductDescriptionGenerationJobView => {
+  const successCount = countItemsByStatus(job.items, ProductDescriptionGenerationItemStatus.SUCCESS);
+  const failedCount = countItemsByStatus(job.items, ProductDescriptionGenerationItemStatus.FAILED);
+  const skippedCount = countItemsByStatus(job.items, ProductDescriptionGenerationItemStatus.SKIPPED);
+  const pendingCount = countItemsByStatus(job.items, ProductDescriptionGenerationItemStatus.PENDING);
+  const processingCount = countItemsByStatus(
+    job.items,
+    ProductDescriptionGenerationItemStatus.PROCESSING,
+  );
+  const cancelledCount = countItemsByStatus(
+    job.items,
+    ProductDescriptionGenerationItemStatus.CANCELLED,
+  );
+  const processedCount = successCount + failedCount + skippedCount;
+  const totalCount = Math.max(job.totalCount, job.items.length, processedCount);
+  const noActiveRows = pendingCount === 0 && processingCount === 0;
+  const allRowsHandled = totalCount > 0 && processedCount + cancelledCount >= totalCount;
+  const timedOut =
+    job.errorMessage === "aiDescriptionJobTimedOut" || job.errorMessage === "aiDescriptionTimedOut";
+
+  let status = job.status;
+  if (
+    status !== ProductDescriptionGenerationJobStatus.FAILED &&
+    status !== ProductDescriptionGenerationJobStatus.CANCELLED &&
+    noActiveRows &&
+    allRowsHandled
+  ) {
+    status =
+      failedCount > 0 || cancelledCount > 0
+        ? ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS
+        : ProductDescriptionGenerationJobStatus.DONE;
+  } else if (status === ProductDescriptionGenerationJobStatus.DONE && failedCount > 0) {
+    status = ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS;
+  }
+
+  return {
+    ...job,
+    status,
+    displayStatus: timedOut ? "TIMED_OUT" : status,
+    totalCount,
+    processedCount,
+    successCount,
+    failedCount,
+    skippedCount,
+    progressPercent: getProgressPercent(processedCount, totalCount),
+  };
+};
+
 export const ProductDescriptionGenerationProgress = ({
   job,
   onClose,
@@ -108,70 +177,123 @@ export const ProductDescriptionGenerationProgress = ({
   const t = useTranslations("products");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
-  const running = isDescriptionGenerationJobRunning(job.status);
-  const progressPercent =
-    typeof job.progressPercent === "number"
-      ? job.progressPercent
-      : job.totalCount > 0
-        ? Math.round((job.processedCount / job.totalCount) * 100)
-        : 0;
+  const normalizedJob = normalizeProductDescriptionGenerationJobView(job);
+  const running = isDescriptionGenerationJobRunning(normalizedJob.status);
   const formatErrorMessage = (message?: string | null) => {
     if (!message) {
       return "";
     }
     return tErrors.has?.(message) ? tErrors(message) : message;
   };
+  const formatItemReason = (message?: string | null) => {
+    if (!message) {
+      return "";
+    }
+    switch (message) {
+      case "aiDescriptionImageRequired":
+        return t("aiDescriptionReasonNoPhoto");
+      case "aiDescriptionNoUsableImages":
+        return t("aiDescriptionReasonImageLoadFailed");
+      case "descriptionAlreadyExists":
+        return t("aiDescriptionReasonAlreadyExists");
+      case "productNotFound":
+        return t("aiDescriptionReasonProductDataFailed");
+      case "aiDescriptionTimedOut":
+        return t("aiDescriptionReasonProviderTimeout");
+      case "aiDescriptionJobTimedOut":
+        return t("aiDescriptionReasonJobTimedOut");
+      default:
+        return formatErrorMessage(message);
+    }
+  };
+  const renderItemResult = (item: ProductDescriptionGenerationJobView["items"][number]) => {
+    if (item.errorMessage) {
+      const reason = formatItemReason(item.errorMessage);
+      const text =
+        item.status === ProductDescriptionGenerationItemStatus.SKIPPED
+          ? t("aiDescriptionSkippedReason", { reason })
+          : item.status === ProductDescriptionGenerationItemStatus.FAILED
+            ? t("aiDescriptionFailedReason", { reason })
+            : reason;
+      return (
+        <p className="whitespace-normal break-words text-sm text-danger" title={text}>
+          {text}
+        </p>
+      );
+    }
+    if (item.generatedDescription) {
+      return (
+        <p
+          className="line-clamp-2 whitespace-normal break-words text-sm text-muted-foreground"
+          title={item.generatedDescription}
+        >
+          {item.generatedDescription}
+        </p>
+      );
+    }
+    return <span className="text-sm text-muted-foreground">-</span>;
+  };
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-border bg-muted/30 p-4">
+      <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-3 text-sm">
           <p className="font-medium text-foreground">
             {t("bulkGenerateDescriptionsProgressLabel", {
-              processed: job.processedCount,
-              total: job.totalCount,
+              processed: normalizedJob.processedCount,
+              total: normalizedJob.totalCount,
             })}
           </p>
-          <span className="text-sm font-semibold text-foreground">{progressPercent}%</span>
+          <span className="text-sm font-semibold text-foreground">
+            {normalizedJob.progressPercent}%
+          </span>
         </div>
         <div className="mt-3 h-2 rounded-md bg-border/70">
           <div
             className="h-2 rounded-md bg-primary transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
+            style={{ width: `${normalizedJob.progressPercent}%` }}
           />
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span>{t("aiDescriptionJobTotal", { count: job.totalCount })}</span>
-          <span>{t(`aiDescriptionJobStatus.${job.status}`)}</span>
+          <span>{t("aiDescriptionJobTotal", { count: normalizedJob.totalCount })}</span>
+          <span>{t(`aiDescriptionJobStatus.${normalizedJob.displayStatus}`)}</span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">{t("aiDescriptionJobSuccess")}</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">
+              {normalizedJob.successCount}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
+              {t("bulkGenerateDescriptionsProgressSkipped")}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-foreground">
+              {normalizedJob.skippedCount}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
+              {t("bulkGenerateDescriptionsProgressFailed")}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-foreground">
+              {normalizedJob.failedCount}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">{t("aiDescriptionJobProcessed")}</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">
+              {normalizedJob.processedCount}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-md border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">{t("aiDescriptionJobSuccess")}</p>
-          <p className="mt-1 text-lg font-semibold text-foreground">{job.successCount}</p>
-        </div>
-        <div className="rounded-md border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">
-            {t("bulkGenerateDescriptionsProgressSkipped")}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-foreground">{job.skippedCount}</p>
-        </div>
-        <div className="rounded-md border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">
-            {t("bulkGenerateDescriptionsProgressFailed")}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-foreground">{job.failedCount}</p>
-        </div>
-        <div className="rounded-md border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">{t("aiDescriptionJobProcessed")}</p>
-          <p className="mt-1 text-lg font-semibold text-foreground">{job.processedCount}</p>
-        </div>
-      </div>
-
-      {job.errorMessage ? (
+      {normalizedJob.errorMessage ? (
         <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-          {formatErrorMessage(job.errorMessage)}
+          {formatErrorMessage(normalizedJob.errorMessage)}
         </div>
       ) : null}
 
@@ -186,11 +308,13 @@ export const ProductDescriptionGenerationProgress = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {job.items.map((item) => (
+            {normalizedJob.items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>
                   <p className="font-medium text-foreground">{item.product.name}</p>
-                  <p className="font-mono text-xs text-muted-foreground">{item.product.sku}</p>
+                  {item.product.sku ? (
+                    <p className="font-mono text-xs text-muted-foreground">{item.product.sku}</p>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <ProductThumb imageUrl={item.imageUrl} name={item.product.name} />
@@ -200,17 +324,7 @@ export const ProductDescriptionGenerationProgress = ({
                     {t(`aiDescriptionItemStatus.${item.status}`)}
                   </Badge>
                 </TableCell>
-                <TableCell className="max-w-md">
-                  {item.errorMessage ? (
-                    <p className="text-sm text-danger">{formatErrorMessage(item.errorMessage)}</p>
-                  ) : item.generatedDescription ? (
-                    <p className="line-clamp-2 text-sm text-muted-foreground">
-                      {item.generatedDescription}
-                    </p>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">-</span>
-                  )}
-                </TableCell>
+                <TableCell className="max-w-md">{renderItemResult(item)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -219,7 +333,7 @@ export const ProductDescriptionGenerationProgress = ({
 
       {!running ? (
         <FormActions>
-          {job.failedCount > 0 && onRetryFailed ? (
+          {normalizedJob.failedCount > 0 && onRetryFailed ? (
             <Button
               type="button"
               variant="outline"

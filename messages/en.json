@@ -3280,6 +3280,14 @@
     "aiDescriptionJobPhoto": "Photo",
     "aiDescriptionJobItemStatus": "Status",
     "aiDescriptionJobResult": "Error / description preview",
+    "aiDescriptionSkippedReason": "Skipped — {reason}",
+    "aiDescriptionFailedReason": "Failed — {reason}",
+    "aiDescriptionReasonNoPhoto": "no product photo",
+    "aiDescriptionReasonImageLoadFailed": "could not load photo",
+    "aiDescriptionReasonProductDataFailed": "could not read product data",
+    "aiDescriptionReasonAlreadyExists": "description already exists",
+    "aiDescriptionReasonProviderTimeout": "AI provider timeout",
+    "aiDescriptionReasonJobTimedOut": "job timed out",
     "aiDescriptionRetryFailed": "Retry failed",
     "aiDescriptionDisabledChecking": "Checking AI settings",
     "aiDescriptionDisabledNoPermission": "No permission",
@@ -3294,7 +3302,8 @@
       "DONE": "Completed",
       "DONE_WITH_ERRORS": "Completed with errors",
       "FAILED": "Failed",
-      "CANCELLED": "Cancelled"
+      "CANCELLED": "Cancelled",
+      "TIMED_OUT": "Timed out"
     },
     "aiDescriptionItemStatus": {
       "PENDING": "Pending",

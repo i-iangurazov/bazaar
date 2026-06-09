@@ -51,6 +51,68 @@ describeDb("product description generation jobs", () => {
     expect(job.items[0]?.errorMessage).toBe("aiDescriptionImageRequired");
   });
 
+  it("returns normalized counters from 77 terminal item statuses when stored counters are stale", async () => {
+    const { org, adminUser, baseUnit } = await seedBase();
+    const productIds = Array.from({ length: 77 }, (_, index) => `ai-description-${index}`);
+
+    await prisma.product.createMany({
+      data: productIds.map((productId, index) => ({
+        id: productId,
+        organizationId: org.id,
+        sku: `AI-DESC-${index}`,
+        name: `AI description product ${index}`,
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        photoUrl: index < 36 ? `https://example.test/product-${index}.jpg` : null,
+      })),
+    });
+
+    const staleJob = await prisma.productDescriptionGenerationJob.create({
+      data: {
+        organizationId: org.id,
+        createdById: adminUser.id,
+        source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+        status: ProductDescriptionGenerationJobStatus.PROCESSING,
+        totalCount: productIds.length,
+        processedCount: 0,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        items: {
+          createMany: {
+            data: productIds.map((productId, index) => ({
+              organizationId: org.id,
+              productId,
+              status:
+                index < 36
+                  ? ProductDescriptionGenerationItemStatus.SUCCESS
+                  : ProductDescriptionGenerationItemStatus.SKIPPED,
+              generatedDescription:
+                index < 36 ? `Generated product description ${index}` : undefined,
+              errorMessage:
+                index >= 36
+                  ? index % 2 === 0
+                    ? "aiDescriptionImageRequired"
+                    : "descriptionAlreadyExists"
+                  : undefined,
+              completedAt: new Date(),
+            })),
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    const job = await getProductDescriptionGenerationJob(org.id, staleJob.id);
+    expect(job.totalCount).toBe(77);
+    expect(job.processedCount).toBe(77);
+    expect(job.successCount).toBe(36);
+    expect(job.skippedCount).toBe(41);
+    expect(job.failedCount).toBe(0);
+    expect(job.progressPercent).toBe(100);
+    expect(job.status).toBe(ProductDescriptionGenerationJobStatus.DONE);
+  });
+
   it("rejects integration jobs that include products outside the active store", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
     const otherStore = await prisma.store.create({

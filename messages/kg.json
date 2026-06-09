@@ -3279,6 +3279,14 @@
     "aiDescriptionJobPhoto": "Сүрөт",
     "aiDescriptionJobItemStatus": "Статус",
     "aiDescriptionJobResult": "Ката / сүрөттөмө үзүндүсү",
+    "aiDescriptionSkippedReason": "Өткөрүлдү — {reason}",
+    "aiDescriptionFailedReason": "Ката — {reason}",
+    "aiDescriptionReasonNoPhoto": "товардын сүрөтү жок",
+    "aiDescriptionReasonImageLoadFailed": "сүрөттү жүктөө мүмкүн болгон жок",
+    "aiDescriptionReasonProductDataFailed": "товардын маалыматтарын окуу мүмкүн болгон жок",
+    "aiDescriptionReasonAlreadyExists": "сүрөттөмө мурунтан бар",
+    "aiDescriptionReasonProviderTimeout": "AI провайдеринин убактысы бүттү",
+    "aiDescriptionReasonJobTimedOut": "тапшырманын убактысы бүттү",
     "aiDescriptionRetryFailed": "Каталарды кайталоо",
     "aiDescriptionDisabledChecking": "AI жөндөөлөрү текшерилүүдө",
     "aiDescriptionDisabledNoPermission": "Генерацияны баштоого укук жок",
@@ -3293,7 +3301,8 @@
       "DONE": "Аяктады",
       "DONE_WITH_ERRORS": "Каталар менен аяктады",
       "FAILED": "Ката",
-      "CANCELLED": "Жокко чыгарылды"
+      "CANCELLED": "Жокко чыгарылды",
+      "TIMED_OUT": "Убакыт бүттү"
     },
     "aiDescriptionItemStatus": {
       "PENDING": "Күтүүдө",

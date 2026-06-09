@@ -126,16 +126,30 @@ const getGenerationJob = async (organizationId: string, jobId: string) => {
     throw new AppError("productDescriptionGenerationJobNotFound", "NOT_FOUND", 404);
   }
 
+  const items = job.items.map((item) => ({
+    ...item,
+    imageUrl:
+      normalizeProductImageUrl(item.product.photoUrl) ??
+      normalizeProductImageUrl(item.product.images[0]?.url ?? null),
+  }));
+  const counts = summarizeItemStatuses(items);
+  const totalCount = Math.max(job.totalCount, items.length, counts.processedCount);
+  const status = deriveJobStatusFromItems({
+    storedStatus: job.status,
+    totalCount,
+    counts,
+  });
+
   return {
     ...job,
-    progressPercent:
-      job.totalCount > 0 ? Math.round((job.processedCount / job.totalCount) * 100) : 0,
-    items: job.items.map((item) => ({
-      ...item,
-      imageUrl:
-        normalizeProductImageUrl(item.product.photoUrl) ??
-        normalizeProductImageUrl(item.product.images[0]?.url ?? null),
-    })),
+    status,
+    totalCount,
+    processedCount: counts.processedCount,
+    successCount: counts.successCount,
+    failedCount: counts.failedCount,
+    skippedCount: counts.skippedCount,
+    progressPercent: getProgressPercent(counts.processedCount, totalCount),
+    items,
   };
 };
 
@@ -271,6 +285,74 @@ const collectProductImageUrls = (product: {
     ),
   ).slice(0, MAX_IMAGES_PER_PRODUCT);
 
+const summarizeItemStatuses = (
+  items: Array<{ status: ProductDescriptionGenerationItemStatus }>,
+) => {
+  const successCount = items.filter(
+    (item) => item.status === ProductDescriptionGenerationItemStatus.SUCCESS,
+  ).length;
+  const failedCount = items.filter(
+    (item) => item.status === ProductDescriptionGenerationItemStatus.FAILED,
+  ).length;
+  const skippedCount = items.filter(
+    (item) => item.status === ProductDescriptionGenerationItemStatus.SKIPPED,
+  ).length;
+  const pendingCount = items.filter(
+    (item) => item.status === ProductDescriptionGenerationItemStatus.PENDING,
+  ).length;
+  const processingCount = items.filter(
+    (item) => item.status === ProductDescriptionGenerationItemStatus.PROCESSING,
+  ).length;
+  const cancelledCount = items.filter(
+    (item) => item.status === ProductDescriptionGenerationItemStatus.CANCELLED,
+  ).length;
+  return {
+    processedCount: successCount + failedCount + skippedCount,
+    successCount,
+    failedCount,
+    skippedCount,
+    pendingCount,
+    processingCount,
+    cancelledCount,
+  };
+};
+
+const deriveJobStatusFromItems = (input: {
+  storedStatus: ProductDescriptionGenerationJobStatus;
+  totalCount: number;
+  counts: ReturnType<typeof summarizeItemStatuses>;
+}) => {
+  if (
+    input.storedStatus === ProductDescriptionGenerationJobStatus.FAILED ||
+    input.storedStatus === ProductDescriptionGenerationJobStatus.CANCELLED
+  ) {
+    return input.storedStatus;
+  }
+
+  const noActiveItems = input.counts.pendingCount === 0 && input.counts.processingCount === 0;
+  const allItemsHandled =
+    input.totalCount > 0 &&
+    input.counts.processedCount + input.counts.cancelledCount >= input.totalCount;
+
+  if (noActiveItems && allItemsHandled) {
+    return input.counts.failedCount > 0 || input.counts.cancelledCount > 0
+      ? ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS
+      : ProductDescriptionGenerationJobStatus.DONE;
+  }
+
+  if (
+    input.storedStatus === ProductDescriptionGenerationJobStatus.DONE &&
+    input.counts.failedCount > 0
+  ) {
+    return ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS;
+  }
+
+  return input.storedStatus;
+};
+
+const getProgressPercent = (processedCount: number, totalCount: number) =>
+  totalCount > 0 ? Math.min(100, Math.round((processedCount / totalCount) * 100)) : 0;
+
 const refreshJobCounts = async (jobId: string) => {
   const grouped = await prisma.productDescriptionGenerationJobItem.groupBy({
     by: ["status"],
@@ -287,7 +369,7 @@ const refreshJobCounts = async (jobId: string) => {
   const pendingCount = countByStatus.get(ProductDescriptionGenerationItemStatus.PENDING) ?? 0;
   const processingCount =
     countByStatus.get(ProductDescriptionGenerationItemStatus.PROCESSING) ?? 0;
-  const processedCount = successCount + failedCount + skippedCount + cancelledCount;
+  const processedCount = successCount + failedCount + skippedCount;
   const isComplete = pendingCount === 0 && processingCount === 0;
 
   return prisma.productDescriptionGenerationJob.update({
@@ -300,7 +382,7 @@ const refreshJobCounts = async (jobId: string) => {
       ...(isComplete
         ? {
             status:
-              failedCount > 0
+              failedCount > 0 || cancelledCount > 0
                 ? ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS
                 : ProductDescriptionGenerationJobStatus.DONE,
             completedAt: new Date(),

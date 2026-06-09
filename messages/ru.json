@@ -3280,6 +3280,14 @@
     "aiDescriptionJobPhoto": "Фото",
     "aiDescriptionJobItemStatus": "Статус",
     "aiDescriptionJobResult": "Ошибка / превью описания",
+    "aiDescriptionSkippedReason": "Пропущено — {reason}",
+    "aiDescriptionFailedReason": "Ошибка — {reason}",
+    "aiDescriptionReasonNoPhoto": "нет фото",
+    "aiDescriptionReasonImageLoadFailed": "не удалось загрузить фото",
+    "aiDescriptionReasonProductDataFailed": "не удалось прочитать данные товара",
+    "aiDescriptionReasonAlreadyExists": "описание уже есть",
+    "aiDescriptionReasonProviderTimeout": "AI provider timeout",
+    "aiDescriptionReasonJobTimedOut": "задача превысила лимит времени",
     "aiDescriptionRetryFailed": "Повторить ошибки",
     "aiDescriptionDisabledChecking": "Проверяем настройки AI",
     "aiDescriptionDisabledNoPermission": "Нет прав для запуска генерации",
@@ -3294,7 +3302,8 @@
       "DONE": "Завершено",
       "DONE_WITH_ERRORS": "Завершено с ошибками",
       "FAILED": "Ошибка",
-      "CANCELLED": "Отменено"
+      "CANCELLED": "Отменено",
+      "TIMED_OUT": "Превышено время"
     },
     "aiDescriptionItemStatus": {
       "PENDING": "Ожидает",
