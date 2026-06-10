@@ -1885,6 +1885,121 @@ describeDb("products", () => {
     expect(importSnapshotByStore.has(separateStore.id)).toBe(false);
   });
 
+  it("imports product stock, minimum stock, cost, price, images, variants, and category for the selected store", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Other Store",
+        code: "OTH",
+      },
+    });
+
+    await importProducts({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-import-fields",
+      rows: [
+        {
+          sourceRowNumber: 2,
+          sku: "SKU-IMPORT-FIELDS",
+          name: "Imported Field Product",
+          unit: baseUnit.code,
+          category: "Тестовая категория",
+          categories: ["Тестовая категория"],
+          description: "Imported description",
+          basePriceKgs: 100,
+          avgCostKgs: 70,
+          minStock: 3,
+          stockQty: 15,
+          photoUrl: "https://example.com/imported.jpg",
+          images: [{ url: "https://example.com/imported.jpg", position: 0 }],
+          variants: [
+            {
+              name: "Черный / M",
+              sku: "SKU-IMPORT-FIELDS-BLK-M",
+              attributes: { color: "черный", size: "M" },
+            },
+          ],
+          barcodes: ["1234567890123"],
+        },
+      ],
+      storeId: store.id,
+    });
+
+    const product = await prisma.product.findUnique({
+      where: {
+        organizationId_sku: {
+          organizationId: org.id,
+          sku: "SKU-IMPORT-FIELDS",
+        },
+      },
+      include: {
+        images: true,
+        variants: true,
+        barcodes: true,
+        storeProducts: true,
+      },
+    });
+    expect(product).not.toBeNull();
+    expect(product?.category).toBe("Тестовая категория");
+    expect(product?.categories).toEqual(["Тестовая категория"]);
+    expect(Number(product?.basePriceKgs)).toBe(100);
+    expect(product?.images.map((image) => image.url)).toEqual(["https://example.com/imported.jpg"]);
+    expect(product?.variants.map((variant) => variant.name)).toEqual(["Черный / M"]);
+    expect(product?.barcodes.map((barcode) => barcode.value)).toEqual(["1234567890123"]);
+    expect(product?.storeProducts.map((storeProduct) => storeProduct.storeId)).toEqual([store.id]);
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product!.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(15);
+    const otherSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: otherStore.id,
+          productId: product!.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(otherSnapshot).toBeNull();
+
+    const reorderPolicy = await prisma.reorderPolicy.findUnique({
+      where: { storeId_productId: { storeId: store.id, productId: product!.id } },
+    });
+    expect(reorderPolicy?.minStock).toBe(3);
+
+    const cost = await prisma.productCost.findUnique({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product!.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(Number(cost?.avgCostKgs)).toBe(70);
+
+    const storePrice = await prisma.storePrice.findUnique({
+      where: {
+        organizationId_storeId_productId_variantKey: {
+          organizationId: org.id,
+          storeId: store.id,
+          productId: product!.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(Number(storePrice?.priceKgs)).toBe(100);
+  });
+
   it("blocks variant removal when movements exist", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
 

@@ -69,15 +69,20 @@ export const productCategoriesRouter = router({
     .input(
       z.object({
         name: z.string().min(1),
+        storeId: z.string().min(1).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        if (input.storeId) {
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        }
         return await removeProductCategory({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           name: input.name,
+          storeId: input.storeId,
         });
       } catch (error) {
         throw toTRPCError(error);

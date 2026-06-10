@@ -367,6 +367,7 @@ const requireOpenShift = async (
 
 const normalizePayments = (
   payments: Array<{ method: PosPaymentMethod; amountKgs: number; providerRef?: string | null }>,
+  options: { requirePayment?: boolean } = {},
 ) => {
   const normalized = payments
     .map((payment) => ({
@@ -376,7 +377,7 @@ const normalizePayments = (
     }))
     .filter((payment) => payment.amountKgs > 0);
 
-  if (!normalized.length) {
+  if (options.requirePayment !== false && !normalized.length) {
     throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
   }
 
@@ -2650,7 +2651,9 @@ export const completePosSale = async (input: {
 }) => {
   const logger = getLogger(input.requestId);
   const debtCustomerName = input.debtCustomerName?.trim() || null;
-  const normalizedPayments = debtCustomerName ? [] : normalizePayments(input.payments);
+  const normalizedPayments = debtCustomerName
+    ? []
+    : normalizePayments(input.payments, { requirePayment: false });
 
   const result = await prisma.$transaction(async (tx) => {
     const { result: completion, replayed } = await withIdempotency(
@@ -2752,6 +2755,9 @@ export const completePosSale = async (input: {
 
         const orderTotal = roundMoney(toMoney(sale.totalKgs));
         const paymentsTotal = sumPayments(normalizedPayments);
+        if (!debtCustomerName && orderTotal > 0.009 && !normalizedPayments.length) {
+          throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
+        }
         if (!debtCustomerName && Math.abs(paymentsTotal - orderTotal) > 0.009) {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }

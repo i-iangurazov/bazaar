@@ -3671,7 +3671,9 @@ export const importProductsTx = async (
     !isUpdateSelectedMode || updateMask.has(field);
   const existingBehavior = input.existingBehavior ?? "update";
   const emptyValueBehavior = input.emptyValueBehavior ?? "keep";
-  const stockBehavior = input.stockBehavior ?? "ignore";
+  const stockBehavior =
+    input.stockBehavior ??
+    (input.rows.some((row) => row.stockQty !== undefined) ? "set" : "ignore");
   const overwriteEmptyValues = emptyValueBehavior === "overwrite";
   const rowDecisionByNumber = new Map(
     (input.rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),

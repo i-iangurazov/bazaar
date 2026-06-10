@@ -53,7 +53,9 @@ describe("pos entry navigation", () => {
     const source = await readSource("src/app/(app)/pos/sell/page.tsx");
 
     expect(source).toContain("const priceMissing = priceKgs === null;");
-    expect(source).toContain("void handleAddLine(product.id, product);");
+    expect(source).toContain(
+      "void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: true }));",
+    );
     expect(source).toContain("priceMissing ? priceMissingLabel : formatSaleMoney(priceKgs)");
     expect(source).toContain('priceMissingLabel={t("sell.priceMissing")}');
     expect(source).not.toContain("const productBlocked = priceMissing;");
@@ -117,7 +119,7 @@ describe("pos entry navigation", () => {
 
     expect(pageSource).toContain("type CustomerCreatePanelProps = {");
     expect(pageSource).toContain("const CustomerCreatePanel = ({");
-    expect(pageSource).toContain("phonePlaceholder={t(\"sell.customerPhonePlaceholder\")}");
+    expect(pageSource).toContain('phonePlaceholder={t("sell.customerPhonePlaceholder")}');
     expect(pageSource).toContain('const phoneDigits = phone.replace(/\\D/g, "");');
     expect(pageSource).toContain("if (!phoneDigits) {");
     expect(pageSource).toContain("email: null");
@@ -134,7 +136,9 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain(
       '<header className="sticky top-0 z-30 border-b border-border bg-background/95 px-3 py-3 shadow-sm backdrop-blur md:hidden">',
     );
-    expect(pageSource).toContain("const primaryImage = product.images?.[0]?.url ?? product.photoUrl;");
+    expect(pageSource).toContain(
+      "const primaryImage = product.images?.[0]?.url ?? product.photoUrl;",
+    );
     expect(pageSource).toContain('variant="mobile"');
     expect(pageSource).toContain("currentCustomerLabel");
     expect(pageSource).toContain("handleSelectCustomer({");
@@ -144,5 +148,53 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain('t("sell.saleDiscount")');
     expect(pageSource).toContain("handleComplete");
     expect(pageSource).toContain('handleReceiptPdf("print", "precheck")');
+  });
+
+  it("keeps POS product search stable while adding products optimistically", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const addLineMutationBlock = pageSource.slice(
+      pageSource.indexOf("const addLineMutation"),
+      pageSource.indexOf("const updateLineMutation"),
+    );
+    const handleAddLineBlock = pageSource.slice(
+      pageSource.indexOf("const handleAddLine"),
+      pageSource.indexOf("useEffect(() => {\n    if (!hasOpenShift)"),
+    );
+
+    expect(addLineMutationBlock).not.toContain("setLineSearch");
+    expect(handleAddLineBlock).not.toContain('setLineSearch("")');
+    expect(pageSource).toContain(
+      "void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: true }));",
+    );
+    expect(pageSource).toContain("{ enabled: Boolean(saleId && !hasLocalCartLines)");
+  });
+
+  it("renders cashier products as readable rows with in-cart quantity controls", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+
+    expect(pageSource).toContain("line-clamp-3 break-words");
+    expect(pageSource).toContain("cartQtyByProductId");
+    expect(pageSource).toContain("onProductDecrement");
+    expect(pageSource).toContain('addProductLabel={t("sell.addProduct")}');
+    expect(pageSource).toContain('<div className="space-y-2">');
+    expect(pageSource).not.toContain(
+      "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4 2xl:grid-cols-5",
+    );
+  });
+
+  it("validates POS payments after local cart sync and intentionally allows zero-total sales", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const routerSource = await readSource("src/server/trpc/routers/pos.ts");
+    const serviceSource = await readSource("src/server/services/pos.ts");
+
+    expect(pageSource).toContain("await waitForCartSync();");
+    expect(pageSource).toContain("const currentLines = getCurrentCartLines();");
+    expect(pageSource).toContain("const currentCartTotalKgs =");
+    expect(pageSource).toContain("currentCartTotalKgs > 0.009 && !normalized.length");
+    expect(pageSource).toContain("normalizedPaymentTotalKgs - currentCartTotalKgs");
+    expect(pageSource).toContain("parseDraftNumber(payment.amount)");
+    expect(routerSource).not.toContain("payments.length < 1");
+    expect(serviceSource).toContain("normalizePayments(input.payments, { requirePayment: false })");
+    expect(serviceSource).toContain("orderTotal > 0.009 && !normalizedPayments.length");
   });
 });

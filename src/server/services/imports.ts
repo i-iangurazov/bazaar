@@ -39,10 +39,17 @@ const importTransactionOptions = {
 export const runProductImport = async (input: RunProductImportInput) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
   const importMode = input.mode ?? "full";
+  const stockBehavior =
+    input.stockBehavior ??
+    (input.rows.some((row) => row.stockQty !== undefined) ? "set" : "ignore");
   const hasMinStockImport =
     input.rows.some((row) => row.minStock !== undefined) &&
     (importMode === "full" || input.updateMask?.includes("minStock"));
-  if (hasMinStockImport && !input.storeId) {
+  const hasStockImport =
+    stockBehavior !== "ignore" &&
+    input.rows.some((row) => row.stockQty !== undefined) &&
+    (importMode === "full" || input.updateMask?.includes("stockQty"));
+  if ((hasMinStockImport || hasStockImport) && !input.storeId) {
     throw new AppError("storeRequired", "BAD_REQUEST", 400);
   }
   const targetStore = input.storeId
@@ -134,7 +141,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
           updateMask: input.updateMask ?? null,
           existingBehavior: input.existingBehavior ?? "update",
           emptyValueBehavior: input.emptyValueBehavior ?? "keep",
-          stockBehavior: input.stockBehavior ?? "ignore",
+          stockBehavior,
           targetStoreId: targetStore?.id ?? null,
           targetStoreName: targetStore?.name ?? null,
           rows: rows.length,
@@ -146,6 +153,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
       ...input,
       rows,
       batchId: batch.id,
+      stockBehavior,
     });
 
     const created = results.filter((row) => row.action === "created").length;
@@ -158,7 +166,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
       updateMask: input.updateMask ?? null,
       existingBehavior: input.existingBehavior ?? "update",
       emptyValueBehavior: input.emptyValueBehavior ?? "keep",
-      stockBehavior: input.stockBehavior ?? "ignore",
+      stockBehavior,
       targetStoreId: targetStore?.id ?? null,
       targetStoreName: targetStore?.name ?? null,
       rows: rows.length,

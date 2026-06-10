@@ -21,6 +21,8 @@ type ImportPreviewRow = {
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   minStock?: number;
+  stockQty?: number;
+  photoUrl?: string;
 };
 
 type ImportPreviewTableProps = {
@@ -48,32 +50,42 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                 <TableHead className="hidden lg:table-cell">{t("fieldPurchasePrice")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldAvgCost")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldMinStock")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("fieldStockQty")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("fieldCategory")}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t("fieldUnit")}</TableHead>
+                <TableHead className="hidden xl:table-cell">{t("fieldPhotoUrl")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleItems.map((row) => (
                 <TableRow key={`${row.sku}-${row.name ?? ""}`}>
                   <TableCell className="text-xs text-muted-foreground">{row.sku}</TableCell>
-                  <TableCell className="font-medium">{row.name ?? tCommon("notAvailable")}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
+                  <TableCell className="font-medium">
+                    {row.name ?? tCommon("notAvailable")}
+                  </TableCell>
+                  <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                     {row.basePriceKgs ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
+                  <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                     {row.purchasePriceKgs ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
+                  <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                     {row.avgCostKgs ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
+                  <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                     {row.minStock ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                  <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                    {row.stockQty ?? tCommon("notAvailable")}
+                  </TableCell>
+                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                     {row.category ?? tCommon("notAvailable")}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                     {row.unit ?? tCommon("notAvailable")}
+                  </TableCell>
+                  <TableCell className="hidden max-w-[180px] truncate text-xs text-muted-foreground xl:table-cell">
+                    {row.photoUrl ?? tCommon("notAvailable")}
                   </TableCell>
                 </TableRow>
               ))}
@@ -84,7 +96,9 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
       renderMobile={(row) => (
         <div className="rounded-md border border-border bg-card p-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">{row.name ?? tCommon("notAvailable")}</p>
+            <p className="truncate text-sm font-medium text-foreground">
+              {row.name ?? tCommon("notAvailable")}
+            </p>
             <p className="text-xs text-muted-foreground">{row.sku}</p>
           </div>
           <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
@@ -110,7 +124,9 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                 {t("fieldPurchasePrice")}
               </p>
-              <p className="text-foreground/90">{row.purchasePriceKgs ?? tCommon("notAvailable")}</p>
+              <p className="text-foreground/90">
+                {row.purchasePriceKgs ?? tCommon("notAvailable")}
+              </p>
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
@@ -123,6 +139,20 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                 {t("fieldMinStock")}
               </p>
               <p className="text-foreground/90">{row.minStock ?? tCommon("notAvailable")}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                {t("fieldStockQty")}
+              </p>
+              <p className="text-foreground/90">{row.stockQty ?? tCommon("notAvailable")}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                {t("fieldPhotoUrl")}
+              </p>
+              <p className="truncate text-foreground/90">
+                {row.photoUrl ?? tCommon("notAvailable")}
+              </p>
             </div>
           </div>
         </div>

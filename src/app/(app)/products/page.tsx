@@ -141,6 +141,31 @@ type ProductSortKey =
 type ProductSortDirection = "asc" | "desc";
 type ProductReadinessBadgeVariant = "muted" | "warning" | "danger";
 
+const CATEGORY_IN_USE_DETAILS_PREFIX = "categoryInUseDetails:";
+
+type CategoryRemovalUsageDetails = {
+  activeProducts?: number;
+  selectedStoreActiveProducts?: number;
+  otherStoreActiveProducts?: number;
+  archivedProducts?: number;
+  templates?: number;
+};
+
+const parseCategoryRemovalUsageDetails = (message: string): CategoryRemovalUsageDetails | null => {
+  if (!message.startsWith(CATEGORY_IN_USE_DETAILS_PREFIX)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      decodeURIComponent(message.slice(CATEGORY_IN_USE_DETAILS_PREFIX.length)),
+    ) as CategoryRemovalUsageDetails;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 const productTypeFilterSchema = z.enum(["all", "product", "bundle"]);
 const productReadinessFilterSchema = z.enum([
   "all",
@@ -858,9 +883,63 @@ const ProductsPage = () => {
     },
   });
 
+  const formatCategoryRemoveError = (message: string) => {
+    const details = parseCategoryRemovalUsageDetails(message);
+    if (!details) {
+      return null;
+    }
+
+    const blockers: string[] = [];
+    const selectedStoreActiveProducts = details.selectedStoreActiveProducts ?? 0;
+    const otherStoreActiveProducts = details.otherStoreActiveProducts ?? 0;
+    if (selectedStoreActiveProducts > 0) {
+      blockers.push(
+        t("categoryRemoveBlockedSelectedStoreProducts", {
+          count: selectedStoreActiveProducts,
+        }),
+      );
+    }
+    if (otherStoreActiveProducts > 0) {
+      blockers.push(
+        t("categoryRemoveBlockedOtherStoreProducts", {
+          count: otherStoreActiveProducts,
+        }),
+      );
+    }
+    if (!blockers.length && (details.activeProducts ?? 0) > 0) {
+      blockers.push(
+        t("categoryRemoveBlockedActiveProducts", {
+          count: details.activeProducts ?? 0,
+        }),
+      );
+    }
+    if ((details.templates ?? 0) > 0) {
+      blockers.push(
+        t("categoryRemoveBlockedTemplates", {
+          count: details.templates ?? 0,
+        }),
+      );
+    }
+    if ((details.archivedProducts ?? 0) > 0) {
+      blockers.push(
+        t("categoryRemoveBlockedArchivedProducts", {
+          count: details.archivedProducts ?? 0,
+        }),
+      );
+    }
+
+    return `${t("categoryRemoveBlockedTitle")}: ${
+      blockers.length ? blockers.join("; ") : t("categoryRemoveBlockedUnknown")
+    }`;
+  };
+
   const removeCategoryMutation = trpc.productCategories.remove.useMutation({
-    onSuccess: (_result, input) => {
-      productsBootstrapQuery.refetch();
+    onSuccess: async (_result, input) => {
+      await Promise.all([
+        productsBootstrapQuery.refetch(),
+        trpcUtils.productCategories.listForStore.invalidate(),
+        trpcUtils.productCategories.list.invalidate(),
+      ]);
       if (category === input.name) {
         setCategory("");
       }
@@ -870,7 +949,10 @@ const ProductsPage = () => {
       toast({ variant: "success", description: t("categoryRemoveSuccess") });
     },
     onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
+      toast({
+        variant: "error",
+        description: formatCategoryRemoveError(error.message) ?? translateError(tErrors, error),
+      });
     },
   });
 
@@ -941,18 +1023,14 @@ const ProductsPage = () => {
     { jobId: descriptionGenerationJobId ?? "" },
     {
       enabled: Boolean(descriptionGenerationJobId),
-      refetchInterval: (job) =>
-        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      refetchInterval: (job) => (isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false),
       onSuccess: async (job) => {
         if (!isDescriptionGenerationJobRunning(job.status)) {
           await Promise.all([
             trpcUtils.products.bootstrap.invalidate(),
             trpcUtils.products.list.invalidate(),
           ]);
-          if (
-            job.status === ProductDescriptionGenerationJobStatus.DONE &&
-            job.failedCount === 0
-          ) {
+          if (job.status === ProductDescriptionGenerationJobStatus.DONE && job.failedCount === 0) {
             setSelectedIds(new Set());
           }
         }
@@ -2504,7 +2582,7 @@ const ProductsPage = () => {
     if (!categoryToRemove) {
       return;
     }
-    removeCategoryMutation.mutate({ name: categoryToRemove });
+    removeCategoryMutation.mutate({ name: categoryToRemove, storeId: storeId || undefined });
   };
 
   const handleBulkStorePriceApply = async (values: z.infer<typeof bulkStorePriceSchema>) => {

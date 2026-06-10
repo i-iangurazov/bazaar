@@ -5,6 +5,8 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 
+const CATEGORY_IN_USE_DETAILS_PREFIX = "categoryInUseDetails:";
+
 export const normalizeProductCategoryName = (value?: string | null) => {
   const normalized = value?.trim().replace(/\s+/g, " ");
   return normalized ? normalized : null;
@@ -42,7 +44,7 @@ export const listProductCategoriesFromDb = async (
       orderBy: { name: "asc" },
     }),
     db.product.findMany({
-      where: { organizationId },
+      where: { organizationId, isDeleted: false },
       select: { category: true, categories: true },
     }),
     db.categoryAttributeTemplate.findMany({
@@ -420,31 +422,65 @@ export const removeProductCategory = async (input: {
   actorId: string;
   requestId: string;
   name: string;
+  storeId?: string | null;
 }) =>
   prisma.$transaction(async (tx) => {
     const normalized = normalizeProductCategoryName(input.name);
+    const normalizedName = normalizeProductCategoryKey(input.name);
     if (!normalized) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
 
-    const category = await tx.productCategory.findUnique({
-      where: {
-        organizationId_name: {
-          organizationId: input.organizationId,
-          name: normalized,
+    const productCategoryWhere = {
+      organizationId: input.organizationId,
+      OR: [{ category: normalized }, { categories: { has: normalized } }],
+    } satisfies Prisma.ProductWhereInput;
+    const selectedStoreProductWhere =
+      input.storeId && input.storeId.trim()
+        ? ({
+            ...productCategoryWhere,
+            storeProducts: {
+              some: {
+                storeId: input.storeId,
+                isActive: true,
+              },
+            },
+          } satisfies Prisma.ProductWhereInput)
+        : null;
+
+    const [
+      category,
+      activeProductUsageCount,
+      selectedStoreActiveProductUsageCount,
+      archivedProductUsageCount,
+      templateUsageCount,
+    ] = await Promise.all([
+      tx.productCategory.findUnique({
+        where: {
+          organizationId_name: {
+            organizationId: input.organizationId,
+            name: normalized,
+          },
         },
-      },
-    });
-
-    if (!category) {
-      throw new AppError("categoryNotFound", "NOT_FOUND", 404);
-    }
-
-    const [productUsageCount, templateUsageCount] = await Promise.all([
+      }),
       tx.product.count({
         where: {
-          organizationId: input.organizationId,
-          OR: [{ category: normalized }, { categories: { has: normalized } }],
+          ...productCategoryWhere,
+          isDeleted: false,
+        },
+      }),
+      selectedStoreProductWhere
+        ? tx.product.count({
+            where: {
+              ...selectedStoreProductWhere,
+              isDeleted: false,
+            },
+          })
+        : Promise.resolve(null),
+      tx.product.count({
+        where: {
+          ...productCategoryWhere,
+          isDeleted: true,
         },
       }),
       tx.categoryAttributeTemplate.count({
@@ -455,8 +491,38 @@ export const removeProductCategory = async (input: {
       }),
     ]);
 
-    if (productUsageCount > 0 || templateUsageCount > 0) {
-      throw new AppError("categoryInUse", "CONFLICT", 409);
+    if (activeProductUsageCount > 0 || templateUsageCount > 0) {
+      const selectedActiveProducts = selectedStoreActiveProductUsageCount ?? undefined;
+      const otherStoreActiveProducts =
+        selectedActiveProducts === undefined
+          ? undefined
+          : Math.max(activeProductUsageCount - selectedActiveProducts, 0);
+      throw new AppError(
+        `${CATEGORY_IN_USE_DETAILS_PREFIX}${encodeURIComponent(
+          JSON.stringify({
+            activeProducts: activeProductUsageCount,
+            selectedStoreActiveProducts: selectedActiveProducts,
+            otherStoreActiveProducts,
+            archivedProducts: archivedProductUsageCount,
+            templates: templateUsageCount,
+          }),
+        )}`,
+        "CONFLICT",
+        409,
+      );
+    }
+
+    if (!category) {
+      throw new AppError("categoryNotFound", "NOT_FOUND", 404);
+    }
+
+    if (normalizedName) {
+      await tx.storeCategoryPreference.deleteMany({
+        where: {
+          organizationId: input.organizationId,
+          normalizedName,
+        },
+      });
     }
 
     await tx.productCategory.delete({ where: { id: category.id } });

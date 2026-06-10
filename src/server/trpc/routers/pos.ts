@@ -612,22 +612,12 @@ export const posRouter = router({
     complete: cashierProcedure
       .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "pos-sales-complete" }))
       .input(
-        z
-          .object({
-            saleId: z.string().min(1),
-            idempotencyKey: z.string().min(8),
-            debtCustomerName: z.string().max(160).optional().nullable(),
-            payments: z.array(paymentSchema),
-          })
-          .superRefine((value, ctx) => {
-            if (!value.debtCustomerName?.trim() && value.payments.length < 1) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "posPaymentMissing",
-                path: ["payments"],
-              });
-            }
-          }),
+        z.object({
+          saleId: z.string().min(1),
+          idempotencyKey: z.string().min(8),
+          debtCustomerName: z.string().max(160).optional().nullable(),
+          payments: z.array(paymentSchema),
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         try {

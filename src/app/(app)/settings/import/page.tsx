@@ -75,6 +75,7 @@ type MappingKey =
   | "description"
   | "photoUrl"
   | "variants"
+  | "options"
   | "barcodes"
   | "basePriceKgs"
   | "purchasePriceKgs"
@@ -401,6 +402,93 @@ const parseVariants = (value: string) => {
   return { variants, invalid: false };
 };
 
+const normalizeOptionAttributeKey = (value: string) => {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  const key = normalized.toLocaleLowerCase("ru-RU");
+  if (["цвет", "color", "colour", "түс"].includes(key)) {
+    return "color";
+  }
+  if (["размер", "size", "өлчөм"].includes(key)) {
+    return "size";
+  }
+  return normalized;
+};
+
+const parseVariantOptions = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return {
+      attributes: {} as Record<string, unknown>,
+      invalid: false,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    const entries = normalized
+      .split(/[;|\n\r]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const attributes: Record<string, unknown> = {};
+    for (const entry of entries) {
+      const separatorIndex = entry.search(/[:=]/);
+      if (separatorIndex <= 0) {
+        return { attributes: {}, invalid: true };
+      }
+      const key = normalizeOptionAttributeKey(entry.slice(0, separatorIndex));
+      const attributeValue = entry.slice(separatorIndex + 1).trim();
+      if (!key || !attributeValue) {
+        return { attributes: {}, invalid: true };
+      }
+      attributes[key] = attributeValue;
+    }
+    return { attributes, invalid: false };
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { attributes: {}, invalid: true };
+  }
+
+  const attributes = Object.fromEntries(
+    Object.entries(parsed as Record<string, unknown>)
+      .map(([key, attributeValue]) => [
+        normalizeOptionAttributeKey(key),
+        normalizeVariantAttributeValue(attributeValue),
+      ])
+      .filter(([key, attributeValue]) => key && attributeValue !== ""),
+  );
+
+  return { attributes, invalid: false };
+};
+
+const mergeOptionsIntoVariants = (
+  variants: NonNullable<ImportRow["variants"]>,
+  attributes: Record<string, unknown>,
+) => {
+  const optionEntries = Object.entries(attributes).filter(([, value]) => value !== "");
+  if (!optionEntries.length) {
+    return variants;
+  }
+  if (variants.length) {
+    return variants.map((variant) => ({
+      ...variant,
+      attributes: {
+        ...attributes,
+        ...(variant.attributes ?? {}),
+      },
+    }));
+  }
+
+  return [
+    {
+      name: optionEntries.map(([, value]) => String(value)).join(" / "),
+      attributes,
+    },
+  ] as NonNullable<ImportRow["variants"]>;
+};
+
 const parseOptionalNumericValue = (value: string) => {
   const normalized = value.trim();
   if (!normalized) {
@@ -527,12 +615,35 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
   description: detectColumn(headers, ["description", "описание"]),
   basePriceKgs: detectColumn(
     headers,
-    ["saleprice", "baseprice", "price", "ценапродажи", "продажнаяцена", "базоваяцена"],
+    [
+      "saleprice",
+      "sale price",
+      "baseprice",
+      "base price",
+      "price",
+      "цена",
+      "ценапродажи",
+      "цена продажи",
+      "продажнаяцена",
+      "продажная цена",
+      "базоваяцена",
+      "базовая цена",
+      "баа",
+    ],
     { allowContains: true },
   ),
   purchasePriceKgs: detectColumn(
     headers,
-    ["purchaseprice", "buyprice", "цена закупки", "закупочнаяцена", "ценазакупки"],
+    [
+      "purchaseprice",
+      "purchase price",
+      "buyprice",
+      "buy price",
+      "цена закупки",
+      "закупочнаяцена",
+      "закупочная цена",
+      "ценазакупки",
+    ],
     { allowContains: true },
   ),
   avgCostKgs: detectColumn(
@@ -547,7 +658,25 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
   ),
   stockQty: detectColumn(
     headers,
-    ["stock", "quantity", "qty", "onhand", "on hand", "остаток", "количество"],
+    [
+      "stock",
+      "quantity",
+      "qty",
+      "onhand",
+      "on hand",
+      "in stock",
+      "instock",
+      "available",
+      "в наличии",
+      "наличие",
+      "остаток",
+      "остаток на складе",
+      "количество",
+      "кол-во",
+      "колво",
+      "саны",
+      "калдыгы",
+    ],
     { allowContains: true },
   ),
   photoUrl: detectColumn(
@@ -559,16 +688,19 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
       "photo link",
       "photo_link",
       "image",
+      "images",
       "image url",
       "imageurl",
       "image link",
       "imagelink",
       "изображение",
+      "изображения",
       "изображениеurl",
       "изображениессылка",
       "ссылка на изображение",
       "ссылка на фото",
       "фото",
+      "фотографии",
       "фотоurl",
       "фототовара",
       "фотоссылка",
@@ -590,6 +722,20 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
       "модификации",
       "размеры",
       "вариант",
+    ],
+    { allowContains: true },
+  ),
+  options: detectColumn(
+    headers,
+    [
+      "options",
+      "option",
+      "attributes",
+      "properties",
+      "опции",
+      "опция",
+      "характеристики",
+      "свойства",
     ],
     { allowContains: true },
   ),
@@ -833,12 +979,61 @@ const resetImportFormState = (setters: {
     stockQty: "",
     photoUrl: "",
     variants: "",
+    options: "",
     barcodes: "",
   });
   setters.setFileName(null);
   setters.setDefaultUnitCode("");
   setters.setSkippedRows([]);
 };
+
+const PRODUCT_TEMPLATE_HEADERS = [
+  "Название",
+  "SKU",
+  "Штрихкод",
+  "Категория",
+  "Описание",
+  "Цена",
+  "Себестоимость",
+  "В наличии",
+  "Минимальный остаток",
+  "Ед. изм.",
+  "Изображения",
+  "Варианты",
+  "Опции",
+];
+
+const PRODUCT_TEMPLATE_EXAMPLE = [
+  "Тестовый товар",
+  "SKU-0001",
+  "1234567890123",
+  "Тестовая категория",
+  "Описание тестового товара",
+  100,
+  70,
+  15,
+  3,
+  "шт",
+  "https://example.com/product-1.jpg; https://example.com/product-2.jpg",
+  '[{"name":"Черный / M","sku":"SKU-0001-BLK-M","color":"черный","size":"M"}]',
+  "Цвет: черный; Размер: M",
+];
+
+const PRODUCT_TEMPLATE_INSTRUCTIONS = [
+  ["Поле", "Формат"],
+  [
+    "Изображения",
+    "Один URL или несколько URL через запятую, точку с запятой, | или перенос строки.",
+  ],
+  [
+    "Варианты",
+    'JSON-массив вариантов: [{"name":"Черный / M","sku":"SKU-0001-BLK-M","color":"черный","size":"M"}]. Также поддерживается простой список названий через запятую, точку с запятой или |.',
+  ],
+  [
+    "Опции",
+    'Пары ключ-значение через точку с запятой: "Цвет: черный; Размер: M". Если колонка "Варианты" пустая, опции создают один вариант.',
+  ],
+];
 
 const CustomerImportPanel = ({
   targetStoreId,
@@ -1405,12 +1600,13 @@ const ImportPage = () => {
     stockQty: "",
     photoUrl: "",
     variants: "",
+    options: "",
     barcodes: "",
   });
   const [importMode, setImportMode] = useState<ImportMode>("full");
   const [existingBehavior, setExistingBehavior] = useState<ProductExistingBehavior>("update");
   const [emptyValueBehavior, setEmptyValueBehavior] = useState<ProductEmptyValueBehavior>("keep");
-  const [stockBehavior, setStockBehavior] = useState<ProductStockBehavior>("ignore");
+  const [stockBehavior, setStockBehavior] = useState<ProductStockBehavior>("set");
   const [productRowActions, setProductRowActions] = useState<
     Record<number, ProductImportRowDecision>
   >({});
@@ -1525,6 +1721,7 @@ const ImportPage = () => {
       { key: "stockQty" as const, label: t("fieldStockQty"), required: false },
       { key: "photoUrl" as const, label: t("fieldPhotoUrl"), required: false },
       { key: "variants" as const, label: t("fieldVariants"), required: false },
+      { key: "options" as const, label: t("fieldOptions"), required: false },
       { key: "barcodes" as const, label: t("fieldBarcodes"), required: false },
     ],
     [t],
@@ -1548,7 +1745,7 @@ const ImportPage = () => {
     return required;
   }, [isUpdateSelectedMode, selectedUpdateFieldSet]);
   const updateSelectableFields = useMemo(
-    () => mappingFields.filter((field) => field.key !== "sku"),
+    () => mappingFields.filter((field) => field.key !== "sku" && field.key !== "options"),
     [mappingFields],
   );
 
@@ -1687,9 +1884,18 @@ const ImportPage = () => {
       const parsedVariants = variantsValue
         ? parseVariants(variantsValue)
         : { variants: [] as NonNullable<ImportRow["variants"]>, invalid: false };
+      const optionsValue =
+        shouldApply("variants") && mapping.options ? normalizeValue(row[mapping.options]) : "";
+      const parsedOptions = optionsValue
+        ? parseVariantOptions(optionsValue)
+        : { attributes: {} as Record<string, unknown>, invalid: false };
+      const variantsWithOptions = mergeOptionsIntoVariants(
+        parsedVariants.variants,
+        parsedOptions.attributes,
+      );
       const variants = color
-        ? applyColorToVariants(parsedVariants.variants, color)
-        : parsedVariants.variants;
+        ? applyColorToVariants(variantsWithOptions, color)
+        : variantsWithOptions;
       const basePriceResult = parseOptionalNumericValue(basePriceCandidate);
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
@@ -1747,6 +1953,15 @@ const ImportPage = () => {
           message: t("rowInvalidVariants", { row: rowNumber }),
           code: "invalidVariants",
           value: "variants",
+        });
+        return;
+      }
+      if (parsedOptions.invalid) {
+        errors.push({
+          row: rowNumber,
+          message: t("rowInvalidVariants", { row: rowNumber }),
+          code: "invalidVariants",
+          value: "options",
         });
         return;
       }
@@ -1928,6 +2143,14 @@ const ImportPage = () => {
     };
   }, [previewInput, tErrors]);
 
+  const applyDetectedProductMapping = (nextHeaders: string[]) => {
+    const nextMapping = buildDefaultMapping(nextHeaders);
+    setMapping(nextMapping);
+    if (nextMapping.stockQty) {
+      setStockBehavior("set");
+    }
+  };
+
   const handleFile = async (file: File) => {
     setFileError(null);
     setFileName(file.name);
@@ -1948,6 +2171,7 @@ const ImportPage = () => {
       photoUrl: "",
       barcodes: "",
       variants: "",
+      options: "",
     });
     setDefaultUnitCode("");
     setSkippedRows([]);
@@ -1962,7 +2186,7 @@ const ImportPage = () => {
         const parsed = parseSpreadsheetRows(sheet, xlsx);
         setRawRows(parsed.rows);
         setHeaders(parsed.headers);
-        setMapping(buildDefaultMapping(parsed.headers));
+        applyDetectedProductMapping(parsed.headers);
         setSource(detectSource(parsed.headers));
         return;
       }
@@ -1975,7 +2199,7 @@ const ImportPage = () => {
           const nextHeaders = Object.keys(results.data[0] ?? {});
           setRawRows(results.data);
           setHeaders(nextHeaders);
-          setMapping(buildDefaultMapping(nextHeaders));
+          applyDetectedProductMapping(nextHeaders);
           setSource(detectSource(nextHeaders));
         },
         error: () => {
@@ -2006,16 +2230,34 @@ const ImportPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadTemplate = () => {
-    const header = t("templateHeaders");
-    const example = t("templateExample");
-    const blob = new Blob([`${header}\n${example}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `template-1c-${locale}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadTemplate = async () => {
+    try {
+      const xlsx = await loadXlsx();
+      const workbook = xlsx.utils.book_new();
+      const productSheet = xlsx.utils.aoa_to_sheet([
+        PRODUCT_TEMPLATE_HEADERS,
+        PRODUCT_TEMPLATE_EXAMPLE,
+      ]);
+      productSheet["!cols"] = PRODUCT_TEMPLATE_HEADERS.map((header) => ({
+        wch: Math.max(header.length + 4, 16),
+      }));
+      const instructionsSheet = xlsx.utils.aoa_to_sheet(PRODUCT_TEMPLATE_INSTRUCTIONS);
+      instructionsSheet["!cols"] = [{ wch: 24 }, { wch: 120 }];
+      xlsx.utils.book_append_sheet(workbook, productSheet, "Products");
+      xlsx.utils.book_append_sheet(workbook, instructionsSheet, "Instructions");
+      const data = xlsx.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+      const blob = new Blob([data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `product-import-template-${locale}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ variant: "error", description: t("fileParseError") });
+    }
   };
 
   const handleDownloadCustomerTemplate = () => {
@@ -2433,7 +2675,11 @@ const ImportPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <Button variant="secondary" className="w-full sm:w-auto" onClick={handleDownloadTemplate}>
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={() => void handleDownloadTemplate()}
+          >
             <DownloadIcon className="h-4 w-4" aria-hidden />
             {t("templateDownload")}
           </Button>

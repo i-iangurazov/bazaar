@@ -30,6 +30,20 @@ describe("store category preferences source", () => {
     expect(router).toContain("assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId)");
   });
 
+  it("reports category delete blockers without counting archived products as active usage", async () => {
+    const page = await readSource("src/app/(app)/products/page.tsx");
+    const service = await readSource("src/server/services/productCategories.ts");
+
+    expect(service).toContain("categoryInUseDetails:");
+    expect(service).toContain("isDeleted: false");
+    expect(service).toContain("archivedProductUsageCount");
+    expect(service).toContain("templateUsageCount");
+    expect(service).toContain("storeCategoryPreference.deleteMany");
+    expect(page).toContain("parseCategoryRemovalUsageDetails");
+    expect(page).toContain("categoryRemoveBlockedOtherStoreProducts");
+    expect(page).toContain("removeCategoryMutation.mutate({ name: categoryToRemove, storeId:");
+  });
+
   it("creates newly managed categories inside the selected store scope", async () => {
     const page = await readSource("src/app/(app)/products/page.tsx");
     const service = await readSource("src/server/services/productCategories.ts");
