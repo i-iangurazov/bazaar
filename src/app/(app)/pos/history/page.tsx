@@ -71,10 +71,11 @@ const PosHistoryPage = () => {
     kind: "precheck" | "fiscal";
   } | null>(null);
 
-  const registersQuery = trpc.pos.registers.list.useQuery();
+  const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
+  const canLoadCurrentShift = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -112,7 +113,7 @@ const PosHistoryPage = () => {
 
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
+    { enabled: canLoadCurrentShift, refetchOnWindowFocus: true },
   );
 
   const salesQuery = trpc.pos.sales.list.useQuery(

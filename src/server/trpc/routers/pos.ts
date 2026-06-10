@@ -26,6 +26,7 @@ import {
   createPosRegister,
   createPosSaleDraft,
   createSaleReturnDraft,
+  deletePosRegister,
   getActivePosSaleDraft,
   getCurrentRegisterShift,
   getPosEntry,
@@ -135,12 +136,20 @@ export const posRouter = router({
 
   registers: router({
     list: protectedProcedure
-      .input(z.object({ storeId: z.string().optional() }).optional())
+      .input(
+        z
+          .object({
+            storeId: z.string().optional(),
+            status: z.enum(["active", "inactive", "all"]).optional(),
+          })
+          .optional(),
+      )
       .query(async ({ ctx, input }) => {
         try {
           return await listPosRegisters({
             organizationId: ctx.user.organizationId,
             storeId: input?.storeId,
+            status: input?.status,
             user: ctx.user,
           });
         } catch (error) {
@@ -176,6 +185,7 @@ export const posRouter = router({
       .input(
         z.object({
           registerId: z.string().min(1),
+          storeId: z.string().min(1).optional(),
           name: z.string().min(2).max(120).optional(),
           code: z.string().min(1).max(32).optional(),
           isActive: z.boolean().optional(),
@@ -186,9 +196,26 @@ export const posRouter = router({
           return await updatePosRegister({
             organizationId: ctx.user.organizationId,
             registerId: input.registerId,
+            storeId: input.storeId,
             name: input.name?.trim(),
             code: input.code?.trim().toUpperCase(),
             isActive: input.isActive,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    delete: managerProcedure
+      .input(z.object({ registerId: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await deletePosRegister({
+            organizationId: ctx.user.organizationId,
+            registerId: input.registerId,
             actorId: ctx.user.id,
             user: ctx.user,
             requestId: ctx.requestId,

@@ -56,6 +56,56 @@ const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 const sumPaymentMinorUnits = (payments: Array<{ amountKgs: number }>) =>
   payments.reduce((total, payment) => total + (moneyToMinorUnits(payment.amountKgs) ?? 0), 0);
 
+export type PosRegisterStatusFilter = "active" | "inactive" | "all";
+
+const getPosRegisterReferenceCounts = async (
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; registerId: string },
+) => {
+  const [shifts, sales, saleReturns, payments, cashMovements, auditLogs] = await Promise.all([
+    tx.registerShift.count({
+      where: { organizationId: input.organizationId, registerId: input.registerId },
+    }),
+    tx.customerOrder.count({
+      where: { organizationId: input.organizationId, registerId: input.registerId },
+    }),
+    tx.saleReturn.count({
+      where: { organizationId: input.organizationId, registerId: input.registerId },
+    }),
+    tx.salePayment.count({
+      where: {
+        organizationId: input.organizationId,
+        shift: { registerId: input.registerId },
+      },
+    }),
+    tx.cashDrawerMovement.count({
+      where: {
+        organizationId: input.organizationId,
+        shift: { registerId: input.registerId },
+      },
+    }),
+    tx.auditLog.count({
+      where: { organizationId: input.organizationId, entity: "PosRegister", entityId: input.registerId },
+    }),
+  ]);
+
+  return {
+    shifts,
+    sales,
+    saleReturns,
+    payments,
+    cashMovements,
+    auditLogs,
+  };
+};
+
+const hasPosRegisterBusinessHistory = (counts: Awaited<ReturnType<typeof getPosRegisterReferenceCounts>>) =>
+  counts.shifts > 0 ||
+  counts.sales > 0 ||
+  counts.saleReturns > 0 ||
+  counts.payments > 0 ||
+  counts.cashMovements > 0;
+
 const resolvePosCustomerSelectionTx = async (
   tx: Prisma.TransactionClient,
   input: {
@@ -578,8 +628,10 @@ const loadShiftReport = async (
 export const listPosRegisters = async (input: {
   organizationId: string;
   storeId?: string;
+  status?: PosRegisterStatusFilter;
   user?: StoreAccessUser;
 }) => {
+  const status = input.status ?? "active";
   const accessibleStoreIds = input.user
     ? await resolveAccessibleStoreIds(prisma, input.user)
     : null;
@@ -592,6 +644,7 @@ export const listPosRegisters = async (input: {
   const registers = await prisma.posRegister.findMany({
     where: {
       organizationId: input.organizationId,
+      ...(status === "active" ? { isActive: true } : status === "inactive" ? { isActive: false } : {}),
       ...(input.storeId
         ? { storeId: input.storeId }
         : accessibleStoreIds
@@ -619,14 +672,45 @@ export const listPosRegisters = async (input: {
         },
       },
       shifts: {
-        where: { status: RegisterShiftStatus.OPEN },
         orderBy: { openedAt: "desc" },
         take: 1,
         select: {
           id: true,
           status: true,
           openedAt: true,
+          closedAt: true,
           openedBy: { select: { id: true, name: true } },
+          closedBy: { select: { id: true, name: true } },
+        },
+      },
+      sales: {
+        where: { isPosSale: true },
+        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+        },
+      },
+      saleReturns: {
+        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+        },
+      },
+      _count: {
+        select: {
+          shifts: true,
+          sales: true,
+          saleReturns: true,
         },
       },
     },
@@ -635,8 +719,34 @@ export const listPosRegisters = async (input: {
 
   return registers.map((register) => ({
     ...register,
-    openShift: register.shifts[0] ?? null,
+    openShift: register.shifts[0]?.status === RegisterShiftStatus.OPEN ? register.shifts[0] : null,
+    latestShift: register.shifts[0] ?? null,
+    latestSale: register.sales[0] ?? null,
+    latestSaleReturn: register.saleReturns[0] ?? null,
+    lastActivityAt:
+      [
+        register.shifts[0]?.closedAt,
+        register.shifts[0]?.openedAt,
+        register.sales[0]?.completedAt,
+        register.sales[0]?.createdAt,
+        register.saleReturns[0]?.completedAt,
+        register.saleReturns[0]?.createdAt,
+      ]
+        .filter((value): value is Date => Boolean(value))
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
+    historyCounts: {
+      shifts: register._count.shifts,
+      sales: register._count.sales,
+      saleReturns: register._count.saleReturns,
+    },
+    hasHistory:
+      register._count.shifts > 0 || register._count.sales > 0 || register._count.saleReturns > 0,
+    canDelete:
+      register._count.shifts === 0 && register._count.sales === 0 && register._count.saleReturns === 0,
     shifts: undefined,
+    sales: undefined,
+    saleReturns: undefined,
+    _count: undefined,
   }));
 };
 
@@ -692,6 +802,7 @@ export const createPosRegister = async (input: {
 export const updatePosRegister = async (input: {
   organizationId: string;
   registerId: string;
+  storeId?: string;
   name?: string;
   code?: string;
   isActive?: boolean;
@@ -706,9 +817,28 @@ export const updatePosRegister = async (input: {
     if (!register) {
       throw new AppError("posRegisterNotFound", "NOT_FOUND", 404);
     }
+    if (input.storeId && input.storeId !== register.storeId) {
+      const nextStore = await tx.store.findFirst({
+        where: { id: input.storeId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      if (!nextStore) {
+        throw new AppError("storeNotFound", "NOT_FOUND", 404);
+      }
+      const counts = await getPosRegisterReferenceCounts(tx, {
+        organizationId: input.organizationId,
+        registerId: register.id,
+      });
+      if (hasPosRegisterBusinessHistory(counts)) {
+        throw new AppError("posRegisterStoreChangeBlockedByHistory", "CONFLICT", 409);
+      }
+    }
     if (input.user) {
       const accessibleStoreIds = await resolveAccessibleStoreIds(tx, input.user);
       if (!accessibleStoreIds.includes(register.storeId)) {
+        throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+      }
+      if (input.storeId && input.storeId !== register.storeId && !accessibleStoreIds.includes(input.storeId)) {
         throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
       }
     }
@@ -716,6 +846,7 @@ export const updatePosRegister = async (input: {
     const updated = await tx.posRegister.update({
       where: { id: register.id },
       data: {
+        storeId: input.storeId ?? register.storeId,
         name: input.name ?? register.name,
         code: input.code ?? register.code,
         isActive: input.isActive ?? register.isActive,
@@ -734,6 +865,52 @@ export const updatePosRegister = async (input: {
     });
 
     return updated;
+  });
+};
+
+export const deletePosRegister = async (input: {
+  organizationId: string;
+  registerId: string;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const register = await tx.posRegister.findFirst({
+      where: { id: input.registerId, organizationId: input.organizationId },
+    });
+    if (!register) {
+      throw new AppError("posRegisterNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      const accessibleStoreIds = await resolveAccessibleStoreIds(tx, input.user);
+      if (!accessibleStoreIds.includes(register.storeId)) {
+        throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+      }
+    }
+
+    const counts = await getPosRegisterReferenceCounts(tx, {
+      organizationId: input.organizationId,
+      registerId: register.id,
+    });
+    if (hasPosRegisterBusinessHistory(counts)) {
+      throw new AppError("posRegisterDeleteBlockedByHistory", "CONFLICT", 409);
+    }
+
+    await tx.posRegister.delete({ where: { id: register.id } });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_REGISTER_DELETE",
+      entity: "PosRegister",
+      entityId: register.id,
+      before: toJson({ ...register, referenceCounts: counts }),
+      after: null,
+      requestId: input.requestId,
+    });
+
+    return { id: register.id, deleted: true, referenceCounts: counts };
   });
 };
 

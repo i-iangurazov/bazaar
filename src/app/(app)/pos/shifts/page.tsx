@@ -56,9 +56,11 @@ const PosShiftsPage = () => {
   const [cashReason, setCashReason] = useState("");
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
 
-  const registersQuery = trpc.pos.registers.list.useQuery();
+  const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
+  const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
+  const canOpenNewShift = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -285,13 +287,17 @@ const PosShiftsPage = () => {
             </div>
           ) : null}
 
-          {canLoadRegisterScopedData && !currentShiftQuery.isLoading && !currentShift ? (
+          {canOpenNewShift && !currentShiftQuery.isLoading && !currentShift ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {t("entry.shiftClosed")}
               <Button variant="secondary" asChild>
                 <Link href={`/pos?registerId=${registerId}`}>{t("entry.openShift")}</Link>
               </Button>
             </div>
+          ) : null}
+
+          {canLoadRegisterScopedData && selectedRegister && !selectedRegister.isActive && !currentShift ? (
+            <p className="text-sm text-muted-foreground">{t("registers.inactiveNoNewSessions")}</p>
           ) : null}
 
           {currentShift ? (

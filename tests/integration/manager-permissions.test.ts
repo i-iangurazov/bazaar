@@ -142,7 +142,7 @@ describeDb("manager operational permissions", () => {
     expect(snapshot?.onHand).toBe(1);
   });
 
-  it("allows managers to create and update registers only in accessible stores", async () => {
+  it("allows managers to manage registers safely only in accessible stores", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.createMany({
       data: [{ organizationId: org.id, userId: managerUser.id, storeId: store.id }],
@@ -175,6 +175,48 @@ describeDb("manager operational permissions", () => {
       name: "Front Desk",
     });
     expect(updated.name).toBe("Front Desk");
+
+    await caller.pos.registers.update({
+      registerId: register.id,
+      isActive: false,
+    });
+    const activeRegisters = await caller.pos.registers.list();
+    expect(activeRegisters.map((item) => item.id)).not.toContain(register.id);
+
+    const inactiveRegisters = await caller.pos.registers.list({ status: "inactive" });
+    expect(inactiveRegisters.map((item) => item.id)).toContain(register.id);
+
+    const allRegisters = await caller.pos.registers.list({ status: "all" });
+    expect(allRegisters.map((item) => item.id)).toContain(register.id);
+
+    const tempRegister = await caller.pos.registers.create({
+      storeId: store.id,
+      name: "Temporary",
+      code: "temp",
+    });
+    await expect(caller.pos.registers.delete({ registerId: tempRegister.id })).resolves.toMatchObject({
+      deleted: true,
+      id: tempRegister.id,
+    });
+
+    const historyRegister = await caller.pos.registers.create({
+      storeId: store.id,
+      name: "History",
+      code: "hist",
+    });
+    await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: historyRegister.id,
+        openedById: managerUser.id,
+        openingCashKgs: 0,
+      },
+    });
+    await expect(caller.pos.registers.delete({ registerId: historyRegister.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "posRegisterDeleteBlockedByHistory",
+    });
 
     await expect(
       caller.pos.registers.create({
