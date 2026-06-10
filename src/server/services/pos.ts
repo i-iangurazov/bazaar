@@ -18,6 +18,7 @@ import type { FiscalReceiptDraft } from "@/server/kkm/adapter";
 import { getKkmAdapter } from "@/server/kkm/registry";
 import { getLogger } from "@/server/logging";
 import { currencySourceWithFallback, resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import { minorUnitsToMoney, moneyToMinorUnits } from "@/lib/moneyInput";
 import {
   incrementCounter,
   kkmReceiptsFailedTotal,
@@ -52,8 +53,8 @@ const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
 const roundMoney = roundCashAmount;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 
-const sumPayments = (payments: Array<{ amountKgs: number }>) =>
-  roundMoney(payments.reduce((total, payment) => total + payment.amountKgs, 0));
+const sumPaymentMinorUnits = (payments: Array<{ amountKgs: number }>) =>
+  payments.reduce((total, payment) => total + (moneyToMinorUnits(payment.amountKgs) ?? 0), 0);
 
 const resolvePosCustomerSelectionTx = async (
   tx: Prisma.TransactionClient,
@@ -370,12 +371,21 @@ const normalizePayments = (
   options: { requirePayment?: boolean } = {},
 ) => {
   const normalized = payments
-    .map((payment) => ({
-      method: payment.method,
-      amountKgs: roundMoney(payment.amountKgs),
-      providerRef: payment.providerRef?.trim() || null,
-    }))
-    .filter((payment) => payment.amountKgs > 0);
+    .map((payment) => {
+      const amountMinorUnits = moneyToMinorUnits(payment.amountKgs);
+      if (amountMinorUnits === null) {
+        return null;
+      }
+      return {
+        method: payment.method,
+        amountKgs: minorUnitsToMoney(amountMinorUnits),
+        providerRef: payment.providerRef?.trim() || null,
+      };
+    })
+    .filter(
+      (payment): payment is { method: PosPaymentMethod; amountKgs: number; providerRef: string | null } =>
+        Boolean(payment && payment.amountKgs > 0),
+    );
 
   if (options.requirePayment !== false && !normalized.length) {
     throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
@@ -2753,12 +2763,12 @@ export const completePosSale = async (input: {
           throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
         }
 
-        const orderTotal = roundMoney(toMoney(sale.totalKgs));
-        const paymentsTotal = sumPayments(normalizedPayments);
-        if (!debtCustomerName && orderTotal > 0.009 && !normalizedPayments.length) {
+        const orderTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs)) ?? 0;
+        const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
+        if (!debtCustomerName && orderTotalMinorUnits > 0 && !normalizedPayments.length) {
           throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
         }
-        if (!debtCustomerName && Math.abs(paymentsTotal - orderTotal) > 0.009) {
+        if (!debtCustomerName && paymentTotalMinorUnits !== orderTotalMinorUnits) {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }
         const transactionCurrency = resolveCurrencySnapshot(
@@ -3706,9 +3716,9 @@ export const completeSaleReturn = async (input: {
           throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
         }
 
-        const returnTotal = roundMoney(toMoney(saleReturn.totalKgs));
-        const paymentsTotal = sumPayments(normalizedPayments);
-        if (Math.abs(paymentsTotal - returnTotal) > 0.009) {
+        const returnTotalMinorUnits = moneyToMinorUnits(toMoney(saleReturn.totalKgs)) ?? 0;
+        const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
+        if (paymentTotalMinorUnits !== returnTotalMinorUnits) {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }
 

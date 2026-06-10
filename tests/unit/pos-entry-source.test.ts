@@ -190,11 +190,15 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("await waitForCartSync();");
     expect(pageSource).toContain("const currentLines = getCurrentCartLines();");
     expect(pageSource).toContain("const currentCartTotalKgs =");
-    expect(pageSource).toContain("currentCartTotalKgs > 0.009 && !normalized.length");
-    expect(pageSource).toContain("normalizedPaymentTotalKgs - currentCartTotalKgs");
+    expect(pageSource).toContain("currentCartTotalMinorUnits > 0 && !normalized.length");
+    expect(pageSource).toContain(
+      "normalizedPaymentTotalMinorUnits !== currentCartTotalMinorUnits",
+    );
+    expect(pageSource).toContain("const shouldUseExactCartTotal =");
     expect(pageSource).toContain("parseDraftNumber(payment.amount)");
     expect(routerSource).not.toContain("payments.length < 1");
     expect(serviceSource).toContain("normalizePayments(input.payments, { requirePayment: false })");
-    expect(serviceSource).toContain("orderTotal > 0.009 && !normalizedPayments.length");
+    expect(serviceSource).toContain("orderTotalMinorUnits > 0 && !normalizedPayments.length");
+    expect(serviceSource).toContain("paymentTotalMinorUnits !== orderTotalMinorUnits");
   });
 });

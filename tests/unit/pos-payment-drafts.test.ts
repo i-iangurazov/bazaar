@@ -42,6 +42,30 @@ describe("POS payment draft autofill", () => {
     ]);
   });
 
+  it("keeps auto-filling when the current amount is formatted differently", () => {
+    const result = reconcilePosPaymentDraftsForSaleTotal({
+      currentPayments: [
+        {
+          method: PosPaymentMethod.TRANSFER,
+          amount: "8 545,00 сом",
+          providerRef: "",
+        },
+      ],
+      saleId: "sale-1",
+      totalKgs: 9000,
+      displayTotal: 9000,
+      previousAutoFill: { saleId: "sale-1", totalKgs: 8545, displayTotal: 8545 },
+    });
+
+    expect(result.payments).toEqual([
+      {
+        method: PosPaymentMethod.TRANSFER,
+        amount: "9000",
+        providerRef: "",
+      },
+    ]);
+  });
+
   it("does not overwrite manually split payments", () => {
     const currentPayments = [
       { method: PosPaymentMethod.CASH, amount: "50", providerRef: "" },

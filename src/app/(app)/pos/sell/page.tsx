@@ -42,6 +42,7 @@ import {
   resolveCurrency,
 } from "@/lib/currencyDisplay";
 import { formatNumber } from "@/lib/i18nFormat";
+import { moneyToMinorUnits, parseMoneyInput } from "@/lib/moneyInput";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
@@ -234,14 +235,7 @@ const findCartLineForProduct = (lines: PosCartLine[], productId: string, variant
       getCartLineProductId(line) === productId && (line.variantKey ?? "BASE") === variantKey,
   );
 
-const parseDraftNumber = (raw: string) => {
-  const normalized = raw.replace(/\s+/g, "").replace(",", ".");
-  if (!normalized.length) {
-    return null;
-  }
-  const amount = Number(normalized);
-  return Number.isFinite(amount) && amount >= 0 ? amount : null;
-};
+const parseDraftNumber = parseMoneyInput;
 
 const recalculateCartLine = (line: PosCartLine, patch: PendingLinePatch): PosCartLine => {
   const qty = patch.qty ?? line.qty;
@@ -995,7 +989,18 @@ const PosSellPage = () => {
       return sum + amount;
     }, 0),
   );
-  const totalPaymentKgs = roundMoney(displayMoneyToKgs(totalPayment, currencySource));
+  const cartDisplayTotalMinorUnits = moneyToMinorUnits(
+    roundMoney(displayMoneyFromKgs(cartTotalKgs, currencySource)),
+  );
+  const singlePaymentDisplayMinorUnits =
+    payments.length === 1 ? moneyToMinorUnits(parseDraftNumber(payments[0].amount) ?? Number.NaN) : null;
+  const totalPaymentKgs =
+    hasCartLines &&
+    payments.length === 1 &&
+    cartDisplayTotalMinorUnits !== null &&
+    singlePaymentDisplayMinorUnits === cartDisplayTotalMinorUnits
+      ? cartTotalKgs
+      : roundMoney(displayMoneyToKgs(totalPayment, currencySource));
   const productResults: PosCatalogProduct[] = activeStoreId
     ? (catalogProductsQuery.data?.items ?? [])
     : [];
@@ -1754,26 +1759,42 @@ const PosSellPage = () => {
     paymentAutoFillRef.current = reconciledPayments.autoFill;
     setPayments(paymentsForSubmit);
 
+    const currentDisplayTotalMinorUnits = moneyToMinorUnits(
+      roundMoney(displayMoneyFromKgs(currentCartTotalKgs, currencySource)),
+    );
+    const isSinglePaymentSale = paymentsForSubmit.length === 1;
     const normalized = paymentsForSubmit
-      .map((payment) => ({
-        method: payment.method,
-        amountKgs: roundMoney(
-          displayMoneyToKgs(parseDraftNumber(payment.amount) ?? Number.NaN, currencySource),
-        ),
-        providerRef: payment.providerRef.trim() || null,
-      }))
+      .map((payment, index) => {
+        const displayAmount = parseDraftNumber(payment.amount);
+        const displayAmountMinorUnits = moneyToMinorUnits(displayAmount ?? Number.NaN);
+        const shouldUseExactCartTotal =
+          isSinglePaymentSale &&
+          index === 0 &&
+          currentDisplayTotalMinorUnits !== null &&
+          displayAmountMinorUnits === currentDisplayTotalMinorUnits;
+
+        return {
+          method: payment.method,
+          amountKgs: shouldUseExactCartTotal
+            ? currentCartTotalKgs
+            : roundMoney(displayMoneyToKgs(displayAmount ?? Number.NaN, currencySource)),
+          providerRef: payment.providerRef.trim() || null,
+        };
+      })
       .filter((payment) => Number.isFinite(payment.amountKgs) && payment.amountKgs > 0);
-    const normalizedPaymentTotalKgs = roundMoney(
-      normalized.reduce((sum, payment) => sum + payment.amountKgs, 0),
+    const currentCartTotalMinorUnits = moneyToMinorUnits(currentCartTotalKgs) ?? 0;
+    const normalizedPaymentTotalMinorUnits = normalized.reduce(
+      (sum, payment) => sum + (moneyToMinorUnits(payment.amountKgs) ?? 0),
+      0,
     );
 
-    if (currentCartTotalKgs > 0.009 && !normalized.length) {
+    if (currentCartTotalMinorUnits > 0 && !normalized.length) {
       toast({ variant: "error", description: t("sell.paymentRequired") });
       focusPaymentsInput();
       return;
     }
 
-    if (Math.abs(roundMoney(normalizedPaymentTotalKgs - currentCartTotalKgs)) > 0.009) {
+    if (normalizedPaymentTotalMinorUnits !== currentCartTotalMinorUnits) {
       toast({ variant: "error", description: t("sell.paymentMismatch") });
       focusPaymentsInput();
       return;
