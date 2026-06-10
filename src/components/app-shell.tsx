@@ -52,6 +52,7 @@ import {
   WhatsNewIcon,
   PrintIcon,
   ReceiveIcon,
+  ArchiveIcon,
   AdjustIcon,
   UploadIcon,
   IntegrationsIcon,
@@ -235,6 +236,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 key: "stockReceiving",
                 href: "/inventory/receiving",
                 icon: ReceiveIcon,
+                requiredPermission: "viewInventory",
+              },
+              {
+                key: "stockWriteOff",
+                href: "/inventory/write-offs",
+                icon: ArchiveIcon,
                 requiredPermission: "viewInventory",
               },
               {

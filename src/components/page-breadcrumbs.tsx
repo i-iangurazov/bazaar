@@ -66,6 +66,8 @@ const segmentLabel = (
       return tBreadcrumbs("receiving");
     case "transfers":
       return tBreadcrumbs("transfers");
+    case "write-offs":
+      return tBreadcrumbs("writeOffs");
     case "movements":
       return tBreadcrumbs("productMovements");
     case "counts":

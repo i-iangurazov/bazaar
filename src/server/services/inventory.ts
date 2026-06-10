@@ -13,6 +13,11 @@ import { updateProductCost } from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { assignProductToStore } from "@/server/services/storeAccess";
+import {
+  buildWriteOffMovementNote,
+  isStockWriteOffReason,
+  type StockWriteOffReason,
+} from "@/lib/inventory/writeOff";
 
 const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 10;
 
@@ -626,6 +631,45 @@ export type StockReceivingResult = {
   }>;
 };
 
+export type StockWriteOffLineInput = {
+  productId: string;
+  variantId?: string | null;
+  qty: number;
+  unitId?: string | null;
+  packId?: string | null;
+};
+
+export type StockWriteOffInput = {
+  storeId: string;
+  date?: Date | null;
+  reason: StockWriteOffReason | string;
+  comment?: string | null;
+  lines: StockWriteOffLineInput[];
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+  idempotencyKey: string;
+};
+
+export type StockWriteOffResult = {
+  writeOffId: string;
+  storeId: string;
+  reason: StockWriteOffReason;
+  comment: string | null;
+  lineCount: number;
+  totalQuantity: number;
+  totalCostKgs: number | null;
+  lines: Array<{
+    productId: string;
+    variantId: string | null;
+    quantity: number;
+    unitCost: number | null;
+    snapshotId: string;
+    onHand: number;
+    movementId: string;
+  }>;
+};
+
 const buildReceivingMovementNote = (input: {
   referenceNumber?: string | null;
   supplierName?: string | null;
@@ -847,6 +891,252 @@ export const postStockReceiving = async (
       totalQuantity: result.totalQuantity,
     },
     "stock receiving posted",
+  );
+
+  return result;
+};
+
+export const postStockWriteOff = async (
+  input: StockWriteOffInput,
+): Promise<StockWriteOffResult> => {
+  const logger = getLogger(input.requestId);
+  if (!input.lines.length) {
+    throw new AppError("writeOffLinesRequired", "BAD_REQUEST", 400);
+  }
+  if (!isStockWriteOffReason(input.reason)) {
+    throw new AppError("writeOffReasonRequired", "BAD_REQUEST", 400);
+  }
+
+  const writeOffId = randomUUID();
+  const comment = input.comment?.trim() || null;
+  const movementNote = buildWriteOffMovementNote({ reason: input.reason, comment });
+  const changedItems: Array<{
+    storeId: string;
+    productId: string;
+    variantId: string | null;
+    onHand: number;
+  }> = [];
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: writeOff } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "inventory.stockWriteOff",
+        userId: input.actorId,
+      },
+      async () => {
+        const store = await tx.store.findFirst({
+          where: { id: input.storeId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+        if (!store) {
+          throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+        }
+
+        const normalizedLines = input.lines.map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId ?? null,
+          variantKey: resolveVariantKey(line.variantId),
+          qty: line.qty,
+          unitId: line.unitId ?? null,
+          packId: line.packId ?? null,
+        }));
+        const lineKeys = new Set<string>();
+        for (const line of normalizedLines) {
+          const key = `${line.productId}:${line.variantKey}`;
+          if (lineKeys.has(key)) {
+            throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+          }
+          lineKeys.add(key);
+          if (!Number.isInteger(line.qty) || line.qty <= 0) {
+            throw new AppError("invalidWriteOffQty", "BAD_REQUEST", 400);
+          }
+        }
+
+        const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
+        const products = await tx.product.findMany({
+          where: {
+            id: { in: productIds },
+            organizationId: input.organizationId,
+            isDeleted: false,
+            storeProducts: {
+              some: {
+                storeId: input.storeId,
+                isActive: true,
+              },
+            },
+          },
+          select: { id: true, baseUnitId: true },
+        });
+        if (products.length !== productIds.length) {
+          throw new AppError("invalidWriteOffProducts", "FORBIDDEN", 403);
+        }
+        const productMap = new Map(products.map((product) => [product.id, product]));
+
+        const variantIds = Array.from(
+          new Set(normalizedLines.map((line) => line.variantId).filter(Boolean) as string[]),
+        );
+        if (variantIds.length) {
+          const variants = await tx.productVariant.findMany({
+            where: {
+              id: { in: variantIds },
+              isActive: true,
+              product: { organizationId: input.organizationId, isDeleted: false },
+            },
+            select: { id: true, productId: true },
+          });
+          const variantProductMap = new Map(
+            variants.map((variant) => [variant.id, variant.productId]),
+          );
+          for (const line of normalizedLines) {
+            if (line.variantId && variantProductMap.get(line.variantId) !== line.productId) {
+              throw new AppError("variantMismatch", "BAD_REQUEST", 400);
+            }
+          }
+          if (variants.length !== variantIds.length) {
+            throw new AppError("variantNotFound", "NOT_FOUND", 404);
+          }
+        }
+
+        const costs = await tx.productCost.findMany({
+          where: {
+            organizationId: input.organizationId,
+            productId: { in: productIds },
+          },
+          select: { productId: true, variantKey: true, avgCostKgs: true },
+        });
+        const costMap = new Map(
+          costs.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
+        );
+
+        const lineResults: StockWriteOffResult["lines"] = [];
+        for (const [index, line] of normalizedLines.entries()) {
+          const product = productMap.get(line.productId);
+          if (!product) {
+            throw new AppError("productNotFound", "NOT_FOUND", 404);
+          }
+          const qty = await resolveBaseQuantity(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            baseUnitId: product.baseUnitId,
+            qty: line.qty,
+            unitId: line.unitId,
+            packId: line.packId,
+            mode: "inventory",
+          });
+          if (!Number.isInteger(qty) || qty <= 0) {
+            throw new AppError("invalidWriteOffQty", "BAD_REQUEST", 400);
+          }
+
+          const unitCost = costMap.get(`${line.productId}:${line.variantKey}`) ?? null;
+          const lineTotal = unitCost !== null ? unitCost * qty : null;
+          const before = await tx.inventorySnapshot.findUnique({
+            where: {
+              storeId_productId_variantKey: {
+                storeId: input.storeId,
+                productId: line.productId,
+                variantKey: line.variantKey,
+              },
+            },
+          });
+
+          const { snapshot, movementId } = await applyStockMovement(tx, {
+            storeId: input.storeId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyDelta: -Math.abs(qty),
+            type: StockMovementType.WRITE_OFF,
+            referenceType: "WRITE_OFF",
+            referenceId: writeOffId,
+            linePosition: index + 1,
+            unitCostKgs: unitCost,
+            lineTotalKgs: lineTotal,
+            note: movementNote,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+            movementDate: input.date ?? null,
+          });
+
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "INVENTORY_WRITE_OFF",
+            entity: "InventorySnapshot",
+            entityId: snapshot.id,
+            before: before ? toJson(before) : null,
+            after: toJson(snapshot),
+            requestId: input.requestId,
+          });
+
+          changedItems.push({
+            storeId: input.storeId,
+            productId: line.productId,
+            variantId: line.variantId,
+            onHand: snapshot.onHand,
+          });
+          lineResults.push({
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: qty,
+            unitCost,
+            snapshotId: snapshot.id,
+            onHand: snapshot.onHand,
+            movementId,
+          });
+        }
+
+        const lineTotals = lineResults.map((line) =>
+          line.unitCost !== null ? line.unitCost * line.quantity : null,
+        );
+        const totalCostKgs = lineTotals.some((lineTotal) => lineTotal !== null)
+          ? lineTotals.reduce<number>((sum, lineTotal) => sum + (lineTotal ?? 0), 0)
+          : null;
+
+        return {
+          writeOffId,
+          storeId: input.storeId,
+          reason: input.reason,
+          comment,
+          lineCount: lineResults.length,
+          totalQuantity: lineResults.reduce((sum, line) => sum + line.quantity, 0),
+          totalCostKgs,
+          lines: lineResults,
+        };
+      },
+    );
+
+    return writeOff as StockWriteOffResult;
+  });
+
+  changedItems.forEach((item) => {
+    eventBus.publish({
+      type: "inventory.updated",
+      payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
+    });
+  });
+
+  await Promise.all(
+    changedItems.map((item) =>
+      maybeEmitLowStock({
+        storeId: item.storeId,
+        productId: item.productId,
+        variantId: item.variantId,
+        onHand: item.onHand,
+        requestId: input.requestId,
+      }),
+    ),
+  );
+
+  logger.info(
+    {
+      storeId: input.storeId,
+      writeOffId: result.writeOffId,
+      lineCount: result.lineCount,
+      totalQuantity: result.totalQuantity,
+      reason: result.reason,
+    },
+    "stock write-off posted",
   );
 
   return result;

@@ -19,8 +19,14 @@ describe("mobile inventory source", () => {
     expect(source).toContain('className="hidden md:contents"');
     expect(source).toContain('href="/inventory/receiving"');
     expect(source).toContain('href="/inventory/counts"');
-    expect(source).toContain('return query ? `/inventory/transfers?${query}` : "/inventory/transfers"');
+    expect(source).toContain(
+      'return query ? `/inventory/transfers?${query}` : "/inventory/transfers"',
+    );
+    expect(source).toContain(
+      'return query ? `/inventory/write-offs?${query}` : "/inventory/write-offs"',
+    );
     expect(source).toContain("router.push(buildTransferHref())");
+    expect(source).toContain("router.push(buildWriteOffHref())");
     expect(source).toContain('onSelect={() => openActionDialog("minStock")}');
   });
 
@@ -35,6 +41,7 @@ describe("mobile inventory source", () => {
     expect(routerSource).toContain("AND: searchTokens.map");
     expect(routerSource).toContain("buildLowStockSnapshotSql");
     expect(routerSource).toContain("postStockReceiving: adminProcedure");
+    expect(routerSource).toContain("postStockWriteOff: adminProcedure");
     expect(routerSource).toContain("transfer: adminProcedure");
     expect(routerSource).toContain("adjust: managerProcedure");
     expect(routerSource).toContain("assertUserCanAccessStore");
@@ -59,7 +66,9 @@ describe("mobile inventory source", () => {
     expect(receivingSource).not.toContain("lg:flex-1 lg:overflow-y-auto");
     expect(receivingSource).toContain("handleReceivingInputKeyDown");
     expect(receivingSource).toContain("focusReceivingInputElement(nextInput, true)");
-    expect(receivingSource).toContain("focusReceivingInput(nextLine.key, field, viewport, { selectContents: true })");
+    expect(receivingSource).toContain(
+      "focusReceivingInput(nextLine.key, field, viewport, { selectContents: true })",
+    );
     expect(receivingSource).toContain(
       "fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40",
     );

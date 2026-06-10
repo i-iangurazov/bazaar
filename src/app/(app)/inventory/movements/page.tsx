@@ -38,12 +38,16 @@ import {
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  ArchiveIcon,
   CheckIcon,
   ChevronDownIcon,
+  CirclePlusIcon,
   DownloadIcon,
   EmptyIcon,
+  ReceiveIcon,
   SearchIcon,
   SortIcon,
+  TransferIcon,
   ViewIcon,
 } from "@/components/icons";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
@@ -57,6 +61,7 @@ const documentTypeOptions = [
   "PURCHASE_ORDER",
   "STOCK_COUNT",
   "TRANSFER",
+  "WRITE_OFF",
   "ADJUSTMENT",
   "RECEIVE",
   "IMPORT",
@@ -620,7 +625,43 @@ const ProductMovementsPage = () => {
 
   return (
     <div>
-      <PageHeader title={t("title")} subtitle={t("subtitle")} filters={filterControls} />
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        action={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button">
+                <CirclePlusIcon className="h-4 w-4" aria-hidden />
+                {t("createDocument")}
+                <ChevronDownIcon className="h-4 w-4" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[240px]">
+              <DropdownMenuLabel>{t("createDocument")}</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/inventory/write-offs">
+                  <ArchiveIcon className="h-4 w-4" aria-hidden />
+                  {t("createWriteOff")}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/inventory/receiving">
+                  <ReceiveIcon className="h-4 w-4" aria-hidden />
+                  {t("createReceiving")}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/inventory/transfers">
+                  <TransferIcon className="h-4 w-4" aria-hidden />
+                  {t("createTransfer")}
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+        filters={filterControls}
+      />
 
       {movementQuery.error ? (
         <div className="mb-4 border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">

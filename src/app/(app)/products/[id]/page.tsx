@@ -264,8 +264,8 @@ const ProductDetailPage = () => {
   const requestedStore = storesQuery.data?.find((store) => store.id === returnStoreId) ?? null;
   const requestedStoreNotAssigned = Boolean(
     returnStoreId &&
-      storePricingQuery.isSuccess &&
-      !assignedStoreRows.some((store) => store.storeId === returnStoreId),
+    storePricingQuery.isSuccess &&
+    !assignedStoreRows.some((store) => store.storeId === returnStoreId),
   );
   const requestedStoreName = requestedStore?.name ?? returnStoreId;
   const selectedSettingsStore = selectedPricingStore ?? assignedStoreRows[0] ?? null;
@@ -594,6 +594,8 @@ const ProductDetailPage = () => {
         return tInventory("movementType.transferIn");
       case "TRANSFER_OUT":
         return tInventory("movementType.transferOut");
+      case "WRITE_OFF":
+        return tInventory("movementType.writeOff");
       default:
         return type;
     }
@@ -605,6 +607,7 @@ const ProductDetailPage = () => {
       case "TRANSFER_IN":
         return "success";
       case "TRANSFER_OUT":
+      case "WRITE_OFF":
         return "warning";
       case "SALE":
         return "danger";

@@ -15,6 +15,7 @@ import {
   adjustStock,
   bulkSetOnHand,
   postStockReceiving,
+  postStockWriteOff,
   receiveStock,
   recomputeInventorySnapshots,
   transferStock,
@@ -32,6 +33,7 @@ import {
   assertUserCanAccessStore,
   productStoreAssignmentWhere,
 } from "@/server/services/storeAccess";
+import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventorySortKeySchema = z.enum([
@@ -48,6 +50,7 @@ const inventorySortDirectionSchema = z.enum(["asc", "desc"]);
 const productMovementDocumentTypeSchema = z.enum(productMovementDocumentTypes);
 const productMovementPaymentStatusSchema = z.enum(productMovementPaymentStatuses);
 const productMovementSortKeySchema = z.enum(productMovementSortKeys);
+const writeOffReasonSchema = z.enum(WRITE_OFF_REASONS);
 type InventorySortKey = z.infer<typeof inventorySortKeySchema>;
 type InventorySortDirection = z.infer<typeof inventorySortDirectionSchema>;
 
@@ -927,6 +930,54 @@ export const inventoryRouter = router({
           note: input.note,
           referenceNumber: input.referenceNumber,
           lines: input.lines,
+          actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          requestId: ctx.requestId,
+          idempotencyKey: input.idempotencyKey,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  postStockWriteOff: adminProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-stock-write-off" }))
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        date: z.string().datetime().optional(),
+        reason: writeOffReasonSchema,
+        comment: z.string().trim().max(1_000).optional(),
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              variantId: z.string().optional().nullable(),
+              qty: z.number().int().positive("invalidWriteOffQty"),
+              unitId: z.string().optional().nullable(),
+              packId: z.string().optional().nullable(),
+            }),
+          )
+          .min(1, "writeOffLinesRequired")
+          .max(500),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await postStockWriteOff({
+          storeId: input.storeId,
+          date: input.date ? new Date(input.date) : undefined,
+          reason: input.reason,
+          comment: input.comment,
+          lines: input.lines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId,
+            qty: line.qty,
+            unitId: line.unitId,
+            packId: line.packId,
+          })),
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,

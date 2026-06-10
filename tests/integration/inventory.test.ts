@@ -6,6 +6,7 @@ import {
   adjustStock,
   bulkSetOnHand,
   postStockReceiving,
+  postStockWriteOff,
   receiveStock,
   recomputeInventorySnapshots,
   transferStock,
@@ -657,6 +658,201 @@ describeDb("inventory service", () => {
         `/products/${product.id}?storeId=${encodeURIComponent(storeB.id)}`,
       ]),
     );
+  });
+
+  it("posts write-off movements as an ordered document for one store", async () => {
+    const { org, store, product, supplier, baseUnit, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Other Store",
+        code: "OTH",
+        allowNegativeStock: false,
+      },
+    });
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "TEST-2",
+        name: "Second Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+    await Promise.all([
+      assignProductToStoreForTest({
+        organizationId: org.id,
+        storeId: store.id,
+        productId: secondProduct.id,
+        assignedById: adminUser.id,
+      }),
+      assignProductToStoreForTest({
+        organizationId: org.id,
+        storeId: otherStore.id,
+        productId: product.id,
+        assignedById: adminUser.id,
+      }),
+    ]);
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "Seed first",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-seed-1",
+      idempotencyKey: "idem-write-off-seed-1",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: secondProduct.id,
+      qtyDelta: 8,
+      reason: "Seed second",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-seed-2",
+      idempotencyKey: "idem-write-off-seed-2",
+    });
+    await adjustStock({
+      storeId: otherStore.id,
+      productId: product.id,
+      qtyDelta: 4,
+      reason: "Other store seed",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-other-seed",
+      idempotencyKey: "idem-write-off-other-seed",
+    });
+
+    const result = await postStockWriteOff({
+      storeId: store.id,
+      date: new Date("2026-06-10T10:00:00.000Z"),
+      reason: "Порча",
+      comment: "Broken packaging",
+      lines: [
+        { productId: secondProduct.id, qty: 3 },
+        { productId: product.id, qty: 4 },
+      ],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off",
+      idempotencyKey: "idem-write-off",
+    });
+
+    expect(result.lineCount).toBe(2);
+    expect(result.totalQuantity).toBe(7);
+    expect(result.reason).toBe("Порча");
+    expect(result.comment).toBe("Broken packaging");
+
+    const [snapshotA, snapshotB, otherSnapshot] = await Promise.all([
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: secondProduct.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: otherStore.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ]);
+    expect(snapshotA?.onHand).toBe(6);
+    expect(snapshotB?.onHand).toBe(5);
+    expect(otherSnapshot?.onHand).toBe(4);
+
+    const movements = await prisma.stockMovement.findMany({
+      where: { referenceType: "WRITE_OFF", referenceId: result.writeOffId },
+      orderBy: { linePosition: "asc" },
+    });
+    expect(movements.map((movement) => movement.type)).toEqual([
+      StockMovementType.WRITE_OFF,
+      StockMovementType.WRITE_OFF,
+    ]);
+    expect(movements.map((movement) => movement.productId)).toEqual([secondProduct.id, product.id]);
+    expect(movements.map((movement) => movement.qtyDelta)).toEqual([-3, -4]);
+    expect(movements.every((movement) => movement.note?.startsWith("writeOff:"))).toBe(true);
+
+    const journal = await caller.inventory.productMovements({ type: "WRITE_OFF" });
+    const writeOffRow = journal.items.find((item) => item.documentId === result.writeOffId);
+    expect(writeOffRow?.reason).toBe("Порча");
+    expect(writeOffRow?.comment).toBe("Broken packaging");
+    expect(writeOffRow?.detailUrl).toBe(
+      `/inventory/movements/${encodeURIComponent(`WRITE_OFF:WRITE_OFF:${result.writeOffId}`)}`,
+    );
+
+    const document = await caller.inventory.productMovementDocument({
+      documentKey: `WRITE_OFF:WRITE_OFF:${result.writeOffId}`,
+    });
+    expect(document?.reason).toBe("Порча");
+    expect(document?.comment).toBe("Broken packaging");
+    expect(document?.storeName).toBe(store.name);
+    expect(document?.authorName).toBe(adminUser.name);
+    expect(document?.totalQuantity).toBe(7);
+    expect(document?.lines.map((line) => line.productId)).toEqual([secondProduct.id, product.id]);
+  });
+
+  it("rejects write-off quantity above stock when negative stock is disabled", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "Seed",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-over-seed",
+      idempotencyKey: "idem-write-off-over-seed",
+    });
+
+    await expect(
+      postStockWriteOff({
+        storeId: store.id,
+        reason: "Потеря",
+        lines: [{ productId: product.id, qty: 3 }],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-write-off-over",
+        idempotencyKey: "idem-write-off-over",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(2);
   });
 
   it("assigns the product to the destination store when transferring stock", async () => {

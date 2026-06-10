@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
+import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
 import {
   resolveAccessibleStoreIds,
   userHasAllStoreAccess,
@@ -13,6 +14,7 @@ export const productMovementDocumentTypes = [
   "PURCHASE_ORDER",
   "STOCK_COUNT",
   "TRANSFER",
+  "WRITE_OFF",
   "ADJUSTMENT",
   "RECEIVE",
   "IMPORT",
@@ -84,6 +86,7 @@ export type ProductMovementJournalRow = {
   totalQuantity: number;
   totalAmount: number | null;
   paidAmount: number | null;
+  reason: string | null;
   comment: string | null;
   description: string | null;
   detailUrl: string | null;
@@ -178,6 +181,7 @@ const documentTypeFallbackLabels: Record<ProductMovementDocumentType, string> = 
   PURCHASE_ORDER: "Purchase order",
   STOCK_COUNT: "Inventory count",
   TRANSFER: "Transfer",
+  WRITE_OFF: "Write-off",
   ADJUSTMENT: "Adjustment",
   RECEIVE: "Receiving",
   IMPORT: "Import",
@@ -278,12 +282,13 @@ const buildMovementDocumentTypeSql = (referenceTypeSql: Prisma.Sql, movementType
       WHEN ${referenceTypeSql} = 'PURCHASE_ORDER' THEN 'PURCHASE_ORDER'
       WHEN ${referenceTypeSql} = 'STOCK_COUNT' THEN 'STOCK_COUNT'
       WHEN ${referenceTypeSql} = 'TRANSFER' THEN 'TRANSFER'
+      WHEN ${referenceTypeSql} = 'WRITE_OFF' THEN 'WRITE_OFF'
       WHEN ${referenceTypeSql} IN ('IMPORT', 'IMPORT_ROLLBACK') THEN 'IMPORT'
       WHEN ${referenceTypeSql} = 'BUNDLE_ASSEMBLY' THEN 'BUNDLE_ASSEMBLY'
       WHEN ${referenceTypeSql} = 'STORE_CLONE' THEN 'STORE_CLONE'
       WHEN ${referenceTypeSql} IN ('Product', 'ProductVariant') THEN 'PRODUCT'
       WHEN ${movementTypeSql} IN ('TRANSFER_IN', 'TRANSFER_OUT') THEN 'TRANSFER'
-      WHEN ${movementTypeSql} IN ('RECEIVE', 'SALE', 'RETURN', 'ADJUSTMENT') THEN ${movementTypeSql}
+      WHEN ${movementTypeSql} IN ('RECEIVE', 'SALE', 'RETURN', 'ADJUSTMENT', 'WRITE_OFF') THEN ${movementTypeSql}
       ELSE 'OTHER'
     END
   `;
@@ -400,7 +405,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
         WHEN co."id" IS NOT NULL THEN co."totalKgs"
         WHEN sr."id" IS NOT NULL THEN sr."totalKgs"
         WHEN po."id" IS NOT NULL AND po_totals."hasCost" THEN po_totals."totalAmount"
-        WHEN g."documentType" IN ('STOCK_RECEIVING', 'TRANSFER') AND g."hasMovementLineTotal" THEN g."movementLineTotalAmount"
+        WHEN g."documentType" IN ('STOCK_RECEIVING', 'TRANSFER', 'WRITE_OFF') AND g."hasMovementLineTotal" THEN g."movementLineTotalAmount"
         ELSE NULL
       END AS "totalAmount",
       CASE
@@ -477,10 +482,7 @@ const buildTextFilterCondition = (column: string, value?: string | null) => {
   });
 };
 
-const getOrderBySql = (
-  sortBy: ProductMovementSortKey,
-  sortDirection: "asc" | "desc",
-) => {
+const getOrderBySql = (sortBy: ProductMovementSortKey, sortDirection: "asc" | "desc") => {
   const direction = sortDirection === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
   switch (sortBy) {
     case "type":
@@ -504,6 +506,10 @@ const getOrderBySql = (
 const normalizeProductMovementJournalRow = (
   row: ProductMovementJournalSqlRow,
 ): ProductMovementJournalRow => {
+  const writeOffNote =
+    row.documentType === "WRITE_OFF" ? parseWriteOffMovementNote(row.comment) : null;
+  const comment = writeOffNote ? writeOffNote.comment : row.comment;
+  const description = writeOffNote?.reason ?? row.description;
   const id = encodeProductMovementDocumentKey({
     documentType: row.documentType,
     documentReferenceType: row.documentReferenceType,
@@ -534,8 +540,9 @@ const normalizeProductMovementJournalRow = (
     totalQuantity: Number(row.totalQuantity),
     totalAmount: toNumberOrNull(row.totalAmount),
     paidAmount: toNumberOrNull(row.paidAmount),
-    comment: row.comment,
-    description: row.description,
+    reason: writeOffNote?.reason ?? null,
+    comment,
+    description,
     detailUrl: getProductMovementDetailUrl({
       id,
       documentReferenceType: row.documentReferenceType,

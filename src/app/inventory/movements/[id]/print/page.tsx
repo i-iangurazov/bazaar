@@ -24,10 +24,7 @@ const safeDecodeURIComponent = (value: string) => {
   }
 };
 
-const getSearchParam = (
-  searchParams: PageProps["searchParams"],
-  key: string,
-) => {
+const getSearchParam = (searchParams: PageProps["searchParams"], key: string) => {
   const value = searchParams?.[key];
   return Array.isArray(value) ? value[0] : value;
 };
@@ -55,7 +52,8 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     !document ||
     (document.documentType !== "STOCK_RECEIVING" &&
       document.documentType !== "RECEIVE" &&
-      document.documentType !== "TRANSFER")
+      document.documentType !== "TRANSFER" &&
+      document.documentType !== "WRITE_OFF")
   ) {
     notFound();
   }
@@ -68,7 +66,9 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
   const title =
     document.documentType === "TRANSFER"
       ? t("printTransferTitle")
-      : t("printReceivingTitle");
+      : document.documentType === "WRITE_OFF"
+        ? t("printWriteOffTitle")
+        : t("printReceivingTitle");
   const labels: MovementPrintDocumentLabels = {
     companyFallback: "Bazaar",
     documentNumber: t("printDocumentNumber", {
@@ -79,8 +79,10 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     sourceStore: t("printSourceStore"),
     destinationStore: t("printDestinationStore"),
     receivingStore: t("printReceivingStore"),
+    writeOffStore: t("printWriteOffStore"),
     sender: t("sender"),
     author: t("author"),
+    reason: t("reason"),
     comment: t("comment"),
     product: tCommon("product"),
     skuBarcode: t("printSkuBarcode"),
@@ -94,7 +96,9 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     costNotSpecified: t("printCostNotSpecified"),
     shippedBy: t("printShippedBy"),
     releasedBy: t("printReleasedBy"),
+    writtenOffBy: t("printWrittenOffBy"),
     receivedBy: t("printReceivedBy"),
+    checkedBy: t("printCheckedBy"),
     responsible: t("printResponsible"),
     signatureDate: t("printSignatureDate"),
     notAvailable: tCommon("notAvailable"),

@@ -14,9 +14,13 @@ describe("product movement journal source", () => {
     expect(appShellSource).toContain('key: "productMovements"');
     expect(appShellSource).toContain('href: "/inventory/movements"');
     expect(appShellSource).toContain("icon: ProductMovementIcon");
+    expect(appShellSource).toContain('key: "stockWriteOff"');
+    expect(appShellSource).toContain('href: "/inventory/write-offs"');
     expect(appShellSource).toContain("exact: true");
     expect(breadcrumbsSource).toContain('case "movements"');
     expect(breadcrumbsSource).toContain('tBreadcrumbs("productMovements")');
+    expect(breadcrumbsSource).toContain('case "write-offs"');
+    expect(breadcrumbsSource).toContain('tBreadcrumbs("writeOffs")');
   });
 
   it("normalizes stock movements into server-side document rows", async () => {
@@ -40,6 +44,8 @@ describe("product movement journal source", () => {
     expect(serviceSource).toContain("SaleReturn");
     expect(serviceSource).toContain("PurchaseOrder");
     expect(serviceSource).toContain("StockCount");
+    expect(serviceSource).toContain("WRITE_OFF");
+    expect(serviceSource).toContain("parseWriteOffMovementNote");
     expect(serviceSource).toContain("paymentStatus");
     expect(serviceSource).toContain("LIMIT ${pageSize}");
   });
@@ -63,6 +69,9 @@ describe("product movement journal source", () => {
     expect(pageSource).toContain("renderPaymentStatus");
     expect(pageSource).toContain("renderOptionalText");
     expect(pageSource).toContain("renderMoney");
+    expect(pageSource).toContain('"WRITE_OFF"');
+    expect(pageSource).toContain('href="/inventory/write-offs"');
+    expect(pageSource).toContain('t("createWriteOff")');
     expect(pageSource).toContain("senderSearch");
     expect(pageSource).toContain("recipientSearch");
     expect(pageSource).toContain("authorSearch");
@@ -84,8 +93,10 @@ describe("product movement journal source", () => {
     expect(pageSource).toContain("document.detailUrl");
     expect(pageSource).toContain("documentActions");
     expect(pageSource).toContain("printInvoice");
+    expect(pageSource).toContain('document?.documentType === "WRITE_OFF"');
+    expect(pageSource).toContain("formatMovementNote");
     expect(pageSource).toContain('target="_blank"');
-    expect(pageSource).toContain('/print?auto=1');
+    expect(pageSource).toContain("/print?auto=1");
     expect(pageSource).toContain("document.lines");
     expect(pageSource).toContain('paginationKey="product-movement-document-lines"');
     expect(pageSource).not.toContain("window.print()");
@@ -105,6 +116,8 @@ describe("product movement journal source", () => {
     expect(printPageSource).toContain("getProductMovementDocument");
     expect(printPageSource).toContain('document.documentType !== "STOCK_RECEIVING"');
     expect(printPageSource).toContain('document.documentType !== "TRANSFER"');
+    expect(printPageSource).toContain('document.documentType !== "WRITE_OFF"');
+    expect(printPageSource).toContain("printWriteOffTitle");
     expect(printPageSource).toContain("MovementPrintDocument");
     expect(printPageSource).toContain("MovementPrintToolbar");
     expect(printDocumentSource).toContain("@page");
@@ -114,6 +127,8 @@ describe("product movement journal source", () => {
     expect(printDocumentSource).toContain("movement-print-signature-row");
     expect(printDocumentSource).toContain("getPrintableLines");
     expect(printDocumentSource).toContain('line.movementType === "TRANSFER_OUT"');
+    expect(printDocumentSource).toContain('"WOF"');
+    expect(printDocumentSource).toContain("labels.writtenOffBy");
     expect(printDocumentSource).not.toContain("sort(");
     expect(printToolbarSource).toContain("window.print()");
     expect(printToolbarSource).toContain("movement-print-chrome");

@@ -33,6 +33,7 @@ enum StockMovementType {
   ADJUSTMENT
   TRANSFER_IN
   TRANSFER_OUT
+  WRITE_OFF
 }
 
 enum PurchaseOrderStatus {

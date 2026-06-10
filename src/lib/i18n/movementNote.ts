@@ -1,5 +1,7 @@
 import type { Formats, TranslationValues } from "next-intl";
 
+import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
+
 type Translator = (key: string, values?: TranslationValues, formats?: Formats) => string;
 
 const STOCK_COUNT_PREFIX = "stockCount:";
@@ -20,6 +22,12 @@ export const formatMovementNote = (tInventory: Translator, note?: string | null)
 
   if (trimmed === "importRollback") {
     return tInventory("movementNoteImportRollback");
+  }
+
+  const writeOffNote = parseWriteOffMovementNote(trimmed);
+  if (writeOffNote) {
+    const label = tInventory("movementNoteWriteOff", { reason: writeOffNote.reason });
+    return writeOffNote.comment ? `${label} • ${writeOffNote.comment}` : label;
   }
 
   if (trimmed.startsWith(STOCK_COUNT_PREFIX)) {

@@ -62,6 +62,8 @@ export const getStockMovementLabel = (
       return tInventory("movementType.transferIn");
     case "TRANSFER_OUT":
       return tInventory("movementType.transferOut");
+    case "WRITE_OFF":
+      return tInventory("movementType.writeOff");
     default:
       return type ?? "";
   }

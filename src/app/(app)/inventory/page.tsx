@@ -68,6 +68,7 @@ import {
   AdjustIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  ArchiveIcon,
   DownloadIcon,
   ReceiveIcon,
   PrintIcon,
@@ -1631,6 +1632,24 @@ const InventoryPage = () => {
     [storeId],
   );
 
+  const buildWriteOffHref = useCallback(
+    (item?: InventoryRow) => {
+      const params = new URLSearchParams();
+      if (storeId) {
+        params.set("storeId", storeId);
+      }
+      if (item) {
+        params.set("productId", item.product.id);
+        if (item.snapshot.variantId) {
+          params.set("variantId", item.snapshot.variantId);
+        }
+      }
+      const query = params.toString();
+      return query ? `/inventory/write-offs?${query}` : "/inventory/write-offs";
+    },
+    [storeId],
+  );
+
   const openActionDialog = useCallback(
     (type: "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
       if ((type === "adjust" || type === "transfer") && !canManageStock) {
@@ -1741,6 +1760,12 @@ const InventoryPage = () => {
               label: t("transferStock"),
               icon: TransferIcon,
               onSelect: () => router.push(buildTransferHref(item)),
+            },
+            {
+              key: "writeOff",
+              label: t("stockWriteOff"),
+              icon: ArchiveIcon,
+              onSelect: () => router.push(buildWriteOffHref(item)),
             },
           ]
         : []),
@@ -1958,6 +1983,8 @@ const InventoryPage = () => {
         return t("movementType.transferIn");
       case "TRANSFER_OUT":
         return t("movementType.transferOut");
+      case "WRITE_OFF":
+        return t("movementType.writeOff");
       default:
         return type;
     }
@@ -1969,6 +1996,7 @@ const InventoryPage = () => {
       case "TRANSFER_IN":
         return "success";
       case "TRANSFER_OUT":
+      case "WRITE_OFF":
         return "warning";
       case "SALE":
         return "danger";
@@ -2106,6 +2134,14 @@ const InventoryPage = () => {
                       {t("transferStock")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      disabled={!storeId || !canManageStock}
+                      onSelect={() => router.push(buildWriteOffHref())}
+                      data-tour="inventory-write-off"
+                    >
+                      <ArchiveIcon className="h-4 w-4" aria-hidden />
+                      {t("stockWriteOff")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       disabled={!storeId || !canManage}
                       onSelect={() => openActionDialog("minStock")}
                     >
@@ -2239,6 +2275,15 @@ const InventoryPage = () => {
                   >
                     <TransferIcon className="h-4 w-4" aria-hidden />
                     {t("transferStock")}
+                  </DropdownMenuItem>
+                ) : null}
+                {canManageStock ? (
+                  <DropdownMenuItem
+                    disabled={!storeId}
+                    onSelect={() => router.push(buildWriteOffHref())}
+                  >
+                    <ArchiveIcon className="h-4 w-4" aria-hidden />
+                    {t("stockWriteOff")}
                   </DropdownMenuItem>
                 ) : null}
                 {canManage ? (
@@ -2936,6 +2981,14 @@ const InventoryPage = () => {
                               >
                                 <TransferIcon className="h-4 w-4" aria-hidden />
                                 {t("transferStock")}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canManageStock ? (
+                              <DropdownMenuItem
+                                onSelect={() => router.push(buildWriteOffHref(item))}
+                              >
+                                <ArchiveIcon className="h-4 w-4" aria-hidden />
+                                {t("stockWriteOff")}
                               </DropdownMenuItem>
                             ) : null}
                             {canManage ? (

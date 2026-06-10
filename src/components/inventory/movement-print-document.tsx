@@ -9,8 +9,10 @@ export type MovementPrintDocumentLabels = {
   sourceStore: string;
   destinationStore: string;
   receivingStore: string;
+  writeOffStore: string;
   sender: string;
   author: string;
+  reason: string;
   comment: string;
   product: string;
   skuBarcode: string;
@@ -24,7 +26,9 @@ export type MovementPrintDocumentLabels = {
   costNotSpecified: string;
   shippedBy: string;
   releasedBy: string;
+  writtenOffBy: string;
   receivedBy: string;
+  checkedBy: string;
   responsible: string;
   signatureDate: string;
   notAvailable: string;
@@ -41,7 +45,7 @@ type MovementPrintDocumentProps = {
 export const getMovementPrintDocumentNumber = (document: ProductMovementDocumentDetail) =>
   document.documentNumber && document.documentNumber !== document.documentId
     ? document.documentNumber
-    : `${document.documentType === "TRANSFER" ? "TRF" : "RCV"}-${document.createdAt
+    : `${document.documentType === "TRANSFER" ? "TRF" : document.documentType === "WRITE_OFF" ? "WOF" : "RCV"}-${document.createdAt
         .toISOString()
         .slice(0, 10)
         .replaceAll("-", "")}-${document.documentId.slice(0, 8).toUpperCase()}`;
@@ -78,13 +82,27 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
     ? lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0)
     : document.totalAmount;
   const totalQuantity = lines.reduce((sum, line) => sum + Math.abs(line.qtyDelta), 0);
-  const senderLabel = document.documentType === "TRANSFER" ? labels.sourceStore : labels.sender;
+  const senderLabel =
+    document.documentType === "TRANSFER"
+      ? labels.sourceStore
+      : document.documentType === "WRITE_OFF"
+        ? labels.writeOffStore
+        : labels.sender;
   const recipientLabel =
     document.documentType === "TRANSFER" ? labels.destinationStore : labels.receivingStore;
-  const senderValue = document.senderName || labels.notAvailable;
+  const senderValue =
+    document.documentType === "WRITE_OFF"
+      ? document.storeName || labels.notAvailable
+      : document.senderName || labels.notAvailable;
   const recipientValue = document.recipientName || document.storeName || labels.notAvailable;
   const firstSignatureLabel =
-    document.documentType === "TRANSFER" ? labels.releasedBy : labels.shippedBy;
+    document.documentType === "TRANSFER"
+      ? labels.releasedBy
+      : document.documentType === "WRITE_OFF"
+        ? labels.writtenOffBy
+        : labels.shippedBy;
+  const secondSignatureLabel =
+    document.documentType === "WRITE_OFF" ? labels.checkedBy : labels.receivedBy;
 
   return (
     <section className="movement-print-sheet" aria-label={labels.title}>
@@ -423,14 +441,22 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           <dt className="movement-print-meta-label">{senderLabel}</dt>
           <dd>{senderValue}</dd>
         </div>
-        <div className="movement-print-meta-item">
-          <dt className="movement-print-meta-label">{recipientLabel}</dt>
-          <dd>{recipientValue}</dd>
-        </div>
+        {document.documentType === "WRITE_OFF" ? null : (
+          <div className="movement-print-meta-item">
+            <dt className="movement-print-meta-label">{recipientLabel}</dt>
+            <dd>{recipientValue}</dd>
+          </div>
+        )}
         <div className="movement-print-meta-item">
           <dt className="movement-print-meta-label">{labels.author}</dt>
           <dd>{document.authorName || document.authorEmail || labels.notAvailable}</dd>
         </div>
+        {document.reason ? (
+          <div className="movement-print-meta-item">
+            <dt className="movement-print-meta-label">{labels.reason}</dt>
+            <dd>{document.reason}</dd>
+          </div>
+        ) : null}
         <div className="movement-print-meta-item movement-print-comment">
           <dt className="movement-print-meta-label">{labels.comment}</dt>
           <dd>{document.comment || document.description || labels.notAvailable}</dd>
@@ -508,7 +534,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           <div className="movement-print-signature-line" />
         </div>
         <div className="movement-print-signature-row">
-          <div>{labels.receivedBy}:</div>
+          <div>{secondSignatureLabel}:</div>
           <div className="movement-print-signature-line" />
         </div>
         <div className="movement-print-signature-row">

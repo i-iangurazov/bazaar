@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { BackIcon, ChevronDownIcon, EmptyIcon, PrintIcon, ViewIcon } from "@/components/icons";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -51,7 +52,8 @@ const ProductMovementDocumentPage = () => {
   const isPrintableDocument =
     document?.documentType === "STOCK_RECEIVING" ||
     document?.documentType === "RECEIVE" ||
-    document?.documentType === "TRANSFER";
+    document?.documentType === "TRANSFER" ||
+    document?.documentType === "WRITE_OFF";
   const formatDocumentLabel = () => {
     if (!document) {
       return t("documentDetails");
@@ -71,7 +73,11 @@ const ProductMovementDocumentPage = () => {
     <div>
       <PageHeader
         title={formatDocumentLabel()}
-        subtitle={document ? document.comment || document.description || t("documentDetails") : undefined}
+        subtitle={
+          document
+            ? document.comment || document.reason || document.description || t("documentDetails")
+            : undefined
+        }
         action={
           <>
             <Button asChild variant="secondary">
@@ -130,7 +136,9 @@ const ProductMovementDocumentPage = () => {
 
       {documentQuery.isLoading ? (
         <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">{tCommon("loading")}</CardContent>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            {tCommon("loading")}
+          </CardContent>
         </Card>
       ) : !document ? (
         <Card>
@@ -170,6 +178,18 @@ const ProductMovementDocumentPage = () => {
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-muted-foreground">{t("statusLabel")}</dt>
+                  <dd className="font-medium text-foreground">
+                    {document.status ? t(`status.${document.status}`) : tCommon("notAvailable")}
+                  </dd>
+                </div>
+                {document.reason ? (
+                  <div>
+                    <dt className="text-muted-foreground">{t("reason")}</dt>
+                    <dd className="font-medium text-foreground">{document.reason}</dd>
+                  </div>
+                ) : null}
+                <div>
                   <dt className="text-muted-foreground">{t("sender")}</dt>
                   <dd className="font-medium text-foreground">
                     {document.senderName || tCommon("notAvailable")}
@@ -195,12 +215,22 @@ const ProductMovementDocumentPage = () => {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">{t("amount")}</dt>
-                  <dd className="font-medium text-foreground">{formatMoney(document.totalAmount)}</dd>
+                  <dd className="font-medium text-foreground">
+                    {formatMoney(document.totalAmount)}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">{t("paidAmount")}</dt>
-                  <dd className="font-medium text-foreground">{formatMoney(document.paidAmount)}</dd>
+                  <dd className="font-medium text-foreground">
+                    {formatMoney(document.paidAmount)}
+                  </dd>
                 </div>
+                {document.comment ? (
+                  <div className="md:col-span-2 xl:col-span-4">
+                    <dt className="text-muted-foreground">{t("comment")}</dt>
+                    <dd className="font-medium text-foreground">{document.comment}</dd>
+                  </div>
+                ) : null}
               </dl>
             </CardContent>
           </Card>
@@ -240,7 +270,9 @@ const ProductMovementDocumentPage = () => {
                                   {line.productName}
                                 </Link>
                                 {line.variantName ? (
-                                  <p className="text-xs text-muted-foreground">{line.variantName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {line.variantName}
+                                  </p>
                                 ) : null}
                               </div>
                             </TableCell>
@@ -258,7 +290,7 @@ const ProductMovementDocumentPage = () => {
                               {line.authorName || line.authorEmail || tCommon("notAvailable")}
                             </TableCell>
                             <TableCell className="max-w-[18rem] truncate">
-                              {line.note || tCommon("notAvailable")}
+                              {formatMovementNote(tInventory, line.note) || tCommon("notAvailable")}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -309,7 +341,9 @@ const ProductMovementDocumentPage = () => {
                       </div>
                     </div>
                     {line.note ? (
-                      <p className="mt-3 text-xs text-muted-foreground">{line.note}</p>
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        {formatMovementNote(tInventory, line.note)}
+                      </p>
                     ) : null}
                   </div>
                 )}

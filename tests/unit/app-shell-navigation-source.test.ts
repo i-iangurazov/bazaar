@@ -85,12 +85,13 @@ describe("conservative app shell navigation source", () => {
 
   it("uses distinct sidebar icons for neighboring inventory pages", () => {
     const inventoryStart = source.indexOf('key: "inventory"');
-    const inventorySource = source.slice(inventoryStart, inventoryStart + 900);
+    const inventorySource = source.slice(inventoryStart, inventoryStart + 1200);
 
     expect(inventorySource).toContain("icon: InventoryIcon");
     expect(inventorySource).toContain("icon: InventoryOverviewIcon");
     expect(inventorySource).toContain("icon: ProductMovementIcon");
     expect(inventorySource).toContain("icon: ReceiveIcon");
+    expect(inventorySource).toContain("icon: ArchiveIcon");
     expect(inventorySource).toContain("icon: StockCountsIcon");
   });
 
