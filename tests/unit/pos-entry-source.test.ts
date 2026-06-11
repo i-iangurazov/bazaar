@@ -199,15 +199,17 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("await waitForCartSync();");
     expect(pageSource).toContain("const currentLines = getCurrentCartLines();");
     expect(pageSource).toContain("const currentCartTotalKgs =");
-    expect(pageSource).toContain("currentCartTotalMinorUnits > 0 && !normalized.length");
-    expect(pageSource).toContain(
-      "normalizedPaymentTotalMinorUnits !== currentCartTotalMinorUnits",
-    );
-    expect(pageSource).toContain("amountKgs: currentCartTotalKgs");
+    expect(pageSource).toContain("buildPosPaymentSubmitPayload({");
+    expect(pageSource).toContain("cartTotalKgs: currentCartTotalKgs");
+    expect(pageSource).toContain('paymentPayload.status === "paymentRequired"');
+    expect(pageSource).toContain('paymentPayload.status === "paymentMismatch"');
+    expect(pageSource).toContain("payments: paymentPayload.payments");
     expect(pageSource).toContain("paymentsRef.current");
     expect(pageSource).toContain("readOnly={payments.length === 1}");
     expect(pageSource).toContain("await flushAllPendingCartSync();");
-    expect(pageSource).toContain("parseDraftNumber(payment.amount)");
+    expect(pageSource).toContain("clearActiveDraftCache();");
+    expect(pageSource).toContain("releaseUnresolvableLineSync");
+    expect(pageSource).toContain("optimisticLineServerIdsRef");
     expect(routerSource).not.toContain("payments.length < 1");
     expect(serviceSource).toContain("normalizePayments(input.payments, { requirePayment: false })");
     expect(serviceSource).toContain("orderTotalMinorUnits > 0 && !normalizedPayments.length");

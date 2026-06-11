@@ -412,6 +412,149 @@ describeDb("pos", () => {
     expect(payments).toHaveLength(0);
   });
 
+  it("completes repeated cashier sales without stale drafts or payment mismatches", async () => {
+    const { org, store, supplier, product, cashierUser, adminUser, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    const zeroPriceProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "ZERO-1",
+        name: "Zero Price Product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: null,
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: zeroPriceProduct.id,
+        isActive: true,
+      },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 500,
+      reason: "seed-repeated-pos-sales",
+      idempotencyKey: "pos-seed-repeated-sales-1",
+      requestId: "pos-seed-repeated-sales-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-repeated-sales-1",
+    });
+
+    const runs = [
+      { method: "CASH" as const, qty: 1, unitPriceKgs: 100, totalKgs: 100 },
+      { method: "TRANSFER" as const, qty: 1, unitPriceKgs: 100, totalKgs: 100 },
+      { method: "CASH" as const, qty: 3, unitPriceKgs: 100, totalKgs: 300 },
+      { method: "CARD" as const, qty: 2, unitPriceKgs: 125, totalKgs: 250 },
+      { method: "TRANSFER" as const, qty: 1, unitPriceKgs: 150, totalKgs: 150 },
+      {
+        method: "CASH" as const,
+        qty: 1,
+        unitPriceKgs: 0,
+        totalKgs: 0,
+        productId: zeroPriceProduct.id,
+      },
+      { method: "CARD" as const, qty: 50, unitPriceKgs: 100, totalKgs: 5000 },
+      { method: "TRANSFER" as const, qty: 1, unitPriceKgs: 100, totalKgs: 100 },
+      {
+        method: "CASH" as const,
+        qty: 2,
+        unitPriceKgs: 100,
+        totalKgs: 200,
+        customerName: "Repeat Customer",
+        customerPhone: "+996700000001",
+      },
+      { method: "TRANSFER" as const, qty: 1, unitPriceKgs: 100, totalKgs: 100 },
+    ];
+
+    for (const [index, run] of runs.entries()) {
+      const sale = await caller.pos.sales.createDraft({
+        registerId: register.id,
+        customerName: run.customerName,
+        customerPhone: run.customerPhone,
+      });
+      const line = await caller.pos.sales.addLine({
+        saleId: sale.id,
+        productId: run.productId ?? product.id,
+        qty: 1,
+      });
+
+      if (run.qty !== 1 || run.unitPriceKgs !== 100) {
+        await caller.pos.sales.updateLine({
+          lineId: line.id,
+          qty: run.qty,
+          unitPriceKgs: run.unitPriceKgs,
+        });
+      }
+
+      await caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: `pos-repeated-sale-${index + 1}`,
+        payments: run.totalKgs > 0 ? [{ method: run.method, amountKgs: run.totalKgs }] : [],
+      });
+
+      const activeDraft = await caller.pos.sales.activeDraft({ registerId: register.id });
+      expect(activeDraft).toBeNull();
+    }
+
+    const completedSales = await prisma.customerOrder.findMany({
+      where: {
+        organizationId: org.id,
+        registerId: register.id,
+        isPosSale: true,
+        status: "COMPLETED",
+      },
+      include: { payments: true },
+      orderBy: { number: "asc" },
+    });
+
+    expect(completedSales).toHaveLength(10);
+    completedSales.forEach((sale, index) => {
+      const expected = runs[index];
+      expect(Number(sale.totalKgs)).toBe(expected.totalKgs);
+      const paymentTotal = sale.payments.reduce(
+        (sum, payment) => sum + Number(payment.amountKgs),
+        0,
+      );
+      expect(paymentTotal).toBe(expected.totalKgs);
+    });
+  });
+
   it("allows POS sale completion to drive stock negative", async () => {
     const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
