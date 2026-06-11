@@ -365,6 +365,105 @@ describeDb("pos", () => {
     expect(Number(payments[0]?.amountKgs ?? 0)).toBe(375);
   });
 
+  it("keeps draft totals in sync when multiple products are added concurrently", async () => {
+    const { org, store, supplier, product, cashierUser, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 1000 },
+    });
+
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "POS-CONCURRENT-2",
+        name: "POS Concurrent Product 2",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 2500,
+      },
+    });
+    const thirdProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "POS-CONCURRENT-3",
+        name: "POS Concurrent Product 3",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 5045,
+      },
+    });
+    await prisma.storeProduct.createMany({
+      data: [secondProduct, thirdProduct].map((item) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        productId: item.id,
+        isActive: true,
+      })),
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-concurrent-line-total-1",
+    });
+
+    const productIds = [product.id, secondProduct.id, thirdProduct.id];
+
+    for (let index = 0; index < 10; index += 1) {
+      const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+      await Promise.all(
+        productIds.map((productId) =>
+          caller.pos.sales.addLine({
+            saleId: sale.id,
+            productId,
+            qty: 1,
+          }),
+        ),
+      );
+
+      const dbSale = await prisma.customerOrder.findUniqueOrThrow({
+        where: { id: sale.id },
+        include: { lines: true },
+      });
+      const lineTotal = dbSale.lines.reduce((sum, line) => sum + Number(line.lineTotalKgs), 0);
+
+      expect(dbSale.lines).toHaveLength(3);
+      expect(lineTotal).toBe(8545);
+      expect(Number(dbSale.totalKgs)).toBe(lineTotal);
+
+      await caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: `pos-complete-concurrent-line-total-${index + 1}`,
+        payments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: lineTotal }],
+      });
+
+      const activeDraft = await caller.pos.sales.activeDraft({ registerId: register.id });
+      expect(activeDraft).toBeNull();
+    }
+  });
+
   it("completes a zero-total POS sale without requiring a payment row", async () => {
     const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
