@@ -2517,6 +2517,10 @@
       "fromDate": "From date",
       "toDate": "To date",
       "export": "Export",
+      "receiptCount": "Receipts: {count}",
+      "printShort": "Print",
+      "downloadShort": "PDF",
+      "shareShort": "Share",
       "empty": "No receipts.",
       "unknownCashier": "Unknown cashier",
       "status": {

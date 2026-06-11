@@ -2517,6 +2517,10 @@
       "fromDate": "Башталыш датасы",
       "toDate": "Аяктоо датасы",
       "export": "Экспорт",
+      "receiptCount": "Чектер: {count}",
+      "printShort": "Басуу",
+      "downloadShort": "PDF",
+      "shareShort": "Бөлүшүү",
       "empty": "Чектер табылган жок.",
       "unknownCashier": "Кассир көрсөтүлгөн эмес",
       "status": {

@@ -2517,6 +2517,10 @@
       "fromDate": "Дата от",
       "toDate": "Дата до",
       "export": "Экспорт",
+      "receiptCount": "Чеков: {count}",
+      "printShort": "Печать",
+      "downloadShort": "PDF",
+      "shareShort": "Поделиться",
       "empty": "Чеки не найдены.",
       "unknownCashier": "Кассир не указан",
       "status": {

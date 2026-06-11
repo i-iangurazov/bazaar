@@ -5,7 +5,9 @@ import { CustomerOrderStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,6 +54,8 @@ const statusValues = [
 
 const paymentMethods = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
 
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
+
 export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptRegistryProps) => {
   const t = useTranslations("pos.receipts");
   const tCommon = useTranslations("common");
@@ -88,6 +92,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     },
     { enabled: canView, refetchOnWindowFocus: true },
   );
+  const receipts = receiptsQuery.data?.items ?? [];
 
   const statusLabel = (value: CustomerOrderStatus) => {
     switch (value) {
@@ -114,7 +119,31 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     return tPos("history.kkmStatusNotSent");
   };
 
-  const exportRows = (receiptsQuery.data?.items ?? []).map((receipt) => {
+  const statusBadgeVariant = (value: CustomerOrderStatus): BadgeVariant => {
+    switch (value) {
+      case CustomerOrderStatus.COMPLETED:
+        return "success";
+      case CustomerOrderStatus.CANCELED:
+        return "danger";
+      case CustomerOrderStatus.CONFIRMED:
+      case CustomerOrderStatus.READY:
+        return "warning";
+      default:
+        return "muted";
+    }
+  };
+
+  const kkmBadgeVariant = (value: "NOT_SENT" | "SENT" | "FAILED"): BadgeVariant => {
+    if (value === "SENT") {
+      return "success";
+    }
+    if (value === "FAILED") {
+      return "danger";
+    }
+    return "muted";
+  };
+
+  const exportRows = receipts.map((receipt) => {
     const currencySource = currencySourceWithFallback(receipt, receipt.store);
     return [
       receipt.number,
@@ -223,20 +252,24 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
 
   return (
     <div className="space-y-6">
-      <div className={compact ? "" : "space-y-1"}>
-        <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
-      </div>
+      {compact ? (
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+      ) : (
+        <PageHeader title={title} subtitle={subtitle} />
+      )}
 
       {!canView ? (
         <p className="text-sm text-danger">{tErrors("forbidden")}</p>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("filtersTitle")}</CardTitle>
+          <Card className="border-border/70 shadow-none">
+            <CardHeader className="px-4 py-3 sm:px-5">
+              <CardTitle className="text-base">{t("filtersTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-5">
+            <CardContent className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
               <Select
                 value={storeId || "all"}
                 onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
@@ -285,7 +318,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                 aria-label={t("toDate")}
               />
 
-              <div className="flex gap-2">
+              <div className="flex min-w-0 gap-2">
                 <Select
                   value={downloadFormat}
                   onValueChange={(value) => setDownloadFormat(value as DownloadFormat)}
@@ -298,7 +331,12 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                     <SelectItem value="xlsx">{tExports("formats.xlsx")}</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="secondary" onClick={handleExportCurrentView}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={handleExportCurrentView}
+                >
                   <DownloadIcon className="h-4 w-4" aria-hidden />
                   {t("export")}
                 </Button>
@@ -306,131 +344,213 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("title")}</CardTitle>
+          <Card className="overflow-hidden border-border/70 shadow-none">
+            <CardHeader className="flex flex-col gap-1 border-b border-border bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <CardTitle className="text-base">{t("title")}</CardTitle>
+              {!receiptsQuery.isLoading && !receiptsQuery.error ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("receiptCount", { count: receipts.length })}
+                </p>
+              ) : null}
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {receiptsQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-foreground sm:px-5">
                   <Spinner className="h-4 w-4" />
                   {tCommon("loading")}
                 </div>
               ) : receiptsQuery.error ? (
-                <div className="text-sm text-danger">
+                <div className="px-4 py-5 text-sm text-danger sm:px-5">
                   {translateError(tErrors, receiptsQuery.error)}
                 </div>
-              ) : (receiptsQuery.data?.items ?? []).length ? (
+              ) : receipts.length ? (
                 <ResponsiveDataList
-                  items={receiptsQuery.data?.items ?? []}
+                  items={receipts}
                   getKey={(item) => item.id}
+                  desktopClassName="border-0"
+                  mobileClassName="p-3 sm:p-4"
                   renderDesktop={(items) => (
                     <div className="overflow-x-auto">
-                      <Table className="min-w-[1080px]">
-                        <TableHeader>
+                      <Table className="min-w-[1120px]" sortable={false}>
+                        <TableHeader className="bg-muted/40">
                           <TableRow>
-                            <TableHead>{t("columns.number")}</TableHead>
-                            <TableHead>{t("columns.date")}</TableHead>
-                            <TableHead>{t("columns.store")}</TableHead>
-                            <TableHead>{t("columns.cashier")}</TableHead>
-                            <TableHead>{t("columns.total")}</TableHead>
-                            <TableHead>{t("columns.payments")}</TableHead>
-                            <TableHead>{t("columns.status")}</TableHead>
-                            <TableHead>{t("columns.fiscal")}</TableHead>
-                            <TableHead>{t("columns.actions")}</TableHead>
+                            <TableHead className="w-[140px] min-w-[140px] px-4 py-3">
+                              {t("columns.number")}
+                            </TableHead>
+                            <TableHead className="w-[120px] min-w-[120px] px-4 py-3">
+                              {t("columns.date")}
+                            </TableHead>
+                            <TableHead className="w-[130px] min-w-[130px] px-4 py-3">
+                              {t("columns.store")}
+                            </TableHead>
+                            <TableHead className="w-[120px] min-w-[120px] px-4 py-3">
+                              {t("columns.cashier")}
+                            </TableHead>
+                            <TableHead className="w-[130px] min-w-[130px] px-4 py-3 text-right">
+                              {t("columns.total")}
+                            </TableHead>
+                            <TableHead className="w-[180px] min-w-[180px] px-4 py-3">
+                              {t("columns.payments")}
+                            </TableHead>
+                            <TableHead className="w-[120px] min-w-[120px] px-4 py-3">
+                              {t("columns.status")}
+                            </TableHead>
+                            <TableHead className="w-[160px] min-w-[160px] px-4 py-3">
+                              {t("columns.fiscal")}
+                            </TableHead>
+                            <TableHead className="sticky right-0 z-10 w-[270px] min-w-[270px] bg-muted/40 px-4 py-3 text-right shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)]">
+                              {t("columns.actions")}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {items.map((item) => (
-                            <TableRow key={item.id}>
-                              <TableCell className="font-medium">{item.number}</TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {formatDateTime(item.createdAt, locale)}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {item.store.name} ({item.store.code})
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {item.cashier?.name ?? item.cashier?.email ?? t("unknownCashier")}
-                              </TableCell>
-                              <TableCell>
-                                {formatKgsMoney(
-                                  item.totalKgs,
-                                  locale,
-                                  currencySourceWithFallback(item, item.store),
-                                )}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {paymentMethods
-                                  .filter((method) => (item.paymentBreakdown[method] ?? 0) > 0)
-                                  .map(
-                                    (method) =>
-                                      `${tPos(`payments.${method.toLowerCase()}`)}: ${formatKgsMoney(
-                                        item.paymentBreakdown[method] ?? 0,
-                                        locale,
-                                        currencySourceWithFallback(item, item.store),
-                                      )}`,
-                                  )
-                                  .join(" · ") || tCommon("notAvailable")}
-                              </TableCell>
-                              <TableCell>{statusLabel(item.status)}</TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {kkmStatusLabel(item.kkmStatus)}
-                                {item.fiscalReceipt?.lastError
-                                  ? ` · ${item.fiscalReceipt.lastError}`
-                                  : ""}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label={tPos("history.printPrecheck")}
-                                    disabled={Boolean(receiptAction)}
-                                    onClick={() =>
-                                      void handleReceiptPdf(item.id, item.number, "print")
-                                    }
-                                  >
-                                    {receiptAction?.saleId === item.id &&
-                                    receiptAction.mode === "print" ? (
-                                      <Spinner className="h-4 w-4" />
-                                    ) : (
-                                      <PrintIcon className="h-4 w-4" aria-hidden />
-                                    )}
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label={tPos("history.downloadPrecheck")}
-                                    disabled={Boolean(receiptAction)}
-                                    onClick={() =>
-                                      void handleReceiptPdf(item.id, item.number, "download")
-                                    }
-                                  >
-                                    {receiptAction?.saleId === item.id &&
-                                    receiptAction.mode === "download" ? (
-                                      <Spinner className="h-4 w-4" />
-                                    ) : (
-                                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                                    )}
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {items.map((item) => {
+                            const currencySource = currencySourceWithFallback(item, item.store);
+                            const paymentEntries = paymentMethods
+                              .map((method) => ({
+                                method,
+                                amount: item.paymentBreakdown[method] ?? 0,
+                              }))
+                              .filter((entry) => entry.amount > 0);
+                            const isBusy = receiptAction?.saleId === item.id;
+                            return (
+                              <TableRow key={item.id} className="group hover:bg-muted/25">
+                                <TableCell className="min-w-[140px] px-4 py-3 align-top">
+                                  <div className="font-semibold text-foreground">{item.number}</div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {item.register?.code ?? tCommon("notAvailable")}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-4 py-3 align-top text-xs text-muted-foreground">
+                                  {formatDateTime(item.createdAt, locale)}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 align-top">
+                                  <div className="text-sm text-foreground">{item.store.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {item.store.code}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-4 py-3 align-top text-xs text-muted-foreground">
+                                  {item.cashier?.name ?? item.cashier?.email ?? t("unknownCashier")}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-right align-top font-semibold text-foreground">
+                                  {formatKgsMoney(item.totalKgs, locale, currencySource)}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 align-top">
+                                  {paymentEntries.length ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {paymentEntries.map((entry) => (
+                                        <Badge
+                                          key={entry.method}
+                                          variant="default"
+                                          className="bg-background text-muted-foreground"
+                                        >
+                                          {tPos(`payments.${entry.method.toLowerCase()}`)}
+                                          <span className="font-semibold text-foreground">
+                                            {formatKgsMoney(entry.amount, locale, currencySource)}
+                                          </span>
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">
+                                      {tCommon("notAvailable")}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 align-top">
+                                  <Badge variant={statusBadgeVariant(item.status)}>
+                                    {statusLabel(item.status)}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="px-4 py-3 align-top">
+                                  <div className="flex max-w-[220px] flex-col gap-1">
+                                    <Badge variant={kkmBadgeVariant(item.kkmStatus)}>
+                                      {kkmStatusLabel(item.kkmStatus)}
+                                    </Badge>
+                                    {item.fiscalReceipt?.lastError ? (
+                                      <span className="line-clamp-2 text-xs text-danger">
+                                        {item.fiscalReceipt.lastError}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="sticky right-0 z-10 min-w-[270px] bg-card px-4 py-3 align-top shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)] group-hover:bg-muted/25">
+                                  <div className="flex justify-end">
+                                    <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-sm">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-8 whitespace-nowrap rounded-none bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                                        aria-label={tPos("history.printPrecheck")}
+                                        disabled={Boolean(receiptAction)}
+                                        onClick={() =>
+                                          void handleReceiptPdf(item.id, item.number, "print")
+                                        }
+                                      >
+                                        {isBusy && receiptAction?.mode === "print" ? (
+                                          <Spinner className="h-4 w-4" />
+                                        ) : (
+                                          <PrintIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                        <span>{t("printShort")}</span>
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-8 whitespace-nowrap rounded-none border-l border-border bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                                        aria-label={tPos("history.downloadPrecheck")}
+                                        disabled={Boolean(receiptAction)}
+                                        onClick={() =>
+                                          void handleReceiptPdf(item.id, item.number, "download")
+                                        }
+                                      >
+                                        {isBusy && receiptAction?.mode === "download" ? (
+                                          <Spinner className="h-4 w-4" />
+                                        ) : (
+                                          <DownloadIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                        <span>{t("downloadShort")}</span>
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-8 whitespace-nowrap rounded-none border-l border-border bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                                        aria-label={tPos("history.shareReceipt")}
+                                        disabled={Boolean(receiptAction)}
+                                        onClick={() =>
+                                          void handleShareReceiptPdf(item.id, item.number)
+                                        }
+                                      >
+                                        {isBusy && receiptAction?.mode === "share" ? (
+                                          <Spinner className="h-4 w-4" />
+                                        ) : (
+                                          <ShareIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                        <span>{t("shareShort")}</span>
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </div>
                   )}
                   renderMobile={(item) => (
-                    <div className="rounded-md border border-border bg-card p-3">
+                    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-foreground">{item.number}</p>
-                        <span className="text-xs text-muted-foreground">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{item.number}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {item.register?.code ?? tCommon("notAvailable")}
+                          </p>
+                        </div>
+                        <Badge variant={statusBadgeVariant(item.status)}>
                           {statusLabel(item.status)}
-                        </span>
+                        </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {formatDateTime(item.createdAt, locale)}
@@ -445,26 +565,38 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                           currencySourceWithFallback(item, item.store),
                         )}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <Badge className="mt-2" variant={kkmBadgeVariant(item.kkmStatus)}>
                         {kkmStatusLabel(item.kkmStatus)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      </Badge>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
                         {paymentMethods
-                          .filter((method) => (item.paymentBreakdown[method] ?? 0) > 0)
-                          .map(
-                            (method) =>
-                              `${tPos(`payments.${method.toLowerCase()}`)}: ${formatKgsMoney(
-                                item.paymentBreakdown[method] ?? 0,
-                                locale,
-                                currencySourceWithFallback(item, item.store),
-                              )}`,
-                          )
-                          .join(" · ") || tCommon("notAvailable")}
-                      </p>
-                      <div className="mt-3 grid gap-2">
+                          .map((method) => ({
+                            method,
+                            amount: item.paymentBreakdown[method] ?? 0,
+                          }))
+                          .filter((entry) => entry.amount > 0)
+                          .map((entry) => (
+                            <Badge
+                              key={entry.method}
+                              variant="default"
+                              className="bg-background text-muted-foreground"
+                            >
+                              {tPos(`payments.${entry.method.toLowerCase()}`)}
+                              <span className="font-semibold text-foreground">
+                                {formatKgsMoney(
+                                  entry.amount,
+                                  locale,
+                                  currencySourceWithFallback(item, item.store),
+                                )}
+                              </span>
+                            </Badge>
+                          ))}
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
                         <Button
                           type="button"
-                          className="h-10 justify-start"
+                          variant="outline"
+                          className="h-10 px-2 text-xs"
                           onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
                           disabled={Boolean(receiptAction)}
                         >
@@ -473,12 +605,12 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                           ) : (
                             <PrintIcon className="h-4 w-4" aria-hidden />
                           )}
-                          {tPos("history.printPrecheck")}
+                          {t("printShort")}
                         </Button>
                         <Button
                           type="button"
-                          variant="secondary"
-                          className="h-10 justify-start"
+                          variant="outline"
+                          className="h-10 px-2 text-xs"
                           onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
                           disabled={Boolean(receiptAction)}
                         >
@@ -488,12 +620,12 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                           ) : (
                             <DownloadIcon className="h-4 w-4" aria-hidden />
                           )}
-                          {tPos("history.downloadPrecheck")}
+                          {t("downloadShort")}
                         </Button>
                         <Button
                           type="button"
-                          variant="secondary"
-                          className="h-10 justify-start"
+                          variant="outline"
+                          className="h-10 px-2 text-xs"
                           onClick={() => void handleShareReceiptPdf(item.id, item.number)}
                           disabled={Boolean(receiptAction)}
                         >
@@ -502,14 +634,14 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                           ) : (
                             <ShareIcon className="h-4 w-4" aria-hidden />
                           )}
-                          {tPos("history.shareReceipt")}
+                          {t("shareShort")}
                         </Button>
                       </div>
                     </div>
                   )}
                 />
               ) : (
-                <p className="text-sm text-muted-foreground">{t("empty")}</p>
+                <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t("empty")}</p>
               )}
             </CardContent>
           </Card>
