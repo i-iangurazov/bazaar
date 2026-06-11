@@ -56,7 +56,7 @@ import {
   resolveCurrency,
 } from "@/lib/currencyDisplay";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
-import { moneyToMinorUnits, parseMoneyInput } from "@/lib/moneyInput";
+import { parseMoneyInput } from "@/lib/moneyInput";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
@@ -65,6 +65,13 @@ import {
   type PosPaymentDraft,
   reconcilePosPaymentDraftsForSaleTotal,
 } from "@/lib/posPaymentDrafts";
+import {
+  buildPosPaymentSubmitPayload,
+  calculatePosCartSubtotalKgs as calculateCartSubtotalKgs,
+  recalculatePosCartLine as recalculateCartLine,
+  roundPosMoney as roundMoney,
+  type PosCartLinePatch,
+} from "@/lib/posSaleMath";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { useSse } from "@/lib/useSse";
 import {
@@ -258,10 +265,7 @@ type LineInputDraft = {
   qty?: string;
 };
 
-type PendingLinePatch = {
-  qty?: number;
-  unitPriceKgs?: number;
-};
+type PendingLinePatch = PosCartLinePatch;
 
 const optimisticLinePrefix = "optimistic:";
 
@@ -279,30 +283,6 @@ const findCartLineForProduct = (lines: PosCartLine[], productId: string, variant
   );
 
 const parseDraftNumber = parseMoneyInput;
-
-const recalculateCartLine = (line: PosCartLine, patch: PendingLinePatch): PosCartLine => {
-  const qty = patch.qty ?? line.qty;
-  const unitPriceKgs = patch.unitPriceKgs ?? line.unitPriceKgs;
-
-  return {
-    ...line,
-    qty,
-    unitPriceKgs,
-    lineTotalKgs: roundMoney(unitPriceKgs * qty),
-    lineCostTotalKgs:
-      line.unitCostKgs === null || line.unitCostKgs === undefined
-        ? (line.lineCostTotalKgs ?? null)
-        : roundMoney(line.unitCostKgs * qty),
-  };
-};
-
-const calculateCartSubtotalKgs = (lines: PosCartLine[]) =>
-  roundMoney(
-    lines.reduce((sum, line) => {
-      const lineTotal = Number(line.lineTotalKgs);
-      return Number.isFinite(lineTotal) ? sum + lineTotal : sum;
-    }, 0),
-  );
 
 const buildOptimisticLine = (product: PosCartProduct): PosCartLine => {
   const unitPriceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? 0;
@@ -590,6 +570,7 @@ const PosSellPage = () => {
   const keyboardScanResetTimerRef = useRef<number | null>(null);
   const keyboardScanSubmittingRef = useRef(false);
   const optimisticSaleLinesRef = useRef<PosCartLine[] | null>(null);
+  const optimisticLineServerIdsRef = useRef<Record<string, string>>({});
   const pendingCartMutationCountRef = useRef(0);
   const removedOptimisticLineIdsRef = useRef<Set<string>>(new Set());
   const pendingAddProductIdsRef = useRef<Set<string>>(new Set());
@@ -752,8 +733,7 @@ const PosSellPage = () => {
       search: debouncedJournalSearch || undefined,
       statuses: journalStatusFilter === "ALL" ? undefined : [journalStatusFilter],
       cashierId: journalCashierId || undefined,
-      paymentMethod:
-        journalPaymentMethodFilter === "ALL" ? undefined : journalPaymentMethodFilter,
+      paymentMethod: journalPaymentMethodFilter === "ALL" ? undefined : journalPaymentMethodFilter,
       returnState:
         journalReturnStateFilter === "NONE"
           ? "none"
@@ -777,6 +757,16 @@ const PosSellPage = () => {
       enabled: Boolean(journalSelectedSaleId),
       refetchOnWindowFocus: false,
     },
+  );
+
+  const clearActiveDraftCache = useCallback(
+    (targetRegisterId = registerId) => {
+      if (!targetRegisterId) {
+        return;
+      }
+      trpcUtils.pos.sales.activeDraft.setData({ registerId: targetRegisterId }, null);
+    },
+    [registerId, trpcUtils.pos.sales.activeDraft],
   );
 
   const createDraftMutation = trpc.pos.sales.createDraft.useMutation({
@@ -827,6 +817,7 @@ const PosSellPage = () => {
 
   const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation({
     onSuccess: async () => {
+      clearActiveDraftCache();
       setSaleId(null);
       setLineSearch("");
       setPayments([createDefaultPosPaymentDraft()]);
@@ -843,6 +834,9 @@ const PosSellPage = () => {
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
       setOptimisticSaleLines(null);
+      optimisticLineServerIdsRef.current = {};
+      removedOptimisticLineIdsRef.current.clear();
+      lineSyncDraftsRef.current = {};
       setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
@@ -939,6 +933,7 @@ const PosSellPage = () => {
 
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: async (result) => {
+      clearActiveDraftCache();
       setLastCompletedSale({
         id: result.id,
         number: result.number,
@@ -960,6 +955,9 @@ const PosSellPage = () => {
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
       setOptimisticSaleLines(null);
+      optimisticLineServerIdsRef.current = {};
+      removedOptimisticLineIdsRef.current.clear();
+      lineSyncDraftsRef.current = {};
       setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
       await Promise.all([
@@ -1091,6 +1089,9 @@ const PosSellPage = () => {
     setJournalReturnQtyByLine({});
     setJournalReturnNotes("");
     setOptimisticSaleLines(null);
+    optimisticLineServerIdsRef.current = {};
+    removedOptimisticLineIdsRef.current.clear();
+    lineSyncDraftsRef.current = {};
     setLineInputDrafts({});
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setLastCompletedSale(null);
@@ -1116,7 +1117,14 @@ const PosSellPage = () => {
     setSelectedCustomer(null);
     setCustomerCreateOpen(false);
     setCustomerEditOpen(false);
-  }, [saleId, saleQuery.data, saleQuery.isFetched, saleQuery.isFetching, saleQuery.isLoading, setPayments]);
+  }, [
+    saleId,
+    saleQuery.data,
+    saleQuery.isFetched,
+    saleQuery.isFetching,
+    saleQuery.isLoading,
+    setPayments,
+  ]);
 
   useEffect(() => {
     if (!sale?.id) {
@@ -1185,6 +1193,11 @@ const PosSellPage = () => {
 
   const resolveRemoteLineId = useCallback(
     (lineId: string) => {
+      const rememberedRemoteLineId = optimisticLineServerIdsRef.current[lineId];
+      if (rememberedRemoteLineId) {
+        return rememberedRemoteLineId;
+      }
+
       const line = getCurrentCartLines().find((item) => item.id === lineId);
       if (line?.serverLineId) {
         return line.serverLineId;
@@ -1250,6 +1263,21 @@ const PosSellPage = () => {
     [endCartSync],
   );
 
+  const releaseUnresolvableLineSync = useCallback(
+    (lineId: string) => {
+      const line = getCurrentCartLines().find((item) => item.id === lineId);
+      const productId = line ? getCartLineProductId(line) : null;
+      if (productId && pendingAddProductIdsRef.current.has(productId)) {
+        return false;
+      }
+
+      delete lineSyncDraftsRef.current[lineId];
+      releaseLineSyncPending(lineId);
+      return true;
+    },
+    [getCurrentCartLines, releaseLineSyncPending],
+  );
+
   const flushLineSync = useCallback(
     (lineId: string) => {
       if (lineSyncInFlightRef.current.has(lineId)) {
@@ -1258,6 +1286,7 @@ const PosSellPage = () => {
 
       const remoteLineId = resolveRemoteLineId(lineId);
       if (!remoteLineId) {
+        releaseUnresolvableLineSync(lineId);
         return;
       }
 
@@ -1294,7 +1323,13 @@ const PosSellPage = () => {
       })();
       void trackCartSyncPromise(syncPromise);
     },
-    [releaseLineSyncPending, resolveRemoteLineId, trackCartSyncPromise, updateLineMutation],
+    [
+      releaseLineSyncPending,
+      releaseUnresolvableLineSync,
+      resolveRemoteLineId,
+      trackCartSyncPromise,
+      updateLineMutation,
+    ],
   );
 
   const scheduleLineSync = useCallback(
@@ -1363,8 +1398,9 @@ const PosSellPage = () => {
         product ??
         visibleProductsRef.current.find((visibleProduct) => visibleProduct.id === productId);
       const optimisticLineId = optimisticLineIdForProduct(productId);
+      const linesBeforeOptimisticAdd = getCurrentCartLines();
       const existingLineBeforeAdd = productForCart
-        ? findCartLineForProduct(getCurrentCartLines(), productId)
+        ? findCartLineForProduct(linesBeforeOptimisticAdd, productId)
         : null;
       if (productForCart) {
         applyOptimisticAdd(productForCart);
@@ -1405,11 +1441,13 @@ const PosSellPage = () => {
           productId,
         );
         const localLineId = currentLocalLine?.id ?? optimisticLineId;
+        optimisticLineServerIdsRef.current[localLineId] = updatedLine.id;
         const lineWasRemoved =
           removedOptimisticLineIdsRef.current.has(localLineId) || !currentLocalLine;
 
         if (lineWasRemoved) {
           removedOptimisticLineIdsRef.current.delete(localLineId);
+          delete optimisticLineServerIdsRef.current[localLineId];
           await trackCartSyncPromise(removeLineMutation.mutateAsync({ lineId: updatedLine.id }));
           return true;
         }
@@ -1450,6 +1488,22 @@ const PosSellPage = () => {
 
         return true;
       } catch {
+        if (productForCart && !existingLineBeforeAdd) {
+          setOptimisticSaleLines((current) => {
+            if (!current) {
+              return current;
+            }
+            const currentLine = findCartLineForProduct(current, productId);
+            if (!currentLine || currentLine.serverLineId) {
+              return current;
+            }
+            delete optimisticLineServerIdsRef.current[currentLine.id];
+            delete lineSyncDraftsRef.current[currentLine.id];
+            releaseLineSyncPending(currentLine.id);
+            removedOptimisticLineIdsRef.current.delete(currentLine.id);
+            return current.filter((line) => line.id !== currentLine.id);
+          });
+        }
         // handled by mutation onError
         return false;
       } finally {
@@ -1467,6 +1521,7 @@ const PosSellPage = () => {
       focusLineSearchInput,
       getCurrentCartLines,
       registerId,
+      releaseLineSyncPending,
       removeLineMutation,
       scheduleLineSync,
       setOptimisticSaleLines,
@@ -1710,10 +1765,15 @@ const PosSellPage = () => {
       return;
     }
 
+    const rememberedRemoteLineId = optimisticLineServerIdsRef.current[lineId];
+    delete optimisticLineServerIdsRef.current[lineId];
     beginCartSync();
     try {
       await trackCartSyncPromise(removeLineMutation.mutateAsync({ lineId: remoteLineId }));
     } catch {
+      if (rememberedRemoteLineId) {
+        optimisticLineServerIdsRef.current[lineId] = rememberedRemoteLineId;
+      }
       setOptimisticSaleLines(currentLines);
       // handled by mutation onError
     } finally {
@@ -1934,6 +1994,7 @@ const PosSellPage = () => {
       pendingEntries.map(async ([localLineId, patch]) => {
         const remoteLineId = resolveRemoteLineId(localLineId);
         if (!remoteLineId) {
+          releaseUnresolvableLineSync(localLineId);
           return;
         }
 
@@ -1953,7 +2014,13 @@ const PosSellPage = () => {
         }
       }),
     );
-  }, [releaseLineSyncPending, resolveRemoteLineId, trackCartSyncPromise, updateLineMutation]);
+  }, [
+    releaseLineSyncPending,
+    releaseUnresolvableLineSync,
+    resolveRemoteLineId,
+    trackCartSyncPromise,
+    updateLineMutation,
+  ]);
 
   const flushAllPendingCartSync = useCallback(async () => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -2008,7 +2075,10 @@ const PosSellPage = () => {
       currentSubtotalKgs,
       Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
     );
-    if (draftDiscountKgs !== null && Math.abs(currentDiscountKgs - (sale?.discountKgs ?? 0)) > 0.009) {
+    if (
+      draftDiscountKgs !== null &&
+      Math.abs(currentDiscountKgs - (sale?.discountKgs ?? 0)) > 0.009
+    ) {
       try {
         await updateDiscountMutation.mutateAsync({ saleId, discountKgs: currentDiscountKgs });
       } catch {
@@ -2016,7 +2086,9 @@ const PosSellPage = () => {
       }
     }
     const currentCartTotalKgs = roundMoney(Math.max(0, currentSubtotalKgs - currentDiscountKgs));
-    const currentDisplayTotal = roundMoney(displayMoneyFromKgs(currentCartTotalKgs, currencySource));
+    const currentDisplayTotal = roundMoney(
+      displayMoneyFromKgs(currentCartTotalKgs, currencySource),
+    );
     const currentDisplayTotalDraft = Number.isFinite(currentDisplayTotal)
       ? String(currentDisplayTotal)
       : "";
@@ -2030,46 +2102,22 @@ const PosSellPage = () => {
       displayTotal: currentDisplayTotal,
       previousAutoFill: paymentAutoFillRef.current,
     });
-    const isSinglePaymentSale = reconciledPayments.payments.length === 1;
-    const paymentsForSubmit = isSinglePaymentSale
-      ? [{ ...reconciledPayments.payments[0], amount: currentDisplayTotalDraft }]
-      : reconciledPayments.payments;
+    const paymentPayload = buildPosPaymentSubmitPayload({
+      payments: reconciledPayments.payments,
+      cartTotalKgs: currentCartTotalKgs,
+      currencySource,
+      singlePaymentDisplayAmount: currentDisplayTotalDraft,
+    });
     paymentAutoFillRef.current = reconciledPayments.autoFill;
-    setPayments(paymentsForSubmit);
+    setPayments(paymentPayload.displayPayments);
 
-    const currentCartTotalMinorUnits = moneyToMinorUnits(currentCartTotalKgs) ?? 0;
-    const normalized = isSinglePaymentSale
-      ? currentCartTotalMinorUnits > 0
-        ? [
-            {
-              method: paymentsForSubmit[0]?.method ?? PosPaymentMethod.CASH,
-              amountKgs: currentCartTotalKgs,
-              providerRef: paymentsForSubmit[0]?.providerRef.trim() || null,
-            },
-          ]
-        : []
-      : paymentsForSubmit
-          .map((payment) => {
-            const displayAmount = parseDraftNumber(payment.amount);
-            return {
-              method: payment.method,
-              amountKgs: roundMoney(displayMoneyToKgs(displayAmount ?? Number.NaN, currencySource)),
-              providerRef: payment.providerRef.trim() || null,
-            };
-          })
-          .filter((payment) => Number.isFinite(payment.amountKgs) && payment.amountKgs > 0);
-    const normalizedPaymentTotalMinorUnits = normalized.reduce(
-      (sum, payment) => sum + (moneyToMinorUnits(payment.amountKgs) ?? 0),
-      0,
-    );
-
-    if (currentCartTotalMinorUnits > 0 && !normalized.length) {
+    if (paymentPayload.status === "paymentRequired") {
       toast({ variant: "error", description: t("sell.paymentRequired") });
       focusPaymentsInput();
       return;
     }
 
-    if (normalizedPaymentTotalMinorUnits !== currentCartTotalMinorUnits) {
+    if (paymentPayload.status === "paymentMismatch") {
       toast({ variant: "error", description: t("sell.paymentMismatch") });
       focusPaymentsInput();
       return;
@@ -2080,7 +2128,7 @@ const PosSellPage = () => {
         saleId,
         idempotencyKey: createIdempotencyKey(),
         debtCustomerName: null,
-        payments: normalized,
+        payments: paymentPayload.payments,
       });
     } catch {
       // handled by mutation onError
@@ -2178,7 +2226,9 @@ const PosSellPage = () => {
   };
 
   const salePaymentSummary = (
-    saleItem: { payments?: Array<{ method: PosPaymentMethod; amountKgs: number; isRefund?: boolean }> },
+    saleItem: {
+      payments?: Array<{ method: PosPaymentMethod; amountKgs: number; isRefund?: boolean }>;
+    },
     saleCurrencySource = currencySource,
   ) => {
     const parts = (saleItem.payments ?? [])
@@ -2415,6 +2465,7 @@ const PosSellPage = () => {
   };
 
   const handleStartNewSale = () => {
+    clearActiveDraftCache();
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
     setSelectedCustomer(null);
@@ -2423,6 +2474,11 @@ const PosSellPage = () => {
     setCustomerSearch("");
     setCustomerCreateOpen(false);
     autoPrintedSaleIdRef.current = null;
+    setOptimisticSaleLines(null);
+    optimisticLineServerIdsRef.current = {};
+    removedOptimisticLineIdsRef.current.clear();
+    lineSyncDraftsRef.current = {};
+    setLineInputDrafts({});
     setMobileCheckoutOpen(false);
     focusLineSearchInput();
   };
@@ -2929,7 +2985,10 @@ const PosSellPage = () => {
                 <SelectItem value="RETURNED">{t("sell.returnStatusReturned")}</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={journalCashierId || "ALL"} onValueChange={(value) => setJournalCashierId(value === "ALL" ? "" : value)}>
+            <Select
+              value={journalCashierId || "ALL"}
+              onValueChange={(value) => setJournalCashierId(value === "ALL" ? "" : value)}
+            >
               <SelectTrigger aria-label={t("sell.cashier")}>
                 <SelectValue />
               </SelectTrigger>
@@ -3064,7 +3123,10 @@ const PosSellPage = () => {
                   const saleCurrencySource = currencySourceWithFallback(saleItem, saleItem.store);
                   const returnState = returnStateForSale(saleItem);
                   return (
-                    <article key={saleItem.id} className="rounded-md border border-border bg-card p-3">
+                    <article
+                      key={saleItem.id}
+                      className="rounded-md border border-border bg-card p-3"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-semibold text-foreground">{saleItem.number}</p>
@@ -3204,11 +3266,7 @@ const PosSellPage = () => {
                     <p className="font-medium text-foreground">{line.product.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {line.qty} x{" "}
-                      {formatKgsMoney(
-                        line.unitPriceKgs,
-                        locale,
-                        journalSelectedSaleCurrencySource,
-                      )}
+                      {formatKgsMoney(line.unitPriceKgs, locale, journalSelectedSaleCurrencySource)}
                     </p>
                   </div>
                   <p className="font-semibold">
@@ -3370,11 +3428,7 @@ const PosSellPage = () => {
                   <p className="text-sm font-medium text-foreground">{line.product.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {line.qty} x{" "}
-                    {formatKgsMoney(
-                      line.unitPriceKgs,
-                      locale,
-                      journalSelectedSaleCurrencySource,
-                    )}
+                    {formatKgsMoney(line.unitPriceKgs, locale, journalSelectedSaleCurrencySource)}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {t("history.availableQty")}: {availableQty}
@@ -4380,7 +4434,9 @@ const PosSellPage = () => {
                                 </Select>
                                 <Input
                                   ref={index === 0 ? firstPaymentAmountRef : undefined}
-                                  value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
+                                  value={
+                                    payments.length === 1 ? cartDisplayTotalDraft : payment.amount
+                                  }
                                   onChange={(event) => {
                                     if (payments.length === 1) {
                                       return;
@@ -5001,7 +5057,9 @@ const PosSellPage = () => {
                             size="icon"
                             className="h-11 w-11 shrink-0"
                             onClick={openCustomerEdit}
-                            disabled={!currentCustomer.id || updateCustomerProfileMutation.isLoading}
+                            disabled={
+                              !currentCustomer.id || updateCustomerProfileMutation.isLoading
+                            }
                             aria-label={t("sell.editCustomer")}
                           >
                             {updateCustomerProfileMutation.isLoading ? (
@@ -5392,7 +5450,9 @@ const PosSellPage = () => {
                                   </Select>
                                   <Input
                                     ref={index === 0 ? firstPaymentAmountRef : undefined}
-                                    value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
+                                    value={
+                                      payments.length === 1 ? cartDisplayTotalDraft : payment.amount
+                                    }
                                     onChange={(event) => {
                                       if (payments.length === 1) {
                                         return;
@@ -5483,7 +5543,5 @@ const PosSellPage = () => {
 
   return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();
 };
-
-const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 export default PosSellPage;

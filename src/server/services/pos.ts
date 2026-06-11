@@ -364,6 +364,51 @@ const recomputeSaleTotals = async (
   });
 };
 
+const lockCustomerOrderForUpdate = async (
+  tx: Prisma.TransactionClient,
+  customerOrderId: string,
+) => {
+  await tx.$queryRaw`
+    SELECT id FROM "CustomerOrder" WHERE id = ${customerOrderId} FOR UPDATE
+  `;
+};
+
+const lockPosSaleDraftForEdit = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    saleId: string;
+    user?: StoreAccessUser;
+  },
+) => {
+  await lockCustomerOrderForUpdate(tx, input.saleId);
+  const sale = await tx.customerOrder.findFirst({
+    where: {
+      id: input.saleId,
+      organizationId: input.organizationId,
+      isPosSale: true,
+    },
+    select: {
+      id: true,
+      status: true,
+      storeId: true,
+      subtotalKgs: true,
+      discountKgs: true,
+      totalKgs: true,
+    },
+  });
+  if (!sale) {
+    throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+  }
+  if (input.user) {
+    await assertUserCanAccessStore(tx, input.user, sale.storeId);
+  }
+  if (sale.status !== CustomerOrderStatus.DRAFT) {
+    throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+  }
+  return sale;
+};
+
 const recomputeSaleReturnTotals = async (tx: Prisma.TransactionClient, saleReturnId: string) => {
   const aggregate = await tx.saleReturnLine.aggregate({
     where: { saleReturnId },
@@ -2322,27 +2367,11 @@ export const addPosSaleLine = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
-    const sale = await tx.customerOrder.findFirst({
-      where: {
-        id: input.saleId,
-        organizationId: input.organizationId,
-        isPosSale: true,
-      },
-      select: {
-        id: true,
-        status: true,
-        storeId: true,
-      },
+    const sale = await lockPosSaleDraftForEdit(tx, {
+      organizationId: input.organizationId,
+      saleId: input.saleId,
+      user: input.user,
     });
-    if (!sale) {
-      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
-    }
-    if (input.user) {
-      await assertUserCanAccessStore(tx, input.user, sale.storeId);
-    }
-    if (sale.status !== CustomerOrderStatus.DRAFT) {
-      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
-    }
 
     const resolved = await resolveUnitPrice({
       tx,
@@ -2465,12 +2494,11 @@ export const updatePosSaleLine = async (input: {
     if (line.customerOrder.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
-    if (input.user) {
-      await assertUserCanAccessStore(tx, input.user, line.customerOrder.storeId);
-    }
-    if (line.customerOrder.status !== CustomerOrderStatus.DRAFT) {
-      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
-    }
+    await lockPosSaleDraftForEdit(tx, {
+      organizationId: input.organizationId,
+      saleId: line.customerOrderId,
+      user: input.user,
+    });
     if (input.qty === undefined && input.unitPriceKgs === undefined) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
@@ -2538,12 +2566,11 @@ export const removePosSaleLine = async (input: {
     if (line.customerOrder.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
-    if (input.user) {
-      await assertUserCanAccessStore(tx, input.user, line.customerOrder.storeId);
-    }
-    if (line.customerOrder.status !== CustomerOrderStatus.DRAFT) {
-      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
-    }
+    await lockPosSaleDraftForEdit(tx, {
+      organizationId: input.organizationId,
+      saleId: line.customerOrderId,
+      user: input.user,
+    });
 
     await tx.customerOrderLine.delete({ where: { id: line.id } });
     await recomputeSaleTotals(tx, line.customerOrderId, input.actorId);
@@ -2577,30 +2604,11 @@ export const updatePosSaleDiscount = async (input: {
   }
 
   return prisma.$transaction(async (tx) => {
-    const sale = await tx.customerOrder.findFirst({
-      where: {
-        id: input.saleId,
-        organizationId: input.organizationId,
-        isPosSale: true,
-      },
-      select: {
-        id: true,
-        status: true,
-        storeId: true,
-        subtotalKgs: true,
-        discountKgs: true,
-        totalKgs: true,
-      },
+    const sale = await lockPosSaleDraftForEdit(tx, {
+      organizationId: input.organizationId,
+      saleId: input.saleId,
+      user: input.user,
     });
-    if (!sale) {
-      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
-    }
-    if (input.user) {
-      await assertUserCanAccessStore(tx, input.user, sale.storeId);
-    }
-    if (sale.status !== CustomerOrderStatus.DRAFT) {
-      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
-    }
 
     const subtotal = toMoney(sale.subtotalKgs);
     if (discountKgs > subtotal) {
