@@ -42,6 +42,29 @@ describe("POS payment draft autofill", () => {
     ]);
   });
 
+  it("overwrites a stale manual amount in single-payment mode", () => {
+    const result = reconcilePosPaymentDraftsForSaleTotal({
+      currentPayments: [
+        {
+          method: PosPaymentMethod.TRANSFER,
+          amount: "10",
+          providerRef: "ref-1",
+        },
+      ],
+      saleId: "sale-1",
+      totalKgs: 150,
+      previousAutoFill: { saleId: "sale-1", totalKgs: 120 },
+    });
+
+    expect(result.payments).toEqual([
+      {
+        method: PosPaymentMethod.TRANSFER,
+        amount: "150",
+        providerRef: "ref-1",
+      },
+    ]);
+  });
+
   it("keeps auto-filling when the current amount is formatted differently", () => {
     const result = reconcilePosPaymentDraftsForSaleTotal({
       currentPayments: [

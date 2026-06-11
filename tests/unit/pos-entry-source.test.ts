@@ -113,20 +113,29 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain('t("sell.paymentsTitle")');
   });
 
-  it("keeps POS customer quick-create focused and phone-only", async () => {
+  it("keeps POS customer management inside the sale screen with email-or-phone contact", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
     const customerServiceSource = await readSource("src/server/services/customers.ts");
+    const posRouterSource = await readSource("src/server/trpc/routers/pos.ts");
 
     expect(pageSource).toContain("type CustomerCreatePanelProps = {");
     expect(pageSource).toContain("const CustomerCreatePanel = ({");
+    expect(pageSource).toContain('emailPlaceholder={t("sell.customerEmailPlaceholder")}');
     expect(pageSource).toContain('phonePlaceholder={t("sell.customerPhonePlaceholder")}');
+    expect(pageSource).toContain('addressPlaceholder={t("sell.customerAddressPlaceholder")}');
     expect(pageSource).toContain('const phoneDigits = phone.replace(/\\D/g, "");');
-    expect(pageSource).toContain("if (!phoneDigits) {");
-    expect(pageSource).toContain("email: null");
-    expect(pageSource).not.toContain("newCustomerEmail");
-    expect(pageSource).not.toContain("setNewCustomerEmail");
-    expect(pageSource).not.toContain("customerEmailPlaceholder");
+    expect(pageSource).toContain("if (!email && !phoneDigits) {");
+    expect(pageSource).toContain("email: email || null");
+    expect(pageSource).toContain("const openCustomerEdit = () => {");
+    expect(pageSource).toContain("const handleUpdateSelectedCustomer = async () => {");
+    expect(pageSource).toContain('title={t("sell.editCustomer")}');
+    expect(pageSource).toContain("setReceiptJournalOpen(true)");
+    expect(pageSource).toContain('title={t("sell.receiptJournal")}');
+    expect(pageSource).toContain("const handleStartJournalReturn = async () => {");
+    expect(posRouterSource).toContain("update: cashierProcedure");
+    expect(posRouterSource).toContain("cashiers: router({");
     expect(customerServiceSource).toContain("const rawPhone = normalizeOptionalText(input.phone)");
+    expect(customerServiceSource).toContain("ensureCustomerContact({ email, phone });");
     expect(customerServiceSource).toContain('throw new AppError("customerPhoneDigitsRequired"');
   });
 
@@ -194,7 +203,10 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain(
       "normalizedPaymentTotalMinorUnits !== currentCartTotalMinorUnits",
     );
-    expect(pageSource).toContain("const shouldUseExactCartTotal =");
+    expect(pageSource).toContain("amountKgs: currentCartTotalKgs");
+    expect(pageSource).toContain("paymentsRef.current");
+    expect(pageSource).toContain("readOnly={payments.length === 1}");
+    expect(pageSource).toContain("await flushAllPendingCartSync();");
     expect(pageSource).toContain("parseDraftNumber(payment.amount)");
     expect(routerSource).not.toContain("payments.length < 1");
     expect(serviceSource).toContain("normalizePayments(input.payments, { requirePayment: false })");

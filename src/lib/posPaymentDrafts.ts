@@ -1,7 +1,5 @@
 import { PosPaymentMethod } from "@prisma/client";
 
-import { moneyInputsEqual } from "@/lib/moneyInput";
-
 export type PosPaymentDraft = {
   method: PosPaymentMethod;
   amount: string;
@@ -50,24 +48,6 @@ export const reconcilePosPaymentDraftsForSaleTotal = (input: {
   }
 
   const [payment] = input.currentPayments;
-  const previousAmount =
-    input.previousAutoFill.displayTotal === null || input.previousAutoFill.displayTotal === undefined
-      ? input.previousAutoFill.totalKgs === null
-        ? ""
-        : String(input.previousAutoFill.totalKgs)
-      : String(input.previousAutoFill.displayTotal);
-  const amountWasAutoFilled =
-    payment.amount === "" ||
-    payment.amount === previousAmount ||
-    moneyInputsEqual(payment.amount, previousAmount);
-
-  if (!amountWasAutoFilled) {
-    return {
-      payments: input.currentPayments,
-      autoFill: nextAutoFill,
-    };
-  }
-
   return {
     payments: [{ ...payment, amount: nextAmount }],
     autoFill: nextAutoFill,

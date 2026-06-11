@@ -1,8 +1,8 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import Link from "next/link";
-import { PosPaymentMethod } from "@prisma/client";
+import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -14,15 +14,19 @@ import {
   DeleteIcon,
   DownloadIcon,
   EmptyIcon,
+  EditIcon,
   PrintIcon,
   SearchIcon,
+  SalesOrdersIcon,
   StatusWarningIcon,
   TagIcon,
+  ViewIcon,
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { PopoverSurface } from "@/components/ui/popover";
 import {
   Select,
@@ -33,6 +37,16 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
   currencySourceWithFallback,
@@ -41,7 +55,7 @@ import {
   formatKgsMoney,
   resolveCurrency,
 } from "@/lib/currencyDisplay";
-import { formatNumber } from "@/lib/i18nFormat";
+import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { moneyToMinorUnits, parseMoneyInput } from "@/lib/moneyInput";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
@@ -86,6 +100,8 @@ const createIdempotencyKey = () => {
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
+
 const useDebouncedValue = (value: string, delayMs: number) => {
   const [debounced, setDebounced] = useState(value);
 
@@ -112,32 +128,45 @@ type PosCustomerSelection = {
   name: string;
   email: string | null;
   phone: string | null;
+  address?: string | null;
 };
 
 type CustomerCreatePanelProps = {
   name: string;
+  email: string;
   phone: string;
+  address: string;
   namePlaceholder: string;
+  emailPlaceholder: string;
   phonePlaceholder: string;
-  createLabel: string;
+  addressPlaceholder: string;
+  submitLabel: string;
   isLoading: boolean;
   disabled: boolean;
   onNameChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
   onPhoneChange: (value: string) => void;
-  onCreate: () => void;
+  onAddressChange: (value: string) => void;
+  onSubmit: () => void;
 };
 
 const CustomerCreatePanel = ({
   name,
+  email,
   phone,
+  address,
   namePlaceholder,
+  emailPlaceholder,
   phonePlaceholder,
-  createLabel,
+  addressPlaceholder,
+  submitLabel,
   isLoading,
   disabled,
   onNameChange,
+  onEmailChange,
   onPhoneChange,
-  onCreate,
+  onAddressChange,
+  onSubmit,
 }: CustomerCreatePanelProps) => (
   <div className="space-y-2 border-t border-border px-3 py-3">
     <Input
@@ -147,19 +176,33 @@ const CustomerCreatePanel = ({
       autoComplete="name"
     />
     <Input
+      value={email}
+      onChange={(event) => onEmailChange(event.target.value)}
+      placeholder={emailPlaceholder}
+      autoComplete="email"
+      inputMode="email"
+    />
+    <Input
       value={phone}
       onChange={(event) => onPhoneChange(event.target.value)}
       placeholder={phonePlaceholder}
       autoComplete="tel"
     />
+    <Textarea
+      value={address}
+      onChange={(event) => onAddressChange(event.target.value)}
+      placeholder={addressPlaceholder}
+      autoComplete="street-address"
+      className="min-h-20"
+    />
     <Button
       type="button"
       className="h-10 w-full justify-start"
-      onClick={onCreate}
+      onClick={onSubmit}
       disabled={disabled}
     >
       {isLoading ? <Spinner className="h-4 w-4" /> : <AddIcon className="h-4 w-4" aria-hidden />}
-      {createLabel}
+      {submitLabel}
     </Button>
   </div>
 );
@@ -477,7 +520,9 @@ const PosSellPage = () => {
   const [lineSearch, setLineSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
-  const [payments, setPayments] = useState<PosPaymentDraft[]>([createDefaultPosPaymentDraft()]);
+  const [payments, setPaymentsState] = useState<PosPaymentDraft[]>(() => [
+    createDefaultPosPaymentDraft(),
+  ]);
   const [discountDraft, setDiscountDraft] = useState("");
   const [discountEditorOpen, setDiscountEditorOpen] = useState(false);
   const [sellInDebt, setSellInDebt] = useState(false);
@@ -487,7 +532,41 @@ const PosSellPage = () => {
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
+  const [customerEditOpen, setCustomerEditOpen] = useState(false);
+  const [customerEditName, setCustomerEditName] = useState("");
+  const [customerEditEmail, setCustomerEditEmail] = useState("");
+  const [customerEditPhone, setCustomerEditPhone] = useState("");
+  const [customerEditAddress, setCustomerEditAddress] = useState("");
+  const [receiptJournalOpen, setReceiptJournalOpen] = useState(false);
+  const [journalSearch, setJournalSearch] = useState("");
+  const [journalDateFrom, setJournalDateFrom] = useState("");
+  const [journalDateTo, setJournalDateTo] = useState("");
+  const [journalStatusFilter, setJournalStatusFilter] = useState<CustomerOrderStatus | "ALL">(
+    CustomerOrderStatus.COMPLETED,
+  );
+  const [journalPaymentMethodFilter, setJournalPaymentMethodFilter] = useState<
+    PosPaymentMethod | "ALL"
+  >("ALL");
+  const [journalReturnStateFilter, setJournalReturnStateFilter] = useState<
+    "ALL" | "NONE" | "RETURNED"
+  >("ALL");
+  const [journalCashierId, setJournalCashierId] = useState("");
+  const [journalPage, setJournalPage] = useState(1);
+  const [journalDetailSaleId, setJournalDetailSaleId] = useState<string | null>(null);
+  const [journalReturnSaleId, setJournalReturnSaleId] = useState<string | null>(null);
+  const [journalReturnQtyByLine, setJournalReturnQtyByLine] = useState<Record<string, string>>({});
+  const [journalRefundMethod, setJournalRefundMethod] = useState<PosPaymentMethod>(
+    PosPaymentMethod.CASH,
+  );
+  const [journalReturnNotes, setJournalReturnNotes] = useState("");
+  const [journalReceiptAction, setJournalReceiptAction] = useState<{
+    saleId: string;
+    mode: "download" | "print";
+    kind: "precheck" | "fiscal";
+  } | null>(null);
   const [optimisticSaleLines, setOptimisticSaleLinesState] = useState<PosCartLine[] | null>(null);
   const [lineInputDrafts, setLineInputDrafts] = useState<Record<string, LineInputDraft>>({});
   const [lastCompletedSale, setLastCompletedSale] = useState<{
@@ -522,10 +601,20 @@ const PosSellPage = () => {
   const lineSyncPendingRef = useRef<Set<string>>(new Set());
   const visibleProductsRef = useRef<PosCatalogProduct[]>([]);
   const autoPrintedSaleIdRef = useRef<string | null>(null);
+  const paymentsRef = useRef<PosPaymentDraft[]>(payments);
   const paymentAutoFillRef = useRef<PosPaymentAutoFillState>({
     saleId: null,
     totalKgs: null,
   });
+
+  const setPayments = useCallback((updater: SetStateAction<PosPaymentDraft[]>) => {
+    const next =
+      typeof updater === "function"
+        ? (updater as (current: PosPaymentDraft[]) => PosPaymentDraft[])(paymentsRef.current)
+        : updater;
+    paymentsRef.current = next;
+    setPaymentsState(next);
+  }, []);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
@@ -612,9 +701,12 @@ const PosSellPage = () => {
 
   const debouncedLineSearch = useDebouncedValue(lineSearch.trim(), 180);
   const debouncedCustomerSearch = useDebouncedValue(customerSearch.trim(), 200);
+  const debouncedJournalSearch = useDebouncedValue(journalSearch.trim(), 250);
   const searchTerm = debouncedLineSearch;
   const hasSearchTerm = lineSearch.trim().length >= 1;
   const activeStoreId = shiftQuery.data?.store.id;
+  const journalStoreId = activeStoreId ?? selectedRegister?.store.id;
+  const journalSelectedSaleId = journalReturnSaleId ?? journalDetailSaleId;
   const receiptPrintSettingsQuery = trpc.stores.hardware.useQuery(
     { storeId: activeStoreId ?? "" },
     { enabled: Boolean(activeStoreId), staleTime: 60_000 },
@@ -645,6 +737,45 @@ const PosSellPage = () => {
     {
       enabled: customerSelectorOpen && Boolean(activeStoreId),
       staleTime: 15_000,
+    },
+  );
+  const journalCashiersQuery = trpc.pos.cashiers.list.useQuery(
+    { storeId: journalStoreId ?? undefined },
+    {
+      enabled: receiptJournalOpen && Boolean(journalStoreId),
+      staleTime: 60_000,
+    },
+  );
+  const journalSalesQuery = trpc.pos.sales.list.useQuery(
+    {
+      storeId: journalStoreId ?? undefined,
+      search: debouncedJournalSearch || undefined,
+      statuses: journalStatusFilter === "ALL" ? undefined : [journalStatusFilter],
+      cashierId: journalCashierId || undefined,
+      paymentMethod:
+        journalPaymentMethodFilter === "ALL" ? undefined : journalPaymentMethodFilter,
+      returnState:
+        journalReturnStateFilter === "NONE"
+          ? "none"
+          : journalReturnStateFilter === "RETURNED"
+            ? "returned"
+            : undefined,
+      dateFrom: journalDateFrom ? new Date(`${journalDateFrom}T00:00:00`) : undefined,
+      dateTo: journalDateTo ? new Date(`${journalDateTo}T23:59:59`) : undefined,
+      page: journalPage,
+      pageSize: 25,
+    },
+    {
+      enabled: receiptJournalOpen && Boolean(journalStoreId),
+      keepPreviousData: true,
+      refetchOnWindowFocus: false,
+    },
+  );
+  const journalSaleDetailQuery = trpc.pos.sales.get.useQuery(
+    { saleId: journalSelectedSaleId ?? "" },
+    {
+      enabled: Boolean(journalSelectedSaleId),
+      refetchOnWindowFocus: false,
     },
   );
 
@@ -707,6 +838,9 @@ const PosSellPage = () => {
       setCustomerSelectorOpen(false);
       setCustomerSearch("");
       setCustomerCreateOpen(false);
+      setNewCustomerEmail("");
+      setNewCustomerAddress("");
+      setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
       setOptimisticSaleLines(null);
       setLineInputDrafts({});
@@ -720,13 +854,14 @@ const PosSellPage = () => {
 
   const updateCustomerMutation = trpc.pos.sales.updateCustomer.useMutation({
     onSuccess: async (result) => {
-      setSelectedCustomer(
+      setSelectedCustomer((current) =>
         result.customerName || result.customerEmail || result.customerPhone
           ? {
-              id: "",
+              id: current?.id ?? "",
               name: result.customerName ?? result.customerEmail ?? result.customerPhone ?? "",
               email: result.customerEmail,
               phone: result.customerPhone,
+              address: result.customerAddress,
             }
           : null,
       );
@@ -740,6 +875,26 @@ const PosSellPage = () => {
     },
   });
   const createCustomerMutation = trpc.pos.customers.create.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const updateCustomerProfileMutation = trpc.pos.customers.update.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const createReturnMutation = trpc.pos.returns.createDraft.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const addReturnLineMutation = trpc.pos.returns.addLine.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const completeReturnMutation = trpc.pos.returns.complete.useMutation({
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -800,6 +955,9 @@ const PosSellPage = () => {
       setCustomerSelectorOpen(false);
       setCustomerSearch("");
       setCustomerCreateOpen(false);
+      setNewCustomerEmail("");
+      setNewCustomerAddress("");
+      setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
       setOptimisticSaleLines(null);
       setLineInputDrafts({});
@@ -842,11 +1000,14 @@ const PosSellPage = () => {
     Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
   );
   const cartTotalKgs = roundMoney(Math.max(0, cartSubtotalKgs - cartDiscountKgs));
+  const cartDisplayTotal = roundMoney(displayMoneyFromKgs(cartTotalKgs, currencySource));
+  const cartDisplayTotalDraft = Number.isFinite(cartDisplayTotal) ? String(cartDisplayTotal) : "";
   const saleIdForPaymentInit = sale?.id ?? (saleId && hasCartLines ? saleId : undefined);
   const saleTotalForPaymentInit = hasCartLines ? cartTotalKgs : sale?.totalKgs;
   const saleCustomerName = sale?.customerName ?? null;
   const saleCustomerEmail = sale?.customerEmail ?? null;
   const saleCustomerPhone = sale?.customerPhone ?? null;
+  const saleCustomerAddress = sale?.customerAddress ?? null;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
 
@@ -886,7 +1047,7 @@ const PosSellPage = () => {
         currentPayments,
         saleId: saleIdForPaymentInit,
         totalKgs: saleTotalForPaymentInit,
-        displayTotal: roundMoney(displayMoneyFromKgs(saleTotalForPaymentInit, currencySource)),
+        displayTotal: cartDisplayTotal,
         previousAutoFill,
       });
       return next.payments;
@@ -894,8 +1055,9 @@ const PosSellPage = () => {
     paymentAutoFillRef.current = {
       saleId: saleIdForPaymentInit,
       totalKgs: saleTotalForPaymentInit,
+      displayTotal: cartDisplayTotal,
     };
-  }, [currencySource, saleIdForPaymentInit, saleTotalForPaymentInit, sellInDebt]);
+  }, [cartDisplayTotal, saleIdForPaymentInit, saleTotalForPaymentInit, sellInDebt, setPayments]);
 
   useEffect(() => {
     if (!sale) {
@@ -920,6 +1082,14 @@ const PosSellPage = () => {
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
     setCustomerCreateOpen(false);
+    setNewCustomerEmail("");
+    setNewCustomerAddress("");
+    setCustomerEditOpen(false);
+    setReceiptJournalOpen(false);
+    setJournalDetailSaleId(null);
+    setJournalReturnSaleId(null);
+    setJournalReturnQtyByLine({});
+    setJournalReturnNotes("");
     setOptimisticSaleLines(null);
     setLineInputDrafts({});
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
@@ -927,7 +1097,7 @@ const PosSellPage = () => {
     setAutoReceiptStatus("idle");
     setMobileCheckoutOpen(false);
     autoPrintedSaleIdRef.current = null;
-  }, [registerId, setOptimisticSaleLines]);
+  }, [registerId, setOptimisticSaleLines, setPayments]);
 
   useEffect(() => {
     if (!saleId) {
@@ -945,23 +1115,25 @@ const PosSellPage = () => {
     setMarkingInput({});
     setSelectedCustomer(null);
     setCustomerCreateOpen(false);
-  }, [saleId, saleQuery.data, saleQuery.isFetched, saleQuery.isFetching, saleQuery.isLoading]);
+    setCustomerEditOpen(false);
+  }, [saleId, saleQuery.data, saleQuery.isFetched, saleQuery.isFetching, saleQuery.isLoading, setPayments]);
 
   useEffect(() => {
     if (!sale?.id) {
       return;
     }
     if (saleCustomerName || saleCustomerEmail || saleCustomerPhone) {
-      setSelectedCustomer({
-        id: "",
+      setSelectedCustomer((current) => ({
+        id: current?.id ?? "",
         name: saleCustomerName ?? saleCustomerEmail ?? saleCustomerPhone ?? "",
         email: saleCustomerEmail,
         phone: saleCustomerPhone,
-      });
+        address: saleCustomerAddress,
+      }));
       return;
     }
     setSelectedCustomer(null);
-  }, [sale?.id, saleCustomerEmail, saleCustomerName, saleCustomerPhone]);
+  }, [sale?.id, saleCustomerAddress, saleCustomerEmail, saleCustomerName, saleCustomerPhone]);
 
   useEffect(() => {
     if (!sale?.lines?.length) {
@@ -989,16 +1161,8 @@ const PosSellPage = () => {
       return sum + amount;
     }, 0),
   );
-  const cartDisplayTotalMinorUnits = moneyToMinorUnits(
-    roundMoney(displayMoneyFromKgs(cartTotalKgs, currencySource)),
-  );
-  const singlePaymentDisplayMinorUnits =
-    payments.length === 1 ? moneyToMinorUnits(parseDraftNumber(payments[0].amount) ?? Number.NaN) : null;
   const totalPaymentKgs =
-    hasCartLines &&
-    payments.length === 1 &&
-    cartDisplayTotalMinorUnits !== null &&
-    singlePaymentDisplayMinorUnits === cartDisplayTotalMinorUnits
+    hasCartLines && payments.length === 1
       ? cartTotalKgs
       : roundMoney(displayMoneyToKgs(totalPayment, currencySource));
   const productResults: PosCatalogProduct[] = activeStoreId
@@ -1107,13 +1271,18 @@ const PosSellPage = () => {
       lineSyncInFlightRef.current.add(lineId);
 
       const syncPromise = (async () => {
+        let shouldReleasePending = true;
         try {
           await updateLineMutation.mutateAsync({ lineId: remoteLineId, ...patch });
         } catch {
-          // Keep the cashier's local cart intact. Final sale submission will validate server state.
+          lineSyncDraftsRef.current[lineId] = {
+            ...patch,
+            ...lineSyncDraftsRef.current[lineId],
+          };
+          shouldReleasePending = false;
         } finally {
           lineSyncInFlightRef.current.delete(lineId);
-          if (lineSyncDraftsRef.current[lineId]) {
+          if (lineSyncDraftsRef.current[lineId] && shouldReleasePending) {
             lineSyncTimersRef.current[lineId] = window.setTimeout(() => {
               delete lineSyncTimersRef.current[lineId];
               flushLineSync(lineId);
@@ -1166,6 +1335,8 @@ const PosSellPage = () => {
             selectedCustomer && !selectedCustomer.id ? selectedCustomer.email : undefined,
           customerPhone:
             selectedCustomer && !selectedCustomer.id ? selectedCustomer.phone : undefined,
+          customerAddress:
+            selectedCustomer && !selectedCustomer.id ? selectedCustomer.address : undefined,
         })
         .then((draft) => ({ id: draft.id }))
         .finally(() => {
@@ -1625,6 +1796,7 @@ const PosSellPage = () => {
     setCustomerSelectorOpen(false);
     setCustomerSearch("");
     setCustomerCreateOpen(false);
+    setCustomerEditOpen(false);
 
     const targetSaleId = saleId ?? activeDraft?.id ?? null;
     if (!targetSaleId) {
@@ -1646,13 +1818,15 @@ const PosSellPage = () => {
       return;
     }
     const name = newCustomerName.trim().replace(/\s+/g, " ");
+    const email = newCustomerEmail.trim().toLowerCase();
     const phone = newCustomerPhone.trim();
+    const address = newCustomerAddress.trim();
     const phoneDigits = phone.replace(/\D/g, "");
     if (!name) {
       toast({ variant: "error", description: t("sell.customerNameRequired") });
       return;
     }
-    if (!phoneDigits) {
+    if (!email && !phoneDigits) {
       toast({ variant: "error", description: t("sell.customerContactRequired") });
       return;
     }
@@ -1662,11 +1836,14 @@ const PosSellPage = () => {
         storeId: activeStoreId,
         name,
         phone: phone || null,
-        email: null,
+        email: email || null,
+        address: address || null,
       });
       const customer = result.customer;
       setNewCustomerName("");
+      setNewCustomerEmail("");
       setNewCustomerPhone("");
+      setNewCustomerAddress("");
       setCustomerCreateOpen(false);
       await trpcUtils.pos.customers.search.invalidate();
       await handleSelectCustomer({
@@ -1674,9 +1851,73 @@ const PosSellPage = () => {
         name: customer.name,
         email: customer.email,
         phone: customer.phone,
+        address: customer.address,
       });
     } catch {
       // handled by mutation onError
+    }
+  };
+
+  const openCustomerEdit = () => {
+    if (!selectedCustomer?.id) {
+      toast({ variant: "error", description: t("sell.customerEditUnavailable") });
+      return;
+    }
+    setCustomerEditName(selectedCustomer.name);
+    setCustomerEditEmail(selectedCustomer.email ?? "");
+    setCustomerEditPhone(selectedCustomer.phone ?? "");
+    setCustomerEditAddress(selectedCustomer.address ?? "");
+    setCustomerEditOpen(true);
+  };
+
+  const handleUpdateSelectedCustomer = async () => {
+    if (!selectedCustomer?.id || updateCustomerProfileMutation.isLoading) {
+      return;
+    }
+    const name = customerEditName.trim().replace(/\s+/g, " ");
+    const email = customerEditEmail.trim().toLowerCase();
+    const phone = customerEditPhone.trim();
+    const address = customerEditAddress.trim();
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (!name) {
+      toast({ variant: "error", description: t("sell.customerNameRequired") });
+      return;
+    }
+    if (!email && !phoneDigits) {
+      toast({ variant: "error", description: t("sell.customerContactRequired") });
+      return;
+    }
+
+    const previousCustomer = selectedCustomer;
+    try {
+      const customer = await updateCustomerProfileMutation.mutateAsync({
+        customerId: selectedCustomer.id,
+        name,
+        email: email || null,
+        phone: phone || null,
+        address: address || null,
+      });
+      const nextCustomer: PosCustomerSelection = {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+      };
+      setSelectedCustomer(nextCustomer);
+
+      const targetSaleId = saleId ?? activeDraft?.id ?? null;
+      if (targetSaleId) {
+        await updateCustomerMutation.mutateAsync({
+          saleId: targetSaleId,
+          customerId: customer.id,
+        });
+      }
+
+      setCustomerEditOpen(false);
+      await trpcUtils.pos.customers.search.invalidate();
+    } catch {
+      setSelectedCustomer(previousCustomer);
     }
   };
 
@@ -1701,12 +1942,34 @@ const PosSellPage = () => {
           await trackCartSyncPromise(
             updateLineMutation.mutateAsync({ lineId: remoteLineId, ...patch }),
           );
+        } catch (error) {
+          lineSyncDraftsRef.current[localLineId] = {
+            ...patch,
+            ...lineSyncDraftsRef.current[localLineId],
+          };
+          throw error;
         } finally {
           releaseLineSyncPending(localLineId);
         }
       }),
     );
   }, [releaseLineSyncPending, resolveRemoteLineId, trackCartSyncPromise, updateLineMutation]);
+
+  const flushAllPendingCartSync = useCallback(async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await flushPendingLineSyncs();
+      await waitForCartSync();
+      if (!Object.keys(lineSyncDraftsRef.current).length) {
+        return;
+      }
+    }
+
+    await flushPendingLineSyncs();
+    await waitForCartSync();
+    if (Object.keys(lineSyncDraftsRef.current).length) {
+      throw new Error("posCartSyncPending");
+    }
+  }, [flushPendingLineSyncs, waitForCartSync]);
 
   const handleComplete = async () => {
     if (!saleId) {
@@ -1720,8 +1983,7 @@ const PosSellPage = () => {
         return;
       }
       try {
-        await flushPendingLineSyncs();
-        await waitForCartSync();
+        await flushAllPendingCartSync();
         await completeMutation.mutateAsync({
           saleId,
           idempotencyKey: createIdempotencyKey(),
@@ -1735,8 +1997,7 @@ const PosSellPage = () => {
     }
 
     try {
-      await flushPendingLineSyncs();
-      await waitForCartSync();
+      await flushAllPendingCartSync();
     } catch {
       return;
     }
@@ -1747,42 +2008,56 @@ const PosSellPage = () => {
       currentSubtotalKgs,
       Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
     );
+    if (draftDiscountKgs !== null && Math.abs(currentDiscountKgs - (sale?.discountKgs ?? 0)) > 0.009) {
+      try {
+        await updateDiscountMutation.mutateAsync({ saleId, discountKgs: currentDiscountKgs });
+      } catch {
+        return;
+      }
+    }
     const currentCartTotalKgs = roundMoney(Math.max(0, currentSubtotalKgs - currentDiscountKgs));
+    const currentDisplayTotal = roundMoney(displayMoneyFromKgs(currentCartTotalKgs, currencySource));
+    const currentDisplayTotalDraft = Number.isFinite(currentDisplayTotal)
+      ? String(currentDisplayTotal)
+      : "";
+    const currentPaymentDrafts = paymentsRef.current.length
+      ? paymentsRef.current
+      : [createDefaultPosPaymentDraft()];
     const reconciledPayments = reconcilePosPaymentDraftsForSaleTotal({
-      currentPayments: payments,
+      currentPayments: currentPaymentDrafts,
       saleId,
       totalKgs: currentCartTotalKgs,
-      displayTotal: roundMoney(displayMoneyFromKgs(currentCartTotalKgs, currencySource)),
+      displayTotal: currentDisplayTotal,
       previousAutoFill: paymentAutoFillRef.current,
     });
-    const paymentsForSubmit = reconciledPayments.payments;
+    const isSinglePaymentSale = reconciledPayments.payments.length === 1;
+    const paymentsForSubmit = isSinglePaymentSale
+      ? [{ ...reconciledPayments.payments[0], amount: currentDisplayTotalDraft }]
+      : reconciledPayments.payments;
     paymentAutoFillRef.current = reconciledPayments.autoFill;
     setPayments(paymentsForSubmit);
 
-    const currentDisplayTotalMinorUnits = moneyToMinorUnits(
-      roundMoney(displayMoneyFromKgs(currentCartTotalKgs, currencySource)),
-    );
-    const isSinglePaymentSale = paymentsForSubmit.length === 1;
-    const normalized = paymentsForSubmit
-      .map((payment, index) => {
-        const displayAmount = parseDraftNumber(payment.amount);
-        const displayAmountMinorUnits = moneyToMinorUnits(displayAmount ?? Number.NaN);
-        const shouldUseExactCartTotal =
-          isSinglePaymentSale &&
-          index === 0 &&
-          currentDisplayTotalMinorUnits !== null &&
-          displayAmountMinorUnits === currentDisplayTotalMinorUnits;
-
-        return {
-          method: payment.method,
-          amountKgs: shouldUseExactCartTotal
-            ? currentCartTotalKgs
-            : roundMoney(displayMoneyToKgs(displayAmount ?? Number.NaN, currencySource)),
-          providerRef: payment.providerRef.trim() || null,
-        };
-      })
-      .filter((payment) => Number.isFinite(payment.amountKgs) && payment.amountKgs > 0);
     const currentCartTotalMinorUnits = moneyToMinorUnits(currentCartTotalKgs) ?? 0;
+    const normalized = isSinglePaymentSale
+      ? currentCartTotalMinorUnits > 0
+        ? [
+            {
+              method: paymentsForSubmit[0]?.method ?? PosPaymentMethod.CASH,
+              amountKgs: currentCartTotalKgs,
+              providerRef: paymentsForSubmit[0]?.providerRef.trim() || null,
+            },
+          ]
+        : []
+      : paymentsForSubmit
+          .map((payment) => {
+            const displayAmount = parseDraftNumber(payment.amount);
+            return {
+              method: payment.method,
+              amountKgs: roundMoney(displayMoneyToKgs(displayAmount ?? Number.NaN, currencySource)),
+              providerRef: payment.providerRef.trim() || null,
+            };
+          })
+          .filter((payment) => Number.isFinite(payment.amountKgs) && payment.amountKgs > 0);
     const normalizedPaymentTotalMinorUnits = normalized.reduce(
       (sum, payment) => sum + (moneyToMinorUnits(payment.amountKgs) ?? 0),
       0,
@@ -1818,13 +2093,277 @@ const PosSellPage = () => {
   );
 
   const addPaymentRow = () => {
-    setPayments((current) => [...current, createDefaultPosPaymentDraft()]);
+    setPayments((current) => {
+      const syncedCurrent =
+        current.length === 1 ? [{ ...current[0], amount: cartDisplayTotalDraft }] : current;
+      return [...syncedCurrent, createDefaultPosPaymentDraft()];
+    });
   };
 
   const removePaymentRow = (index: number) => {
     setPayments((current) =>
       current.length <= 1 ? current : current.filter((_, i) => i !== index),
     );
+  };
+
+  const paymentMethodLabel = (method: PosPaymentMethod) => {
+    switch (method) {
+      case PosPaymentMethod.CARD:
+        return t("payments.card");
+      case PosPaymentMethod.TRANSFER:
+        return t("payments.transfer");
+      case PosPaymentMethod.OTHER:
+        return t("payments.other");
+      default:
+        return t("payments.cash");
+    }
+  };
+
+  const saleStatusLabel = (status: CustomerOrderStatus) => {
+    switch (status) {
+      case CustomerOrderStatus.COMPLETED:
+        return t("history.statusCompleted");
+      case CustomerOrderStatus.CANCELED:
+        return t("history.statusCanceled");
+      default:
+        return t("history.statusDraft");
+    }
+  };
+
+  const saleStatusVariant = (
+    status: CustomerOrderStatus,
+  ): "default" | "success" | "warning" | "danger" => {
+    switch (status) {
+      case CustomerOrderStatus.COMPLETED:
+        return "success";
+      case CustomerOrderStatus.CANCELED:
+        return "danger";
+      default:
+        return "warning";
+    }
+  };
+
+  const returnStateForSale = (saleItem: { totalKgs: number; returnedTotalKgs?: number | null }) => {
+    const returnedTotal = roundMoney(saleItem.returnedTotalKgs ?? 0);
+    if (returnedTotal <= 0) {
+      return "none" as const;
+    }
+    if (returnedTotal + 0.009 >= saleItem.totalKgs) {
+      return "full" as const;
+    }
+    return "partial" as const;
+  };
+
+  const returnStateLabel = (state: "none" | "partial" | "full") => {
+    switch (state) {
+      case "full":
+        return t("sell.returnStateFull");
+      case "partial":
+        return t("sell.returnStatePartial");
+      default:
+        return t("sell.returnStateNone");
+    }
+  };
+
+  const returnStateVariant = (
+    state: "none" | "partial" | "full",
+  ): "default" | "success" | "warning" | "danger" | "muted" => {
+    if (state === "full") {
+      return "danger";
+    }
+    if (state === "partial") {
+      return "warning";
+    }
+    return "muted";
+  };
+
+  const salePaymentSummary = (
+    saleItem: { payments?: Array<{ method: PosPaymentMethod; amountKgs: number; isRefund?: boolean }> },
+    saleCurrencySource = currencySource,
+  ) => {
+    const parts = (saleItem.payments ?? [])
+      .filter((payment) => !payment.isRefund && payment.amountKgs > 0)
+      .map(
+        (payment) =>
+          `${paymentMethodLabel(payment.method)} ${formatKgsMoney(
+            payment.amountKgs,
+            locale,
+            saleCurrencySource,
+          )}`,
+      );
+    return parts.join(" · ") || tCommon("notAvailable");
+  };
+
+  const journalSelectedSale = journalSaleDetailQuery.data;
+  const journalSelectedSaleCurrencySource = currencySourceWithFallback(
+    journalSelectedSale,
+    journalSelectedSale?.store ?? selectedRegister?.store ?? null,
+  );
+  const journalAlreadyReturnedByLine: Record<string, number> = {};
+  for (const saleReturn of journalSelectedSale?.saleReturns ?? []) {
+    if (saleReturn.status !== "COMPLETED") {
+      continue;
+    }
+    for (const line of saleReturn.lines) {
+      journalAlreadyReturnedByLine[line.customerOrderLineId] =
+        (journalAlreadyReturnedByLine[line.customerOrderLineId] ?? 0) + line.qty;
+    }
+  }
+  const journalReturnTotal = journalSelectedSale
+    ? roundMoney(
+        journalSelectedSale.lines.reduce((total, line) => {
+          const availableQty = Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0));
+          const qty = Math.trunc(Number(journalReturnQtyByLine[line.id] ?? 0));
+          if (!Number.isFinite(qty) || qty <= 0 || availableQty <= 0) {
+            return total;
+          }
+          return total + line.unitPriceKgs * Math.min(qty, availableQty);
+        }, 0),
+      )
+    : 0;
+  const isJournalReturnBusy =
+    createReturnMutation.isLoading ||
+    addReturnLineMutation.isLoading ||
+    completeReturnMutation.isLoading;
+
+  useEffect(() => {
+    if (!journalReturnSaleId || !journalSelectedSale?.lines?.length) {
+      setJournalReturnQtyByLine({});
+      return;
+    }
+    setJournalReturnQtyByLine(
+      Object.fromEntries(journalSelectedSale.lines.map((line) => [line.id, "0"])),
+    );
+  }, [journalReturnSaleId, journalSelectedSale?.id, journalSelectedSale?.lines]);
+
+  useEffect(() => {
+    setJournalPage(1);
+  }, [
+    debouncedJournalSearch,
+    journalCashierId,
+    journalDateFrom,
+    journalDateTo,
+    journalPaymentMethodFilter,
+    journalReturnStateFilter,
+    journalStatusFilter,
+  ]);
+
+  const handleJournalReceiptPdf = async (
+    saleIdentifier: { id: string; number: string },
+    mode: "download" | "print",
+    kind: "precheck" | "fiscal",
+  ) => {
+    if (journalReceiptAction) {
+      return;
+    }
+    setJournalReceiptAction({ saleId: saleIdentifier.id, mode, kind });
+    try {
+      const blob = await fetchPdfBlob({
+        url: `/api/pos/receipts/${saleIdentifier.id}/pdf?kind=${kind}&action=${
+          mode === "print" ? "reprint" : "download"
+        }`,
+      });
+      if (mode === "print") {
+        const result = await printPdfBlob(blob);
+        if (!result.autoPrintAttempted) {
+          toast({ variant: "info", description: t("sell.receiptPrintFallback") });
+        }
+      } else {
+        downloadPdfBlob(blob, `pos-receipt-${saleIdentifier.number}-${kind}.pdf`);
+      }
+    } catch {
+      toast({ variant: "error", description: t("history.receiptPdfFailed") });
+    } finally {
+      setJournalReceiptAction(null);
+    }
+  };
+
+  const fillFullJournalReturn = () => {
+    if (!journalSelectedSale) {
+      return;
+    }
+    setJournalReturnQtyByLine(
+      Object.fromEntries(
+        journalSelectedSale.lines.map((line) => [
+          line.id,
+          String(Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0))),
+        ]),
+      ),
+    );
+  };
+
+  const handleStartJournalReturn = async () => {
+    const shift = shiftQuery.data;
+    const saleForReturn = journalSelectedSale;
+    if (!shift || !saleForReturn) {
+      toast({ variant: "error", description: t("history.openShiftRequired") });
+      return;
+    }
+
+    const selectedLines = saleForReturn.lines
+      .map((line) => ({
+        lineId: line.id,
+        maxQty: Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0)),
+        qty: Math.trunc(Number(journalReturnQtyByLine[line.id] ?? 0)),
+      }))
+      .filter((line) => Number.isFinite(line.qty) && line.qty > 0 && line.maxQty > 0)
+      .map((line) => ({
+        lineId: line.lineId,
+        qty: Math.min(line.qty, line.maxQty),
+      }));
+
+    if (!selectedLines.length || journalReturnTotal <= 0) {
+      toast({ variant: "error", description: t("history.returnQtyRequired") });
+      return;
+    }
+
+    try {
+      const draft = await createReturnMutation.mutateAsync({
+        shiftId: shift.id,
+        originalSaleId: saleForReturn.id,
+        notes: journalReturnNotes.trim() || null,
+      });
+
+      for (const selected of selectedLines) {
+        await addReturnLineMutation.mutateAsync({
+          saleReturnId: draft.id,
+          customerOrderLineId: selected.lineId,
+          qty: selected.qty,
+        });
+      }
+
+      const completion = await completeReturnMutation.mutateAsync({
+        saleReturnId: draft.id,
+        idempotencyKey: createIdempotencyKey(),
+        payments: [
+          {
+            method: journalRefundMethod,
+            amountKgs: roundMoney(journalReturnTotal),
+          },
+        ],
+      });
+
+      if (completion.manualRequired) {
+        toast({
+          variant: "info",
+          description: t("history.manualRefundRequired", {
+            requestId: completion.refundRequestId ?? "-",
+          }),
+        });
+      } else {
+        toast({ variant: "success", description: t("history.returnSuccess") });
+      }
+      setJournalReturnSaleId(null);
+      setJournalReturnNotes("");
+      await Promise.all([
+        journalSalesQuery.refetch(),
+        journalSaleDetailQuery.refetch(),
+        trpcUtils.pos.sales.list.invalidate(),
+        trpcUtils.products.list.invalidate(),
+      ]);
+    } catch {
+      // handled by mutation onError
+    }
   };
 
   const handleSellInDebtChange = (checked: boolean) => {
@@ -1868,6 +2407,7 @@ const PosSellPage = () => {
               "",
             email: activeDraft.customerEmail,
             phone: activeDraft.customerPhone,
+            address: activeDraft.customerAddress,
           }
         : null,
     );
@@ -2179,6 +2719,745 @@ const PosSellPage = () => {
     focusLineSearchInput();
   };
 
+  const CustomerEditModal = () => (
+    <Modal
+      open={customerEditOpen}
+      onOpenChange={setCustomerEditOpen}
+      title={t("sell.editCustomer")}
+      subtitle={selectedCustomer?.name ?? t("sell.customer")}
+      mobileSheet
+    >
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5 text-sm font-medium text-foreground">
+            <span>{t("sell.customerNamePlaceholder")}</span>
+            <Input
+              value={customerEditName}
+              onChange={(event) => setCustomerEditName(event.target.value)}
+              autoComplete="name"
+            />
+          </label>
+          <label className="space-y-1.5 text-sm font-medium text-foreground">
+            <span>{t("sell.customerEmailPlaceholder")}</span>
+            <Input
+              value={customerEditEmail}
+              onChange={(event) => setCustomerEditEmail(event.target.value)}
+              autoComplete="email"
+              inputMode="email"
+            />
+          </label>
+          <label className="space-y-1.5 text-sm font-medium text-foreground">
+            <span>{t("sell.customerPhonePlaceholder")}</span>
+            <Input
+              value={customerEditPhone}
+              onChange={(event) => setCustomerEditPhone(event.target.value)}
+              autoComplete="tel"
+            />
+          </label>
+          <label className="space-y-1.5 text-sm font-medium text-foreground sm:col-span-2">
+            <span>{t("sell.customerAddressPlaceholder")}</span>
+            <Textarea
+              value={customerEditAddress}
+              onChange={(event) => setCustomerEditAddress(event.target.value)}
+              autoComplete="street-address"
+            />
+          </label>
+        </div>
+        <ModalFooter>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setCustomerEditOpen(false)}
+            disabled={updateCustomerProfileMutation.isLoading || updateCustomerMutation.isLoading}
+          >
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void handleUpdateSelectedCustomer()}
+            disabled={updateCustomerProfileMutation.isLoading || updateCustomerMutation.isLoading}
+          >
+            {updateCustomerProfileMutation.isLoading || updateCustomerMutation.isLoading ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <EditIcon className="h-4 w-4" aria-hidden />
+            )}
+            {tCommon("save")}
+          </Button>
+        </ModalFooter>
+      </div>
+    </Modal>
+  );
+
+  const ReceiptJournalModal = () => {
+    const journalItems = journalSalesQuery.data?.items ?? [];
+    const journalTotal = journalSalesQuery.data?.total ?? 0;
+    const pageSize = journalSalesQuery.data?.pageSize ?? 25;
+    const hasNextPage = journalPage * pageSize < journalTotal;
+
+    const renderJournalActions = (saleItem: (typeof journalItems)[number]) => {
+      const returnState = returnStateForSale(saleItem);
+      const actionBusy = journalReceiptAction?.saleId === saleItem.id;
+      return (
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => {
+              setJournalReturnSaleId(null);
+              setJournalDetailSaleId(saleItem.id);
+            }}
+          >
+            <ViewIcon className="h-3.5 w-3.5" aria-hidden />
+            {t("history.openDetails")}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 px-2"
+            onClick={() =>
+              void handleJournalReceiptPdf(
+                { id: saleItem.id, number: saleItem.number },
+                "print",
+                "precheck",
+              )
+            }
+            disabled={Boolean(journalReceiptAction)}
+          >
+            {actionBusy && journalReceiptAction?.mode === "print" ? (
+              <Spinner className="h-3.5 w-3.5" />
+            ) : (
+              <PrintIcon className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {t("history.printReceipt")}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => {
+              setJournalDetailSaleId(null);
+              setJournalReturnSaleId(saleItem.id);
+              setJournalReturnNotes("");
+            }}
+            disabled={saleItem.status !== CustomerOrderStatus.COMPLETED || returnState === "full"}
+          >
+            {t("history.return")}
+          </Button>
+        </div>
+      );
+    };
+
+    return (
+      <Modal
+        open={receiptJournalOpen}
+        onOpenChange={(open) => {
+          setReceiptJournalOpen(open);
+          if (!open) {
+            setJournalDetailSaleId(null);
+            setJournalReturnSaleId(null);
+          }
+        }}
+        title={t("sell.receiptJournal")}
+        subtitle={selectedRegisterLabel}
+        className="max-w-[1200px]"
+        bodyClassName="p-4 sm:p-6"
+        mobileSheet
+      >
+        <div className="space-y-4">
+          <div className="grid gap-2 md:grid-cols-4">
+            <Input
+              value={journalSearch}
+              onChange={(event) => setJournalSearch(event.target.value)}
+              placeholder={t("sell.receiptSearchPlaceholder")}
+            />
+            <Select
+              value={journalStatusFilter}
+              onValueChange={(value) =>
+                setJournalStatusFilter(value as CustomerOrderStatus | "ALL")
+              }
+            >
+              <SelectTrigger aria-label={t("history.saleStatus")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t("history.statusAll")}</SelectItem>
+                <SelectItem value={CustomerOrderStatus.COMPLETED}>
+                  {t("history.statusCompleted")}
+                </SelectItem>
+                <SelectItem value={CustomerOrderStatus.DRAFT}>
+                  {t("history.statusDraft")}
+                </SelectItem>
+                <SelectItem value={CustomerOrderStatus.CANCELED}>
+                  {t("history.statusCanceled")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={journalPaymentMethodFilter}
+              onValueChange={(value) =>
+                setJournalPaymentMethodFilter(value as PosPaymentMethod | "ALL")
+              }
+            >
+              <SelectTrigger aria-label={t("history.paymentMethod")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t("history.paymentMethodAll")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.CASH}>{t("payments.cash")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.CARD}>{t("payments.card")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.TRANSFER}>{t("payments.transfer")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.OTHER}>{t("payments.other")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={journalReturnStateFilter}
+              onValueChange={(value) =>
+                setJournalReturnStateFilter(value as "ALL" | "NONE" | "RETURNED")
+              }
+            >
+              <SelectTrigger aria-label={t("sell.returnStatus")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t("sell.returnStatusAll")}</SelectItem>
+                <SelectItem value="NONE">{t("sell.returnStateNone")}</SelectItem>
+                <SelectItem value="RETURNED">{t("sell.returnStatusReturned")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={journalCashierId || "ALL"} onValueChange={(value) => setJournalCashierId(value === "ALL" ? "" : value)}>
+              <SelectTrigger aria-label={t("sell.cashier")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t("sell.cashierAll")}</SelectItem>
+                {(journalCashiersQuery.data ?? []).map((cashier) => (
+                  <SelectItem key={cashier.id} value={cashier.id}>
+                    {cashier.name || cashier.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="date"
+              value={journalDateFrom}
+              onChange={(event) => setJournalDateFrom(event.target.value)}
+              aria-label={t("history.dateFrom")}
+            />
+            <Input
+              type="date"
+              value={journalDateTo}
+              onChange={(event) => setJournalDateTo(event.target.value)}
+              aria-label={t("history.dateTo")}
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-10 flex-1"
+                onClick={() => {
+                  const today = formatDateInput(new Date());
+                  setJournalDateFrom(today);
+                  setJournalDateTo(today);
+                }}
+              >
+                {t("history.today")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-10 flex-1"
+                onClick={() => {
+                  setJournalSearch("");
+                  setJournalDateFrom("");
+                  setJournalDateTo("");
+                  setJournalStatusFilter(CustomerOrderStatus.COMPLETED);
+                  setJournalPaymentMethodFilter("ALL");
+                  setJournalReturnStateFilter("ALL");
+                  setJournalCashierId("");
+                }}
+              >
+                {t("history.clearFilters")}
+              </Button>
+            </div>
+          </div>
+
+          {journalSalesQuery.isLoading ? (
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : journalSalesQuery.error ? (
+            <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+              {translateError(tErrors, journalSalesQuery.error)}
+            </div>
+          ) : journalItems.length ? (
+            <>
+              <TableContainer className="hidden md:block">
+                <Table className="min-w-[1040px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("sell.receiptNumber")}</TableHead>
+                      <TableHead>{t("history.dateTime")}</TableHead>
+                      <TableHead>{t("history.customer")}</TableHead>
+                      <TableHead>{t("history.store")}</TableHead>
+                      <TableHead>{t("sell.cashier")}</TableHead>
+                      <TableHead>{t("history.paymentMethod")}</TableHead>
+                      <TableHead>{t("sell.cartTotal")}</TableHead>
+                      <TableHead>{t("history.saleStatus")}</TableHead>
+                      <TableHead>{t("sell.returnStatus")}</TableHead>
+                      <TableHead sortable={false} className="text-right">
+                        {tCommon("actions")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {journalItems.map((saleItem) => {
+                      const saleCurrencySource = currencySourceWithFallback(
+                        saleItem,
+                        saleItem.store,
+                      );
+                      const returnState = returnStateForSale(saleItem);
+                      return (
+                        <TableRow key={saleItem.id}>
+                          <TableCell className="font-medium">{saleItem.number}</TableCell>
+                          <TableCell>{formatDateTime(saleItem.createdAt, locale)}</TableCell>
+                          <TableCell>
+                            {saleItem.customerName ||
+                              saleItem.customerPhone ||
+                              t("history.walkInCustomer")}
+                          </TableCell>
+                          <TableCell>{saleItem.store.name}</TableCell>
+                          <TableCell>
+                            {saleItem.cashier?.name ||
+                              saleItem.cashier?.email ||
+                              tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell>{salePaymentSummary(saleItem, saleCurrencySource)}</TableCell>
+                          <TableCell className="font-semibold">
+                            {formatKgsMoney(saleItem.totalKgs, locale, saleCurrencySource)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={saleStatusVariant(saleItem.status)}>
+                              {saleStatusLabel(saleItem.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={returnStateVariant(returnState)}>
+                              {returnStateLabel(returnState)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{renderJournalActions(saleItem)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <div className="grid gap-3 md:hidden">
+                {journalItems.map((saleItem) => {
+                  const saleCurrencySource = currencySourceWithFallback(saleItem, saleItem.store);
+                  const returnState = returnStateForSale(saleItem);
+                  return (
+                    <article key={saleItem.id} className="rounded-md border border-border bg-card p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground">{saleItem.number}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateTime(saleItem.createdAt, locale)}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-sm font-semibold">
+                          {formatKgsMoney(saleItem.totalKgs, locale, saleCurrencySource)}
+                        </p>
+                      </div>
+                      <dl className="mt-3 grid gap-2 text-sm">
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-muted-foreground">{t("history.customer")}</dt>
+                          <dd className="text-right">
+                            {saleItem.customerName ||
+                              saleItem.customerPhone ||
+                              t("history.walkInCustomer")}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-muted-foreground">{t("sell.cashier")}</dt>
+                          <dd className="text-right">
+                            {saleItem.cashier?.name ||
+                              saleItem.cashier?.email ||
+                              tCommon("notAvailable")}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-muted-foreground">{t("history.paymentMethod")}</dt>
+                          <dd className="text-right">
+                            {salePaymentSummary(saleItem, saleCurrencySource)}
+                          </dd>
+                        </div>
+                      </dl>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Badge variant={saleStatusVariant(saleItem.status)}>
+                          {saleStatusLabel(saleItem.status)}
+                        </Badge>
+                        <Badge variant={returnStateVariant(returnState)}>
+                          {returnStateLabel(returnState)}
+                        </Badge>
+                      </div>
+                      <div className="mt-3">{renderJournalActions(saleItem)}</div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="grid min-h-40 place-items-center rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              {t("history.empty")}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 border-t border-border pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>{t("sell.receiptJournalCount", { count: journalTotal })}</span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9"
+                onClick={() => setJournalPage((current) => Math.max(1, current - 1))}
+                disabled={journalPage <= 1 || journalSalesQuery.isFetching}
+              >
+                {tCommon("back")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-9"
+                onClick={() => setJournalPage((current) => current + 1)}
+                disabled={!hasNextPage || journalSalesQuery.isFetching}
+              >
+                {t("sell.nextPage")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    );
+  };
+
+  const JournalSaleDetailModal = () => (
+    <Modal
+      open={Boolean(journalDetailSaleId && !journalReturnSaleId)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setJournalDetailSaleId(null);
+        }
+      }}
+      title={t("history.detailsTitle")}
+      subtitle={journalSelectedSale?.number ?? ""}
+      className="max-w-3xl"
+      mobileSheet
+    >
+      {journalSaleDetailQuery.isLoading ? (
+        <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4" />
+          {tCommon("loading")}
+        </div>
+      ) : journalSaleDetailQuery.error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+          {translateError(tErrors, journalSaleDetailQuery.error)}
+        </div>
+      ) : journalSelectedSale ? (
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs uppercase text-muted-foreground">{t("history.customer")}</p>
+              <p className="mt-1 font-medium">
+                {journalSelectedSale.customerName ||
+                  journalSelectedSale.customerPhone ||
+                  t("history.walkInCustomer")}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {[journalSelectedSale.customerPhone, journalSelectedSale.customerEmail]
+                  .filter(Boolean)
+                  .join(" · ") || tCommon("notAvailable")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-xs uppercase text-muted-foreground">{t("history.store")}</p>
+              <p className="mt-1 font-medium">{journalSelectedSale.store.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {formatDateTime(journalSelectedSale.createdAt, locale)}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">{t("history.itemsTitle")}</h3>
+            <div className="mt-2 divide-y divide-border rounded-md border border-border">
+              {journalSelectedSale.lines.map((line) => (
+                <div key={line.id} className="grid gap-2 p-3 sm:grid-cols-[1fr_auto]">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{line.product.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {line.qty} x{" "}
+                      {formatKgsMoney(
+                        line.unitPriceKgs,
+                        locale,
+                        journalSelectedSaleCurrencySource,
+                      )}
+                    </p>
+                  </div>
+                  <p className="font-semibold">
+                    {formatKgsMoney(line.lineTotalKgs, locale, journalSelectedSaleCurrencySource)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border border-border p-3">
+              <p className="text-sm font-semibold text-foreground">{t("history.paymentsTitle")}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {salePaymentSummary(journalSelectedSale, journalSelectedSaleCurrencySource)}
+              </p>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <p className="text-sm font-semibold text-foreground">{t("history.totalsTitle")}</p>
+              <div className="mt-2 space-y-1 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">{t("sell.subtotal")}</span>
+                  <span>
+                    {formatKgsMoney(
+                      journalSelectedSale.subtotalKgs,
+                      locale,
+                      journalSelectedSaleCurrencySource,
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">{t("sell.discount")}</span>
+                  <span>
+                    {formatKgsMoney(
+                      journalSelectedSale.discountKgs,
+                      locale,
+                      journalSelectedSaleCurrencySource,
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3 font-semibold">
+                  <span>{t("sell.cartTotal")}</span>
+                  <span>
+                    {formatKgsMoney(
+                      journalSelectedSale.totalKgs,
+                      locale,
+                      journalSelectedSaleCurrencySource,
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                void handleJournalReceiptPdf(
+                  { id: journalSelectedSale.id, number: journalSelectedSale.number },
+                  "download",
+                  "precheck",
+                )
+              }
+              disabled={Boolean(journalReceiptAction)}
+            >
+              <DownloadIcon className="h-4 w-4" aria-hidden />
+              {t("history.downloadReceipt")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                void handleJournalReceiptPdf(
+                  { id: journalSelectedSale.id, number: journalSelectedSale.number },
+                  "print",
+                  "precheck",
+                )
+              }
+              disabled={Boolean(journalReceiptAction)}
+            >
+              <PrintIcon className="h-4 w-4" aria-hidden />
+              {t("history.printReceipt")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setJournalDetailSaleId(null);
+                setJournalReturnSaleId(journalSelectedSale.id);
+                setJournalReturnNotes("");
+              }}
+              disabled={
+                journalSelectedSale.status !== CustomerOrderStatus.COMPLETED ||
+                returnStateForSale({
+                  totalKgs: journalSelectedSale.totalKgs,
+                  returnedTotalKgs: journalSelectedSale.saleReturns.reduce(
+                    (sum, saleReturn) => sum + saleReturn.totalKgs,
+                    0,
+                  ),
+                }) === "full"
+              }
+            >
+              {t("history.return")}
+            </Button>
+          </ModalFooter>
+        </div>
+      ) : null}
+    </Modal>
+  );
+
+  const JournalReturnModal = () => (
+    <Modal
+      open={Boolean(journalReturnSaleId)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setJournalReturnSaleId(null);
+          setJournalReturnNotes("");
+        }
+      }}
+      title={t("history.returnDialogTitle")}
+      subtitle={
+        journalSelectedSale
+          ? t("history.returnDialogDescription", { number: journalSelectedSale.number })
+          : ""
+      }
+      className="max-w-2xl"
+      mobileSheet
+    >
+      {journalSaleDetailQuery.isLoading || journalSelectedSale?.id !== journalReturnSaleId ? (
+        <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4" />
+          {tCommon("loading")}
+        </div>
+      ) : journalSaleDetailQuery.error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+          {translateError(tErrors, journalSaleDetailQuery.error)}
+        </div>
+      ) : journalSelectedSale ? (
+        <div className="space-y-4">
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-10"
+            onClick={fillFullJournalReturn}
+            disabled={isJournalReturnBusy}
+          >
+            {t("sell.fullReturn")}
+          </Button>
+
+          <div className="space-y-3">
+            {journalSelectedSale.lines.map((line) => {
+              const availableQty = Math.max(
+                0,
+                line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0),
+              );
+              return (
+                <div key={line.id} className="rounded-md border border-border bg-card p-3">
+                  <p className="text-sm font-medium text-foreground">{line.product.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {line.qty} x{" "}
+                    {formatKgsMoney(
+                      line.unitPriceKgs,
+                      locale,
+                      journalSelectedSaleCurrencySource,
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("history.availableQty")}: {availableQty}
+                  </p>
+                  <Input
+                    value={journalReturnQtyByLine[line.id] ?? "0"}
+                    onChange={(event) => {
+                      const raw = event.target.value.replace(/[^\d]/g, "");
+                      const parsed = raw ? Math.trunc(Number(raw)) : 0;
+                      setJournalReturnQtyByLine((current) => ({
+                        ...current,
+                        [line.id]: String(Math.min(parsed, availableQty)),
+                      }));
+                    }}
+                    inputMode="numeric"
+                    className="mt-2"
+                    disabled={availableQty <= 0 || isJournalReturnBusy}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <label className="space-y-1.5 text-sm font-medium text-foreground">
+            <span>{t("sell.returnReason")}</span>
+            <Textarea
+              value={journalReturnNotes}
+              onChange={(event) => setJournalReturnNotes(event.target.value)}
+              placeholder={t("sell.returnReasonPlaceholder")}
+              disabled={isJournalReturnBusy}
+            />
+          </label>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">{t("history.refundMethod")}</p>
+            <Select
+              value={journalRefundMethod}
+              onValueChange={(value) => setJournalRefundMethod(value as PosPaymentMethod)}
+              disabled={isJournalReturnBusy}
+            >
+              <SelectTrigger aria-label={t("history.refundMethod")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PosPaymentMethod.CASH}>{t("payments.cash")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.CARD}>{t("payments.card")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.TRANSFER}>{t("payments.transfer")}</SelectItem>
+                <SelectItem value={PosPaymentMethod.OTHER}>{t("payments.other")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p className="text-sm font-semibold text-foreground">
+            {t("history.returnTotal")}:{" "}
+            {formatKgsMoney(journalReturnTotal, locale, journalSelectedSaleCurrencySource)}
+          </p>
+
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setJournalReturnSaleId(null);
+                setJournalReturnNotes("");
+              }}
+              disabled={isJournalReturnBusy}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleStartJournalReturn()}
+              disabled={isJournalReturnBusy}
+            >
+              {isJournalReturnBusy ? <Spinner className="h-4 w-4" /> : null}
+              {t("history.completeReturn")}
+            </Button>
+          </ModalFooter>
+        </div>
+      ) : null}
+    </Modal>
+  );
+
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
@@ -2258,6 +3537,24 @@ const PosSellPage = () => {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 shrink-0"
+                  onClick={openCustomerEdit}
+                  disabled={!currentCustomer.id || updateCustomerProfileMutation.isLoading}
+                  aria-label={t("sell.editCustomer")}
+                  title={t("sell.editCustomer")}
+                >
+                  {updateCustomerProfileMutation.isLoading ? (
+                    <Spinner className="h-3.5 w-3.5" />
+                  ) : (
+                    <EditIcon className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                </Button>
+              ) : null}
+              {currentCustomer ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
                   onClick={() => void handleClearCustomer()}
                   disabled={updateCustomerMutation.isLoading}
                   aria-label={t("sell.clearCustomer")}
@@ -2306,15 +3603,21 @@ const PosSellPage = () => {
                   {customerCreateOpen ? (
                     <CustomerCreatePanel
                       name={newCustomerName}
+                      email={newCustomerEmail}
                       phone={newCustomerPhone}
+                      address={newCustomerAddress}
                       namePlaceholder={t("sell.customerNamePlaceholder")}
+                      emailPlaceholder={t("sell.customerEmailPlaceholder")}
                       phonePlaceholder={t("sell.customerPhonePlaceholder")}
-                      createLabel={t("sell.createCustomer")}
+                      addressPlaceholder={t("sell.customerAddressPlaceholder")}
+                      submitLabel={t("sell.createCustomer")}
                       isLoading={createCustomerMutation.isLoading}
                       disabled={createCustomerMutation.isLoading || !activeStoreId}
                       onNameChange={setNewCustomerName}
+                      onEmailChange={setNewCustomerEmail}
                       onPhoneChange={setNewCustomerPhone}
-                      onCreate={() => void handleCreateCustomer()}
+                      onAddressChange={setNewCustomerAddress}
+                      onSubmit={() => void handleCreateCustomer()}
                     />
                   ) : null}
 
@@ -2352,6 +3655,7 @@ const PosSellPage = () => {
                               name: customer.name,
                               email: customer.email,
                               phone: customer.phone,
+                              address: customer.address,
                             });
                           }}
                           disabled={updateCustomerMutation.isLoading}
@@ -2368,6 +3672,16 @@ const PosSellPage = () => {
                 </PopoverSurface>
               ) : null}
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8 shrink-0 gap-1.5 px-2 text-xs"
+              onClick={() => setReceiptJournalOpen(true)}
+              disabled={!journalStoreId}
+            >
+              <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden xl:inline">{t("sell.receiptJournal")}</span>
+            </Button>
           </div>
         </div>
       </header>
@@ -3066,18 +4380,22 @@ const PosSellPage = () => {
                                 </Select>
                                 <Input
                                   ref={index === 0 ? firstPaymentAmountRef : undefined}
-                                  value={payment.amount}
-                                  onChange={(event) =>
+                                  value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
+                                  onChange={(event) => {
+                                    if (payments.length === 1) {
+                                      return;
+                                    }
                                     setPayments((current) =>
                                       current.map((item, itemIndex) =>
                                         itemIndex === index
                                           ? { ...item, amount: event.target.value }
                                           : item,
                                       ),
-                                    )
-                                  }
+                                    );
+                                  }}
                                   placeholder={t("sell.paymentAmount")}
                                   inputMode="decimal"
+                                  readOnly={payments.length === 1}
                                   className="h-8 px-2 text-sm"
                                 />
                                 <Button
@@ -3133,6 +4451,10 @@ const PosSellPage = () => {
           </aside>
         </main>
       )}
+      {CustomerEditModal()}
+      {ReceiptJournalModal()}
+      {JournalSaleDetailModal()}
+      {JournalReturnModal()}
     </div>
   );
 
@@ -3212,15 +4534,21 @@ const PosSellPage = () => {
           {customerCreateOpen ? (
             <CustomerCreatePanel
               name={newCustomerName}
+              email={newCustomerEmail}
               phone={newCustomerPhone}
+              address={newCustomerAddress}
               namePlaceholder={t("sell.customerNamePlaceholder")}
+              emailPlaceholder={t("sell.customerEmailPlaceholder")}
               phonePlaceholder={t("sell.customerPhonePlaceholder")}
-              createLabel={t("sell.createCustomer")}
+              addressPlaceholder={t("sell.customerAddressPlaceholder")}
+              submitLabel={t("sell.createCustomer")}
               isLoading={createCustomerMutation.isLoading}
               disabled={createCustomerMutation.isLoading || !activeStoreId}
               onNameChange={setNewCustomerName}
+              onEmailChange={setNewCustomerEmail}
               onPhoneChange={setNewCustomerPhone}
-              onCreate={() => void handleCreateCustomer()}
+              onAddressChange={setNewCustomerAddress}
+              onSubmit={() => void handleCreateCustomer()}
             />
           ) : null}
 
@@ -3258,6 +4586,7 @@ const PosSellPage = () => {
                       name: customer.name,
                       email: customer.email,
                       phone: customer.phone,
+                      address: customer.address,
                     });
                   }}
                   disabled={updateCustomerMutation.isLoading}
@@ -3308,6 +4637,19 @@ const PosSellPage = () => {
               <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
                 <BackIcon className="h-4 w-4" aria-hidden />
               </Link>
+            </Button>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 flex-1 justify-start"
+              onClick={() => setReceiptJournalOpen(true)}
+              disabled={!journalStoreId}
+            >
+              <SalesOrdersIcon className="h-4 w-4" aria-hidden />
+              {t("sell.receiptJournal")}
             </Button>
           </div>
 
@@ -3652,6 +4994,23 @@ const PosSellPage = () => {
                             </span>
                           ) : null}
                         </button>
+                        {currentCustomer ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            className="h-11 w-11 shrink-0"
+                            onClick={openCustomerEdit}
+                            disabled={!currentCustomer.id || updateCustomerProfileMutation.isLoading}
+                            aria-label={t("sell.editCustomer")}
+                          >
+                            {updateCustomerProfileMutation.isLoading ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <EditIcon className="h-4 w-4" aria-hidden />
+                            )}
+                          </Button>
+                        ) : null}
                         {currentCustomer ? (
                           <Button
                             type="button"
@@ -4033,18 +5392,22 @@ const PosSellPage = () => {
                                   </Select>
                                   <Input
                                     ref={index === 0 ? firstPaymentAmountRef : undefined}
-                                    value={payment.amount}
-                                    onChange={(event) =>
+                                    value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
+                                    onChange={(event) => {
+                                      if (payments.length === 1) {
+                                        return;
+                                      }
                                       setPayments((current) =>
                                         current.map((item, itemIndex) =>
                                           itemIndex === index
                                             ? { ...item, amount: event.target.value }
                                             : item,
                                         ),
-                                      )
-                                    }
+                                      );
+                                    }}
                                     placeholder={t("sell.paymentAmount")}
                                     inputMode="decimal"
+                                    readOnly={payments.length === 1}
                                     className="h-11"
                                   />
                                   <Button
@@ -4106,6 +5469,10 @@ const PosSellPage = () => {
         ) : null}
 
         {MobileCustomerSheet()}
+        {CustomerEditModal()}
+        {ReceiptJournalModal()}
+        {JournalSaleDetailModal()}
+        {JournalReturnModal()}
       </div>
     );
   };

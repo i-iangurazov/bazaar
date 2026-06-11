@@ -302,6 +302,68 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("completes a transfer sale after quantity and price edits", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-transfer-edits",
+      idempotencyKey: "pos-seed-transfer-edits-1",
+      requestId: "pos-seed-transfer-edits-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-transfer-edits-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    const line = await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 1 });
+    await caller.pos.sales.updateLine({ lineId: line.id, qty: 3, unitPriceKgs: 125 });
+
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-transfer-edits-1",
+      payments: [{ method: "TRANSFER", amountKgs: 375 }],
+    });
+
+    const dbSale = await prisma.customerOrder.findUnique({ where: { id: sale.id } });
+    const payments = await prisma.salePayment.findMany({ where: { customerOrderId: sale.id } });
+
+    expect(dbSale?.status).toBe("COMPLETED");
+    expect(Number(dbSale?.totalKgs ?? 0)).toBe(375);
+    expect(payments).toHaveLength(1);
+    expect(payments[0]?.method).toBe("TRANSFER");
+    expect(Number(payments[0]?.amountKgs ?? 0)).toBe(375);
+  });
+
   it("completes a zero-total POS sale without requiring a payment row", async () => {
     const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
 

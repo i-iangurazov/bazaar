@@ -3,6 +3,7 @@ import {
   CustomerOrderStatus,
   FiscalReceiptStatus,
   PosPaymentMethod,
+  Role,
 } from "@prisma/client";
 import { z } from "zod";
 
@@ -52,7 +53,12 @@ import {
   updatePosSaleLine,
   updateSaleReturnLine,
 } from "@/server/services/pos";
-import { createCustomer, listCustomers } from "@/server/services/customers";
+import { createCustomer, listCustomers, updateCustomer } from "@/server/services/customers";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
 import {
   createConnectorPairingCode,
   listFiscalReceipts,
@@ -379,6 +385,96 @@ export const posRouter = router({
           throw toTRPCError(error);
         }
       }),
+    update: cashierProcedure
+      .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "pos-customer-update" }))
+      .input(
+        z.object({
+          customerId: z.string().min(1),
+          name: z.string().trim().min(1).max(180),
+          email: z.string().trim().max(254).optional().nullable(),
+          phone: z.string().trim().max(80).optional().nullable(),
+          address: z.string().trim().max(500).optional().nullable(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await updateCustomer({
+            user: ctx.user,
+            actorId: ctx.user.id,
+            requestId: ctx.requestId,
+            ...input,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+  }),
+
+  cashiers: router({
+    list: protectedProcedure
+      .input(z.object({ storeId: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        try {
+          const scopedStoreIds =
+            !input?.storeId && !userHasAllStoreAccess(ctx.user)
+              ? await resolveAccessibleStoreIds(ctx.prisma, ctx.user)
+              : null;
+          if (scopedStoreIds && !scopedStoreIds.length) {
+            return [];
+          }
+          if (input?.storeId) {
+            await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+          }
+
+          return await ctx.prisma.user.findMany({
+            where: {
+              organizationId: ctx.user.organizationId,
+              isActive: true,
+              role: { in: [Role.ADMIN, Role.MANAGER, Role.STAFF, Role.CASHIER] },
+              ...(input?.storeId
+                ? {
+                    OR: [
+                      { role: Role.ADMIN },
+                      { isOrgOwner: true },
+                      {
+                        storeAccesses: {
+                          some: {
+                            organizationId: ctx.user.organizationId,
+                            storeId: input.storeId,
+                          },
+                        },
+                      },
+                    ],
+                  }
+                : scopedStoreIds
+                  ? {
+                      OR: [
+                        { role: Role.ADMIN },
+                        { isOrgOwner: true },
+                        {
+                          storeAccesses: {
+                            some: {
+                              organizationId: ctx.user.organizationId,
+                              storeId: { in: scopedStoreIds },
+                            },
+                          },
+                        },
+                      ],
+                    }
+                : {}),
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+            orderBy: [{ name: "asc" }, { email: "asc" }],
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
   }),
 
   sales: router({
@@ -390,6 +486,9 @@ export const posRouter = router({
             registerId: z.string().optional(),
             search: z.string().optional(),
             statuses: z.array(z.nativeEnum(CustomerOrderStatus)).optional(),
+            cashierId: z.string().optional(),
+            paymentMethod: z.nativeEnum(PosPaymentMethod).optional(),
+            returnState: z.enum(["none", "returned"]).optional(),
             dateFrom: z.coerce.date().optional(),
             dateTo: z.coerce.date().optional(),
             page: z.number().int().min(1).optional(),
@@ -405,10 +504,14 @@ export const posRouter = router({
             registerId: input?.registerId,
             search: input?.search?.trim() || undefined,
             statuses: input?.statuses,
+            cashierId: input?.cashierId,
+            paymentMethod: input?.paymentMethod,
+            returnState: input?.returnState,
             dateFrom: input?.dateFrom,
             dateTo: input?.dateTo,
             page: input?.page ?? 1,
             pageSize: input?.pageSize ?? 25,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -422,6 +525,7 @@ export const posRouter = router({
           return await getPosSale({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -451,6 +555,7 @@ export const posRouter = router({
           customerName: z.string().max(160).optional().nullable(),
           customerEmail: z.string().max(254).optional().nullable(),
           customerPhone: z.string().max(64).optional().nullable(),
+          customerAddress: z.string().max(512).optional().nullable(),
           notes: z.string().max(2_000).optional().nullable(),
           lines: z
             .array(
@@ -472,6 +577,7 @@ export const posRouter = router({
             customerName: input.customerName,
             customerEmail: input.customerEmail,
             customerPhone: input.customerPhone,
+            customerAddress: input.customerAddress,
             notes: input.notes,
             actorId: ctx.user.id,
             user: ctx.user,

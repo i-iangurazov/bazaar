@@ -115,6 +115,7 @@ const resolvePosCustomerSelectionTx = async (
     customerName?: string | null;
     customerEmail?: string | null;
     customerPhone?: string | null;
+    customerAddress?: string | null;
   },
 ) => {
   if (input.customerId) {
@@ -128,6 +129,7 @@ const resolvePosCustomerSelectionTx = async (
         name: true,
         email: true,
         phone: true,
+        address: true,
       },
     });
     if (!customer) {
@@ -137,6 +139,7 @@ const resolvePosCustomerSelectionTx = async (
       customerName: customer.name,
       customerEmail: customer.email,
       customerPhone: customer.phone,
+      customerAddress: customer.address,
     };
   }
 
@@ -144,6 +147,7 @@ const resolvePosCustomerSelectionTx = async (
     customerName: input.customerName?.trim() || null,
     customerEmail: input.customerEmail?.trim().toLowerCase() || null,
     customerPhone: input.customerPhone?.trim() || null,
+    customerAddress: input.customerAddress?.trim() || null,
   };
 };
 
@@ -1370,6 +1374,7 @@ export const createPosSaleDraft = async (input: {
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  customerAddress?: string | null;
   notes?: string | null;
   actorId: string;
   user?: StoreAccessUser;
@@ -1389,7 +1394,8 @@ export const createPosSaleDraft = async (input: {
         input.customerId !== undefined ||
         input.customerName !== undefined ||
         input.customerEmail !== undefined ||
-        input.customerPhone !== undefined;
+        input.customerPhone !== undefined ||
+        input.customerAddress !== undefined;
       const selectedCustomer = hasCustomerInput
         ? await resolvePosCustomerSelectionTx(tx, {
             organizationId: input.organizationId,
@@ -1398,6 +1404,7 @@ export const createPosSaleDraft = async (input: {
             customerName: input.customerName,
             customerEmail: input.customerEmail,
             customerPhone: input.customerPhone,
+            customerAddress: input.customerAddress,
           })
         : null;
 
@@ -1420,6 +1427,7 @@ export const createPosSaleDraft = async (input: {
           customerName: true,
           customerEmail: true,
           customerPhone: true,
+          customerAddress: true,
           shift: {
             select: {
               status: true,
@@ -1446,6 +1454,7 @@ export const createPosSaleDraft = async (input: {
                 customerName: selectedCustomer.customerName,
                 customerEmail: selectedCustomer.customerEmail,
                 customerPhone: selectedCustomer.customerPhone,
+                customerAddress: selectedCustomer.customerAddress,
                 updatedById: input.actorId,
               },
               select: {
@@ -1458,6 +1467,7 @@ export const createPosSaleDraft = async (input: {
                 customerName: true,
                 customerEmail: true,
                 customerPhone: true,
+                customerAddress: true,
               },
             });
             return updated;
@@ -1472,6 +1482,7 @@ export const createPosSaleDraft = async (input: {
             customerName: existingDraft.customerName,
             customerEmail: existingDraft.customerEmail,
             customerPhone: existingDraft.customerPhone,
+            customerAddress: existingDraft.customerAddress,
           };
         }
       }
@@ -1492,6 +1503,7 @@ export const createPosSaleDraft = async (input: {
           customerName: selectedCustomer?.customerName ?? null,
           customerEmail: selectedCustomer?.customerEmail ?? null,
           customerPhone: selectedCustomer?.customerPhone ?? null,
+          customerAddress: selectedCustomer?.customerAddress ?? null,
           notes: input.notes ?? null,
           ...transactionCurrency,
           createdById: input.actorId,
@@ -1593,6 +1605,7 @@ export const createPosSaleDraft = async (input: {
           customerName: true,
           customerEmail: true,
           customerPhone: true,
+          customerAddress: true,
         },
       });
       if (concurrentDraft) {
@@ -1645,6 +1658,7 @@ export const getActivePosSaleDraft = async (input: {
       customerName: true,
       customerEmail: true,
       customerPhone: true,
+      customerAddress: true,
     },
   });
   return draft;
@@ -1672,6 +1686,7 @@ export const updatePosSaleCustomer = async (input: {
         customerName: true,
         customerEmail: true,
         customerPhone: true,
+        customerAddress: true,
       },
     });
     if (!sale) {
@@ -1694,6 +1709,7 @@ export const updatePosSaleCustomer = async (input: {
           customerName: null,
           customerEmail: null,
           customerPhone: null,
+          customerAddress: null,
         };
 
     const updated = await tx.customerOrder.update({
@@ -1702,6 +1718,7 @@ export const updatePosSaleCustomer = async (input: {
         customerName: selectedCustomer.customerName,
         customerEmail: selectedCustomer.customerEmail,
         customerPhone: selectedCustomer.customerPhone,
+        customerAddress: selectedCustomer.customerAddress,
         updatedById: input.actorId,
       },
       select: {
@@ -1709,6 +1726,7 @@ export const updatePosSaleCustomer = async (input: {
         customerName: true,
         customerEmail: true,
         customerPhone: true,
+        customerAddress: true,
       },
     });
 
@@ -1722,11 +1740,13 @@ export const updatePosSaleCustomer = async (input: {
         customerName: sale.customerName,
         customerEmail: sale.customerEmail,
         customerPhone: sale.customerPhone,
+        customerAddress: sale.customerAddress,
       }),
       after: toJson({
         customerName: updated.customerName,
         customerEmail: updated.customerEmail,
         customerPhone: updated.customerPhone,
+        customerAddress: updated.customerAddress,
       }),
       requestId: input.requestId,
     });
@@ -1798,17 +1818,51 @@ export const listPosSales = async (input: {
   registerId?: string;
   search?: string;
   statuses?: CustomerOrderStatus[];
+  cashierId?: string;
+  paymentMethod?: PosPaymentMethod;
+  returnState?: "none" | "returned";
   dateFrom?: Date;
   dateTo?: Date;
   page: number;
   pageSize: number;
+  user?: StoreAccessUser;
 }) => {
+  let accessibleStoreIds: string[] | null = null;
+  if (input.user) {
+    if (input.storeId) {
+      await assertUserCanAccessStore(prisma, input.user, input.storeId);
+    } else {
+      accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
+      if (!accessibleStoreIds.length) {
+        return {
+          items: [],
+          total: 0,
+          page: input.page,
+          pageSize: input.pageSize,
+        };
+      }
+    }
+  }
+
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
     isPosSale: true,
-    ...(input.storeId ? { storeId: input.storeId } : {}),
+    ...(input.storeId
+      ? { storeId: input.storeId }
+      : accessibleStoreIds
+        ? { storeId: { in: accessibleStoreIds } }
+        : {}),
     ...(input.registerId ? { registerId: input.registerId } : {}),
+    ...(input.cashierId ? { createdById: input.cashierId } : {}),
     ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
+    ...(input.paymentMethod
+      ? { payments: { some: { method: input.paymentMethod, isRefund: false } } }
+      : {}),
+    ...(input.returnState === "none"
+      ? { saleReturns: { none: { status: PosReturnStatus.COMPLETED } } }
+      : input.returnState === "returned"
+        ? { saleReturns: { some: { status: PosReturnStatus.COMPLETED } } }
+        : {}),
     ...(input.search
       ? {
           OR: [
@@ -1843,6 +1897,7 @@ export const listPosSales = async (input: {
           },
         },
         register: { select: { id: true, name: true, code: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
         payments: {
           select: {
             id: true,
@@ -1876,6 +1931,7 @@ export const listPosSales = async (input: {
         item.saleReturns.reduce((sum, row) => sum + toMoney(row.totalKgs), 0),
       ),
       ...item,
+      cashier: item.createdBy,
       subtotalKgs: toMoney(item.subtotalKgs),
       discountKgs: toMoney(item.discountKgs),
       totalKgs: toMoney(item.totalKgs),
@@ -2112,7 +2168,11 @@ export const settlePosDebt = async (input: {
   return result;
 };
 
-export const getPosSale = async (input: { organizationId: string; saleId: string }) => {
+export const getPosSale = async (input: {
+  organizationId: string;
+  saleId: string;
+  user?: StoreAccessUser;
+}) => {
   const sale = await prisma.customerOrder.findFirst({
     where: {
       id: input.saleId,
@@ -2136,6 +2196,7 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
         },
       },
       register: { select: { id: true, name: true, code: true } },
+      createdBy: { select: { id: true, name: true, email: true } },
       shift: {
         select: {
           id: true,
@@ -2202,9 +2263,13 @@ export const getPosSale = async (input: { organizationId: string; saleId: string
   if (!sale) {
     return null;
   }
+  if (input.user) {
+    await assertUserCanAccessStore(prisma, input.user, sale.storeId);
+  }
 
   return {
     ...sale,
+    cashier: sale.createdBy,
     subtotalKgs: toMoney(sale.subtotalKgs),
     discountKgs: toMoney(sale.discountKgs),
     totalKgs: toMoney(sale.totalKgs),
