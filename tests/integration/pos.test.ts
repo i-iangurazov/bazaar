@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CashDrawerMovementType, StockMovementType } from "@prisma/client";
+import { CashDrawerMovementType, PosPaymentMethod, StockMovementType } from "@prisma/client";
 
+import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
 import { prisma } from "@/server/db/prisma";
 import { adjustStock } from "@/server/services/inventory";
 import {
@@ -552,6 +553,180 @@ describeDb("pos", () => {
         0,
       );
       expect(paymentTotal).toBe(expected.totalKgs);
+    });
+  });
+
+  it("regresses repeated multi-product transfer sales without stale payment mismatch", async () => {
+    const { org, store, supplier, product, cashierUser, adminUser, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "POS-MISMATCH-2",
+        name: "POS Mismatch Product 2",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 250,
+      },
+    });
+    const thirdProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "POS-MISMATCH-3",
+        name: "POS Mismatch Product 3",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 75,
+      },
+    });
+    await prisma.storeProduct.createMany({
+      data: [secondProduct, thirdProduct].map((item) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        productId: item.id,
+        isActive: true,
+      })),
+    });
+
+    for (const [index, productId] of [product.id, secondProduct.id, thirdProduct.id].entries()) {
+      await adjustStock({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        storeId: store.id,
+        productId,
+        qtyDelta: 500,
+        reason: "seed-pos-payment-mismatch-regression",
+        idempotencyKey: `pos-payment-mismatch-regression-${index + 1}`,
+        requestId: `pos-payment-mismatch-regression-${index + 1}`,
+      });
+    }
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-payment-mismatch-regression-1",
+    });
+
+    const productIds = [product.id, secondProduct.id, thirdProduct.id];
+    const expectedTotals: number[] = [];
+
+    for (let index = 0; index < 10; index += 1) {
+      const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+      const [firstLine, secondLine, thirdLine] = await Promise.all(
+        productIds.map((productId) =>
+          caller.pos.sales.addLine({
+            saleId: sale.id,
+            productId,
+            qty: 1,
+          }),
+        ),
+      );
+
+      await caller.pos.sales.updateLine({
+        lineId: firstLine.id,
+        qty: 2 + (index % 2),
+        unitPriceKgs: 100,
+      });
+      await caller.pos.sales.updateLine({
+        lineId: secondLine.id,
+        qty: 1,
+        unitPriceKgs: 123.45 + index,
+      });
+      await caller.pos.sales.updateLine({
+        lineId: thirdLine.id,
+        qty: 3,
+        unitPriceKgs: 42.42,
+      });
+
+      const currentSale = await prisma.customerOrder.findUniqueOrThrow({
+        where: { id: sale.id },
+        include: { lines: true },
+      });
+      const currentCartTotalKgs = Number(currentSale.totalKgs);
+      expectedTotals.push(currentCartTotalKgs);
+
+      const paymentPayload = buildPosPaymentSubmitPayload({
+        payments: [
+          {
+            method: PosPaymentMethod.TRANSFER,
+            amount: "1",
+            providerRef: "",
+          },
+        ],
+        cartTotalKgs: currentCartTotalKgs,
+        currencySource: null,
+        singlePaymentDisplayAmount: String(currentCartTotalKgs),
+      });
+
+      expect(currentSale.lines).toHaveLength(3);
+      expect(paymentPayload.status).toBe("ok");
+      expect(paymentPayload.payments).toEqual([
+        {
+          method: PosPaymentMethod.TRANSFER,
+          amountKgs: currentCartTotalKgs,
+          providerRef: null,
+        },
+      ]);
+      expect(paymentPayload.paymentTotalMinorUnits).toBe(paymentPayload.cartTotalMinorUnits);
+
+      await caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: `pos-payment-mismatch-regression-sale-${index + 1}`,
+        payments: paymentPayload.payments,
+      });
+
+      const activeDraft = await caller.pos.sales.activeDraft({ registerId: register.id });
+      expect(activeDraft).toBeNull();
+    }
+
+    const completedSales = await prisma.customerOrder.findMany({
+      where: {
+        organizationId: org.id,
+        registerId: register.id,
+        isPosSale: true,
+        status: "COMPLETED",
+      },
+      include: { payments: true, lines: true },
+      orderBy: { number: "asc" },
+    });
+
+    expect(completedSales).toHaveLength(10);
+    completedSales.forEach((sale, index) => {
+      const paymentTotal = sale.payments.reduce(
+        (sum, payment) => sum + Number(payment.amountKgs),
+        0,
+      );
+      expect(sale.lines).toHaveLength(3);
+      expect(sale.payments).toHaveLength(1);
+      expect(sale.payments[0]?.method).toBe(PosPaymentMethod.TRANSFER);
+      expect(paymentTotal).toBe(expectedTotals[index]);
+      expect(Number(sale.totalKgs)).toBe(expectedTotals[index]);
     });
   });
 
