@@ -580,6 +580,7 @@ const PosSellPage = () => {
   const lineSyncDraftsRef = useRef<Record<string, PendingLinePatch>>({});
   const lineSyncInFlightRef = useRef<Set<string>>(new Set());
   const lineSyncPendingRef = useRef<Set<string>>(new Set());
+  const cartSessionVersionRef = useRef(0);
   const visibleProductsRef = useRef<PosCatalogProduct[]>([]);
   const autoPrintedSaleIdRef = useRef<string | null>(null);
   const paymentsRef = useRef<PosPaymentDraft[]>(payments);
@@ -769,11 +770,24 @@ const PosSellPage = () => {
     [registerId, trpcUtils.pos.sales.activeDraft],
   );
 
+  const clearCartRuntimeSyncState = useCallback(() => {
+    cartSessionVersionRef.current += 1;
+    if (typeof window !== "undefined") {
+      Object.values(lineSyncTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    }
+    lineSyncTimersRef.current = {};
+    lineSyncDraftsRef.current = {};
+    lineSyncInFlightRef.current.clear();
+    lineSyncPendingRef.current.clear();
+    pendingAddProductIdsRef.current.clear();
+    pendingCartSyncPromisesRef.current.clear();
+    pendingCartMutationCountRef.current = 0;
+    draftCreationRef.current = null;
+    optimisticLineServerIdsRef.current = {};
+    removedOptimisticLineIdsRef.current.clear();
+  }, []);
+
   const createDraftMutation = trpc.pos.sales.createDraft.useMutation({
-    onSuccess: (sale) => {
-      setSaleId(sale.id);
-      setPayments([createDefaultPosPaymentDraft()]);
-    },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -834,12 +848,12 @@ const PosSellPage = () => {
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
       setOptimisticSaleLines(null);
-      optimisticLineServerIdsRef.current = {};
-      removedOptimisticLineIdsRef.current.clear();
-      lineSyncDraftsRef.current = {};
+      clearCartRuntimeSyncState();
       setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
-      await Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]);
+      void Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]).catch(
+        () => undefined,
+      );
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -955,16 +969,14 @@ const PosSellPage = () => {
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
       setOptimisticSaleLines(null);
-      optimisticLineServerIdsRef.current = {};
-      removedOptimisticLineIdsRef.current.clear();
-      lineSyncDraftsRef.current = {};
+      clearCartRuntimeSyncState();
       setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
-      await Promise.all([
+      void Promise.all([
         shiftQuery.refetch(),
         activeDraftQuery.refetch(),
         trpcUtils.pos.sales.list.invalidate(),
-      ]);
+      ]).catch(() => undefined);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1089,16 +1101,14 @@ const PosSellPage = () => {
     setJournalReturnQtyByLine({});
     setJournalReturnNotes("");
     setOptimisticSaleLines(null);
-    optimisticLineServerIdsRef.current = {};
-    removedOptimisticLineIdsRef.current.clear();
-    lineSyncDraftsRef.current = {};
+    clearCartRuntimeSyncState();
     setLineInputDrafts({});
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
     setMobileCheckoutOpen(false);
     autoPrintedSaleIdRef.current = null;
-  }, [registerId, setOptimisticSaleLines, setPayments]);
+  }, [clearCartRuntimeSyncState, registerId, setOptimisticSaleLines, setPayments]);
 
   useEffect(() => {
     if (!saleId) {
@@ -1111,6 +1121,8 @@ const PosSellPage = () => {
       return;
     }
     setSaleId(null);
+    setOptimisticSaleLines(null);
+    clearCartRuntimeSyncState();
     setPayments([createDefaultPosPaymentDraft()]);
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setMarkingInput({});
@@ -1118,11 +1130,13 @@ const PosSellPage = () => {
     setCustomerCreateOpen(false);
     setCustomerEditOpen(false);
   }, [
+    clearCartRuntimeSyncState,
     saleId,
     saleQuery.data,
     saleQuery.isFetched,
     saleQuery.isFetching,
     saleQuery.isLoading,
+    setOptimisticSaleLines,
     setPayments,
   ]);
 
@@ -1298,18 +1312,26 @@ const PosSellPage = () => {
 
       delete lineSyncDraftsRef.current[lineId];
       lineSyncInFlightRef.current.add(lineId);
+      const cartSessionVersion = cartSessionVersionRef.current;
 
       const syncPromise = (async () => {
         let shouldReleasePending = true;
         try {
           await updateLineMutation.mutateAsync({ lineId: remoteLineId, ...patch });
         } catch {
+          if (cartSessionVersionRef.current !== cartSessionVersion) {
+            shouldReleasePending = false;
+            return;
+          }
           lineSyncDraftsRef.current[lineId] = {
             ...patch,
             ...lineSyncDraftsRef.current[lineId],
           };
           shouldReleasePending = false;
         } finally {
+          if (cartSessionVersionRef.current !== cartSessionVersion) {
+            return;
+          }
           lineSyncInFlightRef.current.delete(lineId);
           if (lineSyncDraftsRef.current[lineId] && shouldReleasePending) {
             lineSyncTimersRef.current[lineId] = window.setTimeout(() => {
@@ -1359,6 +1381,7 @@ const PosSellPage = () => {
       return existingSaleId;
     }
 
+    const cartSessionVersion = cartSessionVersionRef.current;
     if (!draftCreationRef.current) {
       draftCreationRef.current = createDraftMutation
         .mutateAsync({
@@ -1380,6 +1403,9 @@ const PosSellPage = () => {
     }
 
     const draft = await draftCreationRef.current;
+    if (cartSessionVersionRef.current !== cartSessionVersion) {
+      return draft.id;
+    }
     setSaleId(draft.id);
     return draft.id;
   }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer]);
@@ -1394,6 +1420,7 @@ const PosSellPage = () => {
         return false;
       }
 
+      const cartSessionVersion = cartSessionVersionRef.current;
       const productForCart =
         product ??
         visibleProductsRef.current.find((visibleProduct) => visibleProduct.id === productId);
@@ -1426,6 +1453,9 @@ const PosSellPage = () => {
       let targetSaleId: string | null = null;
       try {
         targetSaleId = await ensureSaleDraftId();
+        if (cartSessionVersionRef.current !== cartSessionVersion) {
+          return false;
+        }
         setSaleId(targetSaleId);
 
         const updatedLine = await trackCartSyncPromise(
@@ -1435,6 +1465,9 @@ const PosSellPage = () => {
             qty: 1,
           }),
         );
+        if (cartSessionVersionRef.current !== cartSessionVersion) {
+          return true;
+        }
 
         const currentLocalLine = findCartLineForProduct(
           optimisticSaleLinesRef.current ?? [],
@@ -1488,6 +1521,9 @@ const PosSellPage = () => {
 
         return true;
       } catch {
+        if (cartSessionVersionRef.current !== cartSessionVersion) {
+          return false;
+        }
         if (productForCart && !existingLineBeforeAdd) {
           setOptimisticSaleLines((current) => {
             if (!current) {
@@ -1765,12 +1801,16 @@ const PosSellPage = () => {
       return;
     }
 
+    const cartSessionVersion = cartSessionVersionRef.current;
     const rememberedRemoteLineId = optimisticLineServerIdsRef.current[lineId];
     delete optimisticLineServerIdsRef.current[lineId];
     beginCartSync();
     try {
       await trackCartSyncPromise(removeLineMutation.mutateAsync({ lineId: remoteLineId }));
     } catch {
+      if (cartSessionVersionRef.current !== cartSessionVersion) {
+        return;
+      }
       if (rememberedRemoteLineId) {
         optimisticLineServerIdsRef.current[lineId] = rememberedRemoteLineId;
       }
@@ -1986,6 +2026,7 @@ const PosSellPage = () => {
     if (!pendingEntries.length) {
       return;
     }
+    const cartSessionVersion = cartSessionVersionRef.current;
 
     Object.values(lineSyncTimersRef.current).forEach((timer) => window.clearTimeout(timer));
     lineSyncTimersRef.current = {};
@@ -2004,12 +2045,18 @@ const PosSellPage = () => {
             updateLineMutation.mutateAsync({ lineId: remoteLineId, ...patch }),
           );
         } catch (error) {
+          if (cartSessionVersionRef.current !== cartSessionVersion) {
+            return;
+          }
           lineSyncDraftsRef.current[localLineId] = {
             ...patch,
             ...lineSyncDraftsRef.current[localLineId],
           };
           throw error;
         } finally {
+          if (cartSessionVersionRef.current !== cartSessionVersion) {
+            return;
+          }
           releaseLineSyncPending(localLineId);
         }
       }),
@@ -2461,6 +2508,10 @@ const PosSellPage = () => {
           }
         : null,
     );
+    setOptimisticSaleLines(null);
+    clearCartRuntimeSyncState();
+    setLineInputDrafts({});
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     setSaleId(activeDraft.id);
   };
 
@@ -2475,9 +2526,7 @@ const PosSellPage = () => {
     setCustomerCreateOpen(false);
     autoPrintedSaleIdRef.current = null;
     setOptimisticSaleLines(null);
-    optimisticLineServerIdsRef.current = {};
-    removedOptimisticLineIdsRef.current.clear();
-    lineSyncDraftsRef.current = {};
+    clearCartRuntimeSyncState();
     setLineInputDrafts({});
     setMobileCheckoutOpen(false);
     focusLineSearchInput();

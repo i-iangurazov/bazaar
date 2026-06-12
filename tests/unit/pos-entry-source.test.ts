@@ -98,6 +98,48 @@ describe("pos entry navigation", () => {
     expect(pageSource).not.toContain("[focusLineSearchInput, hasOpenShift, saleId]");
   });
 
+  it("clears POS cart runtime sync state between receipt sessions", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const cleanupBlock = pageSource.slice(
+      pageSource.indexOf("const clearCartRuntimeSyncState"),
+      pageSource.indexOf("const createDraftMutation"),
+    );
+    const completeBlock = pageSource.slice(
+      pageSource.indexOf("const completeMutation"),
+      pageSource.indexOf("const sale = saleQuery.data"),
+    );
+    const cancelBlock = pageSource.slice(
+      pageSource.indexOf("const cancelDraftMutation"),
+      pageSource.indexOf("const updateCustomerMutation"),
+    );
+    const handleAddLineBlock = pageSource.slice(
+      pageSource.indexOf("const handleAddLine"),
+      pageSource.indexOf("useEffect(() => {\n    if (!hasOpenShift)"),
+    );
+
+    expect(pageSource).toContain("const cartSessionVersionRef = useRef(0);");
+    expect(cleanupBlock).toContain("cartSessionVersionRef.current += 1;");
+    expect(cleanupBlock).toContain("Object.values(lineSyncTimersRef.current)");
+    expect(cleanupBlock).toContain("lineSyncDraftsRef.current = {};");
+    expect(cleanupBlock).toContain("lineSyncInFlightRef.current.clear();");
+    expect(cleanupBlock).toContain("lineSyncPendingRef.current.clear();");
+    expect(cleanupBlock).toContain("pendingAddProductIdsRef.current.clear();");
+    expect(cleanupBlock).toContain("pendingCartSyncPromisesRef.current.clear();");
+    expect(cleanupBlock).toContain("pendingCartMutationCountRef.current = 0;");
+    expect(cleanupBlock).toContain("draftCreationRef.current = null;");
+    expect(cleanupBlock).toContain("optimisticLineServerIdsRef.current = {};");
+    expect(cleanupBlock).toContain("removedOptimisticLineIdsRef.current.clear();");
+    expect(completeBlock).toContain("clearCartRuntimeSyncState();");
+    expect(completeBlock).toContain("void Promise.all([");
+    expect(cancelBlock).toContain("clearCartRuntimeSyncState();");
+    expect(cancelBlock).toContain("void Promise.all([");
+    expect(handleAddLineBlock).toContain("const cartSessionVersion = cartSessionVersionRef.current;");
+    expect(handleAddLineBlock).toContain(
+      "if (cartSessionVersionRef.current !== cartSessionVersion)",
+    );
+    expect(pageSource).not.toContain("onSuccess: (sale) =>");
+  });
+
   it("keeps the new POS view for desktop and uses the dedicated mobile quick-sale flow only for phones", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 
