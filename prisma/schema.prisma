@@ -1567,6 +1567,9 @@ model CustomerOrder {
   currencyCode           String?
   currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
   notes                  String?
+  isHeld                 Boolean             @default(false)
+  heldAt                 DateTime?
+  heldById               String?
   isDebt                 Boolean             @default(false)
   debtCustomerName       String?
   debtSettledAt          DateTime?
@@ -1604,6 +1607,8 @@ model CustomerOrder {
   @@index([organizationId, status, createdAt])
   @@index([organizationId, createdAt])
   @@index([organizationId, isPosSale, createdAt])
+  @@index([organizationId, isPosSale, isHeld, status, createdAt])
+  @@index([registerId, isHeld, status, createdAt])
   @@index([organizationId, isDebt, debtSettledAt])
   @@index([organizationId, storeId, isDebt, debtSettledAt])
   @@index([organizationId, storeId, isDebt, debtSettledAt, status, completedAt])

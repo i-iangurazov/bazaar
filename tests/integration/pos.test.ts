@@ -152,6 +152,131 @@ describeDb("pos", () => {
     expect(draftOnly.items).toHaveLength(1);
   });
 
+  it("holds and resumes draft receipts and blocks shift close while held", async () => {
+    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 125 },
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const shift = await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-held-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    const held = await caller.pos.sales.holdDraft({ saleId: sale.id });
+    expect(held.isHeld).toBe(true);
+    expect(held.lineCount).toBe(1);
+
+    const activeAfterHold = await caller.pos.sales.activeDraft({ registerId: register.id });
+    expect(activeAfterHold).toBeNull();
+
+    const heldOnly = await caller.pos.sales.list({
+      registerId: register.id,
+      heldState: "held",
+      statuses: ["DRAFT"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(heldOnly.items).toHaveLength(1);
+    expect(heldOnly.items[0]?.id).toBe(sale.id);
+    expect(heldOnly.items[0]?.isHeld).toBe(true);
+
+    const activeOnlyAfterHold = await caller.pos.sales.list({
+      registerId: register.id,
+      heldState: "active",
+      statuses: ["DRAFT"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(activeOnlyAfterHold.items).toHaveLength(0);
+
+    const storeSearch = await caller.pos.sales.list({
+      registerId: register.id,
+      search: store.code,
+      statuses: ["DRAFT"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(storeSearch.items[0]?.id).toBe(sale.id);
+
+    const cashierSearch = await caller.pos.sales.list({
+      registerId: register.id,
+      search: cashierUser.email,
+      statuses: ["DRAFT"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(cashierSearch.items[0]?.id).toBe(sale.id);
+
+    const currentShift = await caller.pos.shifts.current({ registerId: register.id });
+    expect(currentShift?.heldReceiptCount).toBe(1);
+    expect(currentShift?.heldReceipts[0]?.number).toBe(sale.number);
+
+    await expect(
+      caller.pos.shifts.close({
+        shiftId: shift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "pos-close-held-blocked-1",
+      }),
+    ).rejects.toMatchObject({ message: "posHeldReceiptsOpen", code: "CONFLICT" });
+
+    const resumed = await caller.pos.sales.resumeHeldDraft({
+      saleId: sale.id,
+      registerId: register.id,
+    });
+    expect(resumed.isHeld).toBe(false);
+
+    const activeOnlyAfterResume = await caller.pos.sales.list({
+      registerId: register.id,
+      heldState: "active",
+      statuses: ["DRAFT"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(activeOnlyAfterResume.items[0]?.id).toBe(sale.id);
+
+    const activeAfterResume = await caller.pos.sales.activeDraft({ registerId: register.id });
+    expect(activeAfterResume?.id).toBe(sale.id);
+
+    const saleDetail = await caller.pos.sales.get({ saleId: sale.id });
+    expect(saleDetail?.lines).toHaveLength(1);
+    expect(saleDetail?.lines[0]?.qty).toBe(2);
+    expect(Number(saleDetail?.totalKgs ?? 0)).toBe(250);
+
+    await caller.pos.sales.cancelDraft({ saleId: sale.id });
+    await caller.pos.shifts.close({
+      shiftId: shift.id,
+      closingCashCountedKgs: 0,
+      idempotencyKey: "pos-close-held-cleared-1",
+    });
+
+    const closedShift = await prisma.registerShift.findUnique({ where: { id: shift.id } });
+    expect(closedShift?.status).toBe("CLOSED");
+  });
+
   it("allows receipt registry only for manager and above", async () => {
     const { org, managerUser, staffUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -1805,7 +1930,7 @@ describeDb("pos", () => {
     ).rejects.toMatchObject({ code: "CONFLICT", message: "posCardRefundShiftMismatch" });
   });
 
-  it("creates manual refund request for transfer refunds without inventory reversal", async () => {
+  it("completes transfer inventory returns while flagging the money refund as manual", async () => {
     const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
       plan: "BUSINESS",
     });
@@ -1902,7 +2027,7 @@ describeDb("pos", () => {
       where: { id: returnDraft.id },
       select: { status: true, currencyCode: true, currencyRateKgsPerUnit: true },
     });
-    expect(returnDoc?.status).toBe("CANCELED");
+    expect(returnDoc?.status).toBe("COMPLETED");
     expect(returnDoc?.currencyCode).toBe("USD");
     expect(Number(returnDoc?.currencyRateKgsPerUnit ?? 0)).toBe(89.5);
 
@@ -1932,7 +2057,21 @@ describeDb("pos", () => {
     const refundPayments = await prisma.salePayment.findMany({
       where: { saleReturnId: returnDraft.id, isRefund: true },
     });
-    expect(refundMovements).toHaveLength(0);
-    expect(refundPayments).toHaveLength(0);
+    expect(refundMovements).toHaveLength(1);
+    expect(Number(refundMovements[0]?.qtyDelta ?? 0)).toBe(1);
+    expect(refundPayments).toHaveLength(1);
+    expect(refundPayments[0]?.method).toBe(PosPaymentMethod.TRANSFER);
+    expect(Number(refundPayments[0]?.amountKgs ?? 0)).toBe(100);
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(10);
   });
 });

@@ -146,6 +146,8 @@ const PosShiftsPage = () => {
     currentShift?.store ?? null,
   );
   const report = reportQuery.data;
+  const heldReceipts = currentShift?.heldReceipts ?? [];
+  const heldReceiptCount = currentShift?.heldReceiptCount ?? heldReceipts.length;
   const expectedCash = report?.summary.expectedCashKgs ?? 0;
   const countedCashNumber = Number(countedCash);
   const countedCashKgs = displayMoneyToKgs(countedCashNumber, currentShiftCurrencySource);
@@ -191,6 +193,10 @@ const PosShiftsPage = () => {
     if (!currentShift) {
       return;
     }
+    if (heldReceiptCount > 0) {
+      toast({ variant: "error", description: t("shifts.heldReceiptsBlockClose") });
+      return;
+    }
     const amount = Number(countedCash);
     const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
     if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amountKgs)) {
@@ -206,12 +212,16 @@ const PosShiftsPage = () => {
       return;
     }
 
-    await closeShiftMutation.mutateAsync({
-      shiftId: currentShift.id,
-      closingCashCountedKgs: amountKgs,
-      notes: closeNote.trim() || null,
-      idempotencyKey: createIdempotencyKey(),
-    });
+    try {
+      await closeShiftMutation.mutateAsync({
+        shiftId: currentShift.id,
+        closingCashCountedKgs: amountKgs,
+        notes: closeNote.trim() || null,
+        idempotencyKey: createIdempotencyKey(),
+      });
+    } catch {
+      // handled by mutation onError
+    }
   };
 
   const handleCashMovement = async () => {
@@ -296,7 +306,10 @@ const PosShiftsPage = () => {
             </div>
           ) : null}
 
-          {canLoadRegisterScopedData && selectedRegister && !selectedRegister.isActive && !currentShift ? (
+          {canLoadRegisterScopedData &&
+          selectedRegister &&
+          !selectedRegister.isActive &&
+          !currentShift ? (
             <p className="text-sm text-muted-foreground">{t("registers.inactiveNoNewSessions")}</p>
           ) : null}
 
@@ -474,6 +487,26 @@ const PosShiftsPage = () => {
                   </div>
                 </div>
 
+                {heldReceiptCount > 0 ? (
+                  <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("shifts.heldReceiptsBlockClose")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("shifts.heldReceiptsBlockCloseCount", { count: heldReceiptCount })}
+                    </p>
+                    {heldReceipts.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {heldReceipts.map((receipt) => (
+                          <Badge key={receipt.id} variant="warning">
+                            {receipt.number}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <label className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
                   <input
                     type="checkbox"
@@ -494,7 +527,8 @@ const PosShiftsPage = () => {
                       closeShiftMutation.isLoading ||
                       !countedCashValid ||
                       !closeConfirmed ||
-                      !closeNoteValid
+                      !closeNoteValid ||
+                      heldReceiptCount > 0
                     }
                   >
                     {closeShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}

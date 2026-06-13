@@ -34,6 +34,7 @@ import {
   getPosSale,
   getSaleReturn,
   getShiftXReport,
+  holdPosSaleDraft,
   listPosRegisters,
   listPosReceipts,
   listPosDebts,
@@ -45,6 +46,7 @@ import {
   retryPosSaleKkm,
   removePosSaleLine,
   removeSaleReturnLine,
+  resumeHeldPosSaleDraft,
   settlePosDebt,
   upsertSaleLineMarkingCodes,
   updatePosSaleCustomer,
@@ -461,7 +463,7 @@ export const posRouter = router({
                         },
                       ],
                     }
-                : {}),
+                  : {}),
             },
             select: {
               id: true,
@@ -489,6 +491,7 @@ export const posRouter = router({
             cashierId: z.string().optional(),
             paymentMethod: z.nativeEnum(PosPaymentMethod).optional(),
             returnState: z.enum(["none", "returned"]).optional(),
+            heldState: z.enum(["held", "active"]).optional(),
             dateFrom: z.coerce.date().optional(),
             dateTo: z.coerce.date().optional(),
             page: z.number().int().min(1).optional(),
@@ -507,6 +510,7 @@ export const posRouter = router({
             cashierId: input?.cashierId,
             paymentMethod: input?.paymentMethod,
             returnState: input?.returnState,
+            heldState: input?.heldState,
             dateFrom: input?.dateFrom,
             dateTo: input?.dateTo,
             page: input?.page ?? 1,
@@ -733,6 +737,44 @@ export const posRouter = router({
           return await cancelPosSaleDraft({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    holdDraft: cashierProcedure
+      .input(z.object({ saleId: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await holdPosSaleDraft({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    resumeHeldDraft: cashierProcedure
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          registerId: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await resumeHeldPosSaleDraft({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            registerId: input.registerId,
             actorId: ctx.user.id,
             user: ctx.user,
             requestId: ctx.requestId,

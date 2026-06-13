@@ -85,7 +85,11 @@ const getPosRegisterReferenceCounts = async (
       },
     }),
     tx.auditLog.count({
-      where: { organizationId: input.organizationId, entity: "PosRegister", entityId: input.registerId },
+      where: {
+        organizationId: input.organizationId,
+        entity: "PosRegister",
+        entityId: input.registerId,
+      },
     }),
   ]);
 
@@ -99,7 +103,9 @@ const getPosRegisterReferenceCounts = async (
   };
 };
 
-const hasPosRegisterBusinessHistory = (counts: Awaited<ReturnType<typeof getPosRegisterReferenceCounts>>) =>
+const hasPosRegisterBusinessHistory = (
+  counts: Awaited<ReturnType<typeof getPosRegisterReferenceCounts>>,
+) =>
   counts.shifts > 0 ||
   counts.sales > 0 ||
   counts.saleReturns > 0 ||
@@ -409,6 +415,23 @@ const lockPosSaleDraftForEdit = async (
   return sale;
 };
 
+const selectPosSaleDraftSummary = {
+  id: true,
+  number: true,
+  status: true,
+  storeId: true,
+  registerId: true,
+  shiftId: true,
+  createdAt: true,
+  updatedAt: true,
+  customerName: true,
+  customerEmail: true,
+  customerPhone: true,
+  customerAddress: true,
+  isHeld: true,
+  heldAt: true,
+} satisfies Prisma.CustomerOrderSelect;
+
 const recomputeSaleReturnTotals = async (tx: Prisma.TransactionClient, saleReturnId: string) => {
   const aggregate = await tx.saleReturnLine.aggregate({
     where: { saleReturnId },
@@ -482,7 +505,9 @@ const normalizePayments = (
       };
     })
     .filter(
-      (payment): payment is { method: PosPaymentMethod; amountKgs: number; providerRef: string | null } =>
+      (
+        payment,
+      ): payment is { method: PosPaymentMethod; amountKgs: number; providerRef: string | null } =>
         Boolean(payment && payment.amountKgs > 0),
     );
 
@@ -693,7 +718,11 @@ export const listPosRegisters = async (input: {
   const registers = await prisma.posRegister.findMany({
     where: {
       organizationId: input.organizationId,
-      ...(status === "active" ? { isActive: true } : status === "inactive" ? { isActive: false } : {}),
+      ...(status === "active"
+        ? { isActive: true }
+        : status === "inactive"
+          ? { isActive: false }
+          : {}),
       ...(input.storeId
         ? { storeId: input.storeId }
         : accessibleStoreIds
@@ -791,7 +820,9 @@ export const listPosRegisters = async (input: {
     hasHistory:
       register._count.shifts > 0 || register._count.sales > 0 || register._count.saleReturns > 0,
     canDelete:
-      register._count.shifts === 0 && register._count.sales === 0 && register._count.saleReturns === 0,
+      register._count.shifts === 0 &&
+      register._count.sales === 0 &&
+      register._count.saleReturns === 0,
     shifts: undefined,
     sales: undefined,
     saleReturns: undefined,
@@ -887,7 +918,11 @@ export const updatePosRegister = async (input: {
       if (!accessibleStoreIds.includes(register.storeId)) {
         throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
       }
-      if (input.storeId && input.storeId !== register.storeId && !accessibleStoreIds.includes(input.storeId)) {
+      if (
+        input.storeId &&
+        input.storeId !== register.storeId &&
+        !accessibleStoreIds.includes(input.storeId)
+      ) {
         throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
       }
     }
@@ -1208,8 +1243,37 @@ export const getCurrentRegisterShift = async (input: {
     await assertUserCanAccessStore(prisma, input.user, shift.store.id);
   }
 
+  const heldReceiptWhere = {
+    organizationId: input.organizationId,
+    shiftId: shift.id,
+    isPosSale: true,
+    status: CustomerOrderStatus.DRAFT,
+    isHeld: true,
+  } satisfies Prisma.CustomerOrderWhereInput;
+  const [heldReceipts, heldReceiptCount] = await Promise.all([
+    prisma.customerOrder.findMany({
+      where: heldReceiptWhere,
+      select: {
+        id: true,
+        number: true,
+        heldAt: true,
+        totalKgs: true,
+      },
+      orderBy: { heldAt: "asc" },
+      take: 20,
+    }),
+    prisma.customerOrder.count({ where: heldReceiptWhere }),
+  ]);
+
   return {
     ...shift,
+    heldReceipts: heldReceipts.map((receipt) => ({
+      id: receipt.id,
+      number: receipt.number,
+      heldAt: receipt.heldAt,
+      totalKgs: toMoney(receipt.totalKgs),
+    })),
+    heldReceiptCount,
     openingCashKgs: toMoney(shift.openingCashKgs),
     closingCashCountedKgs: shift.closingCashCountedKgs
       ? toMoney(shift.closingCashCountedKgs)
@@ -1347,6 +1411,25 @@ export const closeRegisterShift = async (input: {
           };
         }
 
+        const heldReceipts = await tx.customerOrder.findMany({
+          where: {
+            organizationId: input.organizationId,
+            shiftId: shift.id,
+            isPosSale: true,
+            status: CustomerOrderStatus.DRAFT,
+            isHeld: true,
+          },
+          select: {
+            number: true,
+          },
+          orderBy: { heldAt: "asc" },
+          take: 10,
+        });
+
+        if (heldReceipts.length) {
+          throw new AppError("posHeldReceiptsOpen", "CONFLICT", 409);
+        }
+
         const report = await loadShiftReport(tx, {
           organizationId: input.organizationId,
           shiftId: shift.id,
@@ -1460,6 +1543,7 @@ export const createPosSaleDraft = async (input: {
           createdById: input.actorId,
           isPosSale: true,
           status: CustomerOrderStatus.DRAFT,
+          isHeld: false,
         },
         orderBy: { createdAt: "desc" },
         select: {
@@ -1473,6 +1557,8 @@ export const createPosSaleDraft = async (input: {
           customerEmail: true,
           customerPhone: true,
           customerAddress: true,
+          isHeld: true,
+          heldAt: true,
           shift: {
             select: {
               status: true,
@@ -1513,6 +1599,8 @@ export const createPosSaleDraft = async (input: {
                 customerEmail: true,
                 customerPhone: true,
                 customerAddress: true,
+                isHeld: true,
+                heldAt: true,
               },
             });
             return updated;
@@ -1528,6 +1616,8 @@ export const createPosSaleDraft = async (input: {
             customerEmail: existingDraft.customerEmail,
             customerPhone: existingDraft.customerPhone,
             customerAddress: existingDraft.customerAddress,
+            isHeld: existingDraft.isHeld,
+            heldAt: existingDraft.heldAt,
           };
         }
       }
@@ -1545,6 +1635,7 @@ export const createPosSaleDraft = async (input: {
           number,
           isPosSale: true,
           status: CustomerOrderStatus.DRAFT,
+          isHeld: false,
           customerName: selectedCustomer?.customerName ?? null,
           customerEmail: selectedCustomer?.customerEmail ?? null,
           customerPhone: selectedCustomer?.customerPhone ?? null,
@@ -1620,6 +1711,8 @@ export const createPosSaleDraft = async (input: {
         customerName: order.customerName,
         customerEmail: order.customerEmail,
         customerPhone: order.customerPhone,
+        isHeld: order.isHeld,
+        heldAt: order.heldAt,
       };
     });
 
@@ -1635,6 +1728,7 @@ export const createPosSaleDraft = async (input: {
           createdById: input.actorId,
           isPosSale: true,
           status: CustomerOrderStatus.DRAFT,
+          isHeld: false,
           shift: {
             status: RegisterShiftStatus.OPEN,
           },
@@ -1651,6 +1745,8 @@ export const createPosSaleDraft = async (input: {
           customerEmail: true,
           customerPhone: true,
           customerAddress: true,
+          isHeld: true,
+          heldAt: true,
         },
       });
       if (concurrentDraft) {
@@ -1686,6 +1782,7 @@ export const getActivePosSaleDraft = async (input: {
       createdById: input.actorId,
       isPosSale: true,
       status: CustomerOrderStatus.DRAFT,
+      isHeld: false,
       shift: {
         status: RegisterShiftStatus.OPEN,
       },
@@ -1704,9 +1801,195 @@ export const getActivePosSaleDraft = async (input: {
       customerEmail: true,
       customerPhone: true,
       customerAddress: true,
+      isHeld: true,
+      heldAt: true,
     },
   });
   return draft;
+};
+
+export const holdPosSaleDraft = async (input: {
+  organizationId: string;
+  saleId: string;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    await lockCustomerOrderForUpdate(tx, input.saleId);
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: {
+        ...selectPosSaleDraftSummary,
+        lines: { select: { id: true } },
+      },
+    });
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
+    }
+    if (sale.status !== CustomerOrderStatus.DRAFT) {
+      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+    }
+    if (!sale.lines.length) {
+      throw new AppError("posHeldReceiptEmpty", "BAD_REQUEST", 400);
+    }
+    if (sale.isHeld) {
+      const { lines, ...saleSummary } = sale;
+      return {
+        ...saleSummary,
+        lineCount: lines.length,
+      };
+    }
+
+    const updated = await tx.customerOrder.update({
+      where: { id: sale.id },
+      data: {
+        isHeld: true,
+        heldAt: new Date(),
+        heldById: input.actorId,
+        updatedById: input.actorId,
+      },
+      select: selectPosSaleDraftSummary,
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_SALE_HOLD",
+      entity: "CustomerOrder",
+      entityId: sale.id,
+      before: toJson({ isHeld: sale.isHeld, lineCount: sale.lines.length }),
+      after: toJson({ isHeld: updated.isHeld, heldAt: updated.heldAt }),
+      requestId: input.requestId,
+    });
+
+    return {
+      ...updated,
+      lineCount: sale.lines.length,
+    };
+  });
+};
+
+export const resumeHeldPosSaleDraft = async (input: {
+  organizationId: string;
+  saleId: string;
+  registerId: string;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const shift = await requireOpenShift(tx, {
+      organizationId: input.organizationId,
+      registerId: input.registerId,
+    });
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, shift.storeId);
+    }
+
+    await lockCustomerOrderForUpdate(tx, input.saleId);
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: {
+        id: true,
+        status: true,
+        storeId: true,
+        registerId: true,
+        shiftId: true,
+        isHeld: true,
+        lines: { select: { id: true } },
+      },
+    });
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (sale.status !== CustomerOrderStatus.DRAFT || !sale.isHeld) {
+      throw new AppError("posHeldReceiptNotFound", "CONFLICT", 409);
+    }
+    if (sale.storeId !== shift.storeId) {
+      throw new AppError("posHeldReceiptStoreMismatch", "CONFLICT", 409);
+    }
+
+    const activeDraft = await tx.customerOrder.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        registerId: shift.registerId,
+        createdById: input.actorId,
+        isPosSale: true,
+        status: CustomerOrderStatus.DRAFT,
+        isHeld: false,
+        id: { not: sale.id },
+        shift: {
+          status: RegisterShiftStatus.OPEN,
+        },
+      },
+      include: {
+        lines: { select: { id: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (activeDraft?.lines.length) {
+      throw new AppError("posActiveDraftExists", "CONFLICT", 409);
+    }
+    if (activeDraft) {
+      await tx.customerOrder.update({
+        where: { id: activeDraft.id },
+        data: {
+          status: CustomerOrderStatus.CANCELED,
+          updatedById: input.actorId,
+        },
+      });
+    }
+
+    const updated = await tx.customerOrder.update({
+      where: { id: sale.id },
+      data: {
+        registerId: shift.registerId,
+        shiftId: shift.id,
+        isHeld: false,
+        heldAt: null,
+        heldById: null,
+        updatedById: input.actorId,
+      },
+      select: selectPosSaleDraftSummary,
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_SALE_RESUME_HELD",
+      entity: "CustomerOrder",
+      entityId: sale.id,
+      before: toJson({
+        isHeld: sale.isHeld,
+        registerId: sale.registerId,
+        shiftId: sale.shiftId,
+      }),
+      after: toJson({
+        isHeld: updated.isHeld,
+        registerId: updated.registerId,
+        shiftId: updated.shiftId,
+      }),
+      requestId: input.requestId,
+    });
+
+    return {
+      ...updated,
+      lineCount: sale.lines.length,
+    };
+  });
 };
 
 export const updatePosSaleCustomer = async (input: {
@@ -1866,6 +2149,7 @@ export const listPosSales = async (input: {
   cashierId?: string;
   paymentMethod?: PosPaymentMethod;
   returnState?: "none" | "returned";
+  heldState?: "held" | "active";
   dateFrom?: Date;
   dateTo?: Date;
   page: number;
@@ -1900,6 +2184,11 @@ export const listPosSales = async (input: {
     ...(input.registerId ? { registerId: input.registerId } : {}),
     ...(input.cashierId ? { createdById: input.cashierId } : {}),
     ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
+    ...(input.heldState === "held"
+      ? { isHeld: true }
+      : input.heldState === "active"
+        ? { isHeld: false }
+        : {}),
     ...(input.paymentMethod
       ? { payments: { some: { method: input.paymentMethod, isRefund: false } } }
       : {}),
@@ -1914,6 +2203,10 @@ export const listPosSales = async (input: {
             { number: { contains: input.search, mode: "insensitive" } },
             { customerName: { contains: input.search, mode: "insensitive" } },
             { customerPhone: { contains: input.search, mode: "insensitive" } },
+            { store: { name: { contains: input.search, mode: "insensitive" } } },
+            { store: { code: { contains: input.search, mode: "insensitive" } } },
+            { createdBy: { name: { contains: input.search, mode: "insensitive" } } },
+            { createdBy: { email: { contains: input.search, mode: "insensitive" } } },
           ],
         }
       : {}),
@@ -1942,6 +2235,14 @@ export const listPosSales = async (input: {
           },
         },
         register: { select: { id: true, name: true, code: true } },
+        shift: {
+          select: {
+            id: true,
+            openedAt: true,
+            closedAt: true,
+            status: true,
+          },
+        },
         createdBy: { select: { id: true, name: true, email: true } },
         payments: {
           select: {
@@ -1977,6 +2278,9 @@ export const listPosSales = async (input: {
       ),
       ...item,
       cashier: item.createdBy,
+      isHeld: item.isHeld,
+      heldAt: item.heldAt,
+      shift: item.shift,
       subtotalKgs: toMoney(item.subtotalKgs),
       discountKgs: toMoney(item.discountKgs),
       totalKgs: toMoney(item.totalKgs),
@@ -3899,6 +4203,17 @@ export const completeSaleReturn = async (input: {
           throw new AppError("posCardRefundShiftMismatch", "CONFLICT", 409);
         }
 
+        if (!saleReturn.lines.length) {
+          throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+        }
+
+        const returnTotalMinorUnits = moneyToMinorUnits(toMoney(saleReturn.totalKgs)) ?? 0;
+        const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
+        if (paymentTotalMinorUnits !== returnTotalMinorUnits) {
+          throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
+        }
+
+        let manualRefundRequestId: string | null = null;
         if (refundHasQrLike || originalHasQrLike) {
           const request = await tx.refundRequest.upsert({
             where: { saleReturnId: saleReturn.id },
@@ -3922,54 +4237,7 @@ export const completeSaleReturn = async (input: {
               status: RefundRequestStatus.OPEN,
             },
           });
-
-          const updatedReturn = await tx.saleReturn.update({
-            where: { id: saleReturn.id },
-            data: {
-              status: PosReturnStatus.CANCELED,
-              canceledAt: new Date(),
-              ...transactionCurrency,
-              notes: saleReturn.notes
-                ? `${saleReturn.notes}\n[MANUAL_REFUND_REQUIRED]`
-                : "[MANUAL_REFUND_REQUIRED]",
-            },
-          });
-
-          await writeAuditLog(tx, {
-            organizationId: input.organizationId,
-            actorId: input.actorId,
-            action: "POS_RETURN_MANUAL_REQUIRED",
-            entity: "SaleReturn",
-            entityId: saleReturn.id,
-            before: toJson({ status: saleReturn.status }),
-            after: toJson({
-              status: updatedReturn.status,
-              refundRequestId: request.id,
-            }),
-            requestId: input.requestId,
-          });
-
-          return {
-            id: updatedReturn.id,
-            number: updatedReturn.number,
-            status: updatedReturn.status,
-            storeId: updatedReturn.storeId,
-            registerId: updatedReturn.registerId,
-            shiftId: updatedReturn.shiftId,
-            productIds: [] as string[],
-            manualRequired: true,
-            refundRequestId: request.id,
-          };
-        }
-
-        if (!saleReturn.lines.length) {
-          throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
-        }
-
-        const returnTotalMinorUnits = moneyToMinorUnits(toMoney(saleReturn.totalKgs)) ?? 0;
-        const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
-        if (paymentTotalMinorUnits !== returnTotalMinorUnits) {
-          throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
+          manualRefundRequestId = request.id;
         }
 
         for (const line of saleReturn.lines) {
@@ -4033,8 +4301,8 @@ export const completeSaleReturn = async (input: {
           registerId: updated.registerId,
           shiftId: updated.shiftId,
           productIds: saleReturn.lines.map((line) => line.productId),
-          manualRequired: false,
-          refundRequestId: null,
+          manualRequired: Boolean(manualRefundRequestId),
+          refundRequestId: manualRefundRequestId,
         };
       },
     );
@@ -4042,26 +4310,24 @@ export const completeSaleReturn = async (input: {
     return completion;
   });
 
-  if (!result.manualRequired) {
-    const productIds = Array.from(new Set(result.productIds));
-    for (const productId of productIds) {
-      eventBus.publish({
-        type: "inventory.updated",
-        payload: { storeId: result.storeId, productId, variantId: null },
-      });
-    }
-
+  const productIds = Array.from(new Set(result.productIds));
+  for (const productId of productIds) {
     eventBus.publish({
-      type: "sale.refunded",
-      payload: {
-        saleReturnId: result.id,
-        storeId: result.storeId,
-        registerId: result.registerId,
-        shiftId: result.shiftId,
-        number: result.number,
-      },
+      type: "inventory.updated",
+      payload: { storeId: result.storeId, productId, variantId: null },
     });
   }
+
+  eventBus.publish({
+    type: "sale.refunded",
+    payload: {
+      saleReturnId: result.id,
+      storeId: result.storeId,
+      registerId: result.registerId,
+      shiftId: result.shiftId,
+      number: result.number,
+    },
+  });
 
   return {
     id: result.id,

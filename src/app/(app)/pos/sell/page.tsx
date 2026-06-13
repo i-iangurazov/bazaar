@@ -525,7 +525,7 @@ const PosSellPage = () => {
   const [journalDateFrom, setJournalDateFrom] = useState("");
   const [journalDateTo, setJournalDateTo] = useState("");
   const [journalStatusFilter, setJournalStatusFilter] = useState<CustomerOrderStatus | "ALL">(
-    CustomerOrderStatus.COMPLETED,
+    "ALL",
   );
   const [journalPaymentMethodFilter, setJournalPaymentMethodFilter] = useState<
     PosPaymentMethod | "ALL"
@@ -533,6 +533,9 @@ const PosSellPage = () => {
   const [journalReturnStateFilter, setJournalReturnStateFilter] = useState<
     "ALL" | "NONE" | "RETURNED"
   >("ALL");
+  const [journalHeldStateFilter, setJournalHeldStateFilter] = useState<"ALL" | "HELD" | "ACTIVE">(
+    "ALL",
+  );
   const [journalCashierId, setJournalCashierId] = useState("");
   const [journalPage, setJournalPage] = useState(1);
   const [journalDetailSaleId, setJournalDetailSaleId] = useState<string | null>(null);
@@ -741,6 +744,12 @@ const PosSellPage = () => {
           : journalReturnStateFilter === "RETURNED"
             ? "returned"
             : undefined,
+      heldState:
+        journalHeldStateFilter === "HELD"
+          ? "held"
+          : journalHeldStateFilter === "ACTIVE"
+            ? "active"
+            : undefined,
       dateFrom: journalDateFrom ? new Date(`${journalDateFrom}T00:00:00`) : undefined,
       dateTo: journalDateTo ? new Date(`${journalDateTo}T23:59:59`) : undefined,
       page: journalPage,
@@ -854,6 +863,89 @@ const PosSellPage = () => {
       void Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]).catch(
         () => undefined,
       );
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const holdDraftMutation = trpc.pos.sales.holdDraft.useMutation({
+    onSuccess: async (result) => {
+      clearActiveDraftCache();
+      toast({
+        variant: "success",
+        description: t("sell.holdReceiptSuccess", { number: result.number }),
+      });
+      setSaleId(null);
+      setLineSearch("");
+      setPayments([createDefaultPosPaymentDraft()]);
+      setDiscountDraft("");
+      setDiscountEditorOpen(false);
+      setSellInDebt(false);
+      setDebtFullName("");
+      setSelectedCustomer(null);
+      setCustomerSelectorOpen(false);
+      setCustomerSearch("");
+      setCustomerCreateOpen(false);
+      setNewCustomerEmail("");
+      setNewCustomerAddress("");
+      setCustomerEditOpen(false);
+      setMobileCheckoutOpen(false);
+      setOptimisticSaleLines(null);
+      clearCartRuntimeSyncState();
+      setLineInputDrafts({});
+      paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+      void Promise.all([
+        activeDraftQuery.refetch(),
+        journalSalesQuery.refetch(),
+        trpcUtils.pos.sales.list.invalidate(),
+        shiftQuery.refetch(),
+      ]).catch(() => undefined);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const resumeHeldDraftMutation = trpc.pos.sales.resumeHeldDraft.useMutation({
+    onSuccess: async (result) => {
+      clearActiveDraftCache();
+      setLastCompletedSale(null);
+      setAutoReceiptStatus("idle");
+      setMobileCheckoutOpen(true);
+      setDiscountEditorOpen(false);
+      setCustomerSelectorOpen(false);
+      setCustomerSearch("");
+      setCustomerCreateOpen(false);
+      setSelectedCustomer(
+        result.customerName || result.customerEmail || result.customerPhone
+          ? {
+              id: "",
+              name: result.customerName ?? result.customerEmail ?? result.customerPhone ?? "",
+              email: result.customerEmail,
+              phone: result.customerPhone,
+              address: result.customerAddress,
+            }
+          : null,
+      );
+      setOptimisticSaleLines(null);
+      clearCartRuntimeSyncState();
+      setLineInputDrafts({});
+      paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+      setSaleId(result.id);
+      setReceiptJournalOpen(false);
+      setJournalDetailSaleId(null);
+      setJournalReturnSaleId(null);
+      toast({
+        variant: "success",
+        description: t("sell.resumeHeldReceiptSuccess", { number: result.number }),
+      });
+      await Promise.all([
+        activeDraftQuery.refetch(),
+        journalSalesQuery.refetch(),
+        trpcUtils.pos.sales.get.invalidate({ saleId: result.id }),
+        shiftQuery.refetch(),
+      ]);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1173,7 +1265,9 @@ const PosSellPage = () => {
     updateDiscountMutation.isLoading ||
     updateCustomerMutation.isLoading ||
     upsertMarkingCodesMutation.isLoading ||
-    cancelDraftMutation.isLoading;
+    cancelDraftMutation.isLoading ||
+    holdDraftMutation.isLoading ||
+    resumeHeldDraftMutation.isLoading;
   const totalPayment = roundMoney(
     payments.reduce((sum, payment) => {
       const amount = parseDraftNumber(payment.amount);
@@ -2182,6 +2276,41 @@ const PosSellPage = () => {
     }
   };
 
+  const handleHoldReceipt = async () => {
+    if (!saleId || !hasCartLines || holdDraftMutation.isLoading) {
+      return;
+    }
+
+    try {
+      await flushAllPendingCartSync();
+    } catch {
+      return;
+    }
+
+    const currentLines = getCurrentCartLines();
+    const currentSubtotalKgs = calculateCartSubtotalKgs(currentLines);
+    const currentDiscountKgs = Math.min(
+      currentSubtotalKgs,
+      Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
+    );
+    if (
+      draftDiscountKgs !== null &&
+      Math.abs(currentDiscountKgs - (sale?.discountKgs ?? 0)) > 0.009
+    ) {
+      try {
+        await updateDiscountMutation.mutateAsync({ saleId, discountKgs: currentDiscountKgs });
+      } catch {
+        return;
+      }
+    }
+
+    try {
+      await holdDraftMutation.mutateAsync({ saleId });
+    } catch {
+      // handled by mutation onError
+    }
+  };
+
   const formatSaleMoney = useCallback(
     (amountKgs: number) => formatKgsMoney(amountKgs, locale, currencySource),
     [currencySource, locale],
@@ -2340,6 +2469,7 @@ const PosSellPage = () => {
     journalCashierId,
     journalDateFrom,
     journalDateTo,
+    journalHeldStateFilter,
     journalPaymentMethodFilter,
     journalReturnStateFilter,
     journalStatusFilter,
@@ -2903,6 +3033,8 @@ const PosSellPage = () => {
     const renderJournalActions = (saleItem: (typeof journalItems)[number]) => {
       const returnState = returnStateForSale(saleItem);
       const actionBusy = journalReceiptAction?.saleId === saleItem.id;
+      const isHeldReceipt = Boolean(saleItem.isHeld);
+      const isDraftReceipt = saleItem.status === CustomerOrderStatus.DRAFT;
       return (
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           <Button
@@ -2918,6 +3050,66 @@ const PosSellPage = () => {
             <ViewIcon className="h-3.5 w-3.5" aria-hidden />
             {t("history.openDetails")}
           </Button>
+          {isHeldReceipt ? (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() =>
+                void resumeHeldDraftMutation
+                  .mutateAsync({
+                    saleId: saleItem.id,
+                    registerId,
+                  })
+                  .catch(() => undefined)
+              }
+              disabled={!registerId || resumeHeldDraftMutation.isLoading}
+            >
+              {resumeHeldDraftMutation.isLoading ? <Spinner className="h-3.5 w-3.5" /> : null}
+              {t("sell.resumeHeldReceipt")}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8 px-2"
+              title={!isDraftReceipt ? t("sell.completedReceiptCorrectionHint") : undefined}
+              onClick={() => {
+                if (!isDraftReceipt) {
+                  toast({ variant: "info", description: t("sell.completedReceiptCorrectionHint") });
+                  return;
+                }
+                if (saleId && saleId !== saleItem.id && hasCartLines) {
+                  toast({ variant: "error", description: tErrors("posActiveDraftExists") });
+                  return;
+                }
+                clearActiveDraftCache();
+                setLastCompletedSale(null);
+                setAutoReceiptStatus("idle");
+                setOptimisticSaleLines(null);
+                clearCartRuntimeSyncState();
+                setLineInputDrafts({});
+                paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+                setSelectedCustomer(
+                  saleItem.customerName || saleItem.customerPhone
+                    ? {
+                        id: "",
+                        name: saleItem.customerName ?? saleItem.customerPhone ?? "",
+                        email: null,
+                        phone: saleItem.customerPhone,
+                      }
+                    : null,
+                );
+                setSaleId(saleItem.id);
+                setReceiptJournalOpen(false);
+              }}
+            >
+              <EditIcon className="h-3.5 w-3.5" aria-hidden />
+              {t("sell.editReceipt")}
+            </Button>
+          )}
           <Button
             type="button"
             variant="secondary"
@@ -2949,7 +3141,11 @@ const PosSellPage = () => {
               setJournalReturnSaleId(saleItem.id);
               setJournalReturnNotes("");
             }}
-            disabled={saleItem.status !== CustomerOrderStatus.COMPLETED || returnState === "full"}
+            disabled={
+              saleItem.status !== CustomerOrderStatus.COMPLETED ||
+              isHeldReceipt ||
+              returnState === "full"
+            }
           >
             {t("history.return")}
           </Button>
@@ -2969,11 +3165,11 @@ const PosSellPage = () => {
         }}
         title={t("sell.receiptJournal")}
         subtitle={selectedRegisterLabel}
-        className="max-w-[1200px]"
-        bodyClassName="p-4 sm:p-6"
+        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-md sm:border"
+        bodyClassName="overflow-visible p-3 sm:p-5"
         mobileSheet
       >
-        <div className="space-y-4">
+        <div className="flex min-h-full flex-col gap-4">
           <div className="grid gap-2 md:grid-cols-4">
             <Input
               value={journalSearch}
@@ -3035,6 +3231,21 @@ const PosSellPage = () => {
               </SelectContent>
             </Select>
             <Select
+              value={journalHeldStateFilter}
+              onValueChange={(value) =>
+                setJournalHeldStateFilter(value as "ALL" | "HELD" | "ACTIVE")
+              }
+            >
+              <SelectTrigger aria-label={t("sell.heldStatus")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">{t("sell.heldStatusAll")}</SelectItem>
+                <SelectItem value="HELD">{t("sell.heldStatusHeld")}</SelectItem>
+                <SelectItem value="ACTIVE">{t("sell.heldStatusActive")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
               value={journalCashierId || "ALL"}
               onValueChange={(value) => setJournalCashierId(value === "ALL" ? "" : value)}
             >
@@ -3083,9 +3294,10 @@ const PosSellPage = () => {
                   setJournalSearch("");
                   setJournalDateFrom("");
                   setJournalDateTo("");
-                  setJournalStatusFilter(CustomerOrderStatus.COMPLETED);
+                  setJournalStatusFilter("ALL");
                   setJournalPaymentMethodFilter("ALL");
                   setJournalReturnStateFilter("ALL");
+                  setJournalHeldStateFilter("ALL");
                   setJournalCashierId("");
                 }}
               >
@@ -3131,8 +3343,20 @@ const PosSellPage = () => {
                       );
                       const returnState = returnStateForSale(saleItem);
                       return (
-                        <TableRow key={saleItem.id}>
-                          <TableCell className="font-medium">{saleItem.number}</TableCell>
+                        <TableRow
+                          key={saleItem.id}
+                          className={saleItem.isHeld ? "bg-warning/10" : undefined}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex flex-col gap-1">
+                              <span>{saleItem.number}</span>
+                              {saleItem.isHeld ? (
+                                <Badge variant="warning" className="w-fit">
+                                  {t("sell.heldReceipt")}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
                           <TableCell>{formatDateTime(saleItem.createdAt, locale)}</TableCell>
                           <TableCell>
                             {saleItem.customerName ||
@@ -3150,9 +3374,16 @@ const PosSellPage = () => {
                             {formatKgsMoney(saleItem.totalKgs, locale, saleCurrencySource)}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={saleStatusVariant(saleItem.status)}>
-                              {saleStatusLabel(saleItem.status)}
-                            </Badge>
+                            <div className="flex flex-col gap-1">
+                              <Badge variant={saleStatusVariant(saleItem.status)}>
+                                {saleStatusLabel(saleItem.status)}
+                              </Badge>
+                              {saleItem.isHeld && saleItem.heldAt ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDateTime(saleItem.heldAt, locale)}
+                                </span>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant={returnStateVariant(returnState)}>
@@ -3174,7 +3405,11 @@ const PosSellPage = () => {
                   return (
                     <article
                       key={saleItem.id}
-                      className="rounded-md border border-border bg-card p-3"
+                      className={`rounded-md border p-3 ${
+                        saleItem.isHeld
+                          ? "border-warning/40 bg-warning/10"
+                          : "border-border bg-card"
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -3215,6 +3450,9 @@ const PosSellPage = () => {
                         <Badge variant={saleStatusVariant(saleItem.status)}>
                           {saleStatusLabel(saleItem.status)}
                         </Badge>
+                        {saleItem.isHeld ? (
+                          <Badge variant="warning">{t("sell.heldReceipt")}</Badge>
+                        ) : null}
                         <Badge variant={returnStateVariant(returnState)}>
                           {returnStateLabel(returnState)}
                         </Badge>
@@ -4539,6 +4777,19 @@ const PosSellPage = () => {
                       </div>
 
                       <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 w-full rounded-md px-4 text-sm font-semibold"
+                        onClick={() => void handleHoldReceipt()}
+                        disabled={
+                          !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
+                        }
+                      >
+                        {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                        {t("sell.holdReceipt")}
+                      </Button>
+
+                      <Button
                         className="h-9 w-full rounded-md bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
                         onClick={handleComplete}
                         disabled={completeDisabled}
@@ -5560,7 +5811,19 @@ const PosSellPage = () => {
                   </div>
 
                   {hasCartLines ? (
-                    <div className="border-t border-border bg-background p-4">
+                    <div className="space-y-2 border-t border-border bg-background p-4">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-11 w-full text-base font-semibold"
+                        onClick={() => void handleHoldReceipt()}
+                        disabled={
+                          !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
+                        }
+                      >
+                        {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                        {t("sell.holdReceipt")}
+                      </Button>
                       <Button
                         className="h-12 w-full bg-success text-base font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
                         onClick={handleComplete}

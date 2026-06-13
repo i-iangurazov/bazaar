@@ -43,6 +43,7 @@ import {
   ChevronDownIcon,
   CirclePlusIcon,
   DownloadIcon,
+  EditIcon,
   EmptyIcon,
   ReceiveIcon,
   SearchIcon,
@@ -286,6 +287,62 @@ const ProductMovementsPage = () => {
     ) : (
       <Badge variant={paymentVariant(value)}>{paymentStatusLabel(value)}</Badge>
     );
+  const editDisabledReason = (movement: MovementRow) => {
+    if (movement.documentType === "SALE") {
+      return t("editUnsupportedSale");
+    }
+    if (
+      movement.documentType === "RETURN" ||
+      movement.documentType === "STOCK_RECEIVING" ||
+      movement.documentType === "TRANSFER" ||
+      movement.documentType === "WRITE_OFF"
+    ) {
+      return t("editUnsupportedDocument");
+    }
+    return t("editUnsupportedType");
+  };
+  const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
+    const viewButton = movement.detailUrl ? (
+      <Button
+        variant={layout === "desktop" ? "ghost" : "secondary"}
+        size={layout === "desktop" ? "icon" : undefined}
+        asChild
+        aria-label={tCommon("view")}
+        className={layout === "mobile" ? "w-full justify-center" : undefined}
+      >
+        <Link href={movement.detailUrl}>
+          <ViewIcon className="h-4 w-4" aria-hidden />
+          {layout === "mobile" ? tCommon("view") : null}
+        </Link>
+      </Button>
+    ) : null;
+    const editButton = (
+      <Button
+        variant={layout === "desktop" ? "ghost" : "secondary"}
+        size={layout === "desktop" ? "icon" : undefined}
+        disabled
+        aria-label={tCommon("edit")}
+        title={editDisabledReason(movement)}
+        className={layout === "mobile" ? "w-full justify-center" : undefined}
+      >
+        <EditIcon className="h-4 w-4" aria-hidden />
+        {layout === "mobile" ? tCommon("edit") : null}
+      </Button>
+    );
+
+    return (
+      <div
+        className={
+          layout === "mobile"
+            ? "mt-3 grid grid-cols-2 gap-2"
+            : "flex items-center justify-end gap-1"
+        }
+      >
+        {viewButton ?? <span className="text-muted-foreground">{tCommon("notAvailable")}</span>}
+        {editButton}
+      </div>
+    );
+  };
 
   const renderDocument = (movement: MovementRow) => {
     const documentNumber = movement.documentNumber || movement.documentId;
@@ -752,22 +809,7 @@ const ProductMovementsPage = () => {
                         <TableCell className="text-right">
                           {renderMoney(movement.paidAmount)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {movement.detailUrl ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              asChild
-                              aria-label={tCommon("view")}
-                            >
-                              <Link href={movement.detailUrl}>
-                                <ViewIcon className="h-4 w-4" aria-hidden />
-                              </Link>
-                            </Button>
-                          ) : (
-                            renderMutedDash()
-                          )}
-                        </TableCell>
+                        <TableCell className="text-right">{renderActions(movement)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -842,14 +884,7 @@ const ProductMovementsPage = () => {
                     </p>
                   </div>
                 </div>
-                {movement.detailUrl ? (
-                  <Button asChild variant="secondary" className="mt-3 w-full">
-                    <Link href={movement.detailUrl}>
-                      <ViewIcon className="h-4 w-4" aria-hidden />
-                      {tCommon("view")}
-                    </Link>
-                  </Button>
-                ) : null}
+                {renderActions(movement, "mobile")}
               </div>
             )}
           />
