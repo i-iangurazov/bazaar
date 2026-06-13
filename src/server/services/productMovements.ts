@@ -95,6 +95,7 @@ export type ProductMovementJournalRow = {
 export type ProductMovementDocumentLine = {
   id: string;
   productId: string;
+  variantId: string | null;
   storeId: string;
   productDetailUrl: string;
   storeName: string;
@@ -156,6 +157,7 @@ type ProductMovementJournalSqlRow = {
 type ProductMovementDocumentLineSqlRow = {
   id: string;
   productId: string;
+  variantId: string | null;
   storeId: string;
   storeName: string;
   productName: string;
@@ -231,7 +233,7 @@ export const encodeProductMovementDocumentKey = (input: {
   documentReferenceId: string;
 }) => `${input.documentType}:${input.documentReferenceType}:${input.documentReferenceId}`;
 
-const decodeProductMovementDocumentKey = (key: string) => {
+export const decodeProductMovementDocumentKey = (key: string) => {
   const [documentType, documentReferenceType, ...referenceParts] = key.split(":");
   const documentReferenceId = referenceParts.join(":");
   if (!documentType || !documentReferenceType || !documentReferenceId) {
@@ -328,6 +330,46 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
     LEFT JOIN "User" u ON u."id" = m."createdById"
     ${baseWhereSql}
   ),
+  movement_line_net AS (
+    SELECT
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      b."productId",
+      COALESCE(b."variantId", 'BASE') AS "variantKey",
+      CASE
+        WHEN b."documentType" = 'TRANSFER'
+        THEN COALESCE(SUM(b."qtyDelta") FILTER (WHERE b."movementType" = 'TRANSFER_OUT'), 0)
+        ELSE COALESCE(SUM(b."qtyDelta"), 0)
+      END AS "netQty"
+    FROM movement_base b
+    GROUP BY
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      b."productId",
+      COALESCE(b."variantId", 'BASE')
+  ),
+  transfer_store_net AS (
+    SELECT
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      b."storeId",
+      b."storeName",
+      b."movementType",
+      COALESCE(SUM(b."qtyDelta"), 0) AS "netQty"
+    FROM movement_base b
+    WHERE b."documentType" = 'TRANSFER'
+      AND b."movementType" IN ('TRANSFER_OUT', 'TRANSFER_IN')
+    GROUP BY
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      b."storeId",
+      b."storeName",
+      b."movementType"
+  ),
   movement_grouped AS (
     SELECT
       b."documentType",
@@ -335,17 +377,47 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       b."documentReferenceId",
       MAX(b."createdAt") AS "documentDate",
       MIN(b."createdAt") AS "firstMovementAt",
-      COUNT(DISTINCT b."productId" || ':' || COALESCE(b."variantId", 'BASE'))::int AS "positionsCount",
-      CASE
-        WHEN b."documentType" = 'TRANSFER'
-          AND COUNT(*) FILTER (WHERE b."movementType" = 'TRANSFER_OUT') > 0
-        THEN COALESCE(SUM(ABS(b."qtyDelta")) FILTER (WHERE b."movementType" = 'TRANSFER_OUT'), 0)::int
-        ELSE COALESCE(SUM(ABS(b."qtyDelta")), 0)::int
-      END AS "totalQuantity",
+      COALESCE((
+        SELECT COUNT(*)::int
+        FROM movement_line_net ln
+        WHERE ln."documentType" = b."documentType"
+          AND ln."documentReferenceType" = b."documentReferenceType"
+          AND ln."documentReferenceId" = b."documentReferenceId"
+          AND ABS(ln."netQty") > 0
+      ), 0)::int AS "positionsCount",
+      COALESCE((
+        SELECT SUM(ABS(ln."netQty"))::int
+        FROM movement_line_net ln
+        WHERE ln."documentType" = b."documentType"
+          AND ln."documentReferenceType" = b."documentReferenceType"
+          AND ln."documentReferenceId" = b."documentReferenceId"
+      ), 0)::int AS "totalQuantity",
       STRING_AGG(DISTINCT b."storeName", ', ') AS "storeName",
       (ARRAY_AGG(b."organizationName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."organizationName" IS NOT NULL AND BTRIM(b."organizationName") <> ''))[1] AS "organizationName",
-      STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ') AS "sourceStoreName",
-      STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ') AS "destinationStoreName",
+      COALESCE(
+        (
+          SELECT STRING_AGG(DISTINCT ts."storeName", ', ')
+          FROM transfer_store_net ts
+          WHERE ts."documentType" = b."documentType"
+            AND ts."documentReferenceType" = b."documentReferenceType"
+            AND ts."documentReferenceId" = b."documentReferenceId"
+            AND ts."movementType" = 'TRANSFER_OUT'
+            AND ABS(ts."netQty") > 0
+        ),
+        STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ')
+      ) AS "sourceStoreName",
+      COALESCE(
+        (
+          SELECT STRING_AGG(DISTINCT ts."storeName", ', ')
+          FROM transfer_store_net ts
+          WHERE ts."documentType" = b."documentType"
+            AND ts."documentReferenceType" = b."documentReferenceType"
+            AND ts."documentReferenceId" = b."documentReferenceId"
+            AND ts."movementType" = 'TRANSFER_IN'
+            AND ABS(ts."netQty") > 0
+        ),
+        STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ')
+      ) AS "destinationStoreName",
       STRING_AGG(DISTINCT b."productName", ', ') AS "productPreview",
       SUM(b."lineTotalKgs") AS "movementLineTotalAmount",
       BOOL_OR(b."lineTotalKgs" IS NOT NULL) AS "hasMovementLineTotal",
@@ -431,13 +503,13 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       ON g."documentReferenceType" = 'STOCK_COUNT' AND sc."id" = g."documentReferenceId"
     LEFT JOIN LATERAL (
       SELECT
-        COALESCE(SUM(CASE WHEN sp."isRefund" = false THEN sp."amountKgs" ELSE 0 END), 0)::numeric AS "paidAmount"
+        COALESCE(SUM(CASE WHEN sp."isRefund" = true THEN -sp."amountKgs" ELSE sp."amountKgs" END), 0)::numeric AS "paidAmount"
       FROM "SalePayment" sp
       WHERE sp."customerOrderId" = co."id"
     ) co_payments ON true
     LEFT JOIN LATERAL (
       SELECT
-        COALESCE(SUM(CASE WHEN sp."isRefund" = true THEN ABS(sp."amountKgs") ELSE sp."amountKgs" END), 0)::numeric AS "refundedAmount"
+        COALESCE(SUM(CASE WHEN sp."isRefund" = true THEN sp."amountKgs" ELSE -sp."amountKgs" END), 0)::numeric AS "refundedAmount"
       FROM "SalePayment" sp
       WHERE sp."saleReturnId" = sr."id"
     ) sr_payments ON true
@@ -700,6 +772,7 @@ export const getProductMovementDocument = async (
       SELECT
         m."id",
         m."productId",
+        m."variantId",
         m."storeId",
         s."name" AS "storeName",
         p."name" AS "productName",
@@ -738,6 +811,7 @@ export const getProductMovementDocument = async (
     lines: lines.map((line) => ({
       id: line.id,
       productId: line.productId,
+      variantId: line.variantId,
       storeId: line.storeId,
       productDetailUrl: `/products/${line.productId}?storeId=${encodeURIComponent(line.storeId)}`,
       storeName: line.storeName,

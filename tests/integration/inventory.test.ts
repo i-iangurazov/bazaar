@@ -274,6 +274,98 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
   });
 
+  it("edits a receiving movement document through Product Movement with net stock and amount deltas", async () => {
+    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const [addedProduct, removedProduct] = await Promise.all(
+      [
+        { sku: "RECEIVING-EDIT-ADDED", name: "Receiving Edit Added" },
+        { sku: "RECEIVING-EDIT-REMOVED", name: "Receiving Edit Removed" },
+      ].map((item) =>
+        prisma.product.create({
+          data: {
+            organizationId: org.id,
+            supplierId: supplier.id,
+            sku: item.sku,
+            name: item.name,
+            unit: baseUnit.code,
+            baseUnitId: baseUnit.id,
+          },
+        }),
+      ),
+    );
+    await Promise.all(
+      [addedProduct, removedProduct].map((editProduct) =>
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId: store.id,
+          productId: editProduct.id,
+          assignedById: adminUser.id,
+        }),
+      ),
+    );
+
+    const receiving = await caller.inventory.postStockReceiving({
+      storeId: store.id,
+      lines: [
+        { productId: product.id, quantity: 10, unitCost: 5 },
+        { productId: removedProduct.id, quantity: 2, unitCost: 4 },
+      ],
+      idempotencyKey: "receiving-edit-post-1",
+    });
+    const documentKey = `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`;
+
+    await caller.inventory.editProductMovementDocument({
+      documentKey,
+      reason: "test receiving edit",
+      lines: [
+        { productId: product.id, quantity: 7, unitCostKgs: 6 },
+        { productId: addedProduct.id, quantity: 3, unitCostKgs: 7 },
+      ],
+      idempotencyKey: "receiving-edit-save-1",
+    });
+
+    const snapshots = await prisma.inventorySnapshot.findMany({
+      where: {
+        storeId: store.id,
+        productId: { in: [product.id, addedProduct.id, removedProduct.id] },
+      },
+    });
+    const onHand = (productId: string) =>
+      snapshots.find((snapshot) => snapshot.productId === productId)?.onHand ?? 0;
+    expect(onHand(product.id)).toBe(7);
+    expect(onHand(addedProduct.id)).toBe(3);
+    expect(onHand(removedProduct.id)).toBe(0);
+
+    const movements = await prisma.stockMovement.findMany({
+      where: { referenceType: "STOCK_RECEIVING", referenceId: receiving.receivingId },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(movements.map((movement) => movement.qtyDelta).sort((a, b) => a - b)).toEqual([
+      -3,
+      -2,
+      2,
+      3,
+      10,
+    ]);
+
+    const journal = await caller.inventory.productMovements({
+      type: "STOCK_RECEIVING",
+      search: receiving.receivingId,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(journal.items[0]?.totalQuantity).toBe(10);
+    expect(journal.items[0]?.positionsCount).toBe(2);
+    expect(journal.items[0]?.totalAmount).toBe(63);
+  });
+
   it("can restrict inventory product search to product name only", async () => {
     const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
     const caller = createTestCaller({
@@ -660,6 +752,168 @@ describeDb("inventory service", () => {
     );
   });
 
+  it("edits a transfer movement document with product replacement and store-safe stock deltas", async () => {
+    const { org, store, product, supplier, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const storeB = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Backup Store",
+        code: "BCK",
+        allowNegativeStock: false,
+      },
+    });
+    const storeC = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Recipient Store",
+        code: "RCP",
+        allowNegativeStock: false,
+      },
+    });
+    const [addedProduct, removedProduct] = await Promise.all(
+      [
+        { sku: "TRANSFER-EDIT-ADDED", name: "Transfer Edit Added" },
+        { sku: "TRANSFER-EDIT-REMOVED", name: "Transfer Edit Removed" },
+      ].map((item) =>
+        prisma.product.create({
+          data: {
+            organizationId: org.id,
+            supplierId: supplier.id,
+            sku: item.sku,
+            name: item.name,
+            unit: baseUnit.code,
+            baseUnitId: baseUnit.id,
+          },
+        }),
+      ),
+    );
+    await Promise.all(
+      [store.id, storeB.id, storeC.id].flatMap((storeId) => [
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId,
+          productId: product.id,
+          assignedById: adminUser.id,
+        }),
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId,
+          productId: addedProduct.id,
+          assignedById: adminUser.id,
+        }),
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId,
+          productId: removedProduct.id,
+          assignedById: adminUser.id,
+        }),
+      ]),
+    );
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 12,
+      reason: "Transfer edit seed original",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-edit-seed-original",
+      idempotencyKey: "idem-transfer-edit-seed-original",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: addedProduct.id,
+      qtyDelta: 10,
+      reason: "Transfer edit seed added",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-edit-seed-added",
+      idempotencyKey: "idem-transfer-edit-seed-added",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: removedProduct.id,
+      qtyDelta: 6,
+      reason: "Transfer edit seed removed",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-edit-seed-removed",
+      idempotencyKey: "idem-transfer-edit-seed-removed",
+    });
+
+    const transfer = await transferStock({
+      fromStoreId: store.id,
+      toStoreId: storeB.id,
+      lines: [
+        { productId: product.id, qty: 5 },
+        { productId: removedProduct.id, qty: 2 },
+      ],
+      note: "Move stock",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-edit",
+      idempotencyKey: "idem-transfer-edit",
+    });
+    const documentKey = `TRANSFER:TRANSFER:${transfer.transferId}`;
+
+    await caller.inventory.editProductMovementDocument({
+      documentKey,
+      reason: "test transfer edit",
+      destinationStoreId: storeC.id,
+      lines: [
+        { productId: product.id, quantity: 4, unitCostKgs: 0 },
+        { productId: addedProduct.id, quantity: 3, unitCostKgs: 0 },
+      ],
+      idempotencyKey: "transfer-edit-save-1",
+    });
+
+    const snapshots = await prisma.inventorySnapshot.findMany({
+      where: {
+        storeId: { in: [store.id, storeB.id, storeC.id] },
+        productId: { in: [product.id, addedProduct.id, removedProduct.id] },
+      },
+    });
+    const onHand = (storeId: string, productId: string) =>
+      snapshots.find((snapshot) => snapshot.storeId === storeId && snapshot.productId === productId)
+        ?.onHand ?? 0;
+
+    expect(onHand(store.id, product.id)).toBe(8);
+    expect(onHand(storeB.id, product.id)).toBe(0);
+    expect(onHand(storeC.id, product.id)).toBe(4);
+    expect(onHand(store.id, addedProduct.id)).toBe(7);
+    expect(onHand(storeB.id, addedProduct.id)).toBe(0);
+    expect(onHand(storeC.id, addedProduct.id)).toBe(3);
+    expect(onHand(store.id, removedProduct.id)).toBe(6);
+    expect(onHand(storeB.id, removedProduct.id)).toBe(0);
+    expect(onHand(storeC.id, removedProduct.id)).toBe(0);
+
+    const journal = await caller.inventory.productMovements({
+      type: "TRANSFER",
+      search: transfer.transferId,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(journal.items[0]?.totalQuantity).toBe(7);
+    expect(journal.items[0]?.positionsCount).toBe(2);
+    expect(journal.items[0]?.recipientName).toBe(storeC.name);
+
+    const audit = await prisma.auditLog.findFirst({
+      where: {
+        action: "INVENTORY_DOCUMENT_EDIT",
+        entity: "StockMovementDocument",
+        entityId: `TRANSFER:${transfer.transferId}`,
+      },
+    });
+    expect(audit).not.toBeNull();
+  });
+
   it("posts write-off movements as an ordered document for one store", async () => {
     const { org, store, product, supplier, baseUnit, adminUser } = await seedBase();
     const caller = createTestCaller({
@@ -815,6 +1069,142 @@ describeDb("inventory service", () => {
     expect(document?.authorName).toBe(adminUser.name);
     expect(document?.totalQuantity).toBe(7);
     expect(document?.lines.map((line) => line.productId)).toEqual([secondProduct.id, product.id]);
+  });
+
+  it("edits a write-off movement document with line removal and quantity deltas", async () => {
+    const { org, store, product, supplier, baseUnit, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const [secondProduct, addedProduct] = await Promise.all(
+      [
+        { sku: "WRITE-OFF-EDIT-2", name: "Write-off Edit Product 2" },
+        { sku: "WRITE-OFF-EDIT-ADDED", name: "Write-off Edit Added" },
+      ].map((item) =>
+        prisma.product.create({
+          data: {
+            organizationId: org.id,
+            supplierId: supplier.id,
+            sku: item.sku,
+            name: item.name,
+            unit: baseUnit.code,
+            baseUnitId: baseUnit.id,
+          },
+        }),
+      ),
+    );
+    await Promise.all(
+      [secondProduct, addedProduct].map((editProduct) =>
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId: store.id,
+          productId: editProduct.id,
+          assignedById: adminUser.id,
+        }),
+      ),
+    );
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "Write-off edit seed first",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-edit-seed-1",
+      idempotencyKey: "idem-write-off-edit-seed-1",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: secondProduct.id,
+      qtyDelta: 8,
+      reason: "Write-off edit seed second",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-edit-seed-2",
+      idempotencyKey: "idem-write-off-edit-seed-2",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: addedProduct.id,
+      qtyDelta: 5,
+      reason: "Write-off edit seed added",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-edit-seed-added",
+      idempotencyKey: "idem-write-off-edit-seed-added",
+    });
+
+    const writeOff = await postStockWriteOff({
+      storeId: store.id,
+      reason: "Порча",
+      comment: "Initial write-off",
+      lines: [
+        { productId: product.id, qty: 4 },
+        { productId: secondProduct.id, qty: 3 },
+      ],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-edit",
+      idempotencyKey: "idem-write-off-edit",
+    });
+    const documentKey = `WRITE_OFF:WRITE_OFF:${writeOff.writeOffId}`;
+
+    await caller.inventory.editProductMovementDocument({
+      documentKey,
+      reason: "test write-off edit",
+      lines: [
+        { productId: secondProduct.id, quantity: 2, unitCostKgs: 0 },
+        { productId: addedProduct.id, quantity: 1, unitCostKgs: 0 },
+      ],
+      idempotencyKey: "write-off-edit-save-1",
+    });
+
+    const [firstSnapshot, secondSnapshot, addedSnapshot] = await Promise.all([
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: secondProduct.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: addedProduct.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ]);
+    expect(firstSnapshot?.onHand).toBe(10);
+    expect(secondSnapshot?.onHand).toBe(6);
+    expect(addedSnapshot?.onHand).toBe(4);
+
+    const journal = await caller.inventory.productMovements({
+      type: "WRITE_OFF",
+      search: writeOff.writeOffId,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(journal.items[0]?.totalQuantity).toBe(3);
+    expect(journal.items[0]?.positionsCount).toBe(2);
   });
 
   it("rejects write-off quantity above stock when negative stock is disabled", async () => {

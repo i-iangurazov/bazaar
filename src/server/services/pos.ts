@@ -58,6 +58,55 @@ const sumPaymentMinorUnits = (payments: Array<{ amountKgs: number }>) =>
 
 export type PosRegisterStatusFilter = "active" | "inactive" | "all";
 
+export type PosReceiptEditLineInput = {
+  lineId?: string | null;
+  productId: string;
+  variantId?: string | null;
+  qty: number;
+  unitPriceKgs: number;
+};
+
+export type PosReturnEditLineInput = {
+  lineId?: string | null;
+  customerOrderLineId?: string | null;
+  productId: string;
+  variantId?: string | null;
+  qty: number;
+  unitPriceKgs: number;
+};
+
+type NormalizedPosReceiptEditLine = {
+  lineId: string | null;
+  productId: string;
+  variantId: string | null;
+  variantKey: string;
+  qty: number;
+  unitPriceKgs: number;
+  lineTotalKgs: number;
+  unitCostKgs: number | null;
+  lineCostTotalKgs: number | null;
+};
+
+const lineAggregateKey = (productId: string, variantKey: string) => `${productId}:${variantKey}`;
+
+const addLineAggregateQty = (
+  map: Map<string, { productId: string; variantId: string | null; variantKey: string; qty: number }>,
+  input: { productId: string; variantId?: string | null; variantKey: string; qty: number },
+) => {
+  const key = lineAggregateKey(input.productId, input.variantKey);
+  const existing = map.get(key);
+  if (existing) {
+    existing.qty += input.qty;
+    return;
+  }
+  map.set(key, {
+    productId: input.productId,
+    variantId: input.variantId ?? null,
+    variantKey: input.variantKey,
+    qty: input.qty,
+  });
+};
+
 const getPosRegisterReferenceCounts = async (
   tx: Prisma.TransactionClient,
   input: { organizationId: string; registerId: string },
@@ -2660,6 +2709,422 @@ export const getPosSale = async (input: {
   };
 };
 
+export const editCompletedPosSale = async (input: {
+  organizationId: string;
+  saleId: string;
+  lines: PosReceiptEditLineInput[];
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  notes?: string | null;
+  reason?: string | null;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+  idempotencyKey: string;
+}) => {
+  if (!input.lines.length) {
+    throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: editResult, replayed } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "pos.sales.editCompleted",
+        userId: input.actorId,
+      },
+      async () => {
+        await lockCustomerOrderForUpdate(tx, input.saleId);
+
+        const sale = await tx.customerOrder.findFirst({
+          where: {
+            id: input.saleId,
+            organizationId: input.organizationId,
+            isPosSale: true,
+          },
+          include: {
+            lines: {
+              include: {
+                saleReturnLines: { select: { id: true } },
+                markingCodeCaptures: { select: { id: true } },
+              },
+              orderBy: { id: "asc" },
+            },
+            payments: {
+              orderBy: { createdAt: "asc" },
+            },
+            store: {
+              select: {
+                id: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+                allowNegativeStock: true,
+              },
+            },
+            shift: {
+              select: {
+                id: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+          },
+        });
+
+        if (!sale) {
+          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, sale.storeId);
+        }
+        if (sale.status !== CustomerOrderStatus.COMPLETED) {
+          throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+        }
+        if (!sale.shiftId || !sale.registerId) {
+          throw new AppError("posSaleMissingShift", "CONFLICT", 409);
+        }
+
+        const existingLineIds = new Set(sale.lines.map((line) => line.id));
+        const requestedLineIds = new Set<string>();
+        const normalizedLines: NormalizedPosReceiptEditLine[] = [];
+        const desiredKeys = new Set<string>();
+
+        for (const line of input.lines) {
+          const lineId = line.lineId?.trim() || null;
+          if (lineId) {
+            if (!existingLineIds.has(lineId)) {
+              throw new AppError("posSaleLineNotFound", "NOT_FOUND", 404);
+            }
+            if (requestedLineIds.has(lineId)) {
+              throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+            }
+            requestedLineIds.add(lineId);
+          }
+          if (!Number.isInteger(line.qty) || line.qty <= 0) {
+            throw new AppError("invalidSalesQuantity", "BAD_REQUEST", 400);
+          }
+          const unitPriceKgs = roundMoney(line.unitPriceKgs);
+          if (!Number.isFinite(unitPriceKgs) || unitPriceKgs < 0) {
+            throw new AppError("unitPriceInvalid", "BAD_REQUEST", 400);
+          }
+
+          const resolvedPrice = await resolveUnitPrice({
+            tx,
+            organizationId: input.organizationId,
+            storeId: sale.storeId,
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+          });
+          const key = lineAggregateKey(line.productId, resolvedPrice.variantKey);
+          if (desiredKeys.has(key)) {
+            throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+          }
+          desiredKeys.add(key);
+
+          const unitCostKgs = await resolveUnitCost({
+            tx,
+            organizationId: input.organizationId,
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            isBundle: resolvedPrice.isBundle,
+          });
+          normalizedLines.push({
+            lineId,
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            variantKey: resolvedPrice.variantKey,
+            qty: line.qty,
+            unitPriceKgs,
+            lineTotalKgs: roundMoney(unitPriceKgs * line.qty),
+            unitCostKgs,
+            lineCostTotalKgs: unitCostKgs === null ? null : roundMoney(unitCostKgs * line.qty),
+          });
+        }
+
+        const protectedLineIds = new Set(
+          sale.lines
+            .filter(
+              (line) => line.saleReturnLines.length > 0 || line.markingCodeCaptures.length > 0,
+            )
+            .map((line) => line.id),
+        );
+        const oldLineById = new Map(sale.lines.map((line) => [line.id, line]));
+        for (const normalized of normalizedLines) {
+          if (!normalized.lineId || !protectedLineIds.has(normalized.lineId)) {
+            continue;
+          }
+          const oldLine = oldLineById.get(normalized.lineId);
+          if (
+            oldLine &&
+            (oldLine.productId !== normalized.productId ||
+              (oldLine.variantId ?? null) !== normalized.variantId)
+          ) {
+            throw new AppError("posSaleLineEditRestricted", "CONFLICT", 409);
+          }
+        }
+
+        const lineIdsToDelete = sale.lines
+          .filter((line) => !requestedLineIds.has(line.id))
+          .map((line) => line.id);
+        if (lineIdsToDelete.some((lineId) => protectedLineIds.has(lineId))) {
+          throw new AppError("posSaleLineEditRestricted", "CONFLICT", 409);
+        }
+
+        const before = {
+          sale: {
+            id: sale.id,
+            number: sale.number,
+            customerName: sale.customerName,
+            customerEmail: sale.customerEmail,
+            customerPhone: sale.customerPhone,
+            customerAddress: sale.customerAddress,
+            notes: sale.notes,
+            subtotalKgs: toMoney(sale.subtotalKgs),
+            discountKgs: toMoney(sale.discountKgs),
+            totalKgs: toMoney(sale.totalKgs),
+          },
+          lines: sale.lines.map((line) => ({
+            id: line.id,
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+            unitPriceKgs: toMoney(line.unitPriceKgs),
+            lineTotalKgs: toMoney(line.lineTotalKgs),
+            unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
+            lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
+          })),
+        };
+
+        const oldAggregates = new Map<
+          string,
+          { productId: string; variantId: string | null; variantKey: string; qty: number }
+        >();
+        for (const line of sale.lines) {
+          addLineAggregateQty(oldAggregates, {
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+          });
+        }
+        const desiredAggregates = new Map<
+          string,
+          { productId: string; variantId: string | null; variantKey: string; qty: number }
+        >();
+        for (const line of normalizedLines) {
+          addLineAggregateQty(desiredAggregates, line);
+        }
+
+        const changedProducts = new Map<
+          string,
+          { storeId: string; productId: string; variantId: string | null; onHand: number | null }
+        >();
+        const aggregateKeys = new Set([...oldAggregates.keys(), ...desiredAggregates.keys()]);
+        for (const key of aggregateKeys) {
+          const oldLine = oldAggregates.get(key);
+          const desiredLine = desiredAggregates.get(key);
+          const oldQty = oldLine?.qty ?? 0;
+          const desiredQty = desiredLine?.qty ?? 0;
+          const stockDelta = oldQty - desiredQty;
+          if (stockDelta === 0) {
+            continue;
+          }
+          const movementLine = desiredLine ?? oldLine;
+          if (!movementLine) {
+            continue;
+          }
+          const movement = await applyStockMovement(tx, {
+            storeId: sale.storeId,
+            productId: movementLine.productId,
+            variantId: movementLine.variantId,
+            qtyDelta: stockDelta,
+            type: StockMovementType.SALE,
+            referenceType: "CustomerOrder",
+            referenceId: sale.id,
+            note: input.reason?.trim() || `Редактирование чека ${sale.number}`,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+          });
+          changedProducts.set(key, {
+            storeId: sale.storeId,
+            productId: movementLine.productId,
+            variantId: movementLine.variantId,
+            onHand: movement.snapshot.onHand,
+          });
+        }
+
+        if (lineIdsToDelete.length) {
+          await tx.customerOrderLine.deleteMany({
+            where: {
+              id: { in: lineIdsToDelete },
+              customerOrderId: sale.id,
+            },
+          });
+        }
+
+        for (const line of normalizedLines) {
+          const data = {
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+            unitPriceKgs: line.unitPriceKgs,
+            lineTotalKgs: line.lineTotalKgs,
+            unitCostKgs: line.unitCostKgs,
+            lineCostTotalKgs: line.lineCostTotalKgs,
+          };
+          if (line.lineId) {
+            await tx.customerOrderLine.update({
+              where: { id: line.lineId },
+              data,
+            });
+          } else {
+            await tx.customerOrderLine.create({
+              data: {
+                customerOrderId: sale.id,
+                ...data,
+              },
+            });
+          }
+          if (!changedProducts.has(lineAggregateKey(line.productId, line.variantKey))) {
+            changedProducts.set(lineAggregateKey(line.productId, line.variantKey), {
+              storeId: sale.storeId,
+              productId: line.productId,
+              variantId: line.variantId,
+              onHand: null,
+            });
+          }
+        }
+
+        await tx.customerOrder.update({
+          where: { id: sale.id },
+          data: {
+            customerName: input.customerName?.trim() || null,
+            customerEmail: input.customerEmail?.trim().toLowerCase() || null,
+            customerPhone: input.customerPhone?.trim() || null,
+            customerAddress: input.customerAddress?.trim() || null,
+            notes: input.notes?.trim() || null,
+            updatedById: input.actorId,
+          },
+        });
+        const updatedSale = await recomputeSaleTotals(tx, sale.id, input.actorId);
+
+        const oldTotalKgs = roundMoney(toMoney(sale.totalKgs));
+        const newTotalKgs = roundMoney(toMoney(updatedSale.totalKgs));
+        const paymentDeltaKgs = roundMoney(newTotalKgs - oldTotalKgs);
+        const transactionCurrency = resolveCurrencySnapshot(
+          currencySourceWithFallback(
+            updatedSale,
+            currencySourceWithFallback(sale.shift, sale.store),
+          ),
+        );
+        const preferredPaymentMethod =
+          sale.payments.find((payment) => !payment.isRefund)?.method ??
+          sale.payments[0]?.method ??
+          PosPaymentMethod.CASH;
+
+        if (paymentDeltaKgs !== 0 && (!sale.isDebt || sale.debtSettledAt)) {
+          await tx.salePayment.create({
+            data: {
+              organizationId: input.organizationId,
+              storeId: sale.storeId,
+              shiftId: sale.shiftId,
+              customerOrderId: sale.id,
+              method: preferredPaymentMethod,
+              amountKgs: Math.abs(paymentDeltaKgs),
+              ...transactionCurrency,
+              providerRef: `edit:${sale.number}`,
+              isRefund: paymentDeltaKgs < 0,
+              createdById: input.actorId,
+            },
+          });
+        }
+
+        const afterLines = await tx.customerOrderLine.findMany({
+          where: { customerOrderId: sale.id },
+          orderBy: { id: "asc" },
+        });
+        const after = {
+          sale: {
+            id: updatedSale.id,
+            number: updatedSale.number,
+            customerName: updatedSale.customerName,
+            customerEmail: updatedSale.customerEmail,
+            customerPhone: updatedSale.customerPhone,
+            customerAddress: updatedSale.customerAddress,
+            notes: updatedSale.notes,
+            subtotalKgs: toMoney(updatedSale.subtotalKgs),
+            discountKgs: toMoney(updatedSale.discountKgs),
+            totalKgs: newTotalKgs,
+          },
+          lines: afterLines.map((line) => ({
+            id: line.id,
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+            unitPriceKgs: toMoney(line.unitPriceKgs),
+            lineTotalKgs: toMoney(line.lineTotalKgs),
+            unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
+            lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
+          })),
+          paymentDeltaKgs,
+        };
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "POS_SALE_EDIT",
+          entity: "CustomerOrder",
+          entityId: sale.id,
+          before: toJson(before),
+          after: toJson(after),
+          requestId: input.requestId,
+        });
+
+        return {
+          id: updatedSale.id,
+          number: updatedSale.number,
+          status: updatedSale.status,
+          storeId: updatedSale.storeId,
+          registerId: updatedSale.registerId,
+          shiftId: updatedSale.shiftId,
+          subtotalKgs: toMoney(updatedSale.subtotalKgs),
+          discountKgs: toMoney(updatedSale.discountKgs),
+          totalKgs: newTotalKgs,
+          paymentDeltaKgs,
+          changedItems: Array.from(changedProducts.values()),
+        };
+      },
+    );
+
+    return { ...editResult, replayed };
+  });
+
+  if (!result.replayed) {
+    result.changedItems.forEach((item) => {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: {
+          storeId: item.storeId,
+          productId: item.productId,
+          variantId: item.variantId,
+        },
+      });
+    });
+  }
+
+  return {
+    ...result,
+    replayed: undefined,
+    changedItems: undefined,
+  };
+};
+
 export const addPosSaleLine = async (input: {
   organizationId: string;
   saleId: string;
@@ -4072,6 +4537,407 @@ export const getSaleReturn = async (input: { organizationId: string; saleReturnI
       ...payment,
       amountKgs: toMoney(payment.amountKgs),
     })),
+  };
+};
+
+export const editCompletedSaleReturn = async (input: {
+  organizationId: string;
+  saleReturnId: string;
+  lines: PosReturnEditLineInput[];
+  notes?: string | null;
+  reason?: string | null;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+  idempotencyKey: string;
+}) => {
+  if (!input.lines.length) {
+    throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: editResult, replayed } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "pos.returns.editCompleted",
+        userId: input.actorId,
+      },
+      async () => {
+        await tx.$queryRaw`
+          SELECT id FROM "SaleReturn" WHERE id = ${input.saleReturnId} FOR UPDATE
+        `;
+
+        const saleReturn = await tx.saleReturn.findFirst({
+          where: {
+            id: input.saleReturnId,
+            organizationId: input.organizationId,
+          },
+          include: {
+            lines: {
+              orderBy: { id: "asc" },
+            },
+            payments: {
+              orderBy: { createdAt: "asc" },
+            },
+            originalSale: {
+              include: {
+                lines: {
+                  include: {
+                    product: { select: { isBundle: true } },
+                  },
+                  orderBy: { id: "asc" },
+                },
+              },
+            },
+            store: {
+              select: {
+                id: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+            shift: {
+              select: {
+                id: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+          },
+        });
+
+        if (!saleReturn) {
+          throw new AppError("posReturnNotFound", "NOT_FOUND", 404);
+        }
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, saleReturn.storeId);
+        }
+        if (saleReturn.status !== PosReturnStatus.COMPLETED) {
+          throw new AppError("posReturnNotEditable", "CONFLICT", 409);
+        }
+
+        const originalLineById = new Map(
+          saleReturn.originalSale.lines.map((line) => [line.id, line]),
+        );
+        const originalLineByProduct = new Map(
+          saleReturn.originalSale.lines.map((line) => [
+            lineAggregateKey(line.productId, line.variantKey),
+            line,
+          ]),
+        );
+        const existingLineIds = new Set(saleReturn.lines.map((line) => line.id));
+        const requestedLineIds = new Set<string>();
+        const desiredKeys = new Set<string>();
+        const normalizedLines: Array<{
+          lineId: string | null;
+          customerOrderLineId: string;
+          productId: string;
+          variantId: string | null;
+          variantKey: string;
+          qty: number;
+          unitPriceKgs: number;
+          lineTotalKgs: number;
+          unitCostKgs: number | null;
+          lineCostTotalKgs: number | null;
+        }> = [];
+
+        for (const line of input.lines) {
+          const lineId = line.lineId?.trim() || null;
+          if (lineId) {
+            if (!existingLineIds.has(lineId)) {
+              throw new AppError("posReturnLineNotFound", "NOT_FOUND", 404);
+            }
+            if (requestedLineIds.has(lineId)) {
+              throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+            }
+            requestedLineIds.add(lineId);
+          }
+          if (!Number.isInteger(line.qty) || line.qty <= 0) {
+            throw new AppError("invalidReturnQuantity", "BAD_REQUEST", 400);
+          }
+          const unitPriceKgs = roundMoney(line.unitPriceKgs);
+          if (!Number.isFinite(unitPriceKgs) || unitPriceKgs < 0) {
+            throw new AppError("unitPriceInvalid", "BAD_REQUEST", 400);
+          }
+
+          const requestedVariantKey = variantKeyFrom(line.variantId ?? null);
+          const originalLine =
+            (line.customerOrderLineId
+              ? originalLineById.get(line.customerOrderLineId)
+              : undefined) ??
+            originalLineByProduct.get(lineAggregateKey(line.productId, requestedVariantKey));
+          if (!originalLine) {
+            throw new AppError("posReturnOriginalLineNotFound", "CONFLICT", 409);
+          }
+          if (
+            originalLine.productId !== line.productId ||
+            (originalLine.variantId ?? null) !== (line.variantId ?? null)
+          ) {
+            throw new AppError("posReturnOriginalLineNotFound", "CONFLICT", 409);
+          }
+          await assertReturnLineAvailable(tx, {
+            customerOrderLineId: originalLine.id,
+            requestedQty: line.qty,
+            excludeReturnLineId: lineId ?? undefined,
+          });
+
+          const key = lineAggregateKey(originalLine.productId, originalLine.variantKey);
+          if (desiredKeys.has(key)) {
+            throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+          }
+          desiredKeys.add(key);
+
+          const unitCostKgs = originalLine.unitCostKgs
+            ? toMoney(originalLine.unitCostKgs)
+            : await resolveUnitCost({
+                tx,
+                organizationId: input.organizationId,
+                productId: originalLine.productId,
+                variantId: originalLine.variantId,
+                isBundle: originalLine.product.isBundle,
+              });
+
+          normalizedLines.push({
+            lineId,
+            customerOrderLineId: originalLine.id,
+            productId: originalLine.productId,
+            variantId: originalLine.variantId ?? null,
+            variantKey: originalLine.variantKey,
+            qty: line.qty,
+            unitPriceKgs,
+            lineTotalKgs: roundMoney(unitPriceKgs * line.qty),
+            unitCostKgs,
+            lineCostTotalKgs: unitCostKgs === null ? null : roundMoney(unitCostKgs * line.qty),
+          });
+        }
+
+        const before = {
+          saleReturn: {
+            id: saleReturn.id,
+            number: saleReturn.number,
+            notes: saleReturn.notes,
+            subtotalKgs: toMoney(saleReturn.subtotalKgs),
+            totalKgs: toMoney(saleReturn.totalKgs),
+          },
+          lines: saleReturn.lines.map((line) => ({
+            id: line.id,
+            customerOrderLineId: line.customerOrderLineId,
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+            unitPriceKgs: toMoney(line.unitPriceKgs),
+            lineTotalKgs: toMoney(line.lineTotalKgs),
+          })),
+        };
+
+        const oldAggregates = new Map<
+          string,
+          { productId: string; variantId: string | null; variantKey: string; qty: number }
+        >();
+        saleReturn.lines.forEach((line) => {
+          addLineAggregateQty(oldAggregates, {
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+          });
+        });
+        const desiredAggregates = new Map<
+          string,
+          { productId: string; variantId: string | null; variantKey: string; qty: number }
+        >();
+        normalizedLines.forEach((line) => addLineAggregateQty(desiredAggregates, line));
+
+        const changedProducts = new Map<
+          string,
+          { storeId: string; productId: string; variantId: string | null; onHand: number | null }
+        >();
+        const aggregateKeys = new Set([...oldAggregates.keys(), ...desiredAggregates.keys()]);
+        for (const key of aggregateKeys) {
+          const oldLine = oldAggregates.get(key);
+          const desiredLine = desiredAggregates.get(key);
+          const stockDelta = (desiredLine?.qty ?? 0) - (oldLine?.qty ?? 0);
+          if (stockDelta === 0) {
+            continue;
+          }
+          const movementLine = desiredLine ?? oldLine;
+          if (!movementLine) {
+            continue;
+          }
+          const movement = await applyStockMovement(tx, {
+            storeId: saleReturn.storeId,
+            productId: movementLine.productId,
+            variantId: movementLine.variantId,
+            qtyDelta: stockDelta,
+            type: StockMovementType.RETURN,
+            referenceType: "SaleReturn",
+            referenceId: saleReturn.id,
+            note: input.reason?.trim() || `Редактирование возврата ${saleReturn.number}`,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+          });
+          changedProducts.set(key, {
+            storeId: saleReturn.storeId,
+            productId: movementLine.productId,
+            variantId: movementLine.variantId,
+            onHand: movement.snapshot.onHand,
+          });
+        }
+
+        const lineIdsToDelete = saleReturn.lines
+          .filter((line) => !requestedLineIds.has(line.id))
+          .map((line) => line.id);
+        if (lineIdsToDelete.length) {
+          await tx.saleReturnLine.deleteMany({
+            where: {
+              id: { in: lineIdsToDelete },
+              saleReturnId: saleReturn.id,
+            },
+          });
+        }
+
+        for (const line of normalizedLines) {
+          const data = {
+            customerOrderLineId: line.customerOrderLineId,
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+            unitPriceKgs: line.unitPriceKgs,
+            lineTotalKgs: line.lineTotalKgs,
+            unitCostKgs: line.unitCostKgs,
+            lineCostTotalKgs: line.lineCostTotalKgs,
+          };
+          if (line.lineId) {
+            await tx.saleReturnLine.update({
+              where: { id: line.lineId },
+              data,
+            });
+          } else {
+            await tx.saleReturnLine.create({
+              data: {
+                saleReturnId: saleReturn.id,
+                ...data,
+              },
+            });
+          }
+        }
+
+        await tx.saleReturn.update({
+          where: { id: saleReturn.id },
+          data: {
+            notes: input.notes?.trim() || null,
+          },
+        });
+        const updatedReturn = await recomputeSaleReturnTotals(tx, saleReturn.id);
+
+        const oldTotalKgs = roundMoney(toMoney(saleReturn.totalKgs));
+        const newTotalKgs = roundMoney(toMoney(updatedReturn.totalKgs));
+        const refundDeltaKgs = roundMoney(newTotalKgs - oldTotalKgs);
+        const transactionCurrency = resolveCurrencySnapshot(
+          currencySourceWithFallback(
+            updatedReturn,
+            currencySourceWithFallback(
+              saleReturn.originalSale,
+              currencySourceWithFallback(saleReturn.shift, saleReturn.store),
+            ),
+          ),
+        );
+        const preferredPaymentMethod =
+          saleReturn.payments.find((payment) => payment.isRefund)?.method ??
+          saleReturn.payments[0]?.method ??
+          PosPaymentMethod.CASH;
+        if (refundDeltaKgs !== 0) {
+          await tx.salePayment.create({
+            data: {
+              organizationId: input.organizationId,
+              storeId: saleReturn.storeId,
+              shiftId: saleReturn.shiftId,
+              customerOrderId: saleReturn.originalSaleId,
+              saleReturnId: saleReturn.id,
+              method: preferredPaymentMethod,
+              amountKgs: refundDeltaKgs,
+              ...transactionCurrency,
+              providerRef: `edit:${saleReturn.number}`,
+              isRefund: true,
+              createdById: input.actorId,
+            },
+          });
+        }
+
+        const afterLines = await tx.saleReturnLine.findMany({
+          where: { saleReturnId: saleReturn.id },
+          orderBy: { id: "asc" },
+        });
+        const after = {
+          saleReturn: {
+            id: updatedReturn.id,
+            number: updatedReturn.number,
+            notes: updatedReturn.notes,
+            subtotalKgs: toMoney(updatedReturn.subtotalKgs),
+            totalKgs: newTotalKgs,
+          },
+          lines: afterLines.map((line) => ({
+            id: line.id,
+            customerOrderLineId: line.customerOrderLineId,
+            productId: line.productId,
+            variantId: line.variantId,
+            variantKey: line.variantKey,
+            qty: line.qty,
+            unitPriceKgs: toMoney(line.unitPriceKgs),
+            lineTotalKgs: toMoney(line.lineTotalKgs),
+          })),
+          refundDeltaKgs,
+        };
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "POS_RETURN_EDIT",
+          entity: "SaleReturn",
+          entityId: saleReturn.id,
+          before: toJson(before),
+          after: toJson(after),
+          requestId: input.requestId,
+        });
+
+        return {
+          id: updatedReturn.id,
+          number: updatedReturn.number,
+          status: updatedReturn.status,
+          storeId: updatedReturn.storeId,
+          registerId: updatedReturn.registerId,
+          shiftId: updatedReturn.shiftId,
+          subtotalKgs: toMoney(updatedReturn.subtotalKgs),
+          totalKgs: newTotalKgs,
+          refundDeltaKgs,
+          changedItems: Array.from(changedProducts.values()),
+        };
+      },
+    );
+
+    return { ...editResult, replayed };
+  });
+
+  if (!result.replayed) {
+    result.changedItems.forEach((item) => {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: {
+          storeId: item.storeId,
+          productId: item.productId,
+          variantId: item.variantId,
+        },
+      });
+    });
+  }
+
+  return {
+    ...result,
+    replayed: undefined,
+    changedItems: undefined,
   };
 };
 
