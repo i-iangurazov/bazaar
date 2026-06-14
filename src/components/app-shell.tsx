@@ -21,6 +21,21 @@ import { ScanInput } from "@/components/ScanInput";
 import { CommandPalette } from "@/components/command-palette";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalFooter } from "@/components/ui/modal";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -632,89 +647,80 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         const isOpen = groupState[group.id];
         const groupLabel = tNav(group.labelKey);
         return (
-          <div key={group.id} className="space-y-2">
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.id)}
-              className="flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent/50 hover:text-foreground"
-              aria-expanded={isOpen}
-              aria-label={tNav("groupToggle", { group: groupLabel })}
-            >
-              <span>{groupLabel}</span>
-              <ChevronDownIcon
-                className={cn("h-4 w-4 transition-transform", isOpen ? "rotate-180" : "rotate-0")}
-                aria-hidden
-              />
-            </button>
+          <SidebarGroup key={group.id}>
+            <SidebarGroupLabel asChild>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                className="flex w-full items-center justify-between rounded-md transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                aria-expanded={isOpen}
+                aria-label={tNav("groupToggle", { group: groupLabel })}
+              >
+                <span>{groupLabel}</span>
+                <ChevronDownIcon
+                  className={cn("h-4 w-4 transition-transform", isOpen ? "rotate-180" : "rotate-0")}
+                  aria-hidden
+                />
+              </button>
+            </SidebarGroupLabel>
             {isOpen ? (
-              <div className="space-y-1">
-                {visibleItems.map((item) => {
-                  const isActive = isItemActive(item);
-                  const visibleChildren =
-                    item.children?.filter((child) => isItemVisible(child)) ?? [];
-                  if (visibleChildren.length) {
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleItems.map((item) => {
+                    const isActive = isItemActive(item);
+                    const visibleChildren =
+                      item.children?.filter((child) => isItemVisible(child)) ?? [];
+                    if (visibleChildren.length) {
+                      return (
+                        <SidebarMenuItem key={item.key}>
+                          <SidebarMenuButton
+                            type="button"
+                            isActive={isActive}
+                            className={cn(!isActive && "text-sidebar-foreground/70")}
+                          >
+                            <item.icon aria-hidden />
+                            <span>{tNav(item.key)}</span>
+                          </SidebarMenuButton>
+                          <SidebarMenu className="ml-4 mt-1 border-l border-sidebar-border pl-2 group-data-[state=collapsed]/sidebar-wrapper:hidden">
+                            {visibleChildren.map((child) => {
+                              const isChildActive = isItemActive(child);
+                              return (
+                                <SidebarMenuItem key={child.key}>
+                                  <SidebarMenuButton asChild isActive={isChildActive}>
+                                    <Link
+                                      href={child.href ?? "/"}
+                                      onClick={onNavigate}
+                                      data-tour={`nav-${child.key}`}
+                                    >
+                                      <child.icon aria-hidden />
+                                      <span>{tNav(child.key)}</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        </SidebarMenuItem>
+                      );
+                    }
+                    if (!item.href) {
+                      return null;
+                    }
                     return (
-                      <div key={item.key} className="space-y-1">
-                        <div
-                          className={cn(
-                            "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold",
-                            isActive
-                              ? "border-l-4 border-primary bg-accent text-accent-foreground"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          <item.icon className="h-4 w-4" aria-hidden />
-                          <span>{tNav(item.key)}</span>
-                        </div>
-                        <div className="space-y-1 pl-4">
-                          {visibleChildren.map((child) => {
-                            const isChildActive = isItemActive(child);
-                            return (
-                              <Link
-                                key={child.key}
-                                href={child.href ?? "/"}
-                                onClick={onNavigate}
-                                data-tour={`nav-${child.key}`}
-                                className={cn(
-                                  "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
-                                  isChildActive
-                                    ? "border-l-4 border-primary bg-accent text-accent-foreground"
-                                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                                )}
-                              >
-                                <child.icon className="h-4 w-4" aria-hidden />
-                                <span>{tNav(child.key)}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <SidebarMenuItem key={item.key}>
+                        <SidebarMenuButton asChild isActive={isActive}>
+                          <Link href={item.href} onClick={onNavigate} data-tour={`nav-${item.key}`}>
+                            <item.icon aria-hidden />
+                            <span>{tNav(item.key)}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
                     );
-                  }
-                  if (!item.href) {
-                    return null;
-                  }
-                  return (
-                    <Link
-                      key={item.key}
-                      href={item.href}
-                      onClick={onNavigate}
-                      data-tour={`nav-${item.key}`}
-                      className={cn(
-                        "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
-                        isActive
-                          ? "border-l-4 border-primary bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                      )}
-                    >
-                      <item.icon className="h-4 w-4" aria-hidden />
-                      <span>{tNav(item.key)}</span>
-                    </Link>
-                  );
-                })}
-              </div>
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
             ) : null}
-          </div>
+          </SidebarGroup>
         );
       });
 
@@ -722,14 +728,16 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     <Button
       type="button"
       variant="ghost"
-      className="mt-4 w-full justify-start rounded-md px-3"
+      className="mt-4 w-full justify-start rounded-md px-3 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0"
       onClick={() => {
         onClick?.();
         setCustomizeNavOpen(true);
       }}
     >
       <AdjustIcon className="h-4 w-4" aria-hidden />
-      {tNav("customize")}
+      <span className="group-data-[state=collapsed]/sidebar-wrapper:sr-only">
+        {tNav("customize")}
+      </span>
     </Button>
   );
 
@@ -775,21 +783,21 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href="/settings/profile"
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex w-full items-center justify-between rounded-md border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group flex w-full items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/60 px-3 py-2 text-left no-underline transition hover:border-sidebar-primary/30 hover:bg-sidebar-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-2"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground/70 transition group-hover:border-sidebar-primary/30 group-hover:text-sidebar-primary">
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-foreground">
+        <span className="min-w-0 group-data-[state=collapsed]/sidebar-wrapper:sr-only">
+          <span className="block truncate text-sm font-semibold text-sidebar-foreground">
             {displayName}
           </span>
-          <span className="block truncate text-xs text-muted-foreground">{roleLabel}</span>
+          <span className="block truncate text-xs text-sidebar-foreground/60">{roleLabel}</span>
         </span>
       </div>
       <ChevronDownIcon
-        className="-rotate-90 text-muted-foreground transition group-hover:text-foreground"
+        className="-rotate-90 text-sidebar-foreground/60 transition group-hover:text-sidebar-foreground group-data-[state=collapsed]/sidebar-wrapper:hidden"
         aria-hidden
       />
     </Link>
@@ -1057,70 +1065,82 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           closeLabel={tCommon("closeMenu")}
           navigationLabel={tNav("mobileNavigation")}
         />
-        <div className="flex min-h-screen">
-          <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="space-y-3">
+        <SidebarProvider className="min-h-screen">
+          <Sidebar className="md:sticky md:top-0 md:h-screen">
+            <SidebarHeader className="space-y-3 p-4">
+              <Link
+                href="/dashboard"
+                className="flex min-h-10 items-center no-underline hover:no-underline"
+                aria-label={tNav("brand")}
+              >
                 <Image
                   src="/brand/logo.png"
-                  alt={tNav("brand")}
+                  alt=""
                   width={724}
                   height={181}
-                  className="h-auto w-[184px] max-w-full"
+                  className="h-auto w-[164px] max-w-full group-data-[state=collapsed]/sidebar-wrapper:hidden"
                   priority
                 />
-                <Button
-                  type="button"
-                  onClick={() => setCommandPaletteOpen(true)}
-                  size="default"
-                  className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                  aria-label={tCommand("openButton")}
-                >
-                  <CirclePlusIcon className="h-5 w-5" aria-hidden />
-                </Button>
+                <span className="hidden h-10 w-10 items-center justify-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground shadow-sm group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
+                  B
+                </span>
+              </Link>
+              <Button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                size="default"
+                className="h-10 w-full rounded-md bg-sidebar-primary text-sidebar-primary-foreground shadow-sm hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0"
+                aria-label={tCommand("openButton")}
+              >
+                <CirclePlusIcon className="h-5 w-5" aria-hidden />
+              </Button>
+            </SidebarHeader>
+
+            <SidebarContent className="scrollbar-soft">
+              <nav aria-label={tNav("brand")}>{renderNavGroups()}</nav>
+            </SidebarContent>
+
+            <SidebarFooter className="space-y-3 p-4 text-sm">
+              {renderCustomizeNavButton()}
+              {renderEmailVerificationNotice()}
+              {renderProfileShortcut()}
+              <div>
+                <SignOutButton />
               </div>
+            </SidebarFooter>
+          </Sidebar>
 
-              <nav className="scrollbar-soft mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-                {renderNavGroups()}
-              </nav>
-
-              <div className="mt-6 border-t border-border pt-6 text-sm">
-                {renderCustomizeNavButton()}
-                {renderEmailVerificationNotice()}
-                {renderProfileShortcut()}
-                <div className="mt-4">
-                  <SignOutButton />
-                </div>
-              </div>
-            </div>
-          </aside>
-
-          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-            <MobilePageContainer>
-              <div className="mx-auto">
-                <div className="mb-6 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex">
-                  <div className="relative w-full sm:max-w-md">
-                    <ScanInput
-                      context="global"
-                      dataTour="scan-input"
-                      placeholder={tHeader("scanPlaceholder")}
-                      ariaLabel={tHeader("scanLabel")}
-                      supportsTabSubmit
-                      enableProductSearch
-                      onResolved={handleScanResolved}
-                    />
+          <SidebarInset className="bg-transparent">
+            <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+              <MobilePageContainer>
+                <div className="mx-auto">
+                  <div className="mb-6 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex">
+                    <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
+                      <SidebarTrigger className="h-10 w-10 shrink-0 border border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground" />
+                      <div className="relative min-w-0 flex-1">
+                        <ScanInput
+                          context="global"
+                          dataTour="scan-input"
+                          placeholder={tHeader("scanPlaceholder")}
+                          ariaLabel={tHeader("scanLabel")}
+                          supportsTabSubmit
+                          enableProductSearch
+                          onResolved={handleScanResolved}
+                        />
+                      </div>
+                    </div>
+                    <div className="hidden md:flex md:items-center md:gap-2">
+                      <PageTipsButton />
+                      <PwaInstallButton />
+                      <LanguageSwitcher />
+                    </div>
                   </div>
-                  <div className="hidden md:flex md:items-center md:gap-2">
-                    <PageTipsButton />
-                    <PwaInstallButton />
-                    <LanguageSwitcher />
-                  </div>
+                  {children}
                 </div>
-                {children}
-              </div>
-            </MobilePageContainer>
-          </main>
-        </div>
+              </MobilePageContainer>
+            </main>
+          </SidebarInset>
+        </SidebarProvider>
 
         <Modal
           open={customizeNavOpen}

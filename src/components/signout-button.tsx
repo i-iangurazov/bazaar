@@ -13,14 +13,14 @@ export const SignOutButton = () => {
   return (
     <Button
       variant="secondary"
-      className="w-full justify-start gap-2 text-left"
+      className="w-full justify-start gap-2 text-left group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0"
       onClick={() => {
         queryClient.clear();
         void signOut({ callbackUrl: "/login" });
       }}
     >
       <SignOutIcon className="h-4 w-4" aria-hidden />
-      {t("signOut")}
+      <span className="group-data-[state=collapsed]/sidebar-wrapper:sr-only">{t("signOut")}</span>
     </Button>
   );
 };
