@@ -428,6 +428,216 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("rejects empty POS drafts before payment validation and creates no side effects", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-empty-pos-submit",
+      idempotencyKey: "pos-empty-submit-seed-1",
+      requestId: "pos-empty-submit-seed-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-empty-submit-open-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+
+    await expect(
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "pos-empty-submit-complete-1",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 999 }],
+      }),
+    ).rejects.toMatchObject({ message: "salesOrderEmpty" });
+
+    const dbSale = await prisma.customerOrder.findUnique({ where: { id: sale.id } });
+    const payments = await prisma.salePayment.findMany({ where: { customerOrderId: sale.id } });
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "CustomerOrder",
+        referenceId: sale.id,
+      },
+    });
+
+    expect(dbSale?.status).toBe("DRAFT");
+    expect(payments).toHaveLength(0);
+    expect(movements).toHaveLength(0);
+  });
+
+  it("handles rapid duplicate POS completes with different keys without duplicate rows", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-rapid-duplicate-complete",
+      idempotencyKey: "pos-rapid-duplicate-seed-1",
+      requestId: "pos-rapid-duplicate-seed-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-rapid-duplicate-open-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    const completes = await Promise.all([
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "pos-rapid-duplicate-complete-1",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+      }),
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "pos-rapid-duplicate-complete-2",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+      }),
+    ]);
+
+    const payments = await prisma.salePayment.findMany({ where: { customerOrderId: sale.id } });
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        storeId: store.id,
+        productId: product.id,
+        type: StockMovementType.SALE,
+        referenceId: sale.id,
+      },
+    });
+    const activeDraft = await caller.pos.sales.activeDraft({ registerId: register.id });
+
+    expect(new Set(completes.map((item) => item.id)).size).toBe(1);
+    expect(payments).toHaveLength(1);
+    expect(Number(payments[0]?.amountKgs ?? 0)).toBe(200);
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.qtyDelta).toBe(-2);
+    expect(activeDraft).toBeNull();
+  });
+
+  it("keeps payment mismatch limited to real split-payment mismatches", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-real-split-mismatch",
+      idempotencyKey: "pos-real-split-mismatch-seed-1",
+      requestId: "pos-real-split-mismatch-seed-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-real-split-mismatch-open-1",
+    });
+
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 1 });
+
+    await expect(
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "pos-real-split-mismatch-complete-1",
+        payments: [
+          { method: PosPaymentMethod.CASH, amountKgs: 50 },
+          { method: PosPaymentMethod.TRANSFER, amountKgs: 49 },
+        ],
+      }),
+    ).rejects.toMatchObject({ message: "posPaymentTotalMismatch" });
+
+    const dbSale = await prisma.customerOrder.findUnique({ where: { id: sale.id } });
+    const payments = await prisma.salePayment.findMany({ where: { customerOrderId: sale.id } });
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "CustomerOrder",
+        referenceId: sale.id,
+      },
+    });
+
+    expect(dbSale?.status).toBe("DRAFT");
+    expect(payments).toHaveLength(0);
+    expect(movements).toHaveLength(0);
+  });
+
   it("edits a completed receipt with quantity, price, product, stock, payment, and audit deltas", async () => {
     const { org, store, supplier, product, cashierUser, adminUser, baseUnit } = await seedBase({
       plan: "BUSINESS",
@@ -649,12 +859,7 @@ describeDb("pos", () => {
       orderBy: { createdAt: "asc" },
     });
     expect(saleMovements.map((movement) => movement.qtyDelta).sort((a, b) => a - b)).toEqual([
-      -10,
-      -8,
-      -3,
-      -2,
-      2,
-      10,
+      -10, -8, -3, -2, 2, 10,
     ]);
 
     const payments = await prisma.salePayment.findMany({
@@ -686,8 +891,8 @@ describeDb("pos", () => {
   it("edits a completed return with inventory, refund, audit, and movement deltas", async () => {
     const { org, store, product, supplier, baseUnit, cashierUser, managerUser, adminUser } =
       await seedBase({
-      plan: "BUSINESS",
-    });
+        plan: "BUSINESS",
+      });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -864,9 +1069,7 @@ describeDb("pos", () => {
       orderBy: { createdAt: "asc" },
     });
     expect(refundMovements.map((movement) => movement.qtyDelta).sort((a, b) => a - b)).toEqual([
-      -1,
-      1,
-      2,
+      -1, 1, 2,
     ]);
 
     const refundPayments = await prisma.salePayment.findMany({

@@ -56,6 +56,17 @@ const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 const sumPaymentMinorUnits = (payments: Array<{ amountKgs: number }>) =>
   payments.reduce((total, payment) => total + (moneyToMinorUnits(payment.amountKgs) ?? 0), 0);
 
+const uniqueConstraintTarget = (error: Prisma.PrismaClientKnownRequestError) => {
+  const target = error.meta?.target;
+  if (Array.isArray(target)) {
+    return target.map((item) => String(item)).join(",");
+  }
+  if (typeof target === "string") {
+    return target;
+  }
+  return null;
+};
+
 export type PosRegisterStatusFilter = "active" | "inactive" | "all";
 
 export type PosReceiptEditLineInput = {
@@ -90,7 +101,10 @@ type NormalizedPosReceiptEditLine = {
 const lineAggregateKey = (productId: string, variantKey: string) => `${productId}:${variantKey}`;
 
 const addLineAggregateQty = (
-  map: Map<string, { productId: string; variantId: string | null; variantKey: string; qty: number }>,
+  map: Map<
+    string,
+    { productId: string; variantId: string | null; variantKey: string; qty: number }
+  >,
   input: { productId: string; variantId?: string | null; variantKey: string; qty: number },
 ) => {
   const key = lineAggregateKey(input.productId, input.variantKey);
@@ -1558,6 +1572,7 @@ export const createPosSaleDraft = async (input: {
   requestId: string;
   lines?: Array<{ productId: string; variantId?: string | null; qty: number }>;
 }) => {
+  const logger = getLogger(input.requestId);
   const createDraftInTransaction = async () =>
     prisma.$transaction(async (tx) => {
       const shift = await requireOpenShift(tx, {
@@ -1801,6 +1816,17 @@ export const createPosSaleDraft = async (input: {
       if (concurrentDraft) {
         return concurrentDraft;
       }
+      logger.warn(
+        {
+          storeId: null,
+          registerId: input.registerId,
+          userId: input.actorId,
+          errorCode: "posDraftUniqueConflict",
+          uniqueTarget: uniqueConstraintTarget(error),
+        },
+        "pos draft unique conflict without active draft fallback",
+      );
+      throw new AppError("posDraftStale", "CONFLICT", 409);
     }
 
     throw error;
@@ -3684,298 +3710,367 @@ export const completePosSale = async (input: {
     ? []
     : normalizePayments(input.payments, { requirePayment: false });
 
-  const result = await prisma.$transaction(async (tx) => {
-    const { result: completion, replayed } = await withIdempotency(
-      tx,
-      {
-        key: input.idempotencyKey,
-        route: "pos.sales.complete",
-        userId: input.actorId,
-      },
-      async () => {
-        await tx.$queryRaw`
+  const result = await prisma
+    .$transaction(async (tx) => {
+      const { result: completion, replayed } = await withIdempotency(
+        tx,
+        {
+          key: input.idempotencyKey,
+          route: "pos.sales.complete",
+          userId: input.actorId,
+        },
+        async () => {
+          await tx.$queryRaw`
           SELECT id FROM "CustomerOrder" WHERE id = ${input.saleId} FOR UPDATE
         `;
 
-        const sale = await tx.customerOrder.findFirst({
-          where: {
-            id: input.saleId,
-            organizationId: input.organizationId,
-            isPosSale: true,
-          },
-          include: {
-            lines: {
-              include: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    sku: true,
+          const sale = await tx.customerOrder.findFirst({
+            where: {
+              id: input.saleId,
+              organizationId: input.organizationId,
+              isPosSale: true,
+            },
+            include: {
+              lines: {
+                include: {
+                  product: {
+                    select: {
+                      id: true,
+                      name: true,
+                      sku: true,
+                    },
                   },
                 },
               },
-            },
-            store: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-                currencyCode: true,
-                currencyRateKgsPerUnit: true,
-              },
-            },
-          },
-        });
-
-        if (!sale) {
-          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
-        }
-        if (input.user) {
-          await assertUserCanAccessStore(tx, input.user, sale.storeId);
-        }
-        if (!sale.shiftId || !sale.registerId) {
-          throw new AppError("posSaleMissingShift", "CONFLICT", 409);
-        }
-
-        const shift = await tx.registerShift.findFirst({
-          where: {
-            id: sale.shiftId,
-            organizationId: input.organizationId,
-          },
-          select: {
-            id: true,
-            status: true,
-            registerId: true,
-            storeId: true,
-            currencyCode: true,
-            currencyRateKgsPerUnit: true,
-          },
-        });
-        if (!shift) {
-          throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
-        }
-        if (shift.status !== RegisterShiftStatus.OPEN) {
-          throw new AppError("posShiftClosed", "CONFLICT", 409);
-        }
-        if (shift.id !== sale.shiftId || shift.registerId !== sale.registerId) {
-          throw new AppError("posShiftMismatch", "CONFLICT", 409);
-        }
-
-        if (sale.status === CustomerOrderStatus.COMPLETED) {
-          return {
-            id: sale.id,
-            number: sale.number,
-            status: sale.status,
-            storeId: sale.storeId,
-            registerId: sale.registerId,
-            shiftId: sale.shiftId,
-            productIds: sale.lines.map((line) => line.productId),
-            kkmCandidate: null,
-          };
-        }
-
-        if (sale.status !== CustomerOrderStatus.DRAFT) {
-          throw new AppError("posSaleNotEditable", "CONFLICT", 409);
-        }
-
-        if (!sale.lines.length) {
-          throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
-        }
-
-        const orderTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs)) ?? 0;
-        const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
-        if (!debtCustomerName && orderTotalMinorUnits > 0 && !normalizedPayments.length) {
-          throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
-        }
-        if (!debtCustomerName && paymentTotalMinorUnits !== orderTotalMinorUnits) {
-          throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
-        }
-        const transactionCurrency = resolveCurrencySnapshot(
-          currencySourceWithFallback(sale, currencySourceWithFallback(shift, sale.store)),
-        );
-
-        const compliance = await tx.storeComplianceProfile.findUnique({
-          where: { storeId: sale.storeId },
-          select: {
-            enableKkm: true,
-            kkmMode: true,
-            kkmProviderKey: true,
-            enableMarking: true,
-            markingMode: true,
-          },
-        });
-
-        if (compliance?.enableMarking && compliance.markingMode === MarkingMode.REQUIRED_ON_SALE) {
-          const productIds = Array.from(new Set(sale.lines.map((line) => line.productId)));
-          const requiredFlags = productIds.length
-            ? await tx.productComplianceFlags.findMany({
-                where: {
-                  organizationId: input.organizationId,
-                  productId: { in: productIds },
-                  requiresMarking: true,
+              store: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  currencyCode: true,
+                  currencyRateKgsPerUnit: true,
                 },
-                select: { productId: true },
-              })
-            : [];
-          const requiredProducts = new Set(requiredFlags.map((flag) => flag.productId));
-
-          const requiredLines = sale.lines.filter((line) => requiredProducts.has(line.productId));
-          if (requiredLines.length) {
-            const captures = await tx.markingCodeCapture.groupBy({
-              by: ["saleLineId"],
-              where: {
-                saleId: sale.id,
-                saleLineId: { in: requiredLines.map((line) => line.id) },
-                status: MarkingCodeStatus.CAPTURED,
               },
-              _count: { _all: true },
-            });
-            const counts = new Map(captures.map((row) => [row.saleLineId, row._count._all]));
+            },
+          });
 
-            const missingLine = requiredLines.find((line) => (counts.get(line.id) ?? 0) < 1);
-            if (missingLine) {
-              throw new AppError("posMarkingCodeRequired", "BAD_REQUEST", 400);
+          if (!sale) {
+            throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+          }
+          if (input.user) {
+            await assertUserCanAccessStore(tx, input.user, sale.storeId);
+          }
+          if (!sale.shiftId || !sale.registerId) {
+            throw new AppError("posSaleMissingShift", "CONFLICT", 409);
+          }
+
+          const shift = await tx.registerShift.findFirst({
+            where: {
+              id: sale.shiftId,
+              organizationId: input.organizationId,
+            },
+            select: {
+              id: true,
+              status: true,
+              registerId: true,
+              storeId: true,
+              currencyCode: true,
+              currencyRateKgsPerUnit: true,
+            },
+          });
+          if (!shift) {
+            throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
+          }
+          if (shift.status !== RegisterShiftStatus.OPEN) {
+            throw new AppError("posShiftClosed", "CONFLICT", 409);
+          }
+          if (shift.id !== sale.shiftId || shift.registerId !== sale.registerId) {
+            throw new AppError("posShiftMismatch", "CONFLICT", 409);
+          }
+
+          if (sale.status === CustomerOrderStatus.COMPLETED) {
+            return {
+              id: sale.id,
+              number: sale.number,
+              status: sale.status,
+              storeId: sale.storeId,
+              registerId: sale.registerId,
+              shiftId: sale.shiftId,
+              productIds: sale.lines.map((line) => line.productId),
+              alreadyCompleted: true,
+              kkmCandidate: null,
+            };
+          }
+
+          if (sale.status !== CustomerOrderStatus.DRAFT) {
+            throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+          }
+
+          const orderTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs)) ?? 0;
+          const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
+          const paymentMethod = debtCustomerName
+            ? "DEBT"
+            : normalizedPayments.length === 1
+              ? normalizedPayments[0]?.method
+              : normalizedPayments.length > 1
+                ? "SPLIT"
+                : "NONE";
+          const logCompletionRejected = (errorCode: string) => {
+            logger.warn(
+              {
+                storeId: sale.storeId,
+                registerId: sale.registerId,
+                userId: input.actorId,
+                draftId: sale.id,
+                cartLineCount: sale.lines.length,
+                serverLineCount: sale.lines.length,
+                paymentSumMinorUnits: paymentTotalMinorUnits,
+                cartTotalMinorUnits: orderTotalMinorUnits,
+                differenceMinorUnits: paymentTotalMinorUnits - orderTotalMinorUnits,
+                paymentMethod,
+                errorCode,
+              },
+              "pos sale completion rejected",
+            );
+          };
+          if (!sale.lines.length) {
+            logCompletionRejected("salesOrderEmpty");
+            throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+          }
+
+          if (!debtCustomerName && orderTotalMinorUnits > 0 && !normalizedPayments.length) {
+            logCompletionRejected("posPaymentMissing");
+            throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
+          }
+          if (!debtCustomerName && paymentTotalMinorUnits !== orderTotalMinorUnits) {
+            logCompletionRejected("posPaymentTotalMismatch");
+            throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
+          }
+          const transactionCurrency = resolveCurrencySnapshot(
+            currencySourceWithFallback(sale, currencySourceWithFallback(shift, sale.store)),
+          );
+
+          const compliance = await tx.storeComplianceProfile.findUnique({
+            where: { storeId: sale.storeId },
+            select: {
+              enableKkm: true,
+              kkmMode: true,
+              kkmProviderKey: true,
+              enableMarking: true,
+              markingMode: true,
+            },
+          });
+
+          if (
+            compliance?.enableMarking &&
+            compliance.markingMode === MarkingMode.REQUIRED_ON_SALE
+          ) {
+            const productIds = Array.from(new Set(sale.lines.map((line) => line.productId)));
+            const requiredFlags = productIds.length
+              ? await tx.productComplianceFlags.findMany({
+                  where: {
+                    organizationId: input.organizationId,
+                    productId: { in: productIds },
+                    requiresMarking: true,
+                  },
+                  select: { productId: true },
+                })
+              : [];
+            const requiredProducts = new Set(requiredFlags.map((flag) => flag.productId));
+
+            const requiredLines = sale.lines.filter((line) => requiredProducts.has(line.productId));
+            if (requiredLines.length) {
+              const captures = await tx.markingCodeCapture.groupBy({
+                by: ["saleLineId"],
+                where: {
+                  saleId: sale.id,
+                  saleLineId: { in: requiredLines.map((line) => line.id) },
+                  status: MarkingCodeStatus.CAPTURED,
+                },
+                _count: { _all: true },
+              });
+              const counts = new Map(captures.map((row) => [row.saleLineId, row._count._all]));
+
+              const missingLine = requiredLines.find((line) => (counts.get(line.id) ?? 0) < 1);
+              if (missingLine) {
+                throw new AppError("posMarkingCodeRequired", "BAD_REQUEST", 400);
+              }
             }
           }
-        }
 
-        for (const line of sale.lines) {
-          await applyStockMovement(tx, {
-            storeId: sale.storeId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyDelta: -line.qty,
-            type: StockMovementType.SALE,
-            referenceType: "CustomerOrder",
-            referenceId: sale.id,
-            note: sale.number,
-            actorId: input.actorId,
-            organizationId: input.organizationId,
-            allowNegativeStock: true,
-          });
-        }
-
-        if (normalizedPayments.length) {
-          await tx.salePayment.createMany({
-            data: normalizedPayments.map((payment) => ({
+          for (const line of sale.lines) {
+            await applyStockMovement(tx, {
+              storeId: sale.storeId,
+              productId: line.productId,
+              variantId: line.variantId,
+              qtyDelta: -line.qty,
+              type: StockMovementType.SALE,
+              referenceType: "CustomerOrder",
+              referenceId: sale.id,
+              note: sale.number,
+              actorId: input.actorId,
               organizationId: input.organizationId,
-              storeId: sale.storeId,
-              shiftId: shift.id,
-              customerOrderId: sale.id,
-              method: payment.method,
-              amountKgs: payment.amountKgs,
-              ...transactionCurrency,
-              providerRef: payment.providerRef,
-              isRefund: false,
-              createdById: input.actorId,
-            })),
-          });
-        }
+              allowNegativeStock: true,
+            });
+          }
 
-        const updated = await tx.customerOrder.update({
-          where: { id: sale.id },
-          data: {
-            status: CustomerOrderStatus.COMPLETED,
-            completedAt: new Date(),
-            completedEventId: input.idempotencyKey,
-            isDebt: Boolean(debtCustomerName),
-            debtCustomerName,
-            customerName: debtCustomerName ?? sale.customerName,
-            ...transactionCurrency,
-            updatedById: input.actorId,
-          },
-        });
-
-        await upsertCustomerFromOrderTx(tx, {
-          organizationId: input.organizationId,
-          storeId: sale.storeId,
-          customerName: updated.customerName,
-          customerEmail: updated.customerEmail,
-          customerPhone: updated.customerPhone,
-          orderedAt: updated.completedAt,
-          countOrder: true,
-        });
-
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "POS_SALE_COMPLETE",
-          entity: "CustomerOrder",
-          entityId: sale.id,
-          before: toJson({ status: sale.status }),
-          after: toJson({ status: updated.status }),
-          requestId: input.requestId,
-        });
-
-        const kkmMode =
-          !debtCustomerName && compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF
-            ? compliance.kkmMode
-            : null;
-        const kkmCandidate: FiscalReceiptDraft | null = kkmMode
-          ? {
-              storeId: sale.storeId,
-              receiptId: sale.number,
-              cashierName: input.actorId,
-              customerName: sale.customerName ?? undefined,
-              lines: sale.lines.map((line) => ({
-                sku: line.product.sku,
-                name: line.product.name,
-                qty: line.qty,
-                priceKgs: toMoney(line.unitPriceKgs),
-              })),
-              payments: normalizedPayments.map((payment) => ({
-                type: payment.method,
-                amountKgs: payment.amountKgs,
-              })),
-              metadata: {
-                saleId: sale.id,
+          if (normalizedPayments.length) {
+            await tx.salePayment.createMany({
+              data: normalizedPayments.map((payment) => ({
+                organizationId: input.organizationId,
+                storeId: sale.storeId,
                 shiftId: shift.id,
-                registerId: sale.registerId,
-                mode: kkmMode,
-              },
-            }
-          : null;
+                customerOrderId: sale.id,
+                method: payment.method,
+                amountKgs: payment.amountKgs,
+                ...transactionCurrency,
+                providerRef: payment.providerRef,
+                isRefund: false,
+                createdById: input.actorId,
+              })),
+            });
+          }
 
-        const fiscalReceipt = kkmCandidate
-          ? await queueFiscalReceipt({
-              tx,
-              organizationId: input.organizationId,
-              storeId: sale.storeId,
-              customerOrderId: sale.id,
-              idempotencyKey: `pos-sale:${sale.id}:${input.idempotencyKey}`,
-              mode: kkmMode ?? KkmMode.EXPORT_ONLY,
-              providerKey: compliance?.kkmProviderKey ?? null,
+          const updated = await tx.customerOrder.update({
+            where: { id: sale.id },
+            data: {
+              status: CustomerOrderStatus.COMPLETED,
+              completedAt: new Date(),
+              completedEventId: input.idempotencyKey,
+              isDebt: Boolean(debtCustomerName),
+              debtCustomerName,
+              customerName: debtCustomerName ?? sale.customerName,
               ...transactionCurrency,
-              payload: kkmCandidate,
-            })
-          : null;
+              updatedById: input.actorId,
+            },
+          });
 
-        return {
-          id: updated.id,
-          number: updated.number,
-          status: updated.status,
-          storeId: updated.storeId,
-          registerId: updated.registerId,
-          shiftId: updated.shiftId,
-          productIds: sale.lines.map((line) => line.productId),
-          kkmCandidate: kkmMode === KkmMode.ADAPTER ? kkmCandidate : null,
-          kkmMode,
-          kkmProviderKey: compliance?.kkmProviderKey ?? null,
-          fiscalReceiptId: fiscalReceipt?.id ?? null,
-        };
-      },
-    );
+          await upsertCustomerFromOrderTx(tx, {
+            organizationId: input.organizationId,
+            storeId: sale.storeId,
+            customerName: updated.customerName,
+            customerEmail: updated.customerEmail,
+            customerPhone: updated.customerPhone,
+            orderedAt: updated.completedAt,
+            countOrder: true,
+          });
 
-    return { ...completion, replayed };
-  });
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "POS_SALE_COMPLETE",
+            entity: "CustomerOrder",
+            entityId: sale.id,
+            before: toJson({ status: sale.status }),
+            after: toJson({ status: updated.status }),
+            requestId: input.requestId,
+          });
 
-  if (!result.replayed && result.fiscalReceiptId) {
+          const kkmMode =
+            !debtCustomerName && compliance?.enableKkm && compliance.kkmMode !== KkmMode.OFF
+              ? compliance.kkmMode
+              : null;
+          const kkmCandidate: FiscalReceiptDraft | null = kkmMode
+            ? {
+                storeId: sale.storeId,
+                receiptId: sale.number,
+                cashierName: input.actorId,
+                customerName: sale.customerName ?? undefined,
+                lines: sale.lines.map((line) => ({
+                  sku: line.product.sku,
+                  name: line.product.name,
+                  qty: line.qty,
+                  priceKgs: toMoney(line.unitPriceKgs),
+                })),
+                payments: normalizedPayments.map((payment) => ({
+                  type: payment.method,
+                  amountKgs: payment.amountKgs,
+                })),
+                metadata: {
+                  saleId: sale.id,
+                  shiftId: shift.id,
+                  registerId: sale.registerId,
+                  mode: kkmMode,
+                },
+              }
+            : null;
+
+          const fiscalReceipt = kkmCandidate
+            ? await queueFiscalReceipt({
+                tx,
+                organizationId: input.organizationId,
+                storeId: sale.storeId,
+                customerOrderId: sale.id,
+                idempotencyKey: `pos-sale:${sale.id}:${input.idempotencyKey}`,
+                mode: kkmMode ?? KkmMode.EXPORT_ONLY,
+                providerKey: compliance?.kkmProviderKey ?? null,
+                ...transactionCurrency,
+                payload: kkmCandidate,
+              })
+            : null;
+
+          return {
+            id: updated.id,
+            number: updated.number,
+            status: updated.status,
+            storeId: updated.storeId,
+            registerId: updated.registerId,
+            shiftId: updated.shiftId,
+            productIds: sale.lines.map((line) => line.productId),
+            alreadyCompleted: false,
+            kkmCandidate: kkmMode === KkmMode.ADAPTER ? kkmCandidate : null,
+            kkmMode,
+            kkmProviderKey: compliance?.kkmProviderKey ?? null,
+            fiscalReceiptId: fiscalReceipt?.id ?? null,
+          };
+        },
+      );
+
+      return { ...completion, replayed };
+    })
+    .catch((error) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        logger.warn(
+          {
+            storeId: null,
+            registerId: null,
+            userId: input.actorId,
+            draftId: input.saleId,
+            cartLineCount: null,
+            serverLineCount: null,
+            paymentSumMinorUnits: sumPaymentMinorUnits(normalizedPayments),
+            cartTotalMinorUnits: null,
+            differenceMinorUnits: null,
+            paymentMethod:
+              debtCustomerName || !normalizedPayments.length
+                ? debtCustomerName
+                  ? "DEBT"
+                  : "NONE"
+                : normalizedPayments.length === 1
+                  ? normalizedPayments[0]?.method
+                  : "SPLIT",
+            errorCode: "posSaleUniqueConflict",
+            uniqueTarget: uniqueConstraintTarget(error),
+          },
+          "pos sale completion rejected",
+        );
+        throw new AppError("posSubmitAlreadyProcessed", "CONFLICT", 409);
+      }
+      throw error;
+    });
+
+  if (!result.replayed && !result.alreadyCompleted && result.fiscalReceiptId) {
     incrementCounter(kkmReceiptsQueuedTotal, {
       mode: result.kkmMode ?? KkmMode.EXPORT_ONLY,
     });
   }
 
-  if (!result.replayed && result.kkmCandidate && result.kkmMode === KkmMode.ADAPTER) {
+  if (
+    !result.replayed &&
+    !result.alreadyCompleted &&
+    result.kkmCandidate &&
+    result.kkmMode === KkmMode.ADAPTER
+  ) {
     try {
       const adapter = getKkmAdapter(result.kkmProviderKey);
       const fiscalized = await adapter.fiscalizeReceipt(result.kkmCandidate);
@@ -4045,26 +4140,36 @@ export const completePosSale = async (input: {
     }
   }
 
-  const productIds = Array.from(new Set(result.productIds));
-  for (const productId of productIds) {
+  if (!result.replayed && !result.alreadyCompleted) {
+    const productIds = Array.from(new Set(result.productIds));
+    for (const productId of productIds) {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: result.storeId, productId, variantId: null },
+      });
+    }
+
     eventBus.publish({
-      type: "inventory.updated",
-      payload: { storeId: result.storeId, productId, variantId: null },
+      type: "sale.completed",
+      payload: {
+        saleId: result.id,
+        storeId: result.storeId,
+        registerId: result.registerId ?? null,
+        shiftId: result.shiftId ?? null,
+        number: result.number,
+      },
     });
   }
 
-  eventBus.publish({
-    type: "sale.completed",
-    payload: {
+  logger.info(
+    {
       saleId: result.id,
-      storeId: result.storeId,
-      registerId: result.registerId ?? null,
-      shiftId: result.shiftId ?? null,
       number: result.number,
+      replayed: result.replayed,
+      alreadyCompleted: result.alreadyCompleted,
     },
-  });
-
-  logger.info({ saleId: result.id, number: result.number }, "pos sale completed");
+    "pos sale completed",
+  );
   const completedSale = await prisma.customerOrder.findUnique({
     where: { id: result.id },
     select: { kkmStatus: true },

@@ -133,7 +133,9 @@ describe("pos entry navigation", () => {
     expect(completeBlock).toContain("void Promise.all([");
     expect(cancelBlock).toContain("clearCartRuntimeSyncState();");
     expect(cancelBlock).toContain("void Promise.all([");
-    expect(handleAddLineBlock).toContain("const cartSessionVersion = cartSessionVersionRef.current;");
+    expect(handleAddLineBlock).toContain(
+      "const cartSessionVersion = cartSessionVersionRef.current;",
+    );
     expect(handleAddLineBlock).toContain(
       "if (cartSessionVersionRef.current !== cartSessionVersion)",
     );
@@ -239,7 +241,11 @@ describe("pos entry navigation", () => {
     const serviceSource = await readSource("src/server/services/pos.ts");
 
     expect(pageSource).toContain("await waitForCartSync();");
+    expect(pageSource).toContain("const completeSubmitInFlightRef = useRef(false);");
+    expect(pageSource).toContain("completeSubmitInFlightRef.current ||");
+    expect(pageSource).toContain("rejectEmptyCartSubmit();");
     expect(pageSource).toContain("const currentLines = getCurrentCartLines();");
+    expect(pageSource).toContain("if (!currentLines.length)");
     expect(pageSource).toContain("const currentCartTotalKgs =");
     expect(pageSource).toContain("buildPosPaymentSubmitPayload({");
     expect(pageSource).toContain("cartTotalKgs: currentCartTotalKgs");
@@ -254,7 +260,21 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("optimisticLineServerIdsRef");
     expect(routerSource).not.toContain("payments.length < 1");
     expect(serviceSource).toContain("normalizePayments(input.payments, { requirePayment: false })");
+    expect(serviceSource.indexOf('throw new AppError("salesOrderEmpty"')).toBeLessThan(
+      serviceSource.indexOf('throw new AppError("posPaymentTotalMismatch"'),
+    );
+    expect(serviceSource).toContain('errorCode: "posSaleUniqueConflict"');
+    expect(serviceSource).toContain('throw new AppError("posSubmitAlreadyProcessed"');
     expect(serviceSource).toContain("orderTotalMinorUnits > 0 && !normalizedPayments.length");
     expect(serviceSource).toContain("paymentTotalMinorUnits !== orderTotalMinorUnits");
+  });
+
+  it("keeps duplicate-record copy out of cashier-visible translations", async () => {
+    const ruMessages = await readSource("messages/ru.json");
+
+    expect(ruMessages).not.toContain("Запись с такими данными уже существует");
+    expect(ruMessages).toContain("Добавьте товары в чек");
+    expect(ruMessages).toContain("Текущий чек устарел");
+    expect(ruMessages).toContain("Этот чек уже обрабатывается");
   });
 });

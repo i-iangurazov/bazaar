@@ -610,6 +610,7 @@ const PosSellPage = () => {
     saleId: null,
     totalKgs: null,
   });
+  const completeSubmitInFlightRef = useRef(false);
 
   const setPayments = useCallback((updater: SetStateAction<PosPaymentDraft[]>) => {
     const next =
@@ -619,6 +620,13 @@ const PosSellPage = () => {
     paymentsRef.current = next;
     setPaymentsState(next);
   }, []);
+
+  const rejectEmptyCartSubmit = useCallback(() => {
+    setPayments([createDefaultPosPaymentDraft()]);
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+    setMobileCheckoutOpen(true);
+    toast({ variant: "error", description: t("sell.emptyCartTitle") });
+  }, [setPayments, t, toast]);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
@@ -794,7 +802,9 @@ const PosSellPage = () => {
       limit: 30,
     },
     {
-      enabled: Boolean(journalEditSaleId && journalSaleDetailQuery.data?.store.id && journalEditSearch.trim()),
+      enabled: Boolean(
+        journalEditSaleId && journalSaleDetailQuery.data?.store.id && journalEditSearch.trim(),
+      ),
       keepPreviousData: true,
     },
   );
@@ -822,6 +832,7 @@ const PosSellPage = () => {
     pendingCartSyncPromisesRef.current.clear();
     pendingCartMutationCountRef.current = 0;
     draftCreationRef.current = null;
+    completeSubmitInFlightRef.current = false;
     optimisticLineServerIdsRef.current = {};
     removedOptimisticLineIdsRef.current.clear();
   }, []);
@@ -2226,99 +2237,117 @@ const PosSellPage = () => {
   }, [flushPendingLineSyncs, waitForCartSync]);
 
   const handleComplete = async () => {
-    if (!saleId) {
+    const targetSaleId = saleId;
+    if (
+      !targetSaleId ||
+      completeSubmitInFlightRef.current ||
+      completeMutation.isLoading ||
+      isLineBusy
+    ) {
       return;
     }
 
-    if (sellInDebt) {
-      const normalizedDebtName = debtFullName.trim().replace(/\s+/g, " ");
-      if (normalizedDebtName.length < 2) {
-        toast({ variant: "error", description: t("sell.debtNameRequired") });
-        return;
-      }
+    const linesBeforeFlush = getCurrentCartLines();
+    if (!linesBeforeFlush.length) {
+      rejectEmptyCartSubmit();
+      return;
+    }
+
+    completeSubmitInFlightRef.current = true;
+    try {
       try {
         await flushAllPendingCartSync();
+      } catch {
+        return;
+      }
+
+      const currentLines = getCurrentCartLines();
+      if (!currentLines.length) {
+        rejectEmptyCartSubmit();
+        return;
+      }
+
+      if (sellInDebt) {
+        const normalizedDebtName = debtFullName.trim().replace(/\s+/g, " ");
+        if (normalizedDebtName.length < 2) {
+          toast({ variant: "error", description: t("sell.debtNameRequired") });
+          return;
+        }
         await completeMutation.mutateAsync({
-          saleId,
+          saleId: targetSaleId,
           idempotencyKey: createIdempotencyKey(),
           debtCustomerName: normalizedDebtName,
           payments: [],
         });
-      } catch {
-        // handled by mutation onError
-      }
-      return;
-    }
-
-    try {
-      await flushAllPendingCartSync();
-    } catch {
-      return;
-    }
-
-    const currentLines = getCurrentCartLines();
-    const currentSubtotalKgs = calculateCartSubtotalKgs(currentLines);
-    const currentDiscountKgs = Math.min(
-      currentSubtotalKgs,
-      Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
-    );
-    if (
-      draftDiscountKgs !== null &&
-      Math.abs(currentDiscountKgs - (sale?.discountKgs ?? 0)) > 0.009
-    ) {
-      try {
-        await updateDiscountMutation.mutateAsync({ saleId, discountKgs: currentDiscountKgs });
-      } catch {
         return;
       }
-    }
-    const currentCartTotalKgs = roundMoney(Math.max(0, currentSubtotalKgs - currentDiscountKgs));
-    const currentDisplayTotal = roundMoney(
-      displayMoneyFromKgs(currentCartTotalKgs, currencySource),
-    );
-    const currentDisplayTotalDraft = Number.isFinite(currentDisplayTotal)
-      ? String(currentDisplayTotal)
-      : "";
-    const currentPaymentDrafts = paymentsRef.current.length
-      ? paymentsRef.current
-      : [createDefaultPosPaymentDraft()];
-    const reconciledPayments = reconcilePosPaymentDraftsForSaleTotal({
-      currentPayments: currentPaymentDrafts,
-      saleId,
-      totalKgs: currentCartTotalKgs,
-      displayTotal: currentDisplayTotal,
-      previousAutoFill: paymentAutoFillRef.current,
-    });
-    const paymentPayload = buildPosPaymentSubmitPayload({
-      payments: reconciledPayments.payments,
-      cartTotalKgs: currentCartTotalKgs,
-      currencySource,
-      singlePaymentDisplayAmount: currentDisplayTotalDraft,
-    });
-    paymentAutoFillRef.current = reconciledPayments.autoFill;
-    setPayments(paymentPayload.displayPayments);
 
-    if (paymentPayload.status === "paymentRequired") {
-      toast({ variant: "error", description: t("sell.paymentRequired") });
-      focusPaymentsInput();
-      return;
-    }
+      const currentSubtotalKgs = calculateCartSubtotalKgs(currentLines);
+      const currentDiscountKgs = Math.min(
+        currentSubtotalKgs,
+        Math.max(0, draftDiscountKgs ?? sale?.discountKgs ?? 0),
+      );
+      if (
+        draftDiscountKgs !== null &&
+        Math.abs(currentDiscountKgs - (sale?.discountKgs ?? 0)) > 0.009
+      ) {
+        try {
+          await updateDiscountMutation.mutateAsync({
+            saleId: targetSaleId,
+            discountKgs: currentDiscountKgs,
+          });
+        } catch {
+          return;
+        }
+      }
+      const currentCartTotalKgs = roundMoney(Math.max(0, currentSubtotalKgs - currentDiscountKgs));
+      const currentDisplayTotal = roundMoney(
+        displayMoneyFromKgs(currentCartTotalKgs, currencySource),
+      );
+      const currentDisplayTotalDraft = Number.isFinite(currentDisplayTotal)
+        ? String(currentDisplayTotal)
+        : "";
+      const currentPaymentDrafts = paymentsRef.current.length
+        ? paymentsRef.current
+        : [createDefaultPosPaymentDraft()];
+      const reconciledPayments = reconcilePosPaymentDraftsForSaleTotal({
+        currentPayments: currentPaymentDrafts,
+        saleId: targetSaleId,
+        totalKgs: currentCartTotalKgs,
+        displayTotal: currentDisplayTotal,
+        previousAutoFill: paymentAutoFillRef.current,
+      });
+      const paymentPayload = buildPosPaymentSubmitPayload({
+        payments: reconciledPayments.payments,
+        cartTotalKgs: currentCartTotalKgs,
+        currencySource,
+        singlePaymentDisplayAmount: currentDisplayTotalDraft,
+      });
+      paymentAutoFillRef.current = reconciledPayments.autoFill;
+      setPayments(paymentPayload.displayPayments);
 
-    if (paymentPayload.status === "paymentMismatch") {
-      toast({ variant: "error", description: t("sell.paymentMismatch") });
-      focusPaymentsInput();
-      return;
-    }
+      if (paymentPayload.status === "paymentRequired") {
+        toast({ variant: "error", description: t("sell.paymentRequired") });
+        focusPaymentsInput();
+        return;
+      }
 
-    try {
+      if (paymentPayload.status === "paymentMismatch") {
+        toast({ variant: "error", description: t("sell.paymentMismatch") });
+        focusPaymentsInput();
+        return;
+      }
+
       await completeMutation.mutateAsync({
-        saleId,
+        saleId: targetSaleId,
         idempotencyKey: createIdempotencyKey(),
         debtCustomerName: null,
         payments: paymentPayload.payments,
       });
     } catch {
       // handled by mutation onError
+    } finally {
+      completeSubmitInFlightRef.current = false;
     }
   };
 
@@ -2509,7 +2538,11 @@ const PosSellPage = () => {
   }, [journalReturnSaleId, journalSelectedSale?.id, journalSelectedSale?.lines]);
 
   useEffect(() => {
-    if (!journalEditSaleId || !journalSelectedSale || journalSelectedSale.id !== journalEditSaleId) {
+    if (
+      !journalEditSaleId ||
+      !journalSelectedSale ||
+      journalSelectedSale.id !== journalEditSaleId
+    ) {
       return;
     }
     setJournalEditCustomerName(journalSelectedSale.customerName ?? "");
