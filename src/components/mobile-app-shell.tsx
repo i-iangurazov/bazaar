@@ -136,7 +136,7 @@ export const MobileTopBar = ({
   onOpenMore,
 }: MobileTopBarProps) => (
   <header
-    className="sticky top-0 z-40 border-b border-border bg-background/95 px-4 pb-3 pt-3 shadow-sm backdrop-blur md:hidden"
+    className="sticky top-0 z-40 border-b border-border/80 bg-card/95 px-4 pb-3 pt-3 shadow-sm backdrop-blur-xl md:hidden"
     style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
   >
     <div className="flex min-h-11 items-center justify-between gap-3">
@@ -158,7 +158,7 @@ export const MobileTopBar = ({
         <PwaInstallButton />
         <Link
           href="/settings/profile"
-          className="button-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="button-focus-ring inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground shadow-sm transition hover:border-primary/40 hover:text-foreground focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label={profileLabel}
         >
           <UserIcon className="h-4 w-4" aria-hidden />
@@ -186,7 +186,7 @@ export const MobileBottomNav = ({
   onOpenMore,
 }: MobileBottomNavProps) => (
   <nav
-    className="fixed inset-x-2 bottom-2 z-40 rounded-md border border-border bg-background/95 px-2 pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+    className="fixed inset-x-3 bottom-3 z-40 rounded-[1.5rem] border border-border/80 bg-card/95 px-2 py-2 shadow-[0_-10px_32px_rgba(15,23,42,0.12)] backdrop-blur-xl md:hidden"
     style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     aria-label={navigationLabel}
   >
@@ -200,15 +200,15 @@ export const MobileBottomNav = ({
       <button
         type="button"
         className={cn(
-          "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 text-[11px] font-semibold transition",
+          "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1rem] px-1 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
           moreActive
-            ? "bg-primary text-primary-foreground shadow-sm"
+            ? "bg-primary/10 text-primary ring-1 ring-primary/20"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground",
         )}
         onClick={onOpenMore}
         aria-current={moreActive ? "page" : undefined}
       >
-        <MoreIcon className="h-4 w-4" aria-hidden />
+        <MoreIcon className="h-5 w-5" aria-hidden />
         <span className="w-full truncate text-center">{moreLabel}</span>
       </button>
     </div>
@@ -219,14 +219,14 @@ const MobileBottomNavLink = ({ item }: { item: MobileShellNavItem }) => (
   <Link
     href={item.href}
     className={cn(
-      "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline",
+      "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1rem] px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
       item.active
-        ? "bg-primary text-primary-foreground shadow-sm"
+        ? "bg-primary/10 text-primary ring-1 ring-primary/20"
         : "text-muted-foreground hover:bg-secondary hover:text-foreground",
     )}
     aria-current={item.active ? "page" : undefined}
   >
-    <item.icon className="h-4 w-4" aria-hidden />
+    <item.icon className="h-5 w-5" aria-hidden />
     <span className="w-full truncate text-center">{item.label}</span>
   </Link>
 );
@@ -279,7 +279,7 @@ export const MobileMoreMenu = ({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-md border-t border-border bg-background shadow-2xl transition-transform duration-200 ease-out",
+          "absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-[1.5rem] border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out",
           open ? "translate-y-0" : "translate-y-full",
         )}
       >
@@ -303,8 +303,9 @@ export const MobileMoreMenu = ({
               href={item.href}
               onClick={onClose}
               className={cn(
-                "flex min-h-12 items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold no-underline transition hover:border-primary/40 hover:bg-accent hover:no-underline",
-                item.active && "border-primary/40 bg-primary/10 text-primary",
+                "flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold no-underline transition hover:border-primary/40 hover:bg-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                item.active &&
+                  "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20",
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" aria-hidden />
