@@ -540,6 +540,25 @@ const PosSellPage = () => {
   const [journalPage, setJournalPage] = useState(1);
   const [journalDetailSaleId, setJournalDetailSaleId] = useState<string | null>(null);
   const [journalReturnSaleId, setJournalReturnSaleId] = useState<string | null>(null);
+  const [journalEditSaleId, setJournalEditSaleId] = useState<string | null>(null);
+  const [journalEditLines, setJournalEditLines] = useState<
+    Array<{
+      key: string;
+      lineId: string | null;
+      productId: string;
+      variantId: string | null;
+      productName: string;
+      variantName: string | null;
+      quantityInput: string;
+      unitPriceInput: string;
+    }>
+  >([]);
+  const [journalEditSearch, setJournalEditSearch] = useState("");
+  const [journalEditReplaceLineKey, setJournalEditReplaceLineKey] = useState<string | null>(null);
+  const [journalEditCustomerName, setJournalEditCustomerName] = useState("");
+  const [journalEditCustomerPhone, setJournalEditCustomerPhone] = useState("");
+  const [journalEditNotes, setJournalEditNotes] = useState("");
+  const [journalEditReason, setJournalEditReason] = useState("");
   const [journalReturnQtyByLine, setJournalReturnQtyByLine] = useState<Record<string, string>>({});
   const [journalRefundMethod, setJournalRefundMethod] = useState<PosPaymentMethod>(
     PosPaymentMethod.CASH,
@@ -691,7 +710,7 @@ const PosSellPage = () => {
   const hasSearchTerm = lineSearch.trim().length >= 1;
   const activeStoreId = shiftQuery.data?.store.id;
   const journalStoreId = activeStoreId ?? selectedRegister?.store.id;
-  const journalSelectedSaleId = journalReturnSaleId ?? journalDetailSaleId;
+  const journalSelectedSaleId = journalReturnSaleId ?? journalDetailSaleId ?? journalEditSaleId;
   const receiptPrintSettingsQuery = trpc.stores.hardware.useQuery(
     { storeId: activeStoreId ?? "" },
     { enabled: Boolean(activeStoreId), staleTime: 60_000 },
@@ -766,6 +785,17 @@ const PosSellPage = () => {
     {
       enabled: Boolean(journalSelectedSaleId),
       refetchOnWindowFocus: false,
+    },
+  );
+  const journalEditProductSearchQuery = trpc.inventory.searchProducts.useQuery(
+    {
+      storeId: journalSaleDetailQuery.data?.store.id ?? "",
+      search: journalEditSearch.trim() || undefined,
+      limit: 30,
+    },
+    {
+      enabled: Boolean(journalEditSaleId && journalSaleDetailQuery.data?.store.id && journalEditSearch.trim()),
+      keepPreviousData: true,
     },
   );
 
@@ -995,6 +1025,22 @@ const PosSellPage = () => {
     },
   });
   const completeReturnMutation = trpc.pos.returns.complete.useMutation({
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const editCompletedSaleMutation = trpc.pos.sales.editCompleted.useMutation({
+    onSuccess: async (result) => {
+      toast({ variant: "success", description: t("sell.editReceiptSaved") });
+      setJournalEditSaleId(null);
+      setJournalEditReplaceLineKey(null);
+      await Promise.all([
+        journalSalesQuery.refetch(),
+        journalSaleDetailQuery.refetch(),
+        trpcUtils.pos.sales.get.invalidate({ saleId: result.id }),
+        trpcUtils.inventory.productMovements.invalidate(),
+      ]);
+    },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -2463,6 +2509,154 @@ const PosSellPage = () => {
   }, [journalReturnSaleId, journalSelectedSale?.id, journalSelectedSale?.lines]);
 
   useEffect(() => {
+    if (!journalEditSaleId || !journalSelectedSale || journalSelectedSale.id !== journalEditSaleId) {
+      return;
+    }
+    setJournalEditCustomerName(journalSelectedSale.customerName ?? "");
+    setJournalEditCustomerPhone(journalSelectedSale.customerPhone ?? "");
+    setJournalEditNotes(journalSelectedSale.notes ?? "");
+    setJournalEditReason("");
+    setJournalEditSearch("");
+    setJournalEditReplaceLineKey(null);
+    setJournalEditLines(
+      journalSelectedSale.lines.map((line) => ({
+        key: line.id,
+        lineId: line.id,
+        productId: line.productId,
+        variantId: line.variantId ?? null,
+        productName: line.product.name,
+        variantName: line.variant?.name ?? null,
+        quantityInput: String(line.qty),
+        unitPriceInput: String(line.unitPriceKgs),
+      })),
+    );
+  }, [journalEditSaleId, journalSelectedSale]);
+
+  const parseJournalEditNumber = (value: string) => {
+    const normalized = value.trim().replace(",", ".");
+    if (!normalized) {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const updateJournalEditLine = (
+    key: string,
+    patch: Partial<(typeof journalEditLines)[number]>,
+  ) => {
+    setJournalEditLines((current) =>
+      current.map((line) => (line.key === key ? { ...line, ...patch } : line)),
+    );
+  };
+
+  const removeJournalEditLine = (key: string) => {
+    setJournalEditLines((current) => current.filter((line) => line.key !== key));
+  };
+
+  const applyProductToJournalEditLine = (
+    lineKey: string,
+    result: NonNullable<typeof journalEditProductSearchQuery.data>[number],
+  ) => {
+    if (
+      journalEditLines.some(
+        (line) =>
+          line.key !== lineKey &&
+          line.productId === result.product.id &&
+          (line.variantId ?? null) === (result.snapshot.variantId ?? null),
+      )
+    ) {
+      toast({ variant: "error", description: t("sell.editReceiptDuplicateLine") });
+      return;
+    }
+    updateJournalEditLine(lineKey, {
+      productId: result.product.id,
+      variantId: result.snapshot.variantId ?? null,
+      productName: result.product.name,
+      variantName: result.variant?.name ?? null,
+      unitPriceInput: String(result.priceKgs ?? 0),
+    });
+    setJournalEditSearch("");
+    setJournalEditReplaceLineKey(null);
+  };
+
+  const addProductToJournalEdit = (
+    result: NonNullable<typeof journalEditProductSearchQuery.data>[number],
+  ) => {
+    if (journalEditReplaceLineKey) {
+      applyProductToJournalEditLine(journalEditReplaceLineKey, result);
+      return;
+    }
+    if (
+      journalEditLines.some(
+        (line) =>
+          line.productId === result.product.id &&
+          (line.variantId ?? null) === (result.snapshot.variantId ?? null),
+      )
+    ) {
+      toast({ variant: "error", description: t("sell.editReceiptDuplicateLine") });
+      return;
+    }
+    setJournalEditLines((current) => [
+      ...current,
+      {
+        key: createIdempotencyKey(),
+        lineId: null,
+        productId: result.product.id,
+        variantId: result.snapshot.variantId ?? null,
+        productName: result.product.name,
+        variantName: result.variant?.name ?? null,
+        quantityInput: "1",
+        unitPriceInput: String(result.priceKgs ?? 0),
+      },
+    ]);
+    setJournalEditSearch("");
+  };
+
+  const submitJournalEdit = async () => {
+    if (!journalSelectedSale || !journalEditSaleId) {
+      return;
+    }
+    if (!journalEditLines.length) {
+      toast({ variant: "error", description: t("sell.editReceiptLinesRequired") });
+      return;
+    }
+    const normalized = journalEditLines.map((line) => ({
+      line,
+      qty: parseJournalEditNumber(line.quantityInput),
+      unitPriceKgs: parseJournalEditNumber(line.unitPriceInput),
+    }));
+    if (
+      normalized.some(
+        ({ qty, unitPriceKgs }) =>
+          qty === null ||
+          !Number.isInteger(qty) ||
+          qty <= 0 ||
+          unitPriceKgs === null ||
+          unitPriceKgs < 0,
+      )
+    ) {
+      toast({ variant: "error", description: t("sell.editReceiptInvalidLine") });
+      return;
+    }
+    await editCompletedSaleMutation.mutateAsync({
+      saleId: journalSelectedSale.id,
+      customerName: journalEditCustomerName,
+      customerPhone: journalEditCustomerPhone,
+      notes: journalEditNotes,
+      reason: journalEditReason,
+      lines: normalized.map(({ line, qty, unitPriceKgs }) => ({
+        lineId: line.lineId,
+        productId: line.productId,
+        variantId: line.variantId,
+        qty: qty ?? 0,
+        unitPriceKgs: unitPriceKgs ?? 0,
+      })),
+      idempotencyKey: createIdempotencyKey(),
+    });
+  };
+
+  useEffect(() => {
     setJournalPage(1);
   }, [
     debouncedJournalSearch,
@@ -3042,6 +3236,7 @@ const PosSellPage = () => {
             variant="secondary"
             size="sm"
             className="h-8 px-2"
+            data-testid="pos-receipt-journal-details-button"
             onClick={() => {
               setJournalReturnSaleId(null);
               setJournalDetailSaleId(saleItem.id);
@@ -3056,6 +3251,7 @@ const PosSellPage = () => {
               variant="default"
               size="sm"
               className="h-8 px-2"
+              data-testid="pos-receipt-journal-edit-button"
               onClick={() =>
                 void resumeHeldDraftMutation
                   .mutateAsync({
@@ -3067,7 +3263,7 @@ const PosSellPage = () => {
               disabled={!registerId || resumeHeldDraftMutation.isLoading}
             >
               {resumeHeldDraftMutation.isLoading ? <Spinner className="h-3.5 w-3.5" /> : null}
-              {t("sell.resumeHeldReceipt")}
+              {t("sell.editReceipt")}
             </Button>
           ) : (
             <Button
@@ -3075,10 +3271,12 @@ const PosSellPage = () => {
               variant="secondary"
               size="sm"
               className="h-8 px-2"
-              title={!isDraftReceipt ? t("sell.completedReceiptCorrectionHint") : undefined}
+              data-testid="pos-receipt-journal-edit-button"
               onClick={() => {
                 if (!isDraftReceipt) {
-                  toast({ variant: "info", description: t("sell.completedReceiptCorrectionHint") });
+                  setJournalDetailSaleId(null);
+                  setJournalReturnSaleId(null);
+                  setJournalEditSaleId(saleItem.id);
                   return;
                 }
                 if (saleId && saleId !== saleItem.id && hasCartLines) {
@@ -3161,6 +3359,8 @@ const PosSellPage = () => {
           if (!open) {
             setJournalDetailSaleId(null);
             setJournalReturnSaleId(null);
+            setJournalEditSaleId(null);
+            setJournalEditReplaceLineKey(null);
           }
         }}
         title={t("sell.receiptJournal")}
@@ -3175,6 +3375,7 @@ const PosSellPage = () => {
               value={journalSearch}
               onChange={(event) => setJournalSearch(event.target.value)}
               placeholder={t("sell.receiptSearchPlaceholder")}
+              data-testid="pos-receipt-journal-search"
             />
             <Select
               value={journalStatusFilter}
@@ -3499,7 +3700,7 @@ const PosSellPage = () => {
 
   const JournalSaleDetailModal = () => (
     <Modal
-      open={Boolean(journalDetailSaleId && !journalReturnSaleId)}
+      open={Boolean(journalDetailSaleId && !journalReturnSaleId && !journalEditSaleId)}
       onOpenChange={(open) => {
         if (!open) {
           setJournalDetailSaleId(null);
@@ -3658,6 +3859,296 @@ const PosSellPage = () => {
               }
             >
               {t("history.return")}
+            </Button>
+          </ModalFooter>
+        </div>
+      ) : null}
+    </Modal>
+  );
+
+  const JournalEditReceiptModal = () => (
+    <Modal
+      open={Boolean(journalEditSaleId)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setJournalEditSaleId(null);
+          setJournalEditReplaceLineKey(null);
+        }
+      }}
+      title={t("sell.editReceipt")}
+      subtitle={journalSelectedSale?.number ?? ""}
+      className="max-w-5xl"
+      bodyClassName="space-y-5"
+      mobileSheet
+    >
+      {journalSaleDetailQuery.isLoading || journalSelectedSale?.id !== journalEditSaleId ? (
+        <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4" />
+          {tCommon("loading")}
+        </div>
+      ) : journalSaleDetailQuery.error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+          {translateError(tErrors, journalSaleDetailQuery.error)}
+        </div>
+      ) : journalSelectedSale ? (
+        <div data-testid="pos-receipt-edit-modal" className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-name">
+                {t("history.customer")}
+              </label>
+              <Input
+                id="journal-edit-name"
+                value={journalEditCustomerName}
+                onChange={(event) => setJournalEditCustomerName(event.target.value)}
+                data-testid="pos-receipt-edit-customer"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-phone">
+                {t("sell.customerPhonePlaceholder")}
+              </label>
+              <Input
+                id="journal-edit-phone"
+                value={journalEditCustomerPhone}
+                onChange={(event) => setJournalEditCustomerPhone(event.target.value)}
+                data-testid="pos-receipt-edit-customer-phone"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end">
+              <div className="min-w-0 flex-1 space-y-1">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="journal-edit-product-search"
+                >
+                  {journalEditReplaceLineKey
+                    ? t("sell.editReceiptReplaceProduct")
+                    : t("sell.editReceiptAddProduct")}
+                </label>
+                <Input
+                  id="journal-edit-product-search"
+                  value={journalEditSearch}
+                  onChange={(event) => setJournalEditSearch(event.target.value)}
+                  placeholder={t("sell.editReceiptProductSearchPlaceholder")}
+                  data-testid="pos-receipt-edit-product-search"
+                />
+              </div>
+              {journalEditReplaceLineKey ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setJournalEditReplaceLineKey(null)}
+                >
+                  {t("sell.editReceiptCancelReplace")}
+                </Button>
+              ) : null}
+            </div>
+            {journalEditSearch.trim() ? (
+              <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+                {journalEditProductSearchQuery.isLoading ? (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</p>
+                ) : journalEditProductSearchQuery.data?.length ? (
+                  journalEditProductSearchQuery.data.map((result) => (
+                    <button
+                      key={`${result.product.id}:${result.snapshot.variantId ?? "BASE"}`}
+                      type="button"
+                      data-testid="pos-receipt-edit-product-result"
+                      className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/50"
+                      onClick={() => addProductToJournalEdit(result)}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground">
+                          {result.product.name}
+                          {result.variant?.name ? ` · ${result.variant.name}` : ""}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {result.product.sku || result.primaryBarcode || tCommon("notAvailable")}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {journalEditReplaceLineKey
+                          ? t("sell.editReceiptReplace")
+                          : t("sell.editReceiptAdd")}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    {tCommon("nothingFound")}
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="overflow-x-auto rounded-md border border-border">
+            <Table className="min-w-[780px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{tCommon("product")}</TableHead>
+                  <TableHead className="w-28 text-right">{t("sell.cartQty")}</TableHead>
+                  <TableHead className="w-36 text-right">{t("sell.unitPrice")}</TableHead>
+                  <TableHead className="w-36 text-right">{t("sell.lineTotal")}</TableHead>
+                  <TableHead className="w-40 text-right">{tCommon("actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {journalEditLines.map((line) => {
+                  const quantity = parseJournalEditNumber(line.quantityInput) ?? 0;
+                  const unitPrice = parseJournalEditNumber(line.unitPriceInput) ?? 0;
+                  return (
+                    <TableRow key={line.key} data-testid="pos-receipt-edit-line">
+                      <TableCell>
+                        <p className="truncate font-medium">
+                          {line.productName}
+                          {line.variantName ? ` · ${line.variantName}` : ""}
+                        </p>
+                        {journalEditReplaceLineKey === line.key ? (
+                          <p className="text-xs text-primary">
+                            {t("sell.editReceiptReplaceActive")}
+                          </p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={line.quantityInput}
+                          inputMode="numeric"
+                          className="text-right"
+                          data-testid="pos-receipt-edit-line-qty"
+                          onChange={(event) =>
+                            updateJournalEditLine(line.key, {
+                              quantityInput: event.target.value,
+                            })
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={line.unitPriceInput}
+                          inputMode="decimal"
+                          className="text-right"
+                          data-testid="pos-receipt-edit-line-price"
+                          onChange={(event) =>
+                            updateJournalEditLine(line.key, {
+                              unitPriceInput: event.target.value,
+                            })
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatKgsMoney(
+                          quantity * unitPrice,
+                          locale,
+                          journalSelectedSaleCurrencySource,
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant={
+                              journalEditReplaceLineKey === line.key ? "default" : "secondary"
+                            }
+                            size="sm"
+                            data-testid="pos-receipt-edit-line-replace"
+                            onClick={() => {
+                              setJournalEditReplaceLineKey(line.key);
+                              setJournalEditSearch("");
+                            }}
+                          >
+                            <EditIcon className="h-4 w-4" aria-hidden />
+                            {t("sell.editReceiptReplace")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            data-testid="pos-receipt-edit-line-remove"
+                            onClick={() => removeJournalEditLine(line.key)}
+                            aria-label={t("sell.editReceiptRemoveLine")}
+                            title={t("sell.editReceiptRemoveLine")}
+                          >
+                            <DeleteIcon className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-notes">
+                {t("sell.returnReason")}
+              </label>
+              <Textarea
+                id="journal-edit-notes"
+                value={journalEditNotes}
+                rows={3}
+                data-testid="pos-receipt-edit-notes"
+                onChange={(event) => setJournalEditNotes(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-reason">
+                {t("sell.returnReason")}
+              </label>
+              <Textarea
+                id="journal-edit-reason"
+                value={journalEditReason}
+                rows={3}
+                placeholder={t("sell.editReceiptReasonPlaceholder")}
+                data-testid="pos-receipt-edit-reason"
+                onChange={(event) => setJournalEditReason(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">{t("sell.cartTotal")}</span>
+            <span className="font-semibold text-foreground" data-testid="pos-receipt-edit-total">
+              {formatKgsMoney(
+                journalEditLines.reduce((sum, line) => {
+                  const quantity = parseJournalEditNumber(line.quantityInput) ?? 0;
+                  const unitPrice = parseJournalEditNumber(line.unitPriceInput) ?? 0;
+                  return sum + quantity * unitPrice;
+                }, 0),
+                locale,
+                journalSelectedSaleCurrencySource,
+              )}
+            </span>
+          </div>
+
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setJournalEditSaleId(null);
+                setJournalEditReplaceLineKey(null);
+              }}
+              disabled={editCompletedSaleMutation.isLoading}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={submitJournalEdit}
+              disabled={editCompletedSaleMutation.isLoading}
+              data-testid="pos-receipt-edit-save"
+            >
+              {editCompletedSaleMutation.isLoading ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <EditIcon className="h-4 w-4" aria-hidden />
+              )}
+              {editCompletedSaleMutation.isLoading ? tCommon("saving") : tCommon("save")}
             </Button>
           </ModalFooter>
         </div>
@@ -4019,6 +4510,7 @@ const PosSellPage = () => {
               className="h-8 shrink-0 gap-1.5 px-2 text-xs"
               onClick={() => setReceiptJournalOpen(true)}
               disabled={!journalStoreId}
+              data-testid="pos-receipt-journal-open"
             >
               <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden xl:inline">{t("sell.receiptJournal")}</span>
@@ -4810,6 +5302,7 @@ const PosSellPage = () => {
       {CustomerEditModal()}
       {ReceiptJournalModal()}
       {JournalSaleDetailModal()}
+      {JournalEditReceiptModal()}
       {JournalReturnModal()}
     </div>
   );
@@ -5003,6 +5496,7 @@ const PosSellPage = () => {
               className="h-11 flex-1 justify-start"
               onClick={() => setReceiptJournalOpen(true)}
               disabled={!journalStoreId}
+              data-testid="pos-receipt-journal-open"
             >
               <SalesOrdersIcon className="h-4 w-4" aria-hidden />
               {t("sell.receiptJournal")}
@@ -5844,6 +6338,7 @@ const PosSellPage = () => {
         {CustomerEditModal()}
         {ReceiptJournalModal()}
         {JournalSaleDetailModal()}
+        {JournalEditReceiptModal()}
         {JournalReturnModal()}
       </div>
     );

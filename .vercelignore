@@ -6,6 +6,7 @@ out
 dist
 .turbo
 .pnpm-store
+tmp
 coverage
 uploads
 *.log

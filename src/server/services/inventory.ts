@@ -12,7 +12,11 @@ import { toJson } from "@/server/services/json";
 import { updateProductCost } from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
-import { assignProductToStore } from "@/server/services/storeAccess";
+import {
+  assertUserCanAccessStore,
+  assignProductToStore,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 import {
   buildWriteOffMovementNote,
   isStockWriteOffReason,
@@ -1490,6 +1494,589 @@ export const transferStock = async (input: TransferStockInput) => {
   );
 
   return result;
+};
+
+export type EditableStockMovementDocumentType = "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF";
+
+export type EditStockMovementDocumentLineInput = {
+  productId: string;
+  variantId?: string | null;
+  quantity: number;
+  unitCostKgs?: number | null;
+};
+
+export type EditStockMovementDocumentInput = {
+  documentType: EditableStockMovementDocumentType;
+  referenceType: string;
+  referenceId: string;
+  destinationStoreId?: string | null;
+  lines: EditStockMovementDocumentLineInput[];
+  reason?: string | null;
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+  idempotencyKey: string;
+  user?: StoreAccessUser;
+};
+
+type StockDocumentAggregateLine = {
+  productId: string;
+  variantId: string | null;
+  variantKey: string;
+  quantity: number;
+  unitCostKgs: number | null;
+  lineTotalKgs: number | null;
+};
+
+const stockDocumentLineKey = (productId: string, variantKey: string) =>
+  `${productId}:${variantKey}`;
+
+const roundStockMoney = (value: number) => Math.round(value * 100) / 100;
+
+const aggregateStockDocumentLines = (
+  movements: Array<{
+    productId: string;
+    variantId: string | null;
+    type: StockMovementType;
+    qtyDelta: number;
+    unitCostKgs: Prisma.Decimal | number | null;
+    lineTotalKgs: Prisma.Decimal | number | null;
+    createdAt: Date;
+  }>,
+  documentType: EditableStockMovementDocumentType,
+) => {
+  const aggregates = new Map<
+    string,
+    {
+      productId: string;
+      variantId: string | null;
+      variantKey: string;
+      qtyDelta: number;
+      lineTotalKgs: number;
+      hasLineTotal: boolean;
+      latestUnitCostKgs: number | null;
+      latestAt: Date;
+    }
+  >();
+
+  for (const movement of movements) {
+    if (documentType === "TRANSFER" && movement.type !== StockMovementType.TRANSFER_OUT) {
+      continue;
+    }
+    const variantKey = resolveVariantKey(movement.variantId);
+    const key = stockDocumentLineKey(movement.productId, variantKey);
+    const existing = aggregates.get(key);
+    const unitCostKgs = movement.unitCostKgs === null ? null : Number(movement.unitCostKgs);
+    const lineTotalKgs = movement.lineTotalKgs === null ? null : Number(movement.lineTotalKgs);
+    if (existing) {
+      existing.qtyDelta += Number(movement.qtyDelta);
+      if (lineTotalKgs !== null) {
+        existing.lineTotalKgs += lineTotalKgs;
+        existing.hasLineTotal = true;
+      }
+      if (unitCostKgs !== null && movement.createdAt >= existing.latestAt) {
+        existing.latestUnitCostKgs = unitCostKgs;
+        existing.latestAt = movement.createdAt;
+      }
+      continue;
+    }
+    aggregates.set(key, {
+      productId: movement.productId,
+      variantId: movement.variantId,
+      variantKey,
+      qtyDelta: Number(movement.qtyDelta),
+      lineTotalKgs: lineTotalKgs ?? 0,
+      hasLineTotal: lineTotalKgs !== null,
+      latestUnitCostKgs: unitCostKgs,
+      latestAt: movement.createdAt,
+    });
+  }
+
+  const result = new Map<string, StockDocumentAggregateLine>();
+  aggregates.forEach((line, key) => {
+    const quantity =
+      documentType === "STOCK_RECEIVING"
+        ? line.qtyDelta
+        : Math.abs(documentType === "TRANSFER" ? line.qtyDelta : line.qtyDelta);
+    if (quantity === 0 && !line.hasLineTotal) {
+      return;
+    }
+    const total = line.hasLineTotal ? roundStockMoney(line.lineTotalKgs) : null;
+    result.set(key, {
+      productId: line.productId,
+      variantId: line.variantId,
+      variantKey: line.variantKey,
+      quantity: Math.max(0, quantity),
+      unitCostKgs:
+        total !== null && quantity > 0
+          ? roundStockMoney(total / quantity)
+          : line.latestUnitCostKgs,
+      lineTotalKgs: total,
+    });
+  });
+  return result;
+};
+
+const normalizeStockDocumentEditLines = (
+  lines: EditStockMovementDocumentLineInput[],
+  unitCostMap: Map<string, number>,
+) => {
+  if (!lines.length) {
+    throw new AppError("documentLinesRequired", "BAD_REQUEST", 400);
+  }
+
+  const normalized = new Map<string, StockDocumentAggregateLine>();
+  for (const line of lines) {
+    const variantKey = resolveVariantKey(line.variantId);
+    const key = stockDocumentLineKey(line.productId, variantKey);
+    if (normalized.has(key)) {
+      throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+    }
+    if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+      throw new AppError("invalidDocumentQuantity", "BAD_REQUEST", 400);
+    }
+    const unitCostKgs =
+      line.unitCostKgs !== null && line.unitCostKgs !== undefined
+        ? roundStockMoney(line.unitCostKgs)
+        : (unitCostMap.get(key) ?? unitCostMap.get(stockDocumentLineKey(line.productId, "BASE")) ?? 0);
+    if (!Number.isFinite(unitCostKgs) || unitCostKgs < 0) {
+      throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+    }
+    normalized.set(key, {
+      productId: line.productId,
+      variantId: line.variantId ?? null,
+      variantKey,
+      quantity: line.quantity,
+      unitCostKgs,
+      lineTotalKgs: roundStockMoney(line.quantity * unitCostKgs),
+    });
+  }
+  return normalized;
+};
+
+export const editStockMovementDocument = async (input: EditStockMovementDocumentInput) => {
+  if (
+    (input.documentType === "STOCK_RECEIVING" && input.referenceType !== "STOCK_RECEIVING") ||
+    (input.documentType === "TRANSFER" && input.referenceType !== "TRANSFER") ||
+    (input.documentType === "WRITE_OFF" && input.referenceType !== "WRITE_OFF")
+  ) {
+    throw new AppError("productMovementDocumentUnsupported", "BAD_REQUEST", 400);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: editResult, replayed } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "inventory.productMovement.editDocument",
+        userId: input.actorId,
+      },
+      async () => {
+        await tx.$queryRaw`
+          SELECT m."id"
+          FROM "StockMovement" m
+          INNER JOIN "Store" s ON s."id" = m."storeId"
+          WHERE m."referenceType" = ${input.referenceType}
+            AND m."referenceId" = ${input.referenceId}
+            AND s."organizationId" = ${input.organizationId}
+          FOR UPDATE
+        `;
+
+        const movements = await tx.stockMovement.findMany({
+          where: {
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            store: { organizationId: input.organizationId },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        if (!movements.length) {
+          throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
+        }
+
+        const storeIds = Array.from(new Set(movements.map((movement) => movement.storeId)));
+        if (input.user) {
+          await Promise.all(
+            storeIds.map((storeId) => assertUserCanAccessStore(tx, input.user!, storeId)),
+          );
+        }
+
+        const sourceStoreIds =
+          input.documentType === "TRANSFER"
+            ? Array.from(
+                new Set(
+                  movements
+                    .filter((movement) => movement.type === StockMovementType.TRANSFER_OUT)
+                    .map((movement) => movement.storeId),
+                ),
+              )
+            : storeIds;
+        const destinationStoreIds =
+          input.documentType === "TRANSFER"
+            ? Array.from(
+                new Set(
+                  movements
+                    .filter((movement) => movement.type === StockMovementType.TRANSFER_IN)
+                    .map((movement) => movement.storeId),
+                ),
+              )
+            : [];
+        if (sourceStoreIds.length !== 1) {
+          throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
+        }
+        if (input.documentType === "TRANSFER" && destinationStoreIds.length !== 1) {
+          throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
+        }
+
+        const sourceStoreId = sourceStoreIds[0]!;
+        const oldDestinationStoreId = destinationStoreIds[0] ?? null;
+        const destinationStoreId =
+          input.documentType === "TRANSFER"
+            ? (input.destinationStoreId?.trim() || oldDestinationStoreId)
+            : null;
+        if (input.documentType === "TRANSFER") {
+          if (!destinationStoreId || !oldDestinationStoreId) {
+            throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
+          }
+          if (destinationStoreId === sourceStoreId) {
+            throw new AppError("transferSameStore", "BAD_REQUEST", 400);
+          }
+          const destinationStore = await tx.store.findFirst({
+            where: { id: destinationStoreId, organizationId: input.organizationId },
+            select: { id: true },
+          });
+          if (!destinationStore) {
+            throw new AppError("storeNotFound", "NOT_FOUND", 404);
+          }
+          if (input.user) {
+            await assertUserCanAccessStore(tx, input.user, destinationStoreId);
+          }
+        }
+        const productIds = Array.from(new Set(input.lines.map((line) => line.productId)));
+        const products = await tx.product.findMany({
+          where: {
+            id: { in: productIds },
+            organizationId: input.organizationId,
+            isDeleted: false,
+            storeProducts: {
+              some: {
+                storeId: sourceStoreId,
+                isActive: true,
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (products.length !== productIds.length) {
+          throw new AppError("invalidProducts", "FORBIDDEN", 403);
+        }
+
+        const variantIds = Array.from(
+          new Set(input.lines.map((line) => line.variantId).filter(Boolean) as string[]),
+        );
+        if (variantIds.length) {
+          const variants = await tx.productVariant.findMany({
+            where: {
+              id: { in: variantIds },
+              isActive: true,
+              product: { organizationId: input.organizationId, isDeleted: false },
+            },
+            select: { id: true, productId: true },
+          });
+          const variantProductMap = new Map(
+            variants.map((variant) => [variant.id, variant.productId]),
+          );
+          for (const line of input.lines) {
+            if (line.variantId && variantProductMap.get(line.variantId) !== line.productId) {
+              throw new AppError("variantMismatch", "BAD_REQUEST", 400);
+            }
+          }
+          if (variants.length !== variantIds.length) {
+            throw new AppError("variantNotFound", "NOT_FOUND", 404);
+          }
+        }
+
+        const costProductIds = Array.from(
+          new Set([...productIds, ...movements.map((movement) => movement.productId)]),
+        );
+        const costs = await tx.productCost.findMany({
+          where: {
+            organizationId: input.organizationId,
+            productId: { in: costProductIds },
+          },
+          select: { productId: true, variantKey: true, avgCostKgs: true },
+        });
+        const unitCostMap = new Map(
+          costs.map((cost) => [stockDocumentLineKey(cost.productId, cost.variantKey), Number(cost.avgCostKgs)]),
+        );
+
+        const beforeLines = aggregateStockDocumentLines(movements, input.documentType);
+        beforeLines.forEach((line, key) => {
+          if (line.unitCostKgs !== null) {
+            unitCostMap.set(key, line.unitCostKgs);
+          }
+        });
+        const desiredLines = normalizeStockDocumentEditLines(input.lines, unitCostMap);
+        const reason = input.reason?.trim() || "Редактирование документа";
+        const changedItems = new Map<
+          string,
+          { storeId: string; productId: string; variantId: string | null; onHand: number | null }
+        >();
+
+        const lineKeys = new Set([...beforeLines.keys(), ...desiredLines.keys()]);
+        let linePosition = 0;
+        for (const key of lineKeys) {
+          linePosition += 1;
+          const beforeLine = beforeLines.get(key);
+          const desiredLine = desiredLines.get(key);
+          const movementLine = desiredLine ?? beforeLine;
+          if (!movementLine) {
+            continue;
+          }
+          const oldQuantity = beforeLine?.quantity ?? 0;
+          const newQuantity = desiredLine?.quantity ?? 0;
+          const oldLineTotal = beforeLine?.lineTotalKgs ?? 0;
+          const newLineTotal = desiredLine?.lineTotalKgs ?? 0;
+          const lineTotalDelta = roundStockMoney(newLineTotal - oldLineTotal);
+          const unitCostKgs = desiredLine?.unitCostKgs ?? beforeLine?.unitCostKgs ?? null;
+
+          if (input.documentType === "STOCK_RECEIVING") {
+            const qtyDelta = newQuantity - oldQuantity;
+            if (qtyDelta !== 0 || lineTotalDelta !== 0) {
+              const movement = await applyStockMovement(tx, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta,
+                type: StockMovementType.RECEIVE,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                unitCostKgs,
+                lineTotalKgs: lineTotalDelta,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+              if (desiredLine && qtyDelta > 0 && unitCostKgs !== null) {
+                await updateProductCost(tx, {
+                  organizationId: input.organizationId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  qtyReceived: qtyDelta,
+                  unitCost: unitCostKgs,
+                });
+              }
+              changedItems.set(`${sourceStoreId}:${key}`, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: movement.snapshot.onHand,
+              });
+            }
+            continue;
+          }
+
+          if (input.documentType === "WRITE_OFF") {
+            const qtyDelta = oldQuantity - newQuantity;
+            if (qtyDelta !== 0 || lineTotalDelta !== 0) {
+              const movement = await applyStockMovement(tx, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta,
+                type: StockMovementType.WRITE_OFF,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                unitCostKgs,
+                lineTotalKgs: lineTotalDelta,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+              changedItems.set(`${sourceStoreId}:${key}`, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: movement.snapshot.onHand,
+              });
+            }
+            continue;
+          }
+
+          if (!destinationStoreId || !oldDestinationStoreId) {
+            throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
+          }
+          const outQtyDelta = oldQuantity - newQuantity;
+          if (outQtyDelta !== 0 || lineTotalDelta !== 0) {
+            const outMovement = await applyStockMovement(tx, {
+              storeId: sourceStoreId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              qtyDelta: outQtyDelta,
+              type: StockMovementType.TRANSFER_OUT,
+              referenceType: input.referenceType,
+              referenceId: input.referenceId,
+              linePosition,
+              unitCostKgs,
+              lineTotalKgs: lineTotalDelta,
+              note: reason,
+              actorId: input.actorId,
+              organizationId: input.organizationId,
+            });
+            changedItems.set(`${sourceStoreId}:${key}`, {
+              storeId: sourceStoreId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              onHand: outMovement.snapshot.onHand,
+            });
+          }
+          if (destinationStoreId === oldDestinationStoreId) {
+            const inQtyDelta = newQuantity - oldQuantity;
+            if (inQtyDelta !== 0) {
+              const inMovement = await applyStockMovement(tx, {
+                storeId: destinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: inQtyDelta,
+                type: StockMovementType.TRANSFER_IN,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+              changedItems.set(`${destinationStoreId}:${key}`, {
+                storeId: destinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: inMovement.snapshot.onHand,
+              });
+            }
+          } else {
+            if (oldQuantity !== 0) {
+              const oldDestinationMovement = await applyStockMovement(tx, {
+                storeId: oldDestinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: -oldQuantity,
+                type: StockMovementType.TRANSFER_IN,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+              changedItems.set(`${oldDestinationStoreId}:${key}`, {
+                storeId: oldDestinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: oldDestinationMovement.snapshot.onHand,
+              });
+            }
+            if (newQuantity !== 0) {
+              const newDestinationMovement = await applyStockMovement(tx, {
+                storeId: destinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: newQuantity,
+                type: StockMovementType.TRANSFER_IN,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+              changedItems.set(`${destinationStoreId}:${key}`, {
+                storeId: destinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: newDestinationMovement.snapshot.onHand,
+              });
+            }
+          }
+        }
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "INVENTORY_DOCUMENT_EDIT",
+          entity: "StockMovementDocument",
+          entityId: `${input.referenceType}:${input.referenceId}`,
+          before: toJson({
+            documentType: input.documentType,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            sourceStoreId,
+            destinationStoreId: oldDestinationStoreId,
+            lines: Array.from(beforeLines.values()),
+          }),
+          after: toJson({
+            documentType: input.documentType,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            sourceStoreId,
+            destinationStoreId,
+            reason,
+            lines: Array.from(desiredLines.values()),
+          }),
+          requestId: input.requestId,
+        });
+
+        return {
+          documentType: input.documentType,
+          referenceType: input.referenceType,
+          referenceId: input.referenceId,
+          lineCount: desiredLines.size,
+          totalQuantity: Array.from(desiredLines.values()).reduce(
+            (sum, line) => sum + line.quantity,
+            0,
+          ),
+          totalAmountKgs: roundStockMoney(
+            Array.from(desiredLines.values()).reduce(
+              (sum, line) => sum + (line.lineTotalKgs ?? 0),
+              0,
+            ),
+          ),
+          changedItems: Array.from(changedItems.values()),
+        };
+      },
+    );
+
+    return { ...editResult, replayed };
+  });
+
+  if (!result.replayed) {
+    result.changedItems.forEach((item) => {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
+      });
+    });
+    await Promise.all(
+      result.changedItems.map((item) =>
+        item.onHand === null
+          ? Promise.resolve()
+          : maybeEmitLowStock({
+              storeId: item.storeId,
+              productId: item.productId,
+              variantId: item.variantId,
+              onHand: item.onHand,
+              requestId: input.requestId,
+            }),
+      ),
+    );
+  }
+
+  return {
+    ...result,
+    replayed: undefined,
+    changedItems: undefined,
+  };
 };
 
 const maybeEmitLowStock = async (input: {

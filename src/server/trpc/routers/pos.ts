@@ -28,6 +28,8 @@ import {
   createPosSaleDraft,
   createSaleReturnDraft,
   deletePosRegister,
+  editCompletedPosSale,
+  editCompletedSaleReturn,
   getActivePosSaleDraft,
   getCurrentRegisterShift,
   getPosEntry,
@@ -71,6 +73,14 @@ const paymentSchema = z.object({
   method: z.nativeEnum(PosPaymentMethod),
   amountKgs: z.number().positive(),
   providerRef: z.string().max(120).optional().nullable(),
+});
+
+const posReceiptEditLineSchema = z.object({
+  lineId: z.string().min(1).optional().nullable(),
+  productId: z.string().min(1),
+  variantId: z.string().optional().nullable(),
+  qty: z.number().int().positive(),
+  unitPriceKgs: z.number().min(0),
 });
 
 const protectedProcedure = baseProtectedProcedure.use(async ({ ctx, next }) => {
@@ -536,6 +546,43 @@ export const posRouter = router({
         }
       }),
 
+    editCompleted: cashierProcedure
+      .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-sales-edit-completed" }))
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          customerName: z.string().max(160).optional().nullable(),
+          customerEmail: z.string().max(254).optional().nullable(),
+          customerPhone: z.string().max(64).optional().nullable(),
+          customerAddress: z.string().max(512).optional().nullable(),
+          notes: z.string().max(2_000).optional().nullable(),
+          reason: z.string().max(500).optional().nullable(),
+          lines: z.array(posReceiptEditLineSchema).min(1).max(500),
+          idempotencyKey: z.string().min(8),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await editCompletedPosSale({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            customerName: input.customerName,
+            customerEmail: input.customerEmail,
+            customerPhone: input.customerPhone,
+            customerAddress: input.customerAddress,
+            notes: input.notes,
+            reason: input.reason,
+            lines: input.lines,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
     activeDraft: cashierProcedure
       .input(z.object({ registerId: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
@@ -867,6 +914,42 @@ export const posRouter = router({
           return await getSaleReturn({
             organizationId: ctx.user.organizationId,
             saleReturnId: input.saleReturnId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    editCompleted: cashierProcedure
+      .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-returns-edit-completed" }))
+      .input(
+        z.object({
+          saleReturnId: z.string().min(1),
+          notes: z.string().max(2_000).optional().nullable(),
+          reason: z.string().max(500).optional().nullable(),
+          lines: z
+            .array(
+              posReceiptEditLineSchema.extend({
+                customerOrderLineId: z.string().min(1).optional().nullable(),
+              }),
+            )
+            .min(1)
+            .max(500),
+          idempotencyKey: z.string().min(8),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await editCompletedSaleReturn({
+            organizationId: ctx.user.organizationId,
+            saleReturnId: input.saleReturnId,
+            notes: input.notes,
+            reason: input.reason,
+            lines: input.lines,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
           });
         } catch (error) {
           throw toTRPCError(error);

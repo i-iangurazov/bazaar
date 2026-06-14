@@ -14,6 +14,7 @@ import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
   bulkSetOnHand,
+  editStockMovementDocument,
   postStockReceiving,
   postStockWriteOff,
   receiveStock,
@@ -21,6 +22,13 @@ import {
   transferStock,
 } from "@/server/services/inventory";
 import {
+  editCompletedPosSale,
+  editCompletedSaleReturn,
+  getPosSale,
+  getSaleReturn,
+} from "@/server/services/pos";
+import {
+  decodeProductMovementDocumentKey,
   getProductMovementDocument,
   listProductMovementJournal,
   productMovementDocumentTypes,
@@ -83,6 +91,16 @@ const inventoryProductSearchInputSchema = z.object({
   productId: z.string().trim().optional(),
   limit: z.number().int().min(1).max(100).optional(),
   searchFields: z.array(inventoryProductSearchFieldSchema).optional(),
+});
+
+const productMovementEditLineSchema = z.object({
+  lineId: z.string().min(1).optional().nullable(),
+  customerOrderLineId: z.string().min(1).optional().nullable(),
+  productId: z.string().min(1),
+  variantId: z.string().optional().nullable(),
+  quantity: z.number().int().positive(),
+  unitPriceKgs: z.number().min(0).optional().nullable(),
+  unitCostKgs: z.number().min(0).optional().nullable(),
 });
 
 const normalizeInventorySearchTokens = (search?: string | null) =>
@@ -788,6 +806,318 @@ export const inventoryRouter = router({
     .query(async ({ ctx, input }) =>
       getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey),
     ),
+
+  editableProductMovementDocument: protectedProcedure
+    .input(z.object({ documentKey: z.string().min(1).max(300) }))
+    .query(async ({ ctx, input }) => {
+      const decoded = decodeProductMovementDocumentKey(input.documentKey);
+      if (!decoded) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
+      }
+
+      if (decoded.documentType === "SALE" && decoded.documentReferenceType === "CustomerOrder") {
+        const sale = await getPosSale({
+          organizationId: ctx.user.organizationId,
+          saleId: decoded.documentReferenceId,
+          user: ctx.user,
+        });
+        if (!sale) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+        }
+        return {
+          documentType: decoded.documentType,
+          referenceType: decoded.documentReferenceType,
+          referenceId: decoded.documentReferenceId,
+          documentNumber: sale.number,
+          storeId: sale.storeId,
+          customerName: sale.customerName,
+          customerEmail: sale.customerEmail,
+          customerPhone: sale.customerPhone,
+          customerAddress: sale.customerAddress,
+          notes: sale.notes,
+          lines: sale.lines.map((line) => ({
+            lineId: line.id,
+            customerOrderLineId: null as string | null,
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            productName: line.product.name,
+            variantName: line.variant?.name ?? null,
+            quantity: line.qty,
+            unitPriceKgs: line.unitPriceKgs,
+            unitCostKgs: line.unitCostKgs,
+          })),
+        };
+      }
+
+      if (decoded.documentType === "RETURN" && decoded.documentReferenceType === "SaleReturn") {
+        const saleReturn = await getSaleReturn({
+          organizationId: ctx.user.organizationId,
+          saleReturnId: decoded.documentReferenceId,
+        });
+        if (!saleReturn) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+        }
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, saleReturn.storeId);
+        return {
+          documentType: decoded.documentType,
+          referenceType: decoded.documentReferenceType,
+          referenceId: decoded.documentReferenceId,
+          documentNumber: saleReturn.number,
+          storeId: saleReturn.storeId,
+          customerName: saleReturn.originalSale.customerName,
+          customerEmail: null as string | null,
+          customerPhone: saleReturn.originalSale.customerPhone,
+          customerAddress: null as string | null,
+          notes: saleReturn.notes,
+          returnableLines: saleReturn.originalSale.lines.map((line) => ({
+            customerOrderLineId: line.id,
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            productName: line.product.name,
+            variantName: null as string | null,
+            quantity: line.qty,
+            unitPriceKgs: Number(line.unitPriceKgs),
+            unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+          })),
+          lines: saleReturn.lines.map((line) => ({
+            lineId: line.id,
+            customerOrderLineId: line.customerOrderLineId,
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            productName: line.product.name,
+            variantName: null as string | null,
+            quantity: line.qty,
+            unitPriceKgs: line.unitPriceKgs,
+            unitCostKgs: line.unitCostKgs,
+          })),
+        };
+      }
+
+      if (
+        decoded.documentType !== "STOCK_RECEIVING" &&
+        decoded.documentType !== "TRANSFER" &&
+        decoded.documentType !== "WRITE_OFF"
+      ) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
+      }
+
+      const document = await getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey);
+      if (!document) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+      }
+
+      const aggregates = new Map<
+        string,
+        {
+          productId: string;
+          variantId: string | null;
+          productName: string;
+          variantName: string | null;
+          quantityDelta: number;
+          lineTotalKgs: number;
+          hasLineTotal: boolean;
+          unitCostKgs: number | null;
+          storeId: string;
+        }
+      >();
+      document.lines.forEach((line) => {
+        if (decoded.documentType === "TRANSFER" && line.movementType !== "TRANSFER_OUT") {
+          return;
+        }
+        const variantKey = line.variantId ?? "BASE";
+        const key = `${line.productId}:${variantKey}`;
+        const existing = aggregates.get(key);
+        if (existing) {
+          existing.quantityDelta += line.qtyDelta;
+          if (line.lineTotalKgs !== null) {
+            existing.lineTotalKgs += line.lineTotalKgs;
+            existing.hasLineTotal = true;
+          }
+          if (line.unitCostKgs !== null) {
+            existing.unitCostKgs = line.unitCostKgs;
+          }
+          return;
+        }
+        aggregates.set(key, {
+          productId: line.productId,
+          variantId: line.variantId,
+          productName: line.productName,
+          variantName: line.variantName,
+          quantityDelta: line.qtyDelta,
+          lineTotalKgs: line.lineTotalKgs ?? 0,
+          hasLineTotal: line.lineTotalKgs !== null,
+          unitCostKgs: line.unitCostKgs,
+          storeId: line.storeId,
+        });
+      });
+      const transferSourceTotals = new Map<string, number>();
+      const transferDestinationTotals = new Map<string, number>();
+      if (decoded.documentType === "TRANSFER") {
+        document.lines.forEach((line) => {
+          if (line.movementType === "TRANSFER_OUT") {
+            transferSourceTotals.set(
+              line.storeId,
+              (transferSourceTotals.get(line.storeId) ?? 0) + line.qtyDelta,
+            );
+          }
+          if (line.movementType === "TRANSFER_IN") {
+            transferDestinationTotals.set(
+              line.storeId,
+              (transferDestinationTotals.get(line.storeId) ?? 0) + line.qtyDelta,
+            );
+          }
+        });
+      }
+      const sourceStoreId =
+        decoded.documentType === "TRANSFER"
+          ? (Array.from(transferSourceTotals.entries()).find(([, quantity]) => quantity < 0)?.[0] ??
+            document.lines.find((line) => line.movementType === "TRANSFER_OUT")?.storeId ??
+            "")
+          : (aggregates.values().next().value?.storeId ?? "");
+      const destinationStoreId =
+        decoded.documentType === "TRANSFER"
+          ? (Array.from(transferDestinationTotals.entries()).find(([, quantity]) => quantity > 0)?.[0] ??
+            document.lines.find((line) => line.movementType === "TRANSFER_IN")?.storeId ??
+            null)
+          : null;
+
+      return {
+        documentType: decoded.documentType,
+        referenceType: decoded.documentReferenceType,
+        referenceId: decoded.documentReferenceId,
+        documentNumber: document.documentNumber,
+        storeId: sourceStoreId,
+        sourceStoreId,
+        destinationStoreId,
+        customerName: null as string | null,
+        customerEmail: null as string | null,
+        customerPhone: null as string | null,
+        customerAddress: null as string | null,
+        notes: document.comment,
+        lines: Array.from(aggregates.values())
+          .map((line) => {
+            const quantity =
+              decoded.documentType === "STOCK_RECEIVING"
+                ? line.quantityDelta
+                : Math.abs(line.quantityDelta);
+            const lineTotalKgs = line.hasLineTotal ? line.lineTotalKgs : null;
+            return {
+              lineId: null as string | null,
+              customerOrderLineId: null as string | null,
+              productId: line.productId,
+              variantId: line.variantId,
+              productName: line.productName,
+              variantName: line.variantName,
+              quantity,
+              unitPriceKgs: null as number | null,
+              unitCostKgs:
+                lineTotalKgs !== null && quantity > 0
+                  ? Math.round((lineTotalKgs / quantity) * 100) / 100
+                  : line.unitCostKgs,
+            };
+          })
+          .filter((line) => line.quantity > 0),
+      };
+    }),
+
+  editProductMovementDocument: managerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-product-movement-edit" }))
+    .input(
+      z.object({
+        documentKey: z.string().min(1).max(300),
+        lines: z.array(productMovementEditLineSchema).min(1).max(500),
+        customerName: z.string().max(160).optional().nullable(),
+        customerEmail: z.string().max(254).optional().nullable(),
+        customerPhone: z.string().max(64).optional().nullable(),
+        customerAddress: z.string().max(512).optional().nullable(),
+        notes: z.string().max(2_000).optional().nullable(),
+        reason: z.string().max(500).optional().nullable(),
+        destinationStoreId: z.string().optional().nullable(),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const decoded = decodeProductMovementDocumentKey(input.documentKey);
+        if (!decoded) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
+        }
+
+        if (decoded.documentType === "SALE" && decoded.documentReferenceType === "CustomerOrder") {
+          return await editCompletedPosSale({
+            organizationId: ctx.user.organizationId,
+            saleId: decoded.documentReferenceId,
+            customerName: input.customerName,
+            customerEmail: input.customerEmail,
+            customerPhone: input.customerPhone,
+            customerAddress: input.customerAddress,
+            notes: input.notes,
+            reason: input.reason,
+            lines: input.lines.map((line) => ({
+              lineId: line.lineId,
+              productId: line.productId,
+              variantId: line.variantId,
+              qty: line.quantity,
+              unitPriceKgs: line.unitPriceKgs ?? 0,
+            })),
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
+          });
+        }
+
+        if (decoded.documentType === "RETURN" && decoded.documentReferenceType === "SaleReturn") {
+          return await editCompletedSaleReturn({
+            organizationId: ctx.user.organizationId,
+            saleReturnId: decoded.documentReferenceId,
+            notes: input.notes,
+            reason: input.reason,
+            lines: input.lines.map((line) => ({
+              lineId: line.lineId,
+              customerOrderLineId: line.customerOrderLineId,
+              productId: line.productId,
+              variantId: line.variantId,
+              qty: line.quantity,
+              unitPriceKgs: line.unitPriceKgs ?? 0,
+            })),
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
+          });
+        }
+
+        if (
+          decoded.documentType === "STOCK_RECEIVING" ||
+          decoded.documentType === "TRANSFER" ||
+          decoded.documentType === "WRITE_OFF"
+        ) {
+          return await editStockMovementDocument({
+            documentType: decoded.documentType,
+            referenceType: decoded.documentReferenceType,
+            referenceId: decoded.documentReferenceId,
+            destinationStoreId: input.destinationStoreId,
+            reason: input.reason,
+            lines: input.lines.map((line) => ({
+              productId: line.productId,
+              variantId: line.variantId,
+              quantity: line.quantity,
+              unitCostKgs: line.unitCostKgs,
+            })),
+            actorId: ctx.user.id,
+            organizationId: ctx.user.organizationId,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
+          });
+        }
+
+        throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   adjust: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-adjust" }))

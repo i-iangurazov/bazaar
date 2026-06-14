@@ -428,6 +428,498 @@ describeDb("pos", () => {
     expect(snapshot?.onHand).toBe(8);
   });
 
+  it("edits a completed receipt with quantity, price, product, stock, payment, and audit deltas", async () => {
+    const { org, store, supplier, product, cashierUser, adminUser, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    const [replacementProduct, addedProduct, wrongProduct] = await Promise.all(
+      [
+        { sku: "POS-EDIT-REPLACEMENT", name: "POS Edit Replacement", basePriceKgs: 90 },
+        { sku: "POS-EDIT-ADDED", name: "POS Edit Added", basePriceKgs: 30 },
+        { sku: "POS-EDIT-WRONG", name: "POS Edit Wrong", basePriceKgs: 40 },
+      ].map((item) =>
+        prisma.product.create({
+          data: {
+            organizationId: org.id,
+            supplierId: supplier.id,
+            sku: item.sku,
+            name: item.name,
+            unit: baseUnit.code,
+            baseUnitId: baseUnit.id,
+            basePriceKgs: item.basePriceKgs,
+          },
+        }),
+      ),
+    );
+    await Promise.all(
+      [replacementProduct, addedProduct, wrongProduct].map((editProduct) =>
+        prisma.storeProduct.create({
+          data: {
+            organizationId: org.id,
+            storeId: store.id,
+            productId: editProduct.id,
+            assignedById: adminUser.id,
+            isActive: true,
+          },
+        }),
+      ),
+    );
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 20,
+      reason: "seed-pos-edit-original",
+      idempotencyKey: "pos-edit-seed-original-1",
+      requestId: "pos-edit-seed-original-1",
+    });
+    await Promise.all(
+      [
+        { productId: replacementProduct.id, suffix: "replacement" },
+        { productId: addedProduct.id, suffix: "added" },
+        { productId: wrongProduct.id, suffix: "wrong" },
+      ].map((item) =>
+        adjustStock({
+          organizationId: org.id,
+          actorId: adminUser.id,
+          storeId: store.id,
+          productId: item.productId,
+          qtyDelta: 20,
+          reason: `seed-pos-edit-${item.suffix}`,
+          idempotencyKey: `pos-edit-seed-${item.suffix}-1`,
+          requestId: `pos-edit-seed-${item.suffix}-1`,
+        }),
+      ),
+    );
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-edit-open-1",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    const line = await caller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: product.id,
+      qty: 10,
+    });
+    await caller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: wrongProduct.id,
+      qty: 2,
+    });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-edit-complete-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 1080 }],
+    });
+
+    const edited = await caller.pos.sales.editCompleted({
+      saleId: sale.id,
+      customerName: "Edited Customer",
+      customerPhone: "+996555000111",
+      notes: "Edited receipt",
+      reason: "test edit",
+      lines: [
+        {
+          lineId: line.id,
+          productId: replacementProduct.id,
+          qty: 8,
+          unitPriceKgs: 90,
+        },
+        {
+          productId: addedProduct.id,
+          qty: 3,
+          unitPriceKgs: 30,
+        },
+      ],
+      idempotencyKey: "pos-edit-completed-1",
+    });
+
+    expect(edited.totalKgs).toBe(810);
+
+    const replayedEdit = await caller.pos.sales.editCompleted({
+      saleId: sale.id,
+      customerName: "Edited Customer",
+      customerPhone: "+996555000111",
+      notes: "Edited receipt",
+      reason: "test edit duplicate replay",
+      lines: [
+        {
+          lineId: line.id,
+          productId: replacementProduct.id,
+          qty: 8,
+          unitPriceKgs: 90,
+        },
+        {
+          productId: addedProduct.id,
+          qty: 3,
+          unitPriceKgs: 30,
+        },
+      ],
+      idempotencyKey: "pos-edit-completed-1",
+    });
+
+    expect(replayedEdit.totalKgs).toBe(810);
+
+    const detail = await caller.pos.sales.get({ saleId: sale.id });
+    expect(detail?.customerName).toBe("Edited Customer");
+    expect(detail?.lines).toHaveLength(2);
+    expect(detail?.lines.map((line) => line.product.id).sort()).toEqual(
+      [addedProduct.id, replacementProduct.id].sort(),
+    );
+    const replacementLine = detail?.lines.find((line) => line.product.id === replacementProduct.id);
+    const addedLine = detail?.lines.find((line) => line.product.id === addedProduct.id);
+    expect(replacementLine?.qty).toBe(8);
+    expect(replacementLine?.unitPriceKgs).toBe(90);
+    expect(addedLine?.qty).toBe(3);
+    expect(addedLine?.unitPriceKgs).toBe(30);
+    expect(detail?.totalKgs).toBe(810);
+
+    const originalSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const replacementSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: replacementProduct.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const addedSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: addedProduct.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const wrongSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: wrongProduct.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(originalSnapshot?.onHand).toBe(20);
+    expect(replacementSnapshot?.onHand).toBe(12);
+    expect(addedSnapshot?.onHand).toBe(17);
+    expect(wrongSnapshot?.onHand).toBe(20);
+
+    const saleMovements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "CustomerOrder",
+        referenceId: sale.id,
+        type: StockMovementType.SALE,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(saleMovements.map((movement) => movement.qtyDelta).sort((a, b) => a - b)).toEqual([
+      -10,
+      -8,
+      -3,
+      -2,
+      2,
+      10,
+    ]);
+
+    const payments = await prisma.salePayment.findMany({
+      where: { customerOrderId: sale.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(payments).toHaveLength(2);
+    expect(Number(payments[0]?.amountKgs ?? 0)).toBe(1080);
+    expect(payments[1]?.isRefund).toBe(true);
+    expect(Number(payments[1]?.amountKgs ?? 0)).toBe(270);
+
+    const auditCount = await prisma.auditLog.count({
+      where: { action: "POS_SALE_EDIT", entity: "CustomerOrder", entityId: sale.id },
+    });
+    expect(auditCount).toBe(1);
+
+    const movementJournal = await caller.inventory.productMovements({
+      type: "SALE",
+      search: sale.number,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(movementJournal.items[0]?.totalQuantity).toBe(11);
+    expect(movementJournal.items[0]?.positionsCount).toBe(2);
+    expect(movementJournal.items[0]?.totalAmount).toBe(810);
+    expect(movementJournal.items[0]?.paidAmount).toBe(810);
+  });
+
+  it("edits a completed return with inventory, refund, audit, and movement deltas", async () => {
+    const { org, store, product, supplier, baseUnit, cashierUser, managerUser, adminUser } =
+      await seedBase({
+      plan: "BUSINESS",
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "POS-RETURN-EDIT-ADDED",
+        name: "POS Return Edit Added",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 50,
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: secondProduct.id,
+        assignedById: adminUser.id,
+        isActive: true,
+      },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-return-edit",
+      idempotencyKey: "pos-return-edit-seed-1",
+      requestId: "pos-return-edit-seed-1",
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: secondProduct.id,
+      qtyDelta: 10,
+      reason: "seed-return-edit-second",
+      idempotencyKey: "pos-return-edit-seed-2",
+      requestId: "pos-return-edit-seed-2",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await cashierCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-return-edit-open-1",
+    });
+    const shift = await cashierCaller.pos.shifts.current({ registerId: register.id });
+    if (!shift) {
+      throw new Error("expected open shift");
+    }
+
+    const sale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    const saleLine = await cashierCaller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: product.id,
+      qty: 2,
+    });
+    const secondSaleLine = await cashierCaller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: secondProduct.id,
+      qty: 1,
+    });
+    await cashierCaller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-return-edit-sale-complete-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 250 }],
+    });
+
+    const returnDraft = await cashierCaller.pos.returns.createDraft({
+      shiftId: shift.id,
+      originalSaleId: sale.id,
+    });
+    const returnLine = await cashierCaller.pos.returns.addLine({
+      saleReturnId: returnDraft.id,
+      customerOrderLineId: saleLine.id,
+      qty: 2,
+    });
+    await managerCaller.pos.returns.complete({
+      saleReturnId: returnDraft.id,
+      idempotencyKey: "pos-return-edit-complete-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+    });
+
+    const edited = await managerCaller.pos.returns.editCompleted({
+      saleReturnId: returnDraft.id,
+      notes: "Edited return",
+      reason: "test return edit",
+      lines: [
+        {
+          lineId: returnLine.id,
+          customerOrderLineId: saleLine.id,
+          productId: product.id,
+          qty: 1,
+          unitPriceKgs: 80,
+        },
+        {
+          customerOrderLineId: secondSaleLine.id,
+          productId: secondProduct.id,
+          qty: 1,
+          unitPriceKgs: 50,
+        },
+      ],
+      idempotencyKey: "pos-return-edit-save-1",
+    });
+    expect(edited.totalKgs).toBe(130);
+    expect(edited.refundDeltaKgs).toBe(-70);
+
+    const returnDetail = await managerCaller.pos.returns.get({ saleReturnId: returnDraft.id });
+    expect(returnDetail?.notes).toBe("Edited return");
+    expect(returnDetail?.lines).toHaveLength(2);
+    const editedReturnLine = returnDetail?.lines.find((line) => line.productId === product.id);
+    const addedReturnLine = returnDetail?.lines.find((line) => line.productId === secondProduct.id);
+    expect(editedReturnLine?.qty).toBe(1);
+    expect(editedReturnLine?.unitPriceKgs).toBe(80);
+    expect(addedReturnLine?.qty).toBe(1);
+    expect(addedReturnLine?.unitPriceKgs).toBe(50);
+    expect(returnDetail?.totalKgs).toBe(130);
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(9);
+    const secondSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: secondProduct.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(secondSnapshot?.onHand).toBe(10);
+
+    const refundMovements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "SaleReturn",
+        referenceId: returnDraft.id,
+        type: StockMovementType.RETURN,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(refundMovements.map((movement) => movement.qtyDelta).sort((a, b) => a - b)).toEqual([
+      -1,
+      1,
+      2,
+    ]);
+
+    const refundPayments = await prisma.salePayment.findMany({
+      where: { saleReturnId: returnDraft.id, isRefund: true },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(refundPayments).toHaveLength(2);
+    expect(Number(refundPayments[0]?.amountKgs ?? 0)).toBe(200);
+    expect(Number(refundPayments[1]?.amountKgs ?? 0)).toBe(-70);
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: "POS_RETURN_EDIT", entity: "SaleReturn", entityId: returnDraft.id },
+    });
+    expect(audit).not.toBeNull();
+
+    const returnMovementJournal = await managerCaller.inventory.productMovements({
+      type: "RETURN",
+      search: returnDraft.number,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(returnMovementJournal.items[0]?.totalQuantity).toBe(2);
+    expect(returnMovementJournal.items[0]?.positionsCount).toBe(2);
+    expect(returnMovementJournal.items[0]?.totalAmount).toBe(130);
+    expect(returnMovementJournal.items[0]?.paidAmount).toBe(130);
+
+    await expect(
+      managerCaller.pos.returns.editCompleted({
+        saleReturnId: returnDraft.id,
+        reason: "test return edit over sold quantity",
+        lines: [
+          {
+            lineId: returnLine.id,
+            customerOrderLineId: saleLine.id,
+            productId: product.id,
+            qty: 3,
+            unitPriceKgs: 80,
+          },
+        ],
+        idempotencyKey: "pos-return-edit-over-sold-1",
+      }),
+    ).rejects.toMatchObject({ message: "posReturnQtyExceeded" });
+
+    const saleJournal = await cashierCaller.pos.sales.list({
+      registerId: register.id,
+      search: sale.number,
+      statuses: ["COMPLETED"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(saleJournal.items[0]?.returnedTotalKgs).toBe(130);
+  });
+
   it("completes a transfer sale after quantity and price edits", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
