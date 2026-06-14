@@ -107,6 +107,52 @@ describeDb("pos", () => {
     expect(draftCount).toBe(1);
   });
 
+  it("cleans up a cancelled active draft before the next sale", async () => {
+    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-cancel-cleanup-1",
+    });
+
+    const firstDraft = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: firstDraft.id, productId: product.id, qty: 1 });
+    await caller.pos.sales.cancelDraft({ saleId: firstDraft.id });
+    expect(await caller.pos.sales.activeDraft({ registerId: register.id })).toBeNull();
+
+    const secondDraft = await caller.pos.sales.createDraft({ registerId: register.id });
+    expect(secondDraft.id).not.toBe(firstDraft.id);
+
+    const drafts = await prisma.customerOrder.findMany({
+      where: {
+        organizationId: org.id,
+        registerId: register.id,
+        createdById: cashierUser.id,
+        isPosSale: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(drafts.map((draft) => draft.status)).toEqual(["CANCELED", "DRAFT"]);
+  });
+
   it("filters sales list by statuses", async () => {
     const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -193,6 +239,25 @@ describeDb("pos", () => {
     const activeAfterHold = await caller.pos.sales.activeDraft({ registerId: register.id });
     expect(activeAfterHold).toBeNull();
 
+    const nextSale = await caller.pos.sales.createDraft({ registerId: register.id });
+    expect(nextSale.id).not.toBe(sale.id);
+    const activeAfterNewSale = await caller.pos.sales.activeDraft({ registerId: register.id });
+    expect(activeAfterNewSale?.id).toBe(nextSale.id);
+
+    const openDrafts = await prisma.customerOrder.findMany({
+      where: {
+        organizationId: org.id,
+        registerId: register.id,
+        createdById: cashierUser.id,
+        isPosSale: true,
+        status: "DRAFT",
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(openDrafts).toHaveLength(2);
+    expect(openDrafts.some((draft) => draft.id === sale.id && draft.isHeld)).toBe(true);
+    expect(openDrafts.some((draft) => draft.id === nextSale.id && !draft.isHeld)).toBe(true);
+
     const heldOnly = await caller.pos.sales.list({
       registerId: register.id,
       heldState: "held",
@@ -211,7 +276,8 @@ describeDb("pos", () => {
       page: 1,
       pageSize: 25,
     });
-    expect(activeOnlyAfterHold.items).toHaveLength(0);
+    expect(activeOnlyAfterHold.items).toHaveLength(1);
+    expect(activeOnlyAfterHold.items[0]?.id).toBe(nextSale.id);
 
     const storeSearch = await caller.pos.sales.list({
       registerId: register.id,
@@ -220,7 +286,7 @@ describeDb("pos", () => {
       page: 1,
       pageSize: 25,
     });
-    expect(storeSearch.items[0]?.id).toBe(sale.id);
+    expect(storeSearch.items.some((item) => item.id === sale.id)).toBe(true);
 
     const cashierSearch = await caller.pos.sales.list({
       registerId: register.id,
@@ -229,7 +295,7 @@ describeDb("pos", () => {
       page: 1,
       pageSize: 25,
     });
-    expect(cashierSearch.items[0]?.id).toBe(sale.id);
+    expect(cashierSearch.items.some((item) => item.id === sale.id)).toBe(true);
 
     const currentShift = await caller.pos.shifts.current({ registerId: register.id });
     expect(currentShift?.heldReceiptCount).toBe(1);
@@ -248,6 +314,8 @@ describeDb("pos", () => {
       registerId: register.id,
     });
     expect(resumed.isHeld).toBe(false);
+    const canceledNewSale = await prisma.customerOrder.findUnique({ where: { id: nextSale.id } });
+    expect(canceledNewSale?.status).toBe("CANCELED");
 
     const activeOnlyAfterResume = await caller.pos.sales.list({
       registerId: register.id,
@@ -493,6 +561,87 @@ describeDb("pos", () => {
     expect(movements).toHaveLength(0);
   });
 
+  it("recovers a draft after a failed submit and completes with corrected payment", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed-pos-failed-submit-recovery",
+      idempotencyKey: "pos-failed-submit-recovery-seed-1",
+      requestId: "pos-failed-submit-recovery-seed-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-failed-submit-recovery-open-1",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    await expect(
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "pos-failed-submit-recovery-bad-1",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 100 }],
+        clientState: {
+          visibleCartLineCount: 1,
+          visibleCartTotalKgs: 200,
+        },
+      }),
+    ).rejects.toMatchObject({ message: "posPaymentTotalMismatch" });
+
+    const activeDraft = await caller.pos.sales.activeDraft({ registerId: register.id });
+    expect(activeDraft?.id).toBe(sale.id);
+    const failedAttemptSale = await caller.pos.sales.get({ saleId: sale.id });
+    expect(failedAttemptSale?.status).toBe("DRAFT");
+    expect(failedAttemptSale?.lines).toHaveLength(1);
+    expect(Number(failedAttemptSale?.totalKgs ?? 0)).toBe(200);
+
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-failed-submit-recovery-good-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+      clientState: {
+        visibleCartLineCount: 1,
+        visibleCartTotalKgs: 200,
+      },
+    });
+
+    const completed = await prisma.customerOrder.findUnique({
+      where: { id: sale.id },
+      include: { payments: true, lines: true },
+    });
+    expect(completed?.status).toBe("COMPLETED");
+    expect(completed?.payments).toHaveLength(1);
+    expect(Number(completed?.payments[0]?.amountKgs ?? 0)).toBe(200);
+    expect(await caller.pos.sales.activeDraft({ registerId: register.id })).toBeNull();
+  });
+
   it("handles rapid duplicate POS completes with different keys without duplicate rows", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -636,6 +785,88 @@ describeDb("pos", () => {
     expect(dbSale?.status).toBe("DRAFT");
     expect(payments).toHaveLength(0);
     expect(movements).toHaveLength(0);
+  });
+
+  it("completes exact split and transfer payments without false mismatch", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 20,
+      reason: "seed-exact-split-transfer",
+      idempotencyKey: "pos-exact-split-transfer-seed-1",
+      requestId: "pos-exact-split-transfer-seed-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-exact-split-transfer-open-1",
+    });
+
+    const splitSale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: splitSale.id, productId: product.id, qty: 2 });
+    await caller.pos.sales.complete({
+      saleId: splitSale.id,
+      idempotencyKey: "pos-exact-split-complete-1",
+      payments: [
+        { method: PosPaymentMethod.CASH, amountKgs: 125 },
+        { method: PosPaymentMethod.TRANSFER, amountKgs: 75 },
+      ],
+      clientState: {
+        visibleCartLineCount: 1,
+        visibleCartTotalKgs: 200,
+      },
+    });
+
+    const transferSale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: transferSale.id, productId: product.id, qty: 1 });
+    await caller.pos.sales.complete({
+      saleId: transferSale.id,
+      idempotencyKey: "pos-exact-transfer-complete-1",
+      payments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: 100 }],
+      clientState: {
+        visibleCartLineCount: 1,
+        visibleCartTotalKgs: 100,
+      },
+    });
+
+    const completed = await prisma.customerOrder.findMany({
+      where: {
+        id: { in: [splitSale.id, transferSale.id] },
+      },
+      include: { payments: true },
+      orderBy: { totalKgs: "desc" },
+    });
+
+    expect(completed).toHaveLength(2);
+    expect(completed.every((sale) => sale.status === "COMPLETED")).toBe(true);
+    expect(completed.flatMap((sale) => sale.payments)).toHaveLength(3);
+    expect(await caller.pos.sales.activeDraft({ registerId: register.id })).toBeNull();
   });
 
   it("edits a completed receipt with quantity, price, product, stock, payment, and audit deltas", async () => {

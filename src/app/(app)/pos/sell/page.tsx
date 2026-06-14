@@ -1129,6 +1129,13 @@ const PosSellPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+      const targetSaleId = saleId;
+      setOptimisticSaleLines(null);
+      clearCartRuntimeSyncState();
+      if (targetSaleId) {
+        void trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }).catch(() => undefined);
+      }
+      void activeDraftQuery.refetch().catch(() => undefined);
     },
   });
 
@@ -1169,6 +1176,51 @@ const PosSellPage = () => {
   const saleCustomerAddress = sale?.customerAddress ?? null;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
+
+  useEffect(() => {
+    if (!activeDraft?.id || saleId || lastCompletedSale || completeMutation.isLoading) {
+      return;
+    }
+
+    setLastCompletedSale(null);
+    setAutoReceiptStatus("idle");
+    setMobileCheckoutOpen(true);
+    setDiscountEditorOpen(false);
+    setCustomerSelectorOpen(false);
+    setCustomerSearch("");
+    setCustomerCreateOpen(false);
+    setSelectedCustomer(
+      activeDraft.customerName || activeDraft.customerEmail || activeDraft.customerPhone
+        ? {
+            id: "",
+            name:
+              activeDraft.customerName ??
+              activeDraft.customerEmail ??
+              activeDraft.customerPhone ??
+              "",
+            email: activeDraft.customerEmail,
+            phone: activeDraft.customerPhone,
+            address: activeDraft.customerAddress,
+          }
+        : null,
+    );
+    setOptimisticSaleLines(null);
+    clearCartRuntimeSyncState();
+    setLineInputDrafts({});
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+    setSaleId(activeDraft.id);
+  }, [
+    activeDraft?.customerAddress,
+    activeDraft?.customerEmail,
+    activeDraft?.customerName,
+    activeDraft?.customerPhone,
+    activeDraft?.id,
+    clearCartRuntimeSyncState,
+    completeMutation.isLoading,
+    lastCompletedSale,
+    saleId,
+    setOptimisticSaleLines,
+  ]);
 
   useSse({
     "shift.opened": () => {
@@ -1288,6 +1340,30 @@ const PosSellPage = () => {
     setOptimisticSaleLines,
     setPayments,
   ]);
+
+  useEffect(() => {
+    if (!sale?.id || sale.status === CustomerOrderStatus.DRAFT) {
+      return;
+    }
+
+    setSaleId(null);
+    setOptimisticSaleLines(null);
+    clearCartRuntimeSyncState();
+    setLineInputDrafts({});
+    setPayments([createDefaultPosPaymentDraft()]);
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+    setMarkingInput({});
+    setSelectedCustomer(null);
+    setCustomerCreateOpen(false);
+    setCustomerEditOpen(false);
+    if (sale.status === CustomerOrderStatus.COMPLETED) {
+      setLastCompletedSale({
+        id: sale.id,
+        number: sale.number,
+        kkmStatus: sale.kkmStatus,
+      });
+    }
+  }, [clearCartRuntimeSyncState, sale, setOptimisticSaleLines, setPayments]);
 
   useEffect(() => {
     if (!sale?.id) {
@@ -2267,21 +2343,6 @@ const PosSellPage = () => {
         return;
       }
 
-      if (sellInDebt) {
-        const normalizedDebtName = debtFullName.trim().replace(/\s+/g, " ");
-        if (normalizedDebtName.length < 2) {
-          toast({ variant: "error", description: t("sell.debtNameRequired") });
-          return;
-        }
-        await completeMutation.mutateAsync({
-          saleId: targetSaleId,
-          idempotencyKey: createIdempotencyKey(),
-          debtCustomerName: normalizedDebtName,
-          payments: [],
-        });
-        return;
-      }
-
       const currentSubtotalKgs = calculateCartSubtotalKgs(currentLines);
       const currentDiscountKgs = Math.min(
         currentSubtotalKgs,
@@ -2301,6 +2362,26 @@ const PosSellPage = () => {
         }
       }
       const currentCartTotalKgs = roundMoney(Math.max(0, currentSubtotalKgs - currentDiscountKgs));
+
+      if (sellInDebt) {
+        const normalizedDebtName = debtFullName.trim().replace(/\s+/g, " ");
+        if (normalizedDebtName.length < 2) {
+          toast({ variant: "error", description: t("sell.debtNameRequired") });
+          return;
+        }
+        await completeMutation.mutateAsync({
+          saleId: targetSaleId,
+          idempotencyKey: createIdempotencyKey(),
+          debtCustomerName: normalizedDebtName,
+          payments: [],
+          clientState: {
+            visibleCartLineCount: currentLines.length,
+            visibleCartTotalKgs: currentCartTotalKgs,
+          },
+        });
+        return;
+      }
+
       const currentDisplayTotal = roundMoney(
         displayMoneyFromKgs(currentCartTotalKgs, currencySource),
       );
@@ -2343,6 +2424,10 @@ const PosSellPage = () => {
         idempotencyKey: createIdempotencyKey(),
         debtCustomerName: null,
         payments: paymentPayload.payments,
+        clientState: {
+          visibleCartLineCount: currentLines.length,
+          visibleCartTotalKgs: currentCartTotalKgs,
+        },
       });
     } catch {
       // handled by mutation onError
@@ -2873,6 +2958,10 @@ const PosSellPage = () => {
   };
 
   const handleStartNewSale = () => {
+    if (activeDraft?.id) {
+      handleResumeActiveDraft();
+      return;
+    }
     clearActiveDraftCache();
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");

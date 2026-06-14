@@ -67,6 +67,37 @@ const uniqueConstraintTarget = (error: Prisma.PrismaClientKnownRequestError) => 
   return null;
 };
 
+type PosCheckoutClientState = {
+  visibleCartLineCount?: number;
+  visibleCartTotalKgs?: number;
+};
+
+const safeErrorLogFields = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return {
+      backendCode: error.code,
+      backendStack: error.stack,
+      uniqueTarget: uniqueConstraintTarget(error),
+    };
+  }
+  if (error instanceof AppError) {
+    return {
+      backendCode: error.code,
+      backendStack: error.stack,
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      backendCode: error.name,
+      backendStack: error.stack,
+    };
+  }
+  return {
+    backendCode: null,
+    backendStack: null,
+  };
+};
+
 export type PosRegisterStatusFilter = "active" | "inactive" | "all";
 
 export type PosReceiptEditLineInput = {
@@ -3703,6 +3734,7 @@ export const completePosSale = async (input: {
   idempotencyKey: string;
   debtCustomerName?: string | null;
   payments: Array<{ method: PosPaymentMethod; amountKgs: number; providerRef?: string | null }>;
+  clientState?: PosCheckoutClientState;
 }) => {
   const logger = getLogger(input.requestId);
   const debtCustomerName = input.debtCustomerName?.trim() || null;
@@ -3807,6 +3839,10 @@ export const completePosSale = async (input: {
           }
 
           const orderTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs)) ?? 0;
+          const visibleCartTotalMinorUnits =
+            input.clientState?.visibleCartTotalKgs === undefined
+              ? null
+              : (moneyToMinorUnits(input.clientState.visibleCartTotalKgs) ?? null);
           const paymentTotalMinorUnits = sumPaymentMinorUnits(normalizedPayments);
           const paymentMethod = debtCustomerName
             ? "DEBT"
@@ -3820,15 +3856,22 @@ export const completePosSale = async (input: {
               {
                 storeId: sale.storeId,
                 registerId: sale.registerId,
+                shiftId: sale.shiftId,
                 userId: input.actorId,
                 draftId: sale.id,
-                cartLineCount: sale.lines.length,
+                orderId: sale.id,
+                visibleCartLineCount: input.clientState?.visibleCartLineCount ?? null,
+                cartLineCount: input.clientState?.visibleCartLineCount ?? sale.lines.length,
                 serverLineCount: sale.lines.length,
                 paymentSumMinorUnits: paymentTotalMinorUnits,
+                visibleCartTotalMinorUnits,
                 cartTotalMinorUnits: orderTotalMinorUnits,
                 differenceMinorUnits: paymentTotalMinorUnits - orderTotalMinorUnits,
                 paymentMethod,
+                idempotencyKey: input.idempotencyKey,
                 errorCode,
+                backendCode: errorCode,
+                backendStack: null,
               },
               "pos sale completion rejected",
             );
@@ -4030,31 +4073,75 @@ export const completePosSale = async (input: {
     })
     .catch((error) => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const paymentMethod =
+          debtCustomerName || !normalizedPayments.length
+            ? debtCustomerName
+              ? "DEBT"
+              : "NONE"
+            : normalizedPayments.length === 1
+              ? normalizedPayments[0]?.method
+              : "SPLIT";
         logger.warn(
           {
             storeId: null,
             registerId: null,
+            shiftId: null,
             userId: input.actorId,
             draftId: input.saleId,
-            cartLineCount: null,
+            orderId: input.saleId,
+            visibleCartLineCount: input.clientState?.visibleCartLineCount ?? null,
+            cartLineCount: input.clientState?.visibleCartLineCount ?? null,
             serverLineCount: null,
             paymentSumMinorUnits: sumPaymentMinorUnits(normalizedPayments),
+            visibleCartTotalMinorUnits:
+              input.clientState?.visibleCartTotalKgs === undefined
+                ? null
+                : (moneyToMinorUnits(input.clientState.visibleCartTotalKgs) ?? null),
             cartTotalMinorUnits: null,
             differenceMinorUnits: null,
-            paymentMethod:
-              debtCustomerName || !normalizedPayments.length
-                ? debtCustomerName
-                  ? "DEBT"
-                  : "NONE"
-                : normalizedPayments.length === 1
-                  ? normalizedPayments[0]?.method
-                  : "SPLIT",
+            paymentMethod,
+            idempotencyKey: input.idempotencyKey,
             errorCode: "posSaleUniqueConflict",
-            uniqueTarget: uniqueConstraintTarget(error),
+            ...safeErrorLogFields(error),
           },
           "pos sale completion rejected",
         );
         throw new AppError("posSubmitAlreadyProcessed", "CONFLICT", 409);
+      }
+      if (error instanceof AppError && error.message === "requestInProgress") {
+        const paymentMethod =
+          debtCustomerName || !normalizedPayments.length
+            ? debtCustomerName
+              ? "DEBT"
+              : "NONE"
+            : normalizedPayments.length === 1
+              ? normalizedPayments[0]?.method
+              : "SPLIT";
+        logger.warn(
+          {
+            storeId: null,
+            registerId: null,
+            shiftId: null,
+            userId: input.actorId,
+            draftId: input.saleId,
+            orderId: input.saleId,
+            visibleCartLineCount: input.clientState?.visibleCartLineCount ?? null,
+            cartLineCount: input.clientState?.visibleCartLineCount ?? null,
+            serverLineCount: null,
+            paymentSumMinorUnits: sumPaymentMinorUnits(normalizedPayments),
+            visibleCartTotalMinorUnits:
+              input.clientState?.visibleCartTotalKgs === undefined
+                ? null
+                : (moneyToMinorUnits(input.clientState.visibleCartTotalKgs) ?? null),
+            cartTotalMinorUnits: null,
+            differenceMinorUnits: null,
+            paymentMethod,
+            idempotencyKey: input.idempotencyKey,
+            errorCode: "requestInProgress",
+            ...safeErrorLogFields(error),
+          },
+          "pos sale completion rejected",
+        );
       }
       throw error;
     });

@@ -75,6 +75,13 @@ const paymentSchema = z.object({
   providerRef: z.string().max(120).optional().nullable(),
 });
 
+const posCheckoutClientStateSchema = z
+  .object({
+    visibleCartLineCount: z.number().int().min(0).max(1_000).optional(),
+    visibleCartTotalKgs: z.number().min(0).max(10_000_000).optional(),
+  })
+  .optional();
+
 const posReceiptEditLineSchema = z.object({
   lineId: z.string().min(1).optional().nullable(),
   productId: z.string().min(1),
@@ -839,6 +846,7 @@ export const posRouter = router({
           idempotencyKey: z.string().min(8),
           debtCustomerName: z.string().max(160).optional().nullable(),
           payments: z.array(paymentSchema),
+          clientState: posCheckoutClientStateSchema,
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -852,6 +860,7 @@ export const posRouter = router({
             idempotencyKey: input.idempotencyKey,
             debtCustomerName: input.debtCustomerName,
             payments: input.payments,
+            clientState: input.clientState,
           });
         } catch (error) {
           throw toTRPCError(error);

@@ -127,6 +127,7 @@ describe("pos entry navigation", () => {
     expect(cleanupBlock).toContain("pendingCartSyncPromisesRef.current.clear();");
     expect(cleanupBlock).toContain("pendingCartMutationCountRef.current = 0;");
     expect(cleanupBlock).toContain("draftCreationRef.current = null;");
+    expect(cleanupBlock).toContain("completeSubmitInFlightRef.current = false;");
     expect(cleanupBlock).toContain("optimisticLineServerIdsRef.current = {};");
     expect(cleanupBlock).toContain("removedOptimisticLineIdsRef.current.clear();");
     expect(completeBlock).toContain("clearCartRuntimeSyncState();");
@@ -140,6 +141,23 @@ describe("pos entry navigation", () => {
       "if (cartSessionVersionRef.current !== cartSessionVersion)",
     );
     expect(pageSource).not.toContain("onSuccess: (sale) =>");
+  });
+
+  it("reconciles server active drafts into the visible cart state", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const migrationSource = await readSource(
+      "prisma/migrations/20260614143000_pos_active_draft_held_scope/migration.sql",
+    );
+
+    expect(pageSource).toContain("if (!activeDraft?.id || saleId || lastCompletedSale");
+    expect(pageSource).toContain("setSaleId(activeDraft.id);");
+    expect(pageSource).toContain("setOptimisticSaleLines(null);");
+    expect(pageSource).toContain("paymentAutoFillRef.current = { saleId: null, totalKgs: null };");
+    expect(pageSource).toContain("if (activeDraft?.id) {\n      handleResumeActiveDraft();");
+    expect(pageSource).toContain("sale.status === CustomerOrderStatus.DRAFT");
+    expect(pageSource).toContain("sale.status === CustomerOrderStatus.COMPLETED");
+    expect(migrationSource).toContain('DROP INDEX IF EXISTS "CustomerOrder_pos_active_draft_unique"');
+    expect(migrationSource).toContain('"isHeld" = false');
   });
 
   it("keeps the new POS view for desktop and uses the dedicated mobile quick-sale flow only for phones", async () => {
@@ -252,6 +270,9 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain('paymentPayload.status === "paymentRequired"');
     expect(pageSource).toContain('paymentPayload.status === "paymentMismatch"');
     expect(pageSource).toContain("payments: paymentPayload.payments");
+    expect(pageSource).toContain("clientState: {");
+    expect(pageSource).toContain("visibleCartLineCount: currentLines.length");
+    expect(pageSource).toContain("visibleCartTotalKgs: currentCartTotalKgs");
     expect(pageSource).toContain("paymentsRef.current");
     expect(pageSource).toContain("readOnly={payments.length === 1}");
     expect(pageSource).toContain("await flushAllPendingCartSync();");
@@ -267,6 +288,11 @@ describe("pos entry navigation", () => {
     expect(serviceSource).toContain('throw new AppError("posSubmitAlreadyProcessed"');
     expect(serviceSource).toContain("orderTotalMinorUnits > 0 && !normalizedPayments.length");
     expect(serviceSource).toContain("paymentTotalMinorUnits !== orderTotalMinorUnits");
+    expect(routerSource).toContain("posCheckoutClientStateSchema");
+    expect(serviceSource).toContain("visibleCartLineCount: input.clientState?.visibleCartLineCount");
+    expect(serviceSource).toContain("serverLineCount: sale.lines.length");
+    expect(serviceSource).toContain("idempotencyKey: input.idempotencyKey");
+    expect(serviceSource).toContain("backendStack");
   });
 
   it("keeps duplicate-record copy out of cashier-visible translations", async () => {
