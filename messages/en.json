@@ -5579,6 +5579,7 @@
     "title": "Exports",
     "subtitle": "Exports overview",
     "requestTitle": "Request",
+    "requestDescription": "Choose a store, period, and export type. Every export is available from one workspace.",
     "storeLabel": "Store label",
     "typeLabel": "Type label",
     "formatLabel": "Format label",
@@ -5588,12 +5589,30 @@
     "created": "Exports created.",
     "retrySuccess": "Retry completed.",
     "jobsTitle": "Jobs",
+    "jobsDescription": "Generated files, processing status, and downloads for completed exports.",
     "empty": "No exports.",
+    "emptyDescription": "Generate the first export to see the completed file in this journal.",
+    "filePending": "File is not ready yet",
+    "jobsErrorTitle": "Could not load export jobs",
+    "noStoresTitle": "No stores available",
+    "noStoresDescription": "You can generate exports after a store is created or assigned.",
     "download": "Download",
     "copyJobId": "Copy job ID",
     "copyFileName": "Copy file name",
     "copiedJobId": "Copied job ID",
     "copiedFileName": "Copied file name",
+    "summary": {
+      "availableTypes": "Export types",
+      "ready": "Ready",
+      "inProgress": "In progress",
+      "failed": "Failed"
+    },
+    "categories": {
+      "all": "All",
+      "inventory": "Inventory",
+      "sales": "Sales and POS",
+      "compliance": "Compliance"
+    },
     "types": {
       "inventoryMovementsLedger": "Inventory movements ledger",
       "inventoryBalancesAtDate": "Inventory balances at date",
@@ -5617,6 +5636,29 @@
       "ettnReferences": "ETTN references",
       "esfReferences": "ESF references"
     },
+    "typeDescriptions": {
+      "inventoryMovementsLedger": "Full inventory movement ledger with product, quantity, cost, document reference, and user.",
+      "inventoryBalancesAtDate": "Inventory balances and stock valuation for store reconciliation.",
+      "purchasesReceipts": "Received purchases for the period with supplier, quantity, unit cost, and line total.",
+      "priceList": "Price list with base price, store override, average cost, margin, and markup.",
+      "salesSummary": "Compact sales summary by day and movement count.",
+      "stockMovements": "General export of all stock movements for the selected period.",
+      "purchases": "Purchase documents and purchase lines with ordered and received quantities.",
+      "inventoryOnHand": "Current stock, minimum stock, and effective price by product.",
+      "periodClose": "Closed-period report. It can be generated only after the selected period is closed.",
+      "kkmReceipts": "Sales rows for register and KKM reconciliation.",
+      "receiptsRegistry": "POS receipt registry with cash, card, transfer payments, and fiscal status.",
+      "shiftXReport": "Shift X report with sales, returns, cash, and non-cash totals.",
+      "shiftZReport": "Closed shift Z report with cash reconciliation and payment breakdown.",
+      "salesByDay": "Sales by day: receipt count and revenue.",
+      "salesByItem": "Sales by item: SKU, variant, quantity, and revenue.",
+      "returnsByDay": "Returns by day: return count and total amount.",
+      "returnsByItem": "Returns by item: SKU, variant, quantity, and returned amount.",
+      "cashDrawerMovements": "Cash pay-ins and pay-outs by POS shift.",
+      "markingSalesRegistry": "Registry of sold marking codes by receipt.",
+      "ettnReferences": "ETTN reference links for documents in the period.",
+      "esfReferences": "ESF reference links for documents in the period."
+    },
     "formats": {
       "csv": "CSV",
       "xlsx": "XLSX"
@@ -5631,6 +5673,7 @@
       "createdAt": "Created at",
       "type": "Type",
       "period": "Period",
+      "file": "File",
       "status": "Status",
       "actions": "Actions"
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { ExportJobStatus, ExportType } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
@@ -8,9 +9,11 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -26,62 +29,73 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CopyIcon, DownloadIcon, RestoreIcon } from "@/components/icons";
+import {
+  CopyIcon,
+  DownloadIcon,
+  ReportsIcon,
+  RestoreIcon,
+  SpreadsheetIcon,
+  StatusDangerIcon,
+  StatusPendingIcon,
+  StatusSuccessIcon,
+  StatusWarningIcon,
+} from "@/components/icons";
 import { RowActions } from "@/components/row-actions";
 import { useToast } from "@/components/ui/toast";
 import { Field, FormActions, FormGrid } from "@/components/form-layout";
 import { formatDate, formatDateTime } from "@/lib/i18nFormat";
+import {
+  EXPORT_TYPE_CATEGORIES,
+  EXPORT_TYPE_METADATA,
+  EXPORT_TYPES,
+  type ExportTypeCategory,
+} from "@/lib/export-types";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 type ExportFileFormat = "csv" | "xlsx";
-type ExportTypeValue =
-  | "INVENTORY_MOVEMENTS_LEDGER"
-  | "INVENTORY_BALANCES_AT_DATE"
-  | "PURCHASES_RECEIPTS"
-  | "PRICE_LIST"
-  | "SALES_SUMMARY"
-  | "STOCK_MOVEMENTS"
-  | "PURCHASES"
-  | "INVENTORY_ON_HAND"
-  | "PERIOD_CLOSE_REPORT"
-  | "RECEIPTS_FOR_KKM"
-  | "RECEIPTS_REGISTRY"
-  | "SHIFT_X_REPORT"
-  | "SHIFT_Z_REPORT"
-  | "SALES_BY_DAY"
-  | "SALES_BY_ITEM"
-  | "RETURNS_BY_DAY"
-  | "RETURNS_BY_ITEM"
-  | "CASH_DRAWER_MOVEMENTS"
-  | "MARKING_SALES_REGISTRY"
-  | "ETTN_REFERENCES"
-  | "ESF_REFERENCES";
+type CategoryFilter = ExportTypeCategory | "all";
 
-const EXPORT_TYPES: readonly ExportTypeValue[] = [
-  "INVENTORY_MOVEMENTS_LEDGER",
-  "INVENTORY_BALANCES_AT_DATE",
-  "PURCHASES_RECEIPTS",
-  "PRICE_LIST",
-  "SALES_SUMMARY",
-  "STOCK_MOVEMENTS",
-  "PURCHASES",
-  "INVENTORY_ON_HAND",
-  "PERIOD_CLOSE_REPORT",
-  "RECEIPTS_FOR_KKM",
-  "RECEIPTS_REGISTRY",
-  "SHIFT_X_REPORT",
-  "SHIFT_Z_REPORT",
-  "SALES_BY_DAY",
-  "SALES_BY_ITEM",
-  "RETURNS_BY_DAY",
-  "RETURNS_BY_ITEM",
-  "CASH_DRAWER_MOVEMENTS",
-  "MARKING_SALES_REGISTRY",
-  "ETTN_REFERENCES",
-  "ESF_REFERENCES",
-];
+const statusBadgeVariant = (status: ExportJobStatus) => {
+  if (status === "DONE") {
+    return "success";
+  }
+  if (status === "FAILED") {
+    return "danger";
+  }
+  if (status === "RUNNING") {
+    return "warning";
+  }
+  return "muted";
+};
+
+const statusIcon = (status: ExportJobStatus) => {
+  if (status === "DONE") {
+    return StatusSuccessIcon;
+  }
+  if (status === "FAILED") {
+    return StatusDangerIcon;
+  }
+  if (status === "RUNNING") {
+    return StatusWarningIcon;
+  }
+  return StatusPendingIcon;
+};
+
+const formatFileSize = (value?: number | null) => {
+  if (!value) {
+    return "";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${Math.round(value / 102.4) / 10} KB`;
+  }
+  return `${Math.round(value / 1024 / 102.4) / 10} MB`;
+};
 
 const ExportsPage = () => {
   const t = useTranslations("exports");
@@ -94,11 +108,14 @@ const ExportsPage = () => {
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
   const [storeId, setStoreId] = useState("");
-  const [exportType, setExportType] = useState<ExportTypeValue>("INVENTORY_MOVEMENTS_LEDGER");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [exportType, setExportType] = useState<ExportType>("INVENTORY_MOVEMENTS_LEDGER");
   const [format, setFormat] = useState<ExportFileFormat>("csv");
 
   const now = useMemo(() => new Date(), []);
-  const [periodStart, setPeriodStart] = useState(formatDateInput(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [periodStart, setPeriodStart] = useState(
+    formatDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
+  );
   const [periodEnd, setPeriodEnd] = useState(formatDateInput(now));
 
   const jobsQuery = trpc.exports.list.useQuery(
@@ -127,32 +144,45 @@ const ExportsPage = () => {
   });
 
   const storeOptions = storesQuery.data ?? [];
+  const selectedMetadata = EXPORT_TYPE_METADATA[exportType];
   const typeLabels = useMemo(
-    () => ({
-      INVENTORY_MOVEMENTS_LEDGER: t("types.inventoryMovementsLedger"),
-      INVENTORY_BALANCES_AT_DATE: t("types.inventoryBalancesAtDate"),
-      PURCHASES_RECEIPTS: t("types.purchasesReceipts"),
-      PRICE_LIST: t("types.priceList"),
-      SALES_SUMMARY: t("types.salesSummary"),
-      STOCK_MOVEMENTS: t("types.stockMovements"),
-      PURCHASES: t("types.purchases"),
-      INVENTORY_ON_HAND: t("types.inventoryOnHand"),
-      PERIOD_CLOSE_REPORT: t("types.periodClose"),
-      RECEIPTS_FOR_KKM: t("types.kkmReceipts"),
-      RECEIPTS_REGISTRY: t("types.receiptsRegistry"),
-      SHIFT_X_REPORT: t("types.shiftXReport"),
-      SHIFT_Z_REPORT: t("types.shiftZReport"),
-      SALES_BY_DAY: t("types.salesByDay"),
-      SALES_BY_ITEM: t("types.salesByItem"),
-      RETURNS_BY_DAY: t("types.returnsByDay"),
-      RETURNS_BY_ITEM: t("types.returnsByItem"),
-      CASH_DRAWER_MOVEMENTS: t("types.cashDrawerMovements"),
-      MARKING_SALES_REGISTRY: t("types.markingSalesRegistry"),
-      ETTN_REFERENCES: t("types.ettnReferences"),
-      ESF_REFERENCES: t("types.esfReferences"),
-    }),
+    () =>
+      Object.fromEntries(
+        EXPORT_TYPES.map((type) => [
+          type,
+          t(`types.${EXPORT_TYPE_METADATA[type].titleKey}`),
+        ]),
+      ) as Record<ExportType, string>,
     [t],
   );
+  const typeDescriptions = useMemo(
+    () =>
+      Object.fromEntries(
+        EXPORT_TYPES.map((type) => [
+          type,
+          t(`typeDescriptions.${EXPORT_TYPE_METADATA[type].descriptionKey}`),
+        ]),
+      ) as Record<ExportType, string>,
+    [t],
+  );
+  const filteredTypes = EXPORT_TYPES.filter(
+    (type) => categoryFilter === "all" || EXPORT_TYPE_METADATA[type].category === categoryFilter,
+  );
+
+  const jobStats = useMemo(() => {
+    const jobs = jobsQuery.data ?? [];
+    return {
+      total: jobs.length,
+      done: jobs.filter((job) => job.status === "DONE").length,
+      running: jobs.filter((job) => job.status === "RUNNING" || job.status === "QUEUED").length,
+      failed: jobs.filter((job) => job.status === "FAILED").length,
+    };
+  }, [jobsQuery.data]);
+
+  const selectExportType = (type: ExportType) => {
+    setExportType(type);
+    setFormat(EXPORT_TYPE_METADATA[type].recommendedFormat);
+  };
 
   const handleGenerate = () => {
     if (!storeId) {
@@ -161,7 +191,7 @@ const ExportsPage = () => {
     }
     const start = new Date(`${periodStart}T00:00:00`);
     const end = new Date(`${periodEnd}T23:59:59`);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
       toast({ variant: "error", description: tErrors("invalidInput") });
       return;
     }
@@ -184,16 +214,64 @@ const ExportsPage = () => {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
+      <div className="grid gap-3 md:grid-cols-4">
+        <Card variant="subtle">
+          <CardContent className="flex items-center gap-3">
+            <span className="rounded-xl bg-primary/10 p-2 text-primary">
+              <ReportsIcon className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                {t("summary.availableTypes")}
+              </p>
+              <p className="text-2xl font-bold text-foreground">{EXPORT_TYPES.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              {t("summary.ready")}
+            </p>
+            <p className="mt-1 text-2xl font-bold text-success">{jobStats.done}</p>
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              {t("summary.inProgress")}
+            </p>
+            <p className="mt-1 text-2xl font-bold text-warning">{jobStats.running}</p>
+          </CardContent>
+        </Card>
+        <Card variant="subtle">
+          <CardContent>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              {t("summary.failed")}
+            </p>
+            <p className="mt-1 text-2xl font-bold text-danger">{jobStats.failed}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {canGenerate ? (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>{t("requestTitle")}</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-muted/35">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <CardTitle>{t("requestTitle")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{t("requestDescription")}</p>
+              </div>
+              <Badge variant="default" className="uppercase">
+                {format}
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <FormGrid>
+            <FormGrid className="lg:grid-cols-5">
               <Field label={t("storeLabel")}>
                 <Select value={storeId} onValueChange={setStoreId}>
                   <SelectTrigger>
@@ -208,8 +286,8 @@ const ExportsPage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t("typeLabel")}>
-                <Select value={exportType} onValueChange={(value) => setExportType(value as ExportTypeValue)}>
+              <Field label={t("typeLabel")} className="lg:col-span-2">
+                <Select value={exportType} onValueChange={(value) => selectExportType(value as ExportType)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -234,19 +312,101 @@ const ExportsPage = () => {
                 </Select>
               </Field>
               <Field label={t("periodStart")}>
-                <Input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
+                <Input
+                  type="date"
+                  value={periodStart}
+                  onChange={(event) => setPeriodStart(event.target.value)}
+                />
               </Field>
               <Field label={t("periodEnd")}>
-                <Input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} />
+                <Input
+                  type="date"
+                  value={periodEnd}
+                  onChange={(event) => setPeriodEnd(event.target.value)}
+                />
               </Field>
             </FormGrid>
+
+            <Alert variant={selectedMetadata.periodRequired ? "info" : "default"}>
+              <AlertTitle>{typeLabels[exportType]}</AlertTitle>
+              <AlertDescription>{typeDescriptions[exportType]}</AlertDescription>
+            </Alert>
+
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={categoryFilter === "all" ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setCategoryFilter("all")}
+                  aria-pressed={categoryFilter === "all"}
+                >
+                  {t("categories.all")}
+                </Button>
+                {EXPORT_TYPE_CATEGORIES.map((category) => (
+                  <Button
+                    key={category}
+                    type="button"
+                    variant={categoryFilter === category ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => setCategoryFilter(category)}
+                    aria-pressed={categoryFilter === category}
+                  >
+                    {t(`categories.${category}`)}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {filteredTypes.map((type) => {
+                  const metadata = EXPORT_TYPE_METADATA[type];
+                  const isSelected = exportType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => selectExportType(type)}
+                      className={cn(
+                        "rounded-xl border bg-card p-4 text-left transition hover:border-primary/40 hover:bg-primary/5",
+                        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2",
+                        isSelected
+                          ? "border-primary/60 bg-primary/10 shadow-sm"
+                          : "border-border/70",
+                      )}
+                      aria-pressed={isSelected}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground">{typeLabels[type]}</p>
+                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                            {typeDescriptions[type]}
+                          </p>
+                        </div>
+                        <Badge variant={isSelected ? "success" : "muted"}>
+                          {metadata.recommendedFormat.toUpperCase()}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {!storeOptions.length && !storesQuery.isLoading ? (
+              <Alert variant="warning">
+                <AlertTitle>{t("noStoresTitle")}</AlertTitle>
+                <AlertDescription>{t("noStoresDescription")}</AlertDescription>
+              </Alert>
+            ) : null}
+
             <FormActions>
               <Button
                 type="button"
                 onClick={handleGenerate}
-                disabled={createMutation.isLoading}
+                disabled={createMutation.isLoading || !storeId}
                 data-tour="exports-generate"
               >
+                <SpreadsheetIcon className="h-4 w-4" aria-hidden />
                 {createMutation.isLoading ? tCommon("loading") : t("generate")}
               </Button>
             </FormActions>
@@ -254,41 +414,58 @@ const ExportsPage = () => {
         </Card>
       ) : null}
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>{t("jobsTitle")}</CardTitle>
+      <Card>
+        <CardHeader className="bg-muted/30">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>{t("jobsTitle")}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{t("jobsDescription")}</p>
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={() => jobsQuery.refetch()}>
+              {tCommon("tryAgain")}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {jobsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-14 w-full rounded-xl" />
+              ))}
             </div>
           ) : jobsQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
-              <span>{translateError(tErrors, jobsQuery.error)}</span>
-              <Button type="button" variant="secondary" size="sm" onClick={() => jobsQuery.refetch()}>
-                {tErrors("tryAgain")}
-              </Button>
-            </div>
+            <Alert variant="destructive">
+              <AlertTitle>{t("jobsErrorTitle")}</AlertTitle>
+              <AlertDescription>{translateError(tErrors, jobsQuery.error)}</AlertDescription>
+            </Alert>
           ) : jobsQuery.data?.length ? (
             <ResponsiveDataList
               items={jobsQuery.data}
               getKey={(job) => job.id}
+              paginationKey="exports-jobs"
+              empty={
+                <EmptyState
+                  icon={<SpreadsheetIcon className="h-9 w-9" aria-hidden />}
+                  title={t("empty")}
+                  description={t("emptyDescription")}
+                />
+              }
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[720px]" data-tour="exports-jobs">
+                <div className="overflow-x-auto rounded-xl border border-border/70">
+                  <Table className="min-w-[860px]" data-tour="exports-jobs">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("columns.createdAt")}</TableHead>
                         <TableHead>{t("columns.type")}</TableHead>
                         <TableHead>{t("columns.period")}</TableHead>
+                        <TableHead>{t("columns.file")}</TableHead>
                         <TableHead>{t("columns.status")}</TableHead>
-                        <TableHead>{t("columns.actions")}</TableHead>
+                        <TableHead className="text-right">{t("columns.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((job) => {
+                        const StatusIcon = statusIcon(job.status);
                         const actions = [
                           {
                             key: "download",
@@ -296,6 +473,7 @@ const ExportsPage = () => {
                             icon: DownloadIcon,
                             href: `/api/exports/${job.id}`,
                             disabled: !job.storagePath || job.status !== "DONE",
+                            variant: "primary",
                           },
                           ...(job.status === "FAILED"
                             ? [
@@ -310,7 +488,7 @@ const ExportsPage = () => {
                             : []),
                           {
                             key: "copy-job-id",
-                            label: tCommon("tooltips.copyLink"),
+                            label: t("copyJobId"),
                             icon: CopyIcon,
                             onSelect: () => copyText(job.id, t("copiedJobId")),
                           },
@@ -318,7 +496,7 @@ const ExportsPage = () => {
                             ? [
                                 {
                                   key: "copy-file-name",
-                                  label: tCommon("tooltips.copyLink"),
+                                  label: t("copyFileName"),
                                   icon: CopyIcon,
                                   onSelect: () => copyText(job.fileName ?? "", t("copiedFileName")),
                                 },
@@ -327,26 +505,44 @@ const ExportsPage = () => {
                         ];
 
                         return (
-                          <TableRow key={job.id}>
+                          <TableRow key={job.id} className="hover:bg-muted/35">
                             <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(job.createdAt, locale)}
                             </TableCell>
                             <TableCell className="font-medium">
-                              {typeLabels[job.type] ?? job.type}
+                              <div className="max-w-[280px]">
+                                <p className="truncate">{typeLabels[job.type] ?? job.type}</p>
+                                <p className="mt-0.5 truncate text-xs font-normal text-muted-foreground">
+                                  {job.id}
+                                </p>
+                              </div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
                             </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {job.fileName ? (
+                                <div className="max-w-[220px]">
+                                  <p className="truncate text-foreground">{job.fileName}</p>
+                                  <p>{formatFileSize(job.fileSize)}</p>
+                                </div>
+                              ) : (
+                                <span>{t("filePending")}</span>
+                              )}
+                            </TableCell>
                             <TableCell>
-                              <Badge variant={job.status === "DONE" ? "success" : "muted"}>
+                              <Badge variant={statusBadgeVariant(job.status)}>
+                                <StatusIcon className="h-3.5 w-3.5" aria-hidden />
                                 {t(`status.${job.status}`)}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <RowActions
-                                moreLabel={tCommon("tooltips.moreActions")}
-                                actions={actions}
-                              />
+                              <div className="flex justify-end">
+                                <RowActions
+                                  moreLabel={tCommon("tooltips.moreActions")}
+                                  actions={actions}
+                                />
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -356,6 +552,7 @@ const ExportsPage = () => {
                 </div>
               )}
               renderMobile={(job) => {
+                const StatusIcon = statusIcon(job.status);
                 const actions = [
                   {
                     key: "download",
@@ -363,6 +560,7 @@ const ExportsPage = () => {
                     icon: DownloadIcon,
                     href: `/api/exports/${job.id}`,
                     disabled: !job.storagePath || job.status !== "DONE",
+                    variant: "primary",
                   },
                   ...(job.status === "FAILED"
                     ? [
@@ -377,7 +575,7 @@ const ExportsPage = () => {
                     : []),
                   {
                     key: "copy-job-id",
-                    label: tCommon("tooltips.copyLink"),
+                    label: t("copyJobId"),
                     icon: CopyIcon,
                     onSelect: () => copyText(job.id, t("copiedJobId")),
                   },
@@ -385,7 +583,7 @@ const ExportsPage = () => {
                     ? [
                         {
                           key: "copy-file-name",
-                          label: tCommon("tooltips.copyLink"),
+                          label: t("copyFileName"),
                           icon: CopyIcon,
                           onSelect: () => copyText(job.fileName ?? "", t("copiedFileName")),
                         },
@@ -394,22 +592,30 @@ const ExportsPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-border bg-card p-3">
+                  <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
+                        <p className="truncate text-sm font-semibold text-foreground">
                           {typeLabels[job.type] ?? job.type}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {formatDateTime(job.createdAt, locale)}
                         </p>
                       </div>
-                      <Badge variant={job.status === "DONE" ? "success" : "muted"}>
+                      <Badge variant={statusBadgeVariant(job.status)}>
+                        <StatusIcon className="h-3.5 w-3.5" aria-hidden />
                         {t(`status.${job.status}`)}
                       </Badge>
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
+                    <div className="mt-3 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+                      <div>
+                        {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
+                      </div>
+                      {job.fileName ? (
+                        <div className="mt-1 truncate text-foreground">
+                          {job.fileName} {formatFileSize(job.fileSize)}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="mt-3 flex items-center justify-end">
                       <RowActions
@@ -422,7 +628,11 @@ const ExportsPage = () => {
               }}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">{t("empty")}</p>
+            <EmptyState
+              icon={<SpreadsheetIcon className="h-9 w-9" aria-hidden />}
+              title={t("empty")}
+              description={t("emptyDescription")}
+            />
           )}
         </CardContent>
       </Card>
