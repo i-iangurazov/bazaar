@@ -257,8 +257,8 @@ const PosShiftsPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("shifts.title")} subtitle={t("shifts.subtitle")} />
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("entry.register")}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -277,8 +277,8 @@ const PosShiftsPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("shifts.current")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -291,14 +291,14 @@ const PosShiftsPage = () => {
           ) : null}
 
           {canLoadRegisterScopedData && currentShiftQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[8rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
 
           {canOpenNewShift && !currentShiftQuery.isLoading && !currentShift ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice flex flex-wrap items-center gap-2">
               {t("entry.shiftClosed")}
               <Button variant="secondary" asChild>
                 <Link href={`/pos?registerId=${registerId}`}>{t("entry.openShift")}</Link>
@@ -310,7 +310,7 @@ const PosShiftsPage = () => {
           selectedRegister &&
           !selectedRegister.isActive &&
           !currentShift ? (
-            <p className="text-sm text-muted-foreground">{t("registers.inactiveNoNewSessions")}</p>
+            <p className="bazaar-admin-notice">{t("registers.inactiveNoNewSessions")}</p>
           ) : null}
 
           {currentShift ? (
@@ -325,42 +325,101 @@ const PosShiftsPage = () => {
               {report ? (
                 <div className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Card className="shadow-none">
+                    <Card className="bazaar-admin-status-tile">
                       <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground">{t("shifts.salesTotal")}</p>
+                        <p className="text-xs text-muted-foreground">{t("shifts.cashSales")}</p>
                         <p className="text-sm font-semibold text-foreground">
-                          {formatCurrentShiftMoney(report.summary.salesTotalKgs)}
+                          {formatCurrentShiftMoney(report.summary.cashSalesKgs)}
                         </p>
                       </CardContent>
                     </Card>
-                    <Card className="shadow-none">
+                    <Card className="bazaar-admin-status-tile">
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">{t("shifts.nonCashSales")}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCurrentShiftMoney(report.summary.nonCashSalesKgs)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bazaar-admin-status-tile">
+                      <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">{t("shifts.totalSales")}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCurrentShiftMoney(report.summary.totalSalesKgs)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bazaar-admin-status-tile">
                       <CardContent className="pt-4">
                         <p className="text-xs text-muted-foreground">{t("shifts.returnsTotal")}</p>
                         <p className="text-sm font-semibold text-foreground">
-                          {formatCurrentShiftMoney(report.summary.returnsTotalKgs)}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="shadow-none">
-                      <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
-                        <p className="text-sm font-semibold text-foreground">
-                          {formatCurrentShiftMoney(report.summary.expectedCashKgs)}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="shadow-none">
-                      <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground">{t("shifts.cashInOut")}</p>
-                        <p className="text-sm font-semibold text-foreground">
-                          +{formatCurrentShiftMoney(report.summary.payInKgs)} / -
-                          {formatCurrentShiftMoney(report.summary.payOutKgs)}
+                          {formatCurrentShiftMoney(report.summary.totalRefundsKgs)}
                         </p>
                       </CardContent>
                     </Card>
                   </div>
 
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                    <div className="bazaar-admin-status-tile">
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">
+                        {t("shifts.salesSummary")}
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">{t("shifts.cashSales")}</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrentShiftMoney(report.summary.cashSalesKgs)}
+                          </p>
+                        </div>
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">
+                            {t("shifts.nonCashSales")}
+                          </p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrentShiftMoney(report.summary.nonCashSalesKgs)}
+                          </p>
+                        </div>
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">{t("shifts.totalSales")}</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrentShiftMoney(report.summary.totalSalesKgs)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bazaar-admin-status-tile">
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">
+                        {t("shifts.cashDrawerSummary")}
+                      </p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">
+                            {t("shifts.expectedCash")}
+                          </p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrentShiftMoney(report.summary.expectedCashKgs)}
+                          </p>
+                        </div>
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">{t("shifts.cashInOut")}</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            +{formatCurrentShiftMoney(report.summary.payInKgs)} / -
+                            {formatCurrentShiftMoney(report.summary.payOutKgs)}
+                          </p>
+                        </div>
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">
+                            {t("shifts.nonCashTotal")}
+                          </p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrentShiftMoney(report.summary.nonCashNetKgs)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bazaar-admin-status-tile">
                     <p className="text-xs font-semibold uppercase text-muted-foreground">
                       {t("shifts.paymentBreakdown")}
                     </p>
@@ -368,7 +427,7 @@ const PosShiftsPage = () => {
                       {paymentBreakdown.map((entry) => (
                         <div
                           key={entry.method}
-                          className="rounded-md border border-border/70 bg-background px-3 py-2"
+                          className="bazaar-admin-info-tile px-3 py-2"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium text-foreground">{entry.label}</p>
@@ -389,7 +448,7 @@ const PosShiftsPage = () => {
                 </div>
               ) : null}
 
-              <div className="grid gap-3 rounded-md border border-border bg-card p-3 md:grid-cols-[180px_1fr_auto]">
+              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[180px_1fr_auto]">
                 <Select
                   value={cashType}
                   onValueChange={(value) => setCashType(value as CashDrawerMovementType)}
@@ -425,21 +484,21 @@ const PosShiftsPage = () => {
                 </Button>
               </div>
 
-              <div className="space-y-3 rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-surface space-y-3 p-3">
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
                     <p className="text-sm font-semibold text-foreground">
                       {formatCurrentShiftMoney(currentShift.openingCashKgs)}
                     </p>
                   </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
                     <p className="text-sm font-semibold text-foreground">
                       {formatCurrentShiftMoney(expectedCash)}
                     </p>
                   </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("shifts.difference")}</p>
                     <p
                       className={
@@ -488,7 +547,7 @@ const PosShiftsPage = () => {
                 </div>
 
                 {heldReceiptCount > 0 ? (
-                  <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
+                  <div className="bazaar-admin-status-tile-warning">
                     <p className="text-sm font-semibold text-foreground">
                       {t("shifts.heldReceiptsBlockClose")}
                     </p>
@@ -507,7 +566,7 @@ const PosShiftsPage = () => {
                   </div>
                 ) : null}
 
-                <label className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
+                <label className="bazaar-admin-notice flex items-start gap-2">
                   <input
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -541,8 +600,8 @@ const PosShiftsPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("shifts.historyTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -555,6 +614,7 @@ const PosShiftsPage = () => {
           ) : null}
 
           {(historyItems ?? []).map((shift) => {
+            const historyCurrencySource = currencySourceWithFallback(shift, shift.store);
             const difference =
               shift.expectedCashKgs !== null && shift.closingCashCountedKgs !== null
                 ? Math.round((shift.closingCashCountedKgs - shift.expectedCashKgs) * 100) / 100
@@ -568,7 +628,7 @@ const PosShiftsPage = () => {
                     ? "shortage"
                     : "balanced";
             return (
-              <div key={shift.id} className="rounded-md border border-border bg-card p-3">
+              <div key={shift.id} className="bazaar-admin-mobile-card p-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -592,30 +652,50 @@ const PosShiftsPage = () => {
                   </div>
                   <div className="grid gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 sm:text-right">
                     <p>
-                      {t("entry.openingCash")}:{" "}
+                      {t("shifts.cashSales")}:{" "}
                       {formatKgsMoney(
-                        shift.openingCashKgs,
+                        shift.summary.cashSalesKgs,
                         locale,
-                        currencySourceWithFallback(shift, shift.store),
+                        historyCurrencySource,
                       )}
                     </p>
                     <p>
-                      {t("shifts.expectedCash")}:{" "}
+                      {t("shifts.nonCashSales")}:{" "}
                       {formatKgsMoney(
-                        shift.expectedCashKgs ?? 0,
+                        shift.summary.nonCashSalesKgs,
                         locale,
-                        currencySourceWithFallback(shift, shift.store),
+                        historyCurrencySource,
                       )}
+                    </p>
+                    <p>
+                      {t("shifts.totalSales")}:{" "}
+                      {formatKgsMoney(
+                        shift.summary.totalSalesKgs,
+                        locale,
+                        historyCurrencySource,
+                      )}
+                    </p>
+                    <p>
+                      {t("shifts.returnsTotal")}:{" "}
+                      {formatKgsMoney(
+                        shift.summary.totalRefundsKgs,
+                        locale,
+                        historyCurrencySource,
+                      )}
+                    </p>
+                    <p>
+                      {t("entry.openingCash")}:{" "}
+                      {formatKgsMoney(shift.openingCashKgs, locale, historyCurrencySource)}
+                    </p>
+                    <p>
+                      {t("shifts.expectedCash")}:{" "}
+                      {formatKgsMoney(shift.expectedCashKgs ?? 0, locale, historyCurrencySource)}
                     </p>
                     <p>
                       {t("shifts.countedCash")}:{" "}
                       {shift.closingCashCountedKgs === null
                         ? tCommon("notAvailable")
-                        : formatKgsMoney(
-                            shift.closingCashCountedKgs,
-                            locale,
-                            currencySourceWithFallback(shift, shift.store),
-                          )}
+                        : formatKgsMoney(shift.closingCashCountedKgs, locale, historyCurrencySource)}
                     </p>
                     <p
                       className={
@@ -632,13 +712,13 @@ const PosShiftsPage = () => {
                         : `${differenceStatus ? t(`shifts.${differenceStatus}`) : ""} · ${formatKgsMoney(
                             Math.abs(difference),
                             locale,
-                            currencySourceWithFallback(shift, shift.store),
+                            historyCurrencySource,
                           )}`}
                     </p>
                   </div>
                 </div>
                 {shift.notes ? (
-                  <p className="mt-2 rounded-md bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+                  <p className="mt-2 rounded-lg bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
                     {t("shifts.notes")}: {shift.notes}
                   </p>
                 ) : null}
@@ -647,13 +727,13 @@ const PosShiftsPage = () => {
           })}
 
           {canLoadRegisterScopedData && historyQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[8rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
           {canLoadRegisterScopedData && !historyQuery.isLoading && !historyItems.length ? (
-            <p className="text-sm text-muted-foreground">{t("shifts.noHistory")}</p>
+            <p className="bazaar-admin-empty">{t("shifts.noHistory")}</p>
           ) : null}
         </CardContent>
       </Card>

@@ -64,8 +64,17 @@ type OpenAiResponseBody = {
   };
 };
 
+type ProductSpecSuggestionKind =
+  | "type"
+  | "color"
+  | "material"
+  | "compatibility"
+  | "design"
+  | "features"
+  | "purpose";
+
 type RequestedSpecSuggestion = {
-  kind: "type" | "color";
+  kind: ProductSpecSuggestionKind;
   labelRu: string;
   options?: string[];
 };
@@ -459,6 +468,11 @@ const buildSystemPrompt = () =>
     "Если значение нельзя определить надежно, верни null.",
     "Для поля type возвращай краткий тип продаваемого товара в форме короткого названия.",
     "Для поля color возвращай основной цвет самого товара. Игнорируй фон, реквизит, тени и случайные акценты.",
+    "Для material возвращай материал только если он явно виден или надежно указан на упаковке.",
+    "Для compatibility не придумывай точную модель. Если точная модель не подтверждена, используй общий класс устройства, например: смартфон.",
+    "Для design возвращай краткое описание видимого дизайна, принта или стиля.",
+    "Для features возвращай 1-2 краткие особенности, которые видны или надежно следуют из категории товара.",
+    "Для purpose возвращай практическое назначение товара.",
     "Если сам товар не виден, а видна только коробка, тип можно определить по надписям и оформлению коробки, но цвет возвращай только если цвет варианта товара действительно подтверждается изображением; иначе null.",
     "Если у товара явно несколько основных цветов, используй разноцветный вариант только когда это действительно лучший ответ.",
   ].join(" ");
@@ -485,24 +499,47 @@ const buildUserPrompt = (requestedSpecs: RequestedSpecSuggestion[]) => {
       continue;
     }
 
-    const multicolorOption = spec.options?.length ? findMulticolorOption(spec.options) : null;
-    lines.push(
-      `Для поля "${spec.kind}" определи основной цвет товара для характеристики "${spec.labelRu}".`,
-    );
-    lines.push(
-      "Ориентируйся на цвет самого товара или явно показанного варианта товара, а не на декоративный фон или случайный цвет упаковки.",
-    );
-    if (multicolorOption) {
+    if (spec.kind === "color") {
+      const multicolorOption = spec.options?.length ? findMulticolorOption(spec.options) : null;
       lines.push(
-        `Если отчетливо видны несколько основных цветов товара, используй значение "${multicolorOption}".`,
+        `Для поля "${spec.kind}" определи основной цвет товара для характеристики "${spec.labelRu}".`,
       );
+      lines.push(
+        "Ориентируйся на цвет самого товара или явно показанного варианта товара, а не на декоративный фон или случайный цвет упаковки.",
+      );
+      if (multicolorOption) {
+        lines.push(
+          `Если отчетливо видны несколько основных цветов товара, используй значение "${multicolorOption}".`,
+        );
+      }
+      if (spec.options?.length) {
+        lines.push(
+          `Выбери одно наиболее подходящее значение строго из списка: ${spec.options.join(", ")}.`,
+        );
+      } else {
+        lines.push('Верни короткое значение без пояснений, например: "Черный".');
+      }
+      continue;
     }
+
+    const examples: Record<ProductSpecSuggestionKind, string> = {
+      type: "Чехол",
+      color: "Черный",
+      material: "Поликарбонат",
+      compatibility: "Смартфон",
+      design: "Игровой принт",
+      features: "Вырез под камеру",
+      purpose: "Защита корпуса смартфона",
+    };
+    lines.push(
+      `Для поля "${spec.kind}" заполни характеристику "${spec.labelRu}" только если значение надежно подтверждается товаром, категорией или видимыми данными.`,
+    );
     if (spec.options?.length) {
       lines.push(
         `Выбери одно наиболее подходящее значение строго из списка: ${spec.options.join(", ")}.`,
       );
     } else {
-      lines.push('Верни короткое значение без пояснений, например: "Черный".');
+      lines.push(`Верни короткое значение без пояснений, например: "${examples[spec.kind]}".`);
     }
   }
 
@@ -510,7 +547,9 @@ const buildUserPrompt = (requestedSpecs: RequestedSpecSuggestion[]) => {
     accumulator[spec.kind] =
       spec.kind === "type"
         ? spec.options?.[0] ?? "Настольная игра"
-        : spec.options?.[0] ?? "Черный";
+        : spec.kind === "color"
+          ? spec.options?.[0] ?? "Черный"
+          : spec.options?.[0] ?? null;
     return accumulator;
   }, {});
   lines.push(`Пример ответа: ${JSON.stringify(exampleFields)}`);
@@ -532,7 +571,7 @@ export const suggestProductSpecsFromImages = async (input: {
     (spec, index, list) => list.findIndex((candidate) => candidate.kind === spec.kind) === index,
   );
   if (!normalizedRequestedSpecs.length) {
-    return { suggestions: {} as Partial<Record<"type" | "color", string>> };
+    return { suggestions: {} as Partial<Record<ProductSpecSuggestionKind, string>> };
   }
 
   const normalizedImageUrls = Array.from(
@@ -660,7 +699,7 @@ export const suggestProductSpecsFromImages = async (input: {
     throw new AppError("aiSpecsGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
   }
 
-  const suggestions: Partial<Record<"type" | "color", string>> = {};
+  const suggestions: Partial<Record<ProductSpecSuggestionKind, string>> = {};
   for (const spec of normalizedRequestedSpecs) {
     const rawValue = parsed[spec.kind];
     if (typeof rawValue !== "string") {
@@ -669,7 +708,7 @@ export const suggestProductSpecsFromImages = async (input: {
     const cleanedValue = cleanSuggestionValue(rawValue);
     if (
       !cleanedValue ||
-      cleanedValue.length > 80 ||
+      cleanedValue.length > 120 ||
       invalidSuggestionPatterns.some((pattern) => pattern.test(cleanedValue))
     ) {
       continue;

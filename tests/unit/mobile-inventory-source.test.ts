@@ -69,9 +69,8 @@ describe("mobile inventory source", () => {
     expect(receivingSource).toContain(
       "focusReceivingInput(nextLine.key, field, viewport, { selectContents: true })",
     );
-    expect(receivingSource).toContain(
-      "fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40",
-    );
+    expect(receivingSource).toContain("bazaar-doc-mobile-actions");
+    expect(receivingSource).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
     expect(receivingSource).toContain("receivingProductsCountShort");
     expect(receivingSource).toContain("receivingTotalQuantityShort");
     expect(receivingSource).toContain("pb-[env(safe-area-inset-bottom)]");

@@ -11,7 +11,7 @@ export const ProductEditorPage = ({
 }) => (
   <div
     className={cn(
-      "-mb-6 min-h-[calc(100vh-3rem)] bg-muted px-0 pb-[calc(var(--mobile-bottom-nav-height)+5.5rem)] pt-4 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-5 md:-my-6 lg:-mx-10 lg:-my-8 lg:px-10 lg:py-6",
+      "-mb-6 min-h-[calc(100vh-3rem)] bg-transparent px-0 pb-[calc(var(--mobile-bottom-nav-height)+5.75rem)] pt-4 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-5 md:-my-6 lg:-mx-10 lg:-my-8 lg:px-10 lg:py-6",
       className,
     )}
   >
@@ -28,16 +28,19 @@ export const ProductEditorHeader = ({
   title: ReactNode;
   actions?: ReactNode;
 }) => (
-  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div className="relative mb-5 overflow-hidden rounded-xl border border-border/65 bg-card/95 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.07)] ring-1 ring-foreground/[0.015] backdrop-blur sm:flex sm:items-center sm:justify-between sm:gap-4 sm:p-5 dark:shadow-none">
+    <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary" />
     <div className="min-w-0">
       {eyebrow ? (
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
           {eyebrow}
         </div>
       ) : null}
-      <h1 className="truncate text-xl font-semibold text-foreground sm:text-2xl">{title}</h1>
+      <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+        {title}
+      </h1>
     </div>
-    {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    {actions ? <div className="mt-3 flex shrink-0 items-center gap-2 sm:mt-0">{actions}</div> : null}
   </div>
 );
 
@@ -48,19 +51,19 @@ export const ProductEditorSaveBar = ({
   label: ReactNode;
   actions: ReactNode;
 }) => (
-  <div className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.5rem)] z-30 rounded-lg border border-foreground/10 bg-foreground p-1.5 text-background shadow-[0_-4px_14px_rgba(15,23,42,0.1)] sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:z-10 sm:mb-4 sm:rounded-lg sm:border sm:p-1.5 sm:shadow-[0_4px_14px_rgba(15,23,42,0.1)] dark:border-border dark:bg-card dark:text-card-foreground">
+  <div className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-30 rounded-xl border border-border/65 bg-card/95 p-2 text-card-foreground shadow-xl shadow-foreground/10 ring-1 ring-foreground/[0.03] backdrop-blur sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:z-10 sm:mb-4 sm:p-2">
     <div className="mx-auto flex min-h-10 w-full max-w-[1120px] items-center justify-between gap-3 sm:min-h-9 sm:max-w-none">
-      <div className="min-w-0 truncate px-2 text-sm font-medium">{label}</div>
+      <div className="min-w-0 truncate px-2 text-sm font-semibold text-foreground">{label}</div>
       <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
     </div>
   </div>
 );
 
 export const ProductEditorGrid = ({ main, sidebar }: { main: ReactNode; sidebar?: ReactNode }) => (
-  <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-    <div className="min-w-0 space-y-3 sm:space-y-4">{main}</div>
+  <div className="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+    <div className="min-w-0 space-y-4 sm:space-y-5">{main}</div>
     {sidebar ? (
-      <aside className="min-w-0 space-y-3 sm:space-y-4 lg:sticky lg:top-20">{sidebar}</aside>
+      <aside className="min-w-0 space-y-4 sm:space-y-5 lg:sticky lg:top-20">{sidebar}</aside>
     ) : null}
   </div>
 );
@@ -82,14 +85,16 @@ export const ProductEditorCard = ({
 }) => (
   <section
     className={cn(
-      "rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]",
+      "overflow-hidden rounded-xl border border-border/65 bg-card/95 shadow-[0_14px_34px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.015] dark:shadow-none",
       className,
     )}
   >
     {title || description || action ? (
-      <div className="flex items-start justify-between gap-3 px-3 pt-3 sm:px-4 sm:pt-4">
+      <div className="flex items-start justify-between gap-3 border-b border-border/60 bg-muted/35 px-4 py-3 sm:px-5">
         <div className="min-w-0">
-          {title ? <h2 className="text-sm font-semibold text-foreground">{title}</h2> : null}
+          {title ? (
+            <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
+          ) : null}
           {description ? (
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
           ) : null}
@@ -99,8 +104,8 @@ export const ProductEditorCard = ({
     ) : null}
     <div
       className={cn(
-        "space-y-3 p-3 sm:space-y-4 sm:p-4",
-        title || description || action ? "pt-3" : "",
+        "space-y-4 p-4 sm:space-y-5 sm:p-5",
+        title || description || action ? "pt-4" : "",
         contentClassName,
       )}
     >
@@ -115,4 +120,4 @@ export const ProductEditorFieldGrid = ({
 }: {
   children: ReactNode;
   className?: string;
-}) => <div className={cn("grid gap-3 sm:grid-cols-2", className)}>{children}</div>;
+}) => <div className={cn("grid gap-4 sm:grid-cols-2", className)}>{children}</div>;

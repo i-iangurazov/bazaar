@@ -100,6 +100,103 @@ const safeErrorLogFields = (error: unknown) => {
 
 export type PosRegisterStatusFilter = "active" | "inactive" | "all";
 
+const posPaymentMethods = [
+  PosPaymentMethod.CASH,
+  PosPaymentMethod.CARD,
+  PosPaymentMethod.TRANSFER,
+  PosPaymentMethod.OTHER,
+] as const;
+
+type ShiftPaymentMethodTotals = {
+  salesKgs: number;
+  refundsKgs: number;
+  netKgs: number;
+};
+
+type ShiftPaymentTotals = {
+  cashSalesKgs: number;
+  cashRefundsKgs: number;
+  cashNetKgs: number;
+  nonCashSalesKgs: number;
+  nonCashRefundsKgs: number;
+  nonCashNetKgs: number;
+  totalSalesKgs: number;
+  totalRefundsKgs: number;
+  totalNetKgs: number;
+};
+
+type ShiftPaymentSummaryRow = {
+  method: PosPaymentMethod;
+  isRefund: boolean;
+  _sum: { amountKgs: Prisma.Decimal | number | null };
+};
+
+const emptyShiftPaymentsByMethod = (): Record<PosPaymentMethod, ShiftPaymentMethodTotals> => ({
+  [PosPaymentMethod.CASH]: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
+  [PosPaymentMethod.CARD]: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
+  [PosPaymentMethod.TRANSFER]: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
+  [PosPaymentMethod.OTHER]: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
+});
+
+const calculateShiftPaymentTotals = (
+  paymentsByMethod: Record<PosPaymentMethod, ShiftPaymentMethodTotals>,
+): ShiftPaymentTotals => {
+  const nonCashMethods = [
+    PosPaymentMethod.CARD,
+    PosPaymentMethod.TRANSFER,
+    PosPaymentMethod.OTHER,
+  ] as const;
+  const nonCashSalesKgs = roundMoney(
+    nonCashMethods.reduce((sum, method) => sum + paymentsByMethod[method].salesKgs, 0),
+  );
+  const nonCashRefundsKgs = roundMoney(
+    nonCashMethods.reduce((sum, method) => sum + paymentsByMethod[method].refundsKgs, 0),
+  );
+  const totalSalesKgs = roundMoney(
+    posPaymentMethods.reduce((sum, method) => sum + paymentsByMethod[method].salesKgs, 0),
+  );
+  const totalRefundsKgs = roundMoney(
+    posPaymentMethods.reduce((sum, method) => sum + paymentsByMethod[method].refundsKgs, 0),
+  );
+
+  return {
+    cashSalesKgs: paymentsByMethod[PosPaymentMethod.CASH].salesKgs,
+    cashRefundsKgs: paymentsByMethod[PosPaymentMethod.CASH].refundsKgs,
+    cashNetKgs: paymentsByMethod[PosPaymentMethod.CASH].netKgs,
+    nonCashSalesKgs,
+    nonCashRefundsKgs,
+    nonCashNetKgs: roundMoney(nonCashSalesKgs - nonCashRefundsKgs),
+    totalSalesKgs,
+    totalRefundsKgs,
+    totalNetKgs: roundMoney(totalSalesKgs - totalRefundsKgs),
+  };
+};
+
+const summarizeShiftPayments = (paymentRows: ShiftPaymentSummaryRow[]) => {
+  const paymentsByMethod = emptyShiftPaymentsByMethod();
+
+  for (const row of paymentRows) {
+    const amount = toMoney(row._sum.amountKgs);
+    if (row.isRefund) {
+      paymentsByMethod[row.method].refundsKgs = roundMoney(
+        paymentsByMethod[row.method].refundsKgs + amount,
+      );
+    } else {
+      paymentsByMethod[row.method].salesKgs = roundMoney(
+        paymentsByMethod[row.method].salesKgs + amount,
+      );
+    }
+    paymentsByMethod[row.method].netKgs = roundMoney(
+      paymentsByMethod[row.method].salesKgs - paymentsByMethod[row.method].refundsKgs,
+    );
+  }
+
+  return {
+    paymentsByMethod,
+    paymentTotals: calculateShiftPaymentTotals(paymentsByMethod),
+  };
+};
+
 export type PosReceiptEditLineInput = {
   lineId?: string | null;
   productId: string;
@@ -688,6 +785,21 @@ const loadShiftReport = async (
       where: {
         organizationId: input.organizationId,
         shiftId: input.shiftId,
+        OR: [
+          {
+            isRefund: false,
+            customerOrder: {
+              isPosSale: true,
+              status: CustomerOrderStatus.COMPLETED,
+            },
+          },
+          {
+            isRefund: true,
+            saleReturn: {
+              status: PosReturnStatus.COMPLETED,
+            },
+          },
+        ],
       },
       _sum: { amountKgs: true },
     }),
@@ -704,31 +816,7 @@ const loadShiftReport = async (
   const salesTotalKgs = toMoney(salesSummary._sum.totalKgs);
   const returnsTotalKgs = toMoney(returnsSummary._sum.totalKgs);
 
-  const paymentsByMethod: Record<
-    PosPaymentMethod,
-    { salesKgs: number; refundsKgs: number; netKgs: number }
-  > = {
-    CASH: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
-    CARD: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
-    TRANSFER: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
-    OTHER: { salesKgs: 0, refundsKgs: 0, netKgs: 0 },
-  };
-
-  for (const row of paymentSummary) {
-    const amount = toMoney(row._sum.amountKgs);
-    if (row.isRefund) {
-      paymentsByMethod[row.method].refundsKgs = roundMoney(
-        paymentsByMethod[row.method].refundsKgs + amount,
-      );
-    } else {
-      paymentsByMethod[row.method].salesKgs = roundMoney(
-        paymentsByMethod[row.method].salesKgs + amount,
-      );
-    }
-    paymentsByMethod[row.method].netKgs = roundMoney(
-      paymentsByMethod[row.method].salesKgs - paymentsByMethod[row.method].refundsKgs,
-    );
-  }
+  const { paymentsByMethod, paymentTotals } = summarizeShiftPayments(paymentSummary);
 
   const payInKgs = roundMoney(
     cashSummary
@@ -788,8 +876,10 @@ const loadShiftReport = async (
       payInKgs,
       payOutKgs,
       expectedCashKgs,
+      ...paymentTotals,
     },
     paymentsByMethod,
+    paymentTotals,
   };
 };
 
@@ -1413,31 +1503,105 @@ export const listRegisterShifts = async (input: {
     }),
   ]);
 
+  const shiftIds = items.map((item) => item.id);
+  const [salesAgg, returnsAgg, paymentAgg] = shiftIds.length
+    ? await Promise.all([
+        prisma.customerOrder.groupBy({
+          by: ["shiftId"],
+          where: {
+            organizationId: input.organizationId,
+            shiftId: { in: shiftIds },
+            isPosSale: true,
+            status: CustomerOrderStatus.COMPLETED,
+          },
+          _sum: { totalKgs: true },
+          _count: { _all: true },
+        }),
+        prisma.saleReturn.groupBy({
+          by: ["shiftId"],
+          where: {
+            organizationId: input.organizationId,
+            shiftId: { in: shiftIds },
+            status: PosReturnStatus.COMPLETED,
+          },
+          _sum: { totalKgs: true },
+          _count: { _all: true },
+        }),
+        prisma.salePayment.groupBy({
+          by: ["shiftId", "method", "isRefund"],
+          where: {
+            organizationId: input.organizationId,
+            shiftId: { in: shiftIds },
+            OR: [
+              {
+                isRefund: false,
+                customerOrder: {
+                  isPosSale: true,
+                  status: CustomerOrderStatus.COMPLETED,
+                },
+              },
+              {
+                isRefund: true,
+                saleReturn: {
+                  status: PosReturnStatus.COMPLETED,
+                },
+              },
+            ],
+          },
+          _sum: { amountKgs: true },
+        }),
+      ])
+    : [[], [], []];
+  const salesByShift = new Map(salesAgg.map((row) => [row.shiftId, row]));
+  const returnsByShift = new Map(returnsAgg.map((row) => [row.shiftId, row]));
+  const paymentsByShift = new Map<string, ShiftPaymentSummaryRow[]>();
+  for (const row of paymentAgg) {
+    const rows = paymentsByShift.get(row.shiftId) ?? [];
+    rows.push(row);
+    paymentsByShift.set(row.shiftId, rows);
+  }
+
   return {
-    items: items.map((item) => ({
-      ...item,
-      openingCashKgs: toMoney(item.openingCashKgs),
-      closingCashCountedKgs: item.closingCashCountedKgs
-        ? toMoney(item.closingCashCountedKgs)
-        : null,
-      expectedCashKgs: item.expectedCashKgs ? toMoney(item.expectedCashKgs) : null,
-      discrepancyKgs:
-        item.expectedCashKgs && item.closingCashCountedKgs
-          ? calculateCashDiscrepancyKgs({
-              countedCashKgs: toMoney(item.closingCashCountedKgs),
-              expectedCashKgs: toMoney(item.expectedCashKgs),
-            })
+    items: items.map((item) => {
+      const { paymentsByMethod, paymentTotals } = summarizeShiftPayments(
+        paymentsByShift.get(item.id) ?? [],
+      );
+      const sales = salesByShift.get(item.id);
+      const returns = returnsByShift.get(item.id);
+      return {
+        ...item,
+        openingCashKgs: toMoney(item.openingCashKgs),
+        closingCashCountedKgs: item.closingCashCountedKgs
+          ? toMoney(item.closingCashCountedKgs)
           : null,
-      differenceStatus:
-        item.expectedCashKgs && item.closingCashCountedKgs
-          ? resolveCashDifferenceStatus(
-              calculateCashDiscrepancyKgs({
+        expectedCashKgs: item.expectedCashKgs ? toMoney(item.expectedCashKgs) : null,
+        discrepancyKgs:
+          item.expectedCashKgs && item.closingCashCountedKgs
+            ? calculateCashDiscrepancyKgs({
                 countedCashKgs: toMoney(item.closingCashCountedKgs),
                 expectedCashKgs: toMoney(item.expectedCashKgs),
-              }),
-            )
-          : null,
-    })),
+              })
+            : null,
+        differenceStatus:
+          item.expectedCashKgs && item.closingCashCountedKgs
+            ? resolveCashDifferenceStatus(
+                calculateCashDiscrepancyKgs({
+                  countedCashKgs: toMoney(item.closingCashCountedKgs),
+                  expectedCashKgs: toMoney(item.expectedCashKgs),
+                }),
+              )
+            : null,
+        summary: {
+          salesCount: sales?._count._all ?? 0,
+          salesTotalKgs: toMoney(sales?._sum.totalKgs),
+          returnsCount: returns?._count._all ?? 0,
+          returnsTotalKgs: toMoney(returns?._sum.totalKgs),
+          ...paymentTotals,
+        },
+        paymentsByMethod,
+        paymentTotals,
+      };
+    }),
     total,
     page: input.page,
     pageSize: input.pageSize,

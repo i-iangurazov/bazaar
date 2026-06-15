@@ -529,7 +529,7 @@ const ProductImageStudioPage = () => {
   );
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -543,8 +543,8 @@ const ProductImageStudioPage = () => {
             : "space-y-6"
         }
       >
-        <Card>
-          <CardHeader className="space-y-3">
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <CardTitle className="text-xl">{t("overview.title")}</CardTitle>
@@ -563,25 +563,25 @@ const ProductImageStudioPage = () => {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
-              <div className="rounded-md border border-border p-4">
+              <div className="bazaar-admin-info-tile p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.totalJobs")}
                 </p>
                 <p className="mt-2 text-2xl font-semibold">{overview?.totalJobs ?? 0}</p>
               </div>
-              <div className="rounded-md border border-border p-4">
+              <div className="bazaar-admin-info-tile p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.succeeded")}
                 </p>
                 <p className="mt-2 text-2xl font-semibold">{overview?.succeededJobs ?? 0}</p>
               </div>
-              <div className="rounded-md border border-border p-4">
+              <div className="bazaar-admin-info-tile p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.failed")}
                 </p>
                 <p className="mt-2 text-2xl font-semibold">{overview?.failedJobs ?? 0}</p>
               </div>
-              <div className="rounded-md border border-border p-4">
+              <div className="bazaar-admin-info-tile p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.lastGenerated")}
                 </p>
@@ -593,7 +593,7 @@ const ProductImageStudioPage = () => {
               </div>
             </div>
             {providerMissing ? (
-              <p className="mt-4 rounded-md border border-dashed border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+              <p className="bazaar-admin-notice mt-4 text-sm">
                 {t("overview.providerMissing")}
               </p>
             ) : null}
@@ -601,8 +601,8 @@ const ProductImageStudioPage = () => {
         </Card>
 
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <Card>
-            <CardHeader className="space-y-1">
+          <Card className="bazaar-admin-surface">
+            <CardHeader className="bazaar-admin-section-header space-y-1">
               <CardTitle>{t("input.title")}</CardTitle>
               <p className="text-sm text-muted-foreground">{t("input.subtitle")}</p>
             </CardHeader>
@@ -611,7 +611,7 @@ const ProductImageStudioPage = () => {
                 <Label>{t("input.uploadLabel")}</Label>
                 <button
                   type="button"
-                  className="flex w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-secondary/20 px-6 py-10 text-center"
+                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/25 px-6 py-10 text-center transition hover:border-primary/40 hover:bg-primary/[0.035]"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!canEdit || uploadingSource}
                 >
@@ -638,7 +638,7 @@ const ProductImageStudioPage = () => {
                   }}
                 />
                 {sourceImage ? (
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
+                  <div className="bazaar-admin-info-tile flex items-center justify-between gap-3 px-3 py-2 text-sm">
                     <div>
                       <p className="font-medium">{sourceImage.fileName}</p>
                       <p className="text-xs text-muted-foreground">
@@ -666,7 +666,7 @@ const ProductImageStudioPage = () => {
                   placeholder={t("input.productPlaceholder")}
                 />
                 {selectedProduct ? (
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div className="bazaar-admin-info-tile flex items-center justify-between gap-3 px-3 py-2">
                     <div className="flex items-center gap-3">
                       <ProductImageThumb
                         imageUrl={selectedProduct.imageUrl}
@@ -688,7 +688,7 @@ const ProductImageStudioPage = () => {
                   </div>
                 ) : null}
                 {!selectedProduct && productSearch.trim().length >= 2 ? (
-                  <div className="rounded-md border border-border">
+                  <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
                     {productSearchQuery.isLoading ? (
                       <div className="px-3 py-3 text-sm text-muted-foreground">
                         {tCommon("loading")}
@@ -719,14 +719,14 @@ const ProductImageStudioPage = () => {
                 ) : null}
               </div>
 
-              <p className="rounded-md border border-dashed border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+              <p className="bazaar-admin-notice text-sm">
                 {t("input.reviewNote")}
               </p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="space-y-1">
+          <Card className="bazaar-admin-surface">
+            <CardHeader className="bazaar-admin-section-header space-y-1">
               <CardTitle>{t("presets.title")}</CardTitle>
               <p className="text-sm text-muted-foreground">{t("presets.subtitle")}</p>
             </CardHeader>
@@ -843,8 +843,8 @@ const ProductImageStudioPage = () => {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader className="space-y-1">
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header space-y-1">
             <CardTitle>{t("preview.title")}</CardTitle>
             <p className="text-sm text-muted-foreground">{t("preview.subtitle")}</p>
           </CardHeader>
@@ -859,7 +859,7 @@ const ProductImageStudioPage = () => {
                     </span>
                   ) : null}
                 </div>
-                <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+                <div className="bazaar-admin-preview-frame overflow-hidden p-0">
                   {sourcePreviewUrl ? (
                     <img
                       src={sourcePreviewUrl}
@@ -883,7 +883,7 @@ const ProductImageStudioPage = () => {
                     </Badge>
                   ) : null}
                 </div>
-                <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+                <div className="bazaar-admin-preview-frame overflow-hidden p-0">
                   {previewIsWorking ? (
                     <div className="flex h-[320px] flex-col items-center justify-center gap-4 px-6 text-center text-sm text-muted-foreground">
                       <Spinner className="h-5 w-5" />
@@ -910,7 +910,7 @@ const ProductImageStudioPage = () => {
             </div>
 
             {selectedJob?.errorMessage ? (
-              <div className="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+              <div className="bazaar-admin-error">
                 {formatJobErrorMessage(selectedJob.errorMessage, tErrors)}
               </div>
             ) : null}
@@ -962,13 +962,13 @@ const ProductImageStudioPage = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="space-y-1">
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header space-y-1">
             <CardTitle>{t("history.title")}</CardTitle>
             <p className="text-sm text-muted-foreground">{t("history.subtitle")}</p>
           </CardHeader>
           <CardContent>
-            <TableContainer>
+            <TableContainer className="bazaar-admin-table-shell">
               <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>

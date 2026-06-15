@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/form";
 import { FormActions } from "@/components/form-layout";
 import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AddIcon,
   DeleteIcon,
@@ -270,6 +271,31 @@ const StockCountDetailPage = () => {
     }
   };
 
+  if (countQuery.isLoading) {
+    return (
+      <div>
+        <PageHeader title={t("detailTitle")} subtitle={t("detailSubtitle")} />
+        <Card className="mb-6 overflow-hidden">
+          <CardContent className="space-y-4 p-6" data-stock-count-detail-skeleton>
+            <div className="grid gap-3 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="rounded-xl border border-border/65 bg-muted/25 p-3">
+                  <Skeleton className="mb-2 h-3 w-20" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-12 rounded-xl" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -342,7 +368,7 @@ const StockCountDetailPage = () => {
         <p className="mb-4 text-sm text-danger">{translateError(tErrors, countQuery.error)}</p>
       ) : null}
 
-      <Card className="mb-6">
+      <Card className="mb-6 overflow-hidden">
         <CardHeader>
           <CardTitle>{t("scanTitle")}</CardTitle>
         </CardHeader>
@@ -370,7 +396,7 @@ const StockCountDetailPage = () => {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>{t("linesTitle")}</CardTitle>
           </CardHeader>
@@ -532,7 +558,7 @@ const StockCountDetailPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-border bg-card p-3">
+                  <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">
@@ -577,7 +603,7 @@ const StockCountDetailPage = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>{t("summaryTitle")}</CardTitle>
           </CardHeader>
@@ -598,7 +624,7 @@ const StockCountDetailPage = () => {
               <span>{t("shortages")}</span>
               <span className="font-semibold text-danger">{summary.shortages}</span>
             </div>
-            <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {t("summaryHint")}
             </div>
           </CardContent>
@@ -607,7 +633,7 @@ const StockCountDetailPage = () => {
 
       {count?.status === "APPLIED" ? (
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{t("overagesTitle")}</CardTitle>
             </CardHeader>
@@ -631,7 +657,7 @@ const StockCountDetailPage = () => {
               )}
             </CardContent>
           </Card>
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("shortagesTitle")}</CardTitle>
               <div className="flex items-center gap-2">
@@ -785,7 +811,7 @@ const StockCountDetailPage = () => {
               </div>
             )}
             renderMobile={(movement) => (
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">

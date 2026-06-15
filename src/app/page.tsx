@@ -3,23 +3,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ArrowRight,
-  BadgeCheck,
-  Boxes,
-  CheckCircle2,
-  CreditCard,
-  FileSpreadsheet,
-  Mail,
-  Package,
-  Printer,
-  ReceiptText,
-  ScanBarcode,
-  Search,
-  Smartphone,
-  Store,
-  Truck,
-  Users,
-} from "lucide-react";
+  ArrowRightIcon,
+  BarcodeIcon,
+  BillingIcon,
+  InventoryIcon,
+  MailIcon,
+  MobilePreviewIcon,
+  PrintIcon,
+  ProductsIcon,
+  SalesOrdersIcon,
+  SearchIcon,
+  SealCheckIcon,
+  SpreadsheetIcon,
+  StatusSuccessIcon,
+  StoresIcon,
+  TruckIcon,
+  UsersIcon,
+} from "@/components/icons-ssr";
 
 import { ForceLightTheme } from "@/components/landing/ForceLightTheme";
 import { Reveal } from "@/components/landing/Reveal";
@@ -90,22 +90,22 @@ const benefits = [
   {
     title: "Быстрая касса",
     text: "Добавляйте товары, выбирайте клиента, принимайте оплату и завершайте продажу без лишних действий.",
-    icon: ReceiptText,
+    icon: SalesOrdersIcon,
   },
   {
     title: "Точные остатки",
     text: "Оприходование, корректировки, перемещения и минимальные остатки помогают держать склад под контролем.",
-    icon: Boxes,
+    icon: InventoryIcon,
   },
   {
     title: "Товары без хаоса",
     text: "Импортируйте товары, управляйте категориями, фото, SKU и штрихкодами.",
-    icon: Package,
+    icon: ProductsIcon,
   },
   {
     title: "Клиентская база",
     text: "Сохраняйте покупателей, связывайте продажи с клиентами и используйте базу для повторных продаж.",
-    icon: Users,
+    icon: UsersIcon,
   },
 ];
 
@@ -187,7 +187,7 @@ const CtaButtons = ({ compact = false }: { compact?: boolean }) => (
     >
       <Link href="/signup">
         Попробовать Bazaar
-        <ArrowRight className="h-4 w-4" aria-hidden />
+        <ArrowRightIcon className="h-4 w-4" aria-hidden />
       </Link>
     </Button>
     <Button
@@ -224,7 +224,7 @@ const HeroProductScene = () => (
       </div>
       <div className="rounded-md border border-border bg-muted/30 p-3">
         <div className="mb-3 flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm text-slate-500">
-          <Search className="h-4 w-4 text-slate-400" />
+          <SearchIcon className="h-4 w-4 text-slate-400" />
           Поиск или сканер
         </div>
         {[
@@ -261,7 +261,7 @@ const HeroProductScene = () => (
         <div className="space-y-4">
           <div className="rounded-md border border-border bg-muted/30 p-3 sm:p-4">
             <div className="mb-3 flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2">
-              <Search className="h-4 w-4 shrink-0 text-slate-400" />
+              <SearchIcon className="h-4 w-4 shrink-0 text-slate-400" />
               <span className="truncate text-sm text-slate-500">Поиск товара или сканер штрихкода</span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -354,7 +354,7 @@ const ProductShowcase = () => (
         <div className="grid gap-3 sm:grid-cols-2">
           {["Продажа завершена", "Остаток обновлён", "Чек отправлен на печать", "Импорт товаров готов"].map((item) => (
             <div key={item} className="rounded-md border border-border bg-white p-4 text-sm font-semibold text-foreground">
-              <CheckCircle2 className="mb-2 h-5 w-5 text-primary" aria-hidden />
+              <StatusSuccessIcon className="mb-2 h-5 w-5 text-primary" aria-hidden />
               {item}
             </div>
           ))}
@@ -488,7 +488,7 @@ const FeatureSection = ({
         <ul className="grid gap-3 sm:grid-cols-2">
           {features.map((feature) => (
             <li key={feature} className="flex items-start gap-3 rounded-md border border-border bg-white p-3 text-sm font-medium text-slate-700">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <StatusSuccessIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
               {feature}
             </li>
           ))}
@@ -507,7 +507,7 @@ const PosMockup = () => (
           <p className="text-sm font-semibold text-foreground">Касса</p>
           <p className="text-xs text-slate-500">Смена #42 · кассир Айдана</p>
         </div>
-        <CreditCard className="h-6 w-6 text-primary" aria-hidden />
+        <BillingIcon className="h-6 w-6 text-primary" aria-hidden />
       </div>
       <div className="grid gap-4 md:grid-cols-[1fr_220px]">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -545,7 +545,7 @@ const InventoryMockup = () => (
         <p className="text-sm font-semibold text-foreground">Запасы</p>
         <p className="text-xs text-slate-500">Оприходование · перемещение · история</p>
       </div>
-      <Truck className="h-6 w-6 text-primary" aria-hidden />
+      <TruckIcon className="h-6 w-6 text-primary" aria-hidden />
     </div>
     <div className="space-y-3">
       {[
@@ -573,11 +573,11 @@ const ProductsImportMockup = () => (
         <p className="text-sm font-semibold text-foreground">Импорт товаров</p>
         <p className="text-xs text-slate-500">Excel/CSV · SKU · штрихкоды · фото</p>
       </div>
-      <FileSpreadsheet className="h-6 w-6 text-primary" aria-hidden />
+      <SpreadsheetIcon className="h-6 w-6 text-primary" aria-hidden />
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="rounded-md border border-dashed border-primary/30 bg-muted/30 p-5 text-center">
-        <FileSpreadsheet className="mx-auto h-8 w-8 text-primary" aria-hidden />
+        <SpreadsheetIcon className="mx-auto h-8 w-8 text-primary" aria-hidden />
         <p className="mt-3 text-sm font-semibold text-foreground">Файл products.xlsx</p>
         <p className="text-xs text-slate-500">1 284 строки распознаны</p>
       </div>
@@ -604,7 +604,7 @@ const CustomersMockup = () => (
         <p className="text-sm font-semibold text-foreground">Клиенты</p>
         <p className="text-xs text-slate-500">Телефон · email · покупки · рассылки</p>
       </div>
-      <Users className="h-6 w-6 text-primary" aria-hidden />
+      <UsersIcon className="h-6 w-6 text-primary" aria-hidden />
     </div>
     <div className="space-y-3">
       {[
@@ -622,7 +622,7 @@ const CustomersMockup = () => (
       ))}
     </div>
     <div className="mt-4 rounded-md bg-foreground p-4 text-white">
-      <Mail className="mb-2 h-5 w-5 text-primary" aria-hidden />
+      <MailIcon className="mb-2 h-5 w-5 text-primary" aria-hidden />
       <p className="text-sm font-semibold">Email-кампания</p>
       <p className="mt-1 text-xs text-white/70">Получателей с email: 128</p>
     </div>
@@ -633,7 +633,7 @@ const PrintingMockup = () => (
   <div className="rounded-md border border-border bg-white p-4 shadow-[0_28px_80px_-58px_rgba(15,23,42,0.24)]">
     <div className="grid gap-4 sm:grid-cols-[0.9fr_1.1fr]">
       <div className="rounded-md border border-border bg-muted/30 p-4">
-        <Printer className="mb-3 h-6 w-6 text-primary" aria-hidden />
+        <PrintIcon className="mb-3 h-6 w-6 text-primary" aria-hidden />
         <p className="font-semibold text-foreground">Чек PDF</p>
         <div className="mt-4 rounded-md bg-white p-4 text-sm text-slate-600 shadow-sm">
           <p className="font-bold text-foreground">Bazaar Store</p>
@@ -646,7 +646,7 @@ const PrintingMockup = () => (
       <div className="grid gap-3">
         {["58 мм чек", "ценник 40×30", "штрихкод EAN-13", "QZ при настройке"].map((item) => (
           <div key={item} className="flex items-center gap-3 rounded-md border border-border p-3 text-sm font-semibold text-foreground">
-            <ScanBarcode className="h-5 w-5 text-primary" aria-hidden />
+            <BarcodeIcon className="h-5 w-5 text-primary" aria-hidden />
             {item}
           </div>
         ))}
@@ -672,7 +672,7 @@ const MobileMockup = () => (
         </div>
       </div>
       <div className="rounded-md border border-border bg-white p-4">
-        <Smartphone className="mb-3 h-6 w-6 text-primary" aria-hidden />
+        <MobilePreviewIcon className="mb-3 h-6 w-6 text-primary" aria-hidden />
         <p className="text-lg font-semibold text-foreground">PWA без установки из магазина приложений</p>
         <p className="mt-2 text-sm leading-6 text-slate-600">Откройте Bazaar в браузере и закрепите на экране телефона.</p>
       </div>
@@ -712,7 +712,7 @@ const PricingSection = () => (
                 <ul className="mt-6 space-y-3 text-sm">
                   {[...plan.features, `лимит: ${limits.maxProducts.toLocaleString("ru-RU")} товаров`].map((feature) => (
                     <li key={feature} className="flex items-start gap-2">
-                      <CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${plan.featured ? "text-primary" : "text-primary"}`} aria-hidden />
+                      <StatusSuccessIcon className={`mt-0.5 h-4 w-4 shrink-0 ${plan.featured ? "text-primary" : "text-primary"}`} aria-hidden />
                       <span className={plan.featured ? "text-white/82" : "text-slate-700"}>{feature}</span>
                     </li>
                   ))}
@@ -782,7 +782,7 @@ const RootPage = async () => {
         <div className="mx-auto grid w-full max-w-7xl gap-7 px-4 py-10 sm:px-6 sm:py-16 lg:grid-cols-[0.88fr_1.12fr] lg:items-center lg:px-8 lg:py-24">
           <Reveal className="min-w-0 max-w-3xl space-y-5 sm:space-y-6">
             <div className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-md border border-border bg-white/86 px-3 py-2 text-xs font-semibold leading-5 text-primary shadow-sm sm:px-4 sm:text-sm">
-              <Store className="h-4 w-4" aria-hidden />
+              <StoresIcon className="h-4 w-4" aria-hidden />
               <span>Для розничных магазинов, шоурумов и локального бизнеса</span>
             </div>
             <div className="space-y-5">
@@ -797,7 +797,7 @@ const RootPage = async () => {
             <div className="grid max-w-2xl gap-2 text-sm font-medium text-slate-600 sm:grid-cols-3">
               {["Касса и смены", "Товары и импорт", "Телефон и компьютер"].map((item) => (
                 <span key={item} className="flex items-center gap-2">
-                  <BadgeCheck className="h-4 w-4 text-primary" aria-hidden />
+                  <SealCheckIcon className="h-4 w-4 text-primary" aria-hidden />
                   {item}
                 </span>
               ))}
@@ -925,7 +925,7 @@ const RootPage = async () => {
               <details className="group rounded-md border border-border bg-white p-5 open:border-primary">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <span>{item.question}</span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90" aria-hidden />
+                  <ArrowRightIcon className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90" aria-hidden />
                 </summary>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">{item.answer}</p>
               </details>

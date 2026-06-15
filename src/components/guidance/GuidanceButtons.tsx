@@ -14,9 +14,11 @@ const headerButtonClassName = "h-10 px-4 text-sm";
 export const GuidanceTipsTriggerButton = ({
   pendingCount,
   onClick,
+  className,
 }: {
   pendingCount: number;
   onClick: () => void;
+  className?: string;
 }) => {
   const t = useTranslations("guidance");
 
@@ -28,7 +30,7 @@ export const GuidanceTipsTriggerButton = ({
             type="button"
             variant="secondary"
             size="icon"
-            className="relative h-10 w-10 shrink-0"
+            className={cn("relative h-10 w-10 shrink-0", className)}
             onClick={onClick}
             aria-label={t("tipsButton")}
           >

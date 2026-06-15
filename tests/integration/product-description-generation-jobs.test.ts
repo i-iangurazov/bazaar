@@ -1,9 +1,10 @@
 import {
+  AttributeType,
   ProductDescriptionGenerationItemStatus,
   ProductDescriptionGenerationJobStatus,
   ProductDescriptionGenerationSource,
 } from "@prisma/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { runJob } from "@/server/jobs";
@@ -12,12 +13,112 @@ import {
   PRODUCT_DESCRIPTION_GENERATION_JOB_NAME,
   startProductDescriptionGenerationJob,
 } from "@/server/services/productDescriptionGenerationJobs";
+import { toJson } from "@/server/services/json";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+
+const { mockDownloadRemoteImage, mockNormalizeProductImageUrl } = vi.hoisted(() => ({
+  mockDownloadRemoteImage: vi.fn(),
+  mockNormalizeProductImageUrl: vi.fn((value: string | null) => value),
+}));
+
+vi.mock("@/server/services/productImageStorage", () => ({
+  downloadRemoteImage: (value: string) => mockDownloadRemoteImage(value),
+  normalizeProductImageUrl: (value: string | null) => mockNormalizeProductImageUrl(value),
+}));
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
+const generatedDescriptionText =
+  "Защитный чехол для смартфона с аккуратной формой и выразительным игровым принтом подходит для ежедневного использования. Он помогает закрыть корпус от потертостей, оставляет доступ к камере и кнопкам, а внешний вид делает карточку товара понятной для покупателя.";
+
+const openAiTextResponse = (outputText: string) =>
+  new Response(JSON.stringify({ status: "completed", output_text: outputText }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
+const seedPhoneCaseSpecTemplate = async (organizationId: string, category: string) => {
+  await prisma.attributeDefinition.createMany({
+    data: [
+      {
+        organizationId,
+        key: "type",
+        labelRu: "Тип",
+        labelKg: "Түрү",
+        type: AttributeType.TEXT,
+      },
+      {
+        organizationId,
+        key: "color",
+        labelRu: "Цвет",
+        labelKg: "Түс",
+        type: AttributeType.TEXT,
+      },
+      {
+        organizationId,
+        key: "material",
+        labelRu: "Материал",
+        labelKg: "Материал",
+        type: AttributeType.TEXT,
+      },
+    ],
+  });
+  await prisma.categoryAttributeTemplate.createMany({
+    data: [
+      { organizationId, category, attributeKey: "type", order: 1 },
+      { organizationId, category, attributeKey: "color", order: 2 },
+      { organizationId, category, attributeKey: "material", order: 3 },
+    ],
+  });
+};
+
+const seedProductForAiJob = async (input: {
+  organizationId: string;
+  productId: string;
+  category: string;
+  description?: string | null;
+  attributes?: Record<string, unknown>;
+}) => {
+  await prisma.product.update({
+    where: { id: input.productId },
+    data: {
+      name: "Чехол CS GO для смартфона",
+      sku: "CASE-CSGO-1",
+      category: input.category,
+      description: input.description ?? null,
+      photoUrl: "https://cdn.example.com/case-csgo.png",
+    },
+  });
+  const variant = await prisma.productVariant.create({
+    data: {
+      productId: input.productId,
+      attributes: toJson(input.attributes ?? {}),
+    },
+  });
+  for (const [key, value] of Object.entries(input.attributes ?? {})) {
+    await prisma.variantAttributeValue.create({
+      data: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantId: variant.id,
+        key,
+        value: toJson(value),
+      },
+    });
+  }
+  return variant;
+};
+
 describeDb("product description generation jobs", () => {
   beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    mockNormalizeProductImageUrl.mockImplementation((value: string | null) => value);
+    mockDownloadRemoteImage.mockResolvedValue({
+      buffer: Buffer.from([1, 2, 3, 4]),
+      contentType: "image/png",
+    });
     await resetDatabase();
   });
 
@@ -152,5 +253,170 @@ describeDb("product description generation jobs", () => {
         runImmediately: false,
       }),
     ).rejects.toMatchObject({ message: "productNotFound" });
+  });
+
+  it("overwrites existing descriptions and characteristics when overwrite is enabled", async () => {
+    const { org, product, adminUser } = await seedBase();
+    const category = "Аксессуары";
+    await seedPhoneCaseSpecTemplate(org.id, category);
+    const variant = await seedProductForAiJob({
+      organizationId: org.id,
+      productId: product.id,
+      category,
+      description: "Старое описание",
+      attributes: {
+        type: "Старый тип",
+        color: "Белый",
+        material: "Силикон",
+      },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiTextResponse(generatedDescriptionText))
+      .mockResolvedValueOnce(
+        openAiTextResponse(
+          JSON.stringify({
+            type: "Чехол",
+            color: "Черный",
+            material: "Поликарбонат",
+          }),
+        ),
+      );
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await startProductDescriptionGenerationJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-description-job-overwrite",
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      productIds: [product.id],
+      locale: "ru",
+      overwriteExisting: true,
+      runImmediately: false,
+    });
+    await runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: created.id });
+
+    const [updatedProduct, updatedVariant, job] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+      prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } }),
+      getProductDescriptionGenerationJob(org.id, created.id),
+    ]);
+    expect(updatedProduct.description).toBe(generatedDescriptionText);
+    expect(updatedVariant.attributes).toMatchObject({
+      type: "Чехол",
+      color: "Черный",
+      material: "Поликарбонат",
+    });
+    await expect(
+      prisma.variantAttributeValue.findMany({
+        where: { variantId: variant.id },
+        orderBy: { key: "asc" },
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "type", value: "Чехол" }),
+        expect.objectContaining({ key: "color", value: "Черный" }),
+        expect.objectContaining({ key: "material", value: "Поликарбонат" }),
+      ]),
+    );
+    expect(job.successCount).toBe(1);
+    expect(job.skippedCount).toBe(0);
+    expect(job.items[0]?.status).toBe(ProductDescriptionGenerationItemStatus.SUCCESS);
+    expect(job.items[0]?.previousDescription).toBe("Старое описание");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips existing descriptions in missing-only mode but still fills missing characteristics", async () => {
+    const { org, product, adminUser } = await seedBase();
+    const category = "Аксессуары";
+    await seedPhoneCaseSpecTemplate(org.id, category);
+    const variant = await seedProductForAiJob({
+      organizationId: org.id,
+      productId: product.id,
+      category,
+      description: "Описание уже есть",
+      attributes: {},
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        openAiTextResponse(
+          JSON.stringify({
+            type: "Чехол",
+            color: "Черный",
+            material: "Поликарбонат",
+          }),
+        ),
+      );
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await startProductDescriptionGenerationJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-description-job-missing-specs",
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      productIds: [product.id],
+      locale: "ru",
+      overwriteExisting: false,
+      runImmediately: false,
+    });
+    await runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: created.id });
+
+    const [updatedProduct, updatedVariant, job] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+      prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } }),
+      getProductDescriptionGenerationJob(org.id, created.id),
+    ]);
+    expect(updatedProduct.description).toBe("Описание уже есть");
+    expect(updatedVariant.attributes).toMatchObject({
+      type: "Чехол",
+      color: "Черный",
+      material: "Поликарбонат",
+    });
+    expect(job.successCount).toBe(1);
+    expect(job.skippedCount).toBe(0);
+    expect(job.items[0]?.generatedDescription).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips existing descriptions and specs in missing-only mode with a clear reason", async () => {
+    const { org, product, adminUser } = await seedBase();
+    const category = "Аксессуары";
+    await seedPhoneCaseSpecTemplate(org.id, category);
+    await seedProductForAiJob({
+      organizationId: org.id,
+      productId: product.id,
+      category,
+      description: "Описание уже есть",
+      attributes: {
+        type: "Чехол",
+        color: "Черный",
+        material: "Поликарбонат",
+      },
+    });
+    const fetchMock = vi.fn();
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await startProductDescriptionGenerationJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-description-job-missing-only-skip",
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      productIds: [product.id],
+      locale: "ru",
+      overwriteExisting: false,
+      runImmediately: false,
+    });
+    await runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: created.id });
+
+    const job = await getProductDescriptionGenerationJob(org.id, created.id);
+    expect(job.successCount).toBe(0);
+    expect(job.skippedCount).toBe(1);
+    expect(job.items[0]?.status).toBe(ProductDescriptionGenerationItemStatus.SKIPPED);
+    expect(job.items[0]?.errorMessage).toBe("descriptionAndSpecsAlreadyExist");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

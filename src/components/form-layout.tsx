@@ -16,11 +16,11 @@ export const FormSection = ({
   className?: string;
   contentClassName?: string;
 }) => (
-  <section className={cn("space-y-2 sm:space-y-3", className)}>
+  <section className={cn("space-y-3 sm:space-y-4", className)}>
     {title ? (
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
       </div>
     ) : null}
     <div className={cn("space-y-3 sm:space-y-4", contentClassName)}>{children}</div>
@@ -51,7 +51,11 @@ export const Field = ({
   labelClassName?: string;
 }) => (
   <div className={cn("flex flex-col gap-1.5", className)}>
-    {label ? <Label className={cn("text-xs text-muted-foreground", labelClassName)}>{label}</Label> : null}
+    {label ? (
+      <Label className={cn("text-sm font-semibold text-foreground", labelClassName)}>
+        {label}
+      </Label>
+    ) : null}
     {children}
     {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}

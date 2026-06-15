@@ -21,6 +21,21 @@ import { ScanInput } from "@/components/ScanInput";
 import { CommandPalette } from "@/components/command-palette";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalFooter } from "@/components/ui/modal";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -52,7 +67,8 @@ import {
   WhatsNewIcon,
   PrintIcon,
   ReceiveIcon,
-  ArchiveIcon,
+  TransferIcon,
+  WriteOffIcon,
   AdjustIcon,
   UploadIcon,
   IntegrationsIcon,
@@ -239,9 +255,15 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 requiredPermission: "viewInventory",
               },
               {
+                key: "stockTransfer",
+                href: "/inventory/transfers",
+                icon: TransferIcon,
+                requiredPermission: "viewInventory",
+              },
+              {
                 key: "stockWriteOff",
                 href: "/inventory/write-offs",
-                icon: ArchiveIcon,
+                icon: WriteOffIcon,
                 requiredPermission: "viewInventory",
               },
               {
@@ -632,89 +654,81 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         const isOpen = groupState[group.id];
         const groupLabel = tNav(group.labelKey);
         return (
-          <div key={group.id} className="space-y-2">
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.id)}
-              className="flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent/50 hover:text-foreground"
-              aria-expanded={isOpen}
-              aria-label={tNav("groupToggle", { group: groupLabel })}
-            >
-              <span>{groupLabel}</span>
-              <ChevronDownIcon
-                className={cn("h-4 w-4 transition-transform", isOpen ? "rotate-180" : "rotate-0")}
-                aria-hidden
-              />
-            </button>
+          <SidebarGroup key={group.id}>
+            <SidebarGroupLabel asChild>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                className="flex w-full items-center justify-between rounded-lg transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                aria-expanded={isOpen}
+                aria-label={tNav("groupToggle", { group: groupLabel })}
+              >
+                <span>{groupLabel}</span>
+                <ChevronDownIcon
+                  className={cn("h-4 w-4 transition-transform", isOpen ? "rotate-180" : "rotate-0")}
+                  aria-hidden
+                />
+              </button>
+            </SidebarGroupLabel>
             {isOpen ? (
-              <div className="space-y-1">
-                {visibleItems.map((item) => {
-                  const isActive = isItemActive(item);
-                  const visibleChildren =
-                    item.children?.filter((child) => isItemVisible(child)) ?? [];
-                  if (visibleChildren.length) {
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleItems.map((item) => {
+                    const isActive = isItemActive(item);
+                    const visibleChildren =
+                      item.children?.filter((child) => isItemVisible(child)) ?? [];
+                    if (visibleChildren.length) {
+                      return (
+                        <SidebarMenuItem key={item.key}>
+                          <SidebarMenuButton
+                            type="button"
+                            isActive={isActive}
+                            className={cn(!isActive && "text-sidebar-foreground/70")}
+                          >
+                            <item.icon aria-hidden />
+                            <span>{tNav(item.key)}</span>
+                          </SidebarMenuButton>
+                          <SidebarMenu className="ml-4 mt-1 border-l border-sidebar-border pl-2 group-data-[state=collapsed]/sidebar-wrapper:hidden">
+                            {visibleChildren.map((child) => {
+                              const isChildActive = isItemActive(child);
+                              return (
+                                <SidebarMenuItem key={child.key}>
+                                  <SidebarMenuButton asChild isActive={isChildActive}>
+                                    <Link
+                                      href={child.href ?? "/"}
+                                      onClick={onNavigate}
+                                      data-tour={`nav-${child.key}`}
+                                      className="min-h-9 rounded-lg text-[13px] [&>svg]:h-[18px] [&>svg]:w-[18px]"
+                                    >
+                                      <child.icon aria-hidden />
+                                      <span>{tNav(child.key)}</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        </SidebarMenuItem>
+                      );
+                    }
+                    if (!item.href) {
+                      return null;
+                    }
                     return (
-                      <div key={item.key} className="space-y-1">
-                        <div
-                          className={cn(
-                            "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold",
-                            isActive
-                              ? "border-l-4 border-primary bg-accent text-accent-foreground"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          <item.icon className="h-4 w-4" aria-hidden />
-                          <span>{tNav(item.key)}</span>
-                        </div>
-                        <div className="space-y-1 pl-4">
-                          {visibleChildren.map((child) => {
-                            const isChildActive = isItemActive(child);
-                            return (
-                              <Link
-                                key={child.key}
-                                href={child.href ?? "/"}
-                                onClick={onNavigate}
-                                data-tour={`nav-${child.key}`}
-                                className={cn(
-                                  "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
-                                  isChildActive
-                                    ? "border-l-4 border-primary bg-accent text-accent-foreground"
-                                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                                )}
-                              >
-                                <child.icon className="h-4 w-4" aria-hidden />
-                                <span>{tNav(child.key)}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <SidebarMenuItem key={item.key}>
+                        <SidebarMenuButton asChild isActive={isActive}>
+                          <Link href={item.href} onClick={onNavigate} data-tour={`nav-${item.key}`}>
+                            <item.icon aria-hidden />
+                            <span>{tNav(item.key)}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
                     );
-                  }
-                  if (!item.href) {
-                    return null;
-                  }
-                  return (
-                    <Link
-                      key={item.key}
-                      href={item.href}
-                      onClick={onNavigate}
-                      data-tour={`nav-${item.key}`}
-                      className={cn(
-                        "relative flex h-9 items-center gap-2 rounded-md border-l-2 border-transparent px-3 text-sm font-semibold transition",
-                        isActive
-                          ? "border-l-4 border-primary bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                      )}
-                    >
-                      <item.icon className="h-4 w-4" aria-hidden />
-                      <span>{tNav(item.key)}</span>
-                    </Link>
-                  );
-                })}
-              </div>
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
             ) : null}
-          </div>
+          </SidebarGroup>
         );
       });
 
@@ -722,14 +736,16 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     <Button
       type="button"
       variant="ghost"
-      className="mt-4 w-full justify-start rounded-md px-3"
+      className="mt-0 h-9 w-full justify-start rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-sidebar-primary/20 hover:bg-sidebar-primary/10 hover:text-sidebar-primary group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0"
       onClick={() => {
         onClick?.();
         setCustomizeNavOpen(true);
       }}
     >
       <AdjustIcon className="h-4 w-4" aria-hidden />
-      {tNav("customize")}
+      <span className="group-data-[state=collapsed]/sidebar-wrapper:sr-only">
+        {tNav("customize")}
+      </span>
     </Button>
   );
 
@@ -747,7 +763,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     }
 
     return (
-      <div className="mt-3 border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-foreground">
+      <div className="mt-3 border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-foreground group-data-[state=collapsed]/sidebar-wrapper:hidden">
         <p className="font-semibold text-foreground">{tNav("emailUnverifiedTitle")}</p>
         <p className="mt-1 leading-relaxed text-muted-foreground">
           {tNav("emailUnverifiedDescription")}
@@ -775,21 +791,21 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href="/settings/profile"
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex w-full items-center justify-between rounded-md border border-border bg-card/70 px-3 py-2 text-left no-underline transition hover:border-primary/40 hover:bg-accent/70 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group flex min-h-11 w-full items-center justify-between rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-left no-underline transition hover:border-sidebar-primary/20 hover:bg-sidebar-accent/75 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:min-h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:py-0"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-sidebar-primary/10 text-sidebar-primary transition group-hover:border-sidebar-primary/35 group-hover:bg-sidebar-primary/15 group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:text-sidebar-foreground/75">
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-foreground">
+        <span className="min-w-0 group-data-[state=collapsed]/sidebar-wrapper:sr-only">
+          <span className="block truncate text-sm font-semibold text-sidebar-foreground">
             {displayName}
           </span>
-          <span className="block truncate text-xs text-muted-foreground">{roleLabel}</span>
+          <span className="block truncate text-xs text-sidebar-foreground/60">{roleLabel}</span>
         </span>
       </div>
       <ChevronDownIcon
-        className="-rotate-90 text-muted-foreground transition group-hover:text-foreground"
+        className="-rotate-90 text-sidebar-foreground/45 transition group-hover:text-sidebar-foreground/75 group-data-[state=collapsed]/sidebar-wrapper:hidden"
         aria-hidden
       />
     </Link>
@@ -1057,70 +1073,91 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           closeLabel={tCommon("closeMenu")}
           navigationLabel={tNav("mobileNavigation")}
         />
-        <div className="flex min-h-screen">
-          <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-6 py-8 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="space-y-3">
+        <SidebarProvider className="min-h-screen">
+          <Sidebar className="md:sticky md:top-0 md:h-screen">
+            <SidebarHeader className="space-y-3 p-3 group-data-[state=collapsed]/sidebar-wrapper:space-y-2 group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
+              <Link
+                href="/dashboard"
+                className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
+                aria-label={tNav("brand")}
+              >
                 <Image
                   src="/brand/logo.png"
-                  alt={tNav("brand")}
+                  alt=""
                   width={724}
                   height={181}
-                  className="h-auto w-[184px] max-w-full"
+                  className="h-auto w-[164px] max-w-full drop-shadow-sm group-data-[state=collapsed]/sidebar-wrapper:hidden"
                   priority
                 />
-                <Button
-                  type="button"
-                  onClick={() => setCommandPaletteOpen(true)}
-                  size="default"
-                  className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                  aria-label={tCommand("openButton")}
-                >
-                  <CirclePlusIcon className="h-5 w-5" aria-hidden />
-                </Button>
-              </div>
+                <span className="hidden h-10 w-10 items-center justify-center rounded-lg group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
+                  <Image
+                    src="/brand/icon.png"
+                    alt=""
+                    width={96}
+                    height={96}
+                    className="h-8 w-8"
+                    priority
+                  />
+                </span>
+              </Link>
+              <Button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                size="default"
+                className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none [&>svg]:h-4 [&>svg]:w-4"
+                aria-label={tCommand("openButton")}
+              >
+                <CirclePlusIcon className="h-5 w-5" aria-hidden />
+              </Button>
+            </SidebarHeader>
 
-              <nav className="scrollbar-soft mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-                {renderNavGroups()}
-              </nav>
+            <SidebarContent className="scrollbar-soft p-2.5 group-data-[state=collapsed]/sidebar-wrapper:px-2">
+              <nav aria-label={tNav("brand")}>{renderNavGroups()}</nav>
+            </SidebarContent>
 
-              <div className="mt-6 border-t border-border pt-6 text-sm">
-                {renderCustomizeNavButton()}
-                {renderEmailVerificationNotice()}
+            <SidebarFooter className="p-2.5 text-sm group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
+              {renderEmailVerificationNotice()}
+              <div className="rounded-2xl border border-sidebar-border/75 bg-sidebar-accent/35 p-1.5 shadow-sm ring-1 ring-sidebar-foreground/[0.015] group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:p-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none group-data-[state=collapsed]/sidebar-wrapper:ring-0">
                 {renderProfileShortcut()}
-                <div className="mt-4">
-                  <SignOutButton />
+                <div className="mt-1 grid grid-cols-2 gap-1 border-t border-sidebar-border/60 pt-1 group-data-[state=collapsed]/sidebar-wrapper:mt-1 group-data-[state=collapsed]/sidebar-wrapper:flex group-data-[state=collapsed]/sidebar-wrapper:flex-col group-data-[state=collapsed]/sidebar-wrapper:border-0 group-data-[state=collapsed]/sidebar-wrapper:pt-0">
+                  {renderCustomizeNavButton()}
+                  <SignOutButton className="h-9 rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-danger/20 hover:bg-danger/10 hover:text-danger group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0" />
                 </div>
               </div>
-            </div>
-          </aside>
+            </SidebarFooter>
+          </Sidebar>
 
-          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-            <MobilePageContainer>
-              <div className="mx-auto">
-                <div className="mb-6 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex">
-                  <div className="relative w-full sm:max-w-md">
-                    <ScanInput
-                      context="global"
-                      dataTour="scan-input"
-                      placeholder={tHeader("scanPlaceholder")}
-                      ariaLabel={tHeader("scanLabel")}
-                      supportsTabSubmit
-                      enableProductSearch
-                      onResolved={handleScanResolved}
-                    />
+          <SidebarInset className="bg-transparent">
+            <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
+              <MobilePageContainer>
+                <div className="mx-auto max-w-[1500px]">
+                  <div className="mb-6 hidden flex-col gap-3 rounded-xl border border-border/65 bg-card/95 p-3 shadow-[0_14px_34px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.015] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between md:flex dark:shadow-none">
+                    <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
+                      <SidebarTrigger className="h-10 w-10 shrink-0 border border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground" />
+                      <div className="relative min-w-0 flex-1">
+                        <ScanInput
+                          context="global"
+                          dataTour="scan-input"
+                          placeholder={tHeader("scanPlaceholder")}
+                          ariaLabel={tHeader("scanLabel")}
+                          supportsTabSubmit
+                          enableProductSearch
+                          onResolved={handleScanResolved}
+                        />
+                      </div>
+                    </div>
+                    <div className="hidden md:flex md:items-center md:gap-2">
+                      <PageTipsButton />
+                      <PwaInstallButton />
+                      <LanguageSwitcher />
+                    </div>
                   </div>
-                  <div className="hidden md:flex md:items-center md:gap-2">
-                    <PageTipsButton />
-                    <PwaInstallButton />
-                    <LanguageSwitcher />
-                  </div>
+                  {children}
                 </div>
-                {children}
-              </div>
-            </MobilePageContainer>
-          </main>
-        </div>
+              </MobilePageContainer>
+            </main>
+          </SidebarInset>
+        </SidebarProvider>
 
         <Modal
           open={customizeNavOpen}

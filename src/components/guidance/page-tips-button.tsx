@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
-export const PageTipsButton = () => {
+export const PageTipsButton = ({ className }: { className?: string } = {}) => {
   const t = useTranslations("guidance");
   const {
     role,
@@ -42,7 +42,11 @@ export const PageTipsButton = () => {
 
   return (
     <>
-      <GuidanceTipsTriggerButton pendingCount={tipsCount} onClick={() => setOpen(true)} />
+      <GuidanceTipsTriggerButton
+        pendingCount={tipsCount}
+        className={className}
+        onClick={() => setOpen(true)}
+      />
 
       <Modal
         open={open}

@@ -200,8 +200,8 @@ const CustomerDatabasePage = () => {
   const formatCustomerMoney = (value: number) => formatStoreMoney(value, locale, selectedStore);
 
   const emptyState = (
-    <Card>
-      <CardContent className="py-10 text-center text-sm text-muted-foreground">
+    <Card className="bazaar-admin-surface">
+      <CardContent className="bazaar-admin-empty">
         {t("empty")}
       </CardContent>
     </Card>
@@ -281,7 +281,7 @@ const CustomerDatabasePage = () => {
       />
 
       <section data-mobile-customers-toolbar className="mb-5 space-y-4 md:hidden">
-        <div className="space-y-3 border border-border bg-card p-3">
+        <div className="bazaar-admin-toolbar space-y-3">
           <Select
             value={storeId}
             onValueChange={(value) => {
@@ -349,14 +349,14 @@ const CustomerDatabasePage = () => {
       </section>
 
       {!storesQuery.isLoading && !stores.length ? (
-        <Card>
-          <CardContent className="py-10 text-sm text-muted-foreground">{t("noStores")}</CardContent>
+        <Card className="bazaar-admin-surface">
+          <CardContent className="bazaar-admin-empty">{t("noStores")}</CardContent>
         </Card>
       ) : null}
 
       {customersQuery.error ? (
-        <Card>
-          <CardContent className="py-6 text-sm text-danger">
+        <Card className="bazaar-admin-surface">
+          <CardContent className="bazaar-admin-error">
             {translateError(tErrors, customersQuery.error)}
           </CardContent>
         </Card>
@@ -377,7 +377,7 @@ const CustomerDatabasePage = () => {
         empty={emptyState}
         getKey={(customer) => customer.id}
         renderDesktop={(items) => (
-          <TableContainer>
+          <TableContainer className="bazaar-admin-table-shell">
             <Table className="min-w-[920px]">
               <TableHeader>
                 <TableRow>
@@ -442,7 +442,7 @@ const CustomerDatabasePage = () => {
           </TableContainer>
         )}
         renderMobile={(customer) => (
-          <Card>
+          <Card className="bazaar-admin-surface overflow-hidden">
             <CardHeader className="space-y-1 pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -473,7 +473,7 @@ const CustomerDatabasePage = () => {
                   <p className="font-medium text-foreground">{customer.email ?? "—"}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-md bg-muted/30 p-2">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
                     <p className="text-sm font-semibold text-foreground">
                       {customer.lastOrderAt
@@ -481,7 +481,7 @@ const CustomerDatabasePage = () => {
                         : tCommon("notAvailable")}
                     </p>
                   </div>
-                  <div className="rounded-md bg-muted/30 p-2">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
                     <p className="text-sm font-semibold text-foreground">{customer.orderCount}</p>
                   </div>
@@ -534,9 +534,9 @@ const CustomerDatabasePage = () => {
         mobileSheet
       >
         {customerDetailQuery.isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">{tCommon("loading")}</div>
+          <div className="bazaar-admin-empty py-8">{tCommon("loading")}</div>
         ) : customerDetailQuery.error ? (
-          <div className="border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+          <div className="bazaar-admin-error">
             {translateError(tErrors, customerDetailQuery.error)}
           </div>
         ) : customerDetail ? (
@@ -544,19 +544,19 @@ const CustomerDatabasePage = () => {
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">{t("detail.contactInfo")}</h3>
               <div className="grid gap-2 text-sm">
-                <div className="rounded-md bg-muted/30 p-3">
+                <div className="bazaar-admin-modal-card">
                   <p className="text-xs text-muted-foreground">{t("columns.phone")}</p>
                   <p className="font-medium text-foreground">
                     {customerDetail.customer.phone ?? "—"}
                   </p>
                 </div>
-                <div className="rounded-md bg-muted/30 p-3">
+                <div className="bazaar-admin-modal-card">
                   <p className="text-xs text-muted-foreground">{t("columns.email")}</p>
                   <p className="font-medium text-foreground">
                     {customerDetail.customer.email ?? "—"}
                   </p>
                 </div>
-                <div className="rounded-md bg-muted/30 p-3">
+                <div className="bazaar-admin-modal-card">
                   <p className="text-xs text-muted-foreground">{t("columns.address")}</p>
                   <p className="font-medium text-foreground">
                     {customerDetail.customer.address ?? "—"}
@@ -568,7 +568,7 @@ const CustomerDatabasePage = () => {
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">{t("detail.summary")}</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-md bg-muted/30 p-3">
+                <div className="bazaar-admin-modal-card">
                   <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
                   <p className="font-semibold text-foreground">
                     {customerDetail.customer.lastOrderAt
@@ -576,7 +576,7 @@ const CustomerDatabasePage = () => {
                       : tCommon("notAvailable")}
                   </p>
                 </div>
-                <div className="rounded-md bg-muted/30 p-3">
+                <div className="bazaar-admin-modal-card">
                   <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
                   <p className="font-semibold text-foreground">
                     {customerDetail.customer.orderCount}
@@ -605,7 +605,7 @@ const CustomerDatabasePage = () => {
               {customerDetail.recentOrders.length ? (
                 <div className="space-y-2">
                   {customerDetail.recentOrders.map((order) => (
-                    <div key={order.id} className="rounded-md border border-border bg-card p-3">
+                    <div key={order.id} className="bazaar-admin-modal-card">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-foreground">{order.number}</p>
@@ -621,7 +621,7 @@ const CustomerDatabasePage = () => {
                   ))}
                 </div>
               ) : (
-                <div className="border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                <div className="bazaar-admin-empty min-h-24 p-4">
                   {t("detail.noReceipts")}
                 </div>
               )}
@@ -682,7 +682,7 @@ const CustomerDatabasePage = () => {
             />
           </div>
           {formErrors.length ? (
-            <div className="border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+            <div className="bazaar-admin-error">
               {formErrors.map((error) => (
                 <p key={error}>{error}</p>
               ))}

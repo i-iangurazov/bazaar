@@ -7,6 +7,7 @@ import {
   ExportJobStatus,
   ExportType,
   MarkingCodeStatus,
+  PosPaymentMethod,
   PosReturnStatus,
   Prisma,
   RegisterShiftStatus,
@@ -570,6 +571,21 @@ const buildShiftReportRows = async (
       where: {
         organizationId,
         shiftId: { in: shiftIds },
+        OR: [
+          {
+            isRefund: false,
+            customerOrder: {
+              isPosSale: true,
+              status: CustomerOrderStatus.COMPLETED,
+            },
+          },
+          {
+            isRefund: true,
+            saleReturn: {
+              status: PosReturnStatus.COMPLETED,
+            },
+          },
+        ],
       },
       _sum: { amountKgs: true },
     }),
@@ -605,11 +621,31 @@ const buildShiftReportRows = async (
     const cashRows = cashMap.get(shift.id) ?? [];
 
     const cashSales = paymentRows
-      .filter((row) => row.method === "CASH" && !row.isRefund)
+      .filter((row) => row.method === PosPaymentMethod.CASH && !row.isRefund)
       .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
     const cashRefunds = paymentRows
-      .filter((row) => row.method === "CASH" && row.isRefund)
+      .filter((row) => row.method === PosPaymentMethod.CASH && row.isRefund)
       .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const cardSales = paymentRows
+      .filter((row) => row.method === PosPaymentMethod.CARD && !row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const cardRefunds = paymentRows
+      .filter((row) => row.method === PosPaymentMethod.CARD && row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const transferSales = paymentRows
+      .filter((row) => row.method === PosPaymentMethod.TRANSFER && !row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const transferRefunds = paymentRows
+      .filter((row) => row.method === PosPaymentMethod.TRANSFER && row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const otherSales = paymentRows
+      .filter((row) => row.method === PosPaymentMethod.OTHER && !row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const otherRefunds = paymentRows
+      .filter((row) => row.method === PosPaymentMethod.OTHER && row.isRefund)
+      .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
+    const nonCashSales = roundMoney(cardSales + transferSales + otherSales);
+    const nonCashRefunds = roundMoney(cardRefunds + transferRefunds + otherRefunds);
     const payIn = cashRows
       .filter((row) => row.type === CashDrawerMovementType.PAY_IN)
       .reduce((sum, row) => sum + Number(row._sum.amountKgs ?? 0), 0);
@@ -640,8 +676,19 @@ const buildShiftReportRows = async (
       closedBy: shift.closedBy?.email ?? "",
       salesCount: sales?._count._all ?? 0,
       salesTotalKgs: Number(sales?._sum.totalKgs ?? 0),
+      cashSalesKgs: roundMoney(cashSales),
+      nonCashSalesKgs: nonCashSales,
+      cardSalesKgs: roundMoney(cardSales),
+      transferSalesKgs: roundMoney(transferSales),
+      otherSalesKgs: roundMoney(otherSales),
       returnsCount: returns?._count._all ?? 0,
       returnsTotalKgs: Number(returns?._sum.totalKgs ?? 0),
+      cashRefundsKgs: roundMoney(cashRefunds),
+      nonCashRefundsKgs: nonCashRefunds,
+      cardRefundsKgs: roundMoney(cardRefunds),
+      transferRefundsKgs: roundMoney(transferRefunds),
+      otherRefundsKgs: roundMoney(otherRefunds),
+      nonCashNetKgs: roundMoney(nonCashSales - nonCashRefunds),
       openingCashKgs: Number(shift.openingCashKgs),
       cashPayInKgs: roundMoney(payIn),
       cashPayOutKgs: roundMoney(payOut),

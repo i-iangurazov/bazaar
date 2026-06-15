@@ -21,7 +21,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -42,6 +41,7 @@ const BazaarApiSettingsPage = () => {
   const [storeId, setStoreId] = useState(storeIdParam ?? "");
   const [keyName, setKeyName] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [apiBaseUrl, setApiBaseUrl] = useState("/api/bazaar/v1");
 
   const storesQuery = trpc.bazaarApi.listStores.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
@@ -83,16 +83,17 @@ const BazaarApiSettingsPage = () => {
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
 
-  const apiBaseUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/api/bazaar/v1` : "/api/bazaar/v1";
+  useEffect(() => {
+    setApiBaseUrl(`${window.location.origin}/api/bazaar/v1`);
+  }, []);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("storeTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="max-w-sm space-y-2">
@@ -120,8 +121,8 @@ const BazaarApiSettingsPage = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="space-y-2">
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <CardTitle>{t("statusTitle")}</CardTitle>
               <Badge variant={activeKeyCount > 0 ? "success" : "muted"}>
@@ -130,23 +131,23 @@ const BazaarApiSettingsPage = () => {
             </div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm md:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("productsEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/products</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("ordersEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/orders</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("customersEndpoint")}</p>
               <p className="break-all font-mono text-xs">{apiBaseUrl}/customers</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("keysTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -166,7 +167,8 @@ const BazaarApiSettingsPage = () => {
               </Button>
             </div>
 
-            <TableContainer>
+            <div className="bazaar-admin-table-shell">
+              <div className="bazaar-admin-table-scroll">
               <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow>
@@ -217,7 +219,8 @@ const BazaarApiSettingsPage = () => {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -233,7 +236,7 @@ const BazaarApiSettingsPage = () => {
         subtitle={t("tokenSubtitle")}
       >
         <div className="space-y-4">
-          <div className="break-all rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
+          <div className="bazaar-admin-modal-card break-all font-mono text-xs">
             {newToken}
           </div>
           <ModalFooter>

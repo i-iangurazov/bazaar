@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -689,11 +690,7 @@ const InventoryReceivingPage = () => {
   };
 
   if (sessionStatus === "loading") {
-    return (
-      <div className="flex min-h-64 items-center justify-center">
-        <Spinner className="h-5 w-5" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   if (!canManageStock) {
@@ -711,7 +708,7 @@ const InventoryReceivingPage = () => {
             </Button>
           }
         />
-        <div className="border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {t("receivingPermissionDenied")}
         </div>
       </div>
@@ -735,7 +732,7 @@ const InventoryReceivingPage = () => {
       />
 
       <div className="space-y-6">
-        <section className="rounded-md border border-border bg-card p-4 md:p-4">
+        <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">
               {t("receivingDetailsTitle")}
@@ -772,7 +769,7 @@ const InventoryReceivingPage = () => {
                 onChange={(event) => setDateTime(event.target.value)}
               />
             </div>
-            <details className="rounded-md border border-border bg-muted/20 p-3 lg:hidden">
+            <details className="rounded-xl border border-border/65 bg-muted/25 p-3 lg:hidden">
               <summary className="cursor-pointer text-sm font-semibold text-foreground">
                 {tCommon("additional")}
               </summary>
@@ -839,7 +836,7 @@ const InventoryReceivingPage = () => {
         </section>
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
-          <section className="rounded-md border border-border bg-card p-4">
+          <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingSearchTitle")}
@@ -876,7 +873,7 @@ const InventoryReceivingPage = () => {
             </div>
             <div
               ref={searchResultsRef}
-              className="mt-3 max-h-[25rem] overflow-y-auto border border-border bg-background"
+              className="bazaar-doc-search-list"
             >
               {searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
@@ -890,7 +887,7 @@ const InventoryReceivingPage = () => {
                   return (
                     <div
                       key={key}
-                      className="flex items-center border-b border-border last:border-b-0 hover:bg-secondary"
+                      className="bazaar-doc-search-row"
                     >
                       <button
                         type="button"
@@ -898,7 +895,7 @@ const InventoryReceivingPage = () => {
                         onClick={() => addSearchResult(result, "manual")}
                         disabled={!storeId}
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden bg-muted/30">
+                        <span className="bazaar-doc-thumb">
                           {getPreviewUrl(result) ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -985,7 +982,7 @@ const InventoryReceivingPage = () => {
             </div>
           </section>
 
-          <section className="rounded-md border border-border bg-card p-4">
+          <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingTableTitle")}
@@ -1012,13 +1009,13 @@ const InventoryReceivingPage = () => {
                     <div
                       key={line.key}
                       data-receiving-line-row
-                      className="grid gap-3 rounded-md border border-border bg-background p-2.5 md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:items-center md:gap-2"
+                      className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:items-center md:gap-2"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex h-7 min-w-7 shrink-0 items-center justify-center border border-border bg-muted/40 px-1 text-xs font-semibold tabular-nums text-muted-foreground">
+                        <span className="bazaar-doc-line-index">
                           {lineNumber}
                         </span>
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden border border-border bg-muted/30">
+                        <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -1142,7 +1139,7 @@ const InventoryReceivingPage = () => {
                 })}
               </div>
             ) : (
-              <div className="flex min-h-[16rem] flex-col items-center justify-center border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
+              <div className="bazaar-doc-empty">
                 <EmptyIcon className="mx-auto mb-3 h-8 w-8" aria-hidden />
                 {t("receivingEmptyState")}
               </div>
@@ -1151,7 +1148,7 @@ const InventoryReceivingPage = () => {
         </div>
 
         <section className="hidden md:block">
-          <div className="rounded-md border border-border bg-card p-4">
+          <div className="bazaar-doc-summary">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingSummaryTitle")}
@@ -1200,7 +1197,7 @@ const InventoryReceivingPage = () => {
             </dl>
             <div
               className={cn(
-                "mt-4 flex items-start gap-2 border px-3 py-2 text-sm",
+                "bazaar-doc-validation",
                 validationMessage
                   ? "border-warning/30 bg-warning/10 text-warning"
                   : "border-success/30 bg-success/10 text-success",
@@ -1216,7 +1213,7 @@ const InventoryReceivingPage = () => {
           </div>
         </section>
       </div>
-      <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40 border-t border-border bg-card p-2.5 shadow-2xl md:hidden">
+      <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">

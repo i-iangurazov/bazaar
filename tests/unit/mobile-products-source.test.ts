@@ -11,7 +11,7 @@ describe("mobile products source", () => {
     const source = await readSource("src/app/(app)/products/page.tsx");
 
     expect(source).toContain("data-mobile-products-toolbar");
-    expect(source).toContain('className="hidden w-full md:block md:max-w-xs"');
+    expect(source).toContain('filtersClassName="hidden border-0 bg-transparent p-0 md:block"');
     expect(source).toContain('mobileItemsClassName="grid grid-cols-1 gap-3"');
     expect(source).toContain("relative h-24 w-24");
     expect(source).toContain("Phones always use");

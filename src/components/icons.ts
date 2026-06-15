@@ -1,169 +1,211 @@
+import { createElement, type ComponentType } from "react";
+import type { IconProps, IconWeight } from "@phosphor-icons/react";
 import {
-  LayoutDashboard,
-  Boxes,
-  Warehouse,
-  ClipboardList,
-  ClipboardCheck,
-  ShoppingCart,
-  Truck,
-  Package,
-  BookUser,
-  Store,
-  Ruler,
-  Users,
-  Plus,
-  Minus,
-  CirclePlus,
-  Upload,
-  Download,
-  ArrowLeft,
-  ArrowDownToLine,
-  ArrowUpDown,
-  ArrowRightLeft,
-  Route,
-  ArrowUp,
-  ArrowDown,
-  GripVertical,
-  ImagePlus,
-  SlidersHorizontal,
-  FileDown,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Clock,
-  Activity,
-  SquareActivity,
-  Menu,
-  X,
-  Inbox,
-  LogOut,
-  User,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  SquareCheckBig,
-  MoreHorizontal,
-  Pencil,
+  AddressBook,
   Archive,
-  Eye,
-  EyeOff,
-  Trash2,
-  RotateCcw,
-  Rocket,
-  HelpCircle,
-  LifeBuoy,
-  BarChart3,
-  ChartNoAxesCombined,
-  Server,
-  CreditCard,
-  Banknote,
-  Megaphone,
-  Search,
-  Tag,
-  DollarSign,
+  ArrowCounterClockwise,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  ArrowUp,
+  ArrowsDownUp,
+  ArrowsLeftRight,
+  Barcode,
+  BookOpen,
+  CashRegister,
+  ChartBar,
+  ChartLineUp,
+  ChartPieSlice,
+  Check,
+  CheckCircle,
+  CheckSquare,
+  Clock,
+  ClockCounterClockwise,
   Copy,
-  Languages,
-  LayoutGrid,
+  CreditCard,
+  CurrencyDollar,
+  Database,
+  DeviceMobile,
+  DotsSixVertical,
+  DotsThree,
+  Envelope,
+  Eye,
+  EyeSlash,
+  FilePdf,
+  FileText,
+  FileXls,
+  Gauge,
+  GearSix,
+  GridFour,
+  Handshake,
+  House,
+  IdentificationCard,
+  ImageSquare,
+  Lifebuoy,
   List,
+  ListChecks,
+  Key,
+  Lock,
+  MagnifyingGlass,
+  Megaphone,
+  Minus,
   Monitor,
-  Plug,
+  Package,
+  PaperPlaneTilt,
+  Path,
+  PencilSimple,
+  PlugsConnected,
+  Plus,
+  PlusCircle,
   Printer,
-  ReceiptText,
-  Factory,
-  Landmark,
-  Mail,
-  Send,
-  Sparkles,
-  Smartphone,
-  Share2,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-} from "lucide-react";
+  Pulse,
+  Question,
+  Receipt,
+  ReceiptX,
+  Rocket,
+  Ruler,
+  SealCheck,
+  ShoppingBagOpen,
+  SignOut,
+  SlidersHorizontal,
+  Sparkle,
+  StackMinus,
+  StackPlus,
+  Storefront,
+  Tag,
+  TextAlignCenter,
+  TextAlignLeft,
+  TextAlignRight,
+  Translate,
+  Trash,
+  Tray,
+  Truck,
+  UploadSimple,
+  User,
+  Users,
+  Warehouse,
+  WarningCircle,
+  X,
+  XCircle,
+  CaretDown,
+  CaretLeft,
+  CaretRight,
+  DownloadSimple,
+  ShieldCheck,
+} from "@phosphor-icons/react";
 
-export const DashboardIcon = LayoutDashboard;
-export const InventoryIcon = Warehouse;
-export const InventoryOverviewIcon = Boxes;
-export const ProductMovementIcon = Route;
-export const StockCountsIcon = ClipboardCheck;
-export const OrdersIcon = ClipboardList;
-export const SalesOrdersIcon = ReceiptText;
-export const CustomerDatabaseIcon = BookUser;
-export const PurchaseOrdersIcon = ShoppingCart;
-export const PosIcon = Banknote;
-export const SuppliersIcon = Factory;
-export const ProductsIcon = Package;
-export const StoresIcon = Store;
-export const UnitsIcon = Ruler;
-export const UsersIcon = Users;
+const createBazaarIcon = (
+  Icon: ComponentType<IconProps>,
+  defaultWeight: IconWeight = "regular",
+) => {
+  const BazaarIcon = ({ weight, ...props }: IconProps) =>
+    createElement(Icon, { ...props, weight: weight ?? defaultWeight });
+  BazaarIcon.displayName = Icon.displayName ?? Icon.name ?? "BazaarIcon";
+  return BazaarIcon;
+};
 
-export const AddIcon = Plus;
-export const MinusIcon = Minus;
-export const CirclePlusIcon = CirclePlus;
-export const UploadIcon = Upload;
-export const IntegrationsIcon = Plug;
-export const DownloadIcon = Download;
-export const BackIcon = ArrowLeft;
-export const ReceiveIcon = ArrowDownToLine;
-export const SortIcon = ArrowUpDown;
-export const TransferIcon = ArrowRightLeft;
-export const ArrowUpIcon = ArrowUp;
-export const ArrowDownIcon = ArrowDown;
-export const GripIcon = GripVertical;
-export const ImagePlusIcon = ImagePlus;
-export const AdjustIcon = SlidersHorizontal;
-export const PdfIcon = FileDown;
-export const PrintIcon = Printer;
-export const InstallAppIcon = Smartphone;
-export const MailIcon = Mail;
-export const SendIcon = Send;
-export const TruckIcon = Truck;
+const navIcon = (Icon: ComponentType<IconProps>) => createBazaarIcon(Icon, "duotone");
+const actionIcon = (Icon: ComponentType<IconProps>, weight: IconWeight = "regular") =>
+  createBazaarIcon(Icon, weight);
 
-export const StatusSuccessIcon = CheckCircle2;
-export const StatusWarningIcon = AlertTriangle;
-export const StatusDangerIcon = XCircle;
-export const StatusPendingIcon = Clock;
-export const ActivityIcon = Activity;
+export const DashboardIcon = navIcon(Gauge);
+export const InventoryIcon = navIcon(Warehouse);
+export const InventoryOverviewIcon = navIcon(ChartPieSlice);
+export const ProductMovementIcon = navIcon(ClockCounterClockwise);
+export const StockCountsIcon = navIcon(ListChecks);
+export const TransferIcon = navIcon(ArrowsLeftRight);
+export const WriteOffIcon = navIcon(StackMinus);
+export const OrdersIcon = navIcon(FileText);
+export const SalesOrdersIcon = navIcon(Receipt);
+export const PurchaseOrdersIcon = navIcon(ShoppingBagOpen);
+export const PosIcon = navIcon(CashRegister);
+export const CustomerDatabaseIcon = navIcon(AddressBook);
+export const SuppliersIcon = navIcon(Handshake);
+export const ProductsIcon = navIcon(Package);
+export const StoresIcon = navIcon(Storefront);
+export const UnitsIcon = navIcon(Ruler);
+export const UsersIcon = navIcon(Users);
+export const IntegrationsIcon = navIcon(PlugsConnected);
+export const ReportsIcon = navIcon(ChartLineUp);
+export const SettingsIcon = navIcon(GearSix);
+export const ImportIcon = navIcon(UploadSimple);
+export const RegisterIcon = navIcon(CashRegister);
+export const HomeIcon = navIcon(House);
 
-export const MenuIcon = Menu;
-export const CloseIcon = X;
-export const EmptyIcon = Inbox;
-export const SignOutIcon = LogOut;
-export const UserIcon = User;
-export const ChevronDownIcon = ChevronDown;
-export const ChevronLeftIcon = ChevronLeft;
-export const ChevronRightIcon = ChevronRight;
-export const CheckIcon = Check;
-export const SelectAllIcon = SquareCheckBig;
-export const MoreIcon = MoreHorizontal;
-export const EditIcon = Pencil;
-export const ArchiveIcon = Archive;
-export const RestoreIcon = RotateCcw;
-export const ViewIcon = Eye;
-export const HideIcon = EyeOff;
-export const DeleteIcon = Trash2;
-export const OnboardingIcon = Rocket;
-export const HelpIcon = HelpCircle;
-export const SupportIcon = LifeBuoy;
-export const MetricsIcon = BarChart3;
-export const ReportsIcon = ChartNoAxesCombined;
-export const DiagnosticsIcon = SquareActivity;
-export const PlatformIcon = Landmark;
-export const JobsIcon = Server;
-export const BillingIcon = CreditCard;
-export const WhatsNewIcon = Megaphone;
-export const SearchIcon = Search;
-export const TagIcon = Tag;
-export const PriceIcon = DollarSign;
-export const CopyIcon = Copy;
-export const LanguageIcon = Languages;
-export const GridViewIcon = LayoutGrid;
-export const TableViewIcon = List;
-export const DesktopPreviewIcon = Monitor;
-export const MobilePreviewIcon = Smartphone;
-export const SparklesIcon = Sparkles;
-export const ShareIcon = Share2;
-export const AlignLeftIcon = AlignLeft;
-export const AlignCenterIcon = AlignCenter;
-export const AlignRightIcon = AlignRight;
+export const AddIcon = actionIcon(Plus);
+export const MinusIcon = actionIcon(Minus);
+export const CirclePlusIcon = actionIcon(PlusCircle);
+export const UploadIcon = actionIcon(UploadSimple);
+export const DownloadIcon = actionIcon(DownloadSimple);
+export const BackIcon = actionIcon(ArrowLeft);
+export const ArrowRightIcon = actionIcon(ArrowRight);
+export const ExternalLinkIcon = actionIcon(ArrowUpRight);
+export const ReceiveIcon = navIcon(StackPlus);
+export const SortIcon = actionIcon(ArrowsDownUp);
+export const ArrowUpIcon = actionIcon(ArrowUp);
+export const ArrowDownIcon = actionIcon(ArrowDown);
+export const GripIcon = actionIcon(DotsSixVertical);
+export const ImagePlusIcon = actionIcon(ImageSquare);
+export const AdjustIcon = actionIcon(SlidersHorizontal);
+export const PdfIcon = actionIcon(FilePdf);
+export const PrintIcon = actionIcon(Printer);
+export const InstallAppIcon = actionIcon(DeviceMobile);
+export const MailIcon = actionIcon(Envelope);
+export const SendIcon = actionIcon(PaperPlaneTilt);
+export const TruckIcon = actionIcon(Truck);
+
+export const StatusSuccessIcon = actionIcon(CheckCircle);
+export const StatusWarningIcon = actionIcon(WarningCircle);
+export const StatusDangerIcon = actionIcon(XCircle);
+export const StatusPendingIcon = actionIcon(Clock);
+export const ActivityIcon = actionIcon(Pulse);
+
+export const MenuIcon = actionIcon(List);
+export const CloseIcon = actionIcon(X);
+export const EmptyIcon = actionIcon(Tray);
+export const SignOutIcon = actionIcon(SignOut);
+export const UserIcon = actionIcon(User);
+export const ChevronDownIcon = actionIcon(CaretDown);
+export const ChevronLeftIcon = actionIcon(CaretLeft);
+export const ChevronRightIcon = actionIcon(CaretRight);
+export const CheckIcon = actionIcon(Check);
+export const SelectAllIcon = actionIcon(CheckSquare);
+export const MoreIcon = actionIcon(DotsThree);
+export const EditIcon = actionIcon(PencilSimple);
+export const ArchiveIcon = actionIcon(Archive);
+export const RestoreIcon = actionIcon(ArrowCounterClockwise);
+export const ViewIcon = actionIcon(Eye);
+export const HideIcon = actionIcon(EyeSlash);
+export const DeleteIcon = actionIcon(Trash);
+export const OnboardingIcon = navIcon(Rocket);
+export const HelpIcon = actionIcon(Question);
+export const SupportIcon = actionIcon(Lifebuoy);
+export const MetricsIcon = navIcon(ChartBar);
+export const DiagnosticsIcon = navIcon(Pulse);
+export const PlatformIcon = navIcon(IdentificationCard);
+export const JobsIcon = navIcon(Database);
+export const BillingIcon = navIcon(CreditCard);
+export const WhatsNewIcon = navIcon(Megaphone);
+export const SearchIcon = actionIcon(MagnifyingGlass);
+export const TagIcon = actionIcon(Tag);
+export const PriceIcon = actionIcon(CurrencyDollar);
+export const CopyIcon = actionIcon(Copy);
+export const LanguageIcon = actionIcon(Translate);
+export const GridViewIcon = actionIcon(GridFour);
+export const TableViewIcon = actionIcon(List);
+export const BarcodeIcon = actionIcon(Barcode);
+export const BookOpenIcon = actionIcon(BookOpen);
+export const KeyIcon = actionIcon(Key);
+export const LockIcon = actionIcon(Lock);
+export const SealCheckIcon = actionIcon(SealCheck);
+export const ShieldCheckIcon = actionIcon(ShieldCheck);
+export const SpreadsheetIcon = actionIcon(FileXls);
+export const DesktopPreviewIcon = actionIcon(Monitor);
+export const MobilePreviewIcon = actionIcon(DeviceMobile);
+export const SparklesIcon = actionIcon(Sparkle);
+export const ShareIcon = actionIcon(Path);
+export const AlignLeftIcon = actionIcon(TextAlignLeft);
+export const AlignCenterIcon = actionIcon(TextAlignCenter);
+export const AlignRightIcon = actionIcon(TextAlignRight);
+export const FailedReceiptIcon = actionIcon(ReceiptX);

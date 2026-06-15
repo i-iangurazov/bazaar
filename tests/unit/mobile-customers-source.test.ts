@@ -12,7 +12,7 @@ describe("mobile customers source", () => {
 
     expect(source).toContain("data-mobile-customers-toolbar");
     expect(source).toContain('className="hidden md:contents"');
-    expect(source).toContain("<TableContainer>");
+    expect(source).toContain('<TableContainer className="bazaar-admin-table-shell">');
     expect(source).toContain("mobileSearchPlaceholder");
     expect(source).toContain("customer.lastOrderAt");
     expect(source).toContain("customer.orderCount");

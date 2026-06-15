@@ -12,6 +12,7 @@ const dashboardSource = readFileSync(
   join(process.cwd(), "src/app/(app)/dashboard/page.tsx"),
   "utf8",
 );
+const globalsSource = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
 
 describe("mobile app shell source", () => {
   it("defines the mobile shell building blocks", () => {
@@ -31,15 +32,16 @@ describe("mobile app shell source", () => {
   });
 
   it("keeps desktop chrome at md and wider while routing mobile bottom tabs", () => {
-    expect(appShellSource).toContain('className="hidden w-64 shrink-0');
-    expect(appShellSource).toContain("md:sticky md:top-0 md:flex");
+    expect(appShellSource).toContain("<SidebarProvider");
+    expect(appShellSource).toContain("<Sidebar className=");
+    expect(appShellSource).toContain("md:sticky md:top-0 md:h-screen");
     expect(appShellSource).toContain("MobileAppShell");
     expect(appShellSource).toContain('href: "/dashboard"');
     expect(appShellSource).toContain('href: "/pos"');
     expect(appShellSource).toContain('href: "/products"');
     expect(appShellSource).toContain('href: "/sales/orders"');
     expect(appShellSource).toContain('href: "/inventory"');
-    expect(appShellSource).toContain('<aside className="hidden w-64 shrink-0');
+    expect(appShellSource).toContain("<Sidebar className=");
     expect(appShellSource).toContain('requiredPermission: "usePos"');
     expect(appShellSource).toContain('requiredPermission: "viewProducts"');
     expect(appShellSource).toContain('requiredPermission: "viewSales"');
@@ -54,20 +56,21 @@ describe("mobile app shell source", () => {
     );
 
     expect(profileButtonSource).toContain("button-focus-ring");
-    expect(profileButtonSource).toContain("h-11 w-11");
-    expect(profileButtonSource).toContain("rounded-md");
-    expect(profileButtonSource).toContain("focus-visible:ring-ring/30");
+    expect(profileButtonSource).toContain("bazaar-mobile-header-button");
+    expect(globalsSource).toContain(".bazaar-mobile-header-button");
+    expect(globalsSource).toContain("h-11 w-11 rounded-xl");
+    expect(globalsSource).toContain("focus-visible:ring-2 focus-visible:ring-ring/40");
   });
 
   it("keeps the mobile bottom nav surface and items rounded", () => {
     const bottomNavStart = mobileShellSource.indexOf("export const MobileBottomNav");
     const bottomNavSource = mobileShellSource.slice(bottomNavStart, bottomNavStart + 1800);
 
-    expect(bottomNavSource).toContain("fixed inset-x-2 bottom-2 z-40 rounded-md border");
+    expect(bottomNavSource).toContain("fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border");
     expect(bottomNavSource).toContain(
-      "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md",
+      "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem]",
     );
-    expect(bottomNavSource).toContain("bg-primary text-primary-foreground shadow-sm");
+    expect(bottomNavSource).toContain("bg-primary text-primary-foreground shadow-lg shadow-primary/20");
   });
 
   it("adds a mobile-only command center without replacing the desktop dashboard", () => {

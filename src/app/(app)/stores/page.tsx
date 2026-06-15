@@ -455,7 +455,7 @@ const StoresPage = () => {
         }
       />
 
-      <Card>
+      <Card className="bazaar-admin-surface overflow-hidden">
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
@@ -464,7 +464,7 @@ const StoresPage = () => {
             items={storesQuery.data ?? []}
             getKey={(store) => store.id}
             renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
                 <TooltipProvider>
                   <InlineEditTableProvider>
                     <Table className="min-w-[760px]">
@@ -756,7 +756,7 @@ const StoresPage = () => {
               ];
 
               return (
-                <div className="rounded-md border border-border bg-card p-3">
+                <div className="bazaar-admin-mobile-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{store.name}</p>
@@ -802,12 +802,12 @@ const StoresPage = () => {
             }}
           />
           {storesQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice mt-4 flex items-center gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !storesQuery.data?.length ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noStores")}
@@ -815,7 +815,7 @@ const StoresPage = () => {
             </div>
           ) : null}
           {storesQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
+            <div className="bazaar-admin-error mt-3 flex flex-wrap items-center gap-2">
               <span>{translateError(tErrors, storesQuery.error)}</span>
               <Button
                 type="button"
@@ -835,6 +835,8 @@ const StoresPage = () => {
         onOpenChange={setStoreDialogOpen}
         title={editingStore ? t("editStore") : t("addStore")}
         subtitle={editingStore?.code ?? t("storeFormHint")}
+        className="rounded-xl"
+        bodyClassName="p-4 sm:p-6"
       >
         <Form {...storeForm}>
           <form
@@ -1065,7 +1067,7 @@ const StoresPage = () => {
                 name="allowNegativeStock"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                    <div className="bazaar-admin-modal-card flex items-center justify-between gap-4">
                       <div className="space-y-1">
                         <FormLabel>{t("allowNegativeStock")}</FormLabel>
                         <FormDescription>{t("allowNegativeHint")}</FormDescription>
@@ -1086,7 +1088,7 @@ const StoresPage = () => {
                 name="trackExpiryLots"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                    <div className="bazaar-admin-modal-card flex items-center justify-between gap-4">
                       <div className="space-y-1">
                         <FormLabel>{t("trackExpiryLots")}</FormLabel>
                         <FormDescription>{t("trackExpiryHint")}</FormDescription>
@@ -1112,7 +1114,7 @@ const StoresPage = () => {
                 name="enableSku"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                    <div className="bazaar-admin-modal-card flex items-center justify-between gap-4">
                       <div className="space-y-1">
                         <FormLabel>{t("enableSku")}</FormLabel>
                         <FormDescription>{t("enableSkuHint")}</FormDescription>
@@ -1134,7 +1136,7 @@ const StoresPage = () => {
                 name="enableBarcode"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                    <div className="bazaar-admin-modal-card flex items-center justify-between gap-4">
                       <div className="space-y-1">
                         <FormLabel>{t("enableBarcode")}</FormLabel>
                         <FormDescription>{t("enableBarcodeHint")}</FormDescription>
@@ -1156,7 +1158,7 @@ const StoresPage = () => {
                 name="enableSimilarProductCheck"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                    <div className="bazaar-admin-modal-card flex items-center justify-between gap-4">
                       <div className="space-y-1">
                         <FormLabel>{t("enableSimilarProductCheck")}</FormLabel>
                         <FormDescription>{t("enableSimilarProductCheckHint")}</FormDescription>
@@ -1214,7 +1216,7 @@ const StoresPage = () => {
                     name="copyInventory"
                     render={({ field }) => (
                       <FormItem>
-                        <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                        <div className="bazaar-admin-modal-card flex items-center justify-between gap-4">
                           <div className="space-y-1">
                             <FormLabel>{t("copyInventory")}</FormLabel>
                             <FormDescription>{t("copyInventoryHint")}</FormDescription>

@@ -2,9 +2,9 @@
 
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
-import { Check, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { CheckIcon, LockIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -323,9 +323,12 @@ const BillingPage = () => {
                             return (
                               <li key={feature} className="flex items-center gap-2">
                                 {enabled ? (
-                                  <Check className="h-3.5 w-3.5 text-success" aria-hidden />
+                                  <CheckIcon className="h-3.5 w-3.5 text-success" aria-hidden />
                                 ) : (
-                                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                                  <LockIcon
+                                    className="h-3.5 w-3.5 text-muted-foreground"
+                                    aria-hidden
+                                  />
                                 )}
                                 <span
                                   className={enabled ? "text-foreground" : "text-muted-foreground"}
@@ -426,12 +429,12 @@ const BillingPage = () => {
                           <TableCell key={`${feature}-${plan}`}>
                             {enabled ? (
                               <span className="inline-flex items-center gap-1 text-success">
-                                <Check className="h-3.5 w-3.5" aria-hidden />
+                                <CheckIcon className="h-3.5 w-3.5" aria-hidden />
                                 {t("comparison.included")}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                <Lock className="h-3.5 w-3.5" aria-hidden />
+                                <LockIcon className="h-3.5 w-3.5" aria-hidden />
                                 {t("comparison.locked")}
                               </span>
                             )}

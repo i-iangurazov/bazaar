@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronRight, Home } from "lucide-react";
 
+import { ChevronRightIcon, HomeIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 type Crumb = {
@@ -228,7 +228,7 @@ export const PageBreadcrumbs = () => {
           return (
             <li key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-1">
               {index > 0 ? (
-                <ChevronRight
+                <ChevronRightIcon
                   className="h-3.5 w-3.5 shrink-0 text-muted-foreground/45"
                   aria-hidden
                 />
@@ -249,7 +249,7 @@ export const PageBreadcrumbs = () => {
                   aria-label={index === 0 ? crumb.label : undefined}
                   className="inline-flex h-7 max-w-[44vw] items-center gap-1 rounded-md px-2.5 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:max-w-[240px]"
                 >
-                  {index === 0 ? <Home className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+                  {index === 0 ? <HomeIcon className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
                   <span className={cn("truncate", index === 0 ? "hidden sm:inline" : null)}>
                     {crumb.label}
                   </span>

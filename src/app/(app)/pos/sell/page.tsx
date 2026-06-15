@@ -3487,12 +3487,12 @@ const PosSellPage = () => {
         }}
         title={t("sell.receiptJournal")}
         subtitle={selectedRegisterLabel}
-        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-md sm:border"
+        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-xl sm:border"
         bodyClassName="overflow-visible p-3 sm:p-5"
         mobileSheet
       >
         <div className="flex min-h-full flex-col gap-4">
-          <div className="grid gap-2 md:grid-cols-4">
+          <div className="bazaar-admin-toolbar grid gap-2 md:grid-cols-4">
             <Input
               value={journalSearch}
               onChange={(event) => setJournalSearch(event.target.value)}
@@ -3630,17 +3630,17 @@ const PosSellPage = () => {
           </div>
 
           {journalSalesQuery.isLoading ? (
-            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-40 gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : journalSalesQuery.error ? (
-            <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+            <div className="bazaar-admin-error">
               {translateError(tErrors, journalSalesQuery.error)}
             </div>
           ) : journalItems.length ? (
             <>
-              <TableContainer className="hidden md:block">
+              <TableContainer className="bazaar-admin-table-shell hidden md:block">
                 <Table className="min-w-[1040px]">
                   <TableHeader>
                     <TableRow>
@@ -3728,10 +3728,10 @@ const PosSellPage = () => {
                   return (
                     <article
                       key={saleItem.id}
-                      className={`rounded-md border p-3 ${
+                      className={`rounded-xl border p-3 shadow-sm ring-1 ring-foreground/[0.01] ${
                         saleItem.isHeld
                           ? "border-warning/40 bg-warning/10"
-                          : "border-border bg-card"
+                          : "border-border/65 bg-card/95"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -3787,7 +3787,7 @@ const PosSellPage = () => {
               </div>
             </>
           ) : (
-            <div className="grid min-h-40 place-items-center rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-40">
               {t("history.empty")}
             </div>
           )}
@@ -3839,13 +3839,13 @@ const PosSellPage = () => {
           {tCommon("loading")}
         </div>
       ) : journalSaleDetailQuery.error ? (
-        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <div className="bazaar-admin-error">
           {translateError(tErrors, journalSaleDetailQuery.error)}
         </div>
       ) : journalSelectedSale ? (
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-modal-card">
               <p className="text-xs uppercase text-muted-foreground">{t("history.customer")}</p>
               <p className="mt-1 font-medium">
                 {journalSelectedSale.customerName ||
@@ -3858,7 +3858,7 @@ const PosSellPage = () => {
                   .join(" · ") || tCommon("notAvailable")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-modal-card">
               <p className="text-xs uppercase text-muted-foreground">{t("history.store")}</p>
               <p className="mt-1 font-medium">{journalSelectedSale.store.name}</p>
               <p className="text-sm text-muted-foreground">
@@ -3869,7 +3869,7 @@ const PosSellPage = () => {
 
           <div>
             <h3 className="text-sm font-semibold text-foreground">{t("history.itemsTitle")}</h3>
-            <div className="mt-2 divide-y divide-border rounded-md border border-border">
+            <div className="bazaar-admin-table-shell mt-2 divide-y divide-border">
               {journalSelectedSale.lines.map((line) => (
                 <div key={line.id} className="grid gap-2 p-3 sm:grid-cols-[1fr_auto]">
                   <div className="min-w-0">
@@ -3888,13 +3888,13 @@ const PosSellPage = () => {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-modal-card">
               <p className="text-sm font-semibold text-foreground">{t("history.paymentsTitle")}</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 {salePaymentSummary(journalSelectedSale, journalSelectedSaleCurrencySource)}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-modal-card">
               <p className="text-sm font-semibold text-foreground">{t("history.totalsTitle")}</p>
               <div className="mt-2 space-y-1 text-sm">
                 <div className="flex justify-between gap-3">
@@ -4009,12 +4009,12 @@ const PosSellPage = () => {
           {tCommon("loading")}
         </div>
       ) : journalSaleDetailQuery.error ? (
-        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <div className="bazaar-admin-error">
           {translateError(tErrors, journalSaleDetailQuery.error)}
         </div>
       ) : journalSelectedSale ? (
         <div data-testid="pos-receipt-edit-modal" className="space-y-5">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="bazaar-admin-modal-card grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
               <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-name">
                 {t("history.customer")}
@@ -4069,7 +4069,7 @@ const PosSellPage = () => {
               ) : null}
             </div>
             {journalEditSearch.trim() ? (
-              <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+              <div className="bazaar-doc-search-list max-h-48">
                 {journalEditProductSearchQuery.isLoading ? (
                   <p className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</p>
                 ) : journalEditProductSearchQuery.data?.length ? (
@@ -4106,7 +4106,7 @@ const PosSellPage = () => {
             ) : null}
           </div>
 
-          <div className="overflow-x-auto rounded-md border border-border">
+          <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
             <Table className="min-w-[780px]">
               <TableHeader>
                 <TableRow>
@@ -4232,7 +4232,7 @@ const PosSellPage = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm">
+          <div className="bazaar-admin-status-tile flex items-center justify-between px-3 py-2 text-sm">
             <span className="text-muted-foreground">{t("sell.cartTotal")}</span>
             <span className="font-semibold text-foreground" data-testid="pos-receipt-edit-total">
               {formatKgsMoney(
@@ -4302,7 +4302,7 @@ const PosSellPage = () => {
           {tCommon("loading")}
         </div>
       ) : journalSaleDetailQuery.error ? (
-        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <div className="bazaar-admin-error">
           {translateError(tErrors, journalSaleDetailQuery.error)}
         </div>
       ) : journalSelectedSale ? (
@@ -4324,7 +4324,7 @@ const PosSellPage = () => {
                 line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0),
               );
               return (
-                <div key={line.id} className="rounded-md border border-border bg-card p-3">
+                <div key={line.id} className="bazaar-admin-mobile-card p-3">
                   <p className="text-sm font-medium text-foreground">{line.product.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {line.qty} x{" "}
@@ -4583,7 +4583,7 @@ const PosSellPage = () => {
                   ) : null}
 
                   {customerSearchQuery.error ? (
-                    <div className="m-3 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                    <div className="bazaar-admin-error m-3">
                       {translateError(tErrors, customerSearchQuery.error)}
                     </div>
                   ) : null}
@@ -4643,7 +4643,7 @@ const PosSellPage = () => {
 
       {!hasOpenShift ? (
         <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
-          <section className="w-full max-w-xl rounded-md border border-border bg-card p-6 shadow-sm">
+          <section className="bazaar-admin-surface w-full max-w-xl p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">{t("entry.shiftClosed")}</p>
@@ -4689,7 +4689,7 @@ const PosSellPage = () => {
             </div>
 
             {activeDraft && !saleId ? (
-              <div className="mx-4 mt-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+              <div className="bazaar-admin-status-tile-warning mx-4 mt-4">
                 <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t("sell.draftDetectedHint", { number: activeDraft?.number ?? "" })}
@@ -4719,7 +4719,7 @@ const PosSellPage = () => {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
               {catalogProductsQuery.error ? (
-                <div className="mb-4 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                <div className="bazaar-admin-error mb-4">
                   {translateError(tErrors, catalogProductsQuery.error)}
                 </div>
               ) : null}
@@ -4732,7 +4732,7 @@ const PosSellPage = () => {
               ) : null}
 
               {!productGridLoading && !visibleProducts.length ? (
-                <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                <div className="bazaar-admin-empty min-h-[260px]">
                   <div>
                     <SearchIcon className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden />
                     <p className="mt-3">
@@ -4780,7 +4780,7 @@ const PosSellPage = () => {
           </section>
 
           <aside
-            className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-md border border-border bg-card shadow-2xl transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-md lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none ${
+            className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-2xl border border-border/70 bg-card/95 shadow-2xl ring-1 ring-foreground/[0.015] backdrop-blur transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-none lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none lg:ring-0 ${
               mobileCheckoutOpen ? "translate-y-0" : "translate-y-[calc(100%-76px)]"
             }`}
           >
@@ -4933,7 +4933,7 @@ const PosSellPage = () => {
 
                 <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                   {saleId && saleQuery.error ? (
-                    <div className="m-4 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                    <div className="bazaar-admin-error m-4">
                       {translateError(tErrors, saleQuery.error)}
                     </div>
                   ) : null}
@@ -4948,7 +4948,7 @@ const PosSellPage = () => {
                   {!hasCartLines && !saleQuery.isLoading && !saleQuery.error ? (
                     <div className="grid min-h-[300px] place-items-center p-6 text-center">
                       <div>
-                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-md border border-dashed border-border bg-muted/30 text-muted-foreground">
+                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-dashed border-border bg-muted/30 text-muted-foreground">
                           <EmptyIcon className="h-5 w-5" aria-hidden />
                         </div>
                         <p className="mt-4 text-sm font-medium text-foreground">
@@ -5446,7 +5446,7 @@ const PosSellPage = () => {
           role="dialog"
           aria-modal="true"
           aria-label={t("sell.customerSelectorTitle")}
-          className="absolute inset-x-0 bottom-0 max-h-[86dvh] overflow-y-auto border-t border-border bg-background p-4 shadow-2xl"
+          className="absolute inset-x-0 bottom-0 max-h-[86dvh] overflow-y-auto rounded-t-2xl border border-border/70 bg-background/95 p-4 shadow-2xl ring-1 ring-foreground/[0.015] backdrop-blur"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -5524,14 +5524,14 @@ const PosSellPage = () => {
           ) : null}
 
           {customerSearchQuery.isLoading || customerSearchQuery.isFetching ? (
-            <div className="mt-4 flex items-center justify-center gap-2 border border-border bg-card py-5 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4 min-h-[8rem] gap-2 py-5">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
 
           {customerSearchQuery.error ? (
-            <div className="mt-4 border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+            <div className="bazaar-admin-error mt-4">
               {translateError(tErrors, customerSearchQuery.error)}
             </div>
           ) : null}
@@ -5539,13 +5539,13 @@ const PosSellPage = () => {
           {!customerSearchQuery.isLoading &&
           !customerSearchQuery.error &&
           !(customerSearchQuery.data?.items.length ?? 0) ? (
-            <div className="mt-4 border border-border bg-card px-4 py-5 text-center text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4 min-h-[8rem] px-4 py-5">
               {t("sell.customerNotFound")}
             </div>
           ) : null}
 
           {customerSearchQuery.data?.items.length ? (
-            <div className="mt-4 divide-y divide-border border border-border bg-card">
+            <div className="bazaar-admin-table-shell mt-4 divide-y divide-border">
               {customerSearchQuery.data.items.map((customer) => (
                 <button
                   key={customer.id}
@@ -5646,7 +5646,7 @@ const PosSellPage = () => {
 
         <main className="mx-auto w-full max-w-md space-y-4 px-3 pb-[calc(11rem+env(safe-area-inset-bottom))] pt-4 md:hidden">
           {showMobileRegisterPanel ? (
-            <section className="rounded-md border border-border bg-card p-3 shadow-sm">
+            <section className="bazaar-admin-surface p-3">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">{t("entry.register")}</label>
                 <Select value={registerId} onValueChange={setRegisterId}>
@@ -5674,7 +5674,7 @@ const PosSellPage = () => {
           ) : null}
 
           {activeDraft && !saleId ? (
-            <section className="border border-warning/40 bg-warning/10 p-3 text-sm">
+            <section className="bazaar-admin-status-tile-warning text-sm">
               <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("sell.draftDetectedHint", { number: activeDraft.number })}
@@ -5731,13 +5731,13 @@ const PosSellPage = () => {
             </div>
 
             {catalogProductsQuery.error ? (
-              <div className="border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+              <div className="bazaar-admin-error">
                 {translateError(tErrors, catalogProductsQuery.error)}
               </div>
             ) : null}
 
             {productGridLoading ? (
-              <div className="flex min-h-28 items-center justify-center gap-2 border border-border bg-card text-sm text-muted-foreground">
+              <div className="bazaar-admin-empty min-h-28 gap-2">
                 <Spinner className="h-4 w-4" />
                 {tCommon("loading")}
               </div>
@@ -5941,12 +5941,12 @@ const PosSellPage = () => {
 
                   <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     {saleId && saleQuery.error ? (
-                      <div className="mb-3 border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                      <div className="bazaar-admin-error mb-3">
                         {translateError(tErrors, saleQuery.error)}
                       </div>
                     ) : null}
 
-                    <div className="mb-4 border border-border bg-card p-3">
+                    <div className="bazaar-admin-surface mb-4 p-3">
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         {t("sell.customer")}
                       </p>

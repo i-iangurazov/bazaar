@@ -109,7 +109,7 @@ export const PwaInstallButton = ({
           onClick={handleInstallClick}
           aria-label={t("buttonLabel")}
         >
-          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center border border-primary/30 bg-background">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-background">
             <InstallAppIcon className="h-4 w-4" aria-hidden />
           </span>
           <span className="min-w-0">

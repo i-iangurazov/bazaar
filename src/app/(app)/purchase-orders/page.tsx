@@ -192,7 +192,7 @@ const PurchaseOrdersPage = () => {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -208,8 +208,8 @@ const PurchaseOrdersPage = () => {
         }
       />
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -301,7 +301,8 @@ const PurchaseOrdersPage = () => {
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
                 <TooltipProvider>
                   <Table className="min-w-[760px]" data-tour="po-table">
                     <TableHeader>
@@ -443,6 +444,7 @@ const PurchaseOrdersPage = () => {
                     </TableBody>
                   </Table>
                 </TooltipProvider>
+                </div>
               </div>
             )}
             renderMobile={(po) => {
@@ -480,7 +482,7 @@ const PurchaseOrdersPage = () => {
               ];
 
               return (
-                <div className="rounded-md border border-border bg-card p-3">
+                <div className="bazaar-admin-mobile-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-start gap-2">
                       {canManage ? (
@@ -542,13 +544,13 @@ const PurchaseOrdersPage = () => {
               );
             }}
           />
-          {listQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          {listQuery.isFetching && !orders.length ? (
+            <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-          ) : totalOrders === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          ) : !listQuery.error && totalOrders === 0 ? (
+            <div className="bazaar-admin-empty mt-4">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noOrders")}
@@ -556,7 +558,7 @@ const PurchaseOrdersPage = () => {
             </div>
           ) : null}
           {listQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-danger">
+            <div className="bazaar-admin-error mt-3 flex flex-wrap items-center gap-3">
               <span>{translateError(tErrors, listQuery.error)}</span>
               <Button
                 type="button"

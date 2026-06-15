@@ -453,8 +453,8 @@ const BazaarCatalogSettingsPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("storeSelectorTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -474,8 +474,8 @@ const BazaarCatalogSettingsPage = () => {
       </Card>
 
       {!selectedStoreId || settingsQuery.isLoading || !settingsData || !formState ? (
-        <Card>
-          <CardContent className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Card className="bazaar-admin-surface">
+          <CardContent className="bazaar-admin-empty min-h-[8rem] gap-2">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </CardContent>
@@ -483,8 +483,8 @@ const BazaarCatalogSettingsPage = () => {
       ) : (
         <>
           {publicLink ? (
-            <Card className="border-success/40">
-              <CardHeader className="space-y-2">
+            <Card className="bazaar-admin-surface border-success/40">
+              <CardHeader className="bazaar-admin-section-header space-y-2">
                 <CardTitle className="text-base">{t("publicLinkTitle")}</CardTitle>
                 <p className="break-all text-sm text-muted-foreground">{publicLink}</p>
               </CardHeader>
@@ -503,8 +503,8 @@ const BazaarCatalogSettingsPage = () => {
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
+          <Card className="bazaar-admin-surface">
+            <CardHeader className="bazaar-admin-section-header">
               <CardTitle>{t("productsVisibility.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -512,19 +512,19 @@ const BazaarCatalogSettingsPage = () => {
               <p className="text-xs text-muted-foreground">{t("productsVisibility.note")}</p>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">
                     {t("productsVisibility.metrics.total")}
                   </p>
                   <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">
                     {t("productsVisibility.metrics.visible")}
                   </p>
                   <p className="text-lg font-semibold">{productSummary?.visibleProducts ?? 0}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">
                     {t("productsVisibility.metrics.hidden")}
                   </p>
@@ -532,7 +532,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
+              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
                 <Input
                   value={productSearch}
                   onChange={(event) => setProductSearch(event.target.value)}
@@ -593,12 +593,12 @@ const BazaarCatalogSettingsPage = () => {
               ) : null}
 
               {productsQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="bazaar-admin-empty min-h-[10rem] gap-2">
                   <Spinner className="h-4 w-4" />
                   {tCommon("loading")}
                 </div>
               ) : productsQuery.error ? (
-                <p className="text-sm text-danger">{translateError(tErrors, productsQuery.error)}</p>
+                <p className="bazaar-admin-error">{translateError(tErrors, productsQuery.error)}</p>
               ) : (
                 <ResponsiveDataList
                   items={productItems}
@@ -616,7 +616,8 @@ const BazaarCatalogSettingsPage = () => {
                   }
                   renderDesktop={(visibleItems) =>
                     visibleItems.length ? (
-                      <div className="overflow-x-auto">
+                      <div className="bazaar-admin-table-shell">
+                        <div className="bazaar-admin-table-scroll">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -706,15 +707,16 @@ const BazaarCatalogSettingsPage = () => {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="bazaar-admin-empty">
                         {t("productsVisibility.empty")}
                       </p>
                     )
                   }
                   renderMobile={(product) => (
-                    <div className="rounded-md border border-border bg-card p-4">
+                    <div className="bazaar-admin-mobile-card p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
                           <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
@@ -779,8 +781,8 @@ const BazaarCatalogSettingsPage = () => {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="space-y-2">
+          <Card className="bazaar-admin-surface">
+            <CardHeader className="bazaar-admin-section-header space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
@@ -906,7 +908,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="rounded-md border border-border">
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/20">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
@@ -926,7 +928,7 @@ const BazaarCatalogSettingsPage = () => {
                 {advancedOpen ? (
                   <div
                     id="catalog-advanced"
-                    className="grid gap-4 border-t border-border p-4 md:grid-cols-2"
+                    className="grid gap-4 border-t border-border/70 p-4 md:grid-cols-2"
                   >
                     <div className="space-y-2">
                       <Label htmlFor="catalog-font">{t("fontLabel")}</Label>
@@ -990,12 +992,12 @@ const BazaarCatalogSettingsPage = () => {
               </div>
 
               <div
-                className="rounded-md border border-border p-4"
+                className="bazaar-admin-preview-frame"
                 style={{ borderColor: `${formState.accentColor}55` }}
               >
                 <p className="mb-3 text-sm text-muted-foreground">{t("previewTitle")}</p>
                 <div
-                  className="rounded-md border border-border bg-background p-3"
+                  className="rounded-xl border border-border/70 bg-background p-3"
                   style={previewFontStyle(formState.fontFamily)}
                 >
                   <div
@@ -1088,7 +1090,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-md border border-border p-4">
+              <div className="bazaar-admin-info-tile flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold">{t("publishLabel")}</p>
                   <p className="text-xs text-muted-foreground">{t("publishHint")}</p>

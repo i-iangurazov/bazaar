@@ -34,6 +34,7 @@ export type ProductDescriptionGenerationJobView = {
     status: ProductDescriptionGenerationItemStatus;
     errorMessage?: string | null;
     generatedDescription?: string | null;
+    previousDescription?: string | null;
     imageUrl?: string | null;
     product: {
       sku: string;
@@ -51,6 +52,8 @@ type NormalizedProductDescriptionGenerationJobView = Omit<
   status: ProductDescriptionGenerationJobStatus;
   displayStatus: ProductDescriptionGenerationDisplayStatus;
   progressPercent: number;
+  descriptionGeneratedCount: number;
+  descriptionOverwrittenCount: number;
 };
 
 const runningJobStatuses = new Set<ProductDescriptionGenerationJobStatus>([
@@ -128,6 +131,19 @@ export const normalizeProductDescriptionGenerationJobView = (
     job.items,
     ProductDescriptionGenerationItemStatus.CANCELLED,
   );
+  const descriptionGeneratedCount = job.items.filter(
+    (item) =>
+      item.status === ProductDescriptionGenerationItemStatus.SUCCESS &&
+      Boolean(item.generatedDescription?.trim()) &&
+      !item.previousDescription?.trim(),
+  ).length;
+  const descriptionOverwrittenCount = job.items.filter(
+    (item) =>
+      item.status === ProductDescriptionGenerationItemStatus.SUCCESS &&
+      Boolean(item.generatedDescription?.trim()) &&
+      Boolean(item.previousDescription?.trim()) &&
+      item.generatedDescription?.trim() !== item.previousDescription?.trim(),
+  ).length;
   const processedCount = successCount + failedCount + skippedCount;
   const totalCount = Math.max(job.totalCount, job.items.length, processedCount);
   const noActiveRows = pendingCount === 0 && processingCount === 0;
@@ -160,6 +176,8 @@ export const normalizeProductDescriptionGenerationJobView = (
     failedCount,
     skippedCount,
     progressPercent: getProgressPercent(processedCount, totalCount),
+    descriptionGeneratedCount,
+    descriptionOverwrittenCount,
   };
 };
 
@@ -196,6 +214,20 @@ export const ProductDescriptionGenerationProgress = ({
         return t("aiDescriptionReasonImageLoadFailed");
       case "descriptionAlreadyExists":
         return t("aiDescriptionReasonAlreadyExists");
+      case "descriptionAndSpecsAlreadyExist":
+        return t("aiDescriptionReasonDescriptionAndSpecsAlreadyExist");
+      case "specsAlreadyExist":
+        return t("aiDescriptionReasonSpecsAlreadyExist");
+      case "missingCategory":
+        return t("aiDescriptionReasonMissingCategory");
+      case "missingSpecTemplate":
+        return t("aiDescriptionReasonMissingSpecTemplate");
+      case "noSupportedSpecFields":
+        return t("aiDescriptionReasonNoSupportedSpecFields");
+      case "noResolvedSpecValues":
+        return t("aiDescriptionReasonNoResolvedSpecValues");
+      case "aiSpecNoUsableImages":
+        return t("aiDescriptionReasonSpecImageLoadFailed");
       case "productNotFound":
         return t("aiDescriptionReasonProductDataFailed");
       case "aiDescriptionTimedOut":
@@ -261,9 +293,15 @@ export const ProductDescriptionGenerationProgress = ({
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-md border border-border bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">{t("aiDescriptionJobSuccess")}</p>
+            <p className="text-xs text-muted-foreground">{t("aiDescriptionJobGenerated")}</p>
             <p className="mt-1 text-lg font-semibold text-foreground">
-              {normalizedJob.successCount}
+              {normalizedJob.descriptionGeneratedCount}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">{t("aiDescriptionJobOverwritten")}</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">
+              {normalizedJob.descriptionOverwrittenCount}
             </p>
           </div>
           <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -280,12 +318,6 @@ export const ProductDescriptionGenerationProgress = ({
             </p>
             <p className="mt-1 text-lg font-semibold text-foreground">
               {normalizedJob.failedCount}
-            </p>
-          </div>
-          <div className="rounded-md border border-border bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">{t("aiDescriptionJobProcessed")}</p>
-            <p className="mt-1 text-lg font-semibold text-foreground">
-              {normalizedJob.processedCount}
             </p>
           </div>
         </div>

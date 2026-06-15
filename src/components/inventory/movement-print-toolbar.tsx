@@ -36,7 +36,11 @@ export const MovementPrintToolbar = ({
   }, [autoPrint, labels.printDocument]);
 
   return (
-    <div className="movement-print-chrome sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+    <div
+      className="movement-print-chrome sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur print:hidden"
+      aria-hidden="false"
+      data-print-exclude="true"
+    >
       <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{labels.printHint}</p>
         <div className="flex flex-wrap gap-2">

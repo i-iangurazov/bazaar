@@ -635,7 +635,7 @@ const BakaiStorePage = () => {
       storeId: activeStoreId,
       locale: normalizeLocale(locale) ?? defaultLocale,
       productIds: targetIds,
-      overwriteExisting: false,
+      overwriteExisting: true,
     });
   };
 
@@ -810,11 +810,11 @@ const BakaiStorePage = () => {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <CardTitle className="flex items-center gap-2">
@@ -836,7 +836,7 @@ const BakaiStorePage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.mode")}</p>
               <p className="text-sm font-semibold">
                 {t(
@@ -846,7 +846,7 @@ const BakaiStorePage = () => {
                 )}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.token")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.hasApiToken
@@ -854,7 +854,7 @@ const BakaiStorePage = () => {
                   : t("overview.tokenMissing")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.endpoint")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.importEndpoint
@@ -862,7 +862,7 @@ const BakaiStorePage = () => {
                   : t("overview.endpointMissing")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.lastSync")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.lastSyncAt
@@ -873,25 +873,25 @@ const BakaiStorePage = () => {
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.template")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.fileName ?? t("overview.notUploaded")}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.sheet")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.sheetName ?? "-"}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("overview.metrics.stockColumns")}</p>
               <p className="text-sm font-semibold">
                 {settingsQuery.data?.integration.template?.stockColumns.join(", ") ?? "pp1"}
               </p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("overview.metrics.lastConnectionCheck")}
               </p>
@@ -904,7 +904,7 @@ const BakaiStorePage = () => {
           </div>
 
           {settingsQuery.data?.integration.template ? (
-            <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice">
               <p>
                 {t("overview.templateMeta", {
                   fileSize: formatFileSize(settingsQuery.data.integration.template.fileSize),
@@ -913,19 +913,19 @@ const BakaiStorePage = () => {
               </p>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[7rem]">
               {t("overview.uploadHint")}
             </div>
           )}
 
           {settingsQuery.data?.integration.lastErrorSummary ? (
-            <div className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+            <div className="bazaar-admin-error">
               {settingsQuery.data.integration.lastErrorSummary}
             </div>
           ) : null}
 
           {settingsQuery.data?.integration.lastConnectionCheckSummary ? (
-            <div className="rounded-md border border-border p-3 text-xs text-muted-foreground">
+            <div className="bazaar-admin-notice text-xs">
               {settingsQuery.data.integration.lastConnectionCheckSummary}
             </div>
           ) : null}
@@ -963,8 +963,8 @@ const BakaiStorePage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("settings.connectionTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1006,7 +1006,7 @@ const BakaiStorePage = () => {
             </div>
           </FormGrid>
 
-          <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+          <div className="bazaar-admin-notice">
             <p>
               {settingsQuery.data?.integration.importEndpoint
                 ? t("settings.endpointConfigured", {
@@ -1054,13 +1054,13 @@ const BakaiStorePage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("settings.mappingsTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("settings.mappingsSubtitle")}</p>
-          <div className="overflow-x-auto">
+          <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1115,13 +1115,13 @@ const BakaiStorePage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("settings.branchMappingsTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("settings.branchMappingsSubtitle")}</p>
-          <div className="overflow-x-auto">
+          <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1165,15 +1165,15 @@ const BakaiStorePage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("productsSelection.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("productsSelection.subtitle")}</p>
           <p className="text-xs text-muted-foreground">{t("productsSelection.note")}</p>
           {isApiMode ? (
-            <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
+            <div className="bazaar-admin-status-tile-warning text-xs">
               {t("productsSelection.apiWarning")}
             </div>
           ) : null}
@@ -1198,7 +1198,7 @@ const BakaiStorePage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {isApiMode ? t("storeScope.externalStore") : t("storeScope.templateColumns")}
               </p>
@@ -1209,19 +1209,19 @@ const BakaiStorePage = () => {
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.total")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.included")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.includedProducts ?? 0}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.excluded")}
               </p>
@@ -1229,7 +1229,7 @@ const BakaiStorePage = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
             <Input
               value={productSearch}
               onChange={(event) => setProductSearch(event.target.value)}
@@ -1346,12 +1346,14 @@ const BakaiStorePage = () => {
           ) : null}
 
           {productsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[8rem]">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : productsQuery.error ? (
-            <p className="text-sm text-danger">{translateError(tErrors, productsQuery.error)}</p>
+            <div className="bazaar-admin-error">
+              {translateError(tErrors, productsQuery.error)}
+            </div>
           ) : (
             <ResponsiveDataList
               items={productItems}
@@ -1367,8 +1369,9 @@ const BakaiStorePage = () => {
               }
               renderDesktop={(visibleItems) =>
                 visibleItems.length ? (
-                  <div className="overflow-x-auto">
-                    <Table>
+                  <div className="bazaar-admin-table-shell">
+                    <div className="bazaar-admin-table-scroll">
+                      <Table>
                       <TableHeader>
                         <TableRow>
                           {canEdit ? (
@@ -1460,14 +1463,17 @@ const BakaiStorePage = () => {
                           </TableRow>
                         ))}
                       </TableBody>
-                    </Table>
+                      </Table>
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">{t("productsSelection.empty")}</p>
+                  <div className="bazaar-admin-empty min-h-[8rem]">
+                    {t("productsSelection.empty")}
+                  </div>
                 )
               }
               renderMobile={(product) => (
-                <div className="rounded-md border border-border bg-card p-4">
+                <div className="bazaar-admin-mobile-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
@@ -1532,8 +1538,8 @@ const BakaiStorePage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface mt-6">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("preflight.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1552,7 +1558,7 @@ const BakaiStorePage = () => {
           </FormActions>
 
           {preflightQuery.isFetching ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[7rem]">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -1561,7 +1567,7 @@ const BakaiStorePage = () => {
           {preflightData ? (
             <div className="space-y-4">
               {preflightData.store ? (
-                <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+                <div className="bazaar-admin-notice text-sm">
                   {t("storeScope.preflightStore", {
                     store: preflightData.store.storeName,
                     external: preflightData.store.externalStoreId ?? "-",
@@ -1569,7 +1575,7 @@ const BakaiStorePage = () => {
                 </div>
               ) : null}
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">
                     {t("preflight.metrics.considered")}
                   </p>
@@ -1577,21 +1583,21 @@ const BakaiStorePage = () => {
                     {preflightData.summary.productsConsidered}
                   </p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.ready")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsReady}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.failed")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsFailed}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.warnings")}</p>
                   <p className="text-lg font-semibold">{preflightData.warnings.total}</p>
                 </div>
               </div>
 
-              <div className="rounded-md border border-border p-3">
+              <div className="bazaar-admin-info-tile">
                 <p className="text-sm font-medium text-foreground">
                   {t("preflight.blockersTitle")}
                 </p>
@@ -1622,7 +1628,7 @@ const BakaiStorePage = () => {
               </div>
 
               {preflightData.warnings.total > 0 ? (
-                <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-foreground">
+                <div className="bazaar-admin-status-tile-warning text-sm">
                   <p className="font-medium">{t("preflight.warningsTitle")}</p>
                   <div className="mt-2 space-y-1">
                     {preflightData.warnings.global.map((warning) => (
@@ -1632,7 +1638,7 @@ const BakaiStorePage = () => {
                 </div>
               ) : null}
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-2">
                 <Input
                   value={filterSku}
                   onChange={(event) => setFilterSku(event.target.value)}
@@ -1654,8 +1660,9 @@ const BakaiStorePage = () => {
               </div>
 
               {filteredFailedProducts.length ? (
-                <div className="overflow-x-auto">
-                  <Table>
+                <div className="bazaar-admin-table-shell">
+                  <div className="bazaar-admin-table-scroll">
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("preflight.table.sku")}</TableHead>
@@ -1674,18 +1681,21 @@ const BakaiStorePage = () => {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                    </Table>
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("preflight.table.empty")}</p>
+                <div className="bazaar-admin-empty min-h-[7rem]">
+                  {t("preflight.table.empty")}
+                </div>
               )}
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface mt-6">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("export.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1807,21 +1817,24 @@ const BakaiStorePage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface mt-6">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("history.title")}</CardTitle>
         </CardHeader>
         <CardContent>
           {jobsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[8rem]">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : jobsQuery.error ? (
-            <p className="text-sm text-danger">{translateError(tErrors, jobsQuery.error)}</p>
+            <div className="bazaar-admin-error">
+              {translateError(tErrors, jobsQuery.error)}
+            </div>
           ) : jobsQuery.data?.length ? (
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="bazaar-admin-table-shell">
+              <div className="bazaar-admin-table-scroll">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("history.columns.createdAt")}</TableHead>
@@ -1909,10 +1922,13 @@ const BakaiStorePage = () => {
                     );
                   })}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
+            <div className="bazaar-admin-empty min-h-[8rem]">
+              {t("history.empty")}
+            </div>
           )}
         </CardContent>
       </Card>

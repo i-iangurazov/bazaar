@@ -397,7 +397,7 @@ const UsersPage = () => {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -408,13 +408,13 @@ const UsersPage = () => {
         }
       />
 
-      <div className="mt-6 space-y-6">
-        <div className="border border-border bg-muted/20 p-4">
+      <div className="space-y-6">
+        <div className="bazaar-admin-notice">
           <p className="text-sm font-semibold text-foreground">{t("storeAccessReviewTitle")}</p>
           <p className="mt-1 text-sm text-muted-foreground">{t("storeAccessReviewHint")}</p>
         </div>
-        <Card>
-          <CardHeader>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -422,7 +422,8 @@ const UsersPage = () => {
               items={usersQuery.data ?? []}
               getKey={(user) => user.id}
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto">
+                <div className="bazaar-admin-table-shell">
+                  <div className="bazaar-admin-table-scroll">
                   <InlineEditTableProvider>
                   <Table className="min-w-[720px]" data-tour="users-table">
                     <TableHeader>
@@ -593,6 +594,7 @@ const UsersPage = () => {
                     </TableBody>
                   </Table>
                   </InlineEditTableProvider>
+                  </div>
                 </div>
               )}
               renderMobile={(user) => {
@@ -639,7 +641,7 @@ const UsersPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+                  <div className="bazaar-admin-mobile-card">
                     <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -678,12 +680,12 @@ const UsersPage = () => {
               }}
             />
             {usersQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
             ) : !usersQuery.data?.length ? (
-              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <div className="bazaar-admin-empty">
                 <div className="flex items-center gap-2">
                   <EmptyIcon className="h-4 w-4" aria-hidden />
                   {t("noUsers")}
@@ -691,7 +693,7 @@ const UsersPage = () => {
               </div>
             ) : null}
             {usersQuery.error ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
+              <div className="bazaar-admin-error flex flex-wrap items-center gap-2">
                 <span>{translateError(tErrors, usersQuery.error)}</span>
                 <Button
                   type="button"
@@ -706,8 +708,8 @@ const UsersPage = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("inviteTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -763,7 +765,7 @@ const UsersPage = () => {
                     const usesStoreAssignments = selectedRole !== "ADMIN";
                     return (
                       <FormItem>
-                        <div className="border border-border p-3">
+                        <div className="bazaar-admin-modal-card">
                           <div className="mb-3">
                             <FormLabel>{t("storeAccess")}</FormLabel>
                             <FormDescription>
@@ -782,7 +784,7 @@ const UsersPage = () => {
                                 return (
                                   <label
                                     key={store.id}
-                                    className="flex items-center gap-2 border border-border bg-card px-3 py-2 text-sm"
+                                    className="bazaar-admin-info-tile flex items-center gap-2 px-3 py-2 text-sm"
                                   >
                                     <input
                                       type="checkbox"
@@ -826,7 +828,7 @@ const UsersPage = () => {
             </Form>
 
             {inviteLink ? (
-              <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <div className="bazaar-admin-notice flex flex-col gap-2">
                 <span className="font-medium text-foreground">{t("inviteLinkReady")}</span>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <code className="break-all rounded-md bg-card px-2 py-1">{inviteLink}</code>
@@ -841,7 +843,8 @@ const UsersPage = () => {
               items={invitesQuery.data ?? []}
               getKey={(invite) => invite.id}
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto">
+                <div className="bazaar-admin-table-shell">
+                  <div className="bazaar-admin-table-scroll">
                   <Table className="min-w-[640px]">
                     <TableHeader>
                       <TableRow>
@@ -882,6 +885,7 @@ const UsersPage = () => {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 </div>
               )}
               renderMobile={(invite) => {
@@ -893,7 +897,7 @@ const UsersPage = () => {
                     : t("invitePending");
 
                 return (
-                  <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+                  <div className="bazaar-admin-mobile-card">
                     <div className="space-y-2">
                       <p className="truncate text-sm font-semibold text-foreground">{invite.email}</p>
                       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -931,15 +935,15 @@ const UsersPage = () => {
               }}
             />
             {invitesQuery.isLoading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
             ) : !invitesQuery.data?.length ? (
-              <p className="text-sm text-muted-foreground">{t("inviteEmpty")}</p>
+              <p className="bazaar-admin-empty">{t("inviteEmpty")}</p>
             ) : null}
             {invitesQuery.error ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
+              <div className="bazaar-admin-error flex flex-wrap items-center gap-2">
                 <span>{translateError(tErrors, invitesQuery.error)}</span>
                 <Button
                   type="button"
@@ -1148,7 +1152,7 @@ const UsersPage = () => {
 	              name="isActive"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                  <div className="bazaar-admin-info-tile flex items-center justify-between gap-4">
                     <div className="space-y-1">
                       <FormLabel>{t("status")}</FormLabel>
                       <FormDescription>{t("statusHint")}</FormDescription>

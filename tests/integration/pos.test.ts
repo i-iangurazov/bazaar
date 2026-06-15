@@ -2565,6 +2565,185 @@ describeDb("pos", () => {
     expect(close.discrepancyKgs).toBe(-10);
   });
 
+  it("reports shift payment breakdown for cash, non-cash, split payments, refunds, and excluded drafts", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
+    });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 30,
+      reason: "seed",
+      idempotencyKey: "pos-seed-shift-payment-breakdown-1",
+      requestId: "pos-seed-shift-payment-breakdown-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await cashierCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 100,
+      idempotencyKey: "pos-open-shift-payment-breakdown-1",
+    });
+
+    const shift = await cashierCaller.pos.shifts.current({ registerId: register.id });
+    if (!shift) {
+      throw new Error("expected open shift");
+    }
+
+    const completeSale = async (
+      key: string,
+      line: { qty: number; unitPriceKgs: number },
+      payments: Array<{ method: PosPaymentMethod; amountKgs: number }>,
+    ) => {
+      const sale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+      const addedLine = await cashierCaller.pos.sales.addLine({
+        saleId: sale.id,
+        productId: product.id,
+        qty: 1,
+      });
+      await cashierCaller.pos.sales.updateLine({
+        lineId: addedLine.id,
+        qty: line.qty,
+        unitPriceKgs: line.unitPriceKgs,
+      });
+      await cashierCaller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: key,
+        payments,
+      });
+      return sale;
+    };
+
+    await completeSale("pos-shift-payment-cash-1", { qty: 1, unitPriceKgs: 100 }, [
+      { method: PosPaymentMethod.CASH, amountKgs: 100 },
+    ]);
+    await completeSale("pos-shift-payment-card-1", { qty: 2, unitPriceKgs: 100 }, [
+      { method: PosPaymentMethod.CARD, amountKgs: 200 },
+    ]);
+    await completeSale("pos-shift-payment-split-1", { qty: 1, unitPriceKgs: 100 }, [
+      { method: PosPaymentMethod.CASH, amountKgs: 30 },
+      { method: PosPaymentMethod.CARD, amountKgs: 70 },
+    ]);
+    await completeSale("pos-shift-payment-transfer-1", { qty: 1, unitPriceKgs: 50 }, [
+      { method: PosPaymentMethod.TRANSFER, amountKgs: 50 },
+    ]);
+    const returnOriginalSale = await completeSale(
+      "pos-shift-payment-return-original-1",
+      { qty: 1, unitPriceKgs: 20 },
+      [{ method: PosPaymentMethod.CASH, amountKgs: 20 }],
+    );
+
+    const saleLine = await prisma.customerOrderLine.findFirst({
+      where: { customerOrderId: returnOriginalSale.id },
+      select: { id: true },
+    });
+    if (!saleLine) {
+      throw new Error("expected return sale line");
+    }
+    const returnDraft = await cashierCaller.pos.returns.createDraft({
+      shiftId: shift.id,
+      originalSaleId: returnOriginalSale.id,
+    });
+    await cashierCaller.pos.returns.addLine({
+      saleReturnId: returnDraft.id,
+      customerOrderLineId: saleLine.id,
+      qty: 1,
+    });
+    await cashierCaller.pos.returns.complete({
+      saleReturnId: returnDraft.id,
+      idempotencyKey: "pos-shift-payment-return-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 20 }],
+    });
+
+    const heldSale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({ saleId: heldSale.id, productId: product.id, qty: 1 });
+    await cashierCaller.pos.sales.holdDraft({ saleId: heldSale.id });
+
+    const canceledSale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({
+      saleId: canceledSale.id,
+      productId: product.id,
+      qty: 1,
+    });
+    await cashierCaller.pos.sales.cancelDraft({ saleId: canceledSale.id });
+
+    const activeDraft = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({ saleId: activeDraft.id, productId: product.id, qty: 1 });
+
+    await prisma.salePayment.createMany({
+      data: [heldSale.id, canceledSale.id, activeDraft.id].map((customerOrderId, index) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        shiftId: shift.id,
+        customerOrderId,
+        method: index === 0 ? PosPaymentMethod.CASH : PosPaymentMethod.CARD,
+        amountKgs: 999,
+        isRefund: false,
+        createdById: cashierUser.id,
+      })),
+    });
+
+    const report = await cashierCaller.pos.shifts.xReport({ shiftId: shift.id });
+
+    expect(report.summary.salesCount).toBe(5);
+    expect(report.summary.salesTotalKgs).toBe(470);
+    expect(report.summary.returnsCount).toBe(1);
+    expect(report.summary.returnsTotalKgs).toBe(20);
+    expect(report.paymentsByMethod.CASH.salesKgs).toBe(150);
+    expect(report.paymentsByMethod.CASH.refundsKgs).toBe(20);
+    expect(report.paymentsByMethod.CASH.netKgs).toBe(130);
+    expect(report.paymentsByMethod.CARD.salesKgs).toBe(270);
+    expect(report.paymentsByMethod.TRANSFER.salesKgs).toBe(50);
+    expect(report.summary.cashSalesKgs).toBe(150);
+    expect(report.summary.cashRefundsKgs).toBe(20);
+    expect(report.summary.cashNetKgs).toBe(130);
+    expect(report.summary.nonCashSalesKgs).toBe(320);
+    expect(report.summary.nonCashRefundsKgs).toBe(0);
+    expect(report.summary.nonCashNetKgs).toBe(320);
+    expect(report.summary.totalSalesKgs).toBe(470);
+    expect(report.summary.totalRefundsKgs).toBe(20);
+    expect(report.summary.totalNetKgs).toBe(450);
+    expect(report.summary.expectedCashKgs).toBe(230);
+
+    const history = await cashierCaller.pos.shifts.list({
+      registerId: register.id,
+      page: 1,
+      pageSize: 5,
+    });
+    expect(history.items[0]?.summary.cashSalesKgs).toBe(150);
+    expect(history.items[0]?.summary.nonCashSalesKgs).toBe(320);
+    expect(history.items[0]?.summary.totalSalesKgs).toBe(470);
+    expect(history.items[0]?.paymentsByMethod.CASH.refundsKgs).toBe(20);
+  });
+
   it("blocks cashier from closing shifts outside assigned stores", async () => {
     const { org, store, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.createMany({

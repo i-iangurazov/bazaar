@@ -39,4 +39,33 @@ describe("POS register management source", () => {
     expect(shiftsSource).toContain('trpc.pos.registers.list.useQuery({ status: "all" })');
     expect(shiftsSource).toContain("canOpenNewShift");
   });
+
+  it("derives shift payment reporting from completed sales and returns", async () => {
+    const serviceSource = await readSource("src/server/services/pos.ts");
+
+    expect(serviceSource).toContain("const summarizeShiftPayments");
+    expect(serviceSource).toContain("const calculateShiftPaymentTotals");
+    expect(serviceSource).toContain("paymentTotals");
+    expect(serviceSource).toContain("nonCashSalesKgs");
+    expect(serviceSource).toContain("nonCashNetKgs");
+    expect(serviceSource).toContain("customerOrder: {");
+    expect(serviceSource).toContain("status: CustomerOrderStatus.COMPLETED");
+    expect(serviceSource).toContain("saleReturn: {");
+    expect(serviceSource).toContain("status: PosReturnStatus.COMPLETED");
+  });
+
+  it("includes cash and non-cash payment breakdown in shift exports", async () => {
+    const exportsSource = await readSource("src/server/services/exports.ts");
+
+    expect(exportsSource).toContain("cashSalesKgs");
+    expect(exportsSource).toContain("nonCashSalesKgs");
+    expect(exportsSource).toContain("cardSalesKgs");
+    expect(exportsSource).toContain("transferSalesKgs");
+    expect(exportsSource).toContain("nonCashRefundsKgs");
+    expect(exportsSource).toContain("nonCashNetKgs");
+    expect(exportsSource).toContain("customerOrder: {");
+    expect(exportsSource).toContain("status: CustomerOrderStatus.COMPLETED");
+    expect(exportsSource).toContain("saleReturn: {");
+    expect(exportsSource).toContain("status: PosReturnStatus.COMPLETED");
+  });
 });

@@ -192,7 +192,7 @@ const UnitsPage = () => {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -204,8 +204,8 @@ const UnitsPage = () => {
         }
       />
 
-      <Card className="mt-6">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
           <Badge variant="muted">
             {t("count", { count: unitsQuery.data?.length ?? 0 })}
@@ -213,12 +213,12 @@ const UnitsPage = () => {
         </CardHeader>
         <CardContent>
           {unitsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !unitsQuery.data?.length ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("empty")}
             </div>
@@ -227,7 +227,8 @@ const UnitsPage = () => {
               items={unitsQuery.data}
               getKey={(unit) => unit.id}
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto">
+                <div className="bazaar-admin-table-shell">
+                  <div className="bazaar-admin-table-scroll">
                   <TooltipProvider>
                     <InlineEditTableProvider>
                       <Table className="min-w-[520px]">
@@ -316,10 +317,11 @@ const UnitsPage = () => {
                     </Table>
                     </InlineEditTableProvider>
                   </TooltipProvider>
+                  </div>
                 </div>
               )}
               renderMobile={(unit) => (
-                <div className="rounded-md border border-border bg-card p-3">
+                <div className="bazaar-admin-mobile-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">{unit.code}</p>
@@ -352,7 +354,7 @@ const UnitsPage = () => {
             />
           )}
           {unitsQuery.error ? (
-            <p className="mt-3 text-sm text-danger">
+            <p className="bazaar-admin-error mt-3">
               {translateError(tErrors, unitsQuery.error)}
             </p>
           ) : null}

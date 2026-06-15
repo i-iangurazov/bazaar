@@ -538,7 +538,7 @@ const MMarketSettingsPage = () => {
       storeId: activeStoreId,
       locale: normalizeLocale(locale) ?? defaultLocale,
       productIds: shortDescriptionTargetIds,
-      overwriteExisting: false,
+      overwriteExisting: true,
     });
   };
 
@@ -984,7 +984,7 @@ const MMarketSettingsPage = () => {
       storeId: activeStoreId,
       locale: normalizeLocale(locale) ?? defaultLocale,
       productIds: targetIds,
-      overwriteExisting: false,
+      overwriteExisting: true,
     });
   };
 
@@ -1194,18 +1194,18 @@ const MMarketSettingsPage = () => {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface overflow-hidden">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle className="flex items-center gap-2 text-lg">
             <IntegrationsIcon className="h-5 w-5 text-primary" aria-hidden />
             {t("connection.title")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <FormGrid>
+          <FormGrid className="min-w-0 [&>*]:min-w-0">
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">{t("connection.environment")}</p>
               <Select
@@ -1225,7 +1225,7 @@ const MMarketSettingsPage = () => {
 
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">{t("connection.token")}</p>
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                 <Input
                   type={showApiToken ? "text" : "password"}
                   value={apiToken}
@@ -1236,6 +1236,7 @@ const MMarketSettingsPage = () => {
                       : t("connection.tokenPlaceholder")
                   }
                   disabled={!canEdit}
+                  className="col-span-2 min-w-0 sm:col-span-1"
                 />
                 <Button
                   type="button"
@@ -1273,7 +1274,7 @@ const MMarketSettingsPage = () => {
             </div>
           </FormGrid>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="bazaar-admin-notice min-w-0 break-words text-xs [overflow-wrap:anywhere]">
             {t("connection.endpoint", {
               endpoint: settingsQuery.data?.integration.environment
                 ? settingsQuery.data.endpoints[settingsQuery.data.integration.environment]
@@ -1315,14 +1316,15 @@ const MMarketSettingsPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("branches.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("branches.subtitle")}</p>
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="bazaar-admin-table-shell">
+            <div className="bazaar-admin-table-scroll">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("branches.columns.store")}</TableHead>
@@ -1349,7 +1351,8 @@ const MMarketSettingsPage = () => {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </div>
           <FormActions className="justify-start">
             <Button
@@ -1363,8 +1366,8 @@ const MMarketSettingsPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("productsSelection.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1391,7 +1394,7 @@ const MMarketSettingsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("storeScope.externalStore")}</p>
               <p className="mt-1 text-sm font-medium text-foreground">
                 {activeBranchId || t("storeScope.mappingMissing")}
@@ -1400,19 +1403,19 @@ const MMarketSettingsPage = () => {
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.total")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.totalProducts ?? 0}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.included")}
               </p>
               <p className="text-lg font-semibold">{productSummary?.includedProducts ?? 0}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">
                 {t("productsSelection.metrics.excluded")}
               </p>
@@ -1420,7 +1423,7 @@ const MMarketSettingsPage = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem]">
             <Input
               value={productSearch}
               onChange={(event) => setProductSearch(event.target.value)}
@@ -1561,12 +1564,14 @@ const MMarketSettingsPage = () => {
           ) : null}
 
           {productsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[8rem]">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : productsQuery.error ? (
-            <p className="text-sm text-danger">{translateError(tErrors, productsQuery.error)}</p>
+            <div className="bazaar-admin-error">
+              {translateError(tErrors, productsQuery.error)}
+            </div>
           ) : (
             <ResponsiveDataList
               items={productItems}
@@ -1582,8 +1587,9 @@ const MMarketSettingsPage = () => {
               }
               renderDesktop={(visibleItems) =>
                 visibleItems.length ? (
-                  <div className="overflow-x-auto">
-                    <Table>
+                  <div className="bazaar-admin-table-shell">
+                    <div className="bazaar-admin-table-scroll">
+                      <Table>
                       <TableHeader>
                         <TableRow>
                           {canEdit ? (
@@ -1679,14 +1685,17 @@ const MMarketSettingsPage = () => {
                           </TableRow>
                         ))}
                       </TableBody>
-                    </Table>
+                      </Table>
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">{t("productsSelection.empty")}</p>
+                  <div className="bazaar-admin-empty min-h-[8rem]">
+                    {t("productsSelection.empty")}
+                  </div>
                 )
               }
               renderMobile={(product) => (
-                <div className="rounded-md border border-border bg-card p-4">
+                <div className="bazaar-admin-mobile-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
@@ -1760,8 +1769,8 @@ const MMarketSettingsPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("preflight.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1779,7 +1788,7 @@ const MMarketSettingsPage = () => {
           </FormActions>
 
           {preflightQuery.isFetching ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[7rem]">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -1788,7 +1797,7 @@ const MMarketSettingsPage = () => {
           {preflightData ? (
             <div className="space-y-4">
               {preflightData.store ? (
-                <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+                <div className="bazaar-admin-notice text-sm">
                   {t("storeScope.preflightStore", {
                     store: preflightData.store.storeName,
                     external: preflightData.store.externalStoreId ?? "-",
@@ -1796,7 +1805,7 @@ const MMarketSettingsPage = () => {
                 </div>
               ) : null}
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">
                     {t("preflight.metrics.considered")}
                   </p>
@@ -1804,21 +1813,21 @@ const MMarketSettingsPage = () => {
                     {preflightData.summary.productsConsidered}
                   </p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.ready")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsReady}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.failed")}</p>
                   <p className="text-lg font-semibold">{preflightData.summary.productsFailed}</p>
                 </div>
-                <div className="rounded-md border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">{t("preflight.metrics.warnings")}</p>
                   <p className="text-lg font-semibold">{preflightData.warnings.total}</p>
                 </div>
               </div>
 
-              <div className="rounded-md border border-border p-3">
+              <div className="bazaar-admin-info-tile">
                 <p className="text-sm font-medium text-foreground">
                   {t("preflight.blockersTitle")}
                 </p>
@@ -1942,7 +1951,7 @@ const MMarketSettingsPage = () => {
                 ) : null}
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-2">
                 <Input
                   value={filterSku}
                   onChange={(event) => setFilterSku(event.target.value)}
@@ -1964,8 +1973,9 @@ const MMarketSettingsPage = () => {
               </div>
 
               {filteredFailedProducts.length ? (
-                <div className="overflow-x-auto">
-                  <Table>
+                <div className="bazaar-admin-table-shell">
+                  <div className="bazaar-admin-table-scroll">
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("preflight.table.sku")}</TableHead>
@@ -1984,18 +1994,21 @@ const MMarketSettingsPage = () => {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                    </Table>
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">{t("preflight.table.empty")}</p>
+                <div className="bazaar-admin-empty min-h-[7rem]">
+                  {t("preflight.table.empty")}
+                </div>
               )}
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("export.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -2058,15 +2071,18 @@ const MMarketSettingsPage = () => {
           <div>
             <p className="mb-2 text-sm font-medium text-foreground">{t("history.title")}</p>
             {jobsQuery.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="bazaar-admin-empty min-h-[8rem]">
                 <Spinner className="h-4 w-4" />
                 {tCommon("loading")}
               </div>
             ) : jobsQuery.error ? (
-              <p className="text-sm text-danger">{translateError(tErrors, jobsQuery.error)}</p>
+              <div className="bazaar-admin-error">
+                {translateError(tErrors, jobsQuery.error)}
+              </div>
             ) : jobsQuery.data?.length ? (
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
+                  <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t("history.columns.createdAt")}</TableHead>
@@ -2122,10 +2138,13 @@ const MMarketSettingsPage = () => {
                       );
                     })}
                   </TableBody>
-                </Table>
+                  </Table>
+                </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
+              <div className="bazaar-admin-empty min-h-[8rem]">
+                {t("history.empty")}
+              </div>
             )}
           </div>
         </CardContent>
@@ -2143,7 +2162,7 @@ const MMarketSettingsPage = () => {
       >
         {bulkProgress ? (
           <div className="space-y-4">
-            <div className="rounded-md border border-border bg-muted/30 p-4">
+            <div className="bazaar-admin-info-tile p-4">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressLabel", {
@@ -2186,7 +2205,7 @@ const MMarketSettingsPage = () => {
                   : "grid grid-cols-2 gap-3 sm:grid-cols-4"
               }
             >
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-info-tile">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressUpdated")}
                 </p>
@@ -2195,7 +2214,7 @@ const MMarketSettingsPage = () => {
                 </p>
               </div>
               {bulkProgress.kind === "specs" ? (
-                <div className="rounded-md border border-border bg-card p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-xs text-muted-foreground">
                     {t("preflight.bulkProgressFilled")}
                   </p>
@@ -2204,7 +2223,7 @@ const MMarketSettingsPage = () => {
                   </p>
                 </div>
               ) : null}
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-info-tile">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressSkipped")}
                 </p>
@@ -2212,7 +2231,7 @@ const MMarketSettingsPage = () => {
                   {bulkProgress.skippedCount}
                 </p>
               </div>
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-info-tile">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressFailed")}
                 </p>
@@ -2220,7 +2239,7 @@ const MMarketSettingsPage = () => {
                   {bulkProgress.failedCount}
                 </p>
               </div>
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-info-tile">
                 <p className="text-xs text-muted-foreground">
                   {tProducts("bulkGenerateDescriptionsProgressDeferred")}
                 </p>
@@ -2231,13 +2250,13 @@ const MMarketSettingsPage = () => {
             </div>
 
             {bulkProgress.errorMessage ? (
-              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+              <div className="bazaar-admin-error">
                 {bulkProgress.errorMessage}
               </div>
             ) : null}
 
             {bulkProgress.kind === "specs" && bulkProgress.items.length ? (
-              <div className="max-h-80 overflow-auto rounded-md border border-border">
+              <div className="bazaar-admin-table-shell max-h-80 overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -2324,7 +2343,7 @@ const MMarketSettingsPage = () => {
             onClose={() => setDescriptionGenerationJobId(null)}
           />
         ) : descriptionGenerationJobQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="bazaar-admin-empty min-h-[7rem]">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </div>

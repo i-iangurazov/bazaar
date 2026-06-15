@@ -1,7 +1,17 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, BookOpen, CheckCircle2, KeyRound, PackageSearch, ReceiptText, ShieldCheck, Users } from "lucide-react";
+
+import {
+  BookOpenIcon,
+  ExternalLinkIcon,
+  KeyIcon,
+  ProductsIcon,
+  SalesOrdersIcon,
+  ShieldCheckIcon,
+  StatusSuccessIcon,
+  UsersIcon,
+} from "@/components/icons-ssr";
 
 export const metadata: Metadata = {
   title: "BAZAAR API v1 — документация для интеграций",
@@ -177,21 +187,21 @@ const endpoints = [
     path: "/products",
     title: "Получение товаров",
     description: "Товары, цены, остатки, изображения, штрихкоды, упаковки и варианты.",
-    icon: PackageSearch,
+    icon: ProductsIcon,
   },
   {
     method: "POST",
     path: "/orders",
     title: "Создание заказа",
     description: "Передача заказа из маркетплейса или внешней витрины в BAZAAR.",
-    icon: ReceiptText,
+    icon: SalesOrdersIcon,
   },
   {
     method: "POST",
     path: "/customers",
     title: "Синхронизация клиентов",
     description: "Создание нового клиента или обновление существующей карточки.",
-    icon: Users,
+    icon: UsersIcon,
   },
 ];
 
@@ -345,7 +355,7 @@ const BazaarApiDocsPage = () => (
               className="inline-flex h-11 items-center gap-2 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800"
             >
               Смотреть методы
-              <ArrowUpRight className="h-4 w-4" aria-hidden />
+              <ExternalLinkIcon className="h-4 w-4" aria-hidden />
             </a>
             <a
               href="#flow"
@@ -368,15 +378,15 @@ const BazaarApiDocsPage = () => (
           </code>
           <div className="mt-5 grid gap-3 text-sm text-slate-300">
             <div className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-emerald-300" aria-hidden />
+              <KeyIcon className="h-4 w-4 text-emerald-300" aria-hidden />
               Authorization: Bearer API key
             </div>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden />
+              <ShieldCheckIcon className="h-4 w-4 text-emerald-300" aria-hidden />
               Один ключ даёт доступ к одному магазину
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-300" aria-hidden />
+              <StatusSuccessIcon className="h-4 w-4 text-emerald-300" aria-hidden />
               Максимум 100 товаров на страницу
             </div>
           </div>
@@ -605,7 +615,7 @@ Content-Type: application/json`}</CodeBlock>
           </ol>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-5">
             <div className="flex items-start gap-3">
-              <BookOpen className="mt-1 h-5 w-5 text-blue-700" aria-hidden />
+              <BookOpenIcon className="mt-1 h-5 w-5 text-blue-700" aria-hidden />
               <div>
                 <h3 className="font-semibold text-slate-950">Публичная ссылка</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-600">

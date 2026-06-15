@@ -165,7 +165,7 @@ const PosEntryPage = () => {
       </div>
 
       <section className="space-y-4 md:hidden">
-        <div className="rounded-md border border-border bg-card p-4 shadow-sm">
+        <div className="bazaar-admin-surface p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Badge variant={openShift ? "success" : "warning"}>
@@ -201,7 +201,7 @@ const PosEntryPage = () => {
           ) : null}
 
           {!entryQuery.isLoading && !(entryQuery.data?.registers?.length ?? 0) ? (
-            <div className="mt-4 border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4 min-h-[8rem] gap-2 text-sm">
               {t("entry.noRegisters")}
               {canManageRegisters ? (
                 <Button className="mt-3 h-11 w-full" size="sm" asChild>
@@ -236,13 +236,13 @@ const PosEntryPage = () => {
 
         {openShift ? (
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-md border border-border bg-card p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("entry.shiftOpenedAt")}</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {formatDateTime(openShift.openedAt, locale)}
               </p>
             </div>
-            <div className="rounded-md border border-border bg-card p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {formatStoreMoney(openShift.openingCashKgs)}
@@ -252,7 +252,7 @@ const PosEntryPage = () => {
         ) : null}
 
         {previousClosedShift ? (
-          <div className="rounded-md border border-border bg-card p-4 text-sm">
+          <div className="bazaar-admin-mobile-card p-4 text-sm">
             <p className="font-semibold text-foreground">{t("entry.previousClosedShiftTitle")}</p>
             <p className="mt-1 text-muted-foreground">
               {formatDateTime(previousClosedShift.closedAt ?? previousClosedShift.openedAt, locale)}
@@ -307,7 +307,7 @@ const PosEntryPage = () => {
       </section>
 
       <div className="hidden gap-4 md:grid lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card>
+        <Card className="bazaar-admin-surface">
           <CardContent className="space-y-5 p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">
@@ -342,7 +342,7 @@ const PosEntryPage = () => {
             </div>
 
             {!entryQuery.isLoading && !(entryQuery.data?.registers?.length ?? 0) ? (
-              <div className="border border-border bg-muted/40 p-4">
+              <div className="bazaar-admin-empty min-h-[8rem] items-start p-4 text-left">
                 <p className="text-sm text-muted-foreground">{t("entry.noRegisters")}</p>
                 {canManageRegisters ? (
                   <Button className="mt-3" size="sm" asChild>
@@ -360,7 +360,7 @@ const PosEntryPage = () => {
             ) : null}
 
             {selectedRegister ? (
-              <div className="border border-border bg-muted/20 p-4">
+              <div className="bazaar-admin-notice p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -429,19 +429,19 @@ const PosEntryPage = () => {
             {openShift ? (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="border border-border bg-muted/30 p-3">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("entry.shiftOpenedAt")}</p>
                     <p className="text-sm font-medium text-foreground">
                       {formatDateTime(openShift.openedAt, locale)}
                     </p>
                   </div>
-                  <div className="border border-border bg-muted/30 p-3">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
                     <p className="text-sm font-medium text-foreground">
                       {formatStoreMoney(openShift.openingCashKgs)}
                     </p>
                   </div>
-                  <div className="border border-border bg-muted/30 p-3">
+                  <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("entry.openedBy")}</p>
                     <p className="text-sm font-medium text-foreground">{openShift.openedBy.name}</p>
                   </div>
@@ -461,8 +461,8 @@ const PosEntryPage = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header">
             <CardTitle>{t("entry.quickActionsTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
@@ -522,7 +522,7 @@ const PosEntryPage = () => {
               autoFocus
             />
           </div>
-          <div className="border border-border bg-muted/20 p-3 text-sm">
+          <div className="bazaar-admin-notice text-sm">
             <p className="font-medium text-foreground">{t("entry.previousClosedShiftTitle")}</p>
             {previousClosedShift ? (
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
