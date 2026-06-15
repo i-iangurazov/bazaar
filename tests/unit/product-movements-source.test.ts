@@ -169,6 +169,7 @@ describe("product movement journal source", () => {
     expect(printDocumentSource).toContain("@page");
     expect(printDocumentSource).toContain("size: A4");
     expect(printDocumentSource).toContain("movement-print-table thead");
+    expect(printDocumentSource).toContain("color: #111827");
     expect(printDocumentSource).toContain("break-inside: avoid");
     expect(printDocumentSource).toContain("movement-print-signature-row");
     expect(printDocumentSource).toContain("getPrintableLines");

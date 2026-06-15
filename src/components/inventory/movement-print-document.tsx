@@ -233,12 +233,14 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         .movement-print-table th,
         .movement-print-table td {
           border: 1px solid #111827;
+          color: #111827;
           padding: 0.25mm 0.45mm;
           vertical-align: top;
         }
 
         .movement-print-table th {
           background: #f1f5f9;
+          color: #111827;
           font-size: 5.6px;
           font-weight: 700;
           text-align: left;
@@ -271,6 +273,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         }
 
         .movement-print-product {
+          color: #111827;
           overflow-wrap: anywhere;
         }
 
