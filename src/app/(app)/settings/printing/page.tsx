@@ -1304,7 +1304,7 @@ const PrintingSettingsPage = () => {
               />
             </MobileWizardStep>
 
-            <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 border border-border bg-background p-3 shadow-lg">
+            <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 border border-border bg-background p-3 shadow-lg">
               <Button
                 type="button"
                 className="h-12 w-full"

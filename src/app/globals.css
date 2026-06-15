@@ -264,7 +264,7 @@
   }
 
   .bazaar-doc-search-list {
-    @apply mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border/65 bg-card/95 shadow-sm;
+    @apply relative z-[90] mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border/65 bg-card/95 shadow-2xl;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }

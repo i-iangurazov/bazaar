@@ -363,7 +363,7 @@ const NewSalesOrderPage = () => {
                   onResolved={handleLineScanResolved}
                 />
                 {showLineSearchResults && lineSearch.trim().length > 0 ? (
-                  <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                  <div className="absolute z-[90] mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
                     {productSearchQuery.isLoading ? (
                       <div className="px-3 py-2 text-sm text-muted-foreground">
                         {tCommon("loading")}

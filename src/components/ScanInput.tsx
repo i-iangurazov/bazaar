@@ -432,7 +432,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           <div
             id={listboxId}
             role="listbox"
-            className="absolute z-20 mt-2 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg"
+            className="absolute z-[90] mt-2 w-full overflow-hidden rounded-md border border-border bg-popover shadow-2xl"
           >
             <div className="max-h-64 overflow-y-auto py-1">
               {dropdownItems.map((item, index) => (

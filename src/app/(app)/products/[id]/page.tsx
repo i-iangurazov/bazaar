@@ -2155,7 +2155,7 @@ const ProductDetailPage = () => {
                   placeholder={t("bundleSearchPlaceholder")}
                 />
                 {componentSearch.trim().length >= 2 ? (
-                  <div className="absolute z-20 mt-2 w-full rounded-md border border-border bg-card shadow-lg">
+                  <div className="absolute z-[90] mt-2 w-full rounded-md border border-border bg-card shadow-lg">
                     <div className="max-h-56 overflow-y-auto py-1">
                       {componentSearchQuery.isLoading ? (
                         <div className="px-3 py-3 text-sm text-muted-foreground">

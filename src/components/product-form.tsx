@@ -5144,7 +5144,7 @@ export const ProductForm = ({
                     disabled={readOnly}
                   />
                   {showBundleResults && bundleSearch.trim().length > 0 ? (
-                    <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                    <div className="absolute z-[90] mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
                       {bundleSearchQuery.isLoading ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
                           {tCommon("loading")}
@@ -5710,7 +5710,7 @@ export const ProductForm = ({
             </FormActions>
           ) : null}
           {!readOnly && !hideActions ? (
-            <div className="sticky bottom-3 z-20 mt-4 rounded-lg border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.12)] md:hidden">
+            <div className="sticky bottom-3 z-30 mt-4 rounded-lg border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.12)] md:hidden">
               <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <Spinner className="h-4 w-4" />
@@ -6640,7 +6640,7 @@ export const ProductForm = ({
                         disabled={readOnly}
                       />
                       {showBundleResults && bundleSearch.trim().length > 0 ? (
-                        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                        <div className="absolute z-[90] mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
                           {bundleSearchQuery.isLoading ? (
                             <div className="px-3 py-2 text-sm text-muted-foreground">
                               {tCommon("loading")}
