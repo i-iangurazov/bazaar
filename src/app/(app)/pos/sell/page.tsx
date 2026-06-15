@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import Link from "next/link";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
 import { useSearchParams } from "next/navigation";
@@ -2585,42 +2585,77 @@ const PosSellPage = () => {
     journalSelectedSale,
     journalSelectedSale?.store ?? selectedRegister?.store ?? null,
   );
-  const journalAlreadyReturnedByLine: Record<string, number> = {};
-  for (const saleReturn of journalSelectedSale?.saleReturns ?? []) {
-    if (saleReturn.status !== "COMPLETED") {
-      continue;
+  const journalAlreadyReturnedByLine = useMemo(() => {
+    const returnedByLine: Record<string, number> = {};
+    for (const saleReturn of journalSelectedSale?.saleReturns ?? []) {
+      if (saleReturn.status !== "COMPLETED") {
+        continue;
+      }
+      for (const line of saleReturn.lines) {
+        returnedByLine[line.customerOrderLineId] =
+          (returnedByLine[line.customerOrderLineId] ?? 0) + line.qty;
+      }
     }
-    for (const line of saleReturn.lines) {
-      journalAlreadyReturnedByLine[line.customerOrderLineId] =
-        (journalAlreadyReturnedByLine[line.customerOrderLineId] ?? 0) + line.qty;
+    return returnedByLine;
+  }, [journalSelectedSale?.saleReturns]);
+  const journalReturnAvailableQtyByLine = useMemo(() => {
+    if (!journalSelectedSale?.lines.length) {
+      return {} as Record<string, number>;
     }
-  }
-  const journalReturnTotal = journalSelectedSale
-    ? roundMoney(
-        journalSelectedSale.lines.reduce((total, line) => {
-          const availableQty = Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0));
-          const qty = Math.trunc(Number(journalReturnQtyByLine[line.id] ?? 0));
-          if (!Number.isFinite(qty) || qty <= 0 || availableQty <= 0) {
-            return total;
-          }
-          return total + line.unitPriceKgs * Math.min(qty, availableQty);
-        }, 0),
-      )
-    : 0;
+    return Object.fromEntries(
+      journalSelectedSale.lines.map((line) => [
+        line.id,
+        Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0)),
+      ]),
+    );
+  }, [journalAlreadyReturnedByLine, journalSelectedSale?.lines]);
+  const journalReturnLineStates =
+    journalSelectedSale?.lines.map((line) => {
+      const availableQty = journalReturnAvailableQtyByLine[line.id] ?? 0;
+      const qty = Math.trunc(Number(journalReturnQtyByLine[line.id] ?? 0));
+      const selectedQty =
+        Number.isFinite(qty) && qty > 0 && availableQty > 0 ? Math.min(qty, availableQty) : 0;
+      return { line, availableQty, selectedQty };
+    }) ?? [];
+  const hasJournalReturnableLines = journalReturnLineStates.some((state) => state.availableQty > 0);
+  const journalReturnTotal = roundMoney(
+    journalReturnLineStates.reduce(
+      (total, state) => total + state.line.unitPriceKgs * state.selectedQty,
+      0,
+    ),
+  );
+  const hasJournalReturnSelection = journalReturnTotal > 0;
   const isJournalReturnBusy =
     createReturnMutation.isLoading ||
     addReturnLineMutation.isLoading ||
     completeReturnMutation.isLoading;
 
   useEffect(() => {
-    if (!journalReturnSaleId || !journalSelectedSale?.lines?.length) {
+    if (
+      !journalReturnSaleId ||
+      !journalSelectedSale ||
+      journalSelectedSale.id !== journalReturnSaleId ||
+      !journalSelectedSale.lines.length
+    ) {
       setJournalReturnQtyByLine({});
       return;
     }
-    setJournalReturnQtyByLine(
-      Object.fromEntries(journalSelectedSale.lines.map((line) => [line.id, "0"])),
+    setJournalReturnQtyByLine((current) =>
+      Object.fromEntries(
+        journalSelectedSale.lines.map((line) => {
+          const availableQty = journalReturnAvailableQtyByLine[line.id] ?? 0;
+          const qty = Math.trunc(Number(current[line.id] ?? 0));
+          const normalizedQty = Number.isFinite(qty) ? Math.max(0, Math.min(qty, availableQty)) : 0;
+          return [line.id, String(normalizedQty)];
+        }),
+      ),
     );
-  }, [journalReturnSaleId, journalSelectedSale?.id, journalSelectedSale?.lines]);
+  }, [
+    journalReturnAvailableQtyByLine,
+    journalReturnSaleId,
+    journalSelectedSale,
+    journalSelectedSale?.id,
+  ]);
 
   useEffect(() => {
     if (
@@ -2823,10 +2858,7 @@ const PosSellPage = () => {
     }
     setJournalReturnQtyByLine(
       Object.fromEntries(
-        journalSelectedSale.lines.map((line) => [
-          line.id,
-          String(Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0))),
-        ]),
+        journalReturnLineStates.map((state) => [state.line.id, String(state.availableQty)]),
       ),
     );
   };
@@ -2839,18 +2871,17 @@ const PosSellPage = () => {
       return;
     }
 
-    const selectedLines = saleForReturn.lines
+    const selectedLines = journalReturnLineStates
+      .filter((state) => state.selectedQty > 0 && state.availableQty > 0)
       .map((line) => ({
-        lineId: line.id,
-        maxQty: Math.max(0, line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0)),
-        qty: Math.trunc(Number(journalReturnQtyByLine[line.id] ?? 0)),
-      }))
-      .filter((line) => Number.isFinite(line.qty) && line.qty > 0 && line.maxQty > 0)
-      .map((line) => ({
-        lineId: line.lineId,
-        qty: Math.min(line.qty, line.maxQty),
+        lineId: line.line.id,
+        qty: line.selectedQty,
       }));
 
+    if (!hasJournalReturnableLines) {
+      toast({ variant: "error", description: t("history.returnNotAvailable") });
+      return;
+    }
     if (!selectedLines.length || journalReturnTotal <= 0) {
       toast({ variant: "error", description: t("history.returnQtyRequired") });
       return;
@@ -4312,29 +4343,49 @@ const PosSellPage = () => {
             variant="secondary"
             className="h-10"
             onClick={fillFullJournalReturn}
-            disabled={isJournalReturnBusy}
+            disabled={isJournalReturnBusy || !hasJournalReturnableLines}
           >
             {t("sell.fullReturn")}
           </Button>
 
-          <div className="space-y-3">
-            {journalSelectedSale.lines.map((line) => {
-              const availableQty = Math.max(
-                0,
-                line.qty - (journalAlreadyReturnedByLine[line.id] ?? 0),
-              );
-              return (
+          {journalSelectedSale.lines.length === 0 ? (
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+              {t("history.returnLinesMissing")}
+            </div>
+          ) : !hasJournalReturnableLines ? (
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              {t("history.returnNotAvailable")}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {journalReturnLineStates.map(({ line, availableQty, selectedQty }) => (
                 <div key={line.id} className="bazaar-admin-mobile-card p-3">
-                  <p className="text-sm font-medium text-foreground">{line.product.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {line.qty} x{" "}
-                    {formatKgsMoney(line.unitPriceKgs, locale, journalSelectedSaleCurrencySource)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("history.availableQty")}: {availableQty}
-                  </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {line.product.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {line.qty} x{" "}
+                        {formatKgsMoney(
+                          line.unitPriceKgs,
+                          locale,
+                          journalSelectedSaleCurrencySource,
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("history.availableQty")}: {availableQty}
+                      </p>
+                    </div>
+                    {selectedQty > 0 ? (
+                      <Badge variant="success" className="shrink-0">
+                        {selectedQty}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <Input
                     value={journalReturnQtyByLine[line.id] ?? "0"}
+                    aria-label={`${line.product.name}: ${t("history.availableQty")} ${availableQty}`}
                     onChange={(event) => {
                       const raw = event.target.value.replace(/[^\d]/g, "");
                       const parsed = raw ? Math.trunc(Number(raw)) : 0;
@@ -4348,9 +4399,9 @@ const PosSellPage = () => {
                     disabled={availableQty <= 0 || isJournalReturnBusy}
                   />
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
 
           <label className="space-y-1.5 text-sm font-medium text-foreground">
             <span>{t("sell.returnReason")}</span>
@@ -4401,7 +4452,9 @@ const PosSellPage = () => {
             <Button
               type="button"
               onClick={() => void handleStartJournalReturn()}
-              disabled={isJournalReturnBusy}
+              disabled={
+                isJournalReturnBusy || !hasJournalReturnableLines || !hasJournalReturnSelection
+              }
             >
               {isJournalReturnBusy ? <Spinner className="h-4 w-4" /> : null}
               {t("history.completeReturn")}

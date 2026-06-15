@@ -216,6 +216,24 @@ describe("pos entry navigation", () => {
     expect(customerServiceSource).toContain('throw new AppError("customerPhoneDigitsRequired"');
   });
 
+  it("keeps receipt journal returns tied to loaded receipt lines and blocks zero-quantity completion", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const ruMessages = await readSource("messages/ru.json");
+
+    expect(pageSource).toContain("const journalReturnAvailableQtyByLine =");
+    expect(pageSource).toContain("const journalReturnLineStates =");
+    expect(pageSource).toContain("const hasJournalReturnableLines =");
+    expect(pageSource).toContain("const hasJournalReturnSelection =");
+    expect(pageSource).toContain('t("history.returnLinesMissing")');
+    expect(pageSource).toContain('t("history.returnNotAvailable")');
+    expect(pageSource).toContain("disabled={isJournalReturnBusy || !hasJournalReturnableLines}");
+    expect(pageSource).toContain(
+      "isJournalReturnBusy || !hasJournalReturnableLines || !hasJournalReturnSelection",
+    );
+    expect(ruMessages).toContain('"returnLinesMissing"');
+    expect(ruMessages).toContain('"returnNotAvailable"');
+  });
+
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 

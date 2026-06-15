@@ -2465,6 +2465,8 @@
       "returnsTitle": "Кайтаруулар",
       "openShiftRequired": "Кайтаруу үчүн ачык смена керек.",
       "returnQtyRequired": "Кайтарыла турган товарларды жана санын тандаңыз.",
+      "returnLinesMissing": "Бул чекте кайтарууга ылайыктуу позициялар табылган жок. Журналды жаңыртыңыз же чектин деталдарын ачыңыз.",
+      "returnNotAvailable": "Бул чек боюнча кайтарууга жеткиликтүү товар калган жок.",
       "returnSuccess": "Кайтаруу аяктады.",
       "returnDialogTitle": "Кайтаруу түзүү",
       "returnDialogDescription": "Чек: {number}",

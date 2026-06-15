@@ -2465,6 +2465,8 @@
       "returnsTitle": "Returns",
       "openShiftRequired": "Open shift is required.",
       "returnQtyRequired": "Return qty is required.",
+      "returnLinesMissing": "No returnable receipt lines were found. Refresh the journal or open receipt details.",
+      "returnNotAvailable": "This receipt has no items available for return.",
       "returnSuccess": "Return completed.",
       "returnDialogTitle": "Return dialog",
       "returnDialogDescription": "Return dialog description {number}",

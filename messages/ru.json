@@ -2465,6 +2465,8 @@
       "returnsTitle": "Возвраты",
       "openShiftRequired": "Для возврата нужна открытая смена.",
       "returnQtyRequired": "Выберите товары и количество для возврата.",
+      "returnLinesMissing": "В этом чеке не найдены позиции для возврата. Обновите журнал или откройте детали чека.",
+      "returnNotAvailable": "По этому чеку больше нет товаров, доступных к возврату.",
       "returnSuccess": "Возврат завершен.",
       "returnDialogTitle": "Оформление возврата",
       "returnDialogDescription": "Чек: {number}",
