@@ -28,10 +28,8 @@ describe("mobile settings source", () => {
   it("keeps store profile and product settings saves reachable on mobile", () => {
     expect(profileSource).toContain('id="store-profile"');
     expect(profileSource).toContain('id="product-settings"');
-    expect(profileSource).toContain('className="scroll-mt-24"');
-    expect(profileSource).toContain(
-      'className="rounded-md border border-border bg-background p-3 md:hidden"',
-    );
+    expect(profileSource).toContain('className="bazaar-admin-surface scroll-mt-24"');
+    expect(profileSource).toContain('className="bazaar-admin-modal-card md:hidden"');
     expect(profileSource).toContain('<FormActions className="hidden md:flex">');
   });
 

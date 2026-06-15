@@ -261,8 +261,8 @@ const PosRegistersPage = () => {
       <PageHeader title={t("registers.title")} subtitle={t("registers.subtitle")} />
 
       {canManage ? (
-        <Card>
-          <CardHeader>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("registers.createTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -307,8 +307,8 @@ const PosRegistersPage = () => {
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader className="gap-4">
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="gap-4 border-b border-border/60 bg-muted/20">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle>{t("registers.listTitle")}</CardTitle>
@@ -320,7 +320,7 @@ const PosRegistersPage = () => {
                 })}
               </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(180px,240px)_auto] sm:items-center">
+            <div className="bazaar-admin-toolbar grid gap-2 sm:grid-cols-[minmax(180px,240px)_auto] sm:items-center">
               <Select value={storeFilter} onValueChange={setStoreFilter}>
                 <SelectTrigger aria-label={tCommon("store")}>
                   <SelectValue />
@@ -353,13 +353,14 @@ const PosRegistersPage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           {registersQuery.isLoading || storesQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
 
-          <div className="hidden overflow-x-auto md:block">
+          <div className="bazaar-admin-table-shell hidden md:block">
+            <div className="bazaar-admin-table-scroll">
             <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-sm">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -406,11 +407,12 @@ const PosRegistersPage = () => {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="space-y-3 md:hidden">
             {visibleRegisters.map((register) => (
-              <div key={register.id} className="rounded-md border border-border bg-card p-4">
+              <div key={register.id} className="bazaar-admin-mobile-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-foreground">{register.name}</p>
@@ -456,7 +458,7 @@ const PosRegistersPage = () => {
           </div>
 
           {!registersQuery.isLoading && !visibleRegisters.length ? (
-            <p className="text-sm text-muted-foreground">{t("registers.empty")}</p>
+            <p className="bazaar-admin-empty">{t("registers.empty")}</p>
           ) : null}
         </CardContent>
       </Card>

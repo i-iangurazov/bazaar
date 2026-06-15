@@ -265,11 +265,11 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
         <p className="text-sm text-danger">{tErrors("forbidden")}</p>
       ) : (
         <>
-          <Card className="border-border/70 shadow-none">
-            <CardHeader className="px-4 py-3 sm:px-5">
+          <Card className="bazaar-admin-surface">
+            <CardHeader className="bazaar-admin-section-header px-4 py-3 sm:px-5">
               <CardTitle className="text-base">{t("filtersTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
+            <CardContent className="bazaar-admin-toolbar m-4 grid gap-3 sm:m-5 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
               <Select
                 value={storeId || "all"}
                 onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
@@ -344,8 +344,8 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-border/70 shadow-none">
-            <CardHeader className="flex flex-col gap-1 border-b border-border bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <Card className="bazaar-admin-surface overflow-hidden">
+            <CardHeader className="bazaar-admin-section-header flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <CardTitle className="text-base">{t("title")}</CardTitle>
               {!receiptsQuery.isLoading && !receiptsQuery.error ? (
                 <p className="text-xs text-muted-foreground">
@@ -355,12 +355,12 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
             </CardHeader>
             <CardContent className="p-0">
               {receiptsQuery.isLoading ? (
-                <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-foreground sm:px-5">
+                <div className="bazaar-admin-empty m-4 min-h-[10rem] gap-2 sm:m-5">
                   <Spinner className="h-4 w-4" />
                   {tCommon("loading")}
                 </div>
               ) : receiptsQuery.error ? (
-                <div className="px-4 py-5 text-sm text-danger sm:px-5">
+                <div className="bazaar-admin-error m-4 sm:m-5">
                   {translateError(tErrors, receiptsQuery.error)}
                 </div>
               ) : receipts.length ? (
@@ -370,7 +370,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                   desktopClassName="border-0"
                   mobileClassName="p-3 sm:p-4"
                   renderDesktop={(items) => (
-                    <div className="overflow-x-auto">
+                    <div className="bazaar-admin-table-scroll">
                       <Table className="min-w-[1120px]" sortable={false}>
                         <TableHeader className="bg-muted/40">
                           <TableRow>
@@ -540,7 +540,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                     </div>
                   )}
                   renderMobile={(item) => (
-                    <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+                    <div className="bazaar-admin-mobile-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-foreground">{item.number}</p>
@@ -641,7 +641,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                   )}
                 />
               ) : (
-                <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5">{t("empty")}</p>
+                <div className="bazaar-admin-empty m-4 sm:m-5">{t("empty")}</div>
               )}
             </CardContent>
           </Card>

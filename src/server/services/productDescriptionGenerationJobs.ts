@@ -17,6 +17,7 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
+import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 
 export const PRODUCT_DESCRIPTION_GENERATION_JOB_NAME = "product-description-generation";
 
@@ -101,6 +102,7 @@ const getGenerationJob = async (organizationId: string, jobId: string) => {
           status: true,
           errorMessage: true,
           generatedDescription: true,
+          previousDescription: true,
           imageCount: true,
           startedAt: true,
           completedAt: true,
@@ -284,6 +286,498 @@ const collectProductImageUrls = (product: {
         .filter((value): value is string => Boolean(value)),
     ),
   ).slice(0, MAX_IMAGES_PER_PRODUCT);
+
+type ProductSpecAutofillKind =
+  | "manufacturer"
+  | "model"
+  | "type"
+  | "color"
+  | "material"
+  | "compatibility"
+  | "design"
+  | "features"
+  | "purpose";
+
+type ProductSpecTemplate = {
+  attributeKey: string;
+  labelRu: string;
+  type: "TEXT" | "NUMBER" | "SELECT" | "MULTI_SELECT";
+  optionsRu: string[];
+  autofillKind: ProductSpecAutofillKind | null;
+};
+
+type ProductSpecGenerationResult =
+  | {
+      status: "generated" | "overwritten";
+      filledValueCount: number;
+      previousValues: Record<string, string | null>;
+      nextValues: Record<string, unknown>;
+    }
+  | {
+      status: "skipped" | "failed";
+      reason: string;
+      filledValueCount: 0;
+      previousValues?: Record<string, string | null>;
+      nextValues?: Record<string, unknown>;
+    };
+
+const normalizeSpecLabel = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+
+const resolveProductSpecAutofillKind = (input: {
+  labelRu?: string | null;
+  attributeKey?: string | null;
+}): ProductSpecAutofillKind | null => {
+  const values = [normalizeSpecLabel(input.labelRu), normalizeSpecLabel(input.attributeKey)].filter(
+    (value) => value.length > 0,
+  );
+  if (!values.length || values.some((value) => value.includes("описани") || value.includes("description"))) {
+    return null;
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("производ") ||
+        value.includes("бренд") ||
+        value.includes("manufacturer") ||
+        value.includes("brand") ||
+        value.includes("maker"),
+    )
+  ) {
+    return "manufacturer";
+  }
+  if (values.some((value) => value.includes("модел") || value.includes("model"))) {
+    return "model";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("совмест") ||
+        value.includes("подходит") ||
+        value.includes("устройств") ||
+        value.includes("compatib") ||
+        value.includes("device"),
+    )
+  ) {
+    return "compatibility";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("материал") ||
+        value.includes("состав") ||
+        value.includes("material") ||
+        value.includes("composition"),
+    )
+  ) {
+    return "material";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("дизайн") ||
+        value.includes("принт") ||
+        value.includes("рисунок") ||
+        value.includes("pattern") ||
+        value.includes("design") ||
+        value.includes("style"),
+    )
+  ) {
+    return "design";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("особен") ||
+        value.includes("характеристик") ||
+        value.includes("feature"),
+    )
+  ) {
+    return "features";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("назначен") ||
+        value.includes("применен") ||
+        value.includes("purpose") ||
+        value.includes("usecase"),
+    )
+  ) {
+    return "purpose";
+  }
+  if (
+    values.some(
+      (value) =>
+        value.includes("цвет") ||
+        value.includes("расцвет") ||
+        value.includes("color") ||
+        value.includes("colour"),
+    )
+  ) {
+    return "color";
+  }
+  if (
+    values.some((value) => value.includes("тип") || value.includes("вид") || value.includes("type"))
+  ) {
+    return "type";
+  }
+  return null;
+};
+
+const parseOptionStrings = (value: Prisma.JsonValue | null | undefined) =>
+  Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter((item) => item.length > 0)
+    : [];
+
+const toStoredProductSpecValue = (type: ProductSpecTemplate["type"], value: string) => {
+  if (type === "MULTI_SELECT") {
+    return [value];
+  }
+  if (type === "NUMBER") {
+    const parsed = Number(value.replace(/\s+/g, "").replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+  return value;
+};
+
+const toSpecString = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((item) => toSpecString(item))
+      .filter((item): item is string => Boolean(item));
+    return normalized.length ? normalized.join(", ") : null;
+  }
+  return null;
+};
+
+const resolveSpecGenerationFailureReason = (error: unknown) => {
+  if (error instanceof AppError) {
+    return error.message;
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "aiSpecsGenerationFailed";
+};
+
+const addCurrentSpecValue = (
+  values: Map<string, string[]>,
+  key: string,
+  rawValue: unknown,
+) => {
+  const value = toSpecString(rawValue);
+  if (!value) {
+    return;
+  }
+  const existing = values.get(key) ?? [];
+  if (!existing.includes(value)) {
+    existing.push(value);
+    values.set(key, existing);
+  }
+};
+
+const generateAndPersistProductSpecs = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  jobId: string;
+  product: {
+    id: string;
+    sku: string;
+    name: string;
+    category: string | null;
+    supplier: { name: string } | null;
+    photoUrl: string | null;
+    images: Array<{ url: string }>;
+    variants: Array<{
+      id: string;
+      attributes: Prisma.JsonValue;
+      attributeValues: Array<{ key: string; value: Prisma.JsonValue }>;
+    }>;
+  };
+  imageUrls: string[];
+  overwriteExisting: boolean;
+  logger: ProductDescriptionGenerationLogger;
+}): Promise<ProductSpecGenerationResult> => {
+  const category = input.product.category?.trim() ?? "";
+  if (!category) {
+    return { status: "skipped", reason: "missingCategory", filledValueCount: 0 };
+  }
+
+  const categoryTemplates = await prisma.categoryAttributeTemplate.findMany({
+    where: {
+      organizationId: input.organizationId,
+      category,
+    },
+    select: {
+      attributeKey: true,
+      order: true,
+      definition: {
+        select: {
+          labelRu: true,
+          type: true,
+          optionsRu: true,
+          isActive: true,
+        },
+      },
+    },
+    orderBy: [{ order: "asc" }, { attributeKey: "asc" }],
+  });
+
+  const templateSpecs: ProductSpecTemplate[] = categoryTemplates
+    .filter((template) => template.definition?.isActive && template.definition.labelRu.trim())
+    .map((template) => ({
+      attributeKey: template.attributeKey,
+      labelRu: template.definition?.labelRu.trim() ?? template.attributeKey,
+      type: template.definition?.type ?? "TEXT",
+      optionsRu: parseOptionStrings(template.definition?.optionsRu),
+      autofillKind: resolveProductSpecAutofillKind({
+        labelRu: template.definition?.labelRu,
+        attributeKey: template.attributeKey,
+      }),
+    }));
+
+  if (!templateSpecs.length) {
+    return { status: "skipped", reason: "missingSpecTemplate", filledValueCount: 0 };
+  }
+
+  const currentValues = new Map<string, string[]>();
+  for (const variant of input.product.variants) {
+    if (variant.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes)) {
+      for (const [key, value] of Object.entries(variant.attributes as Record<string, unknown>)) {
+        addCurrentSpecValue(currentValues, key, value);
+      }
+    }
+    for (const valueRow of variant.attributeValues) {
+      addCurrentSpecValue(currentValues, valueRow.key, valueRow.value);
+    }
+  }
+
+  const nextValues = new Map<string, unknown>();
+  const previousValues: Record<string, string | null> = {};
+  const aiRequests: Array<{
+    attributeKey: string;
+    type: ProductSpecTemplate["type"];
+    kind: Exclude<ProductSpecAutofillKind, "manufacturer" | "model">;
+    labelRu: string;
+    options?: string[];
+  }> = [];
+  let supportedFieldCount = 0;
+  let aiErrorMessage: string | null = null;
+
+  for (const templateSpec of templateSpecs) {
+    if (!templateSpec.autofillKind) {
+      continue;
+    }
+    supportedFieldCount += 1;
+    const existing = currentValues.get(templateSpec.attributeKey) ?? [];
+    previousValues[templateSpec.attributeKey] = existing[0] ?? null;
+    if (existing.length && !input.overwriteExisting) {
+      continue;
+    }
+
+    if (templateSpec.autofillKind === "manufacturer") {
+      const manufacturerValue = input.product.supplier?.name?.trim() ?? "";
+      if (manufacturerValue) {
+        nextValues.set(
+          templateSpec.attributeKey,
+          toStoredProductSpecValue(templateSpec.type, manufacturerValue),
+        );
+      }
+      continue;
+    }
+
+    if (templateSpec.autofillKind === "model") {
+      const modelValue = input.product.sku.trim();
+      if (modelValue) {
+        nextValues.set(
+          templateSpec.attributeKey,
+          toStoredProductSpecValue(templateSpec.type, modelValue),
+        );
+      }
+      continue;
+    }
+
+    aiRequests.push({
+      attributeKey: templateSpec.attributeKey,
+      type: templateSpec.type,
+      kind: templateSpec.autofillKind,
+      labelRu: templateSpec.labelRu,
+      options: templateSpec.optionsRu,
+    });
+  }
+
+  if (!supportedFieldCount) {
+    return { status: "skipped", reason: "noSupportedSpecFields", filledValueCount: 0 };
+  }
+
+  if (aiRequests.length > 0) {
+    if (input.imageUrls.length) {
+      try {
+        const aiResult = await suggestProductSpecsFromImages({
+          imageUrls: input.imageUrls,
+          requestedSpecs: aiRequests.map((entry) => ({
+            kind: entry.kind,
+            labelRu: entry.labelRu,
+            options: entry.options,
+          })),
+          logger: input.logger,
+        });
+        for (const request of aiRequests) {
+          const suggestedValue = aiResult.suggestions[request.kind];
+          if (!suggestedValue) {
+            continue;
+          }
+          nextValues.set(
+            request.attributeKey,
+            toStoredProductSpecValue(request.type, suggestedValue),
+          );
+        }
+      } catch (error) {
+        aiErrorMessage = resolveSpecGenerationFailureReason(error);
+        input.logger.warn(
+          {
+            phase: "product-description-job-specs",
+            productId: input.product.id,
+            error: error instanceof Error ? { message: error.message, name: error.name } : error,
+          },
+          "product description job spec generation failed for item",
+        );
+      }
+    } else {
+      aiErrorMessage = "aiSpecNoUsableImages";
+    }
+  }
+
+  if (!nextValues.size) {
+    const allSupportedFieldsAlreadyFilled =
+      supportedFieldCount > 0 &&
+      templateSpecs
+        .filter((templateSpec) => Boolean(templateSpec.autofillKind))
+        .every((templateSpec) => (currentValues.get(templateSpec.attributeKey) ?? []).length > 0);
+    if (allSupportedFieldsAlreadyFilled && !input.overwriteExisting) {
+      return {
+        status: "skipped",
+        reason: "specsAlreadyExist",
+        filledValueCount: 0,
+        previousValues,
+      };
+    }
+    if (aiErrorMessage && aiErrorMessage !== "aiSpecNoUsableImages") {
+      return {
+        status: "failed",
+        reason: aiErrorMessage,
+        filledValueCount: 0,
+        previousValues,
+      };
+    }
+    return {
+      status: "skipped",
+      reason: aiErrorMessage === "aiSpecNoUsableImages" ? "aiSpecNoUsableImages" : "noResolvedSpecValues",
+      filledValueCount: 0,
+      previousValues,
+    };
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    let targetVariant = input.product.variants[0];
+    if (!targetVariant) {
+      targetVariant = await tx.productVariant.create({
+        data: {
+          productId: input.product.id,
+          attributes: toJson({}),
+        },
+        select: {
+          id: true,
+          attributes: true,
+          attributeValues: {
+            select: { key: true, value: true },
+          },
+        },
+      });
+    }
+
+    const currentAttributes =
+      targetVariant.attributes &&
+      typeof targetVariant.attributes === "object" &&
+      !Array.isArray(targetVariant.attributes)
+        ? { ...(targetVariant.attributes as Record<string, unknown>) }
+        : {};
+
+    for (const [key, value] of nextValues.entries()) {
+      currentAttributes[key] = value;
+    }
+
+    await tx.productVariant.update({
+      where: { id: targetVariant.id },
+      data: {
+        attributes: toJson(currentAttributes),
+      },
+    });
+
+    for (const [key, value] of nextValues.entries()) {
+      await tx.variantAttributeValue.upsert({
+        where: {
+          variantId_key: {
+            variantId: targetVariant.id,
+            key,
+          },
+        },
+        update: {
+          value: toJson(value),
+        },
+        create: {
+          organizationId: input.organizationId,
+          productId: input.product.id,
+          variantId: targetVariant.id,
+          key,
+          value: toJson(value),
+        },
+      });
+    }
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "PRODUCT_UPDATE",
+      entity: "Product",
+      entityId: input.product.id,
+      requestId: input.requestId,
+      before: toJson({ specs: previousValues }),
+      after: toJson({
+        specs: Object.fromEntries(nextValues),
+        generated: true,
+        generationJobId: input.jobId,
+      }),
+    });
+
+    return nextValues.size;
+  });
+
+  return {
+    status: Object.values(previousValues).some((value) => value) ? "overwritten" : "generated",
+    filledValueCount: updated,
+    previousValues,
+    nextValues: Object.fromEntries(nextValues),
+  };
+};
 
 const summarizeItemStatuses = (
   items: Array<{ status: ProductDescriptionGenerationItemStatus }>,
@@ -549,11 +1043,15 @@ const processJobItem = async (input: {
     },
     select: {
       id: true,
+      sku: true,
       name: true,
       category: true,
       isBundle: true,
       description: true,
       photoUrl: true,
+      supplier: {
+        select: { name: true },
+      },
       images: {
         where: {
           url: {
@@ -563,6 +1061,20 @@ const processJobItem = async (input: {
         select: { url: true },
         orderBy: { position: "asc" },
         take: MAX_IMAGES_PER_PRODUCT,
+      },
+      variants: {
+        where: { isActive: true },
+        select: {
+          id: true,
+          attributes: true,
+          attributeValues: {
+            select: {
+              key: true,
+              value: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
@@ -577,51 +1089,63 @@ const processJobItem = async (input: {
   }
 
   const previousDescription = product.description?.trim() ?? "";
-  if (previousDescription && !input.job.overwriteExisting) {
-    await markItem({
-      itemId: input.item.id,
-      status: ProductDescriptionGenerationItemStatus.SKIPPED,
-      errorMessage: "descriptionAlreadyExists",
-      previousDescription,
-    });
-    return;
-  }
-
   const imageUrls = collectProductImageUrls(product);
-  if (!imageUrls.length) {
-    await markItem({
-      itemId: input.item.id,
-      status: ProductDescriptionGenerationItemStatus.SKIPPED,
-      errorMessage: "aiDescriptionImageRequired",
-      previousDescription,
-      imageCount: 0,
-    });
-    return;
+  let generatedDescription: string | null = null;
+  let descriptionSkipReason: string | null = null;
+  let descriptionFailureReason: string | null = null;
+
+  if (previousDescription && !input.job.overwriteExisting) {
+    descriptionSkipReason = "descriptionAlreadyExists";
+  } else if (!imageUrls.length) {
+    descriptionSkipReason = "aiDescriptionImageRequired";
+  } else {
+    try {
+      const result = await generateProductDescriptionFromImages({
+        name: product.name,
+        category: product.category,
+        isBundle: product.isBundle,
+        locale: input.job.locale,
+        imageUrls,
+        logger: input.logger,
+      });
+
+      const nextDescription = result.description.trim();
+      if (!nextDescription || nextDescription === previousDescription) {
+        descriptionSkipReason = "aiDescriptionGenerationSkipped";
+      } else {
+        generatedDescription = nextDescription;
+      }
+    } catch (error) {
+      const errorMessage = toErrorMessage(error);
+      if (isSkipErrorMessage(errorMessage)) {
+        descriptionSkipReason = errorMessage;
+      } else {
+        descriptionFailureReason = errorMessage;
+      }
+      input.logger.warn(
+        {
+          jobId: input.job.id,
+          productId: product.id,
+          itemId: input.item.id,
+          error: error instanceof Error ? { message: error.message, name: error.name } : error,
+        },
+        "product description generation failed for item",
+      );
+    }
   }
 
-  try {
-    const result = await generateProductDescriptionFromImages({
-      name: product.name,
-      category: product.category,
-      isBundle: product.isBundle,
-      locale: input.job.locale,
-      imageUrls,
-      logger: input.logger,
-    });
+  const specResult = await generateAndPersistProductSpecs({
+    organizationId: input.job.organizationId,
+    actorId: input.job.createdById,
+    requestId: randomUUID(),
+    jobId: input.job.id,
+    product,
+    imageUrls,
+    overwriteExisting: input.job.overwriteExisting,
+    logger: input.logger,
+  });
 
-    const generatedDescription = result.description.trim();
-    if (!generatedDescription || generatedDescription === previousDescription) {
-      await markItem({
-        itemId: input.item.id,
-        status: ProductDescriptionGenerationItemStatus.SKIPPED,
-        errorMessage: "aiDescriptionGenerationSkipped",
-        generatedDescription,
-        previousDescription,
-        imageCount: imageUrls.length,
-      });
-      return;
-    }
-
+  if (generatedDescription) {
     await prisma.product.update({
       where: { id: product.id },
       data: { description: generatedDescription },
@@ -640,7 +1164,12 @@ const processJobItem = async (input: {
         generationJobId: input.job.id,
       }),
     });
+  }
 
+  const specsUpdated =
+    specResult.status === "generated" || specResult.status === "overwritten";
+
+  if (generatedDescription || specsUpdated) {
     await markItem({
       itemId: input.item.id,
       status: ProductDescriptionGenerationItemStatus.SUCCESS,
@@ -648,27 +1177,37 @@ const processJobItem = async (input: {
       previousDescription,
       imageCount: imageUrls.length,
     });
-  } catch (error) {
-    const errorMessage = toErrorMessage(error);
+    return;
+  }
+
+  const failureReason =
+    descriptionFailureReason || (specResult.status === "failed" ? specResult.reason : null);
+  if (failureReason) {
     await markItem({
       itemId: input.item.id,
-      status: isSkipErrorMessage(errorMessage)
-        ? ProductDescriptionGenerationItemStatus.SKIPPED
-        : ProductDescriptionGenerationItemStatus.FAILED,
-      errorMessage,
+      status: ProductDescriptionGenerationItemStatus.FAILED,
+      errorMessage: failureReason,
       previousDescription,
       imageCount: imageUrls.length,
     });
-    input.logger.warn(
-      {
-        jobId: input.job.id,
-        productId: product.id,
-        itemId: input.item.id,
-        error: error instanceof Error ? { message: error.message, name: error.name } : error,
-      },
-      "product description generation failed for item",
-    );
+    return;
   }
+
+  const skipReason =
+    descriptionSkipReason === "descriptionAlreadyExists" &&
+    specResult.status === "skipped" &&
+    specResult.reason === "specsAlreadyExist"
+      ? "descriptionAndSpecsAlreadyExist"
+      : descriptionSkipReason ?? (specResult.status === "skipped" ? specResult.reason : null);
+
+  await markItem({
+    itemId: input.item.id,
+    status: ProductDescriptionGenerationItemStatus.SKIPPED,
+    errorMessage: skipReason ?? "aiDescriptionGenerationSkipped",
+    generatedDescription,
+    previousDescription,
+    imageCount: imageUrls.length,
+  });
 };
 
 const getPayloadJobId = (value?: JobPayload) => {

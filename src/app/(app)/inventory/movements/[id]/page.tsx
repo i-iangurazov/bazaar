@@ -9,6 +9,7 @@ import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { BackIcon, ChevronDownIcon, EmptyIcon, PrintIcon, ViewIcon } from "@/components/icons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
@@ -129,27 +131,42 @@ const ProductMovementDocumentPage = () => {
       />
 
       {documentQuery.error ? (
-        <div className="mb-4 border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {translateError(tErrors, documentQuery.error)}
         </div>
       ) : null}
 
       {documentQuery.isLoading ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            {tCommon("loading")}
+        <Card className="overflow-hidden">
+          <CardContent className="space-y-4 p-6" data-movement-detail-skeleton>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div key={index} className="rounded-xl border border-border/65 bg-muted/25 p-3">
+                  <Skeleton className="mb-2 h-3 w-20" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-12 rounded-xl" />
+              ))}
+            </div>
           </CardContent>
         </Card>
       ) : !document ? (
-        <Card>
-          <CardContent className="flex min-h-[14rem] flex-col items-center justify-center p-6 text-center text-sm text-muted-foreground">
-            <EmptyIcon className="mb-3 h-8 w-8" aria-hidden />
-            {t("documentNotFound")}
+        <Card className="overflow-hidden">
+          <CardContent className="p-6">
+            <EmptyState
+              icon={<EmptyIcon className="h-8 w-8" aria-hidden />}
+              description={t("documentNotFound")}
+              className="border-0 bg-muted/25"
+            />
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{t("documentSummary")}</CardTitle>
             </CardHeader>
@@ -235,7 +252,7 @@ const ProductMovementDocumentPage = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{t("documentLines")}</CardTitle>
             </CardHeader>
@@ -299,7 +316,7 @@ const ProductMovementDocumentPage = () => {
                   </div>
                 )}
                 renderMobile={(line) => (
-                  <div className="rounded-md border border-border bg-card p-3">
+                  <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <Link

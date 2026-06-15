@@ -8,7 +8,11 @@ const readSource = (relativePath: string) =>
 
 describe("index page source layout", () => {
   it.each([
-    ["products", "src/app/(app)/products/page.tsx", '<CardTitle>{t("title")}</CardTitle>'],
+    [
+      "products",
+      "src/app/(app)/products/page.tsx",
+      '<CardTitle className="tracking-tight">{t("title")}</CardTitle>',
+    ],
     [
       "inventory",
       "src/app/(app)/inventory/page.tsx",
@@ -61,18 +65,25 @@ describe("index page source layout", () => {
 
   it("exposes filtered AI description generation without requiring selected rows", async () => {
     const pageSource = await readSource("src/app/(app)/products/page.tsx");
-    const tableCardStart = pageSource.indexOf('<CardTitle>{t("title")}</CardTitle>');
-    const contentStart = pageSource.indexOf("<CardContent>", tableCardStart);
+    const pageHeaderStart = pageSource.indexOf("<PageHeader");
+    const tableCardStart = pageSource.indexOf(
+      '<CardTitle className="tracking-tight">{t("title")}</CardTitle>',
+    );
+    const contentStart = pageSource.indexOf("<CardContent", tableCardStart);
     const selectionToolbarStart = pageSource.indexOf("<SelectionToolbar", contentStart);
     const filteredActionStart = pageSource.indexOf(
       "handleBulkGenerateDescriptionsForCurrentFilter",
-      contentStart,
+      pageHeaderStart,
     );
 
-    expect(pageSource).toContain("const handleBulkGenerateDescriptionsForCurrentFilter = async () =>");
+    expect(pageSource).toContain("const handleBulkGenerateDescriptionsForCurrentFilter = async (");
+    expect(pageSource).toContain("overwriteExisting: options.overwriteExisting ?? true");
+    expect(pageSource).toContain("handleBulkGenerateDescriptionsForCurrentFilter({\n                          overwriteExisting: false,");
+    expect(pageHeaderStart).toBeGreaterThan(-1);
     expect(tableCardStart).toBeGreaterThan(-1);
-    expect(filteredActionStart).toBeGreaterThan(contentStart);
-    expect(selectionToolbarStart).toBeGreaterThan(filteredActionStart);
+    expect(filteredActionStart).toBeGreaterThan(pageHeaderStart);
+    expect(filteredActionStart).toBeLessThan(tableCardStart);
+    expect(selectionToolbarStart).toBeGreaterThan(contentStart);
   });
 
   it("keeps variant sale prices in the product form contract", async () => {

@@ -6,14 +6,19 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { SignOutIcon } from "@/components/icons";
-export const SignOutButton = () => {
+import { cn } from "@/lib/utils";
+
+export const SignOutButton = ({ className }: { className?: string }) => {
   const t = useTranslations("common");
   const queryClient = useQueryClient();
 
   return (
     <Button
       variant="secondary"
-      className="w-full justify-start gap-2 text-left group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0"
+      className={cn(
+        "w-full justify-start gap-2 text-left group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0",
+        className,
+      )}
       onClick={() => {
         queryClient.clear();
         void signOut({ callbackUrl: "/login" });

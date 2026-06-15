@@ -137,7 +137,7 @@ const SalesOrdersPage = () => {
         : t("source.manual");
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -161,12 +161,12 @@ const SalesOrdersPage = () => {
         }
       />
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3 md:hidden">
+          <div className="bazaar-admin-toolbar space-y-3 md:hidden">
             <Input
               value={search}
               onChange={(event) => {
@@ -214,7 +214,7 @@ const SalesOrdersPage = () => {
             </div>
           </div>
 
-          <div className="hidden grid-cols-1 gap-3 md:grid md:grid-cols-4">
+          <div className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-4">
             <Input
               value={search}
               onChange={(event) => {
@@ -283,7 +283,8 @@ const SalesOrdersPage = () => {
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
                 <Table className="min-w-[980px]" data-tour="sales-orders-table">
                   <TableHeader>
                     <TableRow>
@@ -403,10 +404,11 @@ const SalesOrdersPage = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             )}
             renderMobile={(order) => (
-              <Card className="border-border">
+              <Card className="bazaar-admin-mobile-card">
                 <CardContent className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <Link
@@ -517,11 +519,11 @@ const SalesOrdersPage = () => {
             paginationKey="sales-orders"
           />
           {listQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
               <span>{tCommon("loading")}</span>
             </div>
           ) : totalItems === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noOrders")}
@@ -542,7 +544,7 @@ const SalesOrdersPage = () => {
             role="dialog"
             aria-modal="true"
             aria-label={tCommon("filters")}
-            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto border-t border-border bg-background p-4 shadow-2xl"
+            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl border-t border-border bg-background p-4 shadow-2xl"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
             <div className="flex items-start justify-between gap-3">

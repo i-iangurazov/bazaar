@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
 import {
   BackIcon,
   DeleteIcon,
@@ -545,11 +546,7 @@ const InventoryTransfersPage = () => {
     typeof value === "number" ? formatMoney(value) : t("transferCostNotSpecified");
 
   if (sessionStatus === "loading") {
-    return (
-      <div className="flex min-h-64 items-center justify-center">
-        <Spinner className="h-5 w-5" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   if (!canManageStock) {
@@ -567,7 +564,7 @@ const InventoryTransfersPage = () => {
             </Button>
           }
         />
-        <div className="border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {t("transferPermissionDenied")}
         </div>
       </div>
@@ -591,7 +588,7 @@ const InventoryTransfersPage = () => {
       />
 
       <div className="space-y-6">
-        <section className="rounded-md border border-border bg-card p-4">
+        <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">{t("transferDetailsTitle")}</h3>
             <Button asChild variant="ghost" size="sm" className="md:hidden">
@@ -646,7 +643,7 @@ const InventoryTransfersPage = () => {
         </section>
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
-          <section className="rounded-md border border-border bg-card p-4">
+          <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <h3 className="text-base font-semibold text-foreground">
                 {t("transferSearchTitle")}
@@ -675,7 +672,7 @@ const InventoryTransfersPage = () => {
                 autoComplete="off"
               />
             </div>
-            <div className="mt-3 max-h-[25rem] overflow-y-auto border border-border bg-background">
+            <div className="bazaar-doc-search-list">
               {searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -688,7 +685,7 @@ const InventoryTransfersPage = () => {
                   return (
                     <div
                       key={key}
-                      className="flex items-center border-b border-border last:border-b-0 hover:bg-secondary"
+                      className="bazaar-doc-search-row"
                     >
                       <button
                         type="button"
@@ -696,7 +693,7 @@ const InventoryTransfersPage = () => {
                         onClick={() => void addSearchResult(result, "manual")}
                         disabled={!canSearch}
                       >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden bg-muted/30">
+                        <span className="bazaar-doc-thumb">
                           {getPreviewUrl(result) ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -743,7 +740,7 @@ const InventoryTransfersPage = () => {
             </div>
           </section>
 
-          <section className="rounded-md border border-border bg-card p-4">
+          <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">{t("transferTableTitle")}</h3>
               <Badge variant={validationMessage ? "warning" : "success"}>
@@ -769,13 +766,13 @@ const InventoryTransfersPage = () => {
                     <div
                       key={line.key}
                       data-transfer-line-row
-                      className="grid gap-3 rounded-md border border-border bg-background p-2.5 lg:grid-cols-[minmax(10rem,1fr)_4.75rem_5.75rem_5.75rem_5.75rem_5.75rem_2.25rem] lg:items-center lg:gap-2"
+                      className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(10rem,1fr)_4.75rem_5.75rem_5.75rem_5.75rem_5.75rem_2.25rem] lg:items-center lg:gap-2"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex h-7 min-w-7 shrink-0 items-center justify-center border border-border bg-muted/40 px-1 text-xs font-semibold tabular-nums text-muted-foreground">
+                        <span className="bazaar-doc-line-index">
                           {lineNumber}
                         </span>
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden border border-border bg-muted/30">
+                        <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -886,7 +883,7 @@ const InventoryTransfersPage = () => {
                 })}
               </div>
             ) : (
-              <div className="flex min-h-[16rem] flex-col items-center justify-center border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
+              <div className="bazaar-doc-empty">
                 <EmptyIcon className="mx-auto mb-3 h-8 w-8" aria-hidden />
                 {t("transferEmptyState")}
               </div>
@@ -895,7 +892,7 @@ const InventoryTransfersPage = () => {
         </div>
 
         <section className="hidden md:block">
-          <div className="rounded-md border border-border bg-card p-4">
+          <div className="bazaar-doc-summary">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-base font-semibold text-foreground">
                 {t("transferSummaryTitle")}
@@ -946,7 +943,7 @@ const InventoryTransfersPage = () => {
             </dl>
             <div
               className={cn(
-                "mt-4 flex items-start gap-2 border px-3 py-2 text-sm",
+                "bazaar-doc-validation",
                 validationMessage
                   ? "border-warning/30 bg-warning/10 text-warning"
                   : "border-success/30 bg-success/10 text-success",
@@ -963,7 +960,7 @@ const InventoryTransfersPage = () => {
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40 border-t border-border bg-card p-2.5 shadow-2xl md:hidden">
+      <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">

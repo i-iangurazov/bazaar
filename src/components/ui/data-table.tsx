@@ -113,11 +113,11 @@ export const DataTable = <TData, TValue>({
 
   return (
     <div className={cn("min-w-0", className)} data-component="data-table">
-      <div className="w-full overflow-x-auto rounded-md border border-border bg-card">
+      <div className="w-full overflow-x-auto rounded-xl border border-border/65 bg-card/95 shadow-[0_14px_36px_rgba(15,23,42,0.045)] ring-1 ring-foreground/[0.012] dark:shadow-none">
         <table className={cn("w-full caption-bottom text-sm", tableClassName)}>
           <thead
             className={cn(
-              "bg-muted/35 text-muted-foreground [&_tr]:border-b [&_tr]:border-border",
+              "bg-muted/55 text-muted-foreground [&_tr]:border-b [&_tr]:border-border/70",
               stickyHeader && "sticky top-0 z-10",
             )}
           >
@@ -140,7 +140,7 @@ export const DataTable = <TData, TValue>({
                       colSpan={header.colSpan}
                       aria-sort={ariaSort}
                       className={cn(
-                        "h-12 px-3 text-left align-middle text-xs font-semibold uppercase text-muted-foreground",
+                        "h-12 px-3 text-left align-middle text-[11px] font-bold uppercase tracking-[0.075em] text-muted-foreground",
                         meta.className,
                         meta.headerClassName,
                       )}
@@ -189,11 +189,11 @@ export const DataTable = <TData, TValue>({
           <tbody>
             {isLoading && !rows.length ? (
               Array.from({ length: 5 }).map((_, rowIndex) => (
-                <tr key={`loading-${rowIndex}`} className="border-b border-border last:border-b-0">
+                <tr key={`loading-${rowIndex}`} className="border-b border-border/55 last:border-b-0">
                   {table.getAllLeafColumns().map((column) => {
                     const meta = getColumnMeta(column);
                     return (
-                      <td key={column.id} className={cn("px-3 py-3 align-middle", meta.className)}>
+                      <td key={column.id} className={cn("px-3 py-4 align-middle", meta.className)}>
                         <Skeleton className="h-4 w-full max-w-[12rem]" />
                       </td>
                     );
@@ -206,7 +206,7 @@ export const DataTable = <TData, TValue>({
                   key={row.id}
                   data-testid={typeof rowTestId === "function" ? rowTestId(row) : rowTestId}
                   className={cn(
-                    "border-b border-border transition-colors last:border-b-0 hover:bg-muted/30",
+                    "border-b border-border/55 transition-colors last:border-b-0 hover:bg-primary/[0.045]",
                     rowClassName?.(row),
                   )}
                 >
@@ -216,7 +216,7 @@ export const DataTable = <TData, TValue>({
                       <td
                         key={cell.id}
                         className={cn(
-                          "px-3 py-3 align-middle text-sm text-foreground",
+                          "px-3 py-4 align-middle text-sm text-foreground",
                           meta.className,
                           meta.cellClassName,
                         )}

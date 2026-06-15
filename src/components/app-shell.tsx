@@ -67,7 +67,8 @@ import {
   WhatsNewIcon,
   PrintIcon,
   ReceiveIcon,
-  ArchiveIcon,
+  TransferIcon,
+  WriteOffIcon,
   AdjustIcon,
   UploadIcon,
   IntegrationsIcon,
@@ -254,9 +255,15 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 requiredPermission: "viewInventory",
               },
               {
+                key: "stockTransfer",
+                href: "/inventory/transfers",
+                icon: TransferIcon,
+                requiredPermission: "viewInventory",
+              },
+              {
                 key: "stockWriteOff",
                 href: "/inventory/write-offs",
-                icon: ArchiveIcon,
+                icon: WriteOffIcon,
                 requiredPermission: "viewInventory",
               },
               {
@@ -652,7 +659,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id)}
-                className="flex w-full items-center justify-between rounded-md transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className="flex w-full items-center justify-between rounded-lg transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 aria-expanded={isOpen}
                 aria-label={tNav("groupToggle", { group: groupLabel })}
               >
@@ -691,6 +698,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                       href={child.href ?? "/"}
                                       onClick={onNavigate}
                                       data-tour={`nav-${child.key}`}
+                                      className="min-h-9 rounded-lg text-[13px] [&>svg]:h-[18px] [&>svg]:w-[18px]"
                                     >
                                       <child.icon aria-hidden />
                                       <span>{tNav(child.key)}</span>
@@ -728,7 +736,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     <Button
       type="button"
       variant="ghost"
-      className="mt-4 w-full justify-start rounded-md px-3 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0"
+      className="mt-0 h-9 w-full justify-start rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-sidebar-primary/20 hover:bg-sidebar-primary/10 hover:text-sidebar-primary group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0"
       onClick={() => {
         onClick?.();
         setCustomizeNavOpen(true);
@@ -755,7 +763,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     }
 
     return (
-      <div className="mt-3 border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-foreground">
+      <div className="mt-3 border border-warning/40 bg-warning/10 px-3 py-3 text-xs text-foreground group-data-[state=collapsed]/sidebar-wrapper:hidden">
         <p className="font-semibold text-foreground">{tNav("emailUnverifiedTitle")}</p>
         <p className="mt-1 leading-relaxed text-muted-foreground">
           {tNav("emailUnverifiedDescription")}
@@ -783,10 +791,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href="/settings/profile"
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex w-full items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/60 px-3 py-2 text-left no-underline transition hover:border-sidebar-primary/30 hover:bg-sidebar-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-2"
+      className="group flex min-h-11 w-full items-center justify-between rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-left no-underline transition hover:border-sidebar-primary/20 hover:bg-sidebar-accent/75 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:min-h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:py-0"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground/70 transition group-hover:border-sidebar-primary/30 group-hover:text-sidebar-primary">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-sidebar-primary/10 text-sidebar-primary transition group-hover:border-sidebar-primary/35 group-hover:bg-sidebar-primary/15 group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:text-sidebar-foreground/75">
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
         <span className="min-w-0 group-data-[state=collapsed]/sidebar-wrapper:sr-only">
@@ -797,7 +805,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         </span>
       </div>
       <ChevronDownIcon
-        className="-rotate-90 text-sidebar-foreground/60 transition group-hover:text-sidebar-foreground group-data-[state=collapsed]/sidebar-wrapper:hidden"
+        className="-rotate-90 text-sidebar-foreground/45 transition group-hover:text-sidebar-foreground/75 group-data-[state=collapsed]/sidebar-wrapper:hidden"
         aria-hidden
       />
     </Link>
@@ -1067,10 +1075,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         />
         <SidebarProvider className="min-h-screen">
           <Sidebar className="md:sticky md:top-0 md:h-screen">
-            <SidebarHeader className="space-y-3 p-4">
+            <SidebarHeader className="space-y-3 p-3 group-data-[state=collapsed]/sidebar-wrapper:space-y-2 group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
               <Link
                 href="/dashboard"
-                className="flex min-h-10 items-center no-underline hover:no-underline"
+                className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
                 aria-label={tNav("brand")}
               >
                 <Image
@@ -1078,45 +1086,54 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   alt=""
                   width={724}
                   height={181}
-                  className="h-auto w-[164px] max-w-full group-data-[state=collapsed]/sidebar-wrapper:hidden"
+                  className="h-auto w-[164px] max-w-full drop-shadow-sm group-data-[state=collapsed]/sidebar-wrapper:hidden"
                   priority
                 />
-                <span className="hidden h-10 w-10 items-center justify-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground shadow-sm group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
-                  B
+                <span className="hidden h-10 w-10 items-center justify-center rounded-lg group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
+                  <Image
+                    src="/brand/icon.png"
+                    alt=""
+                    width={96}
+                    height={96}
+                    className="h-8 w-8"
+                    priority
+                  />
                 </span>
               </Link>
               <Button
                 type="button"
                 onClick={() => setCommandPaletteOpen(true)}
                 size="default"
-                className="h-10 w-full rounded-md bg-sidebar-primary text-sidebar-primary-foreground shadow-sm hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0"
+                className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none [&>svg]:h-4 [&>svg]:w-4"
                 aria-label={tCommand("openButton")}
               >
                 <CirclePlusIcon className="h-5 w-5" aria-hidden />
               </Button>
             </SidebarHeader>
 
-            <SidebarContent className="scrollbar-soft">
+            <SidebarContent className="scrollbar-soft p-2.5 group-data-[state=collapsed]/sidebar-wrapper:px-2">
               <nav aria-label={tNav("brand")}>{renderNavGroups()}</nav>
             </SidebarContent>
 
-            <SidebarFooter className="space-y-3 p-4 text-sm">
-              {renderCustomizeNavButton()}
+            <SidebarFooter className="p-2.5 text-sm group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
               {renderEmailVerificationNotice()}
-              {renderProfileShortcut()}
-              <div>
-                <SignOutButton />
+              <div className="rounded-2xl border border-sidebar-border/75 bg-sidebar-accent/35 p-1.5 shadow-sm ring-1 ring-sidebar-foreground/[0.015] group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:p-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none group-data-[state=collapsed]/sidebar-wrapper:ring-0">
+                {renderProfileShortcut()}
+                <div className="mt-1 grid grid-cols-2 gap-1 border-t border-sidebar-border/60 pt-1 group-data-[state=collapsed]/sidebar-wrapper:mt-1 group-data-[state=collapsed]/sidebar-wrapper:flex group-data-[state=collapsed]/sidebar-wrapper:flex-col group-data-[state=collapsed]/sidebar-wrapper:border-0 group-data-[state=collapsed]/sidebar-wrapper:pt-0">
+                  {renderCustomizeNavButton()}
+                  <SignOutButton className="h-9 rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-danger/20 hover:bg-danger/10 hover:text-danger group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0" />
+                </div>
               </div>
             </SidebarFooter>
           </Sidebar>
 
           <SidebarInset className="bg-transparent">
-            <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+            <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
               <MobilePageContainer>
-                <div className="mx-auto">
-                  <div className="mb-6 hidden flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex">
+                <div className="mx-auto max-w-[1500px]">
+                  <div className="mb-6 hidden flex-col gap-3 rounded-xl border border-border/65 bg-card/95 p-3 shadow-[0_14px_34px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.015] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between md:flex dark:shadow-none">
                     <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
-                      <SidebarTrigger className="h-10 w-10 shrink-0 border border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground" />
+                      <SidebarTrigger className="h-10 w-10 shrink-0 border border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground" />
                       <div className="relative min-w-0 flex-1">
                         <ScanInput
                           context="global"

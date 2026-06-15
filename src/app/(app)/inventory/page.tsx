@@ -276,7 +276,7 @@ const ProductSearchSelect = forwardRef<HTMLDivElement, ProductSearchSelectProps>
             autoComplete="off"
           />
         </div>
-        <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-background">
+        <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-background">
           {loading ? (
             <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
@@ -2186,7 +2186,7 @@ const InventoryPage = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+            <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-2">
               <Switch
                 checked={showPlanning}
                 onCheckedChange={setShowPlanning}
@@ -2201,7 +2201,7 @@ const InventoryPage = () => {
       />
 
       <section data-mobile-inventory-toolbar className="mb-4 space-y-3 md:hidden">
-        <div className="space-y-3 rounded-md border border-border bg-card p-3 shadow-sm">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm">
           <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
             <SelectTrigger className="min-h-11">
               <SelectValue placeholder={tCommon("selectStore")} />
@@ -2310,13 +2310,13 @@ const InventoryPage = () => {
       </section>
 
       <div className="mb-4 grid grid-cols-2 gap-2 text-sm md:hidden">
-        <div className="rounded-md bg-muted/40 px-3 py-2">
+        <div className="rounded-xl bg-muted/40 px-3 py-2">
           <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
           <p className="font-semibold text-foreground">
             {formatNumber(inventorySummary.totalSkus, locale)}
           </p>
         </div>
-        <div className="rounded-md bg-muted/40 px-3 py-2">
+        <div className="rounded-xl bg-muted/40 px-3 py-2">
           <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
           <p
             className={
@@ -2331,13 +2331,13 @@ const InventoryPage = () => {
       </div>
 
       <div className="mb-5 hidden grid-cols-2 gap-2 md:mb-6 md:grid md:gap-3 xl:grid-cols-4">
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-xl border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
           <p className="mt-1 text-xl font-semibold text-foreground">
             {formatNumber(inventorySummary.totalSkus, locale)}
           </p>
         </div>
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-xl border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryNegativeStock")}</p>
           <p
             className={
@@ -2349,7 +2349,7 @@ const InventoryPage = () => {
             {formatNumber(inventorySummary.negativeStockCount, locale)}
           </p>
         </div>
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-xl border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
           <p
             className={
@@ -2361,7 +2361,7 @@ const InventoryPage = () => {
             {formatNumber(inventorySummary.lowStockCount, locale)}
           </p>
         </div>
-        <div className="rounded-md border border-border bg-card p-3">
+        <div className="rounded-xl border border-border bg-card p-3">
           <p className="text-xs text-muted-foreground">{t("summaryPendingReceive")}</p>
           <p className="mt-1 text-xl font-semibold text-foreground">
             {formatNumber(inventorySummary.pendingReceiveCount, locale)}
@@ -2453,7 +2453,7 @@ const InventoryPage = () => {
                 />
               ) : null}
             </div>
-            <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-md border border-border p-1 sm:w-auto">
+            <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-xl border border-border p-1 sm:w-auto">
               <Button
                 type="button"
                 size="sm"
@@ -2563,7 +2563,7 @@ const InventoryPage = () => {
                             <TableHead className="w-10">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                className="h-4 w-4 rounded-xl border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                 checked={allSelected}
                                 onChange={toggleSelectAll}
                                 aria-label={t("selectAll")}
@@ -2617,7 +2617,7 @@ const InventoryPage = () => {
                                   <TableCell>
                                     <input
                                       type="checkbox"
-                                      className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                      className="h-4 w-4 rounded-xl border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                       checked={selectedIds.has(item.snapshot.id)}
                                       onChange={() => toggleSelect(item.snapshot.id)}
                                       aria-label={t("selectInventoryItem", {
@@ -2639,10 +2639,10 @@ const InventoryPage = () => {
                                         <img
                                           src={previewImageUrl}
                                           alt={item.product.name}
-                                          className="h-10 w-10 rounded-md border border-border object-cover"
+                                          className="h-10 w-10 rounded-xl border border-border object-cover"
                                         />
                                       ) : (
-                                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-border bg-secondary/60">
                                           <EmptyIcon
                                             className="h-4 w-4 text-muted-foreground"
                                             aria-hidden
@@ -2751,7 +2751,7 @@ const InventoryPage = () => {
                                 {showPlanning && isExpanded && reorder ? (
                                   <TableRow>
                                     <TableCell colSpan={tableColumnCount}>
-                                      <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm">
+                                      <div className="rounded-xl border border-border/70 bg-muted/30 p-3 text-sm">
                                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                           <div>
                                             <p className="text-xs text-muted-foreground">
@@ -2819,7 +2819,7 @@ const InventoryPage = () => {
                     return (
                       <div
                         key={item.snapshot.id}
-                        className="overflow-hidden rounded-md border border-border bg-card"
+                        className="overflow-hidden rounded-xl border border-border bg-card"
                       >
                         <div className="relative aspect-[4/3] bg-muted/30">
                           {previewImageUrl ? (
@@ -2837,7 +2837,7 @@ const InventoryPage = () => {
                           <label className="absolute right-2 top-2">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              className="h-4 w-4 rounded-xl border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                               checked={selectedIds.has(item.snapshot.id)}
                               onChange={() => toggleSelect(item.snapshot.id)}
                               aria-label={t("selectInventoryItem", { name: label })}
@@ -2932,17 +2932,17 @@ const InventoryPage = () => {
                       : { label: t("stockOk"), variant: "success" as const };
 
               return (
-                <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+                <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
                   <div className="flex items-start gap-3">
                     {previewImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={previewImageUrl}
                         alt={label}
-                        className="h-14 w-14 rounded-md border border-border object-cover"
+                        className="h-14 w-14 rounded-xl border border-border object-cover"
                       />
                     ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-border bg-secondary/60">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-dashed border-border bg-secondary/60">
                         <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                       </div>
                     )}
@@ -3012,7 +3012,7 @@ const InventoryPage = () => {
                         ) : null}
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                        <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+                        <div className="min-w-0 rounded-xl bg-muted/30 px-2 py-1.5">
                           <p className="truncate">{t("onHand")}</p>
                           <p
                             className={
@@ -3024,13 +3024,13 @@ const InventoryPage = () => {
                             {formatNumber(item.snapshot.onHand, locale)}
                           </p>
                         </div>
-                        <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+                        <div className="min-w-0 rounded-xl bg-muted/30 px-2 py-1.5">
                           <p className="truncate">{t("minStock")}</p>
                           <p className="text-lg font-semibold tabular-nums leading-tight text-foreground">
                             {formatNumber(item.minStock, locale)}
                           </p>
                         </div>
-                        <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+                        <div className="min-w-0 rounded-xl bg-muted/30 px-2 py-1.5">
                           <p className="truncate">{t("onOrder")}</p>
                           <p className="text-lg font-semibold tabular-nums leading-tight text-foreground">
                             {formatNumber(item.snapshot.onOrder, locale)}
@@ -3169,7 +3169,7 @@ const InventoryPage = () => {
                   {items.map((item) => (
                     <div
                       key={item.key}
-                      className="space-y-2 rounded-md border border-border/70 bg-card p-3"
+                      className="space-y-2 rounded-xl border border-border/70 bg-card p-3"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -3297,7 +3297,7 @@ const InventoryPage = () => {
         subtitle={t("printSetupRequiredSubtitle")}
       >
         <div className="space-y-4">
-          <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
             <p className="font-medium text-foreground">
               {t("printSetupSelected", { count: selectedCount })}
             </p>
@@ -3402,12 +3402,12 @@ const InventoryPage = () => {
                 )}
               />
               {rollTemplateSelected ? (
-                <div className="space-y-3 rounded-md border border-border/70 bg-secondary/20 p-3">
+                <div className="space-y-3 rounded-xl border border-border/70 bg-secondary/20 p-3">
                   <p className="text-xs font-medium text-foreground">
                     {t("rollTemplatePreviewTitle")}
                   </p>
-                  <div className="w-[210px] max-w-full rounded-md border border-border bg-card p-2">
-                    <div className="aspect-[58/40] rounded-md border border-dashed border-border/70 p-2">
+                  <div className="w-[210px] max-w-full rounded-xl border border-border bg-card p-2">
+                    <div className="aspect-[58/40] rounded-xl border border-dashed border-border/70 p-2">
                       <p className="line-clamp-2 text-[10px] font-medium text-foreground">
                         {rollPreviewItem?.product.name ?? t("rollPreviewName")}
                       </p>
@@ -3419,7 +3419,7 @@ const InventoryPage = () => {
                           {rollPreviewItem?.product.sku || t("rollPreviewSku")}
                         </p>
                       ) : null}
-                      <div className="mt-1 h-4 rounded-md bg-muted" />
+                      <div className="mt-1 h-4 rounded-xl bg-muted" />
                       <p className="mt-1 text-center text-[7px] text-muted-foreground">
                         {t("rollPreviewBarcode")}
                       </p>
@@ -3454,7 +3454,7 @@ const InventoryPage = () => {
                                         field.onChange(nextValue);
                                       }
                                     }}
-                                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-xl bg-muted accent-primary"
                                     aria-label={t("rollGapMm")}
                                   />
                                   <Input
@@ -3509,7 +3509,7 @@ const InventoryPage = () => {
                                         field.onChange(nextValue);
                                       }
                                     }}
-                                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-xl bg-muted accent-primary"
                                     aria-label={t("rollXOffsetMm")}
                                   />
                                   <Input
@@ -3563,7 +3563,7 @@ const InventoryPage = () => {
                                         field.onChange(nextValue);
                                       }
                                     }}
-                                    className="h-2 w-full cursor-pointer appearance-none rounded-md bg-muted accent-primary"
+                                    className="h-2 w-full cursor-pointer appearance-none rounded-xl bg-muted accent-primary"
                                     aria-label={t("rollYOffsetMm")}
                                   />
                                   <Input
@@ -3595,7 +3595,7 @@ const InventoryPage = () => {
                     name="allowWithoutBarcode"
                     render={({ field }) => (
                       <FormItem>
-                        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-card p-2">
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card p-2">
                           <div>
                             <FormLabel>{t("printWithoutBarcode")}</FormLabel>
                             <FormDescription>{t("printWithoutBarcodeHint")}</FormDescription>
@@ -3692,7 +3692,7 @@ const InventoryPage = () => {
               />
             </FormGrid>
             {bulkOnHandProgress ? (
-              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 {t("bulkOnHandProgress", {
                   processed: bulkOnHandProgress.processed,
                   total: bulkOnHandProgress.total,
@@ -4191,7 +4191,7 @@ const InventoryPage = () => {
               control={minStockForm.control}
               name="applyToAll"
               render={({ field }) => (
-                <FormItem className="flex items-start justify-between gap-4 rounded-md border border-border p-4">
+                <FormItem className="flex items-start justify-between gap-4 rounded-xl border border-border p-4">
                   <div className="space-y-1">
                     <FormLabel>{t("minStockApplyAllLabel")}</FormLabel>
                     <FormDescription>{t("minStockApplyAllHint")}</FormDescription>
@@ -4368,7 +4368,7 @@ const InventoryPage = () => {
               </div>
             )}
             renderMobile={(movement) => (
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="rounded-xl border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">

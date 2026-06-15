@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
+import { useTranslations } from "next-intl";
 
 import { CloseIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -48,27 +49,31 @@ export const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> &
     VariantProps<typeof dialogContentVariants> & {
       showClose?: boolean;
+      closeLabel?: string;
     }
->(({ className, children, size, showClose = true, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(dialogContentVariants({ size }), className)}
-      {...props}
-    >
-      {children}
-      {showClose ? (
-        <DialogPrimitive.Close
-          className="button-focus-ring absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground shadow-sm transition hover:bg-secondary/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          aria-label="Close"
-        >
-          <CloseIcon className="h-4 w-4" aria-hidden />
-        </DialogPrimitive.Close>
-      ) : null}
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+>(({ className, children, size, showClose = true, closeLabel, ...props }, ref) => {
+  const tCommon = useTranslations("common");
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(dialogContentVariants({ size }), className)}
+        {...props}
+      >
+        {children}
+        {showClose ? (
+          <DialogPrimitive.Close
+            className="button-focus-ring absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground shadow-sm transition hover:bg-secondary/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            aria-label={closeLabel ?? tCommon("close")}
+          >
+            <CloseIcon className="h-4 w-4" aria-hidden />
+          </DialogPrimitive.Close>
+        ) : null}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 export const DialogHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

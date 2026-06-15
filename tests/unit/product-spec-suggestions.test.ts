@@ -118,6 +118,69 @@ describe("product spec suggestions", () => {
     expect(userText).toContain("цвет самого товара");
   });
 
+  it("supports structured product characteristics beyond type and color", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    mockDownloadRemoteImage.mockResolvedValue({
+      buffer: Buffer.from([1, 2, 3, 4]),
+      contentType: "image/png",
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "completed",
+          output_text: JSON.stringify({
+            material: "Поликарбонат",
+            compatibility: "Смартфон",
+            design: "Игровой принт",
+            features: "Вырез под камеру",
+            purpose: "Защита корпуса смартфона",
+          }),
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { suggestProductSpecsFromImages } =
+      await import("../../src/server/services/productSpecSuggestions");
+
+    await expect(
+      suggestProductSpecsFromImages({
+        imageUrls: ["https://cdn.example.com/photo.png"],
+        requestedSpecs: [
+          { kind: "material", labelRu: "Материал" },
+          { kind: "compatibility", labelRu: "Совместимость" },
+          { kind: "design", labelRu: "Дизайн" },
+          { kind: "features", labelRu: "Особенности" },
+          { kind: "purpose", labelRu: "Назначение" },
+        ],
+      }),
+    ).resolves.toEqual({
+      suggestions: {
+        material: "Поликарбонат",
+        compatibility: "Смартфон",
+        design: "Игровой принт",
+        features: "Вырез под камеру",
+        purpose: "Защита корпуса смартфона",
+      },
+    });
+
+    const request = fetchMock.mock.calls[0]?.[1];
+    const body = JSON.parse(String(request?.body)) as {
+      input: Array<{
+        content: Array<{ type: string; text?: string; image_url?: string }>;
+      }>;
+    };
+    const systemText = body.input[0]?.content[0]?.text ?? "";
+    const userText = body.input[1]?.content[0]?.text ?? "";
+    expect(systemText).toContain("Для material возвращай материал");
+    expect(systemText).toContain("Для compatibility не придумывай точную модель");
+    expect(userText).toContain("Разрешенные поля ответа: material, compatibility, design, features, purpose.");
+  });
+
   it("maps OpenAI rate limits to application rate limit errors", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     mockDownloadRemoteImage.mockResolvedValue({

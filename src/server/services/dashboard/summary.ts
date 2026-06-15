@@ -13,6 +13,7 @@ import { TRPCError } from "@trpc/server";
 import { logProfileSection } from "@/server/profiling/perf";
 import { enrichRecentActivity } from "@/server/services/activity";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
+import { defaultTimeZone } from "@/lib/timezone";
 import {
   canAccessStore,
   listAccessibleStores,
@@ -57,12 +58,33 @@ type DashboardMetricRow = {
   todaySalesKgs: Prisma.Decimal | number | string | null;
   receiptsCount: bigint | number | string | null;
   todayCostKgs: Prisma.Decimal | number | string | null;
+  todayLineCount: bigint | number | string | null;
+  todayCostedLineCount: bigint | number | string | null;
   openShiftsCount: bigint | number | string | null;
   negativeStockCount: bigint | number | string | null;
   missingBarcodeCount: bigint | number | string | null;
   missingPriceCount: bigint | number | string | null;
   pendingPurchaseOrdersCount: bigint | number | string | null;
   failedReceiptsCount: bigint | number | string | null;
+};
+
+type DashboardComparisonRow = {
+  yesterdaySalesKgs: Prisma.Decimal | number | string | null;
+  yesterdayReceiptsCount: bigint | number | string | null;
+};
+
+type DashboardSalesSeriesRow = {
+  date: Date | string;
+  salesKgs: Prisma.Decimal | number | string | null;
+  receiptsCount: bigint | number | string | null;
+};
+
+type DashboardTopProductRow = {
+  productId: string;
+  sku: string | null;
+  name: string;
+  quantity: bigint | number | string | null;
+  revenueKgs: Prisma.Decimal | number | string | null;
 };
 
 export type DashboardSummaryResult = {
@@ -72,6 +94,7 @@ export type DashboardSummaryResult = {
     averageReceiptKgs: number;
     grossProfitKgs: number | null;
     grossMarginPercent: number | null;
+    hasCompleteCostData: boolean;
     openShiftsCount: number;
     lowStockCount: number;
     negativeStockCount: number;
@@ -80,6 +103,26 @@ export type DashboardSummaryResult = {
     pendingPurchaseOrdersCount: number;
     failedReceiptsCount: number;
   };
+  comparison: {
+    yesterdaySalesKgs: number;
+    yesterdayReceiptsCount: number;
+    yesterdayAverageReceiptKgs: number;
+    salesDeltaPercent: number | null;
+    receiptsDeltaPercent: number | null;
+    averageReceiptDeltaPercent: number | null;
+  };
+  salesSeries: Array<{
+    date: string;
+    salesKgs: number;
+    receiptsCount: number;
+  }>;
+  topProducts: Array<{
+    productId: string;
+    sku: string | null;
+    name: string;
+    quantity: number;
+    revenueKgs: number;
+  }>;
   lowStock: Array<{
     snapshot: LowStockSnapshot;
     product: ProductSummary;
@@ -109,6 +152,7 @@ export const emptyDashboardSummary = (): DashboardSummaryResult => ({
     averageReceiptKgs: 0,
     grossProfitKgs: null,
     grossMarginPercent: null,
+    hasCompleteCostData: false,
     openShiftsCount: 0,
     lowStockCount: 0,
     negativeStockCount: 0,
@@ -117,6 +161,16 @@ export const emptyDashboardSummary = (): DashboardSummaryResult => ({
     pendingPurchaseOrdersCount: 0,
     failedReceiptsCount: 0,
   },
+  comparison: {
+    yesterdaySalesKgs: 0,
+    yesterdayReceiptsCount: 0,
+    yesterdayAverageReceiptKgs: 0,
+    salesDeltaPercent: null,
+    receiptsDeltaPercent: null,
+    averageReceiptDeltaPercent: null,
+  },
+  salesSeries: [],
+  topProducts: [],
   lowStock: [],
   pendingPurchaseOrders: [],
   recentActivity: [],
@@ -155,6 +209,18 @@ const resolveDashboardSummaryOptions = (
   includeRecentActivity: options?.includeRecentActivity ?? true,
   includeRecentMovements: options?.includeRecentMovements ?? true,
 });
+
+const toNumber = (value: Prisma.Decimal | bigint | number | string | null | undefined) =>
+  Number(value ?? 0);
+
+const dateKey = (date: Date) => date.toISOString().slice(0, 10);
+
+const percentDelta = (current: number, previous: number) => {
+  if (previous === 0) {
+    return current === 0 ? 0 : null;
+  }
+  return ((current - previous) / previous) * 100;
+};
 
 const assertDashboardStoreAccess = async ({
   prisma,
@@ -321,6 +387,10 @@ export const getDashboardSummary = async ({
   todayStart.setHours(0, 0, 0, 0);
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(todayStart.getDate() + 1);
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(todayStart.getDate() - 1);
+  const sevenDaysStart = new Date(todayStart);
+  sevenDaysStart.setDate(todayStart.getDate() - 6);
 
   const lowStockCandidatesStartedAt = Date.now();
   const lowStockCandidates = await prisma.$queryRaw<
@@ -366,6 +436,9 @@ export const getDashboardSummary = async ({
     recentMovements,
     pendingPurchaseOrders,
     dashboardMetricsRows,
+    comparisonRows,
+    salesSeriesRows,
+    topProductRows,
   ] = await Promise.all([
     lowStockSnapshotIds.length
       ? prisma.inventorySnapshot.findMany({
@@ -493,6 +566,28 @@ export const getDashboardSummary = async ({
         ) AS "todayCostKgs",
         (
           SELECT COUNT(*)
+          FROM "CustomerOrderLine" l
+          INNER JOIN "CustomerOrder" o
+            ON o.id = l."customerOrderId"
+          WHERE o."organizationId" = ${organizationId}
+            AND o."storeId" = ${storeId}
+            AND o.status = 'COMPLETED'
+            AND o."completedAt" >= ${todayStart}
+            AND o."completedAt" < ${tomorrowStart}
+        ) AS "todayLineCount",
+        (
+          SELECT COUNT(l."lineCostTotalKgs")
+          FROM "CustomerOrderLine" l
+          INNER JOIN "CustomerOrder" o
+            ON o.id = l."customerOrderId"
+          WHERE o."organizationId" = ${organizationId}
+            AND o."storeId" = ${storeId}
+            AND o.status = 'COMPLETED'
+            AND o."completedAt" >= ${todayStart}
+            AND o."completedAt" < ${tomorrowStart}
+        ) AS "todayCostedLineCount",
+        (
+          SELECT COUNT(*)
           FROM "RegisterShift" shift
           WHERE shift."organizationId" = ${organizationId}
             AND shift."storeId" = ${storeId}
@@ -562,6 +657,58 @@ export const getDashboardSummary = async ({
             AND receipt.status = 'FAILED'
         ) AS "failedReceiptsCount"
     `,
+    prisma.$queryRaw<DashboardComparisonRow[]>`
+      SELECT
+        COALESCE(SUM(o."totalKgs"), 0) AS "yesterdaySalesKgs",
+        COUNT(*) AS "yesterdayReceiptsCount"
+      FROM "CustomerOrder" o
+      WHERE o."organizationId" = ${organizationId}
+        AND o."storeId" = ${storeId}
+        AND o.status = 'COMPLETED'
+        AND o."completedAt" >= ${yesterdayStart}
+        AND o."completedAt" < ${todayStart}
+    `,
+    prisma.$queryRaw<DashboardSalesSeriesRow[]>`
+      SELECT
+        series."date" AS "date",
+        COALESCE(SUM(series."totalKgs"), 0) AS "salesKgs",
+        COUNT(*) AS "receiptsCount"
+      FROM (
+        SELECT
+          to_char((o."completedAt" AT TIME ZONE ${defaultTimeZone})::date, 'YYYY-MM-DD') AS "date",
+          o."totalKgs" AS "totalKgs"
+        FROM "CustomerOrder" o
+        WHERE o."organizationId" = ${organizationId}
+          AND o."storeId" = ${storeId}
+          AND o.status = 'COMPLETED'
+          AND o."completedAt" >= ${sevenDaysStart}
+          AND o."completedAt" < ${tomorrowStart}
+      ) series
+      GROUP BY series."date"
+      ORDER BY series."date" ASC
+    `,
+    prisma.$queryRaw<DashboardTopProductRow[]>`
+      SELECT
+        l."productId" AS "productId",
+        p.sku AS "sku",
+        p.name AS "name",
+        COALESCE(SUM(l.qty), 0) AS "quantity",
+        COALESCE(SUM(l."lineTotalKgs"), 0) AS "revenueKgs"
+      FROM "CustomerOrderLine" l
+      INNER JOIN "CustomerOrder" o
+        ON o.id = l."customerOrderId"
+      INNER JOIN "Product" p
+        ON p.id = l."productId"
+      WHERE o."organizationId" = ${organizationId}
+        AND o."storeId" = ${storeId}
+        AND o.status = 'COMPLETED'
+        AND o."completedAt" >= ${sevenDaysStart}
+        AND o."completedAt" < ${tomorrowStart}
+        AND p."isDeleted" = false
+      GROUP BY l."productId", p.sku, p.name
+      ORDER BY COALESCE(SUM(l."lineTotalKgs"), 0) DESC
+      LIMIT 5
+    `,
   ]);
   logProfileSection({
     logger,
@@ -575,7 +722,9 @@ export const getDashboardSummary = async ({
       forecasts: forecasts.length,
       recentMovements: recentMovements.length,
       pendingPurchaseOrders: pendingPurchaseOrders.length,
-      receiptsCount: Number(dashboardMetricsRows[0]?.receiptsCount ?? 0),
+      receiptsCount: toNumber(dashboardMetricsRows[0]?.receiptsCount),
+      salesSeriesDays: salesSeriesRows.length,
+      topProducts: topProductRows.length,
       includeRecentActivity: options.includeRecentActivity,
       includeRecentMovements: options.includeRecentMovements,
     },
@@ -617,11 +766,38 @@ export const getDashboardSummary = async ({
       })
     : [];
   const dashboardMetrics = dashboardMetricsRows[0];
-  const todaySalesKgs = Number(dashboardMetrics?.todaySalesKgs ?? 0);
-  const receiptsCount = Number(dashboardMetrics?.receiptsCount ?? 0);
-  const todayCostKgs = Number(dashboardMetrics?.todayCostKgs ?? 0);
-  const grossProfitKgs =
-    todaySalesKgs > 0 || todayCostKgs > 0 ? todaySalesKgs - todayCostKgs : null;
+  const comparison = comparisonRows[0];
+  const todaySalesKgs = toNumber(dashboardMetrics?.todaySalesKgs);
+  const receiptsCount = toNumber(dashboardMetrics?.receiptsCount);
+  const todayCostKgs = toNumber(dashboardMetrics?.todayCostKgs);
+  const todayLineCount = toNumber(dashboardMetrics?.todayLineCount);
+  const todayCostedLineCount = toNumber(dashboardMetrics?.todayCostedLineCount);
+  const hasCompleteCostData = todayLineCount > 0 && todayCostedLineCount === todayLineCount;
+  const grossProfitKgs = hasCompleteCostData ? todaySalesKgs - todayCostKgs : null;
+  const yesterdaySalesKgs = toNumber(comparison?.yesterdaySalesKgs);
+  const yesterdayReceiptsCount = toNumber(comparison?.yesterdayReceiptsCount);
+  const yesterdayAverageReceiptKgs =
+    yesterdayReceiptsCount > 0 ? yesterdaySalesKgs / yesterdayReceiptsCount : 0;
+  const salesSeriesMap = new Map(
+    salesSeriesRows.map((row) => [
+      dateKey(new Date(row.date)),
+      {
+        salesKgs: toNumber(row.salesKgs),
+        receiptsCount: toNumber(row.receiptsCount),
+      },
+    ]),
+  );
+  const salesSeries = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(sevenDaysStart);
+    date.setDate(sevenDaysStart.getDate() + index);
+    const key = dateKey(date);
+    const row = salesSeriesMap.get(key);
+    return {
+      date: key,
+      salesKgs: row?.salesKgs ?? 0,
+      receiptsCount: row?.receiptsCount ?? 0,
+    };
+  });
 
   return {
     business: {
@@ -630,15 +806,37 @@ export const getDashboardSummary = async ({
       averageReceiptKgs: receiptsCount > 0 ? todaySalesKgs / receiptsCount : 0,
       grossProfitKgs,
       grossMarginPercent:
-        todaySalesKgs > 0 ? ((todaySalesKgs - todayCostKgs) / todaySalesKgs) * 100 : null,
-      openShiftsCount: Number(dashboardMetrics?.openShiftsCount ?? 0),
-      lowStockCount: Number(lowStockCandidates[0]?.totalCount ?? 0),
-      negativeStockCount: Number(dashboardMetrics?.negativeStockCount ?? 0),
-      missingBarcodeCount: Number(dashboardMetrics?.missingBarcodeCount ?? 0),
-      missingPriceCount: Number(dashboardMetrics?.missingPriceCount ?? 0),
-      pendingPurchaseOrdersCount: Number(dashboardMetrics?.pendingPurchaseOrdersCount ?? 0),
-      failedReceiptsCount: Number(dashboardMetrics?.failedReceiptsCount ?? 0),
+        hasCompleteCostData && todaySalesKgs > 0
+          ? ((todaySalesKgs - todayCostKgs) / todaySalesKgs) * 100
+          : null,
+      hasCompleteCostData,
+      openShiftsCount: toNumber(dashboardMetrics?.openShiftsCount),
+      lowStockCount: toNumber(lowStockCandidates[0]?.totalCount),
+      negativeStockCount: toNumber(dashboardMetrics?.negativeStockCount),
+      missingBarcodeCount: toNumber(dashboardMetrics?.missingBarcodeCount),
+      missingPriceCount: toNumber(dashboardMetrics?.missingPriceCount),
+      pendingPurchaseOrdersCount: toNumber(dashboardMetrics?.pendingPurchaseOrdersCount),
+      failedReceiptsCount: toNumber(dashboardMetrics?.failedReceiptsCount),
     },
+    comparison: {
+      yesterdaySalesKgs,
+      yesterdayReceiptsCount,
+      yesterdayAverageReceiptKgs,
+      salesDeltaPercent: percentDelta(todaySalesKgs, yesterdaySalesKgs),
+      receiptsDeltaPercent: percentDelta(receiptsCount, yesterdayReceiptsCount),
+      averageReceiptDeltaPercent: percentDelta(
+        receiptsCount > 0 ? todaySalesKgs / receiptsCount : 0,
+        yesterdayAverageReceiptKgs,
+      ),
+    },
+    salesSeries,
+    topProducts: topProductRows.map((row) => ({
+      productId: row.productId,
+      sku: row.sku,
+      name: row.name,
+      quantity: toNumber(row.quantity),
+      revenueKgs: toNumber(row.revenueKgs),
+    })),
     lowStock,
     pendingPurchaseOrders,
     recentActivity,

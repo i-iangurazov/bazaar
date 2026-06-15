@@ -59,12 +59,14 @@ describe("conservative app shell navigation source", () => {
     ]);
   });
 
-  it("keeps the sidebar CTA visual pattern and adds permission filtering in place", () => {
+  it("keeps the sidebar CTA compact in collapsed mode and adds permission filtering in place", () => {
     expect(source).toContain('aria-label={tCommand("openButton")}');
     expect(source).toContain("<CirclePlusIcon");
     expect(source).toContain(
-      'className="h-10 w-full rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"',
+      'className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90',
     );
+    expect(source).toContain("group-data-[state=collapsed]/sidebar-wrapper:w-10");
+    expect(source).toContain("group-data-[state=collapsed]/sidebar-wrapper:shadow-none");
     expect(source).toContain("requiredPermission?: AppPermission");
     expect(source).toContain("hasPermission(access, item.requiredPermission)");
     expect(source).toContain('requiredPermission: "manageCustomers"');
@@ -85,13 +87,15 @@ describe("conservative app shell navigation source", () => {
 
   it("uses distinct sidebar icons for neighboring inventory pages", () => {
     const inventoryStart = source.indexOf('key: "inventory"');
-    const inventorySource = source.slice(inventoryStart, inventoryStart + 1200);
+    const inventorySource = source.slice(inventoryStart, inventoryStart + 1500);
 
     expect(inventorySource).toContain("icon: InventoryIcon");
     expect(inventorySource).toContain("icon: InventoryOverviewIcon");
     expect(inventorySource).toContain("icon: ProductMovementIcon");
     expect(inventorySource).toContain("icon: ReceiveIcon");
-    expect(inventorySource).toContain("icon: ArchiveIcon");
+    expect(inventorySource).toContain('key: "stockTransfer"');
+    expect(inventorySource).toContain("icon: TransferIcon");
+    expect(inventorySource).toContain("icon: WriteOffIcon");
     expect(inventorySource).toContain("icon: StockCountsIcon");
   });
 

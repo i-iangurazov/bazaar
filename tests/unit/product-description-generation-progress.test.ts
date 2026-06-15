@@ -13,6 +13,7 @@ const buildItem = (
   index: number,
   status: ProductDescriptionGenerationItemStatus,
   errorMessage?: string | null,
+  previousDescription?: string | null,
 ): ProductDescriptionGenerationJobView["items"][number] => ({
   id: `item-${index}`,
   productId: `product-${index}`,
@@ -22,6 +23,7 @@ const buildItem = (
     status === ProductDescriptionGenerationItemStatus.SUCCESS
       ? `Generated product description ${index}`
       : null,
+  previousDescription,
   imageUrl: index % 2 === 0 ? `https://example.test/${index}.jpg` : null,
   product: {
     sku: `SKU-${index}`,
@@ -62,6 +64,29 @@ describe("product description generation progress", () => {
     expect(normalized.progressPercent).toBe(100);
     expect(normalized.status).toBe(ProductDescriptionGenerationJobStatus.DONE);
     expect(normalized.displayStatus).toBe(ProductDescriptionGenerationJobStatus.DONE);
+    expect(normalized.descriptionGeneratedCount).toBe(36);
+    expect(normalized.descriptionOverwrittenCount).toBe(0);
+  });
+
+  it("derives generated and overwritten description counts", () => {
+    const normalized = normalizeProductDescriptionGenerationJobView({
+      status: ProductDescriptionGenerationJobStatus.PROCESSING,
+      totalCount: 3,
+      processedCount: 0,
+      successCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      progressPercent: 0,
+      items: [
+        buildItem(0, ProductDescriptionGenerationItemStatus.SUCCESS),
+        buildItem(1, ProductDescriptionGenerationItemStatus.SUCCESS, null, "Old description"),
+        buildItem(2, ProductDescriptionGenerationItemStatus.SKIPPED, "descriptionAlreadyExists"),
+      ],
+    });
+
+    expect(normalized.descriptionGeneratedCount).toBe(1);
+    expect(normalized.descriptionOverwrittenCount).toBe(1);
+    expect(normalized.skippedCount).toBe(1);
   });
 
   it("keeps running progress consistent while pending rows remain", () => {

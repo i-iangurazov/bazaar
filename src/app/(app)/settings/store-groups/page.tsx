@@ -123,33 +123,33 @@ const StoreGroupsPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("modelTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-sm font-medium text-foreground">{t("ruleDefaultTitle")}</p>
               <p className="mt-1 text-sm text-muted-foreground">{t("ruleDefaultBody")}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-sm font-medium text-foreground">{t("ruleSharedTitle")}</p>
               <p className="mt-1 text-sm text-muted-foreground">{t("ruleSharedBody")}</p>
             </div>
-            <div className="rounded-md border border-border p-3">
+            <div className="bazaar-admin-info-tile">
               <p className="text-sm font-medium text-foreground">{t("ruleStockTitle")}</p>
               <p className="mt-1 text-sm text-muted-foreground">{t("ruleStockBody")}</p>
             </div>
           </div>
-          <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+          <div className="bazaar-admin-notice border-warning/40 bg-warning/10 text-warning-foreground">
             {t("safePreviewNotice")}
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("createTitle")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("createDescription")}</p>
         </CardHeader>
@@ -201,7 +201,7 @@ const StoreGroupsPage = () => {
               {availableTargetStores.map((store) => (
                 <label
                   key={store.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 transition hover:border-primary/40"
+                  className="bazaar-admin-info-tile flex cursor-pointer items-start gap-3 transition hover:border-primary/40"
                 >
                   <input
                     type="checkbox"
@@ -225,7 +225,7 @@ const StoreGroupsPage = () => {
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/30 p-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="bazaar-admin-info-tile flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <Label>{t("customerSharing")}</Label>
               <p className="text-sm text-muted-foreground">{t("customerSharingOrganizationWide")}</p>
@@ -255,7 +255,7 @@ const StoreGroupsPage = () => {
           </div>
 
           {preview ? (
-            <div className="space-y-4 rounded-md border border-border p-4">
+            <div className="bazaar-admin-modal-card space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">{t("previewTitle")}</h3>
@@ -276,7 +276,8 @@ const StoreGroupsPage = () => {
                 <Metric label={t("targetBackShare")} value={numberFormatter.format(preview.targetProductsSharedBackToSource)} />
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
                 <Table className="min-w-[780px]">
                   <TableHeader>
                     <TableRow>
@@ -309,6 +310,7 @@ const StoreGroupsPage = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
 
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -327,23 +329,23 @@ const StoreGroupsPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("configuredTitle")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("configuredDescription")}</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {overviewQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
           {overviewQuery.error ? (
-            <p className="text-sm text-danger">{translateError(tErrors, overviewQuery.error)}</p>
+            <p className="bazaar-admin-error">{translateError(tErrors, overviewQuery.error)}</p>
           ) : null}
           {(overviewQuery.data?.groups ?? []).map((group) => (
-            <section key={group.id} className="space-y-3 rounded-md border border-border p-4">
+            <section key={group.id} className="bazaar-admin-modal-card space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">{group.name}</h3>
@@ -362,7 +364,8 @@ const StoreGroupsPage = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow>
@@ -394,11 +397,12 @@ const StoreGroupsPage = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             </section>
           ))}
           {!overviewQuery.isLoading && !(overviewQuery.data?.groups.length ?? 0) ? (
-            <p className="text-sm text-muted-foreground">{t("empty")}</p>
+            <p className="bazaar-admin-empty">{t("empty")}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -407,7 +411,7 @@ const StoreGroupsPage = () => {
 };
 
 const Metric = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-md border border-border p-3">
+  <div className="bazaar-admin-info-tile">
     <p className="text-xs text-muted-foreground">{label}</p>
     <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
   </div>

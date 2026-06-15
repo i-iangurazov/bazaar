@@ -5,8 +5,8 @@ import { ChevronRightIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 export const Breadcrumb = React.forwardRef<HTMLElement, React.ComponentPropsWithoutRef<"nav">>(
-  ({ className, ...props }, ref) => (
-    <nav ref={ref} aria-label="breadcrumb" className={cn("text-sm", className)} {...props} />
+  ({ className, "aria-label": ariaLabel, ...props }, ref) => (
+    <nav ref={ref} aria-label={ariaLabel} className={cn("text-sm", className)} {...props} />
   ),
 );
 Breadcrumb.displayName = "Breadcrumb";

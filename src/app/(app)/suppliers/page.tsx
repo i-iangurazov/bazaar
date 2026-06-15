@@ -305,6 +305,8 @@ const SuppliersPage = () => {
             }
           }}
           title={editingId ? t("editSupplier") : t("newSupplier")}
+          className="rounded-xl"
+          bodyClassName="p-4 sm:p-6"
         >
           <Form {...form}>
             <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
@@ -401,7 +403,7 @@ const SuppliersPage = () => {
         </Modal>
       ) : null}
 
-      <Card>
+      <Card className="bazaar-admin-surface overflow-hidden">
         <CardHeader>
           <CardTitle>{t("directory")}</CardTitle>
         </CardHeader>
@@ -460,7 +462,7 @@ const SuppliersPage = () => {
             items={suppliersQuery.data ?? []}
             getKey={(supplier) => supplier.id}
             renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
                 <TooltipProvider>
                   <InlineEditTableProvider>
                     <Table className="min-w-[560px]">
@@ -660,7 +662,7 @@ const SuppliersPage = () => {
                 : [];
 
               return (
-                <div className="rounded-md border border-border bg-card p-3">
+                <div className="bazaar-admin-mobile-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-start gap-2">
                       {canManage ? (
@@ -698,12 +700,12 @@ const SuppliersPage = () => {
             }}
           />
           {suppliersQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice mt-4 flex items-center gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : !suppliersQuery.data?.length ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty mt-4">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
                 {t("noSuppliers")}
@@ -711,7 +713,7 @@ const SuppliersPage = () => {
             </div>
           ) : null}
           {suppliersQuery.error ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-danger">
+            <div className="bazaar-admin-error mt-3 flex flex-wrap items-center gap-2">
               <span>{translateError(tErrors, suppliersQuery.error)}</span>
               <Button
                 type="button"

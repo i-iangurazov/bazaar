@@ -33,11 +33,11 @@ const IntegrationTile = ({
   actions: ReactNode;
   className?: string;
 }) => (
-  <Card className={`flex min-h-[220px] flex-col ${className ?? ""}`}>
-    <CardHeader className="px-5 py-5">
+  <Card className={`bazaar-admin-surface flex min-h-[220px] flex-col ${className ?? ""}`}>
+    <CardHeader className="border-b border-border/60 bg-muted/20 px-5 py-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-border bg-muted/30 text-primary">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
             <IntegrationsIcon className="h-5 w-5" aria-hidden />
           </div>
           <div className="min-w-0 space-y-1">
@@ -188,7 +188,7 @@ const IntegrationsPage = () => {
         ? t("productImageStudio.status.error")
         : t("productImageStudio.status.notConfigured");
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="grid max-w-[1500px] gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -243,7 +243,7 @@ const ImportPreviewTable = dynamic(() => import("@/components/import-preview-tab
   ssr: false,
   loading: () => (
     <div
-      className="h-32 animate-pulse rounded-md border border-dashed border-border bg-muted/30"
+      className="h-32 animate-pulse rounded-xl border border-dashed border-border bg-muted/30"
       aria-hidden
     />
   ),
@@ -1298,7 +1298,7 @@ const CustomerImportPanel = ({
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="bazaar-admin-surface">
         <CardHeader>
           <CardTitle>{t("customerImport.uploadTitle")}</CardTitle>
         </CardHeader>
@@ -1316,13 +1316,13 @@ const CustomerImportPanel = ({
           {fileName ? (
             <Badge variant="muted">{fileName}</Badge>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice flex items-center gap-2">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("customerImport.uploadHint")}
             </div>
           )}
           {isParsingFile ? (
-            <div className="flex items-center gap-2 border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice flex items-center gap-2">
               <Spinner className="h-4 w-4" />
               {t("customerImport.parsingFile", { file: fileName ?? "" })}
             </div>
@@ -1331,7 +1331,7 @@ const CustomerImportPanel = ({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bazaar-admin-surface">
         <CardHeader>
           <CardTitle>{t("customerImport.mappingTitle")}</CardTitle>
         </CardHeader>
@@ -1391,13 +1391,13 @@ const CustomerImportPanel = ({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bazaar-admin-surface">
         <CardHeader>
           <CardTitle>{t("customerImport.previewTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {isPreviewing ? (
-            <div className="flex items-start gap-3 border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice flex items-start gap-3">
               <Spinner className="h-4 w-4" />
               <div className="space-y-1">
                 <p className="font-medium text-foreground">
@@ -1414,7 +1414,7 @@ const CustomerImportPanel = ({
           {preview ? (
             <>
               {preview.summary.errors > 0 ? (
-                <div className="border border-warning/30 bg-warning/10 p-3 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-muted-foreground">
                   {t("customerImport.partialImportHint", {
                     valid: importableCustomerRows,
                     skipped: preview.summary.skipped,
@@ -1422,24 +1422,24 @@ const CustomerImportPanel = ({
                 </div>
               ) : null}
               <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-                <div className="border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-muted-foreground">{t("customerImport.summary.created")}</p>
                   <p className="text-lg font-semibold">{preview.summary.creatable}</p>
                 </div>
-                <div className="border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-muted-foreground">{t("customerImport.summary.updated")}</p>
                   <p className="text-lg font-semibold">{preview.summary.updatable}</p>
                 </div>
-                <div className="border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-muted-foreground">{t("customerImport.summary.skipped")}</p>
                   <p className="text-lg font-semibold">{preview.summary.skipped}</p>
                 </div>
-                <div className="border border-border p-3">
+                <div className="bazaar-admin-info-tile">
                   <p className="text-muted-foreground">{t("customerImport.summary.errors")}</p>
                   <p className="text-lg font-semibold">{preview.summary.errors}</p>
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-md border border-border">
+              <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
                 <Table className="min-w-[760px]">
                   <TableHeader>
                     <TableRow>
@@ -1531,7 +1531,7 @@ const CustomerImportPanel = ({
             </Button>
           </div>
           {isImporting ? (
-            <div className="flex items-start gap-3 border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               <div className="space-y-1">
                 <p className="font-medium text-foreground">
@@ -1545,7 +1545,7 @@ const CustomerImportPanel = ({
             </div>
           ) : null}
           {lastSummary ? (
-            <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm">
+            <div className="rounded-xl border border-success/40 bg-success/10 p-3 text-sm">
               <p className="font-medium">{t("importResultTitle")}</p>
               <p className="text-xs text-muted-foreground">
                 {t("targetStoreApplied", {
@@ -2573,7 +2573,7 @@ const ImportPage = () => {
   const isImporting = importStartedAt !== null || importMutation.isLoading;
 
   const importTypeCard = (
-    <Card className="mb-6">
+    <Card className="bazaar-admin-surface mb-6">
       <CardHeader>
         <CardTitle>{t("importType.title")}</CardTitle>
       </CardHeader>
@@ -2599,7 +2599,7 @@ const ImportPage = () => {
   );
 
   const targetStoreCard = (
-    <Card className="mb-6">
+    <Card className="bazaar-admin-surface mb-6">
       <CardHeader>
         <CardTitle>{t("targetStoreTitle")}</CardTitle>
       </CardHeader>
@@ -2689,7 +2689,7 @@ const ImportPage = () => {
       {importTypeCard}
       {targetStoreCard}
 
-      <Card className="mb-6">
+      <Card className="bazaar-admin-surface mb-6">
         <CardHeader>
           <CardTitle>{t("uploadTitle")}</CardTitle>
         </CardHeader>
@@ -2710,7 +2710,7 @@ const ImportPage = () => {
               <span>{t("sourceDetected", { source: t(`source.${source}`) })}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice flex items-center gap-2">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("uploadHint")}
             </div>
@@ -2719,14 +2719,14 @@ const ImportPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mb-6">
+      <Card className="bazaar-admin-surface mb-6">
         <CardHeader>
           <CardTitle>{t("mappingTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {headers.length ? (
             <div className="space-y-4">
-              <div className="space-y-3 rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-modal-card space-y-3">
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">{t("importModeTitle")}</p>
                   <Select
@@ -2804,7 +2804,7 @@ const ImportPage = () => {
                 </div>
 
                 {isUpdateSelectedMode ? (
-                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                  <div className="bazaar-admin-notice space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs font-medium text-foreground">
                         {t("updateFieldsTitle")}
@@ -2949,7 +2949,7 @@ const ImportPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mb-6">
+      <Card className="bazaar-admin-surface mb-6">
         <CardHeader>
           <CardTitle>{t("previewTitle")}</CardTitle>
         </CardHeader>
@@ -2959,7 +2959,7 @@ const ImportPage = () => {
           ) : (
             <p className="text-sm text-muted-foreground">{t("previewEmpty")}</p>
           )}
-          <div className="rounded-md border border-border bg-muted/20 p-4">
+          <div className="bazaar-admin-modal-card">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium text-foreground">{t("dryRunTitle")}</p>
@@ -2989,7 +2989,7 @@ const ImportPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bazaar-admin-surface">
         <CardHeader>
           <CardTitle>{t("validationTitle")}</CardTitle>
         </CardHeader>
@@ -3030,7 +3030,7 @@ const ImportPage = () => {
             </div>
           ) : null}
           {shortNameErrors.length ? (
-            <div className="space-y-2 rounded-md border border-primary/30 bg-primary/10 p-3">
+            <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
                   {t("shortNameResolveTitle", { count: shortNameErrors.length })}
@@ -3048,7 +3048,7 @@ const ImportPage = () => {
                 {shortNameErrors.slice(0, 8).map((error) => (
                   <div
                     key={`resolve-name-${error.row}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-card p-2"
+                    className="bazaar-admin-modal-card flex flex-wrap items-center justify-between gap-2 p-2"
                   >
                     <p className="text-xs text-foreground">{error.message}</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -3075,7 +3075,7 @@ const ImportPage = () => {
             </div>
           ) : null}
           {missingUnitErrors.length ? (
-            <div className="space-y-2 rounded-md border border-secondary/70 bg-secondary/30 p-3">
+            <div className="space-y-2 rounded-xl border border-secondary/70 bg-secondary/30 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
                   {t("missingUnitResolveTitle", { count: missingUnitErrors.length })}
@@ -3099,7 +3099,7 @@ const ImportPage = () => {
                 {missingUnitErrors.slice(0, 8).map((error) => (
                   <div
                     key={`resolve-unit-${error.row}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-secondary/70 bg-card p-2"
+                    className="bazaar-admin-modal-card flex flex-wrap items-center justify-between gap-2 p-2"
                   >
                     <p className="text-xs text-foreground">{error.message}</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -3127,7 +3127,7 @@ const ImportPage = () => {
             </div>
           ) : null}
           {duplicateBarcodeErrors.length ? (
-            <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-3">
+            <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
                   {t("duplicateResolveTitle", { count: duplicateBarcodeErrors.length })}
@@ -3145,7 +3145,7 @@ const ImportPage = () => {
                 {duplicateBarcodeErrors.slice(0, 8).map((error) => (
                   <div
                     key={`resolve-${error.row}-${error.value}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-card p-2"
+                    className="bazaar-admin-modal-card flex flex-wrap items-center justify-between gap-2 p-2"
                   >
                     <p className="text-xs text-foreground">{error.message}</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -3196,7 +3196,7 @@ const ImportPage = () => {
             </Button>
           </div>
           {isImporting ? (
-            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice text-sm text-muted-foreground">
               <p className="font-medium text-foreground">
                 {t("importInProgress", {
                   count: validation.rows.length,
@@ -3212,7 +3212,7 @@ const ImportPage = () => {
             <p className="text-sm text-danger">{translateError(tErrors, importMutation.error)}</p>
           ) : null}
           {lastImportSummary ? (
-            <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm text-foreground">
+            <div className="rounded-xl border border-success/40 bg-success/10 p-3 text-sm text-foreground">
               <p className="font-medium">{t("importResultTitle")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("importSuccess", { count: lastImportSummary.rows ?? 0 })}
@@ -3226,31 +3226,31 @@ const ImportPage = () => {
                 </p>
               ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
-                <div className="rounded-md border border-success/40 bg-card p-2">
+                <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.created")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.created ?? 0}</p>
                 </div>
-                <div className="rounded-md border border-success/40 bg-card p-2">
+                <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.updated")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.updated ?? 0}</p>
                 </div>
-                <div className="rounded-md border border-success/40 bg-card p-2">
+                <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.skipped")}</p>
                   <p className="font-semibold text-foreground">{lastImportSummary.skipped ?? 0}</p>
                 </div>
-                <div className="rounded-md border border-success/40 bg-card p-2">
+                <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageDownloaded")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.downloaded ?? 0}
                   </p>
                 </div>
-                <div className="rounded-md border border-success/40 bg-card p-2">
+                <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageFallback")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.fallback ?? 0}
                   </p>
                 </div>
-                <div className="rounded-md border border-success/40 bg-card p-2">
+                <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("imageMissing")}</p>
                   <p className="font-semibold text-foreground">
                     {lastImportSummary.images?.missing ?? 0}
@@ -3262,13 +3262,13 @@ const ImportPage = () => {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
+      <Card className="bazaar-admin-surface mt-6">
         <CardHeader>
           <CardTitle>{t("historyTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {batchesQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-notice flex items-center gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -3279,7 +3279,7 @@ const ImportPage = () => {
               items={batches}
               getKey={(batch) => batch.id}
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto">
+                <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
                   <Table className="min-w-[640px]">
                     <TableHeader>
                       <TableRow>
@@ -3401,7 +3401,7 @@ const ImportPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-md border border-border bg-card p-3">
+                  <div className="bazaar-admin-mobile-card">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground">

@@ -121,7 +121,7 @@ describe("soft-rounded UI primitives", () => {
       </div>,
     );
 
-    expect(screen.getByTestId("card").className).toContain("rounded-md");
+    expect(screen.getByTestId("card").className).toContain("rounded-xl");
     expect(screen.getByTestId("table-container").className).toContain("rounded-md");
     expect(screen.getByTestId("popover").className).toContain("rounded-md");
     expect(screen.getByTestId("skeleton").className).toContain("rounded-md");

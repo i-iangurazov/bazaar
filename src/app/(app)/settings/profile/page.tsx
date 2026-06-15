@@ -373,9 +373,9 @@ const ProfilePage = () => {
 
   if (status === "loading" || profileQuery.isLoading) {
     return (
-      <div>
+      <div className="space-y-6">
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="bazaar-admin-empty min-h-[9rem] gap-2">
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
@@ -385,9 +385,9 @@ const ProfilePage = () => {
 
   if (profileQuery.error) {
     return (
-      <div>
+      <div className="space-y-6">
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{translateError(tErrors, profileQuery.error)}</p>
+        <p className="bazaar-admin-error">{translateError(tErrors, profileQuery.error)}</p>
       </div>
     );
   }
@@ -456,7 +456,7 @@ const ProfilePage = () => {
             <Link
               key={card.href}
               href={card.href}
-              className="flex min-h-16 items-center justify-between gap-3 border border-border bg-card px-4 py-3 text-left no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline"
+              className="bazaar-admin-mobile-card flex min-h-16 items-center justify-between gap-3 px-4 py-3 text-left no-underline hover:no-underline"
             >
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-foreground">{card.title}</span>
@@ -473,8 +473,8 @@ const ProfilePage = () => {
         </div>
       </section>
 
-      <Card id="account-settings" className="scroll-mt-24">
-        <CardHeader>
+      <Card id="account-settings" className="bazaar-admin-surface scroll-mt-24">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("personal.title")}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -545,8 +545,8 @@ const ProfilePage = () => {
         </CardContent>
       </Card>
 
-      <Card id="language-settings" className="scroll-mt-24">
-        <CardHeader>
+      <Card id="language-settings" className="bazaar-admin-surface scroll-mt-24">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("preferences.title")}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -628,8 +628,8 @@ const ProfilePage = () => {
       </Card>
 
       {canEditBusiness ? (
-        <Card id="store-profile" className="scroll-mt-24">
-          <CardHeader>
+        <Card id="store-profile" className="bazaar-admin-surface scroll-mt-24">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("business.title")}</CardTitle>
           </CardHeader>
           <CardContent>
@@ -850,7 +850,7 @@ const ProfilePage = () => {
                     {tCommon("save")}
                   </Button>
                 </FormActions>
-                <div className="rounded-md border border-border bg-background p-3 md:hidden">
+                <div className="bazaar-admin-modal-card md:hidden">
                   <Button
                     type="submit"
                     className="h-12 w-full"
@@ -867,8 +867,8 @@ const ProfilePage = () => {
       ) : null}
 
       {canEditBusiness ? (
-        <Card id="product-settings" className="scroll-mt-24">
-          <CardHeader>
+        <Card id="product-settings" className="bazaar-admin-surface scroll-mt-24">
+          <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("productSettings.title")}</CardTitle>
             <p className="text-sm text-muted-foreground">{t("productSettings.description")}</p>
           </CardHeader>
@@ -921,7 +921,7 @@ const ProfilePage = () => {
                 />
 
                 {productSettingsLoading ? (
-                  <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
+                  <div className="bazaar-admin-empty min-h-[9rem] gap-2">
                     <Spinner className="h-4 w-4" />
                     {tCommon("loading")}
                   </div>
@@ -932,7 +932,7 @@ const ProfilePage = () => {
                       name="enableSku"
                       render={({ field }) => (
                         <FormItem>
-                          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="bazaar-admin-info-tile flex items-center justify-between gap-4">
                             <div className="space-y-1">
                               <FormLabel>{t("productSettings.enableSku")}</FormLabel>
                               <FormDescription>
@@ -956,7 +956,7 @@ const ProfilePage = () => {
                       name="enableBarcode"
                       render={({ field }) => (
                         <FormItem>
-                          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="bazaar-admin-info-tile flex items-center justify-between gap-4">
                             <div className="space-y-1">
                               <FormLabel>{t("productSettings.enableBarcode")}</FormLabel>
                               <FormDescription>
@@ -980,7 +980,7 @@ const ProfilePage = () => {
                       name="enableSimilarProductCheck"
                       render={({ field }) => (
                         <FormItem>
-                          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                          <div className="bazaar-admin-info-tile flex items-center justify-between gap-4">
                             <div className="space-y-1">
                               <FormLabel>
                                 {t("productSettings.enableSimilarProductCheck")}
@@ -1015,7 +1015,7 @@ const ProfilePage = () => {
                     {tCommon("save")}
                   </Button>
                 </FormActions>
-                <div className="rounded-md border border-border bg-background p-3 md:hidden">
+                <div className="bazaar-admin-modal-card md:hidden">
                   <Button
                     type="submit"
                     className="h-12 w-full"
@@ -1034,7 +1034,7 @@ const ProfilePage = () => {
       ) : null}
 
       {businessQuery.error ? (
-        <p className="text-sm text-danger">{translateError(tErrors, businessQuery.error)}</p>
+        <p className="bazaar-admin-error">{translateError(tErrors, businessQuery.error)}</p>
       ) : null}
     </div>
   );

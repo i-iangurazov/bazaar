@@ -34,6 +34,21 @@ describe("pos entry navigation", () => {
     expect(source).toContain("!closeNoteValid");
   });
 
+  it("shows cash and non-cash payment totals in shift close and shift history UI", async () => {
+    const source = await readSource("src/app/(app)/pos/shifts/page.tsx");
+
+    expect(source).toContain('t("shifts.salesSummary")');
+    expect(source).toContain('t("shifts.cashSales")');
+    expect(source).toContain("report.summary.cashSalesKgs");
+    expect(source).toContain('t("shifts.nonCashSales")');
+    expect(source).toContain("report.summary.nonCashSalesKgs");
+    expect(source).toContain('t("shifts.nonCashTotal")');
+    expect(source).toContain("report.summary.nonCashNetKgs");
+    expect(source).toContain("shift.summary.cashSalesKgs");
+    expect(source).toContain("shift.summary.nonCashSalesKgs");
+    expect(source).toContain("shift.summary.totalSalesKgs");
+  });
+
   it("keeps the cashier POS screen on theme tokens for dark mode support", async () => {
     const source = await readSource("src/app/(app)/pos/sell/page.tsx");
 

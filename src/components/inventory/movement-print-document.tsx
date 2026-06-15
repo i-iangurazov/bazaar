@@ -51,7 +51,7 @@ export const getMovementPrintDocumentNumber = (document: ProductMovementDocument
         .replaceAll("-", "")}-${document.documentId.slice(0, 8).toUpperCase()}`;
 
 export const getMovementPrintTechnicalReference = (document: ProductMovementDocumentDetail) =>
-  document.documentId;
+  document.documentId.slice(0, 8).toUpperCase();
 
 const getPrintableLines = (document: ProductMovementDocumentDetail) => {
   if (document.documentType !== "TRANSFER") {

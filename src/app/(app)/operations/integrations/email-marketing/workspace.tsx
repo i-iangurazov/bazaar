@@ -1450,7 +1450,7 @@ export const EmailMarketingWorkspace = () => {
                 <button
                   key={type}
                   type="button"
-                  className="w-full rounded-md border border-border bg-background p-3 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5"
+                  className="bazaar-admin-choice-card w-full"
                   onClick={() => addBlock(type)}
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold">
@@ -1463,14 +1463,14 @@ export const EmailMarketingWorkspace = () => {
                 </button>
               ))}
             </div>
-            <div className="mt-5 rounded-md border border-border bg-muted/20 p-3 text-xs leading-5 text-muted-foreground">
+            <div className="bazaar-admin-notice mt-5 text-xs leading-5">
               Переменные: {"{{customerName}}, {{storeName}}, {{orderNumber}}, {{orderStatus}}, {{orderPreviousStatus}}, {{orderTotal}}, {{unsubscribeLink}}"}
             </div>
           </aside>
 
           <main className="min-h-0 overflow-y-auto bg-muted/30 p-6">
             <div className="mx-auto flex max-w-[860px] flex-col gap-4">
-              <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+              <div className="bazaar-admin-info-tile p-3">
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
                   <Field label="Тема письма">
                     <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
@@ -1566,7 +1566,7 @@ export const EmailMarketingWorkspace = () => {
                         </div>
                       ) : null}
                       {!blocks.length ? (
-                        <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                        <div className="bazaar-admin-empty min-h-[10rem]">
                           Добавьте первый блок из библиотеки слева.
                         </div>
                       ) : null}
@@ -1586,7 +1586,7 @@ export const EmailMarketingWorkspace = () => {
                 </div>
                 <div className="space-y-2">
                   {validation.map((item) => (
-                    <div key={item.key} className="flex items-start gap-2 rounded-md border border-border bg-background p-2 text-sm">
+                    <div key={item.key} className="bazaar-admin-info-tile flex items-start gap-2 p-2 text-sm">
                       {item.ok ? (
                         <StatusSuccessIcon className="mt-0.5 h-4 w-4 text-success" aria-hidden />
                       ) : item.critical ? (
@@ -1743,7 +1743,7 @@ export const EmailMarketingWorkspace = () => {
                 </Field>
                 <Field label="Логотип" hint="Показывается в блоках шапки, где включен логотип.">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-3 rounded-md border border-border bg-background p-2">
+                    <div className="bazaar-admin-info-tile flex items-center gap-3 p-2">
                       <PreviewImageFrame
                         src={selectedLogoUrl}
                         alt={selectedStore?.name ?? "Логотип"}
@@ -1778,7 +1778,7 @@ export const EmailMarketingWorkspace = () => {
         </div>
 
         <Modal open={previewOpen} onOpenChange={setPreviewOpen} title="Предпросмотр" className="max-w-4xl">
-          <div ref={previewContentRef} className="max-h-[70vh] overflow-auto rounded-md border border-border bg-white">
+          <div ref={previewContentRef} className="bazaar-admin-preview-frame max-h-[70vh] overflow-auto bg-white p-0">
             {previewHtml ? (
               <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             ) : (
@@ -1814,7 +1814,7 @@ export const EmailMarketingWorkspace = () => {
 
         <Modal open={confirmOpen} onOpenChange={setConfirmOpen} title="Отправить кампанию?" className="max-w-xl">
           <div className="space-y-4">
-            <div className="rounded-md border border-border bg-muted/20 p-3 text-sm leading-6">
+            <div className="bazaar-admin-info-tile text-sm leading-6">
               <p><strong>Кампания:</strong> {campaignName}</p>
               <p><strong>Тема:</strong> {subject}</p>
               <p><strong>Получателей:</strong> {audienceSummary.validRecipients}</p>
@@ -1846,7 +1846,7 @@ export const EmailMarketingWorkspace = () => {
       />
 
       {!builderDesktopReady ? (
-        <Card className="rounded-md border-warning/30 bg-warning/10">
+        <Card className="bazaar-admin-status-tile-warning">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
               <StatusPendingIcon className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
@@ -1862,7 +1862,7 @@ export const EmailMarketingWorkspace = () => {
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="rounded-md">
+        <Card className="bazaar-admin-surface">
           <CardContent className="p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
@@ -1902,7 +1902,7 @@ export const EmailMarketingWorkspace = () => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-md">
+        <Card className="bazaar-admin-surface">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
               {sendersQuery.data?.senders.some((sender) => sender.status === "VERIFIED") ? (
@@ -2001,7 +2001,7 @@ export const EmailMarketingWorkspace = () => {
 
         {activeTab === "templates" ? (
           <TabsPanel>
-            <Card className="rounded-md">
+            <Card className="bazaar-admin-surface">
               <CardContent className="p-8 text-sm text-muted-foreground">
                 Базовые шаблоны доступны при создании блоков. Отдельная библиотека шаблонов готова к расширению, но без фиктивных шаблонов.
               </CardContent>
@@ -2021,7 +2021,7 @@ export const EmailMarketingWorkspace = () => {
 };
 
 const Metric = ({ label, value }: { label: string; value: number }) => (
-  <div className="rounded-md border border-border bg-background p-2">
+  <div className="bazaar-admin-info-tile p-2">
     <p className="text-xs text-muted-foreground">{label}</p>
     <p className="mt-1 text-lg font-semibold">{value}</p>
   </div>
@@ -2709,8 +2709,8 @@ const CampaignsDashboard = ({
   onArchive: (campaignId: string) => void;
   onDelete: (campaignId: string) => void;
 }) => (
-  <Card className="rounded-md">
-    <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <Card className="bazaar-admin-surface">
+    <CardHeader className="bazaar-admin-section-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <CardTitle>Кампании</CardTitle>
         {!builderAvailable ? (
@@ -2732,7 +2732,7 @@ const CampaignsDashboard = ({
       {campaigns.length ? (
         <div className="grid gap-3 xl:grid-cols-2">
           {campaigns.map((campaign) => (
-            <div key={campaign.id} className="rounded-md border border-border bg-background p-4 shadow-sm">
+            <div key={campaign.id} className="bazaar-admin-mobile-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{campaign.name}</p>
@@ -2775,7 +2775,7 @@ const CampaignsDashboard = ({
           ))}
         </div>
       ) : (
-        <div className="rounded-md border border-dashed border-border p-10 text-center">
+        <div className="bazaar-admin-empty min-h-[14rem]">
           <SparklesIcon className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
           <p className="mt-3 font-semibold">{loading ? "Загрузка..." : "Кампаний пока нет"}</p>
           <p className="mt-1 text-sm text-muted-foreground">Создайте первую рассылку из блоков и товаров магазина.</p>
@@ -2871,8 +2871,8 @@ const SendersPanel = ({
   onArchive: (senderId: string) => void;
 }) => (
   <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
-    <Card className="rounded-md">
-      <CardHeader><CardTitle>Настроить отправителя</CardTitle></CardHeader>
+    <Card className="bazaar-admin-surface">
+      <CardHeader className="bazaar-admin-section-header"><CardTitle>Настроить отправителя</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <Field label="Имя отправителя"><Input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} placeholder="Avantehnik" /></Field>
         <Field label="From email" hint="Адрес должен принадлежать домену, который вы подтвердите через DNS.">
@@ -2886,11 +2886,11 @@ const SendersPanel = ({
       </CardContent>
     </Card>
     <div className="space-y-4">
-      <Card className="rounded-md">
-        <CardHeader><CardTitle>Отправители</CardTitle></CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header"><CardTitle>Отправители</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {data?.defaultSender ? (
-            <div className="rounded-md border border-border bg-muted/20 p-3">
+            <div className="bazaar-admin-info-tile">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">Bazaar KG</p>
@@ -2913,7 +2913,7 @@ const SendersPanel = ({
             </div>
           ) : null}
           {(data?.senders ?? []).map((sender) => (
-            <div key={sender.id} className="rounded-md border border-border bg-background p-3">
+            <div key={sender.id} className="bazaar-admin-mobile-card p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{sender.displayName}</p>
@@ -2929,15 +2929,15 @@ const SendersPanel = ({
           {!loading && !(data?.senders ?? []).length ? <p className="text-sm text-muted-foreground">Брендированных отправителей пока нет.</p> : null}
         </CardContent>
       </Card>
-      <Card className="rounded-md">
-        <CardHeader><CardTitle>Домены и DNS</CardTitle></CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header"><CardTitle>Домены и DNS</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {(data?.domains ?? []).map((domain) => {
             const records = Array.isArray(domain.recordsJson) ? domain.recordsJson as Array<Record<string, unknown>> : [];
             const dmarcName = "_dmarc";
             const dmarcValue = `v=DMARC1; p=none; rua=mailto:postmaster@${domain.domain}`;
             return (
-              <div key={domain.id} className="rounded-md border border-border p-4">
+              <div key={domain.id} className="bazaar-admin-info-tile p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{domain.domain}</p>
@@ -2945,7 +2945,7 @@ const SendersPanel = ({
                   </div>
                   <Badge variant={domain.status === "VERIFIED" ? "success" : domain.status === "FAILED" ? "danger" : "warning"}>{senderStatusLabel(domain.status)}</Badge>
                 </div>
-                <div className="mt-3 overflow-auto rounded-md border border-border">
+                <div className="bazaar-admin-table-shell mt-3 overflow-auto">
                   <Table className="min-w-[820px] text-xs">
                     <TableHeader className="bg-muted/40 text-muted-foreground">
                       <TableRow>
@@ -2981,7 +2981,7 @@ const SendersPanel = ({
                     </TableBody>
                   </Table>
                 </div>
-                <div className="mt-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+                <div className="bazaar-admin-notice mt-3">
                   <p className="text-xs font-semibold text-muted-foreground">Рекомендуется добавить DMARC TXT</p>
                   <div className="mt-2 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)]">
                     <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2 rounded-md bg-background px-2 py-1.5">
@@ -3033,8 +3033,8 @@ const AutomationsPanel = ({
 }) => (
   <div className="grid gap-4 xl:grid-cols-2">
     {automations.map((automation) => (
-      <Card key={automation.id} className="rounded-md">
-        <CardHeader>
+      <Card key={automation.id} className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle>{triggerLabel(automation.trigger)}</CardTitle>
@@ -3047,7 +3047,7 @@ const AutomationsPanel = ({
           <div className="grid gap-2 sm:grid-cols-3">
             <Metric label="Отправлено" value={automation.sentCount} />
             <Metric label="Ошибки" value={automation.failedCount} />
-            <div className="rounded-md border border-border bg-background p-2">
+              <div className="bazaar-admin-info-tile p-2">
               <p className="text-xs text-muted-foreground">Последний запуск</p>
               <p className="mt-1 truncate text-xs font-semibold">{automation.lastTriggeredAt ? formatDateTime(automation.lastTriggeredAt, "ru") : "Нет"}</p>
             </div>
@@ -3088,7 +3088,7 @@ const AutomationsPanel = ({
       </Card>
     ))}
     {!loading && !automations.length ? (
-      <Card className="rounded-md xl:col-span-2"><CardContent className="p-8 text-sm text-muted-foreground">Автоматизации будут созданы после выбора магазина.</CardContent></Card>
+      <Card className="bazaar-admin-surface xl:col-span-2"><CardContent className="bazaar-admin-empty m-4 min-h-[10rem]">Автоматизации будут созданы после выбора магазина.</CardContent></Card>
     ) : null}
   </div>
 );

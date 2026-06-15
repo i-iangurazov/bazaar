@@ -41,6 +41,7 @@ import {
 import { FormActions } from "@/components/form-layout";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AddIcon, EmptyIcon, ViewIcon } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -188,15 +189,26 @@ const StockCountsPage = () => {
         </p>
       ) : null}
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>{t("listTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           {countsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
+            <div className="space-y-2" data-stock-counts-skeleton>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="grid gap-3 rounded-xl border border-border/65 bg-card/95 p-3 md:grid-cols-[1.2fr_1fr_0.7fr_1fr_1fr_3rem]"
+                >
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
             </div>
           ) : counts.length ? (
             <ResponsiveDataList
@@ -249,7 +261,7 @@ const StockCountsPage = () => {
                 </div>
               )}
               renderMobile={(count) => (
-                <div className="rounded-md border border-border bg-card p-3">
+                <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">{count.code}</p>
@@ -289,8 +301,8 @@ const StockCountsPage = () => {
               )}
             />
           ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <EmptyIcon className="h-4 w-4" aria-hidden />
+            <div className="bazaar-doc-empty min-h-[12rem]">
+              <EmptyIcon className="mb-3 h-8 w-8" aria-hidden />
               {t("empty")}
             </div>
           )}

@@ -321,7 +321,7 @@ const ToggleRow = ({
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }) => (
-  <label className="flex items-center justify-between gap-3 border border-border bg-secondary/30 p-3 text-sm">
+  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-muted/30 p-3 text-sm">
     <span>{label}</span>
     <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
   </label>
@@ -340,10 +340,10 @@ const MobileWizardStep = ({
   status?: "ready" | "warning" | "neutral";
   children: ReactNode;
 }) => (
-  <Card>
-    <CardHeader className="px-4 py-4">
+  <Card className="bazaar-admin-surface">
+    <CardHeader className="bazaar-admin-section-header px-4 py-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
           {step}
         </span>
         <div className="min-w-0 flex-1">
@@ -351,7 +351,7 @@ const MobileWizardStep = ({
             <CardTitle className="text-base">{title}</CardTitle>
             {status ? (
               <span
-                className={`shrink-0 border px-2 py-0.5 text-[11px] font-semibold ${
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                   status === "ready"
                     ? "border-success/30 bg-success/10 text-success"
                     : status === "warning"
@@ -382,7 +382,7 @@ const MobileStatusRow = ({
   value: string;
   ready?: boolean;
 }) => (
-  <div className="flex items-start justify-between gap-3 border border-border bg-secondary/20 p-3 text-sm">
+  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/65 bg-muted/30 p-3 text-sm">
     <span className="text-muted-foreground">{label}</span>
     <span
       className={`max-w-[58%] text-right font-medium ${
@@ -819,8 +819,8 @@ const PrintingSettingsPage = () => {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <section className="space-y-4 md:hidden" data-mobile-printing-wizard>
-        <Card>
-          <CardHeader className="px-4 py-4">
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header px-4 py-4">
             <CardTitle className="text-base">{t("wizardTitle")}</CardTitle>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {t("wizardDescription")}
@@ -850,16 +850,18 @@ const PrintingSettingsPage = () => {
 
         {!canEdit ? <p className="text-sm text-warning">{t("readOnly")}</p> : null}
         {settingsQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="bazaar-admin-empty min-h-[7rem]">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </div>
         ) : null}
         {settingsQuery.error ? (
-          <p className="text-sm text-danger">{translateError(tErrors, settingsQuery.error)}</p>
+          <div className="bazaar-admin-error">
+            {translateError(tErrors, settingsQuery.error)}
+          </div>
         ) : null}
         {!selectedStore && !storesQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="bazaar-admin-empty min-h-[7rem]">
             <EmptyIcon className="h-4 w-4" aria-hidden />
             {t("empty")}
           </div>
@@ -878,10 +880,10 @@ const PrintingSettingsPage = () => {
                   <button
                     key={provider}
                     type="button"
-                    className={`min-h-16 border p-3 text-left transition ${
+                    className={`bazaar-admin-choice-card min-h-16 ${
                       values.receiptPrintProvider === provider
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-card"
+                        ? "bazaar-admin-choice-card-active"
+                        : ""
                     }`}
                     disabled={!canEdit}
                     onClick={() => {
@@ -900,7 +902,7 @@ const PrintingSettingsPage = () => {
                     </span>
                   </button>
                 ))}
-                <div className="border border-dashed border-border bg-secondary/20 p-3 text-xs leading-relaxed text-muted-foreground">
+                <div className="bazaar-admin-notice text-xs leading-relaxed">
                   {t("wizardAgentUnavailable")}
                 </div>
               </div>
@@ -962,7 +964,7 @@ const PrintingSettingsPage = () => {
                 ready={qzTerminalProvisioned}
               />
               {qzFingerprint ? (
-                <div className="border border-border bg-secondary/20 p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
                   <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                     {qzFingerprint}
@@ -976,7 +978,7 @@ const PrintingSettingsPage = () => {
                 />
               )}
               {qzSignedButUntrusted ? (
-                <div className="border border-warning/40 bg-warning/10 p-3 text-sm leading-relaxed text-warning">
+                <div className="bazaar-admin-status-tile-warning text-sm leading-relaxed">
                   {t("qzClientProvisionNotice")}
                 </div>
               ) : null}
@@ -1318,8 +1320,8 @@ const PrintingSettingsPage = () => {
       </section>
 
       <div className="hidden space-y-6 md:block">
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("storeScopeTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
@@ -1352,16 +1354,18 @@ const PrintingSettingsPage = () => {
 
       {!canEdit ? <p className="text-sm text-warning">{t("readOnly")}</p> : null}
       {settingsQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="bazaar-admin-empty min-h-[7rem]">
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
       ) : null}
       {settingsQuery.error ? (
-        <p className="text-sm text-danger">{translateError(tErrors, settingsQuery.error)}</p>
+        <div className="bazaar-admin-error">
+          {translateError(tErrors, settingsQuery.error)}
+        </div>
       ) : null}
       {!selectedStore && !storesQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="bazaar-admin-empty min-h-[7rem]">
           <EmptyIcon className="h-4 w-4" aria-hidden />
           {t("empty")}
         </div>
@@ -1369,13 +1373,13 @@ const PrintingSettingsPage = () => {
 
       {selectedStore ? (
         <>
-          <Card>
-            <CardHeader>
+          <Card className="bazaar-admin-surface">
+            <CardHeader className="bazaar-admin-section-header">
               <CardTitle>{t("statusTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div
-                className={`border p-4 ${
+                className={`rounded-xl border p-4 ${
                   qzFullyReady
                     ? "border-success/40 bg-success/10 text-success"
                     : values.receiptPrintProvider === "DISABLED"
@@ -1410,7 +1414,7 @@ const PrintingSettingsPage = () => {
                             : t("autoPrintSetupRequired")}
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-2 border border-current/30 px-3 py-1 text-xs">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-current/30 px-3 py-1 text-xs">
                     {qzFullyReady ? (
                       <StatusSuccessIcon className="h-4 w-4" aria-hidden />
                     ) : (
@@ -1429,10 +1433,10 @@ const PrintingSettingsPage = () => {
                   <button
                     key={provider}
                     type="button"
-                    className={`border p-4 text-left transition ${
+                    className={`bazaar-admin-choice-card ${
                       values.receiptPrintProvider === provider
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-card hover:bg-secondary/40"
+                        ? "bazaar-admin-choice-card-active"
+                        : ""
                     }`}
                     disabled={!canEdit}
                     onClick={() => {
@@ -1461,12 +1465,12 @@ const PrintingSettingsPage = () => {
                 ))}
               </div>
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="border border-border bg-secondary/30 p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("connectionStatus")}</p>
                   <p className="mt-1 text-muted-foreground">{qzStatusLabel}</p>
                 </div>
                 <div
-                  className={`border p-3 text-sm ${
+                  className={`rounded-xl border p-3 text-sm ${
                     qzTrustStatus === "trusted"
                       ? "border-success/30 bg-success/10"
                       : "border-warning/40 bg-warning/10"
@@ -1478,7 +1482,7 @@ const PrintingSettingsPage = () => {
                   </p>
                 </div>
                 <div
-                  className={`border p-3 text-sm ${
+                  className={`rounded-xl border p-3 text-sm ${
                     qzTerminalProvisioned
                       ? "border-success/30 bg-success/10"
                       : "border-warning/40 bg-warning/10"
@@ -1491,7 +1495,7 @@ const PrintingSettingsPage = () => {
                       : t("qzClientProvisionMissing")}
                   </p>
                 </div>
-                <div className="border border-border bg-secondary/30 p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("printerStatus")}</p>
                   <p className="mt-1 text-muted-foreground">
                     {hasSavedPrinters ? t("printersSaved") : t("printersNotSelected")}
@@ -1499,27 +1503,27 @@ const PrintingSettingsPage = () => {
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-md border border-border bg-card p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("qzCertificateLoadedLabel")}</p>
                   <p className="mt-1 text-muted-foreground">
                     {qzCertificateLoaded ? t("yes") : t("no")}
                   </p>
                 </div>
-                <div className="rounded-md border border-border bg-card p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("qzSignatureConfiguredLabel")}</p>
                   <p className="mt-1 text-muted-foreground">
                     {qzSignatureConfigured ? t("yes") : t("no")}
                   </p>
                 </div>
-                <div className="rounded-md border border-border bg-card p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("qzRequestValidityLabel")}</p>
                   <p className="mt-1 text-muted-foreground">{t(qzRequestValidityKey)}</p>
                 </div>
-                <div className="rounded-md border border-border bg-card p-3 text-sm">
+                <div className="bazaar-admin-info-tile text-sm">
                   <p className="font-medium text-foreground">{t("qzLocalTrustLabel")}</p>
                   <p className="mt-1 text-muted-foreground">{t(qzLocalTrustKey)}</p>
                 </div>
-                <div className="rounded-md border border-border bg-card p-3 text-sm md:col-span-2 xl:col-span-1">
+                <div className="bazaar-admin-info-tile text-sm md:col-span-2 xl:col-span-1">
                   <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
                   <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                     {qzFingerprint || t("qzCertificateFingerprintUnavailable")}
@@ -1528,7 +1532,7 @@ const PrintingSettingsPage = () => {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <span
-                  className={`inline-flex items-center gap-2 border px-3 py-2 text-sm ${
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
                     qzStatus === "connected"
                       ? "border-success/40 bg-success/10 text-success"
                       : qzStatus === "error"
@@ -1554,14 +1558,14 @@ const PrintingSettingsPage = () => {
                 </Button>
               </div>
               {values.receiptPrintProvider === "QZ_TRAY" && qzTrustStatus !== "trusted" ? (
-                <div className="border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+                <div className="bazaar-admin-status-tile-warning p-4 text-sm">
                   {t(qzTrustNoticeKey)}
                 </div>
               ) : null}
               {values.receiptPrintProvider === "QZ_TRAY" &&
               qzTrustStatus === "trusted" &&
               !qzTerminalProvisioned ? (
-                <div className="border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+                <div className="bazaar-admin-status-tile-warning p-4 text-sm">
                   {t("qzClientProvisionNotice")}
                 </div>
               ) : null}
@@ -1576,7 +1580,7 @@ const PrintingSettingsPage = () => {
                 </ol>
               </div>
               {values.receiptPrintProvider === "QZ_TRAY" ? (
-                <div className="space-y-3 border border-border bg-secondary/20 p-4">
+                <div className="space-y-3 rounded-xl border border-border/65 bg-muted/25 p-4">
                   <div className="flex flex-wrap items-center gap-3">
                     {qzTrustStatus !== "certificate-missing" ? (
                       <Button asChild type="button" variant="secondary">
@@ -1589,7 +1593,7 @@ const PrintingSettingsPage = () => {
                       {t("downloadQzCertificateHint")}
                     </span>
                   </div>
-                  <label className="flex items-center justify-between gap-3 border border-border bg-card p-3 text-sm">
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-card p-3 text-sm">
                     <span className="space-y-1">
                       <span className="block font-medium text-foreground">
                         {t("qzClientProvisionConfirm")}
@@ -1671,8 +1675,8 @@ const PrintingSettingsPage = () => {
           </Card>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <Card>
-              <CardHeader>
+            <Card className="bazaar-admin-surface">
+              <CardHeader className="bazaar-admin-section-header">
                 <CardTitle>{t("receiptTemplateTitle")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1819,14 +1823,14 @@ const PrintingSettingsPage = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
+            <Card className="bazaar-admin-surface">
+              <CardHeader className="bazaar-admin-section-header">
                 <CardTitle>{t("receiptPreview")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-auto">
+                <div className="bazaar-admin-preview-frame overflow-auto">
                   <div
-                    className="border border-border bg-white p-4 text-black shadow-sm"
+                    className="rounded-lg border border-border bg-white p-4 text-black shadow-sm"
                     style={{ width: receiptPreviewWidth }}
                   >
                     <div className="text-center font-bold">{sample.receiptHeading}</div>
@@ -1864,8 +1868,8 @@ const PrintingSettingsPage = () => {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <Card>
-              <CardHeader>
+            <Card className="bazaar-admin-surface">
+              <CardHeader className="bazaar-admin-section-header">
                 <CardTitle>{t("barcodeTemplateTitle")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1919,15 +1923,15 @@ const PrintingSettingsPage = () => {
                         key={value}
                         type="button"
                         disabled={!canEdit}
-                        className={`space-y-2 border p-3 text-left text-xs transition ${
+                        className={`bazaar-admin-choice-card space-y-2 text-xs ${
                           values.labelLayoutOrder === value
-                            ? "border-primary bg-primary/10"
-                            : "border-border bg-card hover:bg-secondary/40"
+                            ? "bazaar-admin-choice-card-active"
+                            : ""
                         }`}
                         onClick={() => updateValue("labelLayoutOrder", value)}
                       >
                         <span className="block font-medium text-foreground">{t(label)}</span>
-                        <span className="block border border-border bg-white p-2 text-center text-[10px] text-black">
+                        <span className="block rounded-lg border border-border bg-white p-2 text-center text-[10px] text-black">
                           {value.includes("PRICE") && value.startsWith("PRICE") ? <b>{sample.price}</b> : null}
                           {value.includes("NAME") ? <span className="block">{sample.productName}</span> : null}
                           <span className="my-1 block h-5 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />
@@ -1993,13 +1997,13 @@ const PrintingSettingsPage = () => {
                 </Button>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
+            <Card className="bazaar-admin-surface">
+              <CardHeader className="bazaar-admin-section-header">
                 <CardTitle>{t("barcodePreview")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div
-                  className="flex items-center justify-center border border-border bg-white p-3 text-center text-black shadow-sm"
+                  className="flex items-center justify-center rounded-lg border border-border bg-white p-3 text-center text-black shadow-sm"
                   style={{ width: labelPreviewWidth, minHeight: labelPreviewHeight }}
                 >
                   <div className="w-full">

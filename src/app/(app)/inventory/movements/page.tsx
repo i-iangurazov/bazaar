@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -725,7 +726,7 @@ const ProductMovementsPage = () => {
       enableSorting: true,
       accessorFn: (movement) => movement.documentType,
       cell: ({ row }) => renderDocument(row.original),
-      meta: { className: "min-w-[16rem]" },
+      meta: { className: "min-w-[13rem]" },
     },
     {
       id: "date",
@@ -733,7 +734,7 @@ const ProductMovementsPage = () => {
       enableSorting: true,
       accessorFn: (movement) => movement.createdAt,
       cell: ({ row }) => formatDateTime(row.original.createdAt, locale),
-      meta: { className: "min-w-[9rem]" },
+      meta: { className: "min-w-[7.25rem]" },
     },
     {
       id: "status",
@@ -745,28 +746,28 @@ const ProductMovementsPage = () => {
           {statusLabel(row.original.status)}
         </Badge>
       ),
-      meta: { className: "min-w-[8rem]" },
+      meta: { className: "min-w-[6.25rem]" },
     },
     {
       id: "paymentStatus",
       header: t("paymentStatus"),
       enableSorting: false,
       cell: ({ row }) => renderPaymentStatus(row.original.paymentStatus),
-      meta: { className: "min-w-[8rem]" },
+      meta: { className: "min-w-[6.25rem]" },
     },
     {
       id: "sender",
       header: t("sender"),
       enableSorting: false,
       cell: ({ row }) => renderOptionalText(row.original.senderName),
-      meta: { className: "max-w-[12rem] min-w-[9rem] truncate" },
+      meta: { className: "hidden max-w-[12rem] min-w-[9rem] truncate" },
     },
     {
       id: "recipient",
       header: t("recipient"),
       enableSorting: false,
       cell: ({ row }) => renderOptionalText(row.original.recipientName),
-      meta: { className: "max-w-[12rem] min-w-[9rem] truncate" },
+      meta: { className: "hidden max-w-[12rem] min-w-[9rem] truncate" },
     },
     {
       id: "store",
@@ -774,7 +775,7 @@ const ProductMovementsPage = () => {
       enableSorting: true,
       accessorFn: (movement) => movement.storeName ?? "",
       cell: ({ row }) => renderOptionalText(row.original.storeName),
-      meta: { className: "max-w-[12rem] min-w-[9rem] truncate" },
+      meta: { className: "max-w-[9rem] min-w-[6.5rem] truncate" },
     },
     {
       id: "author",
@@ -782,7 +783,7 @@ const ProductMovementsPage = () => {
       enableSorting: true,
       accessorFn: (movement) => movement.authorName || movement.authorEmail || "",
       cell: ({ row }) => renderOptionalText(row.original.authorName || row.original.authorEmail),
-      meta: { className: "max-w-[12rem] min-w-[9rem] truncate" },
+      meta: { className: "hidden max-w-[12rem] min-w-[9rem] truncate" },
     },
     {
       id: "positions",
@@ -790,14 +791,14 @@ const ProductMovementsPage = () => {
       enableSorting: true,
       accessorFn: (movement) => movement.positionsCount,
       cell: ({ row }) => formatNumber(row.original.positionsCount, locale),
-      meta: { className: "min-w-[7rem] text-right" },
+      meta: { className: "min-w-[4.75rem] text-right" },
     },
     {
       id: "quantity",
       header: t("quantity"),
       enableSorting: false,
       cell: ({ row }) => formatNumber(row.original.totalQuantity, locale),
-      meta: { className: "min-w-[7rem] text-right" },
+      meta: { className: "hidden min-w-[7rem] text-right" },
     },
     {
       id: "amount",
@@ -805,21 +806,21 @@ const ProductMovementsPage = () => {
       enableSorting: true,
       accessorFn: (movement) => movement.totalAmount ?? 0,
       cell: ({ row }) => renderMoney(row.original.totalAmount),
-      meta: { className: "min-w-[8rem] text-right" },
+      meta: { className: "min-w-[6.25rem] text-right" },
     },
     {
       id: "paidAmount",
       header: t("paidAmount"),
       enableSorting: false,
       cell: ({ row }) => renderMoney(row.original.paidAmount),
-      meta: { className: "min-w-[8rem] text-right" },
+      meta: { className: "hidden min-w-[8rem] text-right" },
     },
     {
       id: "actions",
-      header: tCommon("actions"),
+      header: () => <span className="sr-only">{tCommon("actions")}</span>,
       enableSorting: false,
       cell: ({ row }) => renderActions(row.original),
-      meta: { className: "min-w-[7rem] text-right" },
+      meta: { className: "min-w-[5.5rem] text-right" },
     },
   ];
 
@@ -1004,7 +1005,7 @@ const ProductMovementsPage = () => {
 
   const filterControls = (
     <div className="flex w-full flex-col gap-3">
-      <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(14rem,2fr)_minmax(15rem,1.5fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)]">
+      <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,2fr)_minmax(15rem,1.5fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)]">
         <div className="space-y-1">
           <Label htmlFor="movement-search">{tCommon("search")}</Label>
           <div className="relative">
@@ -1023,7 +1024,7 @@ const ProductMovementsPage = () => {
         </div>
         <div className="space-y-1">
           <Label>{t("dateRange")}</Label>
-          <div className="rounded-md border border-input bg-background px-2 py-1">
+          <div className="rounded-xl border border-input bg-card px-2 py-1 shadow-sm">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
               <Input
                 type="date"
@@ -1083,7 +1084,7 @@ const ProductMovementsPage = () => {
               resetPage();
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger data-testid="movement-type-filter">
               <SelectValue placeholder={t("allTypes")} />
             </SelectTrigger>
             <SelectContent>
@@ -1119,11 +1120,11 @@ const ProductMovementsPage = () => {
           </Select>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/55 bg-card/70 p-2 shadow-inner shadow-foreground/[0.015]">
         <Button
           type="button"
-          variant="ghost"
-          className="px-2 text-muted-foreground"
+          variant="secondary"
+          className="px-3"
           aria-expanded={additionalFiltersOpen}
           onClick={() => setAdditionalFiltersOpen((current) => !current)}
         >
@@ -1150,7 +1151,7 @@ const ProductMovementsPage = () => {
         </Button>
       </div>
       {additionalFiltersOpen ? (
-        <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+        <div className="rounded-xl border border-border/60 bg-card/80 p-3 shadow-sm">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-1">
               <Label>{t("paymentStatus")}</Label>
@@ -1244,7 +1245,21 @@ const ProductMovementsPage = () => {
   };
 
   const editBodyContent = editableDocumentQuery.isLoading ? (
-    <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>
+    <div className="space-y-4" data-movement-edit-skeleton>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Skeleton className="h-10 rounded-xl" />
+        <Skeleton className="h-10 rounded-xl" />
+      </div>
+      <div className="space-y-2 rounded-xl border border-border/65 bg-muted/25 p-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Skeleton key={index} className="h-12 rounded-xl" />
+        ))}
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+      </div>
+    </div>
   ) : editableDocumentQuery.error ? (
     <Alert variant="destructive" role="alert">
       {translateError(tErrors, editableDocumentQuery.error)}
@@ -1297,7 +1312,7 @@ const ProductMovementsPage = () => {
         </div>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="bazaar-doc-toolbar space-y-3">
         <div className="flex flex-col gap-2 md:flex-row md:items-end">
           <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="movement-edit-search">
@@ -1318,7 +1333,7 @@ const ProductMovementsPage = () => {
           ) : null}
         </div>
         {editSearch.trim() ? (
-          <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+          <div className="max-h-48 overflow-y-auto rounded-xl border border-border/65 bg-card shadow-sm">
             {editingMovement.documentType !== "RETURN" && editProductSearchQuery.isLoading ? (
               <p className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</p>
             ) : editProductChoices.length ? (
@@ -1327,7 +1342,7 @@ const ProductMovementsPage = () => {
                   key={`${result.product.id}:${result.snapshot.variantId ?? "BASE"}:${result.customerOrderLineId ?? "product"}`}
                   type="button"
                   data-testid="movement-edit-product-result"
-                  className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/50"
+                className="flex w-full items-center justify-between gap-3 border-b border-border/55 px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-primary/5"
                   onClick={() => addProductToEdit(result)}
                 >
                   <span className="min-w-0">
@@ -1358,7 +1373,7 @@ const ProductMovementsPage = () => {
               <div
                 key={line.key}
                 data-testid="movement-edit-line"
-                className="space-y-3 rounded-md border border-border bg-card p-3 shadow-sm"
+                className="space-y-3 rounded-xl border border-border/65 bg-card p-3 shadow-sm"
               >
                 <div className="min-w-0">
                   <p className="break-words font-medium text-foreground">
@@ -1400,7 +1415,7 @@ const ProductMovementsPage = () => {
                     />
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/45 px-3 py-2 text-sm">
                   <span className="text-muted-foreground">{t("printLineTotal")}</span>
                   <span className="font-medium text-foreground">
                     {formatCurrencyKGS(getEditLineTotal(line), locale)}
@@ -1448,7 +1463,7 @@ const ProductMovementsPage = () => {
       ) : (
         <EmptyState
           description={t("editLinesRequired")}
-          className="min-h-[10rem] rounded-md border border-dashed"
+          className="min-h-[10rem] rounded-xl border border-dashed"
         />
       )}
 
@@ -1481,7 +1496,7 @@ const ProductMovementsPage = () => {
   const editFooterContent =
     editingMovement && !editableDocumentQuery.isLoading && !editableDocumentQuery.error ? (
       <>
-        <div className="flex min-h-10 items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm sm:mr-auto sm:min-w-[16rem]">
+        <div className="flex min-h-10 items-center justify-between rounded-xl bg-muted/45 px-3 py-2 text-sm sm:mr-auto sm:min-w-[16rem]">
           <span className="text-muted-foreground">{t("amount")}</span>
           <span className="font-semibold text-foreground" data-testid="movement-edit-total">
             {formatCurrencyKGS(editTotal, locale)}
@@ -1548,12 +1563,12 @@ const ProductMovementsPage = () => {
       />
 
       {movementQuery.error ? (
-        <div className="mb-4 border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {translateError(tErrors, movementQuery.error)}
         </div>
       ) : null}
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>{t("tableTitle")}</CardTitle>
           <span className="text-sm text-muted-foreground">
@@ -1571,7 +1586,7 @@ const ProductMovementsPage = () => {
             paginationKey="product-movements"
             scrollToTopOnPageChange
             empty={
-              <div className="flex min-h-[12rem] flex-col items-center justify-center border border-dashed border-border bg-background p-6 text-center text-sm text-muted-foreground">
+              <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
                 <EmptyIcon className="mb-3 h-8 w-8" aria-hidden />
                 {movementQuery.isLoading ? tCommon("loading") : t("empty")}
               </div>
@@ -1586,7 +1601,7 @@ const ProductMovementsPage = () => {
                 manualSorting
                 sorting={movementSorting}
                 onSortingChange={handleMovementSortingChange}
-                tableClassName="min-w-[1160px]"
+                tableClassName="min-w-[1000px] [&_td]:px-2 [&_th]:px-2"
                 empty={
                   <EmptyState
                     icon={<EmptyIcon className="h-8 w-8" aria-hidden />}
@@ -1597,7 +1612,7 @@ const ProductMovementsPage = () => {
               />
             )}
             renderMobile={(movement) => (
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="rounded-xl border border-border/65 bg-card p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   {renderDocument(movement)}
                   <Badge variant={statusVariant(movement.status)}>

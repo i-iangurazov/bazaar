@@ -14,6 +14,9 @@ describe("product movement journal source", () => {
     expect(appShellSource).toContain('key: "productMovements"');
     expect(appShellSource).toContain('href: "/inventory/movements"');
     expect(appShellSource).toContain("icon: ProductMovementIcon");
+    expect(appShellSource).toContain('key: "stockTransfer"');
+    expect(appShellSource).toContain('href: "/inventory/transfers"');
+    expect(appShellSource).toContain("icon: TransferIcon");
     expect(appShellSource).toContain('key: "stockWriteOff"');
     expect(appShellSource).toContain('href: "/inventory/write-offs"');
     expect(appShellSource).toContain("exact: true");
@@ -122,8 +125,8 @@ describe("product movement journal source", () => {
     expect(appShellSource).toContain("<SidebarHeader");
     expect(appShellSource).toContain("<SidebarMenuButton");
     expect(appShellSource).toContain("<SidebarTrigger");
-    expect(mobileShellSource).toContain("rounded-[1.5rem]");
-    expect(mobileShellSource).toContain("bg-primary/10 text-primary");
+    expect(mobileShellSource).toContain("rounded-[1.65rem]");
+    expect(mobileShellSource).toContain("bg-primary text-primary-foreground");
     expect(mobileShellSource).toContain("env(safe-area-inset-bottom)");
   });
 

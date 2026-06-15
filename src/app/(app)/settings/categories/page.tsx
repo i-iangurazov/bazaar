@@ -117,12 +117,12 @@ const CategorySettingsPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("controlsTitle")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("controlsDescription")}</p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-5">
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">{t("store")}</label>
@@ -155,7 +155,7 @@ const CategorySettingsPage = () => {
           </div>
 
           {!canManageCategories ? (
-            <div className="border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+            <div className="bazaar-admin-notice border-warning/30 bg-warning/10 text-warning">
               {t("adminOnly")}
             </div>
           ) : null}
@@ -177,14 +177,14 @@ const CategorySettingsPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="bazaar-admin-surface">
+        <CardHeader className="border-b border-border/60 bg-muted/20">
           <CardTitle>{t("listTitle")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("listDescription")}</p>
         </CardHeader>
         <CardContent>
           {categoriesQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -203,7 +203,7 @@ const CategorySettingsPage = () => {
                 return (
                   <div
                     key={category.normalizedName}
-                    className="flex flex-col gap-3 border border-border bg-card p-4 md:flex-row md:items-center md:justify-between"
+                    className="bazaar-admin-mobile-card flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
                   >
                     <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -290,7 +290,7 @@ const CategorySettingsPage = () => {
               })}
             </div>
           ) : (
-            <div className="space-y-2 border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty space-y-2">
               <p>{t("empty")}</p>
               <p>
                 <Link href="/products/new" className="font-semibold text-primary">

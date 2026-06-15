@@ -334,7 +334,7 @@ const AttributesPage = () => {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -347,12 +347,12 @@ const AttributesPage = () => {
       />
 
       {attributesQuery.isLoading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
       ) : attributesQuery.error ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-danger">
+        <div className="bazaar-admin-error mt-4 flex flex-wrap items-center gap-2">
           <span>{translateError(tErrors, attributesQuery.error)}</span>
           <Button
             type="button"
@@ -369,7 +369,8 @@ const AttributesPage = () => {
             items={attributesQuery.data}
             getKey={(attribute) => attribute.id}
             renderDesktop={(visibleItems) => (
-              <div className="overflow-x-auto">
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
                 <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
@@ -443,10 +444,11 @@ const AttributesPage = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             )}
             renderMobile={(attribute) => (
-              <div className="rounded-md border border-border bg-card p-3">
+              <div className="bazaar-admin-mobile-card">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-mono text-xs text-muted-foreground">{attribute.key}</p>
@@ -492,15 +494,15 @@ const AttributesPage = () => {
           />
         </div>
       ) : (
-        <div className="mt-6 rounded-md border border-dashed border-border p-6 text-center">
+        <div className="bazaar-admin-empty mt-6">
           <EmptyIcon className="mx-auto h-6 w-6 text-muted-foreground/80" aria-hidden />
           <p className="mt-2 text-sm font-semibold text-foreground">{t("emptyTitle")}</p>
           <p className="mt-1 text-xs text-muted-foreground">{t("emptySubtitle")}</p>
         </div>
       )}
 
-      <Card className="mt-8">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="bazaar-admin-surface mt-8">
+        <CardHeader className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>{t("templatesTitle")}</CardTitle>
             <p className="text-xs text-muted-foreground">{t("templatesSubtitle")}</p>
@@ -517,12 +519,12 @@ const AttributesPage = () => {
         </CardHeader>
         <CardContent>
           {templatesQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : templatesQuery.error ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
+            <div className="bazaar-admin-error flex flex-wrap items-center gap-2">
               <span>{translateError(tErrors, templatesQuery.error)}</span>
               <Button
                 type="button"
@@ -538,7 +540,7 @@ const AttributesPage = () => {
               {templateGroups.map((group) => (
                 <div
                   key={group.category}
-                  className="rounded-md border border-border/70 bg-card p-4"
+                  className="bazaar-admin-mobile-card p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -606,7 +608,7 @@ const AttributesPage = () => {
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="bazaar-admin-empty">
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("templateEmpty")}
             </div>
@@ -702,7 +704,7 @@ const AttributesPage = () => {
                 name="required"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-3">
+                    <div className="bazaar-admin-info-tile flex items-center justify-between gap-3">
                       <div>
                         <FormLabel>{t("required")}</FormLabel>
                         <FormDescription>{t("requiredHint")}</FormDescription>
