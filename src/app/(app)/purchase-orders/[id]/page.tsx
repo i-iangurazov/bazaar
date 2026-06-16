@@ -87,7 +87,7 @@ const PurchaseOrderDetailPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const role = session?.user?.role ?? "STAFF";
   const canManage = role === "ADMIN" || role === "MANAGER";
-  const canReceiveInventory = role === "ADMIN";
+  const canReceiveInventory = canManage;
   const [pdfActionPending, setPdfActionPending] = useState<null | "download" | "print">(null);
 
   const poQuery = trpc.purchaseOrders.getById.useQuery({ id: poId }, { enabled: Boolean(poId) });

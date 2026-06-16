@@ -30,7 +30,7 @@ describe("mobile inventory source", () => {
     expect(source).toContain('onSelect={() => openActionDialog("minStock")}');
   });
 
-  it("keeps mobile inventory operations on existing protected backend procedures", async () => {
+  it("keeps mobile inventory operations on manager backend procedures", async () => {
     const routerSource = await readSource("src/server/trpc/routers/inventory.ts");
 
     expect(routerSource).toContain(
@@ -40,9 +40,9 @@ describe("mobile inventory source", () => {
     expect(routerSource).toContain("buildInventoryProductSearchWhere");
     expect(routerSource).toContain("AND: searchTokens.map");
     expect(routerSource).toContain("buildLowStockSnapshotSql");
-    expect(routerSource).toContain("postStockReceiving: adminProcedure");
-    expect(routerSource).toContain("postStockWriteOff: adminProcedure");
-    expect(routerSource).toContain("transfer: adminProcedure");
+    expect(routerSource).toContain("postStockReceiving: managerProcedure");
+    expect(routerSource).toContain("postStockWriteOff: managerProcedure");
+    expect(routerSource).toContain("transfer: managerProcedure");
     expect(routerSource).toContain("adjust: managerProcedure");
     expect(routerSource).toContain("assertUserCanAccessStore");
   });

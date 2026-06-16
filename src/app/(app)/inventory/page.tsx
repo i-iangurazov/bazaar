@@ -351,7 +351,7 @@ const InventoryPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
-  const canManageStock = isAdmin;
+  const canManageStock = canManage;
   const router = useRouter();
   const pathname = usePathname() ?? "/inventory";
   const searchParams = useSearchParams();

@@ -2,7 +2,6 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import {
-  adminProcedure,
   managerProcedure,
   protectedProcedure,
   rateLimit,
@@ -242,7 +241,7 @@ export const purchaseOrdersRouter = router({
       }
     }),
 
-  receive: adminProcedure
+  receive: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "po-receive" }))
     .input(
       z.object({

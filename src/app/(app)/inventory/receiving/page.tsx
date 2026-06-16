@@ -183,7 +183,8 @@ const InventoryReceivingPage = () => {
   const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
-  const canManageStock = session?.user?.role === "ADMIN";
+  const canManageStock =
+    session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const storesQuery = trpc.stores.list.useQuery();
   type StoreRow = NonNullable<typeof storesQuery.data>[number];

@@ -1188,7 +1188,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  receive: adminProcedure
+  receive: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-receive" }))
     .input(
       z.object({
@@ -1227,7 +1227,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  postStockReceiving: adminProcedure
+  postStockReceiving: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-stock-receiving" }))
     .input(
       z.object({
@@ -1270,7 +1270,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  postStockWriteOff: adminProcedure
+  postStockWriteOff: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-stock-write-off" }))
     .input(
       z.object({
@@ -1318,7 +1318,7 @@ export const inventoryRouter = router({
       }
     }),
 
-  transfer: adminProcedure
+  transfer: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-transfer" }))
     .input(
       z.object({

@@ -81,7 +81,7 @@ const StockCountDetailPage = () => {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
-  const canApplyStockCount = role === "ADMIN";
+  const canApplyStockCount = canManage;
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
 

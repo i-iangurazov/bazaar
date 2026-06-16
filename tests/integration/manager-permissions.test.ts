@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { PurchaseOrderStatus, StockCountStatus } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -140,6 +141,142 @@ describeDb("manager operational permissions", () => {
 
     expect(adjustment.onHand).toBe(1);
     expect(snapshot?.onHand).toBe(1);
+  });
+
+  it("allows managers to create and post inventory documents", async () => {
+    const { org, store, supplier, product, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const transferStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Transfer Store",
+        code: "TRN",
+        allowNegativeStock: false,
+      },
+    });
+    await prisma.userStoreAccess.create({
+      data: {
+        organizationId: org.id,
+        userId: managerUser.id,
+        storeId: transferStore.id,
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: transferStore.id,
+        productId: product.id,
+        isActive: true,
+        assignedById: managerUser.id,
+      },
+    });
+
+    const caller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+
+    await expect(
+      caller.inventory.receive({
+        storeId: store.id,
+        productId: product.id,
+        qtyReceived: 10,
+        idempotencyKey: "manager-direct-receive",
+      }),
+    ).resolves.toMatchObject({ onHand: 10 });
+
+    await expect(
+      caller.inventory.postStockReceiving({
+        storeId: store.id,
+        referenceNumber: "MGR-RCV-1",
+        lines: [{ productId: product.id, quantity: 5, unitCost: 100 }],
+        idempotencyKey: "manager-stock-receiving",
+      }),
+    ).resolves.toMatchObject({ storeId: store.id, lineCount: 1, totalQuantity: 5 });
+
+    await expect(
+      caller.inventory.transfer({
+        fromStoreId: store.id,
+        toStoreId: transferStore.id,
+        productId: product.id,
+        qty: 3,
+        idempotencyKey: "manager-stock-transfer",
+      }),
+    ).resolves.toMatchObject({
+      fromStoreId: store.id,
+      toStoreId: transferStore.id,
+      lineCount: 1,
+      totalQuantity: 3,
+    });
+
+    await expect(
+      caller.inventory.postStockWriteOff({
+        storeId: store.id,
+        reason: "Другое",
+        comment: "manager permission test",
+        lines: [{ productId: product.id, qty: 1 }],
+        idempotencyKey: "manager-stock-writeoff",
+      }),
+    ).resolves.toMatchObject({ storeId: store.id, lineCount: 1, totalQuantity: 1 });
+
+    const stockCount = await caller.stockCounts.create({
+      storeId: store.id,
+      notes: "manager count",
+    });
+    await caller.stockCounts.addOrUpdateLineByScan({
+      stockCountId: stockCount.id,
+      storeId: store.id,
+      barcodeOrQuery: product.sku,
+      mode: "set",
+      countedQty: 9,
+    });
+    await expect(
+      caller.stockCounts.apply({
+        stockCountId: stockCount.id,
+        idempotencyKey: "manager-stock-count-apply",
+      }),
+    ).resolves.toMatchObject({ applied: true, adjustments: 1 });
+    await expect(
+      prisma.stockCount.findUniqueOrThrow({ where: { id: stockCount.id } }),
+    ).resolves.toMatchObject({ status: StockCountStatus.APPLIED });
+
+    const purchaseOrder = await caller.purchaseOrders.create({
+      storeId: store.id,
+      supplierId: supplier.id,
+      lines: [{ productId: product.id, qtyOrdered: 2, unitCost: 100 }],
+      submit: false,
+    });
+    await caller.purchaseOrders.submit({ purchaseOrderId: purchaseOrder.id });
+    await caller.purchaseOrders.approve({ purchaseOrderId: purchaseOrder.id });
+    await expect(
+      caller.purchaseOrders.receive({
+        purchaseOrderId: purchaseOrder.id,
+        idempotencyKey: "manager-purchase-order-receive",
+      }),
+    ).resolves.toMatchObject({ id: purchaseOrder.id, status: PurchaseOrderStatus.RECEIVED });
+
+    const sourceSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const transferSnapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: transferStore.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+
+    expect(sourceSnapshot?.onHand).toBe(11);
+    expect(transferSnapshot?.onHand).toBe(3);
   });
 
   it("allows managers to manage registers safely only in accessible stores", async () => {

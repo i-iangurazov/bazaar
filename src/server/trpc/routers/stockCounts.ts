@@ -1,13 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import {
-  adminProcedure,
-  managerProcedure,
-  protectedProcedure,
-  rateLimit,
-  router,
-} from "@/server/trpc/trpc";
+import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
@@ -29,15 +23,6 @@ const stockCountsProtectedProcedure = protectedProcedure.use(async ({ ctx, next 
 });
 
 const stockCountsManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
-  try {
-    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "stockCounts" });
-  } catch (error) {
-    throw toTRPCError(error);
-  }
-  return next();
-});
-
-const stockCountsAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {
   try {
     await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "stockCounts" });
   } catch (error) {
@@ -187,7 +172,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  apply: stockCountsAdminProcedure
+  apply: stockCountsManagerProcedure
     .input(z.object({ stockCountId: z.string(), idempotencyKey: z.string().min(8) }))
     .mutation(async ({ ctx, input }) => {
       try {
