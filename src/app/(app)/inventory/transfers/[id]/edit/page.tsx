@@ -1,4 +1,4 @@
-import { ProductMovementDocumentEditorPage } from "@/components/inventory/product-movement-document-editor";
+import { InventoryTransfersPage } from "@/components/inventory/transfer-workflow";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
@@ -13,7 +13,7 @@ const TransferEditPage = ({
   const documentKey = getParam(searchParams?.documentKey) ?? `TRANSFER:TRANSFER:${documentId}`;
   const backHref = getParam(searchParams?.returnTo) ?? "/inventory/movements";
 
-  return <ProductMovementDocumentEditorPage documentKey={documentKey} backHref={backHref} />;
+  return <InventoryTransfersPage editDocumentKey={documentKey} editBackHref={backHref} />;
 };
 
 export default TransferEditPage;

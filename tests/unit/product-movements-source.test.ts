@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -93,8 +93,26 @@ describe("product movement journal source", () => {
   it("routes edit actions to native document workflows instead of opening the journal editor", async () => {
     const pageSource = await readSource("src/app/(app)/inventory/movements/page.tsx");
     const helperSource = await readSource("src/lib/productMovementEditTarget.ts");
-    const editorSource = await readSource(
-      "src/components/inventory/product-movement-document-editor.tsx",
+    const receivingEditRouteSource = await readSource(
+      "src/app/(app)/inventory/receiving/[id]/edit/page.tsx",
+    );
+    const transferEditRouteSource = await readSource(
+      "src/app/(app)/inventory/transfers/[id]/edit/page.tsx",
+    );
+    const writeOffEditRouteSource = await readSource(
+      "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx",
+    );
+    const receivingPageSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const transferPageSource = await readSource("src/app/(app)/inventory/transfers/page.tsx");
+    const writeOffPageSource = await readSource("src/app/(app)/inventory/write-offs/page.tsx");
+    const receivingWorkflowSource = await readSource(
+      "src/components/inventory/receiving-workflow.tsx",
+    );
+    const transferWorkflowSource = await readSource(
+      "src/components/inventory/transfer-workflow.tsx",
+    );
+    const writeOffWorkflowSource = await readSource(
+      "src/components/inventory/write-off-workflow.tsx",
     );
 
     expect(pageSource).toContain("getProductMovementEditTarget");
@@ -107,9 +125,31 @@ describe("product movement journal source", () => {
     expect(helperSource).toContain("/inventory/counts/");
     expect(helperSource).toContain("/pos/sell?");
     expect(helperSource).toContain("/sales/orders/");
-    expect(editorSource).toContain("ProductMovementDocumentEditorPage");
-    expect(editorSource).toContain("trpc.inventory.editableProductMovementDocument.useQuery");
-    expect(editorSource).toContain("trpc.inventory.editProductMovementDocument.useMutation");
+    expect(receivingEditRouteSource).toContain("InventoryReceivingPage");
+    expect(transferEditRouteSource).toContain("InventoryTransfersPage");
+    expect(writeOffEditRouteSource).toContain("InventoryWriteOffsPage");
+    expect(receivingPageSource).toContain("@/components/inventory/receiving-workflow");
+    expect(transferPageSource).toContain("@/components/inventory/transfer-workflow");
+    expect(writeOffPageSource).toContain("@/components/inventory/write-off-workflow");
+    expect(receivingWorkflowSource).toContain("export const InventoryReceivingPage");
+    expect(transferWorkflowSource).toContain("export const InventoryTransfersPage");
+    expect(writeOffWorkflowSource).toContain("export const InventoryWriteOffsPage");
+    for (const source of [
+      receivingWorkflowSource,
+      transferWorkflowSource,
+      writeOffWorkflowSource,
+    ]) {
+      expect(source).toContain("editableProductMovementDocument.useQuery");
+      expect(source).toContain("editProductMovementDocument.useMutation");
+      expect(source).toContain("editDocumentKey");
+      expect(source).toContain("saveChanges");
+      expect(source).toContain("backToMovements");
+    }
+    await expect(
+      access(
+        path.join(process.cwd(), "src/components/inventory/product-movement-document-editor.tsx"),
+      ),
+    ).rejects.toThrow();
     expect(pageSource).not.toContain("trpc.inventory.editableProductMovementDocument.useQuery");
     expect(pageSource).not.toContain("trpc.inventory.editProductMovementDocument.useMutation");
     expect(pageSource).not.toContain("editLineColumns");

@@ -49,7 +49,7 @@ describe("mobile inventory source", () => {
 
   it("uses mobile cards and bottom-sheet operations for inventory and sticky mobile receiving summary", async () => {
     const inventorySource = await readSource("src/app/(app)/inventory/page.tsx");
-    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const receivingSource = await readSource("src/components/inventory/receiving-workflow.tsx");
 
     expect(inventorySource).toContain("renderMobile={(item) =>");
     expect(inventorySource).toContain('variant: "success" as const');
@@ -77,7 +77,7 @@ describe("mobile inventory source", () => {
   });
 
   it("allows transfers to assign products to the destination store", async () => {
-    const transferSource = await readSource("src/app/(app)/inventory/transfers/page.tsx");
+    const transferSource = await readSource("src/components/inventory/transfer-workflow.tsx");
     const inventoryServiceSource = await readSource("src/server/services/inventory.ts");
 
     expect(transferSource).toContain("destinationStock = destination?.snapshot.onHand ?? 0");

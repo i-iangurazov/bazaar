@@ -994,6 +994,7 @@ export const inventoryRouter = router({
         customerPhone: null as string | null,
         customerAddress: null as string | null,
         notes: document.comment,
+        reason: document.reason,
         lines: Array.from(aggregates.values())
           .map((line) => {
             const quantity =

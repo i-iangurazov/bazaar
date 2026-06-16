@@ -7,13 +7,16 @@ const readSource = (relativePath: string) =>
   readFile(path.join(process.cwd(), relativePath), "utf8");
 
 describe("receiving product creation handoff source", () => {
+  const receivingWorkflowPath = "src/components/inventory/receiving-workflow.tsx";
+
   it("saves the current receiving draft before navigating to product creation", async () => {
-    const source = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const source = await readSource(receivingWorkflowPath);
 
     expect(source).toContain("bazaar:inventory-receiving-draft:");
     expect(source).toContain("writeReceivingDraft(draftKey");
     expect(source).toContain("createReceivingReturnParams");
-    expect(source).toContain('returnTo: "/inventory/receiving"');
+    expect(source).toContain('return "/inventory/receiving"');
+    expect(source).toContain("returnTo,");
     expect(source).toContain("returnSource: receivingReturnSource");
     expect(source).toContain("receivingDraftKey: draftKey");
     expect(source).toContain("router.push(`/products/new?");
@@ -21,7 +24,7 @@ describe("receiving product creation handoff source", () => {
   });
 
   it("restores the receiving draft search without replacing it with the created product name", async () => {
-    const source = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const source = await readSource(receivingWorkflowPath);
 
     expect(source).toContain("readReceivingDraft(returningDraftKey)");
     expect(source).toContain("setLines(draft.lines)");
@@ -60,7 +63,7 @@ describe("receiving product creation handoff source", () => {
   });
 
   it("adds a duplicate product action to receiving search results without clearing search", async () => {
-    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const receivingSource = await readSource(receivingWorkflowPath);
     const inventoryRouterSource = await readSource("src/server/trpc/routers/inventory.ts");
 
     expect(receivingSource).toContain("receivingDuplicateProduct");
@@ -73,7 +76,7 @@ describe("receiving product creation handoff source", () => {
   });
 
   it("limits receiving add-products search to product names", async () => {
-    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const receivingSource = await readSource(receivingWorkflowPath);
     const inventoryRouterSource = await readSource("src/server/trpc/routers/inventory.ts");
 
     expect(receivingSource).toContain('const receivingProductSearchFields: ["name"] = ["name"]');
@@ -84,7 +87,7 @@ describe("receiving product creation handoff source", () => {
   });
 
   it("opens product edit from receiving and returns through the preserved draft", async () => {
-    const receivingSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
+    const receivingSource = await readSource(receivingWorkflowPath);
     const productDetailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
 
     expect(receivingSource).toContain("receivingEditProduct");

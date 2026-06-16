@@ -1,4 +1,4 @@
-import { ProductMovementDocumentEditorPage } from "@/components/inventory/product-movement-document-editor";
+import { InventoryWriteOffsPage } from "@/components/inventory/write-off-workflow";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
@@ -13,7 +13,7 @@ const WriteOffEditPage = ({
   const documentKey = getParam(searchParams?.documentKey) ?? `WRITE_OFF:WRITE_OFF:${documentId}`;
   const backHref = getParam(searchParams?.returnTo) ?? "/inventory/movements";
 
-  return <ProductMovementDocumentEditorPage documentKey={documentKey} backHref={backHref} />;
+  return <InventoryWriteOffsPage editDocumentKey={documentKey} editBackHref={backHref} />;
 };
 
 export default WriteOffEditPage;

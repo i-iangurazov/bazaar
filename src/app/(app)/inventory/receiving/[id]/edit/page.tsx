@@ -1,4 +1,4 @@
-import { ProductMovementDocumentEditorPage } from "@/components/inventory/product-movement-document-editor";
+import { InventoryReceivingPage } from "@/components/inventory/receiving-workflow";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
@@ -14,7 +14,7 @@ const ReceivingEditPage = ({
     getParam(searchParams?.documentKey) ?? `STOCK_RECEIVING:STOCK_RECEIVING:${documentId}`;
   const backHref = getParam(searchParams?.returnTo) ?? "/inventory/movements";
 
-  return <ProductMovementDocumentEditorPage documentKey={documentKey} backHref={backHref} />;
+  return <InventoryReceivingPage editDocumentKey={documentKey} editBackHref={backHref} />;
 };
 
 export default ReceivingEditPage;
