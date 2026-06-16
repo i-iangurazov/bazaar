@@ -490,6 +490,7 @@ const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tMovementJournal = useTranslations("inventory.movementJournal");
   const locale = useLocale();
   const searchParams = useSearchParams();
   const trpcUtils = trpc.useUtils();
@@ -611,6 +612,9 @@ const PosSellPage = () => {
     totalKgs: null,
   });
   const completeSubmitInFlightRef = useRef(false);
+  const receiptEditDeepLinkRef = useRef<string | null>(null);
+  const isFromMovements = searchParams.get("from") === "movements";
+  const movementReturnHref = searchParams.get("returnTo") ?? "/inventory/movements";
 
   const setPayments = useCallback((updater: SetStateAction<PosPaymentDraft[]>) => {
     const next =
@@ -653,6 +657,25 @@ const PosSellPage = () => {
     }
     setRegisterId(registersQuery.data[0].id);
   }, [registerId, registersQuery.data]);
+
+  useEffect(() => {
+    const receiptId = searchParams.get("receiptId");
+    const mode = searchParams.get("mode");
+    if (mode !== "edit" || !receiptId) {
+      return;
+    }
+    const deepLinkKey = `${mode}:${receiptId}`;
+    if (receiptEditDeepLinkRef.current === deepLinkKey) {
+      return;
+    }
+    receiptEditDeepLinkRef.current = deepLinkKey;
+    setReceiptJournalOpen(true);
+    setJournalSearch("");
+    setJournalPage(1);
+    setJournalDetailSaleId(null);
+    setJournalReturnSaleId(null);
+    setJournalEditSaleId(receiptId);
+  }, [searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -3963,6 +3986,14 @@ const PosSellPage = () => {
           </div>
 
           <ModalFooter>
+            {isFromMovements ? (
+              <Button asChild type="button" variant="secondary">
+                <Link href={movementReturnHref}>
+                  <BackIcon className="h-4 w-4" aria-hidden />
+                  {tMovementJournal("backToMovements")}
+                </Link>
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="secondary"

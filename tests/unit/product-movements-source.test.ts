@@ -90,19 +90,32 @@ describe("product movement journal source", () => {
     expect(pageSource).toContain("renderMobile");
   });
 
-  it("uses the Phase 1 shadcn-style dialog and data table for document editing", async () => {
+  it("routes edit actions to native document workflows instead of opening the journal editor", async () => {
     const pageSource = await readSource("src/app/(app)/inventory/movements/page.tsx");
+    const helperSource = await readSource("src/lib/productMovementEditTarget.ts");
+    const editorSource = await readSource(
+      "src/components/inventory/product-movement-document-editor.tsx",
+    );
 
-    expect(pageSource).toContain("DialogContent");
-    expect(pageSource).toContain("DialogBody");
-    expect(pageSource).toContain("DialogFooter");
-    expect(pageSource).toContain("SheetContent");
-    expect(pageSource).toContain("SheetBody");
-    expect(pageSource).toContain("SheetFooter");
-    expect(pageSource).toContain("useEditSheet");
-    expect(pageSource).toContain("editLineColumns");
-    expect(pageSource).toContain('rowTestId="movement-edit-line"');
-    expect(pageSource).toContain('data-testid="movement-edit-save"');
+    expect(pageSource).toContain("getProductMovementEditTarget");
+    expect(pageSource).toContain("<Link href={editTarget.href}>");
+    expect(pageSource).toContain("movement-edit-button-disabled");
+    expect(pageSource).not.toContain("onClick={() => openEditModal(movement)}");
+    expect(helperSource).toContain("/inventory/receiving/");
+    expect(helperSource).toContain("/inventory/transfers/");
+    expect(helperSource).toContain("/inventory/write-offs/");
+    expect(helperSource).toContain("/inventory/counts/");
+    expect(helperSource).toContain("/pos/sell?");
+    expect(helperSource).toContain("/sales/orders/");
+    expect(editorSource).toContain("ProductMovementDocumentEditorPage");
+    expect(editorSource).toContain("trpc.inventory.editableProductMovementDocument.useQuery");
+    expect(editorSource).toContain("trpc.inventory.editProductMovementDocument.useMutation");
+    expect(pageSource).not.toContain("trpc.inventory.editableProductMovementDocument.useQuery");
+    expect(pageSource).not.toContain("trpc.inventory.editProductMovementDocument.useMutation");
+    expect(pageSource).not.toContain("editLineColumns");
+    expect(pageSource).not.toContain('rowTestId="movement-edit-line"');
+    expect(pageSource).not.toContain('data-testid="movement-edit-save"');
+    expect(pageSource).not.toContain('data-testid="movement-edit-modal"');
     expect(pageSource).not.toContain("<Modal");
     expect(pageSource).not.toContain("ModalFooter");
   });

@@ -70,6 +70,7 @@ export type ProductMovementJournalRow = {
   documentId: string;
   documentType: ProductMovementDocumentType;
   documentNumber: string | null;
+  isPosSale: boolean | null;
   documentLabel: string;
   organizationName: string | null;
   createdAt: Date;
@@ -133,6 +134,7 @@ type ProductMovementJournalSqlRow = {
   documentReferenceType: string;
   documentReferenceId: string;
   documentNumber: string | null;
+  isPosSale: boolean | null;
   linkedCustomerOrderId: string | null;
   organizationName: string | null;
   createdAt: Date;
@@ -436,6 +438,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       g."documentReferenceType" AS "documentReferenceType",
       g."documentReferenceId" AS "documentReferenceId",
       COALESCE(co."number", sr."number", sc."code", g."documentReferenceId") AS "documentNumber",
+      co."isPosSale" AS "isPosSale",
       co_original."id" AS "linkedCustomerOrderId",
       g."organizationName" AS "organizationName",
       g."documentDate" AS "createdAt",
@@ -592,6 +595,7 @@ const normalizeProductMovementJournalRow = (
     documentId: row.documentId,
     documentType: row.documentType,
     documentNumber: row.documentNumber,
+    isPosSale: row.isPosSale,
     documentLabel: buildProductMovementDocumentLabel({
       documentType: row.documentType,
       documentNumber: row.documentNumber,

@@ -2986,6 +2986,14 @@
       "editUnitPrice": "Цена за ед.",
       "editRemoveLine": "Удалить строку",
       "editReasonPlaceholder": "Например: исправили количество или цену",
+      "nativeEditSubtitle": "Редактирование выполняется в исходном документе.",
+      "backToMovements": "Вернуться в движение товаров",
+      "editUnavailable": {
+        "missingReference": "Не найден исходный документ для редактирования.",
+        "returnUnsupported": "Редактирование возврата пока недоступно в отдельной форме.",
+        "adjustmentUnsupported": "Для этой корректировки нет отдельной формы редактирования.",
+        "unsupported": "Для этого типа движения редактирование недоступно."
+      },
       "statusLabel": "Статус",
       "allStatuses": "Все статусы",
       "paymentStatus": "Оплата",

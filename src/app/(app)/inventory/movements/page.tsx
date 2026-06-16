@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { CustomerOrderStatus } from "@prisma/client";
@@ -8,29 +8,10 @@ import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table"
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
-import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,18 +30,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/toast";
 import {
-  AddIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   ArchiveIcon,
   CheckIcon,
   ChevronDownIcon,
   CirclePlusIcon,
-  DeleteIcon,
   DownloadIcon,
   EditIcon,
   EmptyIcon,
@@ -71,6 +47,7 @@ import {
   ViewIcon,
 } from "@/components/icons";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { getProductMovementEditTarget } from "@/lib/productMovementEditTarget";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -115,39 +92,7 @@ type PaymentStatus = (typeof paymentStatusOptions)[number];
 type SortKey = (typeof sortOptions)[number];
 type SortDirection = "asc" | "desc";
 
-type EditableMovementType = "SALE" | "RETURN" | "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF";
-
-type EditLineState = {
-  key: string;
-  lineId: string | null;
-  customerOrderLineId: string | null;
-  productId: string;
-  variantId: string | null;
-  productName: string;
-  variantName: string | null;
-  quantityInput: string;
-  unitPriceInput: string;
-  unitCostInput: string;
-};
-
-type EditProductChoice = {
-  product: { id: string; name: string; sku?: string | null };
-  snapshot: { variantId?: string | null };
-  variant?: { name?: string | null } | null;
-  primaryBarcode?: string | null;
-  priceKgs?: number | null;
-  unitCostKgs?: number | null;
-  customerOrderLineId?: string | null;
-};
-
 const allValue = "all";
-const editableMovementTypes = new Set<EditableMovementType>([
-  "SALE",
-  "RETURN",
-  "STOCK_RECEIVING",
-  "TRANSFER",
-  "WRITE_OFF",
-]);
 
 const ProductMovementsPage = () => {
   const t = useTranslations("inventory.movementJournal");
@@ -170,30 +115,9 @@ const ProductMovementsPage = () => {
   const [additionalFiltersOpen, setAdditionalFiltersOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [editingMovement, setEditingMovement] = useState<MovementRow | null>(null);
-  const [editLines, setEditLines] = useState<EditLineState[]>([]);
-  const [editSearch, setEditSearch] = useState("");
-  const [replaceLineKey, setReplaceLineKey] = useState<string | null>(null);
-  const [editReason, setEditReason] = useState("");
-  const [editNotes, setEditNotes] = useState("");
-  const [editCustomerName, setEditCustomerName] = useState("");
-  const [editCustomerPhone, setEditCustomerPhone] = useState("");
-  const [editDestinationStoreId, setEditDestinationStoreId] = useState("");
-  const [useEditSheet, setUseEditSheet] = useState(false);
-  const { toast } = useToast();
-  const trpcUtils = trpc.useUtils();
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = storesQuery.data ?? [];
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 1023px)");
-    const updateViewportMode = () => setUseEditSheet(mediaQuery.matches);
-
-    updateViewportMode();
-    mediaQuery.addEventListener("change", updateViewportMode);
-    return () => mediaQuery.removeEventListener("change", updateViewportMode);
-  }, []);
 
   const movementQuery = trpc.inventory.productMovements.useQuery(
     {
@@ -220,87 +144,6 @@ const ProductMovementsPage = () => {
   const totalItems = movementQuery.data?.total ?? 0;
 
   type MovementRow = (typeof items)[number];
-
-  const editableDocumentQuery = trpc.inventory.editableProductMovementDocument.useQuery(
-    { documentKey: editingMovement?.id ?? "" },
-    {
-      enabled: Boolean(editingMovement),
-      staleTime: 0,
-    },
-  );
-  const editableDocument = editableDocumentQuery.data ?? null;
-  const editStoreId = editableDocument?.storeId ?? "";
-  const editProductSearchQuery = trpc.inventory.searchProducts.useQuery(
-    {
-      storeId: editStoreId,
-      search: editSearch.trim() || undefined,
-      limit: 30,
-    },
-    {
-      enabled: Boolean(
-        editingMovement &&
-        editingMovement.documentType !== "RETURN" &&
-        editStoreId &&
-        editSearch.trim(),
-      ),
-      keepPreviousData: true,
-    },
-  );
-  const editProductResults = useMemo(
-    () => editProductSearchQuery.data ?? [],
-    [editProductSearchQuery.data],
-  );
-  const editProductChoices = useMemo<EditProductChoice[]>(() => {
-    if (editingMovement?.documentType === "RETURN") {
-      const query = editSearch.trim().toLocaleLowerCase(locale);
-      const returnableLines = editableDocument?.returnableLines ?? [];
-      if (!query) {
-        return [];
-      }
-      return returnableLines
-        .filter((line) => {
-          const label = `${line.productName} ${line.variantName ?? ""}`.toLocaleLowerCase(locale);
-          return label.includes(query);
-        })
-        .map((line) => ({
-          product: { id: line.productId, name: line.productName },
-          snapshot: { variantId: line.variantId },
-          variant: line.variantName ? { name: line.variantName } : null,
-          priceKgs: line.unitPriceKgs,
-          unitCostKgs: line.unitCostKgs,
-          customerOrderLineId: line.customerOrderLineId,
-        }));
-    }
-    return editProductResults.map((result) => ({
-      product: result.product,
-      snapshot: result.snapshot,
-      variant: result.variant,
-      primaryBarcode: result.primaryBarcode,
-      priceKgs: result.priceKgs,
-      unitCostKgs: result.unitCostKgs,
-      customerOrderLineId: null,
-    }));
-  }, [
-    editableDocument?.returnableLines,
-    editProductResults,
-    editSearch,
-    editingMovement?.documentType,
-    locale,
-  ]);
-  const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
-    onSuccess: async () => {
-      toast({ variant: "success", description: t("editSaved") });
-      setEditingMovement(null);
-      await Promise.all([
-        trpcUtils.inventory.productMovements.invalidate(),
-        trpcUtils.inventory.productMovementDocument.invalidate(),
-        trpcUtils.inventory.editableProductMovementDocument.invalidate(),
-      ]);
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
 
   const resetPage = () => setPage(1);
   const resetFilters = () => {
@@ -431,203 +274,8 @@ const ProductMovementsPage = () => {
       <Badge variant={paymentVariant(value)}>{paymentStatusLabel(value)}</Badge>
     );
 
-  const isEditableMovement = (
-    movement: MovementRow,
-  ): movement is MovementRow & {
-    documentType: EditableMovementType;
-  } => editableMovementTypes.has(movement.documentType as EditableMovementType);
-
-  useEffect(() => {
-    if (!editableDocument || !editingMovement) {
-      return;
-    }
-    setEditNotes(editableDocument.notes ?? "");
-    setEditReason("");
-    setReplaceLineKey(null);
-    setEditCustomerName(editableDocument.customerName ?? "");
-    setEditCustomerPhone(editableDocument.customerPhone ?? "");
-    setEditDestinationStoreId(editableDocument.destinationStoreId ?? "");
-    setEditLines(
-      editableDocument.lines.map((line, index) => ({
-        key: line.lineId ?? `${line.productId}:${line.variantId ?? "BASE"}:${index}`,
-        lineId: line.lineId,
-        customerOrderLineId: line.customerOrderLineId,
-        productId: line.productId,
-        variantId: line.variantId,
-        productName: line.productName,
-        variantName: line.variantName,
-        quantityInput: String(line.quantity),
-        unitPriceInput: line.unitPriceKgs === null ? "" : String(line.unitPriceKgs),
-        unitCostInput: line.unitCostKgs === null ? "" : String(line.unitCostKgs),
-      })),
-    );
-  }, [editableDocument, editingMovement]);
-
-  const parseNumberInput = (value: string) => {
-    const normalized = value.trim().replace(",", ".");
-    if (!normalized) {
-      return null;
-    }
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  const openEditModal = (movement: MovementRow) => {
-    if (!isEditableMovement(movement)) {
-      return;
-    }
-    setEditingMovement(movement);
-    setEditSearch("");
-  };
-
-  const updateEditLine = (key: string, patch: Partial<EditLineState>) => {
-    setEditLines((current) =>
-      current.map((line) => (line.key === key ? { ...line, ...patch } : line)),
-    );
-  };
-
-  const removeEditLine = (key: string) => {
-    setEditLines((current) => current.filter((line) => line.key !== key));
-  };
-
-  const applyProductToEditLine = (lineKey: string, result: EditProductChoice) => {
-    if (
-      editLines.some(
-        (line) =>
-          line.key !== lineKey &&
-          line.productId === result.product.id &&
-          (line.variantId ?? null) === (result.snapshot.variantId ?? null),
-      )
-    ) {
-      toast({ variant: "error", description: t("editDuplicateLine") });
-      return;
-    }
-    updateEditLine(lineKey, {
-      productId: result.product.id,
-      variantId: result.snapshot.variantId ?? null,
-      productName: result.product.name,
-      variantName: result.variant?.name ?? null,
-      customerOrderLineId: result.customerOrderLineId ?? null,
-      unitPriceInput:
-        editingMovement?.documentType === "SALE" || editingMovement?.documentType === "RETURN"
-          ? String(result.priceKgs ?? 0)
-          : (editLines.find((line) => line.key === lineKey)?.unitPriceInput ?? ""),
-      unitCostInput:
-        editingMovement?.documentType === "STOCK_RECEIVING" ||
-        editingMovement?.documentType === "TRANSFER" ||
-        editingMovement?.documentType === "WRITE_OFF"
-          ? String(result.unitCostKgs ?? 0)
-          : (editLines.find((line) => line.key === lineKey)?.unitCostInput ?? ""),
-    });
-    setEditSearch("");
-    setReplaceLineKey(null);
-  };
-
-  const addProductToEdit = (result: EditProductChoice) => {
-    if (replaceLineKey) {
-      applyProductToEditLine(replaceLineKey, result);
-      setReplaceLineKey(null);
-      return;
-    }
-    if (
-      editLines.some(
-        (line) =>
-          line.productId === result.product.id &&
-          (line.variantId ?? null) === (result.snapshot.variantId ?? null),
-      )
-    ) {
-      toast({ variant: "error", description: t("editDuplicateLine") });
-      return;
-    }
-    setEditLines((current) => [
-      ...current,
-      {
-        key:
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `${result.product.id}:${Date.now()}`,
-        lineId: null,
-        customerOrderLineId: result.customerOrderLineId ?? null,
-        productId: result.product.id,
-        variantId: result.snapshot.variantId ?? null,
-        productName: result.product.name,
-        variantName: result.variant?.name ?? null,
-        quantityInput: "1",
-        unitPriceInput:
-          editingMovement?.documentType === "SALE" || editingMovement?.documentType === "RETURN"
-            ? String(result.priceKgs ?? 0)
-            : "",
-        unitCostInput:
-          editingMovement?.documentType === "STOCK_RECEIVING" ||
-          editingMovement?.documentType === "TRANSFER" ||
-          editingMovement?.documentType === "WRITE_OFF"
-            ? String(result.unitCostKgs ?? 0)
-            : "",
-      },
-    ]);
-    setEditSearch("");
-  };
-
-  const submitEdit = async () => {
-    if (!editingMovement) {
-      return;
-    }
-    if (!editLines.length) {
-      toast({ variant: "error", description: t("editLinesRequired") });
-      return;
-    }
-
-    const lines = editLines.map((line) => {
-      const quantity = parseNumberInput(line.quantityInput);
-      const unitPriceKgs = parseNumberInput(line.unitPriceInput);
-      const unitCostKgs = parseNumberInput(line.unitCostInput);
-      return {
-        line,
-        quantity,
-        unitPriceKgs,
-        unitCostKgs,
-      };
-    });
-    const invalidLine = lines.find(
-      ({ quantity, unitPriceKgs, unitCostKgs }) =>
-        quantity === null ||
-        !Number.isInteger(quantity) ||
-        quantity <= 0 ||
-        ((editingMovement.documentType === "SALE" || editingMovement.documentType === "RETURN") &&
-          (unitPriceKgs === null || unitPriceKgs < 0)) ||
-        ((editingMovement.documentType === "STOCK_RECEIVING" ||
-          editingMovement.documentType === "TRANSFER" ||
-          editingMovement.documentType === "WRITE_OFF") &&
-          (unitCostKgs === null || unitCostKgs < 0)),
-    );
-    if (invalidLine) {
-      toast({ variant: "error", description: t("editInvalidLine") });
-      return;
-    }
-
-    await editMutation.mutateAsync({
-      documentKey: editingMovement.id,
-      customerName: editCustomerName,
-      customerPhone: editCustomerPhone,
-      notes: editNotes,
-      reason: editReason,
-      destinationStoreId:
-        editingMovement.documentType === "TRANSFER" ? editDestinationStoreId : undefined,
-      lines: lines.map(({ line, quantity, unitPriceKgs, unitCostKgs }) => ({
-        lineId: line.lineId,
-        customerOrderLineId: line.customerOrderLineId,
-        productId: line.productId,
-        variantId: line.variantId,
-        quantity: quantity ?? 0,
-        unitPriceKgs,
-        unitCostKgs,
-      })),
-      idempotencyKey:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `movement-edit-${Date.now()}`,
-    });
-  };
+  const editDisabledReasonLabel = (reason: NonNullable<ReturnType<typeof getProductMovementEditTarget>["disabledReason"]>) =>
+    t(`editUnavailable.${reason}`);
 
   const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
     const viewButton = movement.detailUrl ? (
@@ -644,19 +292,42 @@ const ProductMovementsPage = () => {
         </Link>
       </Button>
     ) : null;
-    const editButton = isEditableMovement(movement) ? (
+    const editTarget = getProductMovementEditTarget({
+      id: movement.id,
+      documentId: movement.documentId,
+      documentType: movement.documentType,
+      isPosSale: movement.isPosSale,
+      returnTo: "/inventory/movements",
+    });
+    const disabledReason = editTarget.disabledReason ?? "unsupported";
+    const editButton = editTarget.href ? (
       <Button
         variant={layout === "desktop" ? "ghost" : "secondary"}
         size={layout === "desktop" ? "icon" : undefined}
-        onClick={() => openEditModal(movement)}
+        asChild
         aria-label={tCommon("edit")}
         data-testid="movement-edit-button"
         className={layout === "mobile" ? "w-full justify-center" : undefined}
       >
-        <EditIcon className="h-4 w-4" aria-hidden />
-        {layout === "mobile" ? tCommon("edit") : null}
+        <Link href={editTarget.href}>
+          <EditIcon className="h-4 w-4" aria-hidden />
+          {layout === "mobile" ? tCommon("edit") : null}
+        </Link>
       </Button>
-    ) : null;
+    ) : (
+      <Button
+        variant={layout === "desktop" ? "ghost" : "secondary"}
+        size={layout === "desktop" ? "icon" : undefined}
+        aria-label={editDisabledReasonLabel(disabledReason)}
+        title={editDisabledReasonLabel(disabledReason)}
+        data-testid="movement-edit-button-disabled"
+        className={layout === "mobile" ? "w-full justify-center" : undefined}
+        disabled
+      >
+        <EditIcon className="h-4 w-4" aria-hidden />
+        {layout === "mobile" ? editDisabledReasonLabel(disabledReason) : null}
+      </Button>
+    );
 
     return (
       <div
@@ -823,146 +494,6 @@ const ProductMovementsPage = () => {
       meta: { className: "min-w-[5.5rem] text-right" },
     },
   ];
-
-  const isEditPriceDocument =
-    editingMovement?.documentType === "SALE" || editingMovement?.documentType === "RETURN";
-
-  const editLineUnitLabel = isEditPriceDocument ? t("editUnitPrice") : t("printUnitCost");
-
-  const getEditLineUnitValueInput = useCallback(
-    (line: EditLineState) => (isEditPriceDocument ? line.unitPriceInput : line.unitCostInput),
-    [isEditPriceDocument],
-  );
-
-  const getEditLineTotal = useCallback(
-    (line: EditLineState) => {
-      const quantity = parseNumberInput(line.quantityInput) ?? 0;
-      const unitValue = parseNumberInput(getEditLineUnitValueInput(line)) ?? 0;
-      return quantity * unitValue;
-    },
-    [getEditLineUnitValueInput],
-  );
-
-  const editTotal = editLines.reduce((sum, line) => sum + getEditLineTotal(line), 0);
-
-  const editLineColumns = useMemo<ColumnDef<EditLineState>[]>(
-    () => [
-      {
-        id: "product",
-        header: tCommon("product"),
-        cell: ({ row }) => {
-          const line = row.original;
-          return (
-            <div className="min-w-0">
-              <p className="truncate font-medium">
-                {line.productName}
-                {line.variantName ? ` · ${line.variantName}` : ""}
-              </p>
-              {replaceLineKey === line.key ? (
-                <p className="text-xs text-primary">{t("editReplaceActive")}</p>
-              ) : null}
-            </div>
-          );
-        },
-        meta: { className: "min-w-[18rem]" },
-      },
-      {
-        id: "quantity",
-        header: t("quantity"),
-        cell: ({ row }) => {
-          const line = row.original;
-          return (
-            <Input
-              value={line.quantityInput}
-              inputMode="numeric"
-              className="text-right"
-              data-testid="movement-edit-line-qty"
-              onChange={(event) => updateEditLine(line.key, { quantityInput: event.target.value })}
-            />
-          );
-        },
-        meta: { className: "w-28 min-w-[7rem] text-right" },
-      },
-      {
-        id: "unitValue",
-        header: editLineUnitLabel,
-        cell: ({ row }) => {
-          const line = row.original;
-          return (
-            <Input
-              value={getEditLineUnitValueInput(line)}
-              inputMode="decimal"
-              className="text-right"
-              data-testid="movement-edit-line-price"
-              onChange={(event) =>
-                updateEditLine(
-                  line.key,
-                  isEditPriceDocument
-                    ? { unitPriceInput: event.target.value }
-                    : { unitCostInput: event.target.value },
-                )
-              }
-            />
-          );
-        },
-        meta: { className: "w-36 min-w-[9rem] text-right" },
-      },
-      {
-        id: "lineTotal",
-        header: t("printLineTotal"),
-        cell: ({ row }) => {
-          return formatCurrencyKGS(getEditLineTotal(row.original), locale);
-        },
-        meta: { className: "w-36 min-w-[9rem] text-right" },
-      },
-      {
-        id: "actions",
-        header: tCommon("actions"),
-        cell: ({ row }) => {
-          const line = row.original;
-          return (
-            <div className="flex justify-end gap-1">
-              <Button
-                type="button"
-                variant={replaceLineKey === line.key ? "default" : "secondary"}
-                size="sm"
-                data-testid="movement-edit-line-replace"
-                onClick={() => {
-                  setReplaceLineKey(line.key);
-                  setEditSearch("");
-                }}
-              >
-                <EditIcon className="h-4 w-4" aria-hidden />
-                {t("editReplace")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                data-testid="movement-edit-line-remove"
-                onClick={() => removeEditLine(line.key)}
-                aria-label={t("editRemoveLine")}
-                title={t("editRemoveLine")}
-              >
-                <DeleteIcon className="h-4 w-4" aria-hidden />
-              </Button>
-            </div>
-          );
-        },
-        meta: { className: "w-40 min-w-[10rem] text-right" },
-      },
-    ],
-    [
-      editLineUnitLabel,
-      getEditLineTotal,
-      getEditLineUnitValueInput,
-      isEditPriceDocument,
-      locale,
-      replaceLineKey,
-      t,
-      tCommon,
-    ],
-  );
 
   const sortMenu = (
     <DropdownMenu>
@@ -1239,289 +770,6 @@ const ProductMovementsPage = () => {
     </div>
   );
 
-  const closeEditSurface = () => {
-    setEditingMovement(null);
-    setReplaceLineKey(null);
-  };
-
-  const editBodyContent = editableDocumentQuery.isLoading ? (
-    <div className="space-y-4" data-movement-edit-skeleton>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Skeleton className="h-10 rounded-xl" />
-        <Skeleton className="h-10 rounded-xl" />
-      </div>
-      <div className="space-y-2 rounded-xl border border-border/65 bg-muted/25 p-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <Skeleton key={index} className="h-12 rounded-xl" />
-        ))}
-      </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-24 rounded-xl" />
-      </div>
-    </div>
-  ) : editableDocumentQuery.error ? (
-    <Alert variant="destructive" role="alert">
-      {translateError(tErrors, editableDocumentQuery.error)}
-    </Alert>
-  ) : editingMovement ? (
-    <>
-      {editingMovement.documentType === "SALE" ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1">
-            <Label htmlFor="movement-edit-customer">{t("editCustomer")}</Label>
-            <Input
-              id="movement-edit-customer"
-              value={editCustomerName}
-              onChange={(event) => setEditCustomerName(event.target.value)}
-              data-testid="movement-edit-customer"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="movement-edit-phone">{t("editCustomerPhone")}</Label>
-            <Input
-              id="movement-edit-phone"
-              value={editCustomerPhone}
-              onChange={(event) => setEditCustomerPhone(event.target.value)}
-              data-testid="movement-edit-customer-phone"
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {editingMovement.documentType === "TRANSFER" ? (
-        <div className="space-y-1">
-          <Label htmlFor="movement-edit-destination-store">{t("recipient")}</Label>
-          <Select value={editDestinationStoreId} onValueChange={setEditDestinationStoreId}>
-            <SelectTrigger
-              id="movement-edit-destination-store"
-              data-testid="movement-edit-destination-store"
-            >
-              <SelectValue placeholder={t("recipientPlaceholder")} />
-            </SelectTrigger>
-            <SelectContent>
-              {stores
-                .filter((store) => store.id !== editableDocument?.sourceStoreId)
-                .map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
-
-      <div className="bazaar-doc-toolbar space-y-3">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end">
-          <div className="min-w-0 flex-1 space-y-1">
-            <Label htmlFor="movement-edit-search">
-              {replaceLineKey ? t("editReplaceProduct") : t("editAddProduct")}
-            </Label>
-            <Input
-              id="movement-edit-search"
-              value={editSearch}
-              onChange={(event) => setEditSearch(event.target.value)}
-              placeholder={t("editProductSearchPlaceholder")}
-              data-testid="movement-edit-product-search"
-            />
-          </div>
-          {replaceLineKey ? (
-            <Button type="button" variant="secondary" onClick={() => setReplaceLineKey(null)}>
-              {t("editCancelReplace")}
-            </Button>
-          ) : null}
-        </div>
-        {editSearch.trim() ? (
-          <div className="max-h-48 overflow-y-auto rounded-xl border border-border/65 bg-card shadow-sm">
-            {editingMovement.documentType !== "RETURN" && editProductSearchQuery.isLoading ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</p>
-            ) : editProductChoices.length ? (
-              editProductChoices.map((result) => (
-                <button
-                  key={`${result.product.id}:${result.snapshot.variantId ?? "BASE"}:${result.customerOrderLineId ?? "product"}`}
-                  type="button"
-                  data-testid="movement-edit-product-result"
-                className="flex w-full items-center justify-between gap-3 border-b border-border/55 px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-primary/5"
-                  onClick={() => addProductToEdit(result)}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-foreground">
-                      {result.product.name}
-                      {result.variant?.name ? ` · ${result.variant.name}` : ""}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {result.product.sku || result.primaryBarcode || tCommon("notAvailable")}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {replaceLineKey ? t("editReplace") : t("editAdd")}
-                  </span>
-                </button>
-              ))
-            ) : (
-              <p className="px-3 py-2 text-sm text-muted-foreground">{tCommon("nothingFound")}</p>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {editLines.length ? (
-        useEditSheet ? (
-          <div className="space-y-2" data-testid="movement-edit-lines-compact">
-            {editLines.map((line) => (
-              <div
-                key={line.key}
-                data-testid="movement-edit-line"
-                className="space-y-3 rounded-xl border border-border/65 bg-card p-3 shadow-sm"
-              >
-                <div className="min-w-0">
-                  <p className="break-words font-medium text-foreground">
-                    {line.productName}
-                    {line.variantName ? ` · ${line.variantName}` : ""}
-                  </p>
-                  {replaceLineKey === line.key ? (
-                    <p className="mt-1 text-xs font-medium text-primary">{t("editReplaceActive")}</p>
-                  ) : null}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label>{t("quantity")}</Label>
-                    <Input
-                      value={line.quantityInput}
-                      inputMode="numeric"
-                      className="text-right"
-                      data-testid="movement-edit-line-qty"
-                      onChange={(event) =>
-                        updateEditLine(line.key, { quantityInput: event.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>{editLineUnitLabel}</Label>
-                    <Input
-                      value={getEditLineUnitValueInput(line)}
-                      inputMode="decimal"
-                      className="text-right"
-                      data-testid="movement-edit-line-price"
-                      onChange={(event) =>
-                        updateEditLine(
-                          line.key,
-                          isEditPriceDocument
-                            ? { unitPriceInput: event.target.value }
-                            : { unitCostInput: event.target.value },
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/45 px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">{t("printLineTotal")}</span>
-                  <span className="font-medium text-foreground">
-                    {formatCurrencyKGS(getEditLineTotal(line), locale)}
-                  </span>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                  <Button
-                    type="button"
-                    variant={replaceLineKey === line.key ? "default" : "secondary"}
-                    size="sm"
-                    className="min-w-0 justify-center"
-                    data-testid="movement-edit-line-replace"
-                    onClick={() => {
-                      setReplaceLineKey(line.key);
-                      setEditSearch("");
-                    }}
-                  >
-                    <EditIcon className="h-4 w-4" aria-hidden />
-                    {t("editReplace")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    data-testid="movement-edit-line-remove"
-                    onClick={() => removeEditLine(line.key)}
-                    aria-label={t("editRemoveLine")}
-                    title={t("editRemoveLine")}
-                  >
-                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <DataTable
-            columns={editLineColumns}
-            data={editLines}
-            getRowId={(line) => line.key}
-            rowTestId="movement-edit-line"
-            tableClassName="min-w-[820px]"
-          />
-        )
-      ) : (
-        <EmptyState
-          description={t("editLinesRequired")}
-          className="min-h-[10rem] rounded-xl border border-dashed"
-        />
-      )}
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="movement-edit-notes">{t("comment")}</Label>
-          <Textarea
-            id="movement-edit-notes"
-            value={editNotes}
-            onChange={(event) => setEditNotes(event.target.value)}
-            data-testid="movement-edit-notes"
-            rows={3}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="movement-edit-reason">{t("reason")}</Label>
-          <Textarea
-            id="movement-edit-reason"
-            value={editReason}
-            onChange={(event) => setEditReason(event.target.value)}
-            placeholder={t("editReasonPlaceholder")}
-            data-testid="movement-edit-reason"
-            rows={3}
-          />
-        </div>
-      </div>
-    </>
-  ) : null;
-
-  const editFooterContent =
-    editingMovement && !editableDocumentQuery.isLoading && !editableDocumentQuery.error ? (
-      <>
-        <div className="flex min-h-10 items-center justify-between rounded-xl bg-muted/45 px-3 py-2 text-sm sm:mr-auto sm:min-w-[16rem]">
-          <span className="text-muted-foreground">{t("amount")}</span>
-          <span className="font-semibold text-foreground" data-testid="movement-edit-total">
-            {formatCurrencyKGS(editTotal, locale)}
-          </span>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={closeEditSurface}
-          disabled={editMutation.isLoading}
-        >
-          {tCommon("cancel")}
-        </Button>
-        <Button
-          type="button"
-          onClick={submitEdit}
-          disabled={editMutation.isLoading}
-          data-testid="movement-edit-save"
-        >
-          <AddIcon className="h-4 w-4" aria-hidden />
-          {editMutation.isLoading ? tCommon("saving") : tCommon("save")}
-        </Button>
-      </>
-    ) : null;
-
   return (
     <div>
       <PageHeader
@@ -1688,59 +936,6 @@ const ProductMovementsPage = () => {
           ) : null}
         </CardContent>
       </Card>
-      {useEditSheet ? (
-        <Sheet
-          open={Boolean(editingMovement)}
-          onOpenChange={(open) => {
-            if (!open) {
-              closeEditSurface();
-            }
-          }}
-        >
-          <SheetContent side="bottom" className="h-[100dvh] max-h-[100dvh] rounded-none">
-            <SheetHeader>
-              <SheetTitle>{t("editTitle")}</SheetTitle>
-              {editingMovement ? (
-                <SheetDescription>
-                  {t("editSubtitle", {
-                    number: editingMovement.documentNumber || editingMovement.documentId,
-                  })}
-                </SheetDescription>
-              ) : null}
-            </SheetHeader>
-            <SheetBody className="space-y-5" data-testid="movement-edit-modal">
-              {editBodyContent}
-            </SheetBody>
-            {editFooterContent ? <SheetFooter>{editFooterContent}</SheetFooter> : null}
-          </SheetContent>
-        </Sheet>
-      ) : (
-        <Dialog
-          open={Boolean(editingMovement)}
-          onOpenChange={(open) => {
-            if (!open) {
-              closeEditSurface();
-            }
-          }}
-        >
-          <DialogContent size="xl" className="h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)]">
-            <DialogHeader>
-              <DialogTitle>{t("editTitle")}</DialogTitle>
-              {editingMovement ? (
-                <DialogDescription>
-                  {t("editSubtitle", {
-                    number: editingMovement.documentNumber || editingMovement.documentId,
-                  })}
-                </DialogDescription>
-              ) : null}
-            </DialogHeader>
-            <DialogBody className="space-y-5" data-testid="movement-edit-modal">
-              {editBodyContent}
-            </DialogBody>
-            {editFooterContent ? <DialogFooter>{editFooterContent}</DialogFooter> : null}
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 };

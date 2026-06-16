@@ -2986,6 +2986,14 @@
       "editUnitPrice": "Unit price",
       "editRemoveLine": "Remove line",
       "editReasonPlaceholder": "For example: fixed quantity or price",
+      "nativeEditSubtitle": "Editing happens in the source document workflow.",
+      "backToMovements": "Back to Product Movement",
+      "editUnavailable": {
+        "missingReference": "The source document for editing was not found.",
+        "returnUnsupported": "Return editing is not available in a dedicated form yet.",
+        "adjustmentUnsupported": "This correction does not have a dedicated edit form.",
+        "unsupported": "Editing is not available for this movement type."
+      },
       "statusLabel": "Status",
       "allStatuses": "All statuses",
       "paymentStatus": "Payment",

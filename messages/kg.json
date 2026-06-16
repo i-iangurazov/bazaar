@@ -2985,6 +2985,14 @@
       "editUnitPrice": "Бирдик баасы",
       "editRemoveLine": "Сапты өчүрүү",
       "editReasonPlaceholder": "Мисалы: сан же баа оңдолду",
+      "nativeEditSubtitle": "Түзөтүү баштапкы документтин иш агымында жүргүзүлөт.",
+      "backToMovements": "Товарлардын кыймылына кайтуу",
+      "editUnavailable": {
+        "missingReference": "Түзөтүү үчүн баштапкы документ табылган жок.",
+        "returnUnsupported": "Кайтарууну өзүнчө формада түзөтүү азырынча жеткиликтүү эмес.",
+        "adjustmentUnsupported": "Бул корректировка үчүн өзүнчө түзөтүү формасы жок.",
+        "unsupported": "Бул кыймыл түрүн түзөтүү жеткиликтүү эмес."
+      },
       "statusLabel": "Статус",
       "allStatuses": "Бардык статустар",
       "paymentStatus": "Төлөм",
