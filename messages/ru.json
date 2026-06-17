@@ -937,6 +937,127 @@
         "error": "Ошибка"
       }
     },
+    "oMarket": {
+      "title": "bazaar + O! Market",
+      "description": "Экспорт товаров, остатков, цен, изображений и характеристик выбранного магазина в O! Market.",
+      "openSettings": "Настроить",
+      "openExport": "Открыть экспорт",
+      "lastSync": "Последняя синхронизация: {date}",
+      "status": {
+        "notConfigured": "Не настроено",
+        "draft": "Черновик",
+        "ready": "Готово",
+        "error": "Ошибка"
+      }
+    },
+    "oMarketPage": {
+      "title": "bazaar + O! Market",
+      "subtitle": "Экспорт товаров выбранного магазина, синхронизация остатков/цен и валидация для O! Market.",
+      "common": {
+        "loading": "Загрузка",
+        "saved": "Сохранен",
+        "missing": "Отсутствует"
+      },
+      "connection": {
+        "title": "Статус подключения",
+        "description": "Данные доступа шифруются. Проверка подключения использует read-only endpoint списка товаров.",
+        "token": "Токен",
+        "baseUrl": "Base URL",
+        "lastSync": "Последняя синхронизация",
+        "lastCheck": "Последняя проверка",
+        "mockMode": "Включен mock-режим API"
+      },
+      "credentials": {
+        "title": "Данные доступа и конфигурация",
+        "baseUrl": "Base URL",
+        "token": "X-Access-Token",
+        "tokenSavedPlaceholder": "Токен сохранен. Введите новый токен, чтобы заменить его.",
+        "tokenPlaceholder": "Вставьте API-токен O! Market",
+        "hideToken": "Скрыть токен",
+        "revealToken": "Показать токен",
+        "clearToken": "Очистить сохраненный токен",
+        "saveSettings": "Сохранить настройки",
+        "testConnection": "Проверить подключение"
+      },
+      "storeMapping": {
+        "title": "Маппинг магазинов",
+        "description": "Свяжите каждый магазин Bazaar с location_id O! Market. Остатки и цены всегда берутся из выбранного магазина Bazaar.",
+        "locationPlaceholder": "location_id",
+        "save": "Сохранить маппинг магазинов"
+      },
+      "categoryMapping": {
+        "title": "Маппинг категорий и характеристик",
+        "description": "O! Market требует category_id. Атрибуты можно указать JSON с полями attribute_id и value_id.",
+        "empty": "Категории Bazaar пока не найдены.",
+        "categoryIdPlaceholder": "O! category_id",
+        "categoryNamePlaceholder": "Примечание к категории",
+        "attributesPlaceholder": "attribute_id=1, value_id=1",
+        "save": "Сохранить маппинг категорий"
+      },
+      "productExport": {
+        "title": "Управление экспортом товаров",
+        "description": "Экспортируются только выбранные товары, активные в выбранном магазине Bazaar.",
+        "selectStore": "Выберите магазин",
+        "productExport": "Экспорт товаров",
+        "stockPrice": "Остатки/цены",
+        "fullSync": "Полная синхронизация",
+        "store": "Магазин",
+        "considered": "Проверено",
+        "ready": "Готово",
+        "failedSkipped": "Ошибки/пропуски",
+        "exportSelected": "Экспортировать выбранные",
+        "exportReady": "Экспортировать готовые",
+        "syncStockPrice": "Синхронизировать остатки/цены",
+        "fullSyncWarning": "Полная синхронизация деактивирует активные товары продавца O! Market, которых нет в этом store-scoped payload.",
+        "searchPlaceholder": "Поиск товаров",
+        "allProducts": "Все товары",
+        "included": "Включенные",
+        "excluded": "Исключенные",
+        "selectedStore": "выбранном магазине",
+        "storeScopeNote": "Товары должны быть активны в {store}. Остаток берется только из этого магазина.",
+        "include": "Включить",
+        "exclude": "Исключить"
+      },
+      "table": {
+        "product": "Товар",
+        "category": "Категория",
+        "price": "Цена",
+        "stock": "Остаток",
+        "status": "Статус",
+        "action": "Действие",
+        "sku": "SKU",
+        "name": "Название",
+        "reason": "Причина"
+      },
+      "pagination": {
+        "previous": "Назад",
+        "next": "Далее",
+        "pageOf": "Страница {page} из {total}"
+      },
+      "validation": {
+        "title": "Ошибки, предупреждения и валидация",
+        "loading": "Загрузка валидации...",
+        "noBlockers": "Блокирующих ошибок нет"
+      },
+      "jobs": {
+        "title": "История задач и статусы по товарам",
+        "empty": "Задач O! Market пока нет.",
+        "createdBy": "{date}, {user}",
+        "userFallback": "Пользователь",
+        "counts": "{ok} успешно / {failed} ошибок / {skipped} пропущено"
+      },
+      "toasts": {
+        "settingsSaved": "Настройки O! Market сохранены.",
+        "connectionChecked": "Подключение проверено: {status}",
+        "storeMappingSaved": "Маппинг магазинов сохранен.",
+        "categoryMappingSaved": "Маппинг категорий и характеристик сохранен.",
+        "productsUpdated": "Товары обновлены: {count}",
+        "exportQueued": "Экспорт O! Market поставлен в очередь.",
+        "readyExportQueued": "Экспорт готовых товаров поставлен в очередь.",
+        "stockPriceQueued": "Синхронизация остатков и цен поставлена в очередь.",
+        "fullSyncQueued": "Полная синхронизация поставлена в очередь."
+      }
+    },
     "productImageStudio": {
       "title": "bazaar студия картинок",
       "description": "Улучшение фото товара до каталожного студийного вида",

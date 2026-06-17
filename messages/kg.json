@@ -937,6 +937,127 @@
         "error": "Ката"
       }
     },
+    "oMarket": {
+      "title": "bazaar + O! Market",
+      "description": "Тандалган дүкөндүн товарларын, калдыгын, баасын, сүрөттөрүн жана мүнөздөмөлөрүн O! Marketке экспорттоо.",
+      "openSettings": "Жөндөө",
+      "openExport": "Экспортту ачуу",
+      "lastSync": "Акыркы синхрондоштуруу: {date}",
+      "status": {
+        "notConfigured": "Жөндөлгөн эмес",
+        "draft": "Каралама",
+        "ready": "Даяр",
+        "error": "Ката"
+      }
+    },
+    "oMarketPage": {
+      "title": "bazaar + O! Market",
+      "subtitle": "O! Market үчүн тандалган дүкөндүн товарларын экспорттоо, калдык/бааны синхрондоо жана текшерүү.",
+      "common": {
+        "loading": "Жүктөлүүдө",
+        "saved": "Сакталган",
+        "missing": "Жок"
+      },
+      "connection": {
+        "title": "Байланыш статусу",
+        "description": "Кирүү маалыматтары шифрленет. Байланышты текшерүү товарлар тизмесинин read-only endpointин колдонот.",
+        "token": "Токен",
+        "baseUrl": "Base URL",
+        "lastSync": "Акыркы синхрондоо",
+        "lastCheck": "Акыркы текшерүү",
+        "mockMode": "Mock API режими активдүү"
+      },
+      "credentials": {
+        "title": "Кирүү маалыматтары жана конфигурация",
+        "baseUrl": "Base URL",
+        "token": "X-Access-Token",
+        "tokenSavedPlaceholder": "Токен сакталган. Аны алмаштыруу үчүн жаңы токен киргизиңиз.",
+        "tokenPlaceholder": "O! Market API токенин киргизиңиз",
+        "hideToken": "Токенди жашыруу",
+        "revealToken": "Токенди көрсөтүү",
+        "clearToken": "Сакталган токенди тазалоо",
+        "saveSettings": "Жөндөөлөрдү сактоо",
+        "testConnection": "Байланышты текшерүү"
+      },
+      "storeMapping": {
+        "title": "Дүкөндөрдү байланыштыруу",
+        "description": "Ар бир Bazaar дүкөнүн O! Market location_id менен байланыштырыңыз. Калдык жана баа дайыма тандалган Bazaar дүкөнүнөн алынат.",
+        "locationPlaceholder": "location_id",
+        "save": "Дүкөн байланышын сактоо"
+      },
+      "categoryMapping": {
+        "title": "Категория жана мүнөздөмө байланышы",
+        "description": "O! Market category_id талап кылат. Атрибуттарды attribute_id жана value_id талаалары бар JSON катары берсе болот.",
+        "empty": "Bazaar категориялары азырынча табылган жок.",
+        "categoryIdPlaceholder": "O! category_id",
+        "categoryNamePlaceholder": "Категория эскертүүсү",
+        "attributesPlaceholder": "attribute_id=1, value_id=1",
+        "save": "Категория байланышын сактоо"
+      },
+      "productExport": {
+        "title": "Товар экспортун башкаруу",
+        "description": "Тандалган Bazaar дүкөнүндө активдүү болгон тандалган товарлар гана экспорттолот.",
+        "selectStore": "Дүкөн тандаңыз",
+        "productExport": "Товар экспорту",
+        "stockPrice": "Калдык/баа",
+        "fullSync": "Толук синхрондоо",
+        "store": "Дүкөн",
+        "considered": "Текшерилди",
+        "ready": "Даяр",
+        "failedSkipped": "Ката/өткөрүлгөн",
+        "exportSelected": "Тандалгандарды экспорттоо",
+        "exportReady": "Даярларын экспорттоо",
+        "syncStockPrice": "Калдык/бааны синхрондоо",
+        "fullSyncWarning": "Толук синхрондоо бул store-scoped payload ичинде жок активдүү O! Market товарларын деактивациялайт.",
+        "searchPlaceholder": "Товар издөө",
+        "allProducts": "Бардык товарлар",
+        "included": "Кошулган",
+        "excluded": "Чыгарылган",
+        "selectedStore": "тандалган дүкөндө",
+        "storeScopeNote": "Товарлар {store} активдүү болушу керек. Калдык ошол дүкөндөн гана алынат.",
+        "include": "Кошуу",
+        "exclude": "Чыгаруу"
+      },
+      "table": {
+        "product": "Товар",
+        "category": "Категория",
+        "price": "Баа",
+        "stock": "Калдык",
+        "status": "Статус",
+        "action": "Аракет",
+        "sku": "SKU",
+        "name": "Аталышы",
+        "reason": "Себеп"
+      },
+      "pagination": {
+        "previous": "Артка",
+        "next": "Кийинки",
+        "pageOf": "{page} / {total} бет"
+      },
+      "validation": {
+        "title": "Каталар, эскертүүлөр жана текшерүү жыйынтыгы",
+        "loading": "Текшерүү жүктөлүүдө...",
+        "noBlockers": "Бөгөттөгөн каталар жок"
+      },
+      "jobs": {
+        "title": "Тапшырмалар тарыхы жана товар статусу",
+        "empty": "O! Market тапшырмалары азырынча жок.",
+        "createdBy": "{date}, {user}",
+        "userFallback": "Колдонуучу",
+        "counts": "{ok} ийгиликтүү / {failed} ката / {skipped} өткөрүлгөн"
+      },
+      "toasts": {
+        "settingsSaved": "O! Market жөндөөлөрү сакталды.",
+        "connectionChecked": "Байланыш текшерилди: {status}",
+        "storeMappingSaved": "Дүкөн байланышы сакталды.",
+        "categoryMappingSaved": "Категория жана мүнөздөмө байланышы сакталды.",
+        "productsUpdated": "Товарлар жаңырды: {count}",
+        "exportQueued": "O! Market экспорту кезекке коюлду.",
+        "readyExportQueued": "Даяр товарларды экспорттоо кезекке коюлду.",
+        "stockPriceQueued": "Калдык жана бааны синхрондоо кезекке коюлду.",
+        "fullSyncQueued": "Толук синхрондоо кезекке коюлду."
+      }
+    },
     "productImageStudio": {
       "title": "bazaar студия картинок",
       "description": "Товар сүрөттөрүн каталогго ылайык студиялык форматка келтирүү",

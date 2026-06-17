@@ -43,6 +43,7 @@ import { bazaarCatalogRouter } from "@/server/trpc/routers/bazaarCatalog";
 import { bazaarApiRouter } from "@/server/trpc/routers/bazaarApi";
 import { mMarketRouter } from "@/server/trpc/routers/mMarket";
 import { bakaiStoreRouter } from "@/server/trpc/routers/bakaiStore";
+import { oMarketRouter } from "@/server/trpc/routers/oMarket";
 import { productImageStudioRouter } from "@/server/trpc/routers/productImageStudio";
 import { emailMarketingRouter } from "@/server/trpc/routers/emailMarketing";
 
@@ -91,6 +92,7 @@ export const appRouter = router({
   bazaarApi: bazaarApiRouter,
   mMarket: mMarketRouter,
   bakaiStore: bakaiStoreRouter,
+  oMarket: oMarketRouter,
   productImageStudio: productImageStudioRouter,
   emailMarketing: emailMarketingRouter,
 });

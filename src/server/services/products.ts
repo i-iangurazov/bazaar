@@ -4472,6 +4472,12 @@ export const deleteProduct = async (input: DeleteProductInput) =>
     await tx.bakaiStoreProductSyncState.deleteMany({
       where: { orgId: input.organizationId, productId: input.productId },
     });
+    await tx.oMarketIncludedProduct.deleteMany({
+      where: { orgId: input.organizationId, productId: input.productId },
+    });
+    await tx.oMarketProductSyncState.deleteMany({
+      where: { orgId: input.organizationId, productId: input.productId },
+    });
     await tx.bazaarCatalogHiddenProduct.deleteMany({
       where: { organizationId: input.organizationId, productId: input.productId },
     });

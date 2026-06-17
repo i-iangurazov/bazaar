@@ -111,4 +111,39 @@ describe("integration source structure", () => {
     expect(imageStudioPage).toContain("generatedPreviewUrl");
     expect(imageStudioPage).toContain("animate-pulse");
   });
+
+  it("exposes O! Market integration with store scope, masked tokens, and per-product statuses", async () => {
+    const integrationsPage = await readSource("src/app/(app)/operations/integrations/page.tsx");
+    const oMarketPage = await readSource(
+      "src/app/(app)/operations/integrations/o-market/page.tsx",
+    );
+    const oMarketRouter = await readSource("src/server/trpc/routers/oMarket.ts");
+    const oMarketService = await readSource("src/server/services/oMarket.ts");
+    const oMarketClient = await readSource("src/server/services/oMarketApiClient.ts");
+
+    expect(integrationsPage).toContain("trpc.oMarket.overview");
+    expect(integrationsPage).toContain("/operations/integrations/o-market");
+    expect(oMarketPage).toContain('useTranslations("integrations.oMarketPage")');
+    expect(oMarketPage).toContain('title={t("title")}');
+    expect(oMarketPage).toContain('type={showToken ? "text" : "password"}');
+    expect(oMarketPage).toContain("revealToken");
+    expect(oMarketPage).toContain("productExport.storeScopeNote");
+    expect(oMarketPage).toContain("productResults");
+    expect(oMarketPage).toContain("failed");
+    expect(oMarketPage).toContain("skipped");
+    expect(oMarketPage).not.toContain("[object Object]");
+    expect(oMarketRouter).toContain("managerProcedure");
+    expect(oMarketRouter).toContain("storeId: z.string().min(1)");
+    expect(oMarketService).toContain("buildStoreProductWhere(storeContext.storeId)");
+    expect(oMarketService).toContain("storeId: storeContext.storeId");
+    expect(oMarketService).toContain("O_MARKET_MOCK_API");
+    expect(oMarketService).toContain("MISSING_IMAGE");
+    expect(oMarketService).toContain("MISSING_SPECS");
+    expect(oMarketService).toContain("API_AUTH_FAILED");
+    expect(oMarketService).toContain("X-Access-Token: [REDACTED]");
+    expect(oMarketClient).toContain('"X-Access-Token": input.token');
+    expect(oMarketClient).toContain("/api/mia/v1/product/import/create-or-update/");
+    expect(oMarketClient).toContain("/api/mia/v1/product/import/full-sync/");
+    expect(oMarketClient).toContain("/api/mia/v1/product/import/info/");
+  });
 });

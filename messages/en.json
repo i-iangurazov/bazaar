@@ -937,6 +937,127 @@
         "error": "Error"
       }
     },
+    "oMarket": {
+      "title": "bazaar + O! Market",
+      "description": "Export store-scoped products, stock, prices, images, and specs to O! Market.",
+      "openSettings": "Configure",
+      "openExport": "Open export",
+      "lastSync": "Last sync: {date}",
+      "status": {
+        "notConfigured": "Not configured",
+        "draft": "Draft",
+        "ready": "Ready",
+        "error": "Error"
+      }
+    },
+    "oMarketPage": {
+      "title": "bazaar + O! Market",
+      "subtitle": "Store-scoped product export, stock/price sync, and validation for O! Market.",
+      "common": {
+        "loading": "Loading",
+        "saved": "Saved",
+        "missing": "Missing"
+      },
+      "connection": {
+        "title": "Connection status",
+        "description": "Credentials are encrypted. Test connection uses the read-only product list endpoint.",
+        "token": "Token",
+        "baseUrl": "Base URL",
+        "lastSync": "Last sync",
+        "lastCheck": "Last check",
+        "mockMode": "Mock API mode active"
+      },
+      "credentials": {
+        "title": "Credentials and config",
+        "baseUrl": "Base URL",
+        "token": "X-Access-Token",
+        "tokenSavedPlaceholder": "Token saved. Enter a new token to replace it.",
+        "tokenPlaceholder": "Paste O! Market API token",
+        "hideToken": "Hide token",
+        "revealToken": "Reveal token",
+        "clearToken": "Clear saved token",
+        "saveSettings": "Save settings",
+        "testConnection": "Test connection"
+      },
+      "storeMapping": {
+        "title": "Store mapping",
+        "description": "Map each Bazaar store to an O! Market location_id. Stock and price are always read from the selected Bazaar store.",
+        "locationPlaceholder": "location_id",
+        "save": "Save store mapping"
+      },
+      "categoryMapping": {
+        "title": "Category and specs mapping",
+        "description": "O! Market requires category_id. Attributes can be entered as JSON with attribute_id and value_id fields.",
+        "empty": "No Bazaar categories found yet.",
+        "categoryIdPlaceholder": "O! category_id",
+        "categoryNamePlaceholder": "Category name note",
+        "attributesPlaceholder": "attribute_id=1, value_id=1",
+        "save": "Save category mapping"
+      },
+      "productExport": {
+        "title": "Product export controls",
+        "description": "Export only selected products that are active in the selected Bazaar store.",
+        "selectStore": "Select store",
+        "productExport": "Product export",
+        "stockPrice": "Stock/price",
+        "fullSync": "Full sync",
+        "store": "Store",
+        "considered": "Considered",
+        "ready": "Ready",
+        "failedSkipped": "Failed/skipped",
+        "exportSelected": "Export selected",
+        "exportReady": "Export ready only",
+        "syncStockPrice": "Sync stock/price",
+        "fullSyncWarning": "Full sync deactivates active O! Market merchant products missing from this store-scoped payload.",
+        "searchPlaceholder": "Search products",
+        "allProducts": "All products",
+        "included": "Included",
+        "excluded": "Excluded",
+        "selectedStore": "the selected store",
+        "storeScopeNote": "Products must be active in {store}. Stock comes from that store only.",
+        "include": "Include",
+        "exclude": "Exclude"
+      },
+      "table": {
+        "product": "Product",
+        "category": "Category",
+        "price": "Price",
+        "stock": "Stock",
+        "status": "Status",
+        "action": "Action",
+        "sku": "SKU",
+        "name": "Name",
+        "reason": "Reason"
+      },
+      "pagination": {
+        "previous": "Previous",
+        "next": "Next",
+        "pageOf": "Page {page} of {total}"
+      },
+      "validation": {
+        "title": "Errors, warnings, and validation summary",
+        "loading": "Loading validation...",
+        "noBlockers": "No blocking validation errors"
+      },
+      "jobs": {
+        "title": "Job history and per-product status",
+        "empty": "No O! Market jobs yet.",
+        "createdBy": "{date} by {user}",
+        "userFallback": "User",
+        "counts": "{ok} ok / {failed} failed / {skipped} skipped"
+      },
+      "toasts": {
+        "settingsSaved": "O! Market settings saved.",
+        "connectionChecked": "Connection checked: {status}",
+        "storeMappingSaved": "Store mapping saved.",
+        "categoryMappingSaved": "Category and specs mapping saved.",
+        "productsUpdated": "Products updated: {count}",
+        "exportQueued": "O! Market export queued.",
+        "readyExportQueued": "Ready-only export queued.",
+        "stockPriceQueued": "Stock and price sync queued.",
+        "fullSyncQueued": "Full sync queued."
+      }
+    },
     "productImageStudio": {
       "title": "bazaar image studio",
       "description": "Improve product photos into catalogue studio images",

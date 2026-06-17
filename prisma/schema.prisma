@@ -283,6 +283,31 @@ enum BakaiStoreLastSyncStatus {
   FAILED
 }
 
+enum OMarketIntegrationStatus {
+  DISABLED
+  DRAFT
+  READY
+  ERROR
+}
+
+enum OMarketExportJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum OMarketJobType {
+  PRODUCT_EXPORT
+  STOCK_PRICE_SYNC
+  FULL_SYNC
+}
+
+enum OMarketLastSyncStatus {
+  SUCCESS
+  FAILED
+}
+
 enum ProductImageStudioJobStatus {
   QUEUED
   PROCESSING
@@ -458,6 +483,12 @@ model Organization {
   bakaiStoreExportJobs        BakaiStoreExportJob[]
   bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
   bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
+  oMarketIntegrations         OMarketIntegration[]
+  oMarketStoreMappings        OMarketStoreMapping[]
+  oMarketCategoryMappings     OMarketCategoryMapping[]
+  oMarketExportJobs           OMarketExportJob[]
+  oMarketIncludedProducts     OMarketIncludedProduct[]
+  oMarketProductSyncStates    OMarketProductSyncState[]
   productImageStudioJobs      ProductImageStudioJob[]
   productDescriptionJobs      ProductDescriptionGenerationJob[]
   productDescriptionJobItems  ProductDescriptionGenerationJobItem[]
@@ -541,6 +572,7 @@ model User {
   complianceProfilesUpdated     StoreComplianceProfile[]  @relation("complianceUpdatedBy")
   exportJobsRequested           ExportJob[]               @relation("exportRequestedBy")
   bakaiStoreExportJobsRequested BakaiStoreExportJob[]     @relation("bakaiStoreExportRequestedBy")
+  oMarketExportJobsRequested    OMarketExportJob[]        @relation("oMarketExportRequestedBy")
   periodClosesCreated           PeriodClose[]             @relation("periodClosedBy")
   diagnosticsReportsCreated     DiagnosticsReport[]       @relation("diagnosticsCreatedBy")
   planUpgradeRequestsCreated    PlanUpgradeRequest[]      @relation("planUpgradeRequestedBy")
@@ -661,6 +693,10 @@ model Store {
   bakaiStoreExportJobs        BakaiStoreExportJob[]
   bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
   bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
+  oMarketStoreMappings        OMarketStoreMapping[]
+  oMarketExportJobs           OMarketExportJob[]
+  oMarketIncludedProducts     OMarketIncludedProduct[]
+  oMarketProductSyncStates    OMarketProductSyncState[]
   productDescriptionJobs      ProductDescriptionGenerationJob[]
   featureFlags                StoreFeatureFlag[]
   complianceProfile           StoreComplianceProfile?
@@ -1059,6 +1095,131 @@ model BakaiStoreProductSyncState {
   @@index([productId])
 }
 
+model OMarketIntegration {
+  id                         String                   @id @default(cuid())
+  orgId                      String
+  status                     OMarketIntegrationStatus @default(DISABLED)
+  baseUrl                    String                   @default("https://api-market.o.kg")
+  apiTokenEncrypted          String?
+  lastSyncAt                 DateTime?
+  lastSyncStatus             OMarketLastSyncStatus?
+  lastConnectionCheckAt      DateTime?
+  lastConnectionCheckSummary String?                  @db.Text
+  lastErrorSummary           String?                  @db.Text
+  createdAt                  DateTime                 @default(now())
+  updatedAt                  DateTime                 @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId])
+  @@index([orgId, status, updatedAt])
+}
+
+model OMarketStoreMapping {
+  id                String   @id @default(cuid())
+  orgId             String
+  storeId           String
+  oMarketLocationId String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+
+  @@unique([orgId, storeId])
+  @@index([orgId, storeId])
+  @@index([orgId, oMarketLocationId])
+}
+
+model OMarketCategoryMapping {
+  id                  String   @id @default(cuid())
+  orgId               String
+  bazaarCategory      String
+  oMarketCategoryId   Int
+  oMarketCategoryName String?
+  attributesJson      Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, bazaarCategory])
+  @@index([orgId, oMarketCategoryId])
+}
+
+model OMarketExportJob {
+  id                    String                 @id @default(cuid())
+  orgId                 String
+  storeId               String?
+  jobType               OMarketJobType         @default(PRODUCT_EXPORT)
+  status                OMarketExportJobStatus @default(QUEUED)
+  requestedById         String
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  payloadStatsJson      Json?
+  errorReportJson       Json?
+  responseJson          Json?
+  attemptedCount        Int?
+  succeededCount        Int?
+  failedCount           Int?
+  skippedCount          Int?
+  requestIdempotencyKey String
+  createdAt             DateTime               @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  requestedBy  User         @relation("oMarketExportRequestedBy", fields: [requestedById], references: [id])
+
+  @@unique([requestIdempotencyKey])
+  @@index([orgId, createdAt])
+  @@index([orgId, storeId, createdAt])
+  @@index([orgId, status, createdAt])
+}
+
+model OMarketIncludedProduct {
+  id             String    @id @default(cuid())
+  orgId          String
+  storeId        String?
+  productId      String
+  discountType   String?
+  discountValue  Decimal?  @db.Decimal(12, 2)
+  createdAt      DateTime  @default(now())
+  lastExportedAt DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([orgId, storeId, productId])
+  @@index([orgId, productId])
+  @@index([orgId, storeId, productId])
+  @@index([productId])
+}
+
+model OMarketProductSyncState {
+  id                  String                @id @default(cuid())
+  orgId               String
+  storeId             String?
+  productId           String
+  oMarketProductId    String?
+  lastSyncedAt        DateTime?
+  lastSyncStatus      OMarketLastSyncStatus?
+  lastPayloadChecksum String?
+  lastErrorSummary    String?               @db.Text
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([orgId, storeId, productId])
+  @@index([orgId, productId])
+  @@index([orgId, storeId, productId])
+  @@index([productId])
+}
+
 model PeriodClose {
   id             String   @id @default(cuid())
   organizationId String
@@ -1221,6 +1382,8 @@ model Product {
   mMarketInclusions      MMarketIncludedProduct[]
   bakaiStoreInclusions   BakaiStoreIncludedProduct[]
   bakaiStoreSyncStates   BakaiStoreProductSyncState[]
+  oMarketInclusions      OMarketIncludedProduct[]
+  oMarketSyncStates      OMarketProductSyncState[]
   productImageStudioJobs ProductImageStudioJob[]
   descriptionJobItems    ProductDescriptionGenerationJobItem[]
   hiddenInBazaarCatalogs BazaarCatalogHiddenProduct[]

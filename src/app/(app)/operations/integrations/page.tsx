@@ -95,6 +95,7 @@ const IntegrationsPage = () => {
   const storesQuery = trpc.bazaarCatalog.listStores.useQuery();
   const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
   const bakaiStoreOverviewQuery = trpc.bakaiStore.overview.useQuery();
+  const oMarketOverviewQuery = trpc.oMarket.overview.useQuery();
   const productImageStudioOverviewQuery = trpc.productImageStudio.overview.useQuery();
   const emailMarketingOverviewQuery = trpc.emailMarketing.overview.useQuery(undefined, {
     enabled: canManageApiKeys,
@@ -178,6 +179,23 @@ const IntegrationsPage = () => {
       : bakaiStoreOverviewQuery.data?.status === "ERROR"
         ? "danger"
         : bakaiStoreOverviewQuery.data?.status === "DRAFT"
+          ? "warning"
+          : "muted";
+
+  const oMarketStatus =
+    oMarketOverviewQuery.data?.status === "READY"
+      ? t("oMarket.status.ready")
+      : oMarketOverviewQuery.data?.status === "ERROR"
+        ? t("oMarket.status.error")
+        : oMarketOverviewQuery.data?.status === "DRAFT"
+          ? t("oMarket.status.draft")
+          : t("oMarket.status.notConfigured");
+  const oMarketStatusVariant: BadgeVariant =
+    oMarketOverviewQuery.data?.status === "READY"
+      ? "success"
+      : oMarketOverviewQuery.data?.status === "ERROR"
+        ? "danger"
+        : oMarketOverviewQuery.data?.status === "DRAFT"
           ? "warning"
           : "muted";
 
@@ -299,6 +317,35 @@ const IntegrationsPage = () => {
               {bakaiStoreOverviewQuery.data?.configured ? (
                 <ActionLink href="/operations/integrations/bakai-store">
                   <Button variant="secondary">{t("bakaiStore.openExport")}</Button>
+                </ActionLink>
+              ) : null}
+            </>
+          }
+        />
+
+        <IntegrationTile
+          title={t("oMarket.title")}
+          description={t("oMarket.description")}
+          status={oMarketStatus}
+          statusVariant={oMarketStatusVariant}
+          detail={
+            oMarketOverviewQuery.data?.lastSyncAt
+              ? t("oMarket.lastSync", {
+                  date: new Intl.DateTimeFormat(undefined, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }).format(new Date(oMarketOverviewQuery.data.lastSyncAt)),
+                })
+              : null
+          }
+          actions={
+            <>
+              <ActionLink href="/operations/integrations/o-market">
+                <Button>{t("oMarket.openSettings")}</Button>
+              </ActionLink>
+              {oMarketOverviewQuery.data?.configured ? (
+                <ActionLink href="/operations/integrations/o-market">
+                  <Button variant="secondary">{t("oMarket.openExport")}</Button>
                 </ActionLink>
               ) : null}
             </>
