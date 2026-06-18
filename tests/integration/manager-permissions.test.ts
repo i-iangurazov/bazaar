@@ -232,7 +232,7 @@ describeDb("manager operational permissions", () => {
       countedQty: 9,
     });
     await expect(
-      caller.stockCounts.apply({
+      caller.stockCounts.applyCount({
         stockCountId: stockCount.id,
         idempotencyKey: "manager-stock-count-apply",
       }),

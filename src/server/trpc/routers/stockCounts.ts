@@ -172,7 +172,7 @@ export const stockCountsRouter = router({
       }
     }),
 
-  apply: stockCountsManagerProcedure
+  applyCount: stockCountsManagerProcedure
     .input(z.object({ stockCountId: z.string(), idempotencyKey: z.string().min(8) }))
     .mutation(async ({ ctx, input }) => {
       try {

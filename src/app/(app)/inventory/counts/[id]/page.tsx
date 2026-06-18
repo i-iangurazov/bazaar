@@ -167,7 +167,7 @@ const StockCountDetailPage = () => {
     },
   });
 
-  const applyMutation = trpc.stockCounts.apply.useMutation({
+  const applyMutation = trpc.stockCounts.applyCount.useMutation({
     onSuccess: () => {
       toast({ variant: "success", description: t("applySuccess") });
       countQuery.refetch();
