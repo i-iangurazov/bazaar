@@ -10,6 +10,7 @@ import { AuthBrand } from "@/components/auth-brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -339,11 +340,12 @@ const SignupPage = () => {
                   <label className="text-sm font-medium text-foreground" htmlFor="signup-password">
                     {t("password")}
                   </label>
-                  <Input
+                  <PasswordInput
                     id="signup-password"
-                    type="password"
                     placeholder={t("passwordPlaceholder")}
                     value={signupValues.password}
+                    showLabel={tCommon("showPassword")}
+                    hideLabel={tCommon("hidePassword")}
                     onChange={(event) => {
                       const next = event.target.value;
                       setSignupValues((prev) => ({ ...prev, password: next }));

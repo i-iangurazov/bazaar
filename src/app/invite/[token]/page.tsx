@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -154,11 +155,12 @@ const InvitePage = () => {
                     <label className="text-sm font-medium text-foreground" htmlFor="invite-password">
                       {t("password")}
                     </label>
-                    <Input
+                    <PasswordInput
                       id="invite-password"
-                      type="password"
                       placeholder={t("passwordPlaceholder")}
                       value={values.password}
+                      showLabel={tCommon("showPassword")}
+                      hideLabel={tCommon("hidePassword")}
                       onChange={(event) => {
                         const next = event.target.value;
                         setValues((prev) => ({ ...prev, password: next }));

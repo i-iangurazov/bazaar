@@ -1,8 +1,26 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import Link from "next/link";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
+import {
+  CalendarBlank,
+  ChatCircle,
+  ClipboardText,
+  Coins,
+  Hash,
+  Storefront,
+  User as UserGlyph,
+} from "@phosphor-icons/react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -10,6 +28,7 @@ import {
   BackIcon,
   AddIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   CloseIcon,
   DeleteIcon,
   DownloadIcon,
@@ -18,9 +37,11 @@ import {
   PrintIcon,
   SearchIcon,
   SalesOrdersIcon,
+  StoresIcon,
   StatusWarningIcon,
   TagIcon,
   ViewIcon,
+  BarcodeIcon,
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +102,7 @@ import {
 } from "@/lib/scanning/scanRouter";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { cn } from "@/lib/utils";
 
 const selectedRegisterKey = "pos:selected-register";
 const keyboardScanResetMs = 300;
@@ -585,6 +607,14 @@ const PosSellPage = () => {
     "idle" | "printing" | "ready" | "blocked" | "failed"
   >("idle");
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
+  const [mobileScreen, setMobileScreen] = useState<"sale" | "catalog" | "scanner">("sale");
+  const [mobileSaleTab, setMobileSaleTab] = useState<"document" | "payment">("document");
+  const [mobilePropertiesExpanded, setMobilePropertiesExpanded] = useState(false);
+  const [mobileActiveLineId, setMobileActiveLineId] = useState<string | null>(null);
+  const [mobilePendingProductId, setMobilePendingProductId] = useState<string | null>(null);
+  const [mobileLineInputMode, setMobileLineInputMode] = useState<"price" | "qty">("qty");
+  const [mobileKeypadReplaceNext, setMobileKeypadReplaceNext] = useState(true);
+  const [mobileComment, setMobileComment] = useState("");
   const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
   const paymentsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -920,6 +950,10 @@ const PosSellPage = () => {
       setNewCustomerAddress("");
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
+      setMobileScreen("sale");
+      setMobileSaleTab("document");
+      setMobileActiveLineId(null);
+      setMobilePendingProductId(null);
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -955,6 +989,10 @@ const PosSellPage = () => {
       setNewCustomerAddress("");
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(false);
+      setMobileScreen("sale");
+      setMobileSaleTab("document");
+      setMobileActiveLineId(null);
+      setMobilePendingProductId(null);
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -1140,6 +1178,10 @@ const PosSellPage = () => {
       setNewCustomerAddress("");
       setCustomerEditOpen(false);
       setMobileCheckoutOpen(true);
+      setMobileScreen("sale");
+      setMobileSaleTab("payment");
+      setMobileActiveLineId(null);
+      setMobilePendingProductId(null);
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -1199,6 +1241,23 @@ const PosSellPage = () => {
   const saleCustomerAddress = sale?.customerAddress ?? null;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
+
+  useEffect(() => {
+    if (!mobilePendingProductId) {
+      return;
+    }
+    const pendingLine = findCartLineForProduct(
+      optimisticSaleLines ?? (sale?.lines as PosCartLine[] | undefined) ?? [],
+      mobilePendingProductId,
+    );
+    if (!pendingLine) {
+      return;
+    }
+    setMobileActiveLineId(pendingLine.id);
+    setMobileLineInputMode("qty");
+    setMobileKeypadReplaceNext(true);
+    setMobilePendingProductId(null);
+  }, [mobilePendingProductId, optimisticSaleLines, sale?.lines]);
 
   useEffect(() => {
     if (!activeDraft?.id || saleId || lastCompletedSale || completeMutation.isLoading) {
@@ -1331,6 +1390,14 @@ const PosSellPage = () => {
     setLastCompletedSale(null);
     setAutoReceiptStatus("idle");
     setMobileCheckoutOpen(false);
+    setMobileScreen("sale");
+    setMobileSaleTab("document");
+    setMobilePropertiesExpanded(false);
+    setMobileActiveLineId(null);
+    setMobilePendingProductId(null);
+    setMobileLineInputMode("qty");
+    setMobileKeypadReplaceNext(true);
+    setMobileComment("");
     autoPrintedSaleIdRef.current = null;
   }, [clearCartRuntimeSyncState, registerId, setOptimisticSaleLines, setPayments]);
 
@@ -5661,6 +5728,1084 @@ const PosSellPage = () => {
   };
 
   const MobilePosView = () => {
+    const mobileRedesignActive = isPhoneScreen === true;
+
+    if (mobileRedesignActive) {
+      const showMobileRegisterPanel = !registerId || !selectedRegister || !hasOpenShift;
+      const activeLine = mobileActiveLineId
+        ? saleLines.find((line) => line.id === mobileActiveLineId) ?? null
+        : null;
+      const documentDate = new Date(sale?.createdAt ?? Date.now());
+      const documentDateLabel = new Intl.DateTimeFormat(locale, {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(documentDate);
+      const mobileStoreName = shiftQuery.data?.store.name ?? selectedRegister?.store.name ?? "";
+      const orderStatusLabel =
+        sale?.status && sale.status !== CustomerOrderStatus.DRAFT
+          ? saleStatusLabel(sale.status)
+          : t("sell.mobile.newStatus");
+      const paymentMethods = [
+        PosPaymentMethod.CASH,
+        PosPaymentMethod.CARD,
+        PosPaymentMethod.TRANSFER,
+        PosPaymentMethod.OTHER,
+      ];
+
+      const handleMobileDone = () => {
+        if (mobileScreen !== "sale") {
+          setMobileScreen("sale");
+          return;
+        }
+        if (!hasCartLines) {
+          return;
+        }
+        if (mobileSaleTab !== "payment") {
+          setMobileSaleTab("payment");
+          return;
+        }
+        void handleComplete();
+      };
+
+      const openMobileLineSheet = (lineId: string, mode: "price" | "qty" = "qty") => {
+        setMobileActiveLineId(lineId);
+        setMobileLineInputMode(mode);
+        setMobileKeypadReplaceNext(true);
+      };
+
+      const closeMobileLineSheet = () => {
+        if (activeLine) {
+          handleQtyBlur(activeLine);
+          handleLinePriceBlur(activeLine);
+        }
+        setMobileActiveLineId(null);
+        setMobilePendingProductId(null);
+        setMobileKeypadReplaceNext(true);
+      };
+
+      const confirmMobileLineSheet = () => {
+        closeMobileLineSheet();
+        setMobileScreen("sale");
+        setMobileSaleTab("document");
+      };
+
+      const handleMobileProductSelect = (product: PosCatalogProduct) => {
+        const existingLine = findCartLineForProduct(getCurrentCartLines(), product.id);
+        const startsWithPrice = (product.effectivePriceKgs ?? product.basePriceKgs) === null;
+        setMobileLineInputMode(startsWithPrice ? "price" : "qty");
+        setMobileKeypadReplaceNext(true);
+
+        if (existingLine) {
+          setMobileActiveLineId(existingLine.id);
+          return;
+        }
+
+        setMobilePendingProductId(product.id);
+        void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: false }));
+      };
+
+      const activeLineInputValue = () => {
+        if (!activeLine) {
+          return "";
+        }
+        if (mobileLineInputMode === "price") {
+          return lineInputDrafts[activeLine.id]?.price ?? formatSaleMoneyDraft(activeLine.unitPriceKgs);
+        }
+        return lineInputDrafts[activeLine.id]?.qty ?? String(activeLine.qty);
+      };
+
+      const updateActiveLineInput = (nextValue: string) => {
+        if (!activeLine) {
+          return;
+        }
+        if (mobileLineInputMode === "price") {
+          handleUpdateLinePrice(activeLine.id, nextValue);
+        } else {
+          handleUpdateQty(activeLine.id, nextValue.replace(/[^\d]/g, ""));
+        }
+      };
+
+      const handleMobileKeypadPress = (key: string) => {
+        if (!activeLine) {
+          return;
+        }
+
+        if (key === "enter" || key === "=") {
+          confirmMobileLineSheet();
+          return;
+        }
+
+        if (key === "+" || key === "-") {
+          if (mobileLineInputMode === "price") {
+            const current = parseSaleMoneyDraft(activeLineInputValue()) ?? 0;
+            const next = Math.max(0, roundMoney(current + (key === "+" ? 1 : -1)));
+            updateActiveLineInput(String(next));
+          } else {
+            const current = Math.trunc(Number(activeLineInputValue() || activeLine.qty));
+            const next = Math.max(1, (Number.isFinite(current) ? current : 1) + (key === "+" ? 1 : -1));
+            updateActiveLineInput(String(next));
+          }
+          setMobileKeypadReplaceNext(true);
+          return;
+        }
+
+        if (key === "clear") {
+          updateActiveLineInput(mobileLineInputMode === "price" ? "0" : "1");
+          setMobileKeypadReplaceNext(true);
+          return;
+        }
+
+        if (key === "," && mobileLineInputMode !== "price") {
+          return;
+        }
+
+        const currentValue = activeLineInputValue();
+        const baseValue = mobileKeypadReplaceNext ? "" : currentValue;
+        if (key === ",") {
+          if (baseValue.includes(",") || baseValue.includes(".")) {
+            return;
+          }
+          updateActiveLineInput(baseValue ? `${baseValue},` : "0,");
+          setMobileKeypadReplaceNext(false);
+          return;
+        }
+
+        const nextValue =
+          baseValue === "0" || (mobileLineInputMode === "qty" && baseValue === "1" && mobileKeypadReplaceNext)
+            ? key
+            : `${baseValue}${key}`;
+        updateActiveLineInput(nextValue);
+        setMobileKeypadReplaceNext(false);
+      };
+
+      const renderMobileHeader = () => (
+        <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950 text-white md:hidden">
+          <div
+            className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_58px] items-end gap-2 px-3 pb-3"
+            style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
+          >
+            <Link
+              href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}
+              className="grid h-10 w-10 place-items-center text-white no-underline hover:no-underline"
+              aria-label={tCommon("back")}
+            >
+              <BackIcon className="h-6 w-6" aria-hidden />
+            </Link>
+            <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
+              {t("entry.sell")}
+            </h1>
+            <button
+              type="button"
+              className="h-10 justify-self-end text-[14px] font-semibold leading-none text-primary disabled:opacity-50"
+              onClick={handleMobileDone}
+              disabled={completeMutation.isLoading || isLineBusy}
+            >
+              {t("sell.done")}
+            </button>
+          </div>
+          <div className="grid h-10 grid-cols-2 bg-slate-900 text-[15px] font-semibold">
+            <button
+              type="button"
+              className={cn(
+                "relative text-center text-slate-400",
+                mobileSaleTab === "document" && "text-white",
+              )}
+              onClick={() => setMobileSaleTab("document")}
+            >
+              {t("sell.mobile.document")}
+              {mobileSaleTab === "document" ? (
+                <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "relative text-center text-slate-400",
+                mobileSaleTab === "payment" && "text-white",
+              )}
+              onClick={() => setMobileSaleTab("payment")}
+            >
+              {t("sell.mobile.payment")}
+              {mobileSaleTab === "payment" ? (
+                <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />
+              ) : null}
+            </button>
+          </div>
+        </header>
+      );
+
+      const renderMobileRow = ({
+        icon,
+        label,
+        value,
+        muted = false,
+        chevron = true,
+        action,
+      }: {
+        icon: ReactNode;
+        label: string;
+        value?: ReactNode;
+        muted?: boolean;
+        chevron?: boolean;
+        action?: () => void;
+      }) => {
+        const content = (
+          <>
+            <span className="grid h-8 w-8 shrink-0 place-items-center text-slate-400">
+              {icon}
+            </span>
+            <span className={cn("min-w-0 flex-1 text-[14px] leading-none", muted && "text-slate-400")}>
+              {label}
+            </span>
+            {value !== undefined ? (
+              <span className="min-w-0 max-w-[48%] shrink truncate text-right text-[14px] leading-none text-primary">
+                {value}
+              </span>
+            ) : null}
+            {chevron ? <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" aria-hidden /> : null}
+          </>
+        );
+
+        if (action) {
+          return (
+            <button
+              type="button"
+              className="flex min-h-[48px] w-full items-center gap-2 border-b border-slate-700 py-2 pl-3 pr-2.5 text-left last:border-b-0"
+              onClick={action}
+            >
+              {content}
+            </button>
+          );
+        }
+
+        return (
+          <div className="flex min-h-[48px] items-center gap-2 border-b border-slate-700 py-2 pl-3 pr-2.5 last:border-b-0">
+            {content}
+          </div>
+        );
+      };
+
+      const renderRegisterPanel = () =>
+        showMobileRegisterPanel ? (
+          <section className="mx-0 border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+            <label className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+              {t("entry.register")}
+            </label>
+            <Select value={registerId} onValueChange={setRegisterId}>
+              <SelectTrigger className="mt-2 h-12 border-slate-700 bg-slate-950 text-base text-white">
+                <SelectValue placeholder={t("entry.selectRegister")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(registersQuery.data ?? []).map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.store.name} · {item.name} ({item.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!hasOpenShift && registerId ? (
+              <Button asChild className="mt-3 h-11 w-full">
+                <Link href={`/pos?registerId=${registerId}`}>{t("sell.openShiftFirst")}</Link>
+              </Button>
+            ) : null}
+          </section>
+        ) : null;
+
+      const renderDraftNotice = () =>
+        activeDraft && !saleId ? (
+          <section className="border-y border-[#4d3d1f] bg-[#2a2417] px-3 py-3 text-sm text-[#f7d58a]">
+            <p className="font-semibold text-white">{t("sell.draftDetectedTitle")}</p>
+            <p className="mt-1">{t("sell.draftDetectedHint", { number: activeDraft.number })}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button type="button" className="h-11" onClick={handleResumeActiveDraft}>
+                {t("sell.resumeDraft")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11"
+                onClick={() => void handleDiscardActiveDraft()}
+              >
+                {t("sell.discardSale")}
+              </Button>
+            </div>
+          </section>
+        ) : null;
+
+      const renderOrderSection = () =>
+        hasCartLines ? (
+          <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+            <div className="mb-2">
+              <h2 className="text-[15px] font-semibold leading-none text-primary">
+                {t("sell.mobile.order")}
+              </h2>
+              <p className="mt-1.5 text-[13px] leading-none text-slate-400">{orderStatusLabel}</p>
+            </div>
+            <div>
+              {renderMobileRow({
+                icon: <ClipboardText className="h-5 w-5" aria-hidden />,
+                label: tCommon("status"),
+                value: (
+                  <span className="inline-flex h-7 w-12 items-center rounded-full bg-[#30d158] p-0.5 align-middle">
+                    <span className="ml-auto h-6 w-6 rounded-full bg-[#f7f7f9]" />
+                  </span>
+                ),
+                chevron: false,
+              })}
+              {renderMobileRow({
+                icon: <Coins className="h-5 w-5" aria-hidden />,
+                label: t("sell.mobile.amount"),
+                value: formatSaleMoney(cartTotalKgs),
+              })}
+              {renderMobileRow({
+                icon: <Storefront className="h-5 w-5" aria-hidden />,
+                label: t("sell.mobile.account"),
+                value: mobileStoreName || selectedRegisterLabel,
+              })}
+              {renderMobileRow({
+                icon: <CalendarBlank className="h-5 w-5" aria-hidden />,
+                label: t("sell.mobile.date"),
+                value: documentDateLabel,
+              })}
+            </div>
+            {saleId ? (
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  className="min-h-10 rounded-[9px] bg-[#3a2426] px-4 text-[14px] font-semibold text-[#ff6b67]"
+                  onClick={() => void handleDiscardSale()}
+                  disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
+                >
+                  {cancelDraftMutation.isLoading ? tCommon("loading") : tCommon("delete")}
+                </button>
+              </div>
+            ) : null}
+          </section>
+        ) : null;
+
+      const renderPropertiesSection = () => (
+        <section className="border-y border-slate-800 bg-slate-950/95">
+          <button
+            type="button"
+            className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
+            onClick={() => setMobilePropertiesExpanded((expanded) => !expanded)}
+            aria-expanded={mobilePropertiesExpanded}
+          >
+            <span className="text-[15px] font-semibold leading-none text-primary">
+              {t("sell.mobile.properties")}
+            </span>
+            {mobilePropertiesExpanded ? (
+              <ChevronDownIcon className="h-5 w-5 rotate-180 text-slate-400" aria-hidden />
+            ) : (
+              <ChevronDownIcon className="h-5 w-5 text-slate-400" aria-hidden />
+            )}
+          </button>
+          {mobilePropertiesExpanded ? (
+            <div className="border-t border-slate-800">
+              {renderMobileRow({
+                icon: <Hash className="h-5 w-5" aria-hidden />,
+                label: t("sell.mobile.documentNumber"),
+                muted: !sale?.number,
+                value: sale?.number ?? "",
+                chevron: false,
+              })}
+              {renderMobileRow({
+                icon: <ClipboardText className="h-5 w-5" aria-hidden />,
+                label: tCommon("status"),
+                value: (
+                  <span className="inline-flex h-7 w-12 items-center rounded-full bg-primary p-0.5 align-middle">
+                    <span className="ml-auto h-6 w-6 rounded-full bg-[#f7f7f9]" />
+                  </span>
+                ),
+                chevron: false,
+              })}
+              {renderMobileRow({
+                icon: <CalendarBlank className="h-5 w-5" aria-hidden />,
+                label: t("sell.mobile.date"),
+                value: documentDateLabel,
+              })}
+              {renderMobileRow({
+                icon: <ClipboardText className="h-5 w-5" aria-hidden />,
+                label: t("sell.mobile.orderStatus"),
+              })}
+              {renderMobileRow({
+                icon: <TagIcon className="h-5 w-5" aria-hidden />,
+                label: t("sell.discount"),
+                value: cartDiscountKgs > 0 ? formatSaleMoney(cartDiscountKgs) : "0%",
+              })}
+            </div>
+          ) : null}
+        </section>
+      );
+
+      const renderCounterpartiesSection = () => (
+        <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+          <h2 className="mb-2 text-[15px] font-semibold leading-none text-primary">
+            {t("sell.mobile.counterparties")}
+          </h2>
+          <div>
+            {renderMobileRow({
+              icon: <Storefront className="h-5 w-5" aria-hidden />,
+              label: t("sell.mobile.store"),
+              value: mobileStoreName || selectedRegisterLabel,
+              action: () => setMobilePropertiesExpanded(true),
+            })}
+            {renderMobileRow({
+              icon: <UserGlyph className="h-5 w-5" aria-hidden />,
+              label: t("sell.mobile.client"),
+              value: currentCustomerLabel,
+              action: () => setCustomerSelectorOpen(true),
+            })}
+          </div>
+        </section>
+      );
+
+      const renderAddProductsBar = () => (
+        <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_50px] gap-2.5">
+            <button
+              type="button"
+              className="min-h-[48px] rounded-[11px] bg-primary/15 px-3 text-[15px] font-semibold text-primary"
+              onClick={() => setMobileScreen("catalog")}
+              disabled={!hasOpenShift}
+            >
+              {t("sell.mobile.addProducts")}
+            </button>
+            <button
+              type="button"
+              className="grid min-h-[48px] place-items-center rounded-[11px] bg-primary/15 text-primary disabled:opacity-50"
+              onClick={() => setMobileScreen("scanner")}
+              disabled={!hasOpenShift}
+              aria-label={t("sell.mobile.scanner")}
+            >
+              <BarcodeIcon className="h-6 w-6" aria-hidden />
+            </button>
+          </div>
+        </section>
+      );
+
+      const renderMobileLines = () =>
+        hasCartLines ? (
+          <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+            <h2 className="mb-2 text-[15px] font-semibold text-primary">{t("sell.mobile.products")}</h2>
+            <div className="divide-y divide-slate-800">
+              {saleLines.map((line) => {
+                const lineDiscountKgs = lineDiscountById.get(line.id) ?? 0;
+                const lineNetTotalKgs = roundMoney(Math.max(0, line.lineTotalKgs - lineDiscountKgs));
+                return (
+                  <button
+                    key={line.id}
+                    type="button"
+                    className="flex min-h-[62px] w-full items-center gap-2.5 py-2 text-left"
+                    data-testid="pos-cart-line"
+                    data-product-id={getCartLineProductId(line)}
+                    onClick={() => openMobileLineSheet(line.id, "qty")}
+                  >
+                    <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-slate-800 text-slate-300">
+                      {line.product.primaryImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={line.product.primaryImage}
+                          alt={line.product.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <EmptyIcon className="h-5 w-5" aria-hidden />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-white">
+                        {line.product.name}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-slate-400">
+                        {line.qty} x {formatSaleMoney(line.unitPriceKgs)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-[14px] font-semibold text-white">
+                      {formatSaleMoney(lineNetTotalKgs)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null;
+
+      const renderCommentBar = () => (
+        <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-2">
+          <label className="flex min-h-[44px] items-center gap-2.5 text-slate-400">
+            <ChatCircle className="h-6 w-6 shrink-0" aria-hidden />
+            <input
+              value={mobileComment}
+              onChange={(event) => setMobileComment(event.target.value)}
+              placeholder={t("sell.mobile.commentPlaceholder")}
+              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-white shadow-none outline-none ring-0 placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:ring-0"
+            />
+          </label>
+        </section>
+      );
+
+      const renderDocumentTab = () => (
+        <main className="space-y-3 pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] pt-0">
+          {renderRegisterPanel()}
+          {renderDraftNotice()}
+          {saleId && saleQuery.error ? (
+            <div className="mx-4 border border-[#5a2525] bg-[#2b1717] p-3 text-sm text-[#ff8a8a]">
+              {translateError(tErrors, saleQuery.error)}
+            </div>
+          ) : null}
+          {renderOrderSection()}
+          {renderPropertiesSection()}
+          {renderCounterpartiesSection()}
+          {renderAddProductsBar()}
+          {renderMobileLines()}
+          {renderCommentBar()}
+          {hasCartLines ? (
+            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+              <button
+                type="button"
+                className="min-h-[48px] w-full rounded-[12px] bg-primary px-3 text-[15px] font-semibold text-white shadow-[0_12px_28px_rgba(64,156,255,0.24)]"
+                onClick={() => setMobileSaleTab("payment")}
+                aria-label={t("sell.openCart")}
+              >
+                {t("sell.mobile.goToPayment")}
+              </button>
+            </div>
+          ) : null}
+        </main>
+      );
+
+      const renderPaymentTab = () => (
+        <main
+          className={cn(
+            "min-h-[calc(100dvh-176px)]",
+            hasCartLines
+              ? "pb-[calc(9.5rem_+_env(safe-area-inset-bottom))]"
+              : "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]",
+          )}
+        >
+          {!hasCartLines ? (
+            <>
+              <div className="grid min-h-[calc(100dvh-224px)] place-items-start justify-center pt-9">
+                <p className="text-[14px] leading-none text-slate-400">
+                  {t("sell.mobile.paymentEmpty")}
+                </p>
+              </div>
+              <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+                <button
+                  type="button"
+                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-white"
+                  onClick={addPaymentRow}
+                >
+                  {t("sell.addPayment")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3 pt-3">
+              {renderOrderSection()}
+              <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+                <h2 className="text-[15px] font-semibold leading-none text-primary">
+                  {t("sell.mobile.paymentSummary")}
+                </h2>
+                <div className="mt-3 space-y-2 text-[14px]">
+                  <div className="flex justify-between gap-3 text-slate-400">
+                    <span>{t("sell.subtotal")}</span>
+                    <span className="text-white">{formatSaleMoney(cartSubtotalKgs)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-slate-400">
+                    <span>{t("sell.discount")}</span>
+                    <span className="text-white">{formatSaleMoney(cartDiscountKgs)}</span>
+                  </div>
+                  <div className="flex items-end justify-between gap-3 border-t border-slate-700 pt-2.5">
+                    <span className="text-[15px] font-semibold text-white">{t("sell.amountDue")}</span>
+                    <span className="text-[19px] font-bold text-white" data-testid="pos-cart-total">
+                      {formatSaleMoney(cartTotalKgs)}
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              <section ref={paymentsSectionRef} className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-[15px] font-semibold leading-none text-primary">
+                    {t("sell.paymentsTitle")}
+                  </h2>
+                  <label className="flex items-center gap-2 text-sm text-slate-400">
+                    <span>{t("sell.sellInDebt")}</span>
+                    <Switch checked={sellInDebt} onCheckedChange={handleSellInDebtChange} />
+                  </label>
+                </div>
+
+                {sellInDebt ? (
+                  <div className="mt-4 space-y-3">
+                    <p className="text-sm text-slate-400">{t("sell.sellInDebtHint")}</p>
+                    <Input
+                      value={debtFullName}
+                      onChange={(event) => setDebtFullName(event.target.value)}
+                      placeholder={t("sell.debtFullNamePlaceholder")}
+                      className="h-12 border-slate-700 bg-slate-950 text-white"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      {paymentMethods.map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          className={cn(
+                            "min-h-11 rounded-[10px] border border-slate-700 bg-slate-950 px-3 text-left text-[14px] font-semibold text-white",
+                            payments[0]?.method === method && "border-primary text-primary",
+                          )}
+                          onClick={() =>
+                            setPayments((current) => {
+                              const [firstPayment, ...rest] = current.length
+                                ? current
+                                : [createDefaultPosPaymentDraft()];
+                              return [{ ...firstPayment, method }, ...rest];
+                            })
+                          }
+                        >
+                          {paymentMethodLabel(method)}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {payments.map((payment, index) => (
+                        <div key={`${index}-${payment.method}`} className="grid grid-cols-[1fr_1fr_44px] gap-2">
+                          <Select
+                            value={payment.method}
+                            onValueChange={(value) =>
+                              setPayments((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, method: value as PosPaymentMethod } : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger className="h-11 border-slate-700 bg-slate-950 text-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={PosPaymentMethod.CASH}>{t("payments.cash")}</SelectItem>
+                              <SelectItem value={PosPaymentMethod.CARD}>{t("payments.card")}</SelectItem>
+                              <SelectItem value={PosPaymentMethod.TRANSFER}>{t("payments.transfer")}</SelectItem>
+                              <SelectItem value={PosPaymentMethod.OTHER}>{t("payments.other")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            ref={index === 0 ? firstPaymentAmountRef : undefined}
+                            value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
+                            onChange={(event) => {
+                              if (payments.length === 1) {
+                                return;
+                              }
+                              setPayments((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, amount: event.target.value } : item,
+                                ),
+                              );
+                            }}
+                            placeholder={t("sell.paymentAmount")}
+                            inputMode="decimal"
+                            readOnly={payments.length === 1}
+                            className="h-11 border-slate-700 bg-slate-950 text-white"
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            className="h-11 w-11"
+                            onClick={() => removePaymentRow(index)}
+                            disabled={payments.length <= 1 || isLineBusy || completeMutation.isLoading}
+                            aria-label={tCommon("delete")}
+                          >
+                            <DeleteIcon className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between gap-3">
+                        <Button type="button" variant="secondary" className="h-11" onClick={addPaymentRow}>
+                          {t("sell.addPayment")}
+                        </Button>
+                        {showPaymentTotalSummary ? (
+                          <p className="text-sm text-slate-400">
+                            {t("sell.paymentTotal")}: {paymentTotalLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+                <button
+                  type="button"
+                  className="min-h-11 w-full rounded-[11px] bg-[#2f3640] text-[14px] font-semibold text-white disabled:opacity-50"
+                  onClick={() => void handleHoldReceipt()}
+                  disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
+                >
+                  {holdDraftMutation.isLoading ? tCommon("loading") : t("sell.holdReceipt")}
+                </button>
+                <button
+                  type="button"
+                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-white disabled:opacity-50"
+                  onClick={handleComplete}
+                  disabled={completeDisabled}
+                >
+                  {completeMutation.isLoading
+                    ? tCommon("loading")
+                    : sellInDebt
+                      ? t("sell.completeDebtSale")
+                      : t("sell.completeSale")}
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      );
+
+      const renderSaleScreen = () => (
+        <div className="min-h-[100dvh] bg-[#070b14] text-white md:hidden">
+          {renderMobileHeader()}
+          {mobileSaleTab === "document" ? renderDocumentTab() : renderPaymentTab()}
+        </div>
+      );
+
+      const renderCatalogScreen = () => (
+        <div className="min-h-[100dvh] bg-[#070b14] text-white md:hidden">
+          <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950">
+            <div
+              className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-end gap-2 px-3 pb-3"
+              style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
+            >
+              <button
+                type="button"
+                className="grid h-10 w-10 place-items-center text-white"
+                onClick={() => setMobileScreen("sale")}
+                aria-label={tCommon("back")}
+              >
+                <BackIcon className="h-6 w-6" aria-hidden />
+              </button>
+              <div className="min-w-0">
+                <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
+                  {t("sell.mobile.catalog")}
+                </h1>
+                <p className="mt-1 text-[12px] leading-none text-slate-400">
+                  {t("sell.mobile.itemCount", { count: visibleProducts.length })}
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <main className="pb-[calc(2rem_+_env(safe-area-inset-bottom))]">
+            <div className="flex min-h-[50px] items-center gap-2.5 border-b border-slate-800 bg-slate-900 px-3">
+              <SearchIcon className="h-6 w-6 shrink-0 text-slate-400" aria-hidden />
+              <ScanInput
+                ref={lineSearchInputRef}
+                context="pos"
+                value={lineSearch}
+                onValueChange={setLineSearch}
+                placeholder={t("sell.mobile.search")}
+                ariaLabel={t("sell.mobile.search")}
+                onResolved={handleScanResolved}
+                supportsTabSubmit
+                showDropdown={false}
+                disabled={!hasOpenShift}
+                className="min-w-0 flex-1"
+                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-white shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+              />
+            </div>
+
+            <div className="flex min-h-[46px] w-full items-center gap-2.5 border-b border-slate-800 bg-slate-900 px-3 text-left">
+              <StoresIcon className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-slate-500">
+                {mobileStoreName || selectedRegisterLabel}
+              </span>
+            </div>
+
+            {visibleProductCategories.length ? (
+              <div className="scrollbar-none overflow-x-auto border-b border-slate-800 bg-slate-950/95 px-3 py-2">
+                <div className="flex w-max min-w-full gap-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "min-h-9 shrink-0 rounded-[9px] border px-3 text-[13px] font-semibold",
+                      selectedCategory
+                        ? "border-slate-700 bg-slate-900 text-slate-300"
+                        : "border-primary bg-primary text-white",
+                    )}
+                    onClick={() => {
+                      setSelectedCategory("");
+                      setLineSearch("");
+                    }}
+                  >
+                    {t("sell.allProducts")}
+                  </button>
+                  {visibleProductCategories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      className={cn(
+                        "min-h-9 shrink-0 rounded-[9px] border px-3 text-[13px] font-semibold",
+                        selectedCategory === category
+                          ? "border-primary bg-primary text-white"
+                          : "border-slate-700 bg-slate-900 text-slate-300",
+                      )}
+                      onClick={() => setSelectedCategory(category)}
+                    >
+                      {categoryLabel(category)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {catalogProductsQuery.error ? (
+              <div className="m-4 border border-[#5a2525] bg-[#2b1717] p-3 text-sm text-[#ff8a8a]">
+                {translateError(tErrors, catalogProductsQuery.error)}
+              </div>
+            ) : null}
+
+            {productGridLoading ? (
+              <div className="grid min-h-40 place-items-center text-slate-400">
+                <Spinner className="h-5 w-5" />
+              </div>
+            ) : null}
+
+            {!productGridLoading && !visibleProducts.length ? (
+              <div className="grid min-h-56 place-items-center text-center text-slate-400">
+                <div>
+                  <EmptyIcon className="mx-auto h-8 w-8" aria-hidden />
+                  <p className="mt-3 text-base">
+                    {hasSearchTerm || selectedCategory ? t("sell.noSearchResults") : t("sell.catalogEmpty")}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {visibleProducts.length ? (
+              <div className="divide-y divide-slate-800">
+                {visibleProducts.map((product) => {
+                  const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
+                  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
+                  const productName = priceKgs === null ? t("sell.mobile.freePriceProduct") : product.name;
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      data-testid="pos-product-button"
+                      data-product-id={product.id}
+                      className="grid min-h-[64px] w-full grid-cols-[48px_minmax(0,1fr)_34px] items-center gap-2.5 px-3 py-2 text-left"
+                      onClick={() => handleMobileProductSelect(product)}
+                      disabled={!hasOpenShift || cancelDraftMutation.isLoading || completeMutation.isLoading}
+                    >
+                      <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-[10px] bg-slate-800 text-slate-300">
+                        {primaryImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={primaryImage} alt={product.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <EmptyIcon className="h-5 w-5" aria-hidden />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-white">
+                          {productName}
+                        </span>
+                        <span className="mt-0.5 block text-[12px] font-semibold leading-none text-slate-300">
+                          {priceKgs === null ? formatSaleMoney(0) : formatSaleMoney(priceKgs)}
+                        </span>
+                      </span>
+                      <span className="text-right text-[13px] font-semibold text-slate-300">
+                        {product.onHandQty === null || product.onHandQty === undefined
+                          ? "0"
+                          : formatNumber(product.onHandQty, locale)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </main>
+        </div>
+      );
+
+      const renderScannerScreen = () => (
+        <div className="min-h-[100dvh] bg-[#070b14] text-white md:hidden">
+          <header className="sticky top-0 z-40 bg-slate-950">
+            <div
+              className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-end gap-2 px-3 pb-3"
+              style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
+            >
+              <button
+                type="button"
+                className="grid h-10 w-10 place-items-center text-white"
+                onClick={() => setMobileScreen("sale")}
+                aria-label={tCommon("back")}
+              >
+                <BackIcon className="h-6 w-6" aria-hidden />
+              </button>
+              <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
+                {t("sell.mobile.scanner")}
+              </h1>
+            </div>
+          </header>
+          <main className="grid min-h-[calc(100dvh-68px)] place-items-center px-5 pb-[env(safe-area-inset-bottom)]">
+            <section className="w-full max-w-sm text-center">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-slate-800 bg-slate-950">
+                <BarcodeIcon className="h-9 w-9 text-primary" aria-hidden />
+              </div>
+              <h1 className="mt-4 text-[15px] font-semibold">{t("sell.mobile.scannerUnavailableTitle")}</h1>
+              <p className="mt-2 text-[13px] leading-5 text-slate-400">
+                {t("sell.mobile.scannerUnavailableDescription")}
+              </p>
+              <div className="mt-5 rounded-[12px] border border-slate-800 bg-slate-950/95 px-3 py-2">
+                <ScanInput
+                  context="pos"
+                  value={lineSearch}
+                  onValueChange={setLineSearch}
+                  placeholder={t("sell.mobile.hardwareScannerPlaceholder")}
+                  ariaLabel={t("sell.mobile.hardwareScannerPlaceholder")}
+                  onResolved={async (result) => {
+                    const handled = await handleScanResolved(result);
+                    if (handled) {
+                      setMobileScreen("sale");
+                      setMobileSaleTab("document");
+                    }
+                    return handled;
+                  }}
+                  supportsTabSubmit
+                  showDropdown={false}
+                  disabled={!hasOpenShift}
+                  className="w-full"
+                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-white shadow-none placeholder:text-slate-500 focus-visible:ring-0"
+                />
+              </div>
+            </section>
+          </main>
+        </div>
+      );
+
+      const renderLineItemSheet = () =>
+        activeLine ? (
+          <div className="fixed inset-0 z-[80] md:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/70"
+              onClick={closeMobileLineSheet}
+              aria-label={tCommon("close")}
+            />
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={activeLine.product.name}
+              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-slate-950 px-3 pb-[calc(0.65rem_+_env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl"
+            >
+              <div className="mx-auto h-1 w-12 rounded-full bg-[#5b5b62]" />
+              <div className="mt-4">
+                <h2 className="line-clamp-2 text-[15px] font-semibold leading-tight">
+                  {activeLine.product.name}
+                </h2>
+                <p className="mt-1 truncate text-[13px] text-slate-400">{activeLine.product.name}</p>
+              </div>
+
+              <div className="mt-3 space-y-2.5">
+                <button
+                  type="button"
+                  className={cn(
+                    "flex min-h-[50px] w-full items-center justify-between rounded-[11px] border px-3 text-left",
+                    mobileLineInputMode === "price" ? "border-primary" : "border-slate-700",
+                  )}
+                  onClick={() => {
+                    setMobileLineInputMode("price");
+                    setMobileKeypadReplaceNext(true);
+                  }}
+                >
+                  <span className="text-[15px] font-semibold text-slate-300">
+                    {t("sell.mobile.salePrice")}
+                  </span>
+                  <span className="text-[19px] font-semibold" data-testid="pos-line-price">
+                    {lineInputDrafts[activeLine.id]?.price ?? formatSaleMoneyDraft(activeLine.unitPriceKgs)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex min-h-[50px] w-full items-center justify-between rounded-[11px] border px-3 text-left",
+                    mobileLineInputMode === "qty" ? "border-primary" : "border-slate-700",
+                  )}
+                  onClick={() => {
+                    setMobileLineInputMode("qty");
+                    setMobileKeypadReplaceNext(true);
+                  }}
+                >
+                  <span className="text-[15px] font-semibold text-slate-300">
+                    {t("sell.mobile.quantity")}
+                  </span>
+                  <span className="flex items-center gap-2.5">
+                    <span className="text-[19px] font-semibold" data-testid="pos-line-qty">
+                      {lineInputDrafts[activeLine.id]?.qty ?? String(activeLine.qty)}
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      className="grid h-7 w-9 place-items-center rounded-[7px] bg-slate-300 text-slate-950"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleMobileKeypadPress("clear");
+                      }}
+                    >
+                      <CloseIcon className="h-4 w-4" aria-hidden />
+                    </span>
+                  </span>
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-4 gap-2.5">
+                {["1", "2", "3", "+", "4", "5", "6", "-", "7", "8", "9", "=", ",", "0"].map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="h-11 rounded-[7px] bg-slate-800 text-[19px] font-semibold text-white"
+                    onClick={() => handleMobileKeypadPress(key)}
+                  >
+                    {key}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="col-span-2 h-11 rounded-[7px] bg-primary text-[19px] font-semibold text-white"
+                  onClick={() => handleMobileKeypadPress("enter")}
+                >
+                  ↵
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null;
+
+      return (
+        <>
+          {mobileScreen === "catalog"
+            ? renderCatalogScreen()
+            : mobileScreen === "scanner"
+              ? renderScannerScreen()
+              : renderSaleScreen()}
+          {renderLineItemSheet()}
+          {MobileCustomerSheet()}
+          {CustomerEditModal()}
+          {ReceiptJournalModal()}
+          {JournalSaleDetailModal()}
+          {JournalEditReceiptModal()}
+          {JournalReturnModal()}
+        </>
+      );
+    }
+
     const cartSheetOpen = mobileCheckoutOpen || showCompletedSale;
     const showMobileRegisterPanel = !hasOpenShift || (registersQuery.data?.length ?? 0) > 1;
 

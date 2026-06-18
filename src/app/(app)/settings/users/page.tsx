@@ -17,6 +17,7 @@ import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -1177,7 +1178,12 @@ const UsersPage = () => {
                   <FormItem>
                     <FormLabel>{t("password")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
+                      <PasswordInput
+                        {...field}
+                        placeholder={t("passwordPlaceholder")}
+                        showLabel={tCommon("showPassword")}
+                        hideLabel={tCommon("hidePassword")}
+                      />
                     </FormControl>
                     <FormDescription>{t("passwordHint")}</FormDescription>
                     <FormMessage />
@@ -1233,7 +1239,12 @@ const UsersPage = () => {
                   <FormItem>
                     <FormLabel>{t("password")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
+                      <PasswordInput
+                        {...field}
+                        placeholder={t("passwordPlaceholder")}
+                        showLabel={tCommon("showPassword")}
+                        hideLabel={tCommon("hidePassword")}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1246,7 +1257,12 @@ const UsersPage = () => {
                   <FormItem>
                     <FormLabel>{t("confirmPassword")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
+                      <PasswordInput
+                        {...field}
+                        placeholder={t("passwordPlaceholder")}
+                        showLabel={tCommon("showPassword")}
+                        hideLabel={tCommon("hidePassword")}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

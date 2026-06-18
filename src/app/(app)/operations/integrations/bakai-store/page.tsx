@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormActions, FormGrid } from "@/components/form-layout";
 import { IntegrationsIcon, SparklesIcon } from "@/components/icons";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Modal } from "@/components/ui/modal";
 import {
   Select,
@@ -210,6 +211,11 @@ const BakaiStorePage = () => {
       retry: false,
     },
   );
+  const revealTokenQuery = trpc.bakaiStore.revealToken.useQuery(undefined, {
+    enabled: false,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
 
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
   const [branchMappingDraft, setBranchMappingDraft] = useState<Record<string, string>>({});
@@ -217,6 +223,7 @@ const BakaiStorePage = () => {
     BakaiStoreConnectionMode.TEMPLATE,
   );
   const [apiToken, setApiToken] = useState("");
+  const [showApiToken, setShowApiToken] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [productSelectionFilter, setProductSelectionFilter] = useState<
     "all" | "included" | "excluded"
@@ -269,6 +276,7 @@ const BakaiStorePage = () => {
       setPreflightFresh(false);
       if (variables.clearToken) {
         setApiToken("");
+        setShowApiToken(false);
       }
       await settingsQuery.refetch();
       toast({ variant: "success", description: t("settings.connectionSaved") });
@@ -508,6 +516,16 @@ const BakaiStorePage = () => {
       connectionMode,
       apiToken: apiToken.trim() || undefined,
     });
+  };
+
+  const revealSavedToken = async () => {
+    const result = await revealTokenQuery.refetch();
+    if (result.error) {
+      toast({ variant: "error", description: translateError(tErrors, result.error) });
+      return;
+    }
+    setApiToken(result.data?.apiToken ?? "");
+    setShowApiToken(true);
   };
 
   const handleClearSavedToken = () => {
@@ -992,8 +1010,19 @@ const BakaiStorePage = () => {
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium">{t("settings.apiTokenLabel")}</p>
-              <Input
-                type="password"
+              <PasswordInput
+                visible={showApiToken}
+                onVisibleChange={(nextVisible) => {
+                  if (!nextVisible) {
+                    setShowApiToken(false);
+                    return;
+                  }
+                  if (settingsQuery.data?.integration.hasApiToken && !apiToken) {
+                    void revealSavedToken();
+                    return;
+                  }
+                  setShowApiToken(true);
+                }}
                 value={apiToken}
                 onChange={(event) => setApiToken(event.target.value)}
                 placeholder={
@@ -1002,6 +1031,9 @@ const BakaiStorePage = () => {
                     : t("settings.apiTokenPlaceholder")
                 }
                 disabled={!canEdit}
+                toggleDisabled={!canEdit}
+                showLabel={tCommon("showSecret")}
+                hideLabel={tCommon("hideSecret")}
               />
             </div>
           </FormGrid>

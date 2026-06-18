@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import {
@@ -88,7 +88,12 @@ const ResetTokenPage = () => {
                       <FormItem>
                         <FormLabel>{t("newPassword")}</FormLabel>
                         <FormControl>
-                          <Input {...field} type="password" placeholder={t("passwordPlaceholder")} />
+                          <PasswordInput
+                            {...field}
+                            placeholder={t("passwordPlaceholder")}
+                            showLabel={tCommon("showPassword")}
+                            hideLabel={tCommon("hidePassword")}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

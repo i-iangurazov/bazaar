@@ -1007,7 +1007,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
   const mobileStoreName = storesQuery.data?.[0]?.name ?? null;
 
-  if (normalizedPath === "/pos/sell") {
+  if (normalizedPath === "/pos/sell" && isMobile === true) {
     return (
       <div className="min-h-screen bg-background">
         {impersonation ? (
@@ -1027,18 +1027,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             </div>
           </div>
         ) : null}
-        <MobilePageContainer>{children}</MobilePageContainer>
-        <MobileAppShell
-          pageTitle={mobilePageTitle}
-          storeName={mobileStoreName}
-          bottomItems={mobileBottomItems}
-          moreItems={mobileMoreItems}
-          moreLabel={tNav("more")}
-          profileLabel={tNav("profile")}
-          closeLabel={tCommon("closeMenu")}
-          navigationLabel={tNav("mobileNavigation")}
-          showTopBar={false}
-        />
+        {children}
       </div>
     );
   }

@@ -5,7 +5,7 @@ import { OMarketExportJobStatus, OMarketJobType } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
-import { BackIcon, HideIcon, ViewIcon } from "@/components/icons";
+import { BackIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Select,
   SelectContent,
@@ -367,9 +368,9 @@ const OMarketPage = () => {
             <div className="space-y-2">
               <Label htmlFor="o-market-token">{t("credentials.token")}</Label>
               <div className="flex gap-2">
-                <Input
+                <PasswordInput
                   id="o-market-token"
-                  type={showToken ? "text" : "password"}
+                  visible={showToken}
                   value={apiToken}
                   placeholder={
                     settingsQuery.data?.integration.hasToken
@@ -378,23 +379,22 @@ const OMarketPage = () => {
                   }
                   onChange={(event) => setApiToken(event.target.value)}
                   disabled={!canManage}
+                  toggleDisabled={!canManage}
+                  onVisibleChange={(nextVisible) => {
+                    if (!nextVisible) {
+                      setShowToken(false);
+                      return;
+                    }
+                    if (settingsQuery.data?.integration.hasToken && !apiToken) {
+                      void revealSavedToken();
+                      return;
+                    }
+                    setShowToken(true);
+                  }}
+                  showLabel={t("credentials.revealToken")}
+                  hideLabel={t("credentials.hideToken")}
+                  wrapperClassName="min-w-0 flex-1"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  disabled={!canManage}
-                  onClick={() =>
-                    showToken
-                      ? setShowToken(false)
-                      : settingsQuery.data?.integration.hasToken
-                        ? void revealSavedToken()
-                        : setShowToken(true)
-                  }
-                  aria-label={showToken ? t("credentials.hideToken") : t("credentials.revealToken")}
-                >
-                  {showToken ? <HideIcon className="h-4 w-4" /> : <ViewIcon className="h-4 w-4" />}
-                </Button>
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm">

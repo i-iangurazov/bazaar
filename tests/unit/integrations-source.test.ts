@@ -125,7 +125,9 @@ describe("integration source structure", () => {
     expect(integrationsPage).toContain("/operations/integrations/o-market");
     expect(oMarketPage).toContain('useTranslations("integrations.oMarketPage")');
     expect(oMarketPage).toContain('title={t("title")}');
-    expect(oMarketPage).toContain('type={showToken ? "text" : "password"}');
+    expect(oMarketPage).toContain("<PasswordInput");
+    expect(oMarketPage).toContain("visible={showToken}");
+    expect(oMarketPage).toContain("void revealSavedToken()");
     expect(oMarketPage).toContain("revealToken");
     expect(oMarketPage).toContain("productExport.storeScopeNote");
     expect(oMarketPage).toContain("productResults");

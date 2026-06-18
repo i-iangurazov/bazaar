@@ -451,22 +451,6 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .bazaar-mobile-card-surface {
-    background: rgb(15 23 42 / 0.95) !important;
-    color: rgb(248 250 252) !important;
-  }
-
-  .bazaar-mobile-action-surface {
-    background: rgb(15 23 42) !important;
-    color: rgb(248 250 252) !important;
-  }
-
-  .bazaar-mobile-icon-surface {
-    background-color: rgb(30 41 59) !important;
-  }
-}
-
 @media (max-width: 767px) {
   html,
   body {

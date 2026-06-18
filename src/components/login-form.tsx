@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { normalizeLocale } from "@/lib/locales";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Form,
   FormControl,
@@ -26,6 +27,7 @@ export const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const t = useTranslations("auth");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -129,11 +131,12 @@ export const LoginForm = () => {
               <FormItem>
                 <FormLabel>{t("password")}</FormLabel>
                 <FormControl>
-                  <Input
+                  <PasswordInput
                     {...field}
-                    type="password"
                     autoComplete="current-password"
                     placeholder={t("passwordPlaceholder")}
+                    showLabel={tCommon("showPassword")}
+                    hideLabel={tCommon("hidePassword")}
                   />
                 </FormControl>
                 <FormMessage />

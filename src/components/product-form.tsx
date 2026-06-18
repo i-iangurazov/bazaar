@@ -534,6 +534,26 @@ const normalizeProductBarcodes = (values?: string[] | null) =>
   Array.from(
     new Set((values ?? []).map((value) => normalizeProductBarcodeInput(value)).filter(Boolean)),
   );
+const padProductBarcodeNumber = (value: number, length: number) =>
+  String(Math.trunc(value)).padStart(length, "0").slice(-length);
+const computeProductEan13CheckDigit = (digits12: string) => {
+  let sum = 0;
+  for (let index = 0; index < digits12.length; index += 1) {
+    const next = Number(digits12[index] ?? 0);
+    sum += index % 2 === 0 ? next : next * 3;
+  }
+  return String((10 - (sum % 10)) % 10);
+};
+const buildClientGeneratedProductBarcode = (mode: "EAN13" | "CODE128") => {
+  const random = Math.floor(Math.random() * 1000);
+  if (mode === "CODE128") {
+    return `BZ${Date.now().toString(36).toUpperCase()}${padProductBarcodeNumber(random, 3)}`;
+  }
+
+  const sequence = ((Date.now() % 100_000_000) * 1000 + random) % 10_000_000_000;
+  const body = `29${padProductBarcodeNumber(sequence, 10)}`;
+  return `${body}${computeProductEan13CheckDigit(body)}`;
+};
 const normalizeSkuToken = (value?: string | null) =>
   (value ?? "")
     .trim()
@@ -1401,11 +1421,11 @@ export const ProductForm = ({
     });
   }, [showAdvanced, fields.length]);
 
-  const addBarcodeFromDraft = () => {
+  const appendBarcodeValue = (rawValue: string) => {
     if (readOnly || !enableBarcode) {
       return false;
     }
-    const value = normalizeProductBarcodeInput(barcodeInput);
+    const value = normalizeProductBarcodeInput(rawValue);
     if (!value) {
       return false;
     }
@@ -1428,6 +1448,41 @@ export const ProductForm = ({
     });
     setBarcodeInput("");
     return true;
+  };
+
+  const addBarcodeFromDraft = () => appendBarcodeValue(barcodeInput);
+
+  const generateBarcodeIntoForm = () => {
+    if (readOnly || !enableBarcode || generateBarcodeMutation.isLoading) {
+      return;
+    }
+
+    const currentBarcodes = normalizeProductBarcodes(form.getValues("barcodes"));
+
+    if (productId && currentBarcodes.length === 0) {
+      generateBarcodeMutation.mutate({
+        productId,
+        mode: barcodeGenerateMode,
+        force: true,
+      });
+      return;
+    }
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const value = buildClientGeneratedProductBarcode(barcodeGenerateMode);
+      if (appendBarcodeValue(value)) {
+        toast({
+          variant: "success",
+          description: t("barcodeGenerated", { value }),
+        });
+        return;
+      }
+    }
+
+    toast({
+      variant: "error",
+      description: tErrors("barcodeGenerationFailed"),
+    });
   };
 
   const handleBarcodeInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -4004,11 +4059,15 @@ export const ProductForm = ({
                 type="button"
                 variant="secondary"
                 className="w-full sm:w-auto"
-                onClick={addBarcodeFromDraft}
-                disabled={readOnly}
+                onClick={generateBarcodeIntoForm}
+                disabled={readOnly || generateBarcodeMutation.isLoading}
               >
-                <AddIcon className="h-4 w-4" aria-hidden />
-                {t("addBarcode")}
+                {generateBarcodeMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                )}
+                {generateBarcodeMutation.isLoading ? tCommon("loading") : t("generateBarcode")}
               </Button>
             </FormRow>
             <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
@@ -4016,7 +4075,7 @@ export const ProductForm = ({
                 <Select
                   value={barcodeGenerateMode}
                   onValueChange={(value) => setBarcodeGenerateMode(value as "EAN13" | "CODE128")}
-                  disabled={readOnly || !productId || generateBarcodeMutation.isLoading}
+                  disabled={readOnly || generateBarcodeMutation.isLoading}
                 >
                   <SelectTrigger aria-label={t("generateBarcodeMode")}>
                     <SelectValue placeholder={t("generateBarcodeMode")} />
@@ -4027,39 +4086,8 @@ export const ProductForm = ({
                   </SelectContent>
                 </Select>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto"
-                onClick={() => {
-                  if (!productId || readOnly) {
-                    return;
-                  }
-                  const currentBarcodes =
-                    form
-                      .getValues("barcodes")
-                      ?.map((value) => value.trim())
-                      .filter(Boolean) ?? [];
-                  generateBarcodeMutation.mutate({
-                    productId,
-                    mode: barcodeGenerateMode,
-                    force: currentBarcodes.length === 0,
-                  });
-                }}
-                disabled={readOnly || !productId || generateBarcodeMutation.isLoading}
-              >
-                {generateBarcodeMutation.isLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <AddIcon className="h-4 w-4" aria-hidden />
-                )}
-                {generateBarcodeMutation.isLoading ? tCommon("loading") : t("generateBarcode")}
-              </Button>
             </FormRow>
             <p className="text-xs text-muted-foreground">{t("barcodeScanHint")}</p>
-            {!productId ? (
-              <p className="text-xs text-muted-foreground">{t("barcodeGenerateRequiresSave")}</p>
-            ) : null}
             <div className="flex min-h-[36px] flex-wrap gap-2">
               {field.value?.length ? (
                 field.value.map((barcode, index) => (
@@ -5073,11 +5101,17 @@ export const ProductForm = ({
                           type="button"
                           variant="secondary"
                           className="w-full sm:w-auto"
-                          onClick={addBarcodeFromDraft}
-                          disabled={readOnly}
+                          onClick={generateBarcodeIntoForm}
+                          disabled={readOnly || generateBarcodeMutation.isLoading}
                         >
-                          <AddIcon className="h-4 w-4" aria-hidden />
-                          {t("addBarcode")}
+                          {generateBarcodeMutation.isLoading ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <SparklesIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {generateBarcodeMutation.isLoading
+                            ? tCommon("loading")
+                            : t("generateBarcode")}
                         </Button>
                       </FormRow>
                       <div className="flex min-h-8 flex-wrap gap-2">
@@ -6375,11 +6409,17 @@ export const ProductForm = ({
                                 type="button"
                                 variant="secondary"
                                 className="w-full sm:w-auto"
-                                onClick={addBarcodeFromDraft}
-                                disabled={readOnly}
+                                onClick={generateBarcodeIntoForm}
+                                disabled={readOnly || generateBarcodeMutation.isLoading}
                               >
-                                <AddIcon className="h-4 w-4" aria-hidden />
-                                {t("addBarcode")}
+                                {generateBarcodeMutation.isLoading ? (
+                                  <Spinner className="h-4 w-4" />
+                                ) : (
+                                  <SparklesIcon className="h-4 w-4" aria-hidden />
+                                )}
+                                {generateBarcodeMutation.isLoading
+                                  ? tCommon("loading")
+                                  : t("generateBarcode")}
                               </Button>
                             </FormRow>
                             <div className="flex min-h-8 flex-wrap gap-2">

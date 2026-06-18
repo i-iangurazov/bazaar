@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Modal } from "@/components/ui/modal";
 import {
   Select,
@@ -35,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FormActions, FormGrid } from "@/components/form-layout";
-import { CopyIcon, HideIcon, IntegrationsIcon, SparklesIcon, ViewIcon } from "@/components/icons";
+import { CopyIcon, IntegrationsIcon, SparklesIcon } from "@/components/icons";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
@@ -1226,8 +1227,9 @@ const MMarketSettingsPage = () => {
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">{t("connection.token")}</p>
               <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-                <Input
-                  type={showApiToken ? "text" : "password"}
+                <PasswordInput
+                  visible={showApiToken}
+                  onVisibleChange={setShowApiToken}
                   value={apiToken}
                   onChange={(event) => setApiToken(event.target.value)}
                   placeholder={
@@ -1236,22 +1238,11 @@ const MMarketSettingsPage = () => {
                       : t("connection.tokenPlaceholder")
                   }
                   disabled={!canEdit}
-                  className="col-span-2 min-w-0 sm:col-span-1"
+                  toggleDisabled={!canEdit || !apiToken.length}
+                  showLabel={t("connection.showToken")}
+                  hideLabel={t("connection.hideToken")}
+                  wrapperClassName="col-span-2 min-w-0 sm:col-span-1"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowApiToken((prev) => !prev)}
-                  disabled={!canEdit || !apiToken.length}
-                  aria-label={showApiToken ? t("connection.hideToken") : t("connection.showToken")}
-                >
-                  {showApiToken ? (
-                    <HideIcon className="h-4 w-4" aria-hidden />
-                  ) : (
-                    <ViewIcon className="h-4 w-4" aria-hidden />
-                  )}
-                </Button>
                 <Button
                   type="button"
                   variant="outline"
