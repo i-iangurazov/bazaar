@@ -1047,10 +1047,10 @@ export const InventoryReceivingPage = ({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium text-foreground">
+                          <span className="block whitespace-normal break-words font-medium leading-snug text-foreground">
                             {getDisplayName(result)}
                           </span>
-                          <span className="block truncate text-xs text-muted-foreground">
+                          <span className="block whitespace-normal break-words text-xs leading-snug text-muted-foreground">
                             {[
                               enableSku ? result.product.sku : "",
                               enableBarcode ? result.primaryBarcode : "",
@@ -1166,22 +1166,22 @@ export const InventoryReceivingPage = ({
                             <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
                           )}
                         </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
+                        <div className="min-w-0 flex-1">
+                          <p className="whitespace-normal break-words text-sm font-semibold leading-snug text-foreground">
                             {line.variantName
                               ? `${line.productName} • ${line.variantName}`
                               : line.productName}
                           </p>
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground">
                             {[enableSku ? line.sku : "", enableBarcode ? line.barcode : ""]
                               .filter(Boolean)
                               .join(" • ") || tCommon("notAvailable")}
                           </p>
-                          <p className="truncate text-xs text-muted-foreground md:hidden">
+                          <p className="text-xs text-muted-foreground md:hidden">
                             {t("onHand")}: {formatNumber(line.currentStock, locale)}
                           </p>
                           {line.duplicateHint ? (
-                            <p className="truncate text-xs text-warning">
+                            <p className="whitespace-normal break-words text-xs leading-snug text-warning">
                               {t("receivingDuplicateHint")}
                             </p>
                           ) : null}
