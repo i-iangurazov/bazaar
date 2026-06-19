@@ -770,7 +770,7 @@ export const InventoryTransfersPage = ({
           </div>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <h3 className="text-base font-semibold text-foreground">
@@ -878,7 +878,7 @@ export const InventoryTransfersPage = ({
 
             {lines.length ? (
               <div className="space-y-3">
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(10rem,1fr)_4.75rem_5.75rem_5.75rem_5.75rem_5.75rem_2.25rem] lg:gap-2">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
                   <span>{tCommon("product")}</span>
                   <span>{t("transferQty")}</span>
                   <span>{t("transferSourceAfter")}</span>
@@ -894,7 +894,7 @@ export const InventoryTransfersPage = ({
                     <div
                       key={line.key}
                       data-transfer-line-row
-                      className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(10rem,1fr)_4.75rem_5.75rem_5.75rem_5.75rem_5.75rem_2.25rem] lg:items-center lg:gap-2"
+                      className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">

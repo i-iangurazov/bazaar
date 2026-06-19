@@ -974,7 +974,7 @@ export const InventoryReceivingPage = ({
           </div>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
@@ -1133,7 +1133,7 @@ export const InventoryReceivingPage = ({
 
             {lines.length ? (
               <div className="space-y-3">
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:gap-2">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem] md:gap-1.5">
                   <span>{tCommon("product")}</span>
                   <span>{t("receiveQty")}</span>
                   <span>{t("unitCost")}</span>
@@ -1148,7 +1148,7 @@ export const InventoryReceivingPage = ({
                     <div
                       key={line.key}
                       data-receiving-line-row
-                      className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem] md:items-center md:gap-2"
+                      className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem] md:items-center md:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">

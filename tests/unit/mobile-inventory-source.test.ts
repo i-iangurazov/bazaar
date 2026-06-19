@@ -55,9 +55,11 @@ describe("mobile inventory source", () => {
     expect(inventorySource).toContain('variant: "success" as const');
     expect(inventorySource).toContain("mobileSheet");
     expect(receivingSource).toContain('className="overflow-x-hidden pb-[15rem] md:pb-0"');
-    expect(receivingSource).toContain('className="grid items-start gap-4 xl:grid-cols-2"');
     expect(receivingSource).toContain(
-      "md:grid-cols-[minmax(10rem,1fr)_4.75rem_6.75rem_5.75rem_4.75rem_2.25rem]",
+      'className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"',
+    );
+    expect(receivingSource).toContain(
+      "md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem]",
     );
     expect(receivingSource).toContain("data-receiving-line-row");
     expect(receivingSource).toContain("lines.map((line, index) =>");
