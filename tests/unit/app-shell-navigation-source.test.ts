@@ -109,4 +109,18 @@ describe("conservative app shell navigation source", () => {
     expect(mobileMoreSource).toContain('requiredPermission: "manageIntegrations"');
     expect(source).toContain('normalizedPath.startsWith("/operations/integrations")');
   });
+
+  it("keeps POS sell as a standalone cashier workspace outside the admin shell", () => {
+    const posStandaloneStart = source.indexOf('if (normalizedPath === "/pos/sell")');
+    const adminShellReturnStart = source.indexOf("  return (\n    <GuidanceProvider", posStandaloneStart);
+
+    expect(posStandaloneStart).toBeGreaterThanOrEqual(0);
+    expect(adminShellReturnStart).toBeGreaterThan(posStandaloneStart);
+
+    const posStandaloneBlock = source.slice(posStandaloneStart, adminShellReturnStart);
+    expect(posStandaloneBlock).toContain("{children}");
+    expect(posStandaloneBlock).not.toContain("isMobile === true");
+    expect(posStandaloneBlock).not.toContain("<MobileAppShell");
+    expect(posStandaloneBlock).not.toContain("<SidebarProvider");
+  });
 });

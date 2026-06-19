@@ -1007,7 +1007,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
   const mobileStoreName = storesQuery.data?.[0]?.name ?? null;
 
-  if (normalizedPath === "/pos/sell" && isMobile === true) {
+  if (normalizedPath === "/pos/sell") {
     return (
       <div className="min-h-screen bg-background">
         {impersonation ? (
