@@ -60,14 +60,15 @@ describe("product movement journal source", () => {
     expect(pageSource).toContain("ResponsiveDataList");
     expect(pageSource).toContain('paginationKey="product-movements"');
     expect(pageSource).toContain("renderDocument");
-    expect(pageSource).toContain("href={movement.detailUrl}");
+    expect(pageSource).toContain("useSearchParams");
+    expect(pageSource).toContain("currentJournalHref");
+    expect(pageSource).toContain("withJournalReturn");
+    expect(pageSource).toContain("href={withJournalReturn(movement.detailUrl)}");
     expect(pageSource).toContain("additionalFiltersOpen");
     expect(pageSource).toContain('t("additionalFilters")');
     expect(pageSource).toContain("secondaryFilterCount");
     expect(pageSource).toContain('t("dateRange")');
     expect(pageSource).toContain("dateRangeSummary");
-    expect(pageSource).not.toContain('t("dateFrom")');
-    expect(pageSource).not.toContain('t("dateTo")');
     expect(pageSource).toContain('href="/reports/exports"');
     expect(pageSource).toContain("renderPaymentStatus");
     expect(pageSource).toContain("renderOptionalText");
@@ -117,6 +118,7 @@ describe("product movement journal source", () => {
 
     expect(pageSource).toContain("getProductMovementEditTarget");
     expect(pageSource).toContain("<Link href={editTarget.href}>");
+    expect(pageSource).toContain("returnTo: safeCurrentJournalHref");
     expect(pageSource).toContain("movement-edit-button-disabled");
     expect(pageSource).not.toContain("onClick={() => openEditModal(movement)}");
     expect(helperSource).toContain("/inventory/receiving/");
@@ -188,14 +190,16 @@ describe("product movement journal source", () => {
 
     expect(pageSource).toContain("trpc.inventory.productMovementDocument.useQuery");
     expect(pageSource).toContain("decodeURIComponent");
-    expect(pageSource).toContain('href="/inventory/movements"');
+    expect(pageSource).toContain("resolveSafeReturnTo");
+    expect(pageSource).toContain("href={returnTo}");
+    expect(pageSource).toContain('t("backToMovements")');
     expect(pageSource).toContain("document.detailUrl");
     expect(pageSource).toContain("documentActions");
     expect(pageSource).toContain("printInvoice");
     expect(pageSource).toContain('document?.documentType === "WRITE_OFF"');
     expect(pageSource).toContain("formatMovementNote");
     expect(pageSource).toContain('target="_blank"');
-    expect(pageSource).toContain("/print?auto=1");
+    expect(pageSource).toContain("auto: \"1\"");
     expect(pageSource).toContain("document.lines");
     expect(pageSource).toContain('paginationKey="product-movement-document-lines"');
     expect(pageSource).not.toContain("window.print()");

@@ -364,6 +364,107 @@ describeDb("inventory service", () => {
     expect(journal.items[0]?.totalQuantity).toBe(10);
     expect(journal.items[0]?.positionsCount).toBe(2);
     expect(journal.items[0]?.totalAmount).toBe(63);
+
+    const document = await caller.inventory.productMovementDocument({ documentKey });
+    expect(document?.positionsCount).toBe(2);
+    expect(document?.totalQuantity).toBe(10);
+    expect(document?.totalAmount).toBe(63);
+    expect(document?.lines.map((line) => line.productId)).toEqual([
+      product.id,
+      addedProduct.id,
+    ]);
+    expect(document?.lines).toHaveLength(2);
+    expect(document?.lines.some((line) => line.productId === removedProduct.id)).toBe(false);
+  });
+
+  it("shows effective receiving document lines after editing five lines down to three", async () => {
+    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const extraProducts = await Promise.all(
+      Array.from({ length: 4 }, (_, index) =>
+        prisma.product.create({
+          data: {
+            organizationId: org.id,
+            supplierId: supplier.id,
+            sku: `RECEIVING-5-TO-3-${index + 2}`,
+            name: `Receiving 5 to 3 Product ${index + 2}`,
+            unit: baseUnit.code,
+            baseUnitId: baseUnit.id,
+          },
+        }),
+      ),
+    );
+    await Promise.all(
+      extraProducts.map((editProduct) =>
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId: store.id,
+          productId: editProduct.id,
+          assignedById: adminUser.id,
+        }),
+      ),
+    );
+
+    const originalProducts = [product, ...extraProducts];
+    const receiving = await caller.inventory.postStockReceiving({
+      storeId: store.id,
+      lines: originalProducts.map((lineProduct, index) => ({
+        productId: lineProduct.id,
+        quantity: index + 1,
+        unitCost: 2,
+      })),
+      idempotencyKey: "receiving-five-to-three-post-1",
+    });
+    const documentKey = `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`;
+
+    const initialDocument = await caller.inventory.productMovementDocument({ documentKey });
+    expect(initialDocument?.lines).toHaveLength(5);
+
+    await caller.inventory.editProductMovementDocument({
+      documentKey,
+      reason: "remove two receiving lines",
+      lines: originalProducts.slice(0, 3).map((lineProduct, index) => ({
+        productId: lineProduct.id,
+        quantity: index + 1,
+        unitCostKgs: 2,
+      })),
+      idempotencyKey: "receiving-five-to-three-save-1",
+    });
+
+    const editableDocument = await caller.inventory.editableProductMovementDocument({ documentKey });
+    expect(editableDocument.lines.map((line) => line.productId)).toEqual(
+      originalProducts.slice(0, 3).map((lineProduct) => lineProduct.id),
+    );
+
+    const detailDocument = await caller.inventory.productMovementDocument({ documentKey });
+    expect(detailDocument?.positionsCount).toBe(3);
+    expect(detailDocument?.totalQuantity).toBe(6);
+    expect(detailDocument?.totalAmount).toBe(12);
+    expect(detailDocument?.lines.map((line) => line.productId)).toEqual(
+      originalProducts.slice(0, 3).map((lineProduct) => lineProduct.id),
+    );
+    expect(detailDocument?.lines).toHaveLength(3);
+    expect(
+      detailDocument?.lines.some((line) =>
+        originalProducts.slice(3).some((removedProduct) => removedProduct.id === line.productId),
+      ),
+    ).toBe(false);
+
+    const journal = await caller.inventory.productMovements({
+      type: "STOCK_RECEIVING",
+      search: receiving.receivingId,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(journal.items[0]?.positionsCount).toBe(3);
+    expect(journal.items[0]?.totalQuantity).toBe(6);
+    expect(journal.items[0]?.totalAmount).toBe(12);
   });
 
   it("can restrict inventory product search to product name only", async () => {
@@ -740,16 +841,12 @@ describeDb("inventory service", () => {
     expect(document?.organizationName).toBe(org.name);
     expect(document?.senderName).toBe(store.name);
     expect(document?.recipientName).toBe(storeB.name);
-    expect(document?.lines.map((line) => line.movementType).sort()).toEqual([
-      "TRANSFER_IN",
-      "TRANSFER_OUT",
+    expect(document?.sourceStoreId).toBe(store.id);
+    expect(document?.destinationStoreId).toBe(storeB.id);
+    expect(document?.lines.map((line) => line.movementType)).toEqual(["TRANSFER_OUT"]);
+    expect(document?.lines.map((line) => line.productDetailUrl)).toEqual([
+      `/products/${product.id}?storeId=${encodeURIComponent(store.id)}`,
     ]);
-    expect(document?.lines.map((line) => line.productDetailUrl)).toEqual(
-      expect.arrayContaining([
-        `/products/${product.id}?storeId=${encodeURIComponent(store.id)}`,
-        `/products/${product.id}?storeId=${encodeURIComponent(storeB.id)}`,
-      ]),
-    );
   });
 
   it("edits a transfer movement document with product replacement and store-safe stock deltas", async () => {
@@ -903,6 +1000,33 @@ describeDb("inventory service", () => {
     expect(journal.items[0]?.totalQuantity).toBe(7);
     expect(journal.items[0]?.positionsCount).toBe(2);
     expect(journal.items[0]?.recipientName).toBe(storeC.name);
+
+    const document = await caller.inventory.productMovementDocument({ documentKey });
+    expect(document?.positionsCount).toBe(2);
+    expect(document?.totalQuantity).toBe(7);
+    expect(document?.sourceStoreId).toBe(store.id);
+    expect(document?.destinationStoreId).toBe(storeC.id);
+    expect(document?.lines.map((line) => line.productId)).toEqual([
+      product.id,
+      addedProduct.id,
+    ]);
+    expect(document?.lines.map((line) => line.movementType)).toEqual([
+      "TRANSFER_OUT",
+      "TRANSFER_OUT",
+    ]);
+    expect(document?.lines.some((line) => line.productId === removedProduct.id)).toBe(false);
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        documentKey,
+        reason: "repeat transfer edit after destination correction",
+        destinationStoreId: storeC.id,
+        lines: [
+          { productId: product.id, quantity: 4, unitCostKgs: 0 },
+          { productId: addedProduct.id, quantity: 3, unitCostKgs: 0 },
+        ],
+        idempotencyKey: "transfer-edit-save-2",
+      }),
+    ).resolves.toMatchObject({ lineCount: 2, totalQuantity: 7 });
 
     const audit = await prisma.auditLog.findFirst({
       where: {
@@ -1205,6 +1329,16 @@ describeDb("inventory service", () => {
     });
     expect(journal.items[0]?.totalQuantity).toBe(3);
     expect(journal.items[0]?.positionsCount).toBe(2);
+
+    const document = await caller.inventory.productMovementDocument({ documentKey });
+    expect(document?.positionsCount).toBe(2);
+    expect(document?.totalQuantity).toBe(3);
+    expect(document?.lines.map((line) => line.productId)).toEqual([
+      secondProduct.id,
+      addedProduct.id,
+    ]);
+    expect(document?.lines).toHaveLength(2);
+    expect(document?.lines.some((line) => line.productId === product.id)).toBe(false);
   });
 
   it("rejects write-off quantity above stock when negative stock is disabled", async () => {

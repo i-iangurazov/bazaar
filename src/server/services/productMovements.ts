@@ -117,6 +117,8 @@ export type ProductMovementDocumentLine = {
 };
 
 export type ProductMovementDocumentDetail = ProductMovementJournalRow & {
+  sourceStoreId: string | null;
+  destinationStoreId: string | null;
   lines: ProductMovementDocumentLine[];
 };
 
@@ -227,6 +229,26 @@ const toNumberOrNull = (value: Prisma.Decimal | number | string | null) => {
   }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+const editableStockDocumentTypes = new Set(["STOCK_RECEIVING", "TRANSFER", "WRITE_OFF"]);
+
+const isEditableStockDocumentType = (
+  value: string,
+): value is "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF" =>
+  editableStockDocumentTypes.has(value);
+
+const getEffectiveMovementType = (documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF") => {
+  switch (documentType) {
+    case "STOCK_RECEIVING":
+      return "RECEIVE";
+    case "TRANSFER":
+      return "TRANSFER_OUT";
+    case "WRITE_OFF":
+      return "WRITE_OFF";
+  }
 };
 
 export const encodeProductMovementDocumentKey = (input: {
@@ -628,6 +650,179 @@ const normalizeProductMovementJournalRow = (
   };
 };
 
+const normalizeProductMovementDocumentLine = (
+  line: ProductMovementDocumentLineSqlRow,
+): ProductMovementDocumentLine => ({
+  id: line.id,
+  productId: line.productId,
+  variantId: line.variantId,
+  storeId: line.storeId,
+  productDetailUrl: `/products/${line.productId}?storeId=${encodeURIComponent(line.storeId)}`,
+  storeName: line.storeName,
+  productName: line.productName,
+  sku: line.sku,
+  barcode: line.barcode,
+  unit: line.unit,
+  variantName: line.variantName,
+  movementType: line.movementType,
+  qtyDelta: Number(line.qtyDelta),
+  linePosition: line.linePosition,
+  unitCostKgs: toNumberOrNull(line.unitCostKgs),
+  lineTotalKgs: toNumberOrNull(line.lineTotalKgs),
+  note: line.note,
+  createdAt: line.createdAt,
+  authorName: line.authorName,
+  authorEmail: line.authorEmail,
+});
+
+const buildEffectiveStockDocumentLines = (
+  lines: ProductMovementDocumentLineSqlRow[],
+  documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF",
+) => {
+  const effectiveMovementType = getEffectiveMovementType(documentType);
+  const aggregates = new Map<
+    string,
+    {
+      firstIndex: number;
+      productId: string;
+      variantId: string | null;
+      storeId: string;
+      movementType: string;
+      qtyDelta: number;
+      lineTotalKgs: number;
+      hasLineTotal: boolean;
+      latestUnitCostKgs: number | null;
+      latestLine: ProductMovementDocumentLineSqlRow;
+      linePosition: number | null;
+    }
+  >();
+
+  lines.forEach((line, index) => {
+    if (line.movementType !== effectiveMovementType) {
+      return;
+    }
+    const key = `${line.productId}:${line.variantId ?? "BASE"}`;
+    const unitCostKgs = toNumberOrNull(line.unitCostKgs);
+    const lineTotalKgs = toNumberOrNull(line.lineTotalKgs);
+    const existing = aggregates.get(key);
+    if (existing) {
+      existing.qtyDelta += Number(line.qtyDelta);
+      if (lineTotalKgs !== null) {
+        existing.lineTotalKgs += lineTotalKgs;
+        existing.hasLineTotal = true;
+      }
+      if (unitCostKgs !== null && line.createdAt >= existing.latestLine.createdAt) {
+        existing.latestUnitCostKgs = unitCostKgs;
+      }
+      if (
+        line.linePosition !== null &&
+        (existing.linePosition === null || line.linePosition < existing.linePosition)
+      ) {
+        existing.linePosition = line.linePosition;
+      }
+      if (line.createdAt >= existing.latestLine.createdAt) {
+        existing.latestLine = line;
+        existing.storeId = line.storeId;
+      }
+      return;
+    }
+    aggregates.set(key, {
+      firstIndex: index,
+      productId: line.productId,
+      variantId: line.variantId,
+      storeId: line.storeId,
+      movementType: line.movementType,
+      qtyDelta: Number(line.qtyDelta),
+      lineTotalKgs: lineTotalKgs ?? 0,
+      hasLineTotal: lineTotalKgs !== null,
+      latestUnitCostKgs: unitCostKgs,
+      latestLine: line,
+      linePosition: line.linePosition,
+    });
+  });
+
+  return Array.from(aggregates.values())
+    .map((aggregate) => {
+      const quantity =
+        documentType === "STOCK_RECEIVING" ? aggregate.qtyDelta : Math.abs(aggregate.qtyDelta);
+      if (quantity <= 0) {
+        return null;
+      }
+      const latestLine = aggregate.latestLine;
+      const lineTotalKgs = aggregate.hasLineTotal ? roundMoney(aggregate.lineTotalKgs) : null;
+      const unitCostKgs =
+        lineTotalKgs !== null && quantity > 0
+          ? roundMoney(lineTotalKgs / quantity)
+          : aggregate.latestUnitCostKgs;
+      return {
+        firstIndex: aggregate.firstIndex,
+        line: {
+          id: `effective:${documentType}:${aggregate.movementType}:${aggregate.storeId}:${aggregate.productId}:${aggregate.variantId ?? "BASE"}`,
+          productId: aggregate.productId,
+          variantId: aggregate.variantId,
+          storeId: aggregate.storeId,
+          productDetailUrl: `/products/${aggregate.productId}?storeId=${encodeURIComponent(
+            aggregate.storeId,
+          )}`,
+          storeName: latestLine.storeName,
+          productName: latestLine.productName,
+          sku: latestLine.sku,
+          barcode: latestLine.barcode,
+          unit: latestLine.unit,
+          variantName: latestLine.variantName,
+          movementType: aggregate.movementType,
+          qtyDelta: aggregate.qtyDelta,
+          linePosition: aggregate.linePosition,
+          unitCostKgs,
+          lineTotalKgs,
+          note: latestLine.note,
+          createdAt: latestLine.createdAt,
+          authorName: latestLine.authorName,
+          authorEmail: latestLine.authorEmail,
+        } satisfies ProductMovementDocumentLine,
+      };
+    })
+    .filter((item): item is { firstIndex: number; line: ProductMovementDocumentLine } =>
+      Boolean(item),
+    )
+    .sort((a, b) => {
+      const linePositionA = a.line.linePosition ?? Number.MAX_SAFE_INTEGER;
+      const linePositionB = b.line.linePosition ?? Number.MAX_SAFE_INTEGER;
+      if (linePositionA !== linePositionB) {
+        return linePositionA - linePositionB;
+      }
+      return a.firstIndex - b.firstIndex;
+    })
+    .map((item) => item.line);
+};
+
+const getNetStoreIdForMovementType = (
+  lines: ProductMovementDocumentLineSqlRow[],
+  movementType: string,
+  isActiveTotal: (quantity: number) => boolean,
+) => {
+  const totals = new Map<string, { quantity: number; firstIndex: number }>();
+  lines.forEach((line, index) => {
+    if (line.movementType !== movementType) {
+      return;
+    }
+    const existing = totals.get(line.storeId);
+    if (existing) {
+      existing.quantity += Number(line.qtyDelta);
+      return;
+    }
+    totals.set(line.storeId, { quantity: Number(line.qtyDelta), firstIndex: index });
+  });
+
+  const active = Array.from(totals.entries())
+    .filter(([, total]) => isActiveTotal(total.quantity))
+    .sort(([, a], [, b]) => a.firstIndex - b.firstIndex)[0];
+  if (active) {
+    return active[0];
+  }
+  return lines.find((line) => line.movementType === movementType)?.storeId ?? null;
+};
+
 const buildBaseConditions = async (
   prisma: PrismaClient,
   user: StoreAccessUser,
@@ -809,30 +1004,23 @@ export const getProductMovementDocument = async (
       ORDER BY COALESCE(m."linePosition", 2147483647) ASC, m."createdAt" ASC, m."id" ASC
     `,
   );
+  const effectiveStockLines = isEditableStockDocumentType(decoded.documentType)
+    ? buildEffectiveStockDocumentLines(lines, decoded.documentType)
+    : null;
+  const normalizedLines = effectiveStockLines ?? lines.map(normalizeProductMovementDocumentLine);
+  const sourceStoreId =
+    decoded.documentType === "TRANSFER"
+      ? getNetStoreIdForMovementType(lines, "TRANSFER_OUT", (quantity) => quantity < 0)
+      : (normalizedLines[0]?.storeId ?? lines[0]?.storeId ?? null);
+  const destinationStoreId =
+    decoded.documentType === "TRANSFER"
+      ? getNetStoreIdForMovementType(lines, "TRANSFER_IN", (quantity) => quantity > 0)
+      : null;
 
   return {
     ...normalizeProductMovementJournalRow(row),
-    lines: lines.map((line) => ({
-      id: line.id,
-      productId: line.productId,
-      variantId: line.variantId,
-      storeId: line.storeId,
-      productDetailUrl: `/products/${line.productId}?storeId=${encodeURIComponent(line.storeId)}`,
-      storeName: line.storeName,
-      productName: line.productName,
-      sku: line.sku,
-      barcode: line.barcode,
-      unit: line.unit,
-      variantName: line.variantName,
-      movementType: line.movementType,
-      qtyDelta: Number(line.qtyDelta),
-      linePosition: line.linePosition,
-      unitCostKgs: toNumberOrNull(line.unitCostKgs),
-      lineTotalKgs: toNumberOrNull(line.lineTotalKgs),
-      note: line.note,
-      createdAt: line.createdAt,
-      authorName: line.authorName,
-      authorEmail: line.authorEmail,
-    })),
+    sourceStoreId,
+    destinationStoreId,
+    lines: normalizedLines,
   };
 };

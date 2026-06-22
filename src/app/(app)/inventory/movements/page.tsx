@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { CustomerOrderStatus } from "@prisma/client";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
@@ -48,6 +49,7 @@ import {
 } from "@/components/icons";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { getProductMovementEditTarget } from "@/lib/productMovementEditTarget";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -87,34 +89,107 @@ const statusOptions = [
 const paymentStatusOptions = ["PAID", "PARTIAL", "UNPAID", "REFUNDED", "NOT_APPLICABLE"] as const;
 const sortOptions = ["date", "type", "status", "amount", "positions", "author", "store"] as const;
 
-type DocumentType = (typeof documentTypeOptions)[number];
-type PaymentStatus = (typeof paymentStatusOptions)[number];
 type SortKey = (typeof sortOptions)[number];
 type SortDirection = "asc" | "desc";
 
 const allValue = "all";
+
+const parsePositiveInteger = (value: string | null, fallback: number, min: number, max: number) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const parseOption = <T extends string, F extends T | typeof allValue>(
+  value: string | null,
+  options: readonly T[],
+  fallback: F,
+): T | F => (value && options.includes(value as T) ? (value as T) : fallback);
+
+const normalizeOptionalParam = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
 
 const ProductMovementsPage = () => {
   const t = useTranslations("inventory.movementJournal");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [storeId, setStoreId] = useState(allValue);
-  const [type, setType] = useState<DocumentType | typeof allValue>(allValue);
-  const [status, setStatus] = useState<string>(allValue);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | typeof allValue>(allValue);
-  const [orderStatus, setOrderStatus] = useState<CustomerOrderStatus | typeof allValue>(allValue);
-  const [senderSearch, setSenderSearch] = useState("");
-  const [recipientSearch, setRecipientSearch] = useState("");
-  const [authorSearch, setAuthorSearch] = useState("");
-  const [additionalFiltersOpen, setAdditionalFiltersOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<SortKey>("date");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentQueryString = searchParams.toString();
+  const page = parsePositiveInteger(searchParams.get("page"), 1, 1, 10_000);
+  const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 10, 100);
+  const search = searchParams.get("search") ?? "";
+  const dateFrom = searchParams.get("dateFrom") ?? "";
+  const dateTo = searchParams.get("dateTo") ?? "";
+  const storeId = searchParams.get("storeId") || allValue;
+  const type = parseOption(searchParams.get("type"), documentTypeOptions, allValue);
+  const status = parseOption(searchParams.get("status"), statusOptions, allValue);
+  const paymentStatus = parseOption(
+    searchParams.get("paymentStatus"),
+    paymentStatusOptions,
+    allValue,
+  );
+  const orderStatus = parseOption(
+    searchParams.get("orderStatus"),
+    Object.values(CustomerOrderStatus),
+    allValue,
+  );
+  const senderSearch = searchParams.get("senderSearch") ?? "";
+  const recipientSearch = searchParams.get("recipientSearch") ?? "";
+  const authorSearch = searchParams.get("authorSearch") ?? "";
+  const sortBy = parseOption(searchParams.get("sortBy"), sortOptions, "date");
+  const sortDirection = parseOption(
+    searchParams.get("sortDirection"),
+    ["asc", "desc"] as const,
+    "desc",
+  );
+  const hasSecondaryFilters =
+    paymentStatus !== allValue ||
+    orderStatus !== allValue ||
+    Boolean(senderSearch.trim()) ||
+    Boolean(recipientSearch.trim()) ||
+    Boolean(authorSearch.trim());
+  const [additionalFiltersOpen, setAdditionalFiltersOpen] = useState(hasSecondaryFilters);
+
+  useEffect(() => {
+    if (hasSecondaryFilters) {
+      setAdditionalFiltersOpen(true);
+    }
+  }, [hasSecondaryFilters]);
+
+  const updateJournalParams = useCallback(
+    (updates: Record<string, string | number | null | undefined>) => {
+      const params = new URLSearchParams(currentQueryString);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          params.delete(key);
+          return;
+        }
+        params.set(key, String(value));
+      });
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    },
+    [currentQueryString, pathname, router],
+  );
+
+  const setPage = (value: number) => updateJournalParams({ page: value > 1 ? value : null });
+  const setPageSize = (value: number) =>
+    updateJournalParams({ pageSize: value === 25 ? null : value, page: null });
+  const setFilterParam = (key: string, value: string | null) =>
+    updateJournalParams({ [key]: value, page: null });
+  const currentJournalHref = currentQueryString ? `${pathname}?${currentQueryString}` : pathname;
+  const safeCurrentJournalHref = resolveSafeReturnTo(currentJournalHref);
+  const withJournalReturn = (href: string) => {
+    const params = new URLSearchParams({ from: "movements", returnTo: safeCurrentJournalHref });
+    return `${href}${href.includes("?") ? "&" : "?"}${params.toString()}`;
+  };
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = storesQuery.data ?? [];
@@ -145,23 +220,25 @@ const ProductMovementsPage = () => {
 
   type MovementRow = (typeof items)[number];
 
-  const resetPage = () => setPage(1);
   const resetFilters = () => {
-    setSearch("");
-    setDateFrom("");
-    setDateTo("");
-    setStoreId(allValue);
-    setType(allValue);
-    setStatus(allValue);
-    setPaymentStatus(allValue);
-    setOrderStatus(allValue);
-    setSenderSearch("");
-    setRecipientSearch("");
-    setAuthorSearch("");
+    updateJournalParams({
+      search: null,
+      dateFrom: null,
+      dateTo: null,
+      storeId: null,
+      type: null,
+      status: null,
+      paymentStatus: null,
+      orderStatus: null,
+      senderSearch: null,
+      recipientSearch: null,
+      authorSearch: null,
+      sortBy: null,
+      sortDirection: null,
+      page: null,
+      pageSize: null,
+    });
     setAdditionalFiltersOpen(false);
-    setSortBy("date");
-    setSortDirection("desc");
-    setPage(1);
   };
 
   const documentTypeLabel = (value: string) => t(`type.${value}`);
@@ -214,9 +291,12 @@ const ProductMovementsPage = () => {
     ["date", "amount", "positions"].includes(key) ? "desc" : "asc";
 
   const setSortColumn = (key: SortKey) => {
-    setSortBy(key);
-    setSortDirection((current) => (sortBy === key ? current : defaultSortDirection(key)));
-    resetPage();
+    const nextDirection = sortBy === key ? sortDirection : defaultSortDirection(key);
+    updateJournalParams({
+      sortBy: key === "date" ? null : key,
+      sortDirection: nextDirection === "desc" ? null : nextDirection,
+      page: null,
+    });
   };
 
   const statusVariant = (
@@ -286,7 +366,7 @@ const ProductMovementsPage = () => {
         aria-label={tCommon("view")}
         className={layout === "mobile" ? "w-full justify-center" : undefined}
       >
-        <Link href={movement.detailUrl}>
+        <Link href={withJournalReturn(movement.detailUrl)}>
           <ViewIcon className="h-4 w-4" aria-hidden />
           {layout === "mobile" ? tCommon("view") : null}
         </Link>
@@ -297,7 +377,7 @@ const ProductMovementsPage = () => {
       documentId: movement.documentId,
       documentType: movement.documentType,
       isPosSale: movement.isPosSale,
-      returnTo: "/inventory/movements",
+      returnTo: safeCurrentJournalHref,
     });
     const disabledReason = editTarget.disabledReason ?? "unsupported";
     const editButton = editTarget.href ? (
@@ -357,7 +437,7 @@ const ProductMovementsPage = () => {
           {movement.detailUrl ? (
             <Link
               className="truncate font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
-              href={movement.detailUrl}
+              href={withJournalReturn(movement.detailUrl)}
             >
               #{documentNumber}
             </Link>
@@ -385,9 +465,13 @@ const ProductMovementsPage = () => {
     if (!nextSort || !sortOptions.includes(nextSort.id as SortKey)) {
       return;
     }
-    setSortBy(nextSort.id as SortKey);
-    setSortDirection(nextSort.desc ? "desc" : "asc");
-    resetPage();
+    const nextSortBy = nextSort.id as SortKey;
+    const nextDirection = nextSort.desc ? "desc" : "asc";
+    updateJournalParams({
+      sortBy: nextSortBy === "date" ? null : nextSortBy,
+      sortDirection: nextDirection === "desc" ? null : nextDirection,
+      page: null,
+    });
   };
 
   const movementColumns: ColumnDef<MovementRow>[] = [
@@ -519,8 +603,11 @@ const ProductMovementsPage = () => {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-            resetPage();
+            const nextDirection = sortDirection === "asc" ? "desc" : "asc";
+            updateJournalParams({
+              sortDirection: nextDirection === "desc" ? null : nextDirection,
+              page: null,
+            });
           }}
         >
           {sortDirection === "asc" ? (
@@ -544,10 +631,9 @@ const ProductMovementsPage = () => {
             <Input
               id="movement-search"
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                resetPage();
-              }}
+              onChange={(event) =>
+                setFilterParam("search", normalizeOptionalParam(event.target.value))
+              }
               className="pl-9"
               placeholder={t("searchPlaceholder")}
             />
@@ -560,10 +646,7 @@ const ProductMovementsPage = () => {
               <Input
                 type="date"
                 value={dateFrom}
-                onChange={(event) => {
-                  setDateFrom(event.target.value);
-                  resetPage();
-                }}
+                onChange={(event) => setFilterParam("dateFrom", event.target.value || null)}
                 aria-label={t("dateRangeStart")}
                 className="h-8 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
               />
@@ -573,10 +656,7 @@ const ProductMovementsPage = () => {
               <Input
                 type="date"
                 value={dateTo}
-                onChange={(event) => {
-                  setDateTo(event.target.value);
-                  resetPage();
-                }}
+                onChange={(event) => setFilterParam("dateTo", event.target.value || null)}
                 aria-label={t("dateRangeEnd")}
                 className="h-8 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
               />
@@ -588,10 +668,7 @@ const ProductMovementsPage = () => {
           <Label>{t("store")}</Label>
           <Select
             value={storeId}
-            onValueChange={(value) => {
-              setStoreId(value);
-              resetPage();
-            }}
+            onValueChange={(value) => setFilterParam("storeId", value === allValue ? null : value)}
           >
             <SelectTrigger>
               <SelectValue placeholder={t("allStores")} />
@@ -610,10 +687,7 @@ const ProductMovementsPage = () => {
           <Label>{t("documentType")}</Label>
           <Select
             value={type}
-            onValueChange={(value) => {
-              setType(value as DocumentType | typeof allValue);
-              resetPage();
-            }}
+            onValueChange={(value) => setFilterParam("type", value === allValue ? null : value)}
           >
             <SelectTrigger data-testid="movement-type-filter">
               <SelectValue placeholder={t("allTypes")} />
@@ -632,10 +706,7 @@ const ProductMovementsPage = () => {
           <Label>{t("statusLabel")}</Label>
           <Select
             value={status}
-            onValueChange={(value) => {
-              setStatus(value);
-              resetPage();
-            }}
+            onValueChange={(value) => setFilterParam("status", value === allValue ? null : value)}
           >
             <SelectTrigger>
               <SelectValue placeholder={t("allStatuses")} />
@@ -689,8 +760,7 @@ const ProductMovementsPage = () => {
               <Select
                 value={paymentStatus}
                 onValueChange={(value) => {
-                  setPaymentStatus(value as PaymentStatus | typeof allValue);
-                  resetPage();
+                  setFilterParam("paymentStatus", value === allValue ? null : value);
                 }}
               >
                 <SelectTrigger>
@@ -711,8 +781,7 @@ const ProductMovementsPage = () => {
               <Select
                 value={orderStatus}
                 onValueChange={(value) => {
-                  setOrderStatus(value as CustomerOrderStatus | typeof allValue);
-                  resetPage();
+                  setFilterParam("orderStatus", value === allValue ? null : value);
                 }}
               >
                 <SelectTrigger>
@@ -734,8 +803,7 @@ const ProductMovementsPage = () => {
                 id="movement-sender"
                 value={senderSearch}
                 onChange={(event) => {
-                  setSenderSearch(event.target.value);
-                  resetPage();
+                  setFilterParam("senderSearch", normalizeOptionalParam(event.target.value));
                 }}
                 placeholder={t("senderPlaceholder")}
               />
@@ -746,8 +814,7 @@ const ProductMovementsPage = () => {
                 id="movement-recipient"
                 value={recipientSearch}
                 onChange={(event) => {
-                  setRecipientSearch(event.target.value);
-                  resetPage();
+                  setFilterParam("recipientSearch", normalizeOptionalParam(event.target.value));
                 }}
                 placeholder={t("recipientPlaceholder")}
               />
@@ -758,8 +825,7 @@ const ProductMovementsPage = () => {
                 id="movement-author"
                 value={authorSearch}
                 onChange={(event) => {
-                  setAuthorSearch(event.target.value);
-                  resetPage();
+                  setFilterParam("authorSearch", normalizeOptionalParam(event.target.value));
                 }}
                 placeholder={t("authorPlaceholder")}
               />

@@ -950,35 +950,15 @@ export const inventoryRouter = router({
           storeId: line.storeId,
         });
       });
-      const transferSourceTotals = new Map<string, number>();
-      const transferDestinationTotals = new Map<string, number>();
-      if (decoded.documentType === "TRANSFER") {
-        document.lines.forEach((line) => {
-          if (line.movementType === "TRANSFER_OUT") {
-            transferSourceTotals.set(
-              line.storeId,
-              (transferSourceTotals.get(line.storeId) ?? 0) + line.qtyDelta,
-            );
-          }
-          if (line.movementType === "TRANSFER_IN") {
-            transferDestinationTotals.set(
-              line.storeId,
-              (transferDestinationTotals.get(line.storeId) ?? 0) + line.qtyDelta,
-            );
-          }
-        });
-      }
       const sourceStoreId =
         decoded.documentType === "TRANSFER"
-          ? (Array.from(transferSourceTotals.entries()).find(([, quantity]) => quantity < 0)?.[0] ??
+          ? (document.sourceStoreId ??
             document.lines.find((line) => line.movementType === "TRANSFER_OUT")?.storeId ??
             "")
           : (aggregates.values().next().value?.storeId ?? "");
       const destinationStoreId =
         decoded.documentType === "TRANSFER"
-          ? (Array.from(transferDestinationTotals.entries()).find(([, quantity]) => quantity > 0)?.[0] ??
-            document.lines.find((line) => line.movementType === "TRANSFER_IN")?.storeId ??
-            null)
+          ? (document.destinationStoreId ?? null)
           : null;
 
       return {

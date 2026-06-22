@@ -1,4 +1,5 @@
 import { InventoryWriteOffsPage } from "@/components/inventory/write-off-workflow";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
@@ -11,7 +12,7 @@ const WriteOffEditPage = ({
 }) => {
   const documentId = decodeURIComponent(params.id);
   const documentKey = getParam(searchParams?.documentKey) ?? `WRITE_OFF:WRITE_OFF:${documentId}`;
-  const backHref = getParam(searchParams?.returnTo) ?? "/inventory/movements";
+  const backHref = resolveSafeReturnTo(getParam(searchParams?.returnTo));
 
   return <InventoryWriteOffsPage editDocumentKey={documentKey} editBackHref={backHref} />;
 };

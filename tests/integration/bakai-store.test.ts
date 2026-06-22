@@ -555,6 +555,18 @@ describeDb("bakai store integration", () => {
         included: true,
       });
 
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+
       const preflight = await runBakaiStoreApiPreflight(org.id);
 
       expect(preflight.mode).toBe("API");
@@ -562,8 +574,35 @@ describeDb("bakai store integration", () => {
       expect(preflight.summary.productsFailed).toBe(1);
       expect(preflight.warnings.global).toContain("FULL_UPLOAD_RISK_WARNING");
       expect(preflight.actionability.canRunAll).toBe(false);
-      expect(preflight.actionability.canRunReadyOnly).toBe(false);
+      expect(preflight.actionability.canRunReadyOnly).toBe(true);
+
+      const requested = await requestBakaiStoreApiSync({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "bakai-api-ready-only-sync",
+        mode: "READY_ONLY",
+      });
+      const result = await runJob("bakai-store-api-sync", {
+        jobId: requested.job.id,
+        organizationId: org.id,
+      });
+      const job = await getBakaiStoreExportJob(org.id, requested.job.id);
+      const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as {
+        products?: Array<Record<string, unknown>>;
+      };
+
+      expect(result.status).toBe("ok");
+      expect(job?.status).toBe(BakaiStoreExportJobStatus.DONE);
+      expect(job?.attemptedCount).toBe(1);
+      expect(job?.succeededCount).toBe(1);
+      expect(job?.failedCount).toBe(0);
+      expect(job?.skippedCount).toBe(1);
+      expect(requestBody.products?.map((product) => product.sku)).toEqual(["BAKAI-1"]);
+      expect(requestBody.products?.some((product) => product.sku === "BROKEN-API-1")).toBe(
+        false,
+      );
     } finally {
+      vi.unstubAllGlobals();
       if (previousEndpoint === undefined) {
         delete process.env.BAKAI_STORE_IMPORT_ENDPOINT;
       } else {

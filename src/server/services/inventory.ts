@@ -1617,6 +1617,30 @@ const aggregateStockDocumentLines = (
   return result;
 };
 
+const getNetStockMovementStoreIds = (
+  movements: Array<{ storeId: string; type: StockMovementType; qtyDelta: number }>,
+  movementType: StockMovementType,
+  isActiveTotal: (quantity: number) => boolean,
+) => {
+  const totals = new Map<string, { quantity: number; firstIndex: number }>();
+  movements.forEach((movement, index) => {
+    if (movement.type !== movementType) {
+      return;
+    }
+    const existing = totals.get(movement.storeId);
+    if (existing) {
+      existing.quantity += movement.qtyDelta;
+      return;
+    }
+    totals.set(movement.storeId, { quantity: movement.qtyDelta, firstIndex: index });
+  });
+
+  return Array.from(totals.entries())
+    .filter(([, total]) => isActiveTotal(total.quantity))
+    .sort(([, left], [, right]) => left.firstIndex - right.firstIndex)
+    .map(([storeId]) => storeId);
+};
+
 const normalizeStockDocumentEditLines = (
   lines: EditStockMovementDocumentLineInput[],
   unitCostMap: Map<string, number>,
@@ -1703,22 +1727,18 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
 
         const sourceStoreIds =
           input.documentType === "TRANSFER"
-            ? Array.from(
-                new Set(
-                  movements
-                    .filter((movement) => movement.type === StockMovementType.TRANSFER_OUT)
-                    .map((movement) => movement.storeId),
-                ),
+            ? getNetStockMovementStoreIds(
+                movements,
+                StockMovementType.TRANSFER_OUT,
+                (quantity) => quantity < 0,
               )
             : storeIds;
         const destinationStoreIds =
           input.documentType === "TRANSFER"
-            ? Array.from(
-                new Set(
-                  movements
-                    .filter((movement) => movement.type === StockMovementType.TRANSFER_IN)
-                    .map((movement) => movement.storeId),
-                ),
+            ? getNetStockMovementStoreIds(
+                movements,
+                StockMovementType.TRANSFER_IN,
+                (quantity) => quantity > 0,
               )
             : [];
         if (sourceStoreIds.length !== 1) {

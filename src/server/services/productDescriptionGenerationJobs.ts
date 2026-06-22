@@ -15,9 +15,13 @@ import { registerJob, runJob, type JobPayload, type JobResult } from "@/server/j
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
-import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
+import {
+  AI_GENERATED_SPEC_DEFINITIONS,
+  generateProductContent,
+  resolveProductContentSpecKind,
+  type ProductContentSpecKind,
+} from "@/server/services/productContentGeneration";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
-import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 
 export const PRODUCT_DESCRIPTION_GENERATION_JOB_NAME = "product-description-generation";
 
@@ -287,20 +291,12 @@ const collectProductImageUrls = (product: {
     ),
   ).slice(0, MAX_IMAGES_PER_PRODUCT);
 
-type ProductSpecAutofillKind =
-  | "manufacturer"
-  | "model"
-  | "type"
-  | "color"
-  | "material"
-  | "compatibility"
-  | "design"
-  | "features"
-  | "purpose";
+type ProductSpecAutofillKind = ProductContentSpecKind;
 
 type ProductSpecTemplate = {
   attributeKey: string;
   labelRu: string;
+  labelKg?: string;
   type: "TEXT" | "NUMBER" | "SELECT" | "MULTI_SELECT";
   optionsRu: string[];
   autofillKind: ProductSpecAutofillKind | null;
@@ -321,113 +317,7 @@ type ProductSpecGenerationResult =
       nextValues?: Record<string, unknown>;
     };
 
-const normalizeSpecLabel = (value?: string | null) =>
-  (value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/[^\p{L}\p{N}]+/gu, "");
-
-const resolveProductSpecAutofillKind = (input: {
-  labelRu?: string | null;
-  attributeKey?: string | null;
-}): ProductSpecAutofillKind | null => {
-  const values = [normalizeSpecLabel(input.labelRu), normalizeSpecLabel(input.attributeKey)].filter(
-    (value) => value.length > 0,
-  );
-  if (!values.length || values.some((value) => value.includes("описани") || value.includes("description"))) {
-    return null;
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("производ") ||
-        value.includes("бренд") ||
-        value.includes("manufacturer") ||
-        value.includes("brand") ||
-        value.includes("maker"),
-    )
-  ) {
-    return "manufacturer";
-  }
-  if (values.some((value) => value.includes("модел") || value.includes("model"))) {
-    return "model";
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("совмест") ||
-        value.includes("подходит") ||
-        value.includes("устройств") ||
-        value.includes("compatib") ||
-        value.includes("device"),
-    )
-  ) {
-    return "compatibility";
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("материал") ||
-        value.includes("состав") ||
-        value.includes("material") ||
-        value.includes("composition"),
-    )
-  ) {
-    return "material";
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("дизайн") ||
-        value.includes("принт") ||
-        value.includes("рисунок") ||
-        value.includes("pattern") ||
-        value.includes("design") ||
-        value.includes("style"),
-    )
-  ) {
-    return "design";
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("особен") ||
-        value.includes("характеристик") ||
-        value.includes("feature"),
-    )
-  ) {
-    return "features";
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("назначен") ||
-        value.includes("применен") ||
-        value.includes("purpose") ||
-        value.includes("usecase"),
-    )
-  ) {
-    return "purpose";
-  }
-  if (
-    values.some(
-      (value) =>
-        value.includes("цвет") ||
-        value.includes("расцвет") ||
-        value.includes("color") ||
-        value.includes("colour"),
-    )
-  ) {
-    return "color";
-  }
-  if (
-    values.some((value) => value.includes("тип") || value.includes("вид") || value.includes("type"))
-  ) {
-    return "type";
-  }
-  return null;
-};
+const resolveProductSpecAutofillKind = resolveProductContentSpecKind;
 
 const parseOptionStrings = (value: Prisma.JsonValue | null | undefined) =>
   Array.isArray(value)
@@ -465,16 +355,6 @@ const toSpecString = (value: unknown): string | null => {
     return normalized.length ? normalized.join(", ") : null;
   }
   return null;
-};
-
-const resolveSpecGenerationFailureReason = (error: unknown) => {
-  if (error instanceof AppError) {
-    return error.message;
-  }
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-  return "aiSpecsGenerationFailed";
 };
 
 const addCurrentSpecValue = (
@@ -541,7 +421,7 @@ const generateAndPersistProductSpecs = async (input: {
     orderBy: [{ order: "asc" }, { attributeKey: "asc" }],
   });
 
-  const templateSpecs: ProductSpecTemplate[] = categoryTemplates
+  let templateSpecs: ProductSpecTemplate[] = categoryTemplates
     .filter((template) => template.definition?.isActive && template.definition.labelRu.trim())
     .map((template) => ({
       attributeKey: template.attributeKey,
@@ -554,8 +434,16 @@ const generateAndPersistProductSpecs = async (input: {
       }),
     }));
 
-  if (!templateSpecs.length) {
-    return { status: "skipped", reason: "missingSpecTemplate", filledValueCount: 0 };
+  const generatedTemplateMode = templateSpecs.length === 0;
+  if (generatedTemplateMode) {
+    templateSpecs = AI_GENERATED_SPEC_DEFINITIONS.map((definition) => ({
+      attributeKey: definition.key,
+      labelRu: definition.labelRu,
+      labelKg: definition.labelKg,
+      type: "TEXT",
+      optionsRu: [],
+      autofillKind: definition.kind,
+    }));
   }
 
   const currentValues = new Map<string, string[]>();
@@ -572,98 +460,68 @@ const generateAndPersistProductSpecs = async (input: {
 
   const nextValues = new Map<string, unknown>();
   const previousValues: Record<string, string | null> = {};
-  const aiRequests: Array<{
-    attributeKey: string;
-    type: ProductSpecTemplate["type"];
-    kind: Exclude<ProductSpecAutofillKind, "manufacturer" | "model">;
-    labelRu: string;
-    options?: string[];
-  }> = [];
   let supportedFieldCount = 0;
-  let aiErrorMessage: string | null = null;
+  const supportedTemplateSpecs: ProductSpecTemplate[] = [];
 
   for (const templateSpec of templateSpecs) {
     if (!templateSpec.autofillKind) {
       continue;
     }
     supportedFieldCount += 1;
+    supportedTemplateSpecs.push(templateSpec);
     const existing = currentValues.get(templateSpec.attributeKey) ?? [];
     previousValues[templateSpec.attributeKey] = existing[0] ?? null;
-    if (existing.length && !input.overwriteExisting) {
-      continue;
-    }
-
-    if (templateSpec.autofillKind === "manufacturer") {
-      const manufacturerValue = input.product.supplier?.name?.trim() ?? "";
-      if (manufacturerValue) {
-        nextValues.set(
-          templateSpec.attributeKey,
-          toStoredProductSpecValue(templateSpec.type, manufacturerValue),
-        );
-      }
-      continue;
-    }
-
-    if (templateSpec.autofillKind === "model") {
-      const modelValue = input.product.sku.trim();
-      if (modelValue) {
-        nextValues.set(
-          templateSpec.attributeKey,
-          toStoredProductSpecValue(templateSpec.type, modelValue),
-        );
-      }
-      continue;
-    }
-
-    aiRequests.push({
-      attributeKey: templateSpec.attributeKey,
-      type: templateSpec.type,
-      kind: templateSpec.autofillKind,
-      labelRu: templateSpec.labelRu,
-      options: templateSpec.optionsRu,
-    });
   }
 
   if (!supportedFieldCount) {
     return { status: "skipped", reason: "noSupportedSpecFields", filledValueCount: 0 };
   }
 
-  if (aiRequests.length > 0) {
-    if (input.imageUrls.length) {
-      try {
-        const aiResult = await suggestProductSpecsFromImages({
-          imageUrls: input.imageUrls,
-          requestedSpecs: aiRequests.map((entry) => ({
-            kind: entry.kind,
-            labelRu: entry.labelRu,
-            options: entry.options,
-          })),
-          logger: input.logger,
-        });
-        for (const request of aiRequests) {
-          const suggestedValue = aiResult.suggestions[request.kind];
-          if (!suggestedValue) {
-            continue;
-          }
-          nextValues.set(
-            request.attributeKey,
-            toStoredProductSpecValue(request.type, suggestedValue),
-          );
-        }
-      } catch (error) {
-        aiErrorMessage = resolveSpecGenerationFailureReason(error);
-        input.logger.warn(
-          {
-            phase: "product-description-job-specs",
-            productId: input.product.id,
-            error: error instanceof Error ? { message: error.message, name: error.name } : error,
-          },
-          "product description job spec generation failed for item",
-        );
-      }
-    } else {
-      aiErrorMessage = "aiSpecNoUsableImages";
+  const contentResult = await generateProductContent({
+    product: {
+      id: input.product.id,
+      sku: input.product.sku,
+      name: input.product.name,
+      supplier: input.product.supplier,
+    },
+    category,
+    imageUrls: input.imageUrls,
+    locale: "ru",
+    mode: input.overwriteExisting ? "overwrite" : "missing-only",
+    generateDescription: false,
+    generateSpecs: true,
+    overwriteSpecs: input.overwriteExisting,
+    requestedSpecs: supportedTemplateSpecs.map((templateSpec) => ({
+      key: templateSpec.attributeKey,
+      labelRu: templateSpec.labelRu,
+      labelKg: templateSpec.labelKg,
+      kind: templateSpec.autofillKind as ProductSpecAutofillKind,
+      options: templateSpec.optionsRu,
+      existingValue: currentValues.get(templateSpec.attributeKey)?.[0] ?? null,
+    })),
+    integrationContext: {
+      source: "product-description-generation-job",
+    },
+    logger: input.logger,
+  });
+
+  for (const generatedSpec of contentResult.specs.values) {
+    const templateSpec = supportedTemplateSpecs.find(
+      (candidate) => candidate.attributeKey === generatedSpec.key,
+    );
+    if (!templateSpec) {
+      continue;
     }
+    nextValues.set(
+      templateSpec.attributeKey,
+      toStoredProductSpecValue(templateSpec.type, generatedSpec.value),
+    );
+  }
+
+  if (generatedTemplateMode && nextValues.size) {
+    templateSpecs = supportedTemplateSpecs.filter((templateSpec) =>
+      nextValues.has(templateSpec.attributeKey),
+    );
   }
 
   if (!nextValues.size) {
@@ -680,23 +538,84 @@ const generateAndPersistProductSpecs = async (input: {
         previousValues,
       };
     }
-    if (aiErrorMessage && aiErrorMessage !== "aiSpecNoUsableImages") {
+    if (
+      contentResult.specs.status === "failed" &&
+      contentResult.specs.reason !== "aiSpecNoUsableImages"
+    ) {
       return {
         status: "failed",
-        reason: aiErrorMessage,
+        reason: contentResult.specs.reason,
         filledValueCount: 0,
         previousValues,
       };
     }
     return {
       status: "skipped",
-      reason: aiErrorMessage === "aiSpecNoUsableImages" ? "aiSpecNoUsableImages" : "noResolvedSpecValues",
+      reason:
+        generatedTemplateMode && contentResult.specs.reason === "noResolvedSpecValues"
+          ? "missingSpecTemplate"
+          : contentResult.specs.reason === "aiSpecNoUsableImages"
+            ? "aiSpecNoUsableImages"
+            : "noResolvedSpecValues",
       filledValueCount: 0,
       previousValues,
     };
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (generatedTemplateMode) {
+      const existingTemplateCount = await tx.categoryAttributeTemplate.count({
+        where: {
+          organizationId: input.organizationId,
+          category,
+        },
+      });
+
+      for (const [index, templateSpec] of templateSpecs.entries()) {
+        await tx.attributeDefinition.upsert({
+          where: {
+            organizationId_key: {
+              organizationId: input.organizationId,
+              key: templateSpec.attributeKey,
+            },
+          },
+          update: {
+            isActive: true,
+            labelRu: templateSpec.labelRu,
+            labelKg: templateSpec.labelKg ?? templateSpec.labelRu,
+            type: templateSpec.type,
+          },
+          create: {
+            organizationId: input.organizationId,
+            key: templateSpec.attributeKey,
+            labelRu: templateSpec.labelRu,
+            labelKg: templateSpec.labelKg ?? templateSpec.labelRu,
+            type: templateSpec.type,
+            required: false,
+            isActive: true,
+          },
+        });
+        await tx.categoryAttributeTemplate.upsert({
+          where: {
+            organizationId_category_attributeKey: {
+              organizationId: input.organizationId,
+              category,
+              attributeKey: templateSpec.attributeKey,
+            },
+          },
+          update: {
+            order: existingTemplateCount + index,
+          },
+          create: {
+            organizationId: input.organizationId,
+            category,
+            attributeKey: templateSpec.attributeKey,
+            order: existingTemplateCount + index,
+          },
+        });
+      }
+    }
+
     let targetVariant = input.product.variants[0];
     if (!targetVariant) {
       targetVariant = await tx.productVariant.create({
@@ -1094,44 +1013,54 @@ const processJobItem = async (input: {
   let descriptionSkipReason: string | null = null;
   let descriptionFailureReason: string | null = null;
 
-  if (previousDescription && !input.job.overwriteExisting) {
-    descriptionSkipReason = "descriptionAlreadyExists";
-  } else if (!imageUrls.length) {
-    descriptionSkipReason = "aiDescriptionImageRequired";
-  } else {
-    try {
-      const result = await generateProductDescriptionFromImages({
-        name: product.name,
-        category: product.category,
-        isBundle: product.isBundle,
-        locale: input.job.locale,
-        imageUrls,
-        logger: input.logger,
-      });
+  const descriptionResult = await generateProductContent({
+    product: {
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      description: product.description,
+      isBundle: product.isBundle,
+      supplier: product.supplier,
+    },
+    category: product.category,
+    imageUrls,
+    locale: input.job.locale,
+    mode: input.job.overwriteExisting ? "overwrite" : "missing-only",
+    generateDescription: true,
+    generateSpecs: false,
+    overwriteDescription: input.job.overwriteExisting,
+    integrationContext: {
+      source: "product-description-generation-job",
+    },
+    logger: input.logger,
+  }).then(
+    (result) => result.description,
+    (error) => ({
+      status: "failed" as const,
+      value: null,
+      reason: toErrorMessage(error),
+    }),
+  );
 
-      const nextDescription = result.description.trim();
-      if (!nextDescription || nextDescription === previousDescription) {
-        descriptionSkipReason = "aiDescriptionGenerationSkipped";
-      } else {
-        generatedDescription = nextDescription;
-      }
-    } catch (error) {
-      const errorMessage = toErrorMessage(error);
-      if (isSkipErrorMessage(errorMessage)) {
-        descriptionSkipReason = errorMessage;
-      } else {
-        descriptionFailureReason = errorMessage;
-      }
-      input.logger.warn(
-        {
-          jobId: input.job.id,
-          productId: product.id,
-          itemId: input.item.id,
-          error: error instanceof Error ? { message: error.message, name: error.name } : error,
-        },
-        "product description generation failed for item",
-      );
+  if (descriptionResult.status === "generated" || descriptionResult.status === "overwritten") {
+    generatedDescription = descriptionResult.value;
+  } else if (descriptionResult.status === "failed") {
+    if (isSkipErrorMessage(descriptionResult.reason)) {
+      descriptionSkipReason = descriptionResult.reason;
+    } else {
+      descriptionFailureReason = descriptionResult.reason;
     }
+    input.logger.warn(
+      {
+        jobId: input.job.id,
+        productId: product.id,
+        itemId: input.item.id,
+        error: descriptionResult.reason,
+      },
+      "product description generation failed for item",
+    );
+  } else {
+    descriptionSkipReason = descriptionResult.reason;
   }
 
   const specResult = await generateAndPersistProductSpecs({

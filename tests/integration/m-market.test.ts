@@ -462,6 +462,37 @@ describeDb("m-market integration", () => {
     expect(second.remainingSeconds).toBeGreaterThan(0);
   });
 
+  it("marks stale running export jobs failed before accepting a new export request", async () => {
+    const { org, store, adminUser } = await prepareReadyMMarketData();
+    const staleJob = await prisma.mMarketExportJob.create({
+      data: {
+        orgId: org.id,
+        storeId: store.id,
+        environment: MMarketEnvironment.DEV,
+        status: MMarketExportJobStatus.RUNNING,
+        requestedById: adminUser.id,
+        startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        requestIdempotencyKey: "stale-mmarket-job",
+        payloadStatsJson: { productCount: 1 },
+      },
+    });
+
+    const requested = await requestMMarketExport({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "export-after-stale",
+    });
+    const refreshedStaleJob = await prisma.mMarketExportJob.findUniqueOrThrow({
+      where: { id: staleJob.id },
+    });
+
+    expect(refreshedStaleJob.status).toBe(MMarketExportJobStatus.FAILED);
+    expect(JSON.stringify(refreshedStaleJob.errorReportJson)).toContain(
+      "mMarketExportJobTimedOut",
+    );
+    expect(requested.job.status).toBe(MMarketExportJobStatus.QUEUED);
+  });
+
   it("queues export for ready products even when other included products fail preflight", async () => {
     const { org, adminUser, product, store, supplier, baseUnit } = await prepareReadyMMarketData();
     const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;

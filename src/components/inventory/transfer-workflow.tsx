@@ -573,7 +573,10 @@ export const InventoryTransfersPage = ({
       await trpcUtils.inventory.productMovementDocument.invalidate();
       await trpcUtils.inventory.editableProductMovementDocument.invalidate();
       toast({ variant: "success", description: t("transferEditSuccess") });
-      router.push(`/inventory/movements/${encodeURIComponent(editDocumentKey ?? "")}`);
+      const params = new URLSearchParams({ from: "movements", returnTo: editBackHref });
+      router.push(
+        `/inventory/movements/${encodeURIComponent(editDocumentKey ?? "")}?${params.toString()}`,
+      );
     },
     onError: (error) => {
       toast({

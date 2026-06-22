@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
@@ -31,11 +31,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const ProductMovementDocumentPage = () => {
   const params = useParams<{ id?: string }>();
+  const searchParams = useSearchParams();
   const documentKey = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
   const t = useTranslations("inventory.movementJournal");
   const tInventory = useTranslations("inventory");
@@ -64,11 +66,19 @@ const ProductMovementDocumentPage = () => {
   };
   const formatMoney = (value?: number | null) =>
     typeof value === "number" ? formatCurrencyKGS(value, locale) : tCommon("notAvailable");
-  const currentDetailUrl = document
+  const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"));
+  const detailReturnParams = new URLSearchParams({ from: "movements", returnTo });
+  const bareCurrentDetailUrl = document
     ? `/inventory/movements/${encodeURIComponent(document.id)}`
     : "";
+  const currentDetailUrl = bareCurrentDetailUrl
+    ? `${bareCurrentDetailUrl}?${detailReturnParams.toString()}`
+    : "";
   const printUrl = document
-    ? `/inventory/movements/${encodeURIComponent(document.id)}/print?auto=1`
+    ? `/inventory/movements/${encodeURIComponent(document.id)}/print?${new URLSearchParams({
+        auto: "1",
+        returnTo,
+      }).toString()}`
     : "";
 
   return (
@@ -83,9 +93,9 @@ const ProductMovementDocumentPage = () => {
         action={
           <>
             <Button asChild variant="secondary">
-              <Link href="/inventory/movements">
+              <Link href={returnTo}>
                 <BackIcon className="h-4 w-4" aria-hidden />
-                {t("backToJournal")}
+                {t("backToMovements")}
               </Link>
             </Button>
             {document ? (
@@ -104,7 +114,7 @@ const ProductMovementDocumentPage = () => {
                       {t("viewDetails")}
                     </Link>
                   </DropdownMenuItem>
-                  {document.detailUrl && document.detailUrl !== currentDetailUrl ? (
+                  {document.detailUrl && document.detailUrl !== bareCurrentDetailUrl ? (
                     <DropdownMenuItem asChild>
                       <Link href={document.detailUrl}>
                         <ViewIcon className="h-4 w-4" aria-hidden />

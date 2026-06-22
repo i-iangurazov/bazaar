@@ -7,6 +7,7 @@ import {
   type MovementPrintDocumentLabels,
 } from "@/components/inventory/movement-print-document";
 import { MovementPrintToolbar } from "@/components/inventory/movement-print-toolbar";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
 import { getProductMovementDocument } from "@/server/services/productMovements";
@@ -105,7 +106,11 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     statusLabel: document.status ? t(`status.${document.status}`) : tCommon("notAvailable"),
     title,
   };
-  const detailHref = `/inventory/movements/${encodeURIComponent(document.id)}`;
+  const returnTo = resolveSafeReturnTo(getSearchParam(searchParams, "returnTo"));
+  const detailHref = `/inventory/movements/${encodeURIComponent(document.id)}?${new URLSearchParams({
+    from: "movements",
+    returnTo,
+  }).toString()}`;
 
   return (
     <main className="movement-print-page min-h-screen bg-slate-100 py-1 print:bg-white">

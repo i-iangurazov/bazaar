@@ -43,6 +43,16 @@ const BAKAI_STORE_MIN_NAME_LEN = 7;
 const BAKAI_STORE_MAX_NAME_LEN = 250;
 const BAKAI_STORE_MIN_DESCRIPTION_LEN = 50;
 const BAKAI_STORE_MIN_IMAGES = 3;
+
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const BAKAI_STORE_EXPORT_JOB_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.BAKAI_STORE_EXPORT_JOB_TIMEOUT_MS,
+  60 * 60 * 1000,
+);
 const BAKAI_IMAGE_EXTENSION_PATTERN = /\.(jpg|png|webp)(?:\?.*)?$/i;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
@@ -125,6 +135,13 @@ export type BakaiStorePreflightResult = {
     issues: BakaiStorePreflightIssueCode[];
   }>;
   readyProductIds: string[];
+  validationResults: Array<{
+    productId: string;
+    status: "valid" | "warning" | "invalid";
+    errors: BakaiStorePreflightIssueCode[];
+    warnings: BakaiStorePreflightWarningCode[];
+    canExport: boolean;
+  }>;
   actionability: {
     canRunAll: boolean;
     canRunReadyOnly: boolean;
@@ -1466,6 +1483,7 @@ export const buildBakaiStoreApiPayload = async (input: {
   const payloadByProductId = new Map<string, BakaiStoreApiProductPayload>();
   const readyProductIds: string[] = [];
   const failedProducts: BakaiStorePreflightResult["failedProducts"] = [];
+  const validationResults: BakaiStorePreflightResult["validationResults"] = [];
   const seenSkus = new Set<string>();
 
   for (const selection of selectedProducts) {
@@ -1501,10 +1519,24 @@ export const buildBakaiStoreApiPayload = async (input: {
         name: selection.product.name ?? "",
         issues,
       });
+      validationResults.push({
+        productId: selection.productId,
+        status: "invalid",
+        errors: issues,
+        warnings: [],
+        canExport: false,
+      });
       continue;
     }
 
     readyProductIds.push(selection.productId);
+    validationResults.push({
+      productId: selection.productId,
+      status: "valid",
+      errors: [],
+      warnings: [],
+      canExport: true,
+    });
     payloadProducts.push(mapped.payload);
     payloadByProductId.set(selection.productId, mapped.payload);
   }
@@ -1527,10 +1559,10 @@ export const buildBakaiStoreApiPayload = async (input: {
     endpointConfigured;
   const canRunReadyOnly =
     readyProductIds.length > 0 &&
-    readyProductIds.length === selectedProducts.length &&
     Boolean(integration?.apiTokenEncrypted) &&
     missingStoreMappings.length === 0 &&
-    endpointConfigured;
+    endpointConfigured &&
+    payloadProducts.length <= BAKAI_STORE_MAX_PRODUCTS_PER_REQUEST;
 
   const blockerCounts = countByCode(failedProducts.map((row) => ({ codes: row.issues })));
   if (selectedProducts.length === 0) {
@@ -1546,7 +1578,7 @@ export const buildBakaiStoreApiPayload = async (input: {
   const preflight: BakaiStorePreflightResult = {
     mode: "API",
     generatedAt: new Date(),
-    canExport: canRunAll,
+    canExport: syncMode === "READY_ONLY" ? canRunReadyOnly : canRunAll,
     store: {
       storeId: storeContext.storeId,
       storeName: storeContext.storeName,
@@ -1579,6 +1611,7 @@ export const buildBakaiStoreApiPayload = async (input: {
     },
     failedProducts,
     readyProductIds,
+    validationResults,
     actionability: {
       canRunAll,
       canRunReadyOnly,
@@ -1747,6 +1780,7 @@ const buildBakaiStoreExportPlan = async (input: {
   const readyRowsInput: Parameters<typeof buildBakaiStoreExportRows>[0]["products"] = [];
   const readyProductIds: string[] = [];
   const failedProducts: BakaiStorePreflightResult["failedProducts"] = [];
+  const validationResults: BakaiStorePreflightResult["validationResults"] = [];
 
   const globalTemplateError = !integration?.templateStoragePath || !storedTemplateSchema;
 
@@ -1841,6 +1875,13 @@ const buildBakaiStoreExportPlan = async (input: {
         name,
         issues,
       });
+      validationResults.push({
+        productId: selection.productId,
+        status: "invalid",
+        errors: issues,
+        warnings: [],
+        canExport: false,
+      });
       continue;
     }
 
@@ -1856,6 +1897,13 @@ const buildBakaiStoreExportPlan = async (input: {
       stockByColumn,
     });
     readyProductIds.push(selection.productId);
+    validationResults.push({
+      productId: selection.productId,
+      status: "valid",
+      errors: [],
+      warnings: [],
+      canExport: true,
+    });
   }
 
   const exportRows = buildBakaiStoreExportRows({
@@ -1904,6 +1952,7 @@ const buildBakaiStoreExportPlan = async (input: {
     },
     failedProducts,
     readyProductIds,
+    validationResults,
     actionability: {
       canRunAll: selectedProducts.length > 0 && failedProducts.length === 0 && !globalTemplateError,
       canRunReadyOnly: readyProductIds.length > 0,
@@ -3112,6 +3161,78 @@ export const getBakaiStoreJob = async (organizationId: string, jobId: string) =>
 
 export const getBakaiStoreExportJob = getBakaiStoreJob;
 
+const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => {
+  const timeoutBefore = new Date(Date.now() - BAKAI_STORE_EXPORT_JOB_TIMEOUT_MS);
+  const jobs = await prisma.bakaiStoreExportJob.findMany({
+    where: {
+      ...(organizationId ? { orgId: organizationId } : {}),
+      status: BakaiStoreExportJobStatus.RUNNING,
+      startedAt: { lt: timeoutBefore },
+      finishedAt: null,
+    },
+    select: {
+      id: true,
+      orgId: true,
+      storeId: true,
+      jobType: true,
+      requestIdempotencyKey: true,
+      startedAt: true,
+      attemptedCount: true,
+      succeededCount: true,
+      failedCount: true,
+      skippedCount: true,
+      payloadStatsJson: true,
+      errorReportJson: true,
+    },
+  });
+
+  if (!jobs.length) {
+    return [];
+  }
+
+  const finishedAt = new Date();
+  for (const job of jobs) {
+    const attemptedCount = job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
+    const succeededCount = job.succeededCount ?? 0;
+    const skippedCount = job.skippedCount ?? 0;
+    await prisma.bakaiStoreExportJob.update({
+      where: { id: job.id },
+      data: {
+        status: BakaiStoreExportJobStatus.FAILED,
+        finishedAt,
+        attemptedCount,
+        succeededCount,
+        skippedCount,
+        failedCount: Math.max(0, attemptedCount - succeededCount - skippedCount),
+        errorReportJson: toJson({
+          ...(asRecord(job.errorReportJson) ?? {}),
+          reason: "bakaiStoreExportJobTimedOut",
+          timeout: true,
+          timeoutMs: BAKAI_STORE_EXPORT_JOB_TIMEOUT_MS,
+          jobId: job.id,
+          jobType: job.jobType,
+          storeId: job.storeId,
+          startedAt: job.startedAt?.toISOString() ?? null,
+          finishedAt: finishedAt.toISOString(),
+          requestIdempotencyKey: job.requestIdempotencyKey,
+          payloadStats: asRecord(job.payloadStatsJson),
+        }),
+      },
+    });
+    await prisma.bakaiStoreIntegration.updateMany({
+      where: { orgId: job.orgId },
+      data: {
+        status: BakaiStoreIntegrationStatus.ERROR,
+        lastSyncAt: finishedAt,
+        lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
+        lastErrorSummary: "bakaiStoreExportJobTimedOut",
+      },
+    });
+  }
+
+  return jobs.map((job) => job.id);
+};
+
 export const requestBakaiStoreExport = async (input: {
   organizationId: string;
   storeId?: string | null;
@@ -3119,6 +3240,8 @@ export const requestBakaiStoreExport = async (input: {
   requestId: string;
   mode?: BakaiStoreExportMode;
 }) => {
+  await timeoutAbandonedBakaiStoreExportJobs(input.organizationId);
+
   const integration = await prisma.bakaiStoreIntegration.findUnique({
     where: { orgId: input.organizationId },
     select: {
@@ -3170,6 +3293,10 @@ export const requestBakaiStoreExport = async (input: {
         ...plan.payloadStats,
         jobType: BakaiStoreJobType.TEMPLATE_EXPORT,
       }),
+      attemptedCount: plan.exportRows.length,
+      succeededCount: 0,
+      failedCount: 0,
+      skippedCount: plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0,
     },
   });
 
@@ -3211,6 +3338,8 @@ export const requestBakaiStoreApiSync = async (input: {
   requestId: string;
   mode?: BakaiStoreExportMode;
 }) => {
+  await timeoutAbandonedBakaiStoreExportJobs(input.organizationId);
+
   const integration = await prisma.bakaiStoreIntegration.findUnique({
     where: { orgId: input.organizationId },
     select: {
@@ -3247,7 +3376,7 @@ export const requestBakaiStoreApiSync = async (input: {
   if (input.mode === "READY_ONLY" && !plan.preflight.actionability.canRunReadyOnly) {
     throw new AppError("bakaiStoreReadyOnlyUnsafe", "CONFLICT", 409);
   }
-  if (!plan.preflight.actionability.canRunAll) {
+  if (plan.mode !== "READY_ONLY" && !plan.preflight.actionability.canRunAll) {
     throw new AppError("bakaiStoreApiPreflightFailed", "CONFLICT", 409);
   }
 
@@ -3265,7 +3394,7 @@ export const requestBakaiStoreApiSync = async (input: {
       attemptedCount: plan.payload.products.length,
       succeededCount: 0,
       failedCount: 0,
-      skippedCount: 0,
+      skippedCount: plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0,
     },
   });
 
@@ -3304,6 +3433,8 @@ export const requestBakaiStoreApiSync = async (input: {
 const runBakaiStoreExportJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
+  await timeoutAbandonedBakaiStoreExportJobs();
+
   const requestPayload =
     payload && typeof payload === "object" && payload !== null
       ? (payload as Record<string, unknown>)
@@ -3372,6 +3503,7 @@ const runBakaiStoreExportJob = async (
     });
 
     const finishedAt = new Date();
+    const skippedCount = plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0;
     const finished = await prisma.bakaiStoreExportJob.update({
       where: { id: job.id },
       data: {
@@ -3385,7 +3517,32 @@ const runBakaiStoreExportJob = async (
           ...plan.payloadStats,
           workbookBytes: savedFile.fileSize,
         }),
-        errorReportJson: Prisma.DbNull,
+        attemptedCount: plan.exportRows.length,
+        succeededCount: plan.exportRows.length,
+        failedCount: 0,
+        skippedCount,
+        errorReportJson:
+          skippedCount > 0
+            ? toJson({
+                ...plan.errorReport,
+                productResults: [
+                  ...plan.preflight.failedProducts.map((product) => ({
+                    productId: product.productId,
+                    sku: product.sku,
+                    name: product.name,
+                    status: "skipped",
+                    reason: product.issues.join(", "),
+                  })),
+                  ...plan.preflight.readyProductIds.map((productId) => ({
+                    productId,
+                    sku: null,
+                    name: null,
+                    status: "exported",
+                    reason: null,
+                  })),
+                ],
+              })
+            : Prisma.DbNull,
       },
     });
 
@@ -3489,6 +3646,8 @@ const runBakaiStoreExportJob = async (
 const runBakaiStoreApiSyncJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
+  await timeoutAbandonedBakaiStoreExportJobs();
+
   const requestPayload =
     payload && typeof payload === "object" && payload !== null
       ? (payload as Record<string, unknown>)
@@ -3555,7 +3714,11 @@ const runBakaiStoreApiSyncJob = async (
       mode: normalizeBakaiExportMode(asRecord(job.payloadStatsJson)?.exportMode),
     });
 
-    if (!plan.preflight.actionability.canRunAll) {
+    if (plan.mode === "READY_ONLY") {
+      if (!plan.preflight.actionability.canRunReadyOnly) {
+        throw new AppError("bakaiStoreReadyOnlyUnsafe", "CONFLICT", 409);
+      }
+    } else if (!plan.preflight.actionability.canRunAll) {
       throw new AppError("bakaiStoreApiPreflightFailed", "CONFLICT", 409);
     }
 
@@ -3696,6 +3859,7 @@ const runBakaiStoreApiSyncJob = async (
 
     const failedCount = failedProducts.length;
     const succeededCount = succeededProductIds.size;
+    const skippedCount = plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0;
     const finished = await prisma.bakaiStoreExportJob.update({
       where: { id: job.id },
       data: {
@@ -3705,10 +3869,35 @@ const runBakaiStoreApiSyncJob = async (
         attemptedCount: plan.payload.products.length,
         succeededCount,
         failedCount,
-        skippedCount: 0,
+        skippedCount,
         responseJson: toJson({
           endpoint: process.env.BAKAI_STORE_IMPORT_ENDPOINT?.trim() ?? null,
           batches: batchResults,
+          productResults: [
+            ...(plan.mode === "READY_ONLY"
+              ? plan.preflight.failedProducts.map((product) => ({
+                  productId: product.productId,
+                  sku: product.sku,
+                  name: product.name,
+                  status: "skipped",
+                  reason: product.issues.join(", "),
+                }))
+              : []),
+            ...plan.payload.products.map((product) => {
+              const productId = productIdBySku.get(normalizeSku(product.sku)) ?? null;
+              const failedProduct = failedProducts.find(
+                (failedProductRow) =>
+                  normalizeSku(failedProductRow.sku) === normalizeSku(product.sku),
+              );
+              return {
+                productId,
+                sku: product.sku,
+                name: null,
+                status: failedProduct ? "failed" : "exported",
+                reason: failedProduct ? failedProduct.reason : null,
+              };
+            }),
+          ],
         }),
         errorReportJson:
           failedCount > 0

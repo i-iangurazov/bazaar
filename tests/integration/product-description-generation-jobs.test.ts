@@ -419,4 +419,55 @@ describeDb("product description generation jobs", () => {
     expect(job.items[0]?.errorMessage).toBe("descriptionAndSpecsAlreadyExist");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("generates useful characteristics from metadata when a category has no template yet", async () => {
+    const { org, product, adminUser } = await seedBase();
+    const category = "Аксессуары";
+    const variant = await seedProductForAiJob({
+      organizationId: org.id,
+      productId: product.id,
+      category,
+      description: "Описание уже есть",
+      attributes: {},
+    });
+    const fetchMock = vi.fn();
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await startProductDescriptionGenerationJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-description-job-metadata-specs",
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      productIds: [product.id],
+      locale: "ru",
+      overwriteExisting: false,
+      runImmediately: false,
+    });
+    await runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: created.id });
+
+    const [updatedVariant, templates, job] = await Promise.all([
+      prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } }),
+      prisma.categoryAttributeTemplate.findMany({
+        where: { organizationId: org.id, category },
+        include: { definition: true },
+        orderBy: { order: "asc" },
+      }),
+      getProductDescriptionGenerationJob(org.id, created.id),
+    ]);
+
+    expect(updatedVariant.attributes).toMatchObject({
+      ai_type: "Чехол",
+      ai_purpose: "Защита смартфона",
+      ai_features: "Вырез под камеру",
+      ai_design: "Игровой принт",
+    });
+    expect(templates.map((template) => template.definition?.labelRu)).toEqual(
+      expect.arrayContaining(["Тип", "Назначение", "Особенности", "Дизайн"]),
+    );
+    expect(templates.map((template) => template.definition?.labelRu)).not.toContain("Описание");
+    expect(job.successCount).toBe(1);
+    expect(job.items[0]?.status).toBe(ProductDescriptionGenerationItemStatus.SUCCESS);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

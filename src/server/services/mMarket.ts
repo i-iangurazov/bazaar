@@ -17,6 +17,10 @@ import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
 import { bulkGenerateProductDescriptions, bulkUpdateProductCategory } from "@/server/services/products";
+import {
+  inferProductSpecValueFromMetadata,
+  matchProductSpecOption,
+} from "@/server/services/productContentGeneration";
 import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 import { setCategoryTemplate } from "@/server/services/categoryTemplates";
 
@@ -35,6 +39,16 @@ const MMARKET_EXPORT_COOLDOWN_MS = 15 * 60 * 1000;
 const MMARKET_EXPORT_JOB_NAME = "mmarket-export";
 const MMARKET_REQUEST_TIMEOUT_MS = 90_000;
 const MMARKET_SPEC_REQUEST_TIMEOUT_MS = 5_000;
+
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const MMARKET_EXPORT_JOB_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.MMARKET_EXPORT_JOB_TIMEOUT_MS,
+  60 * 60 * 1000,
+);
 
 const MMARKET_MIN_NAME_LEN = 7;
 const MMARKET_MAX_NAME_LEN = 250;
@@ -131,6 +145,14 @@ export type MMarketPreflightResult = {
     name: string;
     issues: MMarketPreflightIssueCode[];
     warnings: MMarketPreflightWarningCode[];
+  }>;
+  readyProductIds: string[];
+  validationResults: Array<{
+    productId: string;
+    status: "valid" | "warning" | "invalid";
+    errors: MMarketPreflightIssueCode[];
+    warnings: MMarketPreflightWarningCode[];
+    canExport: boolean;
   }>;
   cooldown: {
     active: boolean;
@@ -1284,6 +1306,7 @@ const buildMMarketExportPlan = async (input: {
   const readyProducts: MMarketPayloadProduct[] = [];
   const exportedProductIds: string[] = [];
   const failedProducts: MMarketPreflightResult["failedProducts"] = [];
+  const validationResults: MMarketPreflightResult["validationResults"] = [];
 
   for (const product of products) {
     const sku = product.sku?.trim() ?? "";
@@ -1385,9 +1408,23 @@ const buildMMarketExportPlan = async (input: {
         issues,
         warnings,
       });
+      validationResults.push({
+        productId: product.id,
+        status: "invalid",
+        errors: issues,
+        warnings,
+        canExport: false,
+      });
       continue;
     }
 
+    validationResults.push({
+      productId: product.id,
+      status: warnings.length ? "warning" : "valid",
+      errors: [],
+      warnings,
+      canExport: true,
+    });
     readyProducts.push({
       sku,
       name,
@@ -1445,6 +1482,8 @@ const buildMMarketExportPlan = async (input: {
       global: remoteSpecCatalog.globalWarnings,
     },
     failedProducts,
+    readyProductIds: exportedProductIds,
+    validationResults,
     cooldown: {
       active: cooldownSeconds > 0,
       remainingSeconds: cooldownSeconds,
@@ -2737,6 +2776,33 @@ export const bulkAutofillMMarketSpecs = async (input: {
           }
         }
       }
+
+      for (const request of aiRequests) {
+        if (nextValues.has(request.attributeKey)) {
+          continue;
+        }
+        const inferredValue = inferProductSpecValueFromMetadata({
+          kind: request.kind,
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            supplier: product.supplier,
+          },
+          category: product.category,
+          options: request.options,
+        });
+        if (!inferredValue) {
+          continue;
+        }
+        nextValues.set(
+          request.attributeKey,
+          toStoredAttributeValue(
+            request.type,
+            matchProductSpecOption(inferredValue, request.options),
+          ),
+        );
+      }
     }
 
     if (!nextValues.size) {
@@ -2927,6 +2993,65 @@ export const getMMarketExportJob = async (organizationId: string, jobId: string)
   });
 };
 
+const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
+  const timeoutBefore = new Date(Date.now() - MMARKET_EXPORT_JOB_TIMEOUT_MS);
+  const jobs = await prisma.mMarketExportJob.findMany({
+    where: {
+      ...(organizationId ? { orgId: organizationId } : {}),
+      status: MMarketExportJobStatus.RUNNING,
+      startedAt: { lt: timeoutBefore },
+      finishedAt: null,
+    },
+    select: {
+      id: true,
+      orgId: true,
+      storeId: true,
+      requestIdempotencyKey: true,
+      startedAt: true,
+      payloadStatsJson: true,
+      errorReportJson: true,
+    },
+  });
+
+  if (!jobs.length) {
+    return [];
+  }
+
+  const finishedAt = new Date();
+  for (const job of jobs) {
+    await prisma.mMarketExportJob.update({
+      where: { id: job.id },
+      data: {
+        status: MMarketExportJobStatus.FAILED,
+        finishedAt,
+        errorReportJson: toJson({
+          ...(asRecord(job.errorReportJson) ?? {}),
+          reason: "mMarketExportJobTimedOut",
+          timeout: true,
+          timeoutMs: MMARKET_EXPORT_JOB_TIMEOUT_MS,
+          jobId: job.id,
+          storeId: job.storeId,
+          startedAt: job.startedAt?.toISOString() ?? null,
+          finishedAt: finishedAt.toISOString(),
+          requestIdempotencyKey: job.requestIdempotencyKey,
+          payloadStats: asRecord(job.payloadStatsJson),
+        }),
+      },
+    });
+    await prisma.mMarketIntegration.updateMany({
+      where: { orgId: job.orgId },
+      data: {
+        status: MMarketIntegrationStatus.ERROR,
+        lastSyncAt: finishedAt,
+        lastSyncStatus: MMarketLastSyncStatus.FAILED,
+        lastErrorSummary: "mMarketExportJobTimedOut",
+      },
+    });
+  }
+
+  return jobs.map((job) => job.id);
+};
+
 export const requestMMarketExport = async (input: {
   organizationId: string;
   storeId?: string | null;
@@ -2934,6 +3059,8 @@ export const requestMMarketExport = async (input: {
   requestId: string;
   mode?: MMarketExportMode;
 }) => {
+  await timeoutAbandonedMMarketExportJobs(input.organizationId);
+
   const integration = await prisma.mMarketIntegration.findUnique({
     where: { orgId: input.organizationId },
     select: {
@@ -3046,6 +3173,8 @@ export const requestMMarketExport = async (input: {
 const runMMarketExportJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
+  await timeoutAbandonedMMarketExportJobs();
+
   const requestPayload =
     payload && typeof payload === "object" && payload !== null
       ? (payload as Record<string, unknown>)
@@ -3118,6 +3247,22 @@ const runMMarketExportJob = async (
     });
 
     const exportedAt = new Date();
+    const productResults = [
+      ...plan.preflight.failedProducts.map((product) => ({
+        productId: product.productId,
+        sku: product.sku,
+        name: product.name,
+        status: "skipped",
+        reason: product.issues.join(", "),
+      })),
+      ...plan.exportedProductIds.map((productId) => ({
+        productId,
+        sku: null,
+        name: null,
+        status: "exported",
+        reason: null,
+      })),
+    ];
     const finished = await prisma.mMarketExportJob.update({
       where: { id: job.id },
       data: {
@@ -3127,10 +3272,17 @@ const runMMarketExportJob = async (
           ...plan.payloadStats,
           httpStatus: remoteResult.status,
         }),
-        errorReportJson: Prisma.DbNull,
+        errorReportJson:
+          plan.mode === "READY_ONLY" && plan.preflight.failedProducts.length > 0
+            ? toJson({
+                ...plan.errorReport,
+                productResults,
+              })
+            : Prisma.DbNull,
         responseJson: toJson({
           httpStatus: remoteResult.status,
           body: remoteResult.body,
+          productResults,
         }),
       },
     });
