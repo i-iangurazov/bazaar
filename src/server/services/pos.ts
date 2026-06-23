@@ -2843,6 +2843,11 @@ export const getPosSale = async (input: {
                 orderBy: { position: "asc" },
                 take: 1,
               },
+              barcodes: {
+                select: { value: true },
+                orderBy: { createdAt: "asc" },
+                take: 1,
+              },
               complianceFlags: {
                 select: {
                   requiresMarking: true,
@@ -2893,11 +2898,12 @@ export const getPosSale = async (input: {
     discountKgs: toMoney(sale.discountKgs),
     totalKgs: toMoney(sale.totalKgs),
     lines: sale.lines.map((line) => {
-      const { images, photoUrl, ...product } = line.product;
+      const { barcodes, images, photoUrl, ...product } = line.product;
       return {
         ...line,
         product: {
           ...product,
+          primaryBarcode: barcodes[0]?.value ?? null,
           primaryImage:
             sanitizeListImageUrl(line.variant?.image?.url) ??
             sanitizeListImageUrl(images[0]?.url) ??

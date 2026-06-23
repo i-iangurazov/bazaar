@@ -2711,6 +2711,7 @@
       "toDate": "Аяктоо датасы",
       "export": "Экспорт",
       "receiptCount": "Чектер: {count}",
+      "previewShort": "Көрүү",
       "printShort": "Басуу",
       "downloadShort": "PDF",
       "shareShort": "Бөлүшүү",
@@ -2734,6 +2735,36 @@
         "status": "Абалы",
         "fiscal": "Фискалдаштыруу",
         "actions": "Аракеттер"
+      }
+    },
+    "receiptPreview": {
+      "title": "Чекти көрүү",
+      "titleWithNumber": "Чек {number}",
+      "loadFailed": "Чекти жүктөө мүмкүн болгон жок.",
+      "notFound": "Чек табылган жок.",
+      "store": "Дүкөн",
+      "register": "Касса",
+      "shift": "Смена #{id}",
+      "cashier": "Кассир",
+      "unknownCashier": "Кассир көрсөтүлгөн эмес",
+      "customer": "Кардар",
+      "subtotal": "Аралык жыйынтык",
+      "discount": "Арзандатуу",
+      "returns": "Кайтаруулар",
+      "total": "Жалпы",
+      "payments": "Төлөмдөр",
+      "paymentTotal": "Төлөмдөр жалпы: {total}",
+      "products": "Товарлар",
+      "lineCount": "Саптар: {count}",
+      "returnStatus": "Чек боюнча кайтаруулар",
+      "download": "PDF жүктөө",
+      "print": "Басуу",
+      "columns": {
+        "product": "Товар",
+        "sku": "SKU / штрихкод",
+        "quantity": "Саны",
+        "price": "Баасы",
+        "total": "Сумма"
       }
     },
     "receiptPdf": {
@@ -5516,8 +5547,8 @@
     }
   },
   "analytics": {
-    "title": "Аналитика",
-    "subtitle": "Сатуу жана запастар боюнча негизги тренддер.",
+    "title": "Сатуу аналитикасы",
+    "subtitle": "Чыныгы аяктаган POS сатуулар боюнча сатуу, сатылган товарлар жана чектер.",
     "backToReports": "Отчётторго кайтуу",
     "allStores": "Бардык дүкөндөр",
     "baseCurrencyNotice": "Бардык дүкөндөр боюнча жыйынтыктар базалык эсептик валютада (KGS) көрсөтүлөт. Бир дүкөндү тандасаңыз, суммалар ошол дүкөндүн валютасында чыгат.",
@@ -5543,7 +5574,108 @@
     "emptySales": "Бул мөөнөттө сатуу маалыматтары жок.",
     "emptyTopProducts": "Буюмдар боюнча маалымат жок.",
     "emptyLowStock": "Аз калган окуялар жок.",
-    "emptyInventory": "Запастар боюнча маалымат жок."
+    "emptyInventory": "Запастар боюнча маалымат жок.",
+    "filters": {
+      "title": "Мөөнөт жана фильтрлер",
+      "store": "Дүкөн",
+      "register": "Касса",
+      "allRegisters": "Бардык кассалар",
+      "cashier": "Кассир",
+      "allCashiers": "Бардык кассирлер",
+      "category": "Категория",
+      "allCategories": "Бардык категориялар",
+      "dateFrom": "Кайсы датадан",
+      "dateTo": "Кайсы датага чейин",
+      "presets": "Тез мөөнөт",
+      "productSearch": "Товар издөө",
+      "productSearchPlaceholder": "Аталышы, SKU же штрихкод"
+    },
+    "presets": {
+      "today": "Бүгүн",
+      "yesterday": "Кечээ",
+      "last7": "Акыркы 7 күн",
+      "last30": "Акыркы 30 күн",
+      "thisMonth": "Бул ай",
+      "lastMonth": "Өткөн ай"
+    },
+    "actions": {
+      "exportProducts": "Товарларды экспорттоо",
+      "openProduct": "Товар",
+      "showReceipts": "Чектер"
+    },
+    "kpis": {
+      "netSales": "Таза сатуу",
+      "grossSales": "Жалпы сатуу",
+      "returns": "Кайтаруулар",
+      "receipts": "Чектер",
+      "averageReceipt": "Орточо чек",
+      "nonCash": "Нак эмес"
+    },
+    "chart": {
+      "title": "Мөөнөт ичиндеги сатуу",
+      "subtitle": "Сатылган товарларды жана чектерди көрүү үчүн күндү басыңыз.",
+      "netSales": "Таза сатуу",
+      "grossSales": "Жалпы сатуу",
+      "returns": "Кайтаруулар",
+      "receipts": "Чектер",
+      "averageReceipt": "Орточо чек"
+    },
+    "products": {
+      "title": "Сатылган товарлар",
+      "subtitle": "Кайтаруулар эске алынган аяктаган чектердин жыйындысы.",
+      "count": "Товарлар: {count}",
+      "returned": "кайтарылды",
+      "returns": "Кайтаруулар",
+      "page": "{page} / {pages} бет",
+      "columns": {
+        "product": "Товар",
+        "sku": "SKU / штрихкод",
+        "quantity": "Сатылды",
+        "revenue": "Түшүм",
+        "averagePrice": "Орточо баа",
+        "stock": "Калдык",
+        "receipts": "Чектер",
+        "actions": "Аракеттер"
+      }
+    },
+    "dayTable": {
+      "title": "Мөөнөттөгү күндөр",
+      "date": "Дата",
+      "sales": "Сатуу",
+      "receipts": "Чектер"
+    },
+    "dataPolicy": {
+      "title": "Эсептөө эрежелери",
+      "sales": "Сатууга аяктаган POS чектер гана кирет; черновик, кармалган, жокко чыгарылган жана бүтпөгөн чектер кошулбайт.",
+      "returns": "Аяктаган кайтаруулар таза сатуудан жана санынан алынат.",
+      "payments": "Бөлүнгөн төлөмдөр төлөм саптары боюнча саналат: накталай, карта, которуу жана башка.",
+      "timezone": "Дата чектери бизнес убакыт алкагы боюнча эсептелет: {timezone}."
+    },
+    "performance": {
+      "overview": "Жыйынтык суроосу",
+      "products": "Товарлар суроосу"
+    },
+    "dayDetail": {
+      "title": "Күн: {date}",
+      "titleFallback": "Күндүн деталдары",
+      "products": "Сатылган товарлар",
+      "receipts": "Күндүн чектери"
+    },
+    "receipts": {
+      "empty": "Чектер табылган жок.",
+      "unknownCashier": "Кассир көрсөтүлгөн эмес",
+      "columns": {
+        "number": "Чек",
+        "store": "Дүкөн",
+        "cashier": "Кассир",
+        "payment": "Төлөм",
+        "total": "Жыйынтык"
+      }
+    },
+    "productReceipts": {
+      "title": "Товар бар чектер: {product}",
+      "titleFallback": "Товар бар чектер"
+    }
   },
   "onboarding": {
     "title": "Тез баштоо",

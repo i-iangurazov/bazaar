@@ -2711,6 +2711,7 @@
       "toDate": "To date",
       "export": "Export",
       "receiptCount": "Receipts: {count}",
+      "previewShort": "Preview",
       "printShort": "Print",
       "downloadShort": "PDF",
       "shareShort": "Share",
@@ -2734,6 +2735,36 @@
         "status": "Status",
         "fiscal": "Fiscal",
         "actions": "Actions"
+      }
+    },
+    "receiptPreview": {
+      "title": "Receipt preview",
+      "titleWithNumber": "Receipt {number}",
+      "loadFailed": "Could not load receipt.",
+      "notFound": "Receipt not found.",
+      "store": "Store",
+      "register": "Register",
+      "shift": "Shift #{id}",
+      "cashier": "Cashier",
+      "unknownCashier": "Unknown cashier",
+      "customer": "Customer",
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "returns": "Returns",
+      "total": "Total",
+      "payments": "Payments",
+      "paymentTotal": "Payment total: {total}",
+      "products": "Products",
+      "lineCount": "Lines: {count}",
+      "returnStatus": "Receipt returns",
+      "download": "Download PDF",
+      "print": "Print",
+      "columns": {
+        "product": "Product",
+        "sku": "SKU / barcode",
+        "quantity": "Qty",
+        "price": "Price",
+        "total": "Total"
       }
     },
     "receiptPdf": {
@@ -5519,8 +5550,8 @@
     }
   },
   "analytics": {
-    "title": "Analytics",
-    "subtitle": "Analytics overview",
+    "title": "Sales analytics",
+    "subtitle": "Sales, sold products, and receipts from real completed POS sales.",
     "backToReports": "Back to reports",
     "allStores": "All stores",
     "baseCurrencyNotice": "All-store totals are shown in the base accounting currency (KGS). Select one store to view totals in that store's currency.",
@@ -5546,7 +5577,108 @@
     "emptySales": "Empty sales",
     "emptyTopProducts": "Empty top products",
     "emptyLowStock": "Empty low stock",
-    "emptyInventory": "Empty inventory"
+    "emptyInventory": "Empty inventory",
+    "filters": {
+      "title": "Period and filters",
+      "store": "Store",
+      "register": "Register",
+      "allRegisters": "All registers",
+      "cashier": "Cashier",
+      "allCashiers": "All cashiers",
+      "category": "Category",
+      "allCategories": "All categories",
+      "dateFrom": "From date",
+      "dateTo": "To date",
+      "presets": "Quick range",
+      "productSearch": "Product search",
+      "productSearchPlaceholder": "Name, SKU, or barcode"
+    },
+    "presets": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisMonth": "This month",
+      "lastMonth": "Last month"
+    },
+    "actions": {
+      "exportProducts": "Export products",
+      "openProduct": "Product",
+      "showReceipts": "Receipts"
+    },
+    "kpis": {
+      "netSales": "Net sales",
+      "grossSales": "Gross sales",
+      "returns": "Returns",
+      "receipts": "Receipts",
+      "averageReceipt": "Average receipt",
+      "nonCash": "Non-cash"
+    },
+    "chart": {
+      "title": "Sales over time",
+      "subtitle": "Click a day to see sold products and receipts.",
+      "netSales": "Net sales",
+      "grossSales": "Gross sales",
+      "returns": "Returns",
+      "receipts": "Receipts",
+      "averageReceipt": "Average receipt"
+    },
+    "products": {
+      "title": "Sold products",
+      "subtitle": "Completed receipt aggregation with returns applied.",
+      "count": "Products: {count}",
+      "returned": "returned",
+      "returns": "Returns",
+      "page": "Page {page} of {pages}",
+      "columns": {
+        "product": "Product",
+        "sku": "SKU / barcode",
+        "quantity": "Sold",
+        "revenue": "Revenue",
+        "averagePrice": "Average price",
+        "stock": "Stock",
+        "receipts": "Receipts",
+        "actions": "Actions"
+      }
+    },
+    "dayTable": {
+      "title": "Days in range",
+      "date": "Date",
+      "sales": "Sales",
+      "receipts": "Receipts"
+    },
+    "dataPolicy": {
+      "title": "Calculation rules",
+      "sales": "Only completed POS receipts are counted; drafts, held receipts, cancelled receipts, and unfinished receipts are excluded.",
+      "returns": "Completed returns are subtracted from net sales and quantity.",
+      "payments": "Split payments are counted from payment rows: cash, card, transfer, and other.",
+      "timezone": "Date boundaries use the business timezone: {timezone}."
+    },
+    "performance": {
+      "overview": "Overview query",
+      "products": "Products query"
+    },
+    "dayDetail": {
+      "title": "Day: {date}",
+      "titleFallback": "Day detail",
+      "products": "Sold products",
+      "receipts": "Receipts for the day"
+    },
+    "receipts": {
+      "empty": "No receipts found.",
+      "unknownCashier": "Unknown cashier",
+      "columns": {
+        "number": "Receipt",
+        "store": "Store",
+        "cashier": "Cashier",
+        "payment": "Payment",
+        "total": "Total"
+      }
+    },
+    "productReceipts": {
+      "title": "Receipts with product: {product}",
+      "titleFallback": "Receipts with product"
+    }
   },
   "onboarding": {
     "title": "Onboarding",

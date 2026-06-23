@@ -2711,6 +2711,7 @@
       "toDate": "Дата до",
       "export": "Экспорт",
       "receiptCount": "Чеков: {count}",
+      "previewShort": "Просмотр",
       "printShort": "Печать",
       "downloadShort": "PDF",
       "shareShort": "Поделиться",
@@ -2734,6 +2735,36 @@
         "status": "Статус",
         "fiscal": "Фискализация",
         "actions": "Действия"
+      }
+    },
+    "receiptPreview": {
+      "title": "Просмотр чека",
+      "titleWithNumber": "Чек {number}",
+      "loadFailed": "Не удалось загрузить чек.",
+      "notFound": "Чек не найден.",
+      "store": "Магазин",
+      "register": "Касса",
+      "shift": "Смена #{id}",
+      "cashier": "Кассир",
+      "unknownCashier": "Кассир не указан",
+      "customer": "Клиент",
+      "subtotal": "Подытог",
+      "discount": "Скидка",
+      "returns": "Возвраты",
+      "total": "Итого",
+      "payments": "Оплаты",
+      "paymentTotal": "Всего оплат: {total}",
+      "products": "Товары",
+      "lineCount": "Позиций: {count}",
+      "returnStatus": "Возвраты по чеку",
+      "download": "Скачать PDF",
+      "print": "Печать",
+      "columns": {
+        "product": "Товар",
+        "sku": "SKU / штрихкод",
+        "quantity": "Кол-во",
+        "price": "Цена",
+        "total": "Сумма"
       }
     },
     "receiptPdf": {
@@ -5517,8 +5548,8 @@
     }
   },
   "analytics": {
-    "title": "Аналитика",
-    "subtitle": "Ключевые тренды продаж и запасов.",
+    "title": "Аналитика продаж",
+    "subtitle": "Продажи, проданные товары и чеки по реальным завершенным POS-продажам.",
     "backToReports": "Назад к отчетам",
     "allStores": "Все магазины",
     "baseCurrencyNotice": "Итоги по всем магазинам показаны в базовой учетной валюте (KGS). Выберите один магазин, чтобы видеть суммы в валюте этого магазина.",
@@ -5544,7 +5575,108 @@
     "emptySales": "Нет данных продаж за период.",
     "emptyTopProducts": "Нет данных по товарам.",
     "emptyLowStock": "Нет событий низкого остатка.",
-    "emptyInventory": "Нет данных по запасам."
+    "emptyInventory": "Нет данных по запасам.",
+    "filters": {
+      "title": "Период и фильтры",
+      "store": "Магазин",
+      "register": "Касса",
+      "allRegisters": "Все кассы",
+      "cashier": "Кассир",
+      "allCashiers": "Все кассиры",
+      "category": "Категория",
+      "allCategories": "Все категории",
+      "dateFrom": "С даты",
+      "dateTo": "По дату",
+      "presets": "Быстрый период",
+      "productSearch": "Поиск товара",
+      "productSearchPlaceholder": "Название, SKU или штрихкод"
+    },
+    "presets": {
+      "today": "Сегодня",
+      "yesterday": "Вчера",
+      "last7": "Последние 7 дней",
+      "last30": "Последние 30 дней",
+      "thisMonth": "Этот месяц",
+      "lastMonth": "Прошлый месяц"
+    },
+    "actions": {
+      "exportProducts": "Экспорт товаров",
+      "openProduct": "Товар",
+      "showReceipts": "Чеки"
+    },
+    "kpis": {
+      "netSales": "Чистые продажи",
+      "grossSales": "Валовые продажи",
+      "returns": "Возвраты",
+      "receipts": "Чеки",
+      "averageReceipt": "Средний чек",
+      "nonCash": "Безналичные"
+    },
+    "chart": {
+      "title": "Продажи за период",
+      "subtitle": "Кликните по дню, чтобы увидеть проданные товары и чеки.",
+      "netSales": "Чистые продажи",
+      "grossSales": "Валовые продажи",
+      "returns": "Возвраты",
+      "receipts": "Чеки",
+      "averageReceipt": "Средний чек"
+    },
+    "products": {
+      "title": "Проданные товары",
+      "subtitle": "Агрегация по завершенным чекам с учетом возвратов.",
+      "count": "Товаров: {count}",
+      "returned": "возврат",
+      "returns": "Возвраты",
+      "page": "Страница {page} из {pages}",
+      "columns": {
+        "product": "Товар",
+        "sku": "SKU / штрихкод",
+        "quantity": "Продано",
+        "revenue": "Выручка",
+        "averagePrice": "Средняя цена",
+        "stock": "Остаток",
+        "receipts": "Чеки",
+        "actions": "Действия"
+      }
+    },
+    "dayTable": {
+      "title": "Дни периода",
+      "date": "Дата",
+      "sales": "Продажи",
+      "receipts": "Чеки"
+    },
+    "dataPolicy": {
+      "title": "Правила расчета",
+      "sales": "В продажи попадают только завершенные POS-чеки; черновики, отложенные, отмененные и незавершенные чеки исключены.",
+      "returns": "Завершенные возвраты вычитаются из чистых продаж и количества.",
+      "payments": "Разделенные оплаты считаются по строкам оплат: наличные, карта, перевод и другое.",
+      "timezone": "Границы дат считаются в бизнес-часовом поясе: {timezone}."
+    },
+    "performance": {
+      "overview": "Запрос итогов",
+      "products": "Запрос товаров"
+    },
+    "dayDetail": {
+      "title": "День: {date}",
+      "titleFallback": "Детализация дня",
+      "products": "Что было продано",
+      "receipts": "Чеки за день"
+    },
+    "receipts": {
+      "empty": "Чеки не найдены.",
+      "unknownCashier": "Кассир не указан",
+      "columns": {
+        "number": "Чек",
+        "store": "Магазин",
+        "cashier": "Кассир",
+        "payment": "Оплата",
+        "total": "Итог"
+      }
+    },
+    "productReceipts": {
+      "title": "Чеки с товаром: {product}",
+      "titleFallback": "Чеки с товаром"
+    }
   },
   "onboarding": {
     "title": "Быстрый запуск",

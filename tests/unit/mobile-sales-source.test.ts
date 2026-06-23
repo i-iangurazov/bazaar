@@ -27,8 +27,9 @@ describe("mobile sales and receipts source", () => {
 
     expect(source).toContain("renderDesktop={(items) => (");
     expect(source).toContain('<Table className="min-w-[1120px]" sortable={false}>');
-    expect(source).toContain('className="sticky right-0 z-10 w-[270px]');
+    expect(source).toContain('className="sticky right-0 z-10 w-[340px]');
     expect(source).toContain("renderMobile={(item) => (");
+    expect(source).toContain('t("previewShort")');
     expect(source).toContain("handleShareReceiptPdf");
     expect(source).toContain('t("shareShort")');
     expect(source).toContain('tPos("history.shareReceipt")');

@@ -28,7 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { DownloadIcon, PrintIcon, ShareIcon } from "@/components/icons";
+import { DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/components/icons";
+import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -80,6 +81,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     saleId: string;
     mode: "download" | "print" | "share";
   } | null>(null);
+  const [previewSaleId, setPreviewSaleId] = useState<string | null>(null);
 
   const receiptsQuery = trpc.pos.receipts.useQuery(
     {
@@ -398,7 +400,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                             <TableHead className="w-[160px] min-w-[160px] px-4 py-3">
                               {t("columns.fiscal")}
                             </TableHead>
-                            <TableHead className="sticky right-0 z-10 w-[270px] min-w-[270px] bg-muted/40 px-4 py-3 text-right shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)]">
+                            <TableHead className="sticky right-0 z-10 w-[340px] min-w-[340px] bg-muted/40 px-4 py-3 text-right shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)]">
                               {t("columns.actions")}
                             </TableHead>
                           </TableRow>
@@ -475,13 +477,23 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                     ) : null}
                                   </div>
                                 </TableCell>
-                                <TableCell className="sticky right-0 z-10 min-w-[270px] bg-card px-4 py-3 align-top shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)] group-hover:bg-muted/25">
+                                <TableCell className="sticky right-0 z-10 min-w-[340px] bg-card px-4 py-3 align-top shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)] group-hover:bg-muted/25">
                                   <div className="flex justify-end">
                                     <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-sm">
                                       <Button
                                         type="button"
                                         variant="ghost"
                                         className="h-8 whitespace-nowrap rounded-none bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                                        aria-label={t("previewShort")}
+                                        onClick={() => setPreviewSaleId(item.id)}
+                                      >
+                                        <ViewIcon className="h-4 w-4" aria-hidden />
+                                        <span>{t("previewShort")}</span>
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="h-8 whitespace-nowrap rounded-none border-l border-border bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
                                         aria-label={tPos("history.printPrecheck")}
                                         disabled={Boolean(receiptAction)}
                                         onClick={() =>
@@ -592,7 +604,16 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                             </Badge>
                           ))}
                       </div>
-                      <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 px-2 text-xs"
+                          onClick={() => setPreviewSaleId(item.id)}
+                        >
+                          <ViewIcon className="h-4 w-4" aria-hidden />
+                          {t("previewShort")}
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"
@@ -645,6 +666,15 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
               )}
             </CardContent>
           </Card>
+          <ReceiptPreviewModal
+            saleId={previewSaleId}
+            open={Boolean(previewSaleId)}
+            onOpenChange={(nextOpen) => {
+              if (!nextOpen) {
+                setPreviewSaleId(null);
+              }
+            }}
+          />
         </>
       )}
     </div>

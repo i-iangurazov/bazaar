@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Prisma } from "@prisma/client";
+import { CustomerOrderStatus, PosPaymentMethod, PosReturnStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
@@ -98,5 +98,280 @@ describeDb("analytics", () => {
       granularity: "day",
     });
     expect(Array.isArray(storeSales.series)).toBe(true);
+  });
+
+  it("aggregates completed POS sales by date/product and subtracts completed returns", async () => {
+    const { org, store, product, adminUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const completedAt = new Date("2026-06-20T06:00:00.000Z");
+    const returnCompletedAt = new Date("2026-06-20T08:00:00.000Z");
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        basePriceKgs: new Prisma.Decimal(100),
+        category: "Accessories",
+        categories: ["Accessories"],
+      },
+    });
+    await prisma.productBarcode.create({
+      data: {
+        organizationId: org.id,
+        productId: product.id,
+        value: "1234567890123",
+      },
+    });
+    await prisma.inventorySnapshot.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        onHand: 7,
+        allowNegativeStock: false,
+      },
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const shift = await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        openedById: cashierUser.id,
+        openedAt: new Date("2026-06-20T05:00:00.000Z"),
+      },
+    });
+
+    const sale = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: shift.id,
+        number: "POS-AN-1",
+        status: CustomerOrderStatus.COMPLETED,
+        isPosSale: true,
+        isHeld: false,
+        subtotalKgs: new Prisma.Decimal(300),
+        discountKgs: new Prisma.Decimal(0),
+        totalKgs: new Prisma.Decimal(300),
+        completedAt,
+        createdAt: completedAt,
+        createdById: cashierUser.id,
+        customerName: "Test Customer",
+      },
+    });
+    const saleLine = await prisma.customerOrderLine.create({
+      data: {
+        customerOrderId: sale.id,
+        productId: product.id,
+        variantKey: "BASE",
+        qty: 3,
+        unitPriceKgs: new Prisma.Decimal(100),
+        lineTotalKgs: new Prisma.Decimal(300),
+      },
+    });
+    await prisma.salePayment.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: sale.id,
+          method: PosPaymentMethod.CASH,
+          amountKgs: new Prisma.Decimal(100),
+          isRefund: false,
+          createdById: cashierUser.id,
+          createdAt: completedAt,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: sale.id,
+          method: PosPaymentMethod.CARD,
+          amountKgs: new Prisma.Decimal(200),
+          isRefund: false,
+          createdById: cashierUser.id,
+          createdAt: completedAt,
+        },
+      ],
+    });
+
+    const saleReturn = await prisma.saleReturn.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: shift.id,
+        originalSaleId: sale.id,
+        number: "RET-AN-1",
+        status: PosReturnStatus.COMPLETED,
+        subtotalKgs: new Prisma.Decimal(100),
+        totalKgs: new Prisma.Decimal(100),
+        completedAt: returnCompletedAt,
+        createdAt: returnCompletedAt,
+        createdById: cashierUser.id,
+        completedById: cashierUser.id,
+      },
+    });
+    await prisma.saleReturnLine.create({
+      data: {
+        saleReturnId: saleReturn.id,
+        customerOrderLineId: saleLine.id,
+        productId: product.id,
+        variantKey: "BASE",
+        qty: 1,
+        unitPriceKgs: new Prisma.Decimal(100),
+        lineTotalKgs: new Prisma.Decimal(100),
+      },
+    });
+    await prisma.salePayment.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        shiftId: shift.id,
+        customerOrderId: sale.id,
+        saleReturnId: saleReturn.id,
+        method: PosPaymentMethod.CASH,
+        amountKgs: new Prisma.Decimal(100),
+        isRefund: true,
+        createdById: cashierUser.id,
+        createdAt: returnCompletedAt,
+      },
+    });
+
+    await prisma.customerOrder.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          registerId: register.id,
+          shiftId: shift.id,
+          number: "POS-DRAFT",
+          status: CustomerOrderStatus.DRAFT,
+          isPosSale: true,
+          isHeld: false,
+          totalKgs: new Prisma.Decimal(999),
+          createdAt: completedAt,
+          createdById: cashierUser.id,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          registerId: register.id,
+          shiftId: shift.id,
+          number: "POS-CANCELED",
+          status: CustomerOrderStatus.CANCELED,
+          isPosSale: true,
+          isHeld: false,
+          totalKgs: new Prisma.Decimal(999),
+          completedAt,
+          createdAt: completedAt,
+          createdById: cashierUser.id,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          registerId: register.id,
+          shiftId: shift.id,
+          number: "POS-HELD",
+          status: CustomerOrderStatus.COMPLETED,
+          isPosSale: true,
+          isHeld: true,
+          totalKgs: new Prisma.Decimal(999),
+          completedAt,
+          createdAt: completedAt,
+          createdById: cashierUser.id,
+        },
+      ],
+    });
+
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const input = {
+      storeId: store.id,
+      registerId: register.id,
+      cashierId: cashierUser.id,
+      dateFrom: "2026-06-20",
+      dateTo: "2026-06-20",
+    };
+    const overview = await adminCaller.analytics.salesOverview(input);
+    expect(overview.series).toHaveLength(1);
+    expect(overview.series[0]).toMatchObject({
+      date: "2026-06-20",
+      grossSalesKgs: 300,
+      returnsKgs: 100,
+      netSalesKgs: 200,
+      receiptCount: 1,
+      returnCount: 1,
+    });
+    expect(overview.totals.paymentBreakdown.CASH).toBe(100);
+    expect(overview.totals.paymentBreakdown.CARD).toBe(200);
+    expect(overview.totals.refundBreakdown.CASH).toBe(100);
+
+    const options = await adminCaller.analytics.salesFilterOptions(input);
+    expect(options.categories).toContain("Accessories");
+
+    const soldProducts = await adminCaller.analytics.soldProducts({
+      ...input,
+      category: "Accessories",
+      search: "123456",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(soldProducts.total).toBe(1);
+    expect(soldProducts.items[0]).toMatchObject({
+      productId: product.id,
+      productSku: product.sku,
+      barcode: "1234567890123",
+      category: "Accessories",
+      quantitySold: 3,
+      quantityReturned: 1,
+      netQuantity: 2,
+      grossRevenueKgs: 300,
+      returnedRevenueKgs: 100,
+      netRevenueKgs: 200,
+      stockRemaining: 7,
+      receiptCount: 1,
+    });
+
+    const dayDetail = await adminCaller.analytics.salesDayDetail({
+      storeId: store.id,
+      registerId: register.id,
+      cashierId: cashierUser.id,
+      date: "2026-06-20",
+    });
+    expect(dayDetail.summary?.netSalesKgs).toBe(200);
+    expect(dayDetail.products).toHaveLength(1);
+    expect(dayDetail.receipts).toHaveLength(1);
+    expect(dayDetail.receipts[0]?.number).toBe("POS-AN-1");
+
+    const productReceipts = await adminCaller.analytics.productReceipts({
+      ...input,
+      productId: product.id,
+      variantKey: "BASE",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(productReceipts.items).toHaveLength(1);
+    expect(productReceipts.items[0]?.paymentBreakdown.CASH).toBe(100);
+    expect(productReceipts.items[0]?.paymentBreakdown.CARD).toBe(200);
+
+    const preview = await adminCaller.pos.sales.get({ saleId: sale.id });
+    expect(preview?.lines).toHaveLength(1);
+    expect(preview?.lines[0]?.product.primaryBarcode).toBe("1234567890123");
   });
 });
