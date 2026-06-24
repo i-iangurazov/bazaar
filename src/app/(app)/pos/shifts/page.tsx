@@ -54,6 +54,8 @@ const PosShiftsPage = () => {
   const [closeConfirmed, setCloseConfirmed] = useState(false);
   const [cashAmount, setCashAmount] = useState("");
   const [cashReason, setCashReason] = useState("");
+  const [cashComment, setCashComment] = useState("");
+  const [cashOutReason, setCashOutReason] = useState("collection");
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
 
   const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
@@ -132,6 +134,7 @@ const PosShiftsPage = () => {
     onSuccess: async () => {
       setCashAmount("");
       setCashReason("");
+      setCashComment("");
       toast({ variant: "success", description: t("shifts.cashMovementSuccess") });
       await reportQuery.refetch();
     },
@@ -149,6 +152,10 @@ const PosShiftsPage = () => {
   const heldReceipts = currentShift?.heldReceipts ?? [];
   const heldReceiptCount = currentShift?.heldReceiptCount ?? heldReceipts.length;
   const expectedCash = report?.summary.expectedCashKgs ?? 0;
+  const overWithdrawalKgs =
+    report?.summary.overWithdrawalKgs ?? Math.round(Math.max(0, -expectedCash) * 100) / 100;
+  const countableCashKgs =
+    report?.summary.countableCashKgs ?? Math.round(Math.max(0, expectedCash) * 100) / 100;
   const countedCashNumber = Number(countedCash);
   const countedCashKgs = displayMoneyToKgs(countedCashNumber, currentShiftCurrencySource);
   const countedCashValid =
@@ -166,6 +173,14 @@ const PosShiftsPage = () => {
           : "balanced";
   const closeNoteRequired = cashDifference !== null && Math.abs(cashDifference) > 0.009;
   const closeNoteValid = !closeNoteRequired || closeNote.trim().length > 0;
+  const closeBlockingMessage =
+    countedCashNumber < 0 ? t("shifts.countedCashNegative") : null;
+  const closeWarningMessage =
+    report && overWithdrawalKgs > 0.009
+      ? t("shifts.overWithdrawalWarning", {
+          amount: formatKgsMoney(overWithdrawalKgs, locale, currentShiftCurrencySource),
+        })
+      : null;
   const paymentBreakdown = report
     ? [
         { method: "CASH" as const, label: t("payments.cash") },
@@ -177,6 +192,12 @@ const PosShiftsPage = () => {
         ...report.paymentsByMethod[entry.method],
       }))
     : [];
+  const cashOutReasonOptions = [
+    { value: "collection", label: t("shifts.cashOutReasonCollection") },
+    { value: "expense", label: t("shifts.cashOutReasonExpense") },
+    { value: "correction", label: t("shifts.cashOutReasonCorrection") },
+    { value: "other", label: t("shifts.cashOutReasonOther") },
+  ];
 
   useEffect(() => {
     if (!report) {
@@ -184,7 +205,12 @@ const PosShiftsPage = () => {
     }
     if (!countedCash) {
       setCountedCash(
-        String(displayMoneyFromKgs(report.summary.expectedCashKgs, currentShiftCurrencySource)),
+        String(
+          displayMoneyFromKgs(
+            Math.max(0, report.summary.expectedCashKgs),
+            currentShiftCurrencySource,
+          ),
+        ),
       );
     }
   }, [currentShiftCurrencySource, report, countedCash]);
@@ -200,7 +226,10 @@ const PosShiftsPage = () => {
     const amount = Number(countedCash);
     const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
     if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amountKgs)) {
-      toast({ variant: "error", description: t("shifts.invalidAmount") });
+      toast({
+        variant: "error",
+        description: amount < 0 ? t("shifts.countedCashNegative") : t("shifts.invalidAmount"),
+      });
       return;
     }
     if (!closeConfirmed) {
@@ -230,13 +259,28 @@ const PosShiftsPage = () => {
     }
     const amount = Number(cashAmount);
     const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
+    const selectedCashOutReason =
+      cashOutReasonOptions.find((option) => option.value === cashOutReason)?.label ??
+      t("shifts.cashOutReasonOther");
+    const reason =
+      cashType === CashDrawerMovementType.PAY_OUT
+        ? [selectedCashOutReason, cashComment.trim()].filter(Boolean).join(": ")
+        : cashReason.trim();
     if (
       !Number.isFinite(amount) ||
       amount <= 0 ||
       !Number.isFinite(amountKgs) ||
-      cashReason.trim().length < 2
+      reason.length < 2
     ) {
       toast({ variant: "error", description: t("shifts.cashMovementInvalid") });
+      return;
+    }
+    if (
+      cashType === CashDrawerMovementType.PAY_OUT &&
+      report &&
+      expectedCash - amountKgs < -0.009
+    ) {
+      toast({ variant: "error", description: t("shifts.cashOutExceedsExpectedCash") });
       return;
     }
 
@@ -244,7 +288,7 @@ const PosShiftsPage = () => {
       shiftId: currentShift.id,
       type: cashType,
       amountKgs,
-      reason: cashReason.trim(),
+      reason,
       idempotencyKey: createIdempotencyKey(),
     });
   };
@@ -394,10 +438,28 @@ const PosShiftsPage = () => {
                       <div className="mt-2 grid gap-2 sm:grid-cols-3">
                         <div className="bazaar-admin-info-tile px-3 py-2">
                           <p className="text-xs text-muted-foreground">
-                            {t("shifts.expectedCash")}
+                            {t("shifts.calculatedCash")}
                           </p>
                           <p className="text-sm font-semibold text-foreground">
                             {formatCurrentShiftMoney(report.summary.expectedCashKgs)}
+                          </p>
+                        </div>
+                        {report.summary.overWithdrawalKgs > 0.009 ? (
+                          <div className="bazaar-admin-info-tile px-3 py-2">
+                            <p className="text-xs text-muted-foreground">
+                              {t("shifts.overWithdrawal")}
+                            </p>
+                            <p className="text-sm font-semibold text-warning">
+                              {formatCurrentShiftMoney(report.summary.overWithdrawalKgs)}
+                            </p>
+                          </div>
+                        ) : null}
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">
+                            {t("shifts.countableCash")}
+                          </p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {formatCurrentShiftMoney(report.summary.countableCashKgs)}
                           </p>
                         </div>
                         <div className="bazaar-admin-info-tile px-3 py-2">
@@ -448,7 +510,7 @@ const PosShiftsPage = () => {
                 </div>
               ) : null}
 
-              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[180px_1fr_auto]">
+              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[180px_160px_1fr_auto]">
                 <Select
                   value={cashType}
                   onValueChange={(value) => setCashType(value as CashDrawerMovementType)}
@@ -472,12 +534,34 @@ const PosShiftsPage = () => {
                     placeholder={t("shifts.amount")}
                     inputMode="decimal"
                   />
+                </div>
+                {cashType === CashDrawerMovementType.PAY_OUT ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Select value={cashOutReason} onValueChange={setCashOutReason}>
+                      <SelectTrigger aria-label={t("shifts.cashOutReason")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cashOutReasonOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={cashComment}
+                      onChange={(event) => setCashComment(event.target.value)}
+                      placeholder={t("shifts.comment")}
+                    />
+                  </div>
+                ) : (
                   <Input
                     value={cashReason}
                     onChange={(event) => setCashReason(event.target.value)}
                     placeholder={t("shifts.reason")}
                   />
-                </div>
+                )}
                 <Button onClick={handleCashMovement} disabled={cashMovementMutation.isLoading}>
                   {cashMovementMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                   {t("shifts.record")}
@@ -485,7 +569,7 @@ const PosShiftsPage = () => {
               </div>
 
               <div className="bazaar-admin-surface space-y-3 p-3">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
                   <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
                     <p className="text-sm font-semibold text-foreground">
@@ -493,9 +577,23 @@ const PosShiftsPage = () => {
                     </p>
                   </div>
                   <div className="bazaar-admin-info-tile">
-                    <p className="text-xs text-muted-foreground">{t("shifts.expectedCash")}</p>
+                    <p className="text-xs text-muted-foreground">{t("shifts.calculatedCash")}</p>
                     <p className="text-sm font-semibold text-foreground">
                       {formatCurrentShiftMoney(expectedCash)}
+                    </p>
+                  </div>
+                  {overWithdrawalKgs > 0.009 ? (
+                    <div className="bazaar-admin-info-tile">
+                      <p className="text-xs text-muted-foreground">{t("shifts.overWithdrawal")}</p>
+                      <p className="text-sm font-semibold text-warning">
+                        {formatCurrentShiftMoney(overWithdrawalKgs)}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="bazaar-admin-info-tile">
+                    <p className="text-xs text-muted-foreground">{t("shifts.countableCash")}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {formatCurrentShiftMoney(countableCashKgs)}
                     </p>
                   </div>
                   <div className="bazaar-admin-info-tile">
@@ -566,6 +664,18 @@ const PosShiftsPage = () => {
                   </div>
                 ) : null}
 
+                {closeBlockingMessage ? (
+                  <div className="bazaar-admin-status-tile-warning">
+                    <p className="text-sm font-semibold text-foreground">{closeBlockingMessage}</p>
+                  </div>
+                ) : null}
+
+                {closeWarningMessage ? (
+                  <div className="bazaar-admin-status-tile-warning">
+                    <p className="text-sm font-semibold text-foreground">{closeWarningMessage}</p>
+                  </div>
+                ) : null}
+
                 <label className="bazaar-admin-notice flex items-start gap-2">
                   <input
                     type="checkbox"
@@ -585,6 +695,7 @@ const PosShiftsPage = () => {
                     disabled={
                       closeShiftMutation.isLoading ||
                       !countedCashValid ||
+                      Boolean(closeBlockingMessage) ||
                       !closeConfirmed ||
                       !closeNoteValid ||
                       heldReceiptCount > 0
@@ -688,8 +799,18 @@ const PosShiftsPage = () => {
                       {formatKgsMoney(shift.openingCashKgs, locale, historyCurrencySource)}
                     </p>
                     <p>
-                      {t("shifts.expectedCash")}:{" "}
+                      {t("shifts.calculatedCash")}:{" "}
                       {formatKgsMoney(shift.expectedCashKgs ?? 0, locale, historyCurrencySource)}
+                    </p>
+                    {shift.overWithdrawalKgs > 0.009 ? (
+                      <p className="text-warning">
+                        {t("shifts.overWithdrawal")}:{" "}
+                        {formatKgsMoney(shift.overWithdrawalKgs, locale, historyCurrencySource)}
+                      </p>
+                    ) : null}
+                    <p>
+                      {t("shifts.countableCash")}:{" "}
+                      {formatKgsMoney(shift.countableCashKgs ?? 0, locale, historyCurrencySource)}
                     </p>
                     <p>
                       {t("shifts.countedCash")}:{" "}

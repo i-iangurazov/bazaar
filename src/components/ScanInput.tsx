@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useCallback,
   forwardRef,
   useDeferredValue,
   useEffect,
@@ -10,6 +11,7 @@ import React, {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
 import { CheckIcon, EmptyIcon } from "@/components/icons";
@@ -52,6 +54,7 @@ type ScanInputProps = {
   onBlur?: () => void;
   onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
   showDropdown?: boolean;
+  portalDropdown?: boolean;
   enableProductSearch?: boolean;
   productSearchMinLength?: number;
   dataTour?: string;
@@ -98,6 +101,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       onBlur,
       onKeyDown,
       showDropdown = true,
+      portalDropdown = false,
       enableProductSearch = false,
       productSearchMinLength = 2,
       dataTour,
@@ -119,6 +123,11 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     const [showEmptyResult, setShowEmptyResult] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const [lastTrigger, setLastTrigger] = useState<ScanSubmitTrigger>("enter");
+    const [portalRect, setPortalRect] = useState<{
+      top: number;
+      left: number;
+      width: number;
+    } | null>(null);
 
     const currentValue = controlled ? value ?? "" : internalValue;
     const deferredValue = useDeferredValue(currentValue);
@@ -155,6 +164,36 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       !liveProductSearchQuery.isFetching &&
       multipleItems.length === 0 &&
       liveProductItems.length === 0;
+    const shouldRenderDropdown =
+      showDropdown &&
+      dropdownOpen &&
+      (dropdownItems.length > 0 || showEmptyResult || showLiveLoading || showLiveEmpty);
+
+    const updatePortalRect = useCallback(() => {
+      if (!portalDropdown || typeof window === "undefined") {
+        return;
+      }
+
+      const input = innerRef.current;
+      if (!input) {
+        return;
+      }
+
+      const rect = input.getBoundingClientRect();
+      const viewportPadding = 12;
+      const maxWidth = Math.max(window.innerWidth - viewportPadding * 2, 0);
+      const width = Math.min(rect.width, maxWidth);
+      const left = Math.min(
+        Math.max(rect.left, viewportPadding),
+        Math.max(window.innerWidth - width - viewportPadding, viewportPadding),
+      );
+
+      setPortalRect({
+        top: rect.bottom + 8,
+        left,
+        width,
+      });
+    }, [portalDropdown]);
 
     useImperativeHandle(forwardedRef, () => innerRef.current as HTMLInputElement, []);
 
@@ -169,6 +208,22 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       },
       [],
     );
+
+    useEffect(() => {
+      if (!portalDropdown || !shouldRenderDropdown) {
+        setPortalRect(null);
+        return;
+      }
+
+      updatePortalRect();
+      window.addEventListener("resize", updatePortalRect);
+      window.addEventListener("scroll", updatePortalRect, true);
+
+      return () => {
+        window.removeEventListener("resize", updatePortalRect);
+        window.removeEventListener("scroll", updatePortalRect, true);
+      };
+    }, [portalDropdown, shouldRenderDropdown, updatePortalRect]);
 
     const updateValue = (nextValue: string) => {
       if (!controlled) {
@@ -360,6 +415,64 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       }
     };
 
+    const dropdown = shouldRenderDropdown ? (
+      <div
+        id={listboxId}
+        role="listbox"
+        className={cn(
+          "overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-2xl",
+          portalDropdown
+            ? "fixed z-[900]"
+            : "absolute z-[90] mt-2 w-full",
+          portalDropdown && !portalRect ? "pointer-events-none invisible" : undefined,
+        )}
+        style={
+          portalDropdown
+            ? {
+                top: portalRect?.top ?? 0,
+                left: portalRect?.left ?? 0,
+                width: portalRect?.width ?? 0,
+              }
+            : undefined
+        }
+      >
+        <div className="max-h-64 overflow-y-auto py-1">
+          {dropdownItems.map((item, index) => (
+            <ProductSearchResultItem
+              key={item.id}
+              id={`${listboxId}-${item.id}`}
+              role="option"
+              product={item}
+              active={index === activeIndex}
+              compact
+              aria-selected={index === activeIndex}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => {
+                void handleItemSelect(item);
+              }}
+            />
+          ))}
+          {showLiveLoading ? (
+            <div className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted/40">
+                <Spinner className="h-4 w-4" />
+              </span>
+              <span>{tCommon("loading")}</span>
+            </div>
+          ) : null}
+          {(showEmptyResult || showLiveEmpty) && dropdownItems.length === 0 ? (
+            <div className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/40">
+                <EmptyIcon className="h-4 w-4" aria-hidden />
+              </span>
+              <span>{tCommon("nothingFound")}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    ) : null;
+
     return (
       <div className={cn("relative", className)}>
         <Input
@@ -426,50 +539,9 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           </span>
         ) : null}
 
-        {showDropdown &&
-        dropdownOpen &&
-        (dropdownItems.length > 0 || showEmptyResult || showLiveLoading || showLiveEmpty) ? (
-          <div
-            id={listboxId}
-            role="listbox"
-            className="absolute z-[90] mt-2 w-full overflow-hidden rounded-md border border-border bg-popover shadow-2xl"
-          >
-            <div className="max-h-64 overflow-y-auto py-1">
-              {dropdownItems.map((item, index) => (
-                <ProductSearchResultItem
-                  key={item.id}
-                  id={`${listboxId}-${item.id}`}
-                  role="option"
-                  product={item}
-                  active={index === activeIndex}
-                  compact
-                  aria-selected={index === activeIndex}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => {
-                    void handleItemSelect(item);
-                  }}
-                />
-              ))}
-              {showLiveLoading ? (
-                <div className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted/40">
-                    <Spinner className="h-4 w-4" />
-                  </span>
-                  <span>{tCommon("loading")}</span>
-                </div>
-              ) : null}
-              {(showEmptyResult || showLiveEmpty) && dropdownItems.length === 0 ? (
-                <div className="flex items-center gap-3 px-3 py-3 text-sm text-muted-foreground">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/40">
-                    <EmptyIcon className="h-4 w-4" aria-hidden />
-                  </span>
-                  <span>{tCommon("nothingFound")}</span>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        {portalDropdown && dropdown && typeof document !== "undefined"
+          ? createPortal(dropdown, document.body)
+          : dropdown}
       </div>
     );
   },

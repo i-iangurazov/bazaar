@@ -2565,6 +2565,240 @@ describeDb("pos", () => {
     expect(close.discrepancyKgs).toBe(-10);
   });
 
+  it("blocks cash out that would make expected drawer cash negative", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Cash Drawer",
+        code: "CASH-OUT",
+      },
+    });
+
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    await cashierCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 100,
+      idempotencyKey: "pos-open-cash-out-limit-1",
+    });
+
+    const shift = await cashierCaller.pos.shifts.current({ registerId: register.id });
+    if (!shift) {
+      throw new Error("expected open shift");
+    }
+
+    await cashierCaller.pos.cash.record({
+      shiftId: shift.id,
+      type: CashDrawerMovementType.PAY_OUT,
+      amountKgs: 40,
+      reason: "Инкассация",
+      idempotencyKey: "pos-cash-out-limit-ok-1",
+    });
+
+    await expect(
+      cashierCaller.pos.cash.record({
+        shiftId: shift.id,
+        type: CashDrawerMovementType.PAY_OUT,
+        amountKgs: 61,
+        reason: "Инкассация",
+        idempotencyKey: "pos-cash-out-limit-blocked-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "posCashOutExceedsExpectedCash",
+    });
+
+    const close = await cashierCaller.pos.shifts.close({
+      shiftId: shift.id,
+      closingCashCountedKgs: 60,
+      idempotencyKey: "pos-shift-close-cash-out-limit-1",
+    });
+
+    expect(close.expectedCashKgs).toBe(60);
+    expect(close.discrepancyKgs).toBe(0);
+  });
+
+  it("allows negative calculated cash to close with zero counted cash and a note", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.userStoreAccess.createMany({
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      skipDuplicates: true,
+    });
+
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const negativeCountRegister = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Negative Count",
+        code: "NEG-COUNT",
+      },
+    });
+    await cashierCaller.pos.shifts.open({
+      registerId: negativeCountRegister.id,
+      openingCashKgs: 50,
+      idempotencyKey: "pos-open-negative-count-1",
+    });
+    const negativeCountShift = await cashierCaller.pos.shifts.current({
+      registerId: negativeCountRegister.id,
+    });
+    if (!negativeCountShift) {
+      throw new Error("expected open shift");
+    }
+
+    await expect(
+      cashierCaller.pos.shifts.close({
+        shiftId: negativeCountShift.id,
+        closingCashCountedKgs: -1,
+        idempotencyKey: "pos-shift-close-negative-count-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "posShiftCountedCashNegative",
+    });
+
+    const negativeExpectedRegister = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Negative Expected",
+        code: "NEG-EXP",
+      },
+    });
+    await cashierCaller.pos.shifts.open({
+      registerId: negativeExpectedRegister.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-negative-expected-1",
+    });
+    const negativeExpectedShift = await cashierCaller.pos.shifts.current({
+      registerId: negativeExpectedRegister.id,
+    });
+    if (!negativeExpectedShift) {
+      throw new Error("expected open shift");
+    }
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 5,
+      reason: "seed negative cash shift",
+      idempotencyKey: "pos-seed-negative-cash-shift-1",
+      requestId: "pos-seed-negative-cash-shift-1",
+    });
+
+    const completeSale = async (
+      key: string,
+      unitPriceKgs: number,
+      payment: { method: PosPaymentMethod; amountKgs: number },
+    ) => {
+      const sale = await cashierCaller.pos.sales.createDraft({
+        registerId: negativeExpectedRegister.id,
+      });
+      const line = await cashierCaller.pos.sales.addLine({
+        saleId: sale.id,
+        productId: product.id,
+        qty: 1,
+      });
+      await cashierCaller.pos.sales.updateLine({
+        lineId: line.id,
+        qty: 1,
+        unitPriceKgs,
+      });
+      await cashierCaller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: key,
+        payments: [payment],
+      });
+    };
+
+    await completeSale("pos-negative-expected-cash-sale-1", 19850, {
+      method: PosPaymentMethod.CASH,
+      amountKgs: 19850,
+    });
+    await completeSale("pos-negative-expected-card-sale-1", 7890, {
+      method: PosPaymentMethod.CARD,
+      amountKgs: 7890,
+    });
+
+    await prisma.cashDrawerMovement.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        shiftId: negativeExpectedShift.id,
+        type: CashDrawerMovementType.PAY_OUT,
+        amountKgs: 139290,
+        reason: "legacy over-withdrawal",
+        createdById: cashierUser.id,
+      },
+    });
+
+    const report = await cashierCaller.pos.shifts.xReport({ shiftId: negativeExpectedShift.id });
+    expect(report.summary.cashSalesKgs).toBe(19850);
+    expect(report.summary.nonCashSalesKgs).toBe(7890);
+    expect(report.summary.totalSalesKgs).toBe(27740);
+    expect(report.summary.payOutKgs).toBe(139290);
+    expect(report.summary.expectedCashKgs).toBe(-119440);
+    expect(report.summary.overWithdrawalKgs).toBe(119440);
+    expect(report.summary.countableCashKgs).toBe(0);
+
+    await expect(
+      cashierCaller.pos.shifts.close({
+        shiftId: negativeExpectedShift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "pos-shift-close-negative-expected-missing-note-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "posShiftDifferenceNoteRequired",
+    });
+
+    const close = await cashierCaller.pos.shifts.close({
+      shiftId: negativeExpectedShift.id,
+      closingCashCountedKgs: 0,
+      notes: "Legacy cash-out exceeded available drawer cash",
+      idempotencyKey: "pos-shift-close-negative-expected-1",
+    });
+
+    expect(close.expectedCashKgs).toBe(-119440);
+    expect(close.overWithdrawalKgs).toBe(119440);
+    expect(close.countableCashKgs).toBe(0);
+    expect(close.closingCashCountedKgs).toBe(0);
+    expect(close.discrepancyKgs).toBe(119440);
+
+    const history = await cashierCaller.pos.shifts.list({
+      registerId: negativeExpectedRegister.id,
+      page: 1,
+      pageSize: 5,
+    });
+    expect(history.items[0]?.summary.cashSalesKgs).toBe(19850);
+    expect(history.items[0]?.summary.nonCashSalesKgs).toBe(7890);
+    expect(history.items[0]?.expectedCashKgs).toBe(-119440);
+    expect(history.items[0]?.overWithdrawalKgs).toBe(119440);
+    expect(history.items[0]?.countableCashKgs).toBe(0);
+  });
+
   it("reports shift payment breakdown for cash, non-cash, split payments, refunds, and excluded drafts", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({
       plan: "BUSINESS",

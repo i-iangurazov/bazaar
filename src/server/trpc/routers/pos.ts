@@ -336,7 +336,7 @@ export const posRouter = router({
       .input(
         z.object({
           shiftId: z.string().min(1),
-          closingCashCountedKgs: z.number().min(0),
+          closingCashCountedKgs: z.number(),
           notes: z.string().max(500).optional().nullable(),
           idempotencyKey: z.string().min(8),
         }),

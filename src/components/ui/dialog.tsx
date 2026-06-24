@@ -19,14 +19,14 @@ export const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]", className)}
+    className={cn("fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[1px]", className)}
     {...props}
   />
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 export const dialogContentVariants = cva(
-  "fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-2xl focus:outline-none sm:max-h-[calc(100dvh-2rem)]",
+  "fixed left-1/2 top-1/2 z-[1001] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-2xl focus:outline-none sm:max-h-[calc(100dvh-2rem)]",
   {
     variants: {
       size: {

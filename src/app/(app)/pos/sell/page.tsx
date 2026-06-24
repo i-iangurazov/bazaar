@@ -612,6 +612,9 @@ const PosSellPage = () => {
   const [mobilePropertiesExpanded, setMobilePropertiesExpanded] = useState(false);
   const [mobileActiveLineId, setMobileActiveLineId] = useState<string | null>(null);
   const [mobilePendingProductId, setMobilePendingProductId] = useState<string | null>(null);
+  const [mobilePendingLineInputMode, setMobilePendingLineInputMode] = useState<"price" | "qty">(
+    "qty",
+  );
   const [mobileLineInputMode, setMobileLineInputMode] = useState<"price" | "qty">("qty");
   const [mobileKeypadReplaceNext, setMobileKeypadReplaceNext] = useState(true);
   const [mobileComment, setMobileComment] = useState("");
@@ -767,7 +770,8 @@ const PosSellPage = () => {
   const debouncedLineSearch = useDebouncedValue(lineSearch.trim(), 180);
   const debouncedCustomerSearch = useDebouncedValue(customerSearch.trim(), 200);
   const debouncedJournalSearch = useDebouncedValue(journalSearch.trim(), 250);
-  const searchTerm = debouncedLineSearch;
+  const useImmediateCatalogSearch = isPhoneScreen === true && mobileScreen === "catalog";
+  const searchTerm = useImmediateCatalogSearch ? lineSearch.trim() : debouncedLineSearch;
   const hasSearchTerm = lineSearch.trim().length >= 1;
   const activeStoreId = shiftQuery.data?.store.id;
   const journalStoreId = activeStoreId ?? selectedRegister?.store.id;
@@ -791,7 +795,12 @@ const PosSellPage = () => {
       sortKey: "name",
       sortDirection: "asc",
     },
-    { enabled: Boolean(activeStoreId), keepPreviousData: true, staleTime: 30_000 },
+    {
+      enabled: Boolean(activeStoreId),
+      keepPreviousData: !useImmediateCatalogSearch,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
   );
   const customerSearchQuery = trpc.pos.customers.search.useQuery(
     {
@@ -954,6 +963,7 @@ const PosSellPage = () => {
       setMobileSaleTab("document");
       setMobileActiveLineId(null);
       setMobilePendingProductId(null);
+      setMobilePendingLineInputMode("qty");
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -993,6 +1003,7 @@ const PosSellPage = () => {
       setMobileSaleTab("document");
       setMobileActiveLineId(null);
       setMobilePendingProductId(null);
+      setMobilePendingLineInputMode("qty");
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -1182,6 +1193,7 @@ const PosSellPage = () => {
       setMobileSaleTab("payment");
       setMobileActiveLineId(null);
       setMobilePendingProductId(null);
+      setMobilePendingLineInputMode("qty");
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -1254,10 +1266,11 @@ const PosSellPage = () => {
       return;
     }
     setMobileActiveLineId(pendingLine.id);
-    setMobileLineInputMode("qty");
+    setMobileLineInputMode(mobilePendingLineInputMode);
     setMobileKeypadReplaceNext(true);
     setMobilePendingProductId(null);
-  }, [mobilePendingProductId, optimisticSaleLines, sale?.lines]);
+    setMobilePendingLineInputMode("qty");
+  }, [mobilePendingLineInputMode, mobilePendingProductId, optimisticSaleLines, sale?.lines]);
 
   useEffect(() => {
     if (!activeDraft?.id || saleId || lastCompletedSale || completeMutation.isLoading) {
@@ -1395,6 +1408,7 @@ const PosSellPage = () => {
     setMobilePropertiesExpanded(false);
     setMobileActiveLineId(null);
     setMobilePendingProductId(null);
+    setMobilePendingLineInputMode("qty");
     setMobileLineInputMode("qty");
     setMobileKeypadReplaceNext(true);
     setMobileComment("");
@@ -1737,6 +1751,10 @@ const PosSellPage = () => {
         return false;
       }
 
+      if (pendingAddProductIdsRef.current.has(productId)) {
+        return true;
+      }
+
       const cartSessionVersion = cartSessionVersionRef.current;
       const productForCart =
         product ??
@@ -1756,7 +1774,7 @@ const PosSellPage = () => {
         }
       }
 
-      if (existingLineBeforeAdd || pendingAddProductIdsRef.current.has(productId)) {
+      if (existingLineBeforeAdd) {
         const localLineId = existingLineBeforeAdd?.id ?? optimisticLineId;
         const nextQty = (existingLineBeforeAdd?.qty ?? 0) + 1;
         if (nextQty > 0) {
@@ -5781,6 +5799,7 @@ const PosSellPage = () => {
         }
         setMobileActiveLineId(null);
         setMobilePendingProductId(null);
+        setMobilePendingLineInputMode("qty");
         setMobileKeypadReplaceNext(true);
       };
 
@@ -5791,9 +5810,13 @@ const PosSellPage = () => {
       };
 
       const handleMobileProductSelect = (product: PosCatalogProduct) => {
+        if (pendingAddProductIdsRef.current.has(product.id) || mobilePendingProductId === product.id) {
+          return;
+        }
         const existingLine = findCartLineForProduct(getCurrentCartLines(), product.id);
         const startsWithPrice = (product.effectivePriceKgs ?? product.basePriceKgs) === null;
         setMobileLineInputMode(startsWithPrice ? "price" : "qty");
+        setMobilePendingLineInputMode(startsWithPrice ? "price" : "qty");
         setMobileKeypadReplaceNext(true);
 
         if (existingLine) {
@@ -6594,6 +6617,7 @@ const PosSellPage = () => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
                   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
                   const productName = priceKgs === null ? t("sell.mobile.freePriceProduct") : product.name;
+                  const isPendingProduct = mobilePendingProductId === product.id;
                   return (
                     <button
                       key={product.id}
@@ -6602,7 +6626,12 @@ const PosSellPage = () => {
                       data-product-id={product.id}
                       className="grid min-h-[64px] w-full grid-cols-[48px_minmax(0,1fr)_34px] items-center gap-2.5 px-3 py-2 text-left"
                       onClick={() => handleMobileProductSelect(product)}
-                      disabled={!hasOpenShift || cancelDraftMutation.isLoading || completeMutation.isLoading}
+                      disabled={
+                        !hasOpenShift ||
+                        isPendingProduct ||
+                        cancelDraftMutation.isLoading ||
+                        completeMutation.isLoading
+                      }
                     >
                       <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-[10px] bg-slate-800 text-slate-300">
                         {primaryImage ? (

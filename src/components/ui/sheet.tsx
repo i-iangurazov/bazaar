@@ -20,14 +20,14 @@ export const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]", className)}
+    className={cn("fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[1px]", className)}
     {...props}
   />
 ));
 SheetOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 export const sheetContentVariants = cva(
-  "fixed z-50 flex flex-col overflow-hidden border-border bg-card text-card-foreground shadow-2xl focus:outline-none",
+  "fixed z-[1001] flex flex-col overflow-hidden border-border bg-card text-card-foreground shadow-2xl focus:outline-none",
   {
     variants: {
       side: {

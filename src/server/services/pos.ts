@@ -838,10 +838,12 @@ const loadShiftReport = async (
     cashSalesKgs,
     cashRefundsKgs,
   });
-  const persistedExpectedCashKgs = shift.expectedCashKgs
-    ? toMoney(shift.expectedCashKgs)
-    : expectedCashKgs;
-  const countedCashKgs = shift.closingCashCountedKgs ? toMoney(shift.closingCashCountedKgs) : null;
+  const persistedExpectedCashKgs =
+    shift.expectedCashKgs === null ? expectedCashKgs : toMoney(shift.expectedCashKgs);
+  const overWithdrawalKgs = roundMoney(Math.max(0, -persistedExpectedCashKgs));
+  const countableCashKgs = roundMoney(Math.max(0, persistedExpectedCashKgs));
+  const countedCashKgs =
+    shift.closingCashCountedKgs === null ? null : toMoney(shift.closingCashCountedKgs);
   const discrepancyKgs =
     countedCashKgs === null
       ? null
@@ -859,6 +861,8 @@ const loadShiftReport = async (
       openingCashKgs: toMoney(shift.openingCashKgs),
       closingCashCountedKgs: countedCashKgs,
       expectedCashKgs: persistedExpectedCashKgs,
+      overWithdrawalKgs,
+      countableCashKgs,
       discrepancyKgs,
       differenceStatus:
         discrepancyKgs === null ? null : resolveCashDifferenceStatus(discrepancyKgs),
@@ -876,6 +880,8 @@ const loadShiftReport = async (
       payInKgs,
       payOutKgs,
       expectedCashKgs,
+      overWithdrawalKgs: roundMoney(Math.max(0, -expectedCashKgs)),
+      countableCashKgs: roundMoney(Math.max(0, expectedCashKgs)),
       ...paymentTotals,
     },
     paymentsByMethod,
@@ -1459,10 +1465,9 @@ export const getCurrentRegisterShift = async (input: {
     })),
     heldReceiptCount,
     openingCashKgs: toMoney(shift.openingCashKgs),
-    closingCashCountedKgs: shift.closingCashCountedKgs
-      ? toMoney(shift.closingCashCountedKgs)
-      : null,
-    expectedCashKgs: shift.expectedCashKgs ? toMoney(shift.expectedCashKgs) : null,
+    closingCashCountedKgs:
+      shift.closingCashCountedKgs === null ? null : toMoney(shift.closingCashCountedKgs),
+    expectedCashKgs: shift.expectedCashKgs === null ? null : toMoney(shift.expectedCashKgs),
   };
 };
 
@@ -1568,29 +1573,28 @@ export const listRegisterShifts = async (input: {
       );
       const sales = salesByShift.get(item.id);
       const returns = returnsByShift.get(item.id);
+      const expectedCashKgs =
+        item.expectedCashKgs === null ? null : toMoney(item.expectedCashKgs);
+      const countedCashKgs =
+        item.closingCashCountedKgs === null ? null : toMoney(item.closingCashCountedKgs);
+      const discrepancyKgs =
+        expectedCashKgs === null || countedCashKgs === null
+          ? null
+          : calculateCashDiscrepancyKgs({ countedCashKgs, expectedCashKgs });
+      const overWithdrawalKgs =
+        expectedCashKgs === null ? 0 : roundMoney(Math.max(0, -expectedCashKgs));
+      const countableCashKgs =
+        expectedCashKgs === null ? null : roundMoney(Math.max(0, expectedCashKgs));
       return {
         ...item,
         openingCashKgs: toMoney(item.openingCashKgs),
-        closingCashCountedKgs: item.closingCashCountedKgs
-          ? toMoney(item.closingCashCountedKgs)
-          : null,
-        expectedCashKgs: item.expectedCashKgs ? toMoney(item.expectedCashKgs) : null,
-        discrepancyKgs:
-          item.expectedCashKgs && item.closingCashCountedKgs
-            ? calculateCashDiscrepancyKgs({
-                countedCashKgs: toMoney(item.closingCashCountedKgs),
-                expectedCashKgs: toMoney(item.expectedCashKgs),
-              })
-            : null,
+        closingCashCountedKgs: countedCashKgs,
+        expectedCashKgs,
+        overWithdrawalKgs,
+        countableCashKgs,
+        discrepancyKgs,
         differenceStatus:
-          item.expectedCashKgs && item.closingCashCountedKgs
-            ? resolveCashDifferenceStatus(
-                calculateCashDiscrepancyKgs({
-                  countedCashKgs: toMoney(item.closingCashCountedKgs),
-                  expectedCashKgs: toMoney(item.expectedCashKgs),
-                }),
-              )
-            : null,
+          discrepancyKgs === null ? null : resolveCashDifferenceStatus(discrepancyKgs),
         summary: {
           salesCount: sales?._count._all ?? 0,
           salesTotalKgs: toMoney(sales?._sum.totalKgs),
@@ -1649,23 +1653,28 @@ export const closeRegisterShift = async (input: {
         }
 
         if (shift.status === RegisterShiftStatus.CLOSED) {
+          const expectedCashKgs =
+            shift.expectedCashKgs === null ? 0 : toMoney(shift.expectedCashKgs);
+          const closingCashCountedKgs =
+            shift.closingCashCountedKgs === null ? null : toMoney(shift.closingCashCountedKgs);
+          const discrepancyKgs =
+            closingCashCountedKgs === null
+              ? null
+              : calculateCashDiscrepancyKgs({
+                  countedCashKgs: closingCashCountedKgs,
+                  expectedCashKgs,
+                });
           return {
             id: shift.id,
             registerId: shift.registerId,
             storeId: shift.storeId,
             status: shift.status,
             closedAt: shift.closedAt,
-            expectedCashKgs: shift.expectedCashKgs ? toMoney(shift.expectedCashKgs) : 0,
-            closingCashCountedKgs: shift.closingCashCountedKgs
-              ? toMoney(shift.closingCashCountedKgs)
-              : null,
-            discrepancyKgs:
-              shift.expectedCashKgs && shift.closingCashCountedKgs
-                ? calculateCashDiscrepancyKgs({
-                    countedCashKgs: toMoney(shift.closingCashCountedKgs),
-                    expectedCashKgs: toMoney(shift.expectedCashKgs),
-                  })
-                : null,
+            expectedCashKgs,
+            overWithdrawalKgs: roundMoney(Math.max(0, -expectedCashKgs)),
+            countableCashKgs: roundMoney(Math.max(0, expectedCashKgs)),
+            closingCashCountedKgs,
+            discrepancyKgs,
           };
         }
 
@@ -1695,10 +1704,18 @@ export const closeRegisterShift = async (input: {
 
         const counted = roundMoney(input.closingCashCountedKgs);
         const expected = roundMoney(report.summary.expectedCashKgs);
+        if (!Number.isFinite(counted) || counted < 0) {
+          throw new AppError("posShiftCountedCashNegative", "BAD_REQUEST", 400);
+        }
+        if (!Number.isFinite(expected)) {
+          throw new AppError("posShiftExpectedCashInvalid", "BAD_REQUEST", 400);
+        }
         const discrepancy = calculateCashDiscrepancyKgs({
           countedCashKgs: counted,
           expectedCashKgs: expected,
         });
+        const overWithdrawalKgs = roundMoney(Math.max(0, -expected));
+        const countableCashKgs = roundMoney(Math.max(0, expected));
         const closingNotes = input.notes?.trim() || null;
 
         if (Math.abs(discrepancy) > 0.009 && !closingNotes) {
@@ -1724,7 +1741,11 @@ export const closeRegisterShift = async (input: {
           entity: "RegisterShift",
           entityId: shift.id,
           before: toJson(shift),
-          after: toJson(updated),
+          after: toJson({
+            ...updated,
+            overWithdrawalKgs,
+            countableCashKgs,
+          }),
           requestId: input.requestId,
         });
 
@@ -1735,6 +1756,8 @@ export const closeRegisterShift = async (input: {
           status: updated.status,
           closedAt: updated.closedAt,
           expectedCashKgs: expected,
+          overWithdrawalKgs,
+          countableCashKgs,
           closingCashCountedKgs: counted,
           discrepancyKgs: discrepancy,
         };
@@ -5781,6 +5804,10 @@ export const recordCashDrawerMovement = async (input: {
         userId: input.actorId,
       },
       async () => {
+        await tx.$queryRaw`
+          SELECT id FROM "RegisterShift" WHERE id = ${input.shiftId} FOR UPDATE
+        `;
+
         const shift = await tx.registerShift.findFirst({
           where: {
             id: input.shiftId,
@@ -5807,13 +5834,29 @@ export const recordCashDrawerMovement = async (input: {
           throw new AppError("posShiftClosed", "CONFLICT", 409);
         }
 
+        const amountKgs = roundMoney(input.amountKgs);
+        if (!Number.isFinite(amountKgs) || amountKgs <= 0) {
+          throw new AppError("posCashMovementAmountInvalid", "BAD_REQUEST", 400);
+        }
+
+        if (input.type === CashDrawerMovementType.PAY_OUT) {
+          const report = await loadShiftReport(tx, {
+            organizationId: input.organizationId,
+            shiftId: shift.id,
+          });
+          const availableCashKgs = roundMoney(report.summary.expectedCashKgs);
+          if (!Number.isFinite(availableCashKgs) || availableCashKgs - amountKgs < -0.009) {
+            throw new AppError("posCashOutExceedsExpectedCash", "BAD_REQUEST", 400);
+          }
+        }
+
         const created = await tx.cashDrawerMovement.create({
           data: {
             organizationId: input.organizationId,
             storeId: shift.storeId,
             shiftId: shift.id,
             type: input.type,
-            amountKgs: roundMoney(input.amountKgs),
+            amountKgs,
             ...resolveCurrencySnapshot(currencySourceWithFallback(shift, shift.store)),
             reason: input.reason,
             createdById: input.actorId,

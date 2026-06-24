@@ -34,6 +34,35 @@ describe("pos entry navigation", () => {
     expect(source).toContain("!closeNoteValid");
   });
 
+  it("shows explicit shift close and cash-out validation instead of silently disabling close", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/shifts/page.tsx");
+    const serviceSource = await readSource("src/server/services/pos.ts");
+    const routerSource = await readSource("src/server/trpc/routers/pos.ts");
+    const ruMessages = await readSource("messages/ru.json");
+
+    expect(pageSource).toContain("const closeBlockingMessage =");
+    expect(pageSource).toContain("const closeWarningMessage =");
+    expect(pageSource).toContain('t("shifts.overWithdrawalWarning"');
+    expect(pageSource).toContain("Math.max(0, report.summary.expectedCashKgs)");
+    expect(pageSource).toContain('t("shifts.countedCashNegative")');
+    expect(pageSource).toContain('t("shifts.cashOutExceedsExpectedCash")');
+    expect(pageSource).toContain('t("shifts.calculatedCash")');
+    expect(pageSource).toContain('t("shifts.overWithdrawal")');
+    expect(pageSource).toContain('t("shifts.countableCash")');
+    expect(pageSource).toContain("cashOutReasonOptions");
+    expect(pageSource).toContain('t("shifts.cashOutReasonCollection")');
+    expect(serviceSource).not.toContain('throw new AppError("posShiftExpectedCashNegative"');
+    expect(serviceSource).toContain('throw new AppError("posShiftExpectedCashInvalid"');
+    expect(serviceSource).toContain('throw new AppError("posShiftCountedCashNegative"');
+    expect(serviceSource).toContain('throw new AppError("posCashOutExceedsExpectedCash"');
+    expect(serviceSource).toContain("overWithdrawalKgs");
+    expect(serviceSource).toContain("countableCashKgs");
+    expect(routerSource).toContain("closingCashCountedKgs: z.number()");
+    expect(routerSource).not.toContain("closingCashCountedKgs: z.number().min(0)");
+    expect(ruMessages).toContain("Изъятия превысили расчетную наличность");
+    expect(ruMessages).toContain("Инкассация");
+  });
+
   it("shows cash and non-cash payment totals in shift close and shift history UI", async () => {
     const source = await readSource("src/app/(app)/pos/shifts/page.tsx");
 
@@ -271,6 +300,34 @@ describe("pos entry navigation", () => {
       "void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: true }));",
     );
     expect(pageSource).toContain("{ enabled: Boolean(saleId && !hasLocalCartLines)");
+  });
+
+  it("keeps mobile POS catalog search and add selection stable by product id", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const handleAddLineBlock = pageSource.slice(
+      pageSource.indexOf("const handleAddLine"),
+      pageSource.indexOf("useEffect(() => {\n    if (!hasOpenShift)"),
+    );
+    const mobileSelectBlock = pageSource.slice(
+      pageSource.indexOf("const handleMobileProductSelect"),
+      pageSource.indexOf("const activeLineInputValue"),
+    );
+
+    expect(pageSource).toContain(
+      'const useImmediateCatalogSearch = isPhoneScreen === true && mobileScreen === "catalog";',
+    );
+    expect(pageSource).toContain(
+      "const searchTerm = useImmediateCatalogSearch ? lineSearch.trim() : debouncedLineSearch;",
+    );
+    expect(pageSource).toContain("keepPreviousData: !useImmediateCatalogSearch");
+    expect(pageSource).toContain("refetchOnWindowFocus: false");
+    expect(handleAddLineBlock.indexOf("pendingAddProductIdsRef.current.has(productId)")).toBeLessThan(
+      handleAddLineBlock.indexOf("applyOptimisticAdd(productForCart)"),
+    );
+    expect(mobileSelectBlock).toContain("mobilePendingProductId === product.id");
+    expect(mobileSelectBlock).toContain("setMobilePendingProductId(product.id)");
+    expect(pageSource).toContain("const isPendingProduct = mobilePendingProductId === product.id;");
+    expect(pageSource).toContain("data-product-id={product.id}");
   });
 
   it("renders cashier products as readable rows with in-cart quantity controls", async () => {

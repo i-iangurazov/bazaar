@@ -75,7 +75,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
       {toasts.length ? (
         <div
           className={cn(
-            "fixed left-4 right-4 z-50 flex flex-col gap-3 sm:w-96",
+            "fixed left-4 right-4 z-[1100] flex flex-col gap-3 sm:w-96",
             isPosCashierRoute
               ? "top-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
               : "bottom-4 sm:left-auto sm:right-6",

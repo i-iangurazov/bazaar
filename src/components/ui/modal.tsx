@@ -81,7 +81,7 @@ export const Modal = ({
   const content = (
     <div
       className={cn(
-        "fixed inset-0 z-50 overflow-hidden",
+        "fixed inset-0 z-[1000] overflow-hidden",
         mobileSheet
           ? "flex items-end justify-center px-0 py-0 sm:grid sm:place-items-center sm:px-4 sm:py-6"
           : "grid place-items-center px-3 py-4 sm:px-4 sm:py-6",
