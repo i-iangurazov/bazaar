@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
@@ -65,6 +65,8 @@ export const ResponsiveDataList = <T,>({
   const [internalPage, setInternalPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const page = isServerPagination ? Math.max(1, externalPage ?? 1) : internalPage;
+  const onPageChangeRef = useRef(onPageChange);
+  onPageChangeRef.current = onPageChange;
 
   useEffect(() => {
     if (isServerPagination) {
@@ -89,11 +91,11 @@ export const ResponsiveDataList = <T,>({
 
   useEffect(() => {
     if (isServerPagination) {
-      onPageChange?.(1);
+      onPageChangeRef.current?.(1);
       return;
     }
     setInternalPage(1);
-  }, [isServerPagination, onPageChange, pageSize]);
+  }, [isServerPagination, pageSize]);
 
   const totalCount = isServerPagination ? totalItems : list.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
