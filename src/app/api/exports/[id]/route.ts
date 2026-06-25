@@ -1,9 +1,9 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 
-import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
+import { AppError } from "@/server/services/errors";
+import { resolveExportJobDownload } from "@/server/services/exports";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,46 +14,57 @@ type RouteParams = {
   };
 };
 
-export const GET = async (_request: Request, { params }: RouteParams) => {
-  const token = await getServerAuthToken();
-  if (!token) {
-    return new Response(null, { status: 401 });
-  }
-
-  const job = await prisma.exportJob.findFirst({
-    where: { id: params.id, organizationId: token.organizationId as string },
-  });
-
-  if (!job || !job.storagePath) {
-    return new Response(null, { status: 404 });
-  }
-
-  let fileSize: number;
-  try {
-    const stats = await stat(job.storagePath);
-    if (!stats.isFile()) {
-      return new Response(null, { status: 404 });
-    }
-    fileSize = stats.size;
-  } catch {
-    return new Response(null, { status: 404 });
-  }
-  const defaultExtension =
-    job.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      ? "xlsx"
-      : "csv";
-  const fileName = job.fileName ?? `export-${job.id}.${defaultExtension}`;
-
-  const stream = createReadStream(job.storagePath);
-  const body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
-
-  return new Response(body, {
-    status: 200,
+const textResponse = (message: string, status: number) =>
+  new Response(message, {
+    status,
     headers: {
-      "Content-Type": job.mimeType ?? "text/csv;charset=utf-8",
-      "Content-Disposition": `attachment; filename=\"${fileName}\"`,
-      "Content-Length": String(fileSize),
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
     },
   });
+
+const buildContentDisposition = (fileName: string) => {
+  const fallback = fileName.replace(/[^\x20-\x7e]|["\\\r\n]/g, "_");
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+};
+
+export const GET = async (_request: Request, { params }: RouteParams) => {
+  const token = await getServerAuthToken();
+  if (!token?.sub || !token.organizationId) {
+    return textResponse("unauthorized", 401);
+  }
+
+  try {
+    const download = await resolveExportJobDownload({
+      organizationId: String(token.organizationId),
+      jobId: params.id,
+      user: {
+        id: token.sub,
+        organizationId: String(token.organizationId),
+        role: String(token.role ?? "STAFF"),
+        isOrgOwner: Boolean((token as { isOrgOwner?: boolean | null }).isOrgOwner),
+        isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean | null }).isPlatformOwner),
+      },
+    });
+
+    const stream = createReadStream(download.storagePath);
+    const body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "Content-Type": download.mimeType,
+        "Content-Disposition": buildContentDisposition(download.fileName),
+        "Content-Length": String(download.fileSize),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      return textResponse(error.message, error.status);
+    }
+    return textResponse("exportDownloadFailed", 500);
+  }
 };

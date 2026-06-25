@@ -22,7 +22,7 @@ export const IconButton = ({
 }: IconButtonProps) => {
   const content = <Icon className="h-4 w-4" aria-hidden />;
   const canLink = Boolean(href) && !props.disabled;
-  const isInternalLink = Boolean(href?.startsWith("/"));
+  const isInternalLink = Boolean(href?.startsWith("/") && !href.startsWith("/api/"));
 
   return (
     <Tooltip>

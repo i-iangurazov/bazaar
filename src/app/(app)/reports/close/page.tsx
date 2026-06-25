@@ -77,7 +77,7 @@ const PeriodClosePage = () => {
     onSuccess: (job) => {
       toast({ variant: "success", description: t("exportCreated") });
       if (job?.id) {
-        window.open(`/api/exports/${job.id}`, "_blank");
+        window.open("/reports/exports", "_blank");
       }
     },
     onError: (error) => {

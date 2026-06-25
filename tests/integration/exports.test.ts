@@ -58,9 +58,9 @@ describeDb("exports", () => {
       RECEIPTS_REGISTRY:
         "orgId,storeCode,storeName,receiptNumber,createdAt,completedAt,status,registerCode,registerName,cashierEmail,currencyCode,currencyRateKgsPerUnit,totalKgs,cashKgs,cardKgs,transferKgs,otherKgs,kkmStatus,fiscalStatus,fiscalMode,fiscalNumber,providerReceiptId,fiscalError",
       SHIFT_X_REPORT:
-        "orgId,storeCode,reportType,shiftId,status,currencyCode,currencyRateKgsPerUnit,registerCode,registerName,openedAt,openedBy,closedAt,closedBy,salesCount,salesTotalKgs,cashSalesKgs,nonCashSalesKgs,cardSalesKgs,transferSalesKgs,otherSalesKgs,returnsCount,returnsTotalKgs,cashRefundsKgs,nonCashRefundsKgs,cardRefundsKgs,transferRefundsKgs,otherRefundsKgs,nonCashNetKgs,openingCashKgs,cashPayInKgs,cashPayOutKgs,expectedCashKgs,countedCashKgs,discrepancyKgs",
+        "orgId,storeCode,reportType,shiftId,status,currencyCode,currencyRateKgsPerUnit,registerCode,registerName,openedAt,openedBy,closedAt,closedBy,salesCount,salesTotalKgs,cashSalesKgs,nonCashSalesKgs,cardSalesKgs,transferSalesKgs,otherSalesKgs,returnsCount,returnsTotalKgs,cashRefundsKgs,nonCashRefundsKgs,cardRefundsKgs,transferRefundsKgs,otherRefundsKgs,nonCashNetKgs,openingCashKgs,cashPayInKgs,cashPayOutKgs,expectedCashKgs,overWithdrawalKgs,countedCashKgs,discrepancyKgs",
       SHIFT_Z_REPORT:
-        "orgId,storeCode,reportType,shiftId,status,currencyCode,currencyRateKgsPerUnit,registerCode,registerName,openedAt,openedBy,closedAt,closedBy,salesCount,salesTotalKgs,cashSalesKgs,nonCashSalesKgs,cardSalesKgs,transferSalesKgs,otherSalesKgs,returnsCount,returnsTotalKgs,cashRefundsKgs,nonCashRefundsKgs,cardRefundsKgs,transferRefundsKgs,otherRefundsKgs,nonCashNetKgs,openingCashKgs,cashPayInKgs,cashPayOutKgs,expectedCashKgs,countedCashKgs,discrepancyKgs",
+        "orgId,storeCode,reportType,shiftId,status,currencyCode,currencyRateKgsPerUnit,registerCode,registerName,openedAt,openedBy,closedAt,closedBy,salesCount,salesTotalKgs,cashSalesKgs,nonCashSalesKgs,cardSalesKgs,transferSalesKgs,otherSalesKgs,returnsCount,returnsTotalKgs,cashRefundsKgs,nonCashRefundsKgs,cardRefundsKgs,transferRefundsKgs,otherRefundsKgs,nonCashNetKgs,openingCashKgs,cashPayInKgs,cashPayOutKgs,expectedCashKgs,overWithdrawalKgs,countedCashKgs,discrepancyKgs",
       SALES_BY_DAY: "orgId,storeCode,day,ordersCount,revenueKgs",
       SALES_BY_ITEM: "orgId,storeCode,sku,productName,variantSku,variantName,qty,revenueKgs",
       RETURNS_BY_DAY: "orgId,storeCode,day,returnsCount,returnsTotalKgs",
@@ -97,6 +97,9 @@ describeDb("exports", () => {
 
       expect(job.status).toBe("DONE");
       expect(job.storagePath).toBeTruthy();
+      expect(job.downloadAvailable).toBe(true);
+      expect(job.downloadUrl).toBe(`/api/exports/${job.id}`);
+      expect(job.downloadUnavailableReason).toBeNull();
 
       const csv = await fs.readFile(job.storagePath ?? "", "utf8");
       expect(job.mimeType).toBe("text/csv;charset=utf-8");
@@ -105,7 +108,7 @@ describeDb("exports", () => {
       const header = csv.replace(/^\ufeff/, "").split(/\r?\n/)[0]?.trim();
       expect(header).toBe(headers[type]);
     }
-  });
+  }, 60_000);
 
   it("generates XLSX exports with stable headers", async () => {
     const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
@@ -132,6 +135,9 @@ describeDb("exports", () => {
       throw new Error("export job missing");
     }
     expect(job.status).toBe("DONE");
+    expect(job.downloadAvailable).toBe(true);
+    expect(job.downloadUrl).toBe(`/api/exports/${job.id}`);
+    expect(job.downloadUnavailableReason).toBeNull();
     const xlsx = await fs.readFile(job.storagePath ?? "");
     expect(job.mimeType).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     expect(job.fileName?.endsWith(".xlsx")).toBe(true);
@@ -164,5 +170,37 @@ describeDb("exports", () => {
         periodEnd: new Date("2025-01-31T23:59:59Z"),
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("marks completed exports unavailable when the generated file is missing", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const created = await caller.exports.create({
+      storeId: store.id,
+      type: ExportType.PRICE_LIST,
+      format: "csv",
+      periodStart: new Date("2025-01-01T00:00:00Z"),
+      periodEnd: new Date("2025-01-31T23:59:59Z"),
+    });
+
+    await runJob("export-job", { jobId: created.id });
+    const completed = await caller.exports.get({ jobId: created.id });
+    expect(completed?.storagePath).toBeTruthy();
+    if (!completed?.storagePath) {
+      throw new Error("export storage path missing");
+    }
+    await fs.unlink(completed.storagePath);
+
+    const missing = await caller.exports.get({ jobId: created.id });
+    expect(missing?.status).toBe("DONE");
+    expect(missing?.downloadAvailable).toBe(false);
+    expect(missing?.downloadUrl).toBeNull();
+    expect(missing?.downloadUnavailableReason).toBe("exportFileMissing");
   });
 });

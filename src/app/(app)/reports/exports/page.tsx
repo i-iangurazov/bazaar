@@ -54,9 +54,50 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
-const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 type ExportFileFormat = "csv" | "xlsx";
 type CategoryFilter = ExportTypeCategory | "all";
+type ExportPeriodPreset = "today" | "yesterday" | "last7" | "last30" | "thisMonth" | "lastMonth";
+
+const formatDateInput = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const buildPresetRange = (preset: ExportPeriodPreset) => {
+  const today = new Date();
+  if (preset === "today") {
+    const value = formatDateInput(today);
+    return { start: value, end: value };
+  }
+  if (preset === "yesterday") {
+    const value = formatDateInput(addDays(today, -1));
+    return { start: value, end: value };
+  }
+  if (preset === "last7") {
+    return { start: formatDateInput(addDays(today, -6)), end: formatDateInput(today) };
+  }
+  if (preset === "thisMonth") {
+    return {
+      start: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+      end: formatDateInput(today),
+    };
+  }
+  if (preset === "lastMonth") {
+    return {
+      start: formatDateInput(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+      end: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 0)),
+    };
+  }
+  return { start: formatDateInput(addDays(today, -29)), end: formatDateInput(today) };
+};
 
 const statusBadgeVariant = (status: ExportJobStatus) => {
   if (status === "DONE") {
@@ -99,6 +140,7 @@ const formatFileSize = (value?: number | null) => {
 
 const ExportsPage = () => {
   const t = useTranslations("exports");
+  const tReports = useTranslations("reports");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
@@ -117,6 +159,7 @@ const ExportsPage = () => {
     formatDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
   );
   const [periodEnd, setPeriodEnd] = useState(formatDateInput(now));
+  const [periodPreset, setPeriodPreset] = useState<ExportPeriodPreset | "custom">("thisMonth");
 
   const jobsQuery = trpc.exports.list.useQuery(
     { storeId: storeId || undefined, limit: 100 },
@@ -182,6 +225,22 @@ const ExportsPage = () => {
   const selectExportType = (type: ExportType) => {
     setExportType(type);
     setFormat(EXPORT_TYPE_METADATA[type].recommendedFormat);
+  };
+
+  const applyPeriodPreset = (nextPreset: ExportPeriodPreset) => {
+    const range = buildPresetRange(nextPreset);
+    setPeriodPreset(nextPreset);
+    setPeriodStart(range.start);
+    setPeriodEnd(range.end);
+  };
+
+  const handlePeriodDateChange = (field: "start" | "end", value: string) => {
+    setPeriodPreset("custom");
+    if (field === "start") {
+      setPeriodStart(value);
+      return;
+    }
+    setPeriodEnd(value);
   };
 
   const handleGenerate = () => {
@@ -315,17 +374,33 @@ const ExportsPage = () => {
                 <Input
                   type="date"
                   value={periodStart}
-                  onChange={(event) => setPeriodStart(event.target.value)}
+                  onChange={(event) => handlePeriodDateChange("start", event.target.value)}
                 />
               </Field>
               <Field label={t("periodEnd")}>
                 <Input
                   type="date"
                   value={periodEnd}
-                  onChange={(event) => setPeriodEnd(event.target.value)}
+                  onChange={(event) => handlePeriodDateChange("end", event.target.value)}
                 />
               </Field>
             </FormGrid>
+
+            <div className="flex flex-wrap gap-2">
+              {(["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as ExportPeriodPreset[]).map(
+                (item) => (
+                  <Button
+                    key={item}
+                    type="button"
+                    variant={periodPreset === item ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => applyPeriodPreset(item)}
+                  >
+                    {tReports(`presets.${item}`)}
+                  </Button>
+                ),
+              )}
+            </div>
 
             <Alert variant={selectedMetadata.periodRequired ? "info" : "default"}>
               <AlertTitle>{typeLabels[exportType]}</AlertTitle>
@@ -471,8 +546,8 @@ const ExportsPage = () => {
                             key: "download",
                             label: tCommon("tooltips.download"),
                             icon: DownloadIcon,
-                            href: `/api/exports/${job.id}`,
-                            disabled: !job.storagePath || job.status !== "DONE",
+                            href: job.downloadUrl ?? "#",
+                            disabled: !job.downloadAvailable,
                             variant: "primary",
                           },
                           ...(job.status === "FAILED"
@@ -524,7 +599,11 @@ const ExportsPage = () => {
                               {job.fileName ? (
                                 <div className="max-w-[220px]">
                                   <p className="truncate text-foreground">{job.fileName}</p>
-                                  <p>{formatFileSize(job.fileSize)}</p>
+                                  <p>
+                                    {job.downloadUnavailableReason === "exportFileMissing"
+                                      ? t("fileMissing")
+                                      : formatFileSize(job.fileSize)}
+                                  </p>
                                 </div>
                               ) : (
                                 <span>{t("filePending")}</span>
@@ -558,8 +637,8 @@ const ExportsPage = () => {
                     key: "download",
                     label: tCommon("tooltips.download"),
                     icon: DownloadIcon,
-                    href: `/api/exports/${job.id}`,
-                    disabled: !job.storagePath || job.status !== "DONE",
+                    href: job.downloadUrl ?? "#",
+                    disabled: !job.downloadAvailable,
                     variant: "primary",
                   },
                   ...(job.status === "FAILED"
@@ -613,7 +692,10 @@ const ExportsPage = () => {
                       </div>
                       {job.fileName ? (
                         <div className="mt-1 truncate text-foreground">
-                          {job.fileName} {formatFileSize(job.fileSize)}
+                          {job.fileName}{" "}
+                          {job.downloadUnavailableReason === "exportFileMissing"
+                            ? t("fileMissing")
+                            : formatFileSize(job.fileSize)}
                         </div>
                       ) : null}
                     </div>

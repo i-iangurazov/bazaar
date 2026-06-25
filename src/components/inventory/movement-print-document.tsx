@@ -22,7 +22,6 @@ export type MovementPrintDocumentLabels = {
   lineTotal: string;
   positions: string;
   amount: string;
-  technicalReference: string;
   costNotSpecified: string;
   shippedBy: string;
   releasedBy: string;
@@ -50,9 +49,6 @@ export const getMovementPrintDocumentNumber = (document: ProductMovementDocument
         .slice(0, 10)
         .replaceAll("-", "")}-${document.documentId.slice(0, 8).toUpperCase()}`;
 
-export const getMovementPrintTechnicalReference = (document: ProductMovementDocumentDetail) =>
-  document.documentId.slice(0, 8).toUpperCase();
-
 const getPrintableLines = (document: ProductMovementDocumentDetail) => {
   if (document.documentType !== "TRANSFER") {
     return document.lines;
@@ -64,23 +60,30 @@ const getPrintableLines = (document: ProductMovementDocumentDetail) => {
     : document.lines.filter((line) => line.movementType === "TRANSFER_IN");
 };
 
-const formatMaybeMoney = (value: number | null | undefined, locale: string) =>
-  typeof value === "number" ? formatCurrencyKGS(value, locale) : null;
+const isReceivingDocument = (document: ProductMovementDocumentDetail) =>
+  document.documentType === "STOCK_RECEIVING" || document.documentType === "RECEIVE";
 
-const renderSkuBarcode = (sku: string | null, barcode: string | null, fallback: string) => {
-  if (!sku && !barcode) {
-    return fallback;
-  }
+const formatMaybeMoney = (value: number | null | undefined, locale: string, fallback: string) =>
+  typeof value === "number" ? formatCurrencyKGS(value, locale) : fallback;
 
-  return <span>{[sku, barcode].filter(Boolean).join(" · ")}</span>;
+const productSecondaryText = (
+  line: ProductMovementDocumentDetail["lines"][number],
+  labels: MovementPrintDocumentLabels,
+) => {
+  const references = [line.sku, line.barcode].filter(Boolean);
+  return references.length ? `${labels.skuBarcode}: ${references.join(" / ")}` : null;
 };
 
 export const MovementPrintDocument = ({ document, labels, locale }: MovementPrintDocumentProps) => {
   const lines = getPrintableLines(document);
-  const hasLineAmount = lines.some((line) => typeof line.lineTotalKgs === "number");
-  const totalAmount = hasLineAmount
-    ? lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0)
-    : document.totalAmount;
+  const showMoneyColumns =
+    isReceivingDocument(document) &&
+    (document.totalAmount !== null ||
+      lines.some((line) => line.unitCostKgs !== null || line.lineTotalKgs !== null));
+  const totalAmount = showMoneyColumns
+    ? (document.totalAmount ??
+      lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0))
+    : null;
   const totalQuantity = lines.reduce((sum, line) => sum + Math.abs(line.qtyDelta), 0);
   const senderLabel =
     document.documentType === "TRANSFER"
@@ -103,6 +106,8 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         : labels.shippedBy;
   const secondSignatureLabel =
     document.documentType === "WRITE_OFF" ? labels.checkedBy : labels.receivedBy;
+  const hasReason = Boolean(document.reason?.trim());
+  const hasComment = Boolean((document.comment || document.description)?.trim());
 
   return (
     <section className="movement-print-sheet" aria-label={labels.title}>
@@ -110,65 +115,60 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         .movement-print-sheet {
           width: 210mm;
           max-width: calc(100vw - 24px);
+          min-height: 297mm;
           margin: 12px auto;
-          padding: 7mm;
+          padding: 14mm;
           color: #111827;
           background: #ffffff;
           box-shadow: 0 12px 34px rgba(15, 23, 42, 0.14);
           font-family: Arial, Helvetica, sans-serif;
-          font-size: 8px;
-          line-height: 1.1;
+          font-size: 11px;
+          line-height: 1.35;
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
         }
 
         .movement-print-header {
           display: grid;
-          grid-template-columns: 1fr 42mm;
-          gap: 4mm;
+          grid-template-columns: minmax(0, 1fr) 54mm;
+          gap: 10mm;
           align-items: start;
-          padding-bottom: 1.4mm;
-          border-bottom: 1.5px solid #111827;
+          padding-bottom: 7mm;
+          border-bottom: 1px solid #d1d5db;
         }
 
         .movement-print-company {
-          margin: 0 0 0.9mm;
-          color: #334155;
-          font-size: 6.8px;
+          margin: 0 0 2mm;
+          color: #4b5563;
+          font-size: 10px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.03em;
+          letter-spacing: 0.04em;
         }
 
         .movement-print-title {
           margin: 0;
-          font-size: 12px;
-          line-height: 1.1;
+          font-size: 22px;
+          line-height: 1.12;
           font-weight: 700;
         }
 
         .movement-print-number {
-          margin: 0.6mm 0 0;
-          color: #334155;
-          font-size: 7.6px;
+          margin: 2.5mm 0 0;
+          color: #111827;
+          font-size: 12px;
           font-weight: 700;
         }
 
-        .movement-print-technical-reference {
-          margin: 0.3mm 0 0;
-          color: #64748b;
-          font-size: 6px;
-        }
-
         .movement-print-stamp {
-          border: 1px solid #111827;
+          border: 1px solid #d1d5db;
         }
 
         .movement-print-stamp-row {
           display: grid;
-          grid-template-columns: 15mm 1fr;
-          min-height: 3.6mm;
-          border-bottom: 1px solid #111827;
+          grid-template-columns: 20mm 1fr;
+          min-height: 9mm;
+          border-bottom: 1px solid #d1d5db;
         }
 
         .movement-print-stamp-row:last-child {
@@ -177,18 +177,19 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
 
         .movement-print-stamp-label,
         .movement-print-stamp-value {
-          padding: 0.8mm 1mm;
+          padding: 2mm;
         }
 
         .movement-print-stamp-label {
-          border-right: 1px solid #111827;
-          color: #475569;
-          font-size: 6px;
+          border-right: 1px solid #d1d5db;
+          color: #4b5563;
+          font-size: 9px;
           font-weight: 700;
           text-transform: uppercase;
         }
 
         .movement-print-stamp-value {
+          font-size: 10.5px;
           font-weight: 700;
           text-align: right;
         }
@@ -196,8 +197,8 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         .movement-print-meta {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0.7mm 4mm;
-          margin-top: 1.4mm;
+          gap: 3mm 8mm;
+          margin-top: 7mm;
         }
 
         .movement-print-meta dt,
@@ -207,13 +208,13 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
 
         .movement-print-meta-item {
           display: grid;
-          grid-template-columns: 22mm 1fr;
-          gap: 1.5mm;
-          min-height: 2.7mm;
+          grid-template-columns: 34mm minmax(0, 1fr);
+          gap: 3mm;
+          min-height: 6mm;
         }
 
         .movement-print-meta-label {
-          color: #475569;
+          color: #4b5563;
           font-weight: 700;
         }
 
@@ -223,51 +224,51 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
 
         .movement-print-table {
           width: 100%;
-          margin-top: 1.6mm;
+          margin-top: 8mm;
           border-collapse: collapse;
           table-layout: fixed;
-          font-size: 6.5px;
-          line-height: 1.03;
+          font-size: 10.5px;
+          line-height: 1.3;
         }
 
         .movement-print-table th,
         .movement-print-table td {
-          border: 1px solid #111827;
+          border: 1px solid #d1d5db;
           color: #111827;
-          padding: 0.25mm 0.45mm;
+          padding: 2.2mm 2mm;
           vertical-align: top;
         }
 
         .movement-print-table th {
-          background: #f1f5f9;
-          color: #111827;
-          font-size: 5.6px;
+          background: #f3f4f6;
+          color: #374151;
+          font-size: 9px;
           font-weight: 700;
           text-align: left;
           text-transform: uppercase;
         }
 
+        .movement-print-table th.movement-print-money {
+          white-space: normal;
+          text-align: right;
+        }
+
         .movement-print-num {
-          width: 6mm;
+          width: 10mm;
           text-align: center;
         }
 
-        .movement-print-sku {
-          width: 31mm;
-        }
-
         .movement-print-unit {
-          width: 8mm;
+          width: 18mm;
         }
 
         .movement-print-qty {
-          width: 11mm;
+          width: 24mm;
           text-align: right;
         }
 
         .movement-print-money {
-          width: 22mm;
-          font-size: 5.7px;
+          width: 30mm;
           white-space: nowrap;
           text-align: right;
         }
@@ -277,36 +278,35 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           overflow-wrap: anywhere;
         }
 
-        .movement-print-missing {
-          color: #64748b;
-          font-size: 5.8px;
-          white-space: nowrap;
+        .movement-print-product-name {
+          font-weight: 700;
         }
 
         .movement-print-muted {
-          color: #64748b;
-          font-size: 5.8px;
+          margin-top: 0.8mm;
+          color: #6b7280;
+          font-size: 9.5px;
         }
 
         .movement-print-totals {
           display: flex;
           justify-content: flex-end;
-          margin-top: 1.3mm;
+          margin-top: 6mm;
         }
 
         .movement-print-total-box {
-          width: 40mm;
-          border: 1px solid #111827;
+          width: 68mm;
+          border: 1px solid #d1d5db;
           border-bottom: 0;
-          font-size: 6.8px;
+          font-size: 11px;
         }
 
         .movement-print-total-row {
           display: flex;
           justify-content: space-between;
-          gap: 3mm;
-          border-bottom: 1px solid #111827;
-          padding: 0.35mm 0.8mm;
+          gap: 6mm;
+          border-bottom: 1px solid #d1d5db;
+          padding: 2mm 2.5mm;
         }
 
         .movement-print-total-row strong {
@@ -316,39 +316,31 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         .movement-print-signatures {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 1.3mm 5mm;
-          margin-top: 1.8mm;
+          gap: 8mm 12mm;
+          margin-top: 14mm;
           page-break-inside: avoid;
           break-inside: avoid;
         }
 
-        .movement-print-signature-row {
+        .movement-print-signature-row,
+        .movement-print-signature-date {
           display: grid;
           grid-template-columns: max-content 1fr;
-          gap: 1.5mm;
+          gap: 4mm;
           align-items: end;
-          min-height: 3.9mm;
-          font-size: 6.8px;
+          min-height: 11mm;
+          font-size: 11px;
         }
 
         .movement-print-signature-line {
           border-bottom: 1px solid #111827;
-          min-height: 2.8mm;
-        }
-
-        .movement-print-signature-date {
-          display: grid;
-          grid-template-columns: max-content 1fr;
-          gap: 1.5mm;
-          align-items: end;
-          min-height: 3.9mm;
-          font-size: 6.8px;
+          min-height: 8mm;
         }
 
         @media print {
           @page {
             size: A4;
-            margin: 5mm;
+            margin: 12mm;
           }
 
           html,
@@ -378,7 +370,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
-            font-size: 7px !important;
+            font-size: 11px !important;
           }
 
           .movement-print-table {
@@ -398,12 +390,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
             page-break-inside: avoid;
           }
 
-          .movement-print-table th,
-          .movement-print-table td {
-            padding-top: 0.18mm;
-            padding-bottom: 0.18mm;
-          }
-
+          .movement-print-header,
           .movement-print-meta,
           .movement-print-totals,
           .movement-print-signatures {
@@ -420,9 +407,6 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           </p>
           <h1 className="movement-print-title">{labels.title}</h1>
           <p className="movement-print-number">{labels.documentNumber}</p>
-          <p className="movement-print-technical-reference">
-            {labels.technicalReference}: {getMovementPrintTechnicalReference(document)}
-          </p>
         </div>
 
         <div className="movement-print-stamp" aria-label={labels.status}>
@@ -454,16 +438,18 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           <dt className="movement-print-meta-label">{labels.author}</dt>
           <dd>{document.authorName || document.authorEmail || labels.notAvailable}</dd>
         </div>
-        {document.reason ? (
+        {hasReason ? (
           <div className="movement-print-meta-item">
             <dt className="movement-print-meta-label">{labels.reason}</dt>
             <dd>{document.reason}</dd>
           </div>
         ) : null}
-        <div className="movement-print-meta-item movement-print-comment">
-          <dt className="movement-print-meta-label">{labels.comment}</dt>
-          <dd>{document.comment || document.description || labels.notAvailable}</dd>
-        </div>
+        {hasComment ? (
+          <div className="movement-print-meta-item movement-print-comment">
+            <dt className="movement-print-meta-label">{labels.comment}</dt>
+            <dd>{document.comment || document.description}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <table className="movement-print-table">
@@ -471,42 +457,46 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           <tr>
             <th className="movement-print-num">№</th>
             <th>{labels.product}</th>
-            <th className="movement-print-sku">{labels.skuBarcode}</th>
             <th className="movement-print-qty">{labels.quantity}</th>
             <th className="movement-print-unit">{labels.unit}</th>
-            <th className="movement-print-money">{labels.unitCost}</th>
-            <th className="movement-print-money">{labels.lineTotal}</th>
+            {showMoneyColumns ? (
+              <>
+                <th className="movement-print-money">{labels.unitCost}</th>
+                <th className="movement-print-money">{labels.lineTotal}</th>
+              </>
+            ) : null}
           </tr>
         </thead>
         <tbody>
-          {lines.map((line, index) => (
-            <tr key={line.id}>
-              <td className="movement-print-num">{index + 1}</td>
-              <td className="movement-print-product">
-                <div>{line.productName}</div>
-                {line.variantName ? (
-                  <div className="movement-print-muted">{line.variantName}</div>
+          {lines.map((line, index) => {
+            const secondary = productSecondaryText(line, labels);
+            return (
+              <tr key={line.id}>
+                <td className="movement-print-num">{index + 1}</td>
+                <td className="movement-print-product">
+                  <div className="movement-print-product-name">{line.productName}</div>
+                  {line.variantName ? (
+                    <div className="movement-print-muted">{line.variantName}</div>
+                  ) : null}
+                  {secondary ? <div className="movement-print-muted">{secondary}</div> : null}
+                </td>
+                <td className="movement-print-qty">
+                  {formatNumber(Math.abs(line.qtyDelta), locale)}
+                </td>
+                <td>{line.unit || labels.notAvailable}</td>
+                {showMoneyColumns ? (
+                  <>
+                    <td className="movement-print-money">
+                      {formatMaybeMoney(line.unitCostKgs, locale, labels.notAvailable)}
+                    </td>
+                    <td className="movement-print-money">
+                      {formatMaybeMoney(line.lineTotalKgs, locale, labels.notAvailable)}
+                    </td>
+                  </>
                 ) : null}
-              </td>
-              <td className="movement-print-sku">
-                {renderSkuBarcode(line.sku, line.barcode, labels.notAvailable)}
-              </td>
-              <td className="movement-print-qty">
-                {formatNumber(Math.abs(line.qtyDelta), locale)}
-              </td>
-              <td>{line.unit || labels.notAvailable}</td>
-              <td className="movement-print-money">
-                {formatMaybeMoney(line.unitCostKgs, locale) ?? (
-                  <span className="movement-print-missing">{labels.costNotSpecified}</span>
-                )}
-              </td>
-              <td className="movement-print-money">
-                {formatMaybeMoney(line.lineTotalKgs, locale) ?? (
-                  <span className="movement-print-missing">{labels.costNotSpecified}</span>
-                )}
-              </td>
-            </tr>
-          ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -520,14 +510,12 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
             <span>{labels.quantity}</span>
             <strong>{formatNumber(totalQuantity, locale)}</strong>
           </div>
-          <div className="movement-print-total-row">
-            <span>{labels.amount}</span>
-            <strong>
-              {formatMaybeMoney(totalAmount, locale) ?? (
-                <span className="movement-print-missing">{labels.costNotSpecified}</span>
-              )}
-            </strong>
-          </div>
+          {showMoneyColumns ? (
+            <div className="movement-print-total-row">
+              <span>{labels.amount}</span>
+              <strong>{formatMaybeMoney(totalAmount, locale, labels.notAvailable)}</strong>
+            </div>
+          ) : null}
         </div>
       </div>
 

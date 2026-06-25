@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -25,11 +26,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DownloadIcon } from "@/components/icons";
+import {
+  ArrowRightIcon,
+  DownloadIcon,
+  InventoryIcon,
+  MetricsIcon,
+  PosIcon,
+  ProductMovementIcon,
+  ReportsIcon,
+  SpreadsheetIcon,
+} from "@/components/icons";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { formatDate, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+
+type ReportPreset = "today" | "yesterday" | "last7" | "last30" | "thisMonth" | "lastMonth";
+
+const formatDateInput = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const buildPresetRange = (preset: ReportPreset) => {
+  const today = new Date();
+  if (preset === "today") {
+    const value = formatDateInput(today);
+    return { from: value, to: value };
+  }
+  if (preset === "yesterday") {
+    const value = formatDateInput(addDays(today, -1));
+    return { from: value, to: value };
+  }
+  if (preset === "last7") {
+    return { from: formatDateInput(addDays(today, -6)), to: formatDateInput(today) };
+  }
+  if (preset === "thisMonth") {
+    return {
+      from: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+      to: formatDateInput(today),
+    };
+  }
+  if (preset === "lastMonth") {
+    return {
+      from: formatDateInput(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+      to: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 0)),
+    };
+  }
+  return { from: formatDateInput(addDays(today, -29)), to: formatDateInput(today) };
+};
 
 const ReportsPage = () => {
   const t = useTranslations("reports");
@@ -42,20 +95,24 @@ const ReportsPage = () => {
   const reportsEnabled = status === "authenticated" && Boolean(canView);
 
   const [storeId, setStoreId] = useState("");
-  const [rangeDays, setRangeDays] = useState(30);
+  const initialRange = useMemo(() => buildPresetRange("last30"), []);
+  const [dateFrom, setDateFrom] = useState(initialRange.from);
+  const [dateTo, setDateTo] = useState(initialRange.to);
+  const [preset, setPreset] = useState<ReportPreset | "custom">("last30");
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: reportsEnabled });
+  const reportRangeInput = { storeId: storeId || undefined, dateFrom, dateTo };
   const stockoutsQuery = trpc.reports.stockouts.useQuery(
-    { storeId: storeId || undefined, days: rangeDays },
+    reportRangeInput,
     { enabled: reportsEnabled },
   );
   const slowMoversQuery = trpc.reports.slowMovers.useQuery(
-    { storeId: storeId || undefined, days: rangeDays },
+    reportRangeInput,
     { enabled: reportsEnabled },
   );
   const shrinkageQuery = trpc.reports.shrinkage.useQuery(
-    { storeId: storeId || undefined, days: rangeDays },
+    reportRangeInput,
     { enabled: reportsEnabled },
   );
 
@@ -64,6 +121,88 @@ const ReportsPage = () => {
   const stockoutRows = useMemo(() => stockoutsQuery.data ?? [], [stockoutsQuery.data]);
   const slowMoverRows = useMemo(() => slowMoversQuery.data ?? [], [slowMoversQuery.data]);
   const shrinkageRows = useMemo(() => shrinkageQuery.data ?? [], [shrinkageQuery.data]);
+
+  const applyPreset = (nextPreset: ReportPreset) => {
+    const range = buildPresetRange(nextPreset);
+    setPreset(nextPreset);
+    setDateFrom(range.from);
+    setDateTo(range.to);
+  };
+
+  const handleDateChange = (field: "from" | "to", value: string) => {
+    setPreset("custom");
+    if (field === "from") {
+      setDateFrom(value);
+      return;
+    }
+    setDateTo(value);
+  };
+
+  const reportCards = [
+    {
+      key: "sales",
+      href: "/reports/analytics",
+      icon: ReportsIcon,
+      title: t("cards.sales.title"),
+      description: t("cards.sales.description"),
+      filters: t("cards.sales.filters"),
+      action: t("analyticsLink"),
+    },
+    {
+      key: "soldProducts",
+      href: "/reports/analytics",
+      icon: SpreadsheetIcon,
+      title: t("cards.soldProducts.title"),
+      description: t("cards.soldProducts.description"),
+      filters: t("cards.soldProducts.filters"),
+      action: t("analyticsLink"),
+    },
+    {
+      key: "stock",
+      href: "/reports",
+      icon: InventoryIcon,
+      title: t("cards.stock.title"),
+      description: t("cards.stock.description"),
+      filters: t("cards.stock.filters"),
+      action: t("stockoutsTitle"),
+    },
+    {
+      key: "movement",
+      href: "/inventory/movements",
+      icon: ProductMovementIcon,
+      title: t("cards.movement.title"),
+      description: t("cards.movement.description"),
+      filters: t("cards.movement.filters"),
+      action: t("cards.open"),
+    },
+    {
+      key: "cashShift",
+      href: "/pos/shifts",
+      icon: PosIcon,
+      title: t("cards.cashShift.title"),
+      description: t("cards.cashShift.description"),
+      filters: t("cards.cashShift.filters"),
+      action: t("cards.open"),
+    },
+    {
+      key: "exports",
+      href: "/reports/exports",
+      icon: DownloadIcon,
+      title: t("cards.exports.title"),
+      description: t("cards.exports.description"),
+      filters: t("cards.exports.filters"),
+      action: t("exportsLink"),
+    },
+    {
+      key: "metrics",
+      href: "/reports/analytics",
+      icon: MetricsIcon,
+      title: t("cards.metrics.title"),
+      description: t("cards.metrics.description"),
+      filters: t("cards.metrics.filters"),
+      action: t("analyticsLink"),
+    },
+  ];
 
   if (status === "authenticated" && !canView) {
     return (
@@ -115,19 +254,34 @@ const ReportsPage = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-full sm:max-w-xs">
-              <Select
-                value={String(rangeDays)}
-                onValueChange={(value) => setRangeDays(Number(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t("rangeLabel")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">{t("range30")}</SelectItem>
-                  <SelectItem value="90">{t("range90")}</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid w-full gap-2 sm:max-w-md sm:grid-cols-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                aria-label={t("dateFrom")}
+                onChange={(event) => handleDateChange("from", event.target.value)}
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                aria-label={t("dateTo")}
+                onChange={(event) => handleDateChange("to", event.target.value)}
+              />
+            </div>
+            <div className="flex w-full flex-wrap gap-2">
+              {(["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as ReportPreset[]).map(
+                (item) => (
+                  <Button
+                    key={item}
+                    type="button"
+                    variant={preset === item ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => applyPreset(item)}
+                  >
+                    {t(`presets.${item}`)}
+                  </Button>
+                ),
+              )}
             </div>
             <div className="w-full sm:max-w-xs">
               <Select
@@ -147,6 +301,36 @@ const ReportsPage = () => {
         }
       />
 
+      <section className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {reportCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.key} variant="subtle" className="overflow-hidden">
+              <CardContent className="flex h-full flex-col gap-4">
+                <div className="flex items-start gap-3">
+                  <span className="rounded-md bg-primary/10 p-2 text-primary">
+                    <Icon className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground">{card.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{card.description}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{card.filters}</p>
+                <div className="mt-auto">
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href={card.href}>
+                      {card.action}
+                      <ArrowRightIcon className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </section>
+
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle>{t("stockoutsTitle")}</CardTitle>
@@ -164,7 +348,7 @@ const ReportsPage = () => {
               ]);
               downloadTableFile({
                 format: exportFormat,
-                fileNameBase: `stockouts-${rangeDays}d-${locale}`,
+                fileNameBase: `stockouts-${dateFrom}-${dateTo}-${locale}`,
                 header: [
                   t("columns.store"),
                   t("columns.product"),
@@ -297,7 +481,7 @@ const ReportsPage = () => {
               ]);
               downloadTableFile({
                 format: exportFormat,
-                fileNameBase: `slow-movers-${rangeDays}d-${locale}`,
+                fileNameBase: `slow-movers-${dateFrom}-${dateTo}-${locale}`,
                 header: [
                   t("columns.store"),
                   t("columns.product"),
@@ -426,7 +610,7 @@ const ReportsPage = () => {
               ]);
               downloadTableFile({
                 format: exportFormat,
-                fileNameBase: `shrinkage-${rangeDays}d-${locale}`,
+                fileNameBase: `shrinkage-${dateFrom}-${dateTo}-${locale}`,
                 header: [
                   t("columns.store"),
                   t("columns.product"),

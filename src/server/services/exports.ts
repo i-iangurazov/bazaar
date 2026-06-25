@@ -12,6 +12,7 @@ import {
   Prisma,
   RegisterShiftStatus,
   StockMovementType,
+  type ExportJob,
 } from "@prisma/client";
 import * as XLSX from "xlsx";
 
@@ -21,6 +22,7 @@ import { writeAuditLog } from "@/server/services/audit";
 import { sanitizeSpreadsheetValue, toCsv } from "@/server/services/csv";
 import { toJson } from "@/server/services/json";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
+import { assertUserCanAccessStore, type StoreAccessUser } from "@/server/services/storeAccess";
 
 type ExportRequestInput = {
   organizationId: string;
@@ -75,6 +77,46 @@ const readJobFormat = (paramsJson: Prisma.JsonValue | null | undefined): ExportF
 
 const buildFileName = (type: ExportType, jobId: string, format: ExportFormat) =>
   `${type.toLowerCase()}-${jobId}.${format}`;
+
+type ExportDownloadUnavailableReason = "exportFileMissing";
+
+export type ExportJobWithDownloadState = ExportJob & {
+  downloadAvailable: boolean;
+  downloadUrl: string | null;
+  downloadUnavailableReason: ExportDownloadUnavailableReason | null;
+};
+
+const readExportFileStats = async (storagePath?: string | null) => {
+  if (!storagePath) {
+    return null;
+  }
+  try {
+    const stats = await fs.stat(storagePath);
+    return stats.isFile() ? stats : null;
+  } catch {
+    return null;
+  }
+};
+
+const withDownloadState = async (job: ExportJob): Promise<ExportJobWithDownloadState> => {
+  if (job.status !== ExportJobStatus.DONE) {
+    return {
+      ...job,
+      downloadAvailable: false,
+      downloadUrl: null,
+      downloadUnavailableReason: null,
+    };
+  }
+
+  const stats = await readExportFileStats(job.storagePath);
+  return {
+    ...job,
+    fileSize: stats?.size ?? job.fileSize,
+    downloadAvailable: Boolean(stats),
+    downloadUrl: stats ? `/api/exports/${job.id}` : null,
+    downloadUnavailableReason: stats ? null : "exportFileMissing",
+  };
+};
 
 const buildExportFile = (
   format: ExportFormat,
@@ -656,6 +698,7 @@ const buildShiftReportRows = async (
     const expectedCash = roundMoney(
       Number(shift.openingCashKgs) + payIn - payOut + cashSales - cashRefunds,
     );
+    const overWithdrawal = expectedCash < 0 ? roundMoney(Math.abs(expectedCash)) : 0;
     const countedCash = shift.closingCashCountedKgs ? Number(shift.closingCashCountedKgs) : null;
     const discrepancy = countedCash === null ? null : roundMoney(countedCash - expectedCash);
 
@@ -693,6 +736,7 @@ const buildShiftReportRows = async (
       cashPayInKgs: roundMoney(payIn),
       cashPayOutKgs: roundMoney(payOut),
       expectedCashKgs: expectedCash,
+      overWithdrawalKgs: overWithdrawal,
       countedCashKgs: countedCash ?? "",
       discrepancyKgs: discrepancy ?? "",
     };
@@ -1631,6 +1675,7 @@ const buildExportData = async (
         "cashPayInKgs",
         "cashPayOutKgs",
         "expectedCashKgs",
+        "overWithdrawalKgs",
         "countedCashKgs",
         "discrepancyKgs",
       ];
@@ -1677,6 +1722,7 @@ const buildExportData = async (
         "cashPayInKgs",
         "cashPayOutKgs",
         "expectedCashKgs",
+        "overWithdrawalKgs",
         "countedCashKgs",
         "discrepancyKgs",
       ];
@@ -1947,7 +1993,7 @@ export const listExportJobs = async (organizationId: string, input?: ListExportJ
   if (input?.storeIds && input.storeIds.length === 0) {
     return [];
   }
-  return prisma.exportJob.findMany({
+  const jobs = await prisma.exportJob.findMany({
     where: {
       organizationId,
       ...(input?.storeId
@@ -1959,19 +2005,59 @@ export const listExportJobs = async (organizationId: string, input?: ListExportJ
     orderBy: { createdAt: "desc" },
     take,
   });
+  return Promise.all(jobs.map((job) => withDownloadState(job)));
 };
 
 export const getExportJob = async (organizationId: string, jobId: string, storeIds?: string[]) => {
   if (storeIds && storeIds.length === 0) {
     return null;
   }
-  return prisma.exportJob.findFirst({
+  const job = await prisma.exportJob.findFirst({
     where: {
       id: jobId,
       organizationId,
       ...(storeIds ? { storeId: { in: storeIds } } : {}),
     },
   });
+  return job ? withDownloadState(job) : null;
+};
+
+export const resolveExportJobDownload = async (input: {
+  organizationId: string;
+  jobId: string;
+  user: StoreAccessUser;
+}) => {
+  const job = await prisma.exportJob.findFirst({
+    where: {
+      id: input.jobId,
+      organizationId: input.organizationId,
+    },
+  });
+  if (!job) {
+    throw new AppError("exportJobNotFound", "NOT_FOUND", 404);
+  }
+  await assertUserCanAccessStore(prisma, input.user, job.storeId);
+  if (job.status !== ExportJobStatus.DONE) {
+    throw new AppError("exportNotReady", "CONFLICT", 409);
+  }
+
+  const stats = await readExportFileStats(job.storagePath);
+  if (!stats || !job.storagePath) {
+    throw new AppError("exportFileMissing", "CONFLICT", 410);
+  }
+
+  const defaultExtension =
+    job.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ? "xlsx"
+      : "csv";
+
+  return {
+    job,
+    storagePath: job.storagePath,
+    fileName: job.fileName ?? `export-${job.id}.${defaultExtension}`,
+    mimeType: job.mimeType ?? "text/csv;charset=utf-8",
+    fileSize: stats.size,
+  };
 };
 
 export const retryExportJob = async (input: {

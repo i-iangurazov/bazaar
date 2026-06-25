@@ -2579,6 +2579,8 @@
       "overWithdrawal": "Over-withdrawal",
       "countableCash": "Cash to count",
       "cashInOut": "Cash in/out",
+      "cashIn": "Cash in",
+      "cashOut": "Cash out",
       "paymentBreakdown": "Payment breakdown",
       "salesNetBreakdown": "Sales net breakdown {sales} {refunds}",
       "difference": "Difference",
@@ -2619,7 +2621,7 @@
       "cashMovementInvalid": "Invalid cash movement.",
       "expectedCashNegative": "Expected cash cannot be negative. Check cash withdrawals.",
       "countedCashNegative": "Counted cash cannot be negative.",
-      "overWithdrawalWarning": "Cash withdrawals exceeded calculated drawer cash by {amount}. Counted cash cannot be negative. If the drawer is empty, enter 0.",
+      "overWithdrawalWarning": "Cash withdrawals exceeded calculated drawer cash by {amount}. If the drawer is empty, enter 0 and add a comment.",
       "cashOutExceedsExpectedCash": "Cash out exceeds available drawer cash."
     },
     "history": {
@@ -3258,8 +3260,8 @@
       "printWriteOffStore": "Write-off store",
       "printSkuBarcode": "SKU / barcode",
       "printUnit": "Unit",
-      "printUnitCost": "Unit cost",
-      "printLineTotal": "Line total",
+      "printUnitCost": "Price",
+      "printLineTotal": "Total",
       "printTechnicalReference": "Technical ID",
       "printCostNotSpecified": "not specified",
       "printShippedBy": "Shipped / handed over",
@@ -4788,6 +4790,8 @@
     "poAlreadyReceived": "Po already received",
     "exportJobNotFound": "Export job not found",
     "exportRetryUnavailable": "Export retry unavailable",
+    "exportNotReady": "Export file is not ready yet.",
+    "exportFileMissing": "Export file is no longer available. Generate the export again.",
     "exportQueueBusy": "Export queue busy",
     "mMarketNotConfigured": "M market not configured",
     "mMarketPreflightFailed": "M market preflight failed.",
@@ -5537,7 +5541,55 @@
     "rangeLabel": "Range label",
     "range30": "Range30",
     "range90": "Range90",
+    "dateFrom": "From date",
+    "dateTo": "To date",
+    "presets": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisMonth": "This month",
+      "lastMonth": "Previous month"
+    },
     "allStores": "All stores",
+    "cards": {
+      "open": "Open",
+      "sales": {
+        "title": "Sales report",
+        "description": "Revenue, returns, average receipt, and daily sales trend.",
+        "filters": "Filters: store, register, cashier, from/to dates, and quick presets."
+      },
+      "soldProducts": {
+        "title": "Sold products",
+        "description": "Products, quantities, returns, revenue, and receipts for the selected period.",
+        "filters": "Filters: from/to dates, store, register, cashier, category, and search."
+      },
+      "stock": {
+        "title": "Stock report",
+        "description": "Stockouts, slow movers, and shrinkage for the selected period.",
+        "filters": "Filters: store and from/to dates. CSV/XLSX available."
+      },
+      "movement": {
+        "title": "Movement report",
+        "description": "Receiving, transfer, write-off, and other inventory movement documents.",
+        "filters": "Filters: document type, status, store, author, and period."
+      },
+      "cashShift": {
+        "title": "Cash shift report",
+        "description": "Shift opens/closes, cash, non-cash, and over-withdrawal review.",
+        "filters": "Filters: register and shift history."
+      },
+      "exports": {
+        "title": "Exports history",
+        "description": "Ready CSV/XLSX files, processing status, and retry actions.",
+        "filters": "Filters: store, export type, format, and from/to dates."
+      },
+      "metrics": {
+        "title": "Metrics and analytics",
+        "description": "Sales charts, day receipts, and receipt preview without PDF download.",
+        "filters": "Filters: from/to dates, store, register, cashier, and category."
+      }
+    },
     "stockoutsTitle": "Stockouts",
     "stockoutsEmpty": "No stockouts.",
     "slowMoversTitle": "Slow movers",
@@ -5923,6 +5975,7 @@
     "empty": "No exports.",
     "emptyDescription": "Generate the first export to see the completed file in this journal.",
     "filePending": "File is not ready yet",
+    "fileMissing": "File unavailable. Generate the export again.",
     "jobsErrorTitle": "Could not load export jobs",
     "noStoresTitle": "No stores available",
     "noStoresDescription": "You can generate exports after a store is created or assigned.",

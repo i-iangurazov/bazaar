@@ -463,9 +463,14 @@ const PosShiftsPage = () => {
                           </p>
                         </div>
                         <div className="bazaar-admin-info-tile px-3 py-2">
-                          <p className="text-xs text-muted-foreground">{t("shifts.cashInOut")}</p>
+                          <p className="text-xs text-muted-foreground">{t("shifts.cashIn")}</p>
                           <p className="text-sm font-semibold text-foreground">
-                            +{formatCurrentShiftMoney(report.summary.payInKgs)} / -
+                            {formatCurrentShiftMoney(report.summary.payInKgs)}
+                          </p>
+                        </div>
+                        <div className="bazaar-admin-info-tile px-3 py-2">
+                          <p className="text-xs text-muted-foreground">{t("shifts.cashOut")}</p>
+                          <p className="text-sm font-semibold text-foreground">
                             {formatCurrentShiftMoney(report.summary.payOutKgs)}
                           </p>
                         </div>

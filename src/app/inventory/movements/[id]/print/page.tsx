@@ -93,7 +93,6 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     lineTotal: t("printLineTotal"),
     positions: t("positions"),
     amount: t("amount"),
-    technicalReference: t("printTechnicalReference"),
     costNotSpecified: t("printCostNotSpecified"),
     shippedBy: t("printShippedBy"),
     releasedBy: t("printReleasedBy"),
