@@ -40,41 +40,43 @@ describeDb("exports", () => {
 
     const headers: Record<ExportType, string> = {
       INVENTORY_MOVEMENTS_LEDGER:
-        "orgId,storeCode,storeName,movementId,movementType,occurredAt,sku,variantSku,productName,variantName,barcode,qtyDelta,unit,unitCostKgs,totalCostKgs,effectivePriceKgs,reason,docType,docNumber,userEmail,requestId",
+        "ID организации,Код магазина,Магазин,ID движения,Тип движения,Дата движения,Артикул,Артикул варианта,Товар,Вариант,Штрихкод,Изменение кол-ва,Ед.,Цена за ед. KGS,Сумма себестоимости KGS,Цена продажи KGS,Причина,Тип документа,Номер документа,Пользователь,ID запроса",
       INVENTORY_BALANCES_AT_DATE:
-        "orgId,storeCode,sku,variantSku,productName,onHand,unit,avgCostKgs,inventoryValueKgs",
+        "ID организации,Код магазина,Артикул,Артикул варианта,Товар,В наличии,Ед.,Средняя себестоимость KGS,Стоимость остатков KGS",
       PURCHASES_RECEIPTS:
-        "orgId,storeCode,supplierName,supplierInn,poNumber,receivedAt,sku,qty,unit,unitCostKgs,lineTotalKgs",
+        "ID организации,Код магазина,Поставщик,ИНН поставщика,Номер закупки,Дата приемки,Артикул,Кол-во,Ед.,Цена за ед. KGS,Сумма строки KGS",
       PRICE_LIST:
-        "orgId,storeCode,sku,productName,basePriceKgs,storeOverridePriceKgs,effectivePriceKgs,avgCostKgs,marginPct,markupPct",
-      SALES_SUMMARY: "date,store,totalQty,movementCount",
-      STOCK_MOVEMENTS: "date,store,sku,product,variant,movementType,qtyDelta,reference,actor",
+        "ID организации,Код магазина,Артикул,Товар,Базовая цена KGS,Цена магазина KGS,Цена продажи KGS,Средняя себестоимость KGS,Маржа %,Наценка %",
+      SALES_SUMMARY: "Дата,Магазин,Продано шт.,Операций",
+      STOCK_MOVEMENTS:
+        "Дата,Магазин,Артикул,Товар,Вариант,Тип движения,Изменение кол-ва,Основание,Автор",
       PURCHASES:
-        "poId,status,createdAt,receivedAt,store,supplier,sku,product,variant,qtyOrdered,qtyReceived,unitCostKgs,lineTotalKgs",
+        "ID закупки,Статус,Создано,Дата приемки,Магазин,Поставщик,Артикул,Товар,Вариант,Заказано,Принято,Цена за ед. KGS,Сумма строки KGS",
       INVENTORY_ON_HAND:
-        "store,sku,product,variant,onHand,onOrder,minStock,reorderPoint,effectivePriceKgs",
+        "Магазин,Артикул,Товар,Вариант,В наличии,В заказе,Мин. остаток,Точка заказа,Цена продажи KGS",
       PERIOD_CLOSE_REPORT:
-        "store,periodStart,periodEnd,closedAt,movementCount,skuCount,salesTotalKgs,purchasesTotalKgs",
-      RECEIPTS_FOR_KKM: "receiptId,date,store,sku,product,variant,qty",
+        "Магазин,Начало периода,Конец периода,Закрыто,Операций,Товаров,Продажи KGS,Закупки KGS",
+      RECEIPTS_FOR_KKM: "ID чека,Дата,Магазин,Артикул,Товар,Вариант,Кол-во",
       RECEIPTS_REGISTRY:
-        "orgId,storeCode,storeName,receiptNumber,createdAt,completedAt,status,registerCode,registerName,cashierEmail,currencyCode,currencyRateKgsPerUnit,totalKgs,cashKgs,cardKgs,transferKgs,otherKgs,kkmStatus,fiscalStatus,fiscalMode,fiscalNumber,providerReceiptId,fiscalError",
+        "ID организации,Код магазина,Магазин,Номер чека,Создано,Завершено,Статус,Код кассы,Касса,Кассир,Валюта,Курс к KGS,Итого KGS,Наличные KGS,Карта KGS,Перевод KGS,Другое KGS,Статус ККМ,Фискальный статус,Фискальный режим,Фискальный номер,ID чека провайдера,Ошибка фискализации",
       SHIFT_X_REPORT:
-        "orgId,storeCode,reportType,shiftId,status,currencyCode,currencyRateKgsPerUnit,registerCode,registerName,openedAt,openedBy,closedAt,closedBy,salesCount,salesTotalKgs,cashSalesKgs,nonCashSalesKgs,cardSalesKgs,transferSalesKgs,otherSalesKgs,returnsCount,returnsTotalKgs,cashRefundsKgs,nonCashRefundsKgs,cardRefundsKgs,transferRefundsKgs,otherRefundsKgs,nonCashNetKgs,openingCashKgs,cashPayInKgs,cashPayOutKgs,expectedCashKgs,overWithdrawalKgs,countedCashKgs,discrepancyKgs",
+        "ID организации,Код магазина,Тип отчета,ID смены,Статус,Валюта,Курс к KGS,Код кассы,Касса,Открыта,Открыл,Закрыто,Закрыл,Кол-во продаж,Продажи KGS,Продажи наличными KGS,Безналичные продажи KGS,Продажи картой KGS,Продажи переводом KGS,Прочие продажи KGS,Кол-во возвратов,Возвраты KGS,Возвраты наличными KGS,Безналичные возвраты KGS,Возвраты на карту KGS,Возвраты переводом KGS,Прочие возвраты KGS,Безналичный итог KGS,Наличные на открытии KGS,Внесения KGS,Изъятия KGS,Расчетная наличность KGS,Сверхизъятие KGS,Пересчитанная наличность KGS,Расхождение KGS",
       SHIFT_Z_REPORT:
-        "orgId,storeCode,reportType,shiftId,status,currencyCode,currencyRateKgsPerUnit,registerCode,registerName,openedAt,openedBy,closedAt,closedBy,salesCount,salesTotalKgs,cashSalesKgs,nonCashSalesKgs,cardSalesKgs,transferSalesKgs,otherSalesKgs,returnsCount,returnsTotalKgs,cashRefundsKgs,nonCashRefundsKgs,cardRefundsKgs,transferRefundsKgs,otherRefundsKgs,nonCashNetKgs,openingCashKgs,cashPayInKgs,cashPayOutKgs,expectedCashKgs,overWithdrawalKgs,countedCashKgs,discrepancyKgs",
-      SALES_BY_DAY: "orgId,storeCode,day,ordersCount,revenueKgs",
-      SALES_BY_ITEM: "orgId,storeCode,sku,productName,variantSku,variantName,qty,revenueKgs",
-      RETURNS_BY_DAY: "orgId,storeCode,day,returnsCount,returnsTotalKgs",
+        "ID организации,Код магазина,Тип отчета,ID смены,Статус,Валюта,Курс к KGS,Код кассы,Касса,Открыта,Открыл,Закрыто,Закрыл,Кол-во продаж,Продажи KGS,Продажи наличными KGS,Безналичные продажи KGS,Продажи картой KGS,Продажи переводом KGS,Прочие продажи KGS,Кол-во возвратов,Возвраты KGS,Возвраты наличными KGS,Безналичные возвраты KGS,Возвраты на карту KGS,Возвраты переводом KGS,Прочие возвраты KGS,Безналичный итог KGS,Наличные на открытии KGS,Внесения KGS,Изъятия KGS,Расчетная наличность KGS,Сверхизъятие KGS,Пересчитанная наличность KGS,Расхождение KGS",
+      SALES_BY_DAY: "ID организации,Код магазина,Дата,Чеков,Выручка KGS",
+      SALES_BY_ITEM:
+        "ID организации,Код магазина,Артикул,Товар,Артикул варианта,Вариант,Кол-во,Выручка KGS",
+      RETURNS_BY_DAY: "ID организации,Код магазина,Дата,Кол-во возвратов,Возвраты KGS",
       RETURNS_BY_ITEM:
-        "orgId,storeCode,sku,productName,variantSku,variantName,qty,returnsTotalKgs",
+        "ID организации,Код магазина,Артикул,Товар,Артикул варианта,Вариант,Кол-во,Возвраты KGS",
       CASH_DRAWER_MOVEMENTS:
-        "orgId,storeCode,createdAt,shiftId,registerCode,registerName,type,currencyCode,currencyRateKgsPerUnit,amountKgs,reason,createdBy",
+        "ID организации,Код магазина,Создано,ID смены,Код кассы,Касса,Тип,Валюта,Курс к KGS,Сумма KGS,Причина,Создал",
       MARKING_SALES_REGISTRY:
-        "orgId,storeCode,capturedAt,receiptNumber,receiptCreatedAt,sku,productName,qty,markingCode,capturedBy",
+        "ID организации,Код магазина,Зафиксировано,Номер чека,Чек создан,Артикул,Товар,Кол-во,Код маркировки,Зафиксировал",
       ETTN_REFERENCES:
-        "orgId,storeCode,createdAt,documentType,documentId,ettnNumber,ettnDate,notes,createdBy",
+        "ID организации,Код магазина,Создано,Тип документа,ID документа,Номер ЭТТН,Дата ЭТТН,Примечание,Создал",
       ESF_REFERENCES:
-        "orgId,storeCode,createdAt,documentType,documentId,esfNumber,esfDate,counterpartyName,createdBy",
+        "ID организации,Код магазина,Создано,Тип документа,ID документа,Номер ЭСФ,Дата ЭСФ,Контрагент,Создал",
     };
 
     expect(Object.keys(headers).sort()).toEqual(Object.values(ExportType).sort());
@@ -150,7 +152,7 @@ describeDb("exports", () => {
     });
     const header = (values[0] ?? []).map(String).join(",");
     expect(header).toBe(
-      "orgId,storeCode,sku,productName,basePriceKgs,storeOverridePriceKgs,effectivePriceKgs,avgCostKgs,marginPct,markupPct",
+      "ID организации,Код магазина,Артикул,Товар,Базовая цена KGS,Цена магазина KGS,Цена продажи KGS,Средняя себестоимость KGS,Маржа %,Наценка %",
     );
   });
 
@@ -248,10 +250,12 @@ describeDb("exports", () => {
     }
     const csv = Buffer.concat(chunks).toString("utf8");
 
-    expect(download.fileName).toBe(`price_list-${created.id}.csv`);
+    expect(download.fileName).toBe(
+      `price-list-2025-01-01_to_2025-01-31-${created.id.slice(0, 8)}.csv`,
+    );
     expect(download.fileSize).toBe(Buffer.byteLength(csv));
     expect(csv.startsWith("\ufeff")).toBe(true);
-    expect(csv).toContain("orgId,storeCode,sku,productName");
+    expect(csv).toContain("ID организации,Код магазина,Артикул,Товар");
 
     const refreshed = await caller.exports.get({ jobId: created.id });
     expect(refreshed?.downloadAvailable).toBe(true);

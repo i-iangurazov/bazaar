@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -121,6 +124,8 @@ const ProductMovementsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const trpcUtils = trpc.useUtils();
+  const { toast } = useToast();
   const currentQueryString = searchParams.toString();
   const page = parsePositiveInteger(searchParams.get("page"), 1, 1, 10_000);
   const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 10, 100);
@@ -219,6 +224,23 @@ const ProductMovementsPage = () => {
   const totalItems = movementQuery.data?.total ?? 0;
 
   type MovementRow = (typeof items)[number];
+  const [archiveTarget, setArchiveTarget] = useState<MovementRow | null>(null);
+  const [archiveReason, setArchiveReason] = useState("");
+  const archiveReasonTrimmed = archiveReason.trim();
+
+  const archiveMutation = trpc.inventory.archiveStockReceivingDocument.useMutation({
+    onSuccess: async () => {
+      toast({ variant: "success", description: t("archiveReceivingSuccess") });
+      setArchiveTarget(null);
+      setArchiveReason("");
+      await trpcUtils.inventory.list.invalidate();
+      await trpcUtils.inventory.productMovements.invalidate();
+      await trpcUtils.inventory.productMovementDocument.invalidate();
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
 
   const resetFilters = () => {
     updateJournalParams({
@@ -408,6 +430,26 @@ const ProductMovementsPage = () => {
         {layout === "mobile" ? editDisabledReasonLabel(disabledReason) : null}
       </Button>
     );
+    const archiveButton =
+      movement.documentType === "STOCK_RECEIVING" ? (
+        <Button
+          type="button"
+          variant={layout === "desktop" ? "ghost" : "secondary"}
+          size={layout === "desktop" ? "icon" : undefined}
+          aria-label={t("archiveReceiving")}
+          title={t("archiveReceiving")}
+          data-testid="movement-archive-receiving-button"
+          className={layout === "mobile" ? "w-full justify-center" : undefined}
+          onClick={() => {
+            setArchiveTarget(movement);
+            setArchiveReason("");
+          }}
+          disabled={archiveMutation.isLoading}
+        >
+          <ArchiveIcon className="h-4 w-4" aria-hidden />
+          {layout === "mobile" ? t("archiveReceiving") : null}
+        </Button>
+      ) : null;
 
     return (
       <div
@@ -419,6 +461,7 @@ const ProductMovementsPage = () => {
       >
         {viewButton ?? <span className="text-muted-foreground">{tCommon("notAvailable")}</span>}
         {editButton}
+        {archiveButton}
       </div>
     );
   };
@@ -575,7 +618,7 @@ const ProductMovementsPage = () => {
       header: () => <span className="sr-only">{tCommon("actions")}</span>,
       enableSorting: false,
       cell: ({ row }) => renderActions(row.original),
-      meta: { className: "min-w-[5.5rem] text-right" },
+      meta: { className: "min-w-[8rem] text-right" },
     },
   ];
 
@@ -1002,6 +1045,65 @@ const ProductMovementsPage = () => {
           ) : null}
         </CardContent>
       </Card>
+      <Modal
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!open && !archiveMutation.isLoading) {
+            setArchiveTarget(null);
+            setArchiveReason("");
+          }
+        }}
+        title={t("archiveReceivingTitle")}
+        subtitle={t("archiveReceivingDescription", {
+          number: archiveTarget?.documentNumber || archiveTarget?.documentId || "",
+        })}
+        className="max-w-xl"
+      >
+        <div className="space-y-2">
+          <Label htmlFor="archive-receiving-reason">{t("archiveReceivingReason")}</Label>
+          <Textarea
+            id="archive-receiving-reason"
+            value={archiveReason}
+            onChange={(event) => setArchiveReason(event.target.value)}
+            placeholder={t("archiveReceivingReasonPlaceholder")}
+            rows={4}
+            disabled={archiveMutation.isLoading}
+          />
+          {!archiveReasonTrimmed ? (
+            <p className="text-xs text-danger">{t("archiveReceivingReasonRequired")}</p>
+          ) : null}
+        </div>
+        <ModalFooter className="mt-6">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setArchiveTarget(null);
+              setArchiveReason("");
+            }}
+            disabled={archiveMutation.isLoading}
+          >
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={!archiveTarget || !archiveReasonTrimmed || archiveMutation.isLoading}
+            onClick={() => {
+              if (!archiveTarget || !archiveReasonTrimmed) {
+                return;
+              }
+              archiveMutation.mutate({
+                documentKey: archiveTarget.id,
+                reason: archiveReasonTrimmed,
+                idempotencyKey: crypto.randomUUID(),
+              });
+            }}
+          >
+            {archiveMutation.isLoading ? tCommon("loading") : t("archiveReceivingSubmit")}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 };

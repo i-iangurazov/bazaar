@@ -13,6 +13,7 @@ import { logProfileSection } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
+  archiveStockReceivingDocument,
   bulkSetOnHand,
   editStockMovementDocument,
   postStockReceiving,
@@ -1095,6 +1096,43 @@ export const inventoryRouter = router({
         }
 
         throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  archiveStockReceivingDocument: managerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-receiving-archive" }))
+    .input(
+      z.object({
+        documentKey: z.string().min(1).max(300),
+        reason: z.string().trim().min(1, "receivingArchiveReasonRequired").max(500),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const decoded = decodeProductMovementDocumentKey(input.documentKey);
+        if (!decoded) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
+        }
+        if (
+          decoded.documentType !== "STOCK_RECEIVING" ||
+          decoded.documentReferenceType !== "STOCK_RECEIVING"
+        ) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
+        }
+
+        return await archiveStockReceivingDocument({
+          referenceType: decoded.documentReferenceType,
+          referenceId: decoded.documentReferenceId,
+          reason: input.reason,
+          actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          user: ctx.user,
+          requestId: ctx.requestId,
+          idempotencyKey: input.idempotencyKey,
+        });
       } catch (error) {
         throw toTRPCError(error);
       }

@@ -1519,6 +1519,19 @@ export type EditStockMovementDocumentInput = {
   user?: StoreAccessUser;
 };
 
+const STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE = "STOCK_RECEIVING_ARCHIVE";
+
+export type ArchiveStockReceivingDocumentInput = {
+  referenceType: string;
+  referenceId: string;
+  reason: string;
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+  idempotencyKey: string;
+  user?: StoreAccessUser;
+};
+
 type StockDocumentAggregateLine = {
   productId: string;
   variantId: string | null;
@@ -2091,6 +2104,197 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
       ),
     );
   }
+
+  return {
+    ...result,
+    replayed: undefined,
+    changedItems: undefined,
+  };
+};
+
+export const archiveStockReceivingDocument = async (
+  input: ArchiveStockReceivingDocumentInput,
+) => {
+  if (input.referenceType !== "STOCK_RECEIVING") {
+    throw new AppError("productMovementDocumentUnsupported", "BAD_REQUEST", 400);
+  }
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new AppError("receivingArchiveReasonRequired", "BAD_REQUEST", 400);
+  }
+
+  const logger = getLogger(input.requestId);
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: archiveResult, replayed } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "inventory.productMovement.archiveReceiving",
+        userId: input.actorId,
+      },
+      async () => {
+        await tx.$queryRaw`
+          SELECT m."id"
+          FROM "StockMovement" m
+          INNER JOIN "Store" s ON s."id" = m."storeId"
+          WHERE m."referenceType" = ${input.referenceType}
+            AND m."referenceId" = ${input.referenceId}
+            AND s."organizationId" = ${input.organizationId}
+          FOR UPDATE
+        `;
+
+        const existingArchive = await tx.stockMovement.findFirst({
+          where: {
+            referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
+            referenceId: input.referenceId,
+            store: { organizationId: input.organizationId },
+          },
+          select: { id: true },
+        });
+        if (existingArchive) {
+          throw new AppError("stockReceivingAlreadyArchived", "CONFLICT", 409);
+        }
+
+        const movements = await tx.stockMovement.findMany({
+          where: {
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            store: { organizationId: input.organizationId },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        if (!movements.length) {
+          throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
+        }
+
+        const storeIds = Array.from(new Set(movements.map((movement) => movement.storeId)));
+        if (storeIds.length !== 1) {
+          throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
+        }
+        const storeId = storeIds[0]!;
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, storeId);
+        }
+
+        const lines = Array.from(aggregateStockDocumentLines(movements, "STOCK_RECEIVING").values());
+        if (!lines.length) {
+          throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
+        }
+
+        const changedItems: Array<{
+          storeId: string;
+          productId: string;
+          variantId: string | null;
+          onHand: number;
+        }> = [];
+
+        for (const [index, line] of lines.entries()) {
+          try {
+            const reversal = await applyStockMovement(tx, {
+              storeId,
+              productId: line.productId,
+              variantId: line.variantId,
+              qtyDelta: -line.quantity,
+              type: StockMovementType.ADJUSTMENT,
+              referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
+              referenceId: input.referenceId,
+              linePosition: index + 1,
+              unitCostKgs: line.unitCostKgs,
+              lineTotalKgs:
+                line.lineTotalKgs !== null ? -Math.abs(line.lineTotalKgs) : null,
+              note: `Архивирование оприходования: ${reason}`,
+              actorId: input.actorId,
+              organizationId: input.organizationId,
+            });
+            changedItems.push({
+              storeId,
+              productId: line.productId,
+              variantId: line.variantId,
+              onHand: reversal.snapshot.onHand,
+            });
+          } catch (error) {
+            if (error instanceof AppError && error.message === "insufficientStock") {
+              throw new AppError("stockReceivingArchiveInsufficientStock", "CONFLICT", 409);
+            }
+            throw error;
+          }
+        }
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "INVENTORY_RECEIVING_ARCHIVE",
+          entity: "StockMovementDocument",
+          entityId: `${input.referenceType}:${input.referenceId}`,
+          before: toJson({
+            documentType: "STOCK_RECEIVING",
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            storeId,
+            lines,
+          }),
+          after: toJson({
+            documentType: "STOCK_RECEIVING",
+            referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
+            referenceId: input.referenceId,
+            storeId,
+            reason,
+            archivedBy: input.actorId,
+            archivedAt: new Date().toISOString(),
+            lines: lines.map((line) => ({
+              ...line,
+              quantity: -line.quantity,
+              lineTotalKgs:
+                line.lineTotalKgs !== null ? -Math.abs(line.lineTotalKgs) : null,
+            })),
+          }),
+          requestId: input.requestId,
+        });
+
+        return {
+          documentType: "STOCK_RECEIVING" as const,
+          referenceType: input.referenceType,
+          referenceId: input.referenceId,
+          archived: true,
+          reason,
+          lineCount: lines.length,
+          totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+          changedItems,
+        };
+      },
+    );
+
+    return { ...archiveResult, replayed };
+  });
+
+  if (!result.replayed) {
+    result.changedItems.forEach((item) => {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
+      });
+    });
+    await Promise.all(
+      result.changedItems.map((item) =>
+        maybeEmitLowStock({
+          storeId: item.storeId,
+          productId: item.productId,
+          variantId: item.variantId,
+          onHand: item.onHand,
+          requestId: input.requestId,
+        }),
+      ),
+    );
+  }
+
+  logger.info(
+    {
+      referenceId: input.referenceId,
+      lineCount: result.lineCount,
+      totalQuantity: result.totalQuantity,
+    },
+    "stock receiving archived",
+  );
 
   return {
     ...result,

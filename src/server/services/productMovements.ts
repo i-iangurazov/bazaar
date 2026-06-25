@@ -234,6 +234,7 @@ const toNumberOrNull = (value: Prisma.Decimal | number | string | null) => {
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const editableStockDocumentTypes = new Set(["STOCK_RECEIVING", "TRANSFER", "WRITE_OFF"]);
+const stockReceivingArchiveReferenceType = "STOCK_RECEIVING_ARCHIVE";
 
 const isEditableStockDocumentType = (
   value: string,
@@ -833,6 +834,20 @@ const buildBaseConditions = async (
   const baseConditions: Prisma.Sql[] = [
     Prisma.sql`p."organizationId" = ${user.organizationId}`,
     Prisma.sql`s."organizationId" = ${user.organizationId}`,
+    Prisma.sql`COALESCE(m."referenceType", '') <> ${stockReceivingArchiveReferenceType}`,
+    Prisma.sql`
+      NOT (
+        m."referenceType" = 'STOCK_RECEIVING'
+        AND EXISTS (
+          SELECT 1
+          FROM "StockMovement" archive_m
+          INNER JOIN "Store" archive_s ON archive_s."id" = archive_m."storeId"
+          WHERE archive_m."referenceType" = ${stockReceivingArchiveReferenceType}
+            AND archive_m."referenceId" = m."referenceId"
+            AND archive_s."organizationId" = s."organizationId"
+        )
+      )
+    `,
   ];
 
   if (!userHasAllStoreAccess(user)) {

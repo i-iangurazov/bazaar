@@ -274,6 +274,114 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
   });
 
+  it("archives a receiving document with reversal movements and hides it from Product Movement", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+
+    const receiving = await caller.inventory.postStockReceiving({
+      storeId: store.id,
+      referenceNumber: "RCV-ARCHIVE-1",
+      lines: [{ productId: product.id, quantity: 5, unitCost: 12 }],
+      idempotencyKey: "receiving-archive-post-1",
+    });
+    const documentKey = `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`;
+
+    const archived = await caller.inventory.archiveStockReceivingDocument({
+      documentKey,
+      reason: "created by mistake",
+      idempotencyKey: "receiving-archive-save-1",
+    });
+
+    expect(archived.archived).toBe(true);
+    expect(archived.totalQuantity).toBe(5);
+
+    const reversal = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "STOCK_RECEIVING_ARCHIVE",
+        referenceId: receiving.receivingId,
+      },
+    });
+    expect(reversal).toHaveLength(1);
+    expect(reversal[0]?.type).toBe(StockMovementType.ADJUSTMENT);
+    expect(reversal[0]?.qtyDelta).toBe(-5);
+    expect(Number(reversal[0]?.lineTotalKgs)).toBe(-60);
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(0);
+
+    const journal = await caller.inventory.productMovements({
+      type: "STOCK_RECEIVING",
+      search: receiving.receivingId,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(journal.items).toHaveLength(0);
+    await expect(caller.inventory.productMovementDocument({ documentKey })).resolves.toBeNull();
+    await assertSnapshotMatchesLedger(store.id, product.id);
+  });
+
+  it("blocks receiving archive when current stock is insufficient to reverse it", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+
+    const receiving = await caller.inventory.postStockReceiving({
+      storeId: store.id,
+      referenceNumber: "RCV-ARCHIVE-BLOCK",
+      lines: [{ productId: product.id, quantity: 5, unitCost: 10 }],
+      idempotencyKey: "receiving-archive-block-post-1",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: -3,
+      reason: "consumed after receiving",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-receiving-archive-block-adjust",
+      idempotencyKey: "receiving-archive-block-adjust-1",
+    });
+
+    await expect(
+      caller.inventory.archiveStockReceivingDocument({
+        documentKey: `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`,
+        reason: "created by mistake",
+        idempotencyKey: "receiving-archive-block-save-1",
+      }),
+    ).rejects.toMatchObject({ message: "stockReceivingArchiveInsufficientStock" });
+
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(2);
+    await assertSnapshotMatchesLedger(store.id, product.id);
+  });
+
   it("edits a receiving movement document through Product Movement with net stock and amount deltas", async () => {
     const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
     const caller = createTestCaller({

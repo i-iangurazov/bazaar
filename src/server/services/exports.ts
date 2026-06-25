@@ -81,8 +81,40 @@ const readJobFormat = (paramsJson: Prisma.JsonValue | null | undefined): ExportF
   return normalizeExportFormat((paramsJson as Record<string, unknown>).format);
 };
 
-const buildFileName = (type: ExportType, jobId: string, format: ExportFormat) =>
-  `${type.toLowerCase()}-${jobId}.${format}`;
+const exportFileSlugs: Record<ExportType, string> = {
+  INVENTORY_MOVEMENTS_LEDGER: "inventory-movements-ledger",
+  INVENTORY_BALANCES_AT_DATE: "inventory-balances",
+  PURCHASES_RECEIPTS: "purchase-receipts",
+  PRICE_LIST: "price-list",
+  SALES_SUMMARY: "sales-summary",
+  STOCK_MOVEMENTS: "stock-movements",
+  PURCHASES: "purchases",
+  INVENTORY_ON_HAND: "inventory-on-hand",
+  PERIOD_CLOSE_REPORT: "period-close",
+  RECEIPTS_FOR_KKM: "receipts-for-kkm",
+  RECEIPTS_REGISTRY: "receipts-registry",
+  SHIFT_X_REPORT: "shift-x-report",
+  SHIFT_Z_REPORT: "shift-z-report",
+  SALES_BY_DAY: "sales-by-day",
+  SALES_BY_ITEM: "sales-by-item",
+  RETURNS_BY_DAY: "returns-by-day",
+  RETURNS_BY_ITEM: "returns-by-item",
+  CASH_DRAWER_MOVEMENTS: "cash-drawer-movements",
+  MARKING_SALES_REGISTRY: "marking-sales-registry",
+  ETTN_REFERENCES: "ettn-references",
+  ESF_REFERENCES: "esf-references",
+};
+
+const buildFileName = (
+  type: ExportType,
+  jobId: string,
+  format: ExportFormat,
+  periodStart: Date,
+  periodEnd: Date,
+) => {
+  const slug = exportFileSlugs[type] ?? type.toLowerCase().replace(/_/g, "-");
+  return `${slug}-${formatDay(periodStart)}_to_${formatDay(periodEnd)}-${jobId.slice(0, 8)}.${format}`;
+};
 
 type ExportDownloadUnavailableReason = "exportFileMissing";
 
@@ -333,20 +365,177 @@ const withDownloadState = async (job: ExportJob): Promise<ExportJobWithDownloadS
   };
 };
 
+const exportColumnLabels: Record<string, string> = {
+  actor: "Автор",
+  amountKgs: "Сумма KGS",
+  avgCostKgs: "Средняя себестоимость KGS",
+  barcode: "Штрихкод",
+  basePriceKgs: "Базовая цена KGS",
+  cardKgs: "Карта KGS",
+  cardRefundsKgs: "Возвраты на карту KGS",
+  cardSalesKgs: "Продажи картой KGS",
+  cashKgs: "Наличные KGS",
+  cashPayInKgs: "Внесения KGS",
+  cashPayOutKgs: "Изъятия KGS",
+  cashRefundsKgs: "Возвраты наличными KGS",
+  cashSalesKgs: "Продажи наличными KGS",
+  cashierEmail: "Кассир",
+  capturedAt: "Зафиксировано",
+  capturedBy: "Зафиксировал",
+  closedAt: "Закрыто",
+  closedBy: "Закрыл",
+  completedAt: "Завершено",
+  countedCashKgs: "Пересчитанная наличность KGS",
+  counterpartyName: "Контрагент",
+  createdAt: "Создано",
+  createdBy: "Создал",
+  currencyCode: "Валюта",
+  currencyRateKgsPerUnit: "Курс к KGS",
+  date: "Дата",
+  day: "Дата",
+  discrepancyKgs: "Расхождение KGS",
+  docNumber: "Номер документа",
+  docType: "Тип документа",
+  documentId: "ID документа",
+  documentType: "Тип документа",
+  effectivePriceKgs: "Цена продажи KGS",
+  expectedCashKgs: "Расчетная наличность KGS",
+  esfDate: "Дата ЭСФ",
+  esfNumber: "Номер ЭСФ",
+  ettnDate: "Дата ЭТТН",
+  ettnNumber: "Номер ЭТТН",
+  ettnRequired: "ЭТТН нужна",
+  fiscalError: "Ошибка фискализации",
+  fiscalMode: "Фискальный режим",
+  fiscalNumber: "Фискальный номер",
+  fiscalStatus: "Фискальный статус",
+  inventoryValueKgs: "Стоимость остатков KGS",
+  kkmStatus: "Статус ККМ",
+  lineTotalKgs: "Сумма строки KGS",
+  marginPct: "Маржа %",
+  markingCode: "Код маркировки",
+  markingRequired: "Маркировка нужна",
+  markingType: "Тип маркировки",
+  minStock: "Мин. остаток",
+  movementCount: "Операций",
+  movementId: "ID движения",
+  movementType: "Тип движения",
+  markupPct: "Наценка %",
+  nonCashNetKgs: "Безналичный итог KGS",
+  nonCashRefundsKgs: "Безналичные возвраты KGS",
+  nonCashSalesKgs: "Безналичные продажи KGS",
+  notes: "Примечание",
+  occurredAt: "Дата движения",
+  onHand: "В наличии",
+  onOrder: "В заказе",
+  openedAt: "Открыта",
+  openedBy: "Открыл",
+  openingCashKgs: "Наличные на открытии KGS",
+  orderStatus: "Статус заказа",
+  ordersCount: "Чеков",
+  orgId: "ID организации",
+  otherKgs: "Другое KGS",
+  otherRefundsKgs: "Прочие возвраты KGS",
+  otherSalesKgs: "Прочие продажи KGS",
+  overWithdrawalKgs: "Сверхизъятие KGS",
+  paidAmountKgs: "Оплачено KGS",
+  periodEnd: "Конец периода",
+  periodStart: "Начало периода",
+  poId: "ID закупки",
+  poNumber: "Номер закупки",
+  product: "Товар",
+  productName: "Товар",
+  providerReceiptId: "ID чека провайдера",
+  purchasesTotalKgs: "Закупки KGS",
+  qty: "Кол-во",
+  qtyDelta: "Изменение кол-ва",
+  qtyOrdered: "Заказано",
+  qtyReceived: "Принято",
+  reason: "Причина",
+  receiptCreatedAt: "Чек создан",
+  receiptId: "ID чека",
+  receiptNumber: "Номер чека",
+  receivedAt: "Дата приемки",
+  reference: "Основание",
+  registerCode: "Код кассы",
+  registerName: "Касса",
+  reorderPoint: "Точка заказа",
+  reportType: "Тип отчета",
+  requestId: "ID запроса",
+  returnsCount: "Кол-во возвратов",
+  returnsTotalKgs: "Возвраты KGS",
+  revenueKgs: "Выручка KGS",
+  salesCount: "Кол-во продаж",
+  salesTotalKgs: "Продажи KGS",
+  shiftId: "ID смены",
+  sku: "Артикул",
+  skuCount: "Товаров",
+  status: "Статус",
+  store: "Магазин",
+  storeCode: "Код магазина",
+  storeName: "Магазин",
+  storeOverridePriceKgs: "Цена магазина KGS",
+  supplier: "Поставщик",
+  supplierInn: "ИНН поставщика",
+  supplierName: "Поставщик",
+  totalCostKgs: "Сумма себестоимости KGS",
+  totalKgs: "Итого KGS",
+  totalQty: "Продано шт.",
+  transferKgs: "Перевод KGS",
+  transferRefundsKgs: "Возвраты переводом KGS",
+  transferSalesKgs: "Продажи переводом KGS",
+  type: "Тип",
+  unit: "Ед.",
+  unitCostKgs: "Цена за ед. KGS",
+  userEmail: "Пользователь",
+  variant: "Вариант",
+  variantName: "Вариант",
+  variantSku: "Артикул варианта",
+};
+
+const humanizeExportColumn = (column: string) =>
+  column
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+
+const toExportDisplayHeader = (header: string[]) =>
+  header.map((column) => exportColumnLabels[column] ?? humanizeExportColumn(column));
+
+const calculateColumnWidths = (header: string[], bodyRows: unknown[][]) =>
+  header.map((label, columnIndex) => {
+    const sampleLengths = bodyRows
+      .slice(0, 250)
+      .map((row) => String(row[columnIndex] ?? "").length);
+    const maxLength = Math.max(label.length, ...sampleLengths);
+    return { wch: Math.min(Math.max(maxLength + 2, 10), 42) };
+  });
+
 const buildExportFile = (
   format: ExportFormat,
   header: string[],
   keys: string[],
   rows: Array<Record<string, unknown>>,
 ) => {
+  const displayHeader = toExportDisplayHeader(header);
   if (format === "xlsx") {
     const workbook = XLSX.utils.book_new();
+    const bodyRows = rows.map((row) => keys.map((key) => sanitizeSpreadsheetValue(row[key])));
     const values = [
-      header,
-      ...rows.map((row) => keys.map((key) => sanitizeSpreadsheetValue(row[key]))),
+      displayHeader,
+      ...bodyRows,
     ];
     const worksheet = XLSX.utils.aoa_to_sheet(values);
-    XLSX.utils.book_append_sheet(workbook, worksheet, "export");
+    worksheet["!cols"] = calculateColumnWidths(displayHeader, bodyRows);
+    if (displayHeader.length) {
+      worksheet["!autofilter"] = {
+        ref: XLSX.utils.encode_range({
+          s: { r: 0, c: 0 },
+          e: { r: Math.max(values.length - 1, 0), c: displayHeader.length - 1 },
+        }),
+      };
+    }
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Отчет");
     const content = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
     return {
       content,
@@ -354,7 +543,7 @@ const buildExportFile = (
     };
   }
 
-  const csv = toCsv(header, rows, keys);
+  const csv = toCsv(displayHeader, rows, keys);
   return {
     content: Buffer.from(csv, "utf8"),
     mimeType: "text/csv;charset=utf-8",
@@ -2464,7 +2653,7 @@ const runExportJob = async (
     const { header, keys, rows } = await buildExportData(input, store, compliance);
     const format = input.format ?? DEFAULT_EXPORT_FORMAT;
     const file = buildExportFile(format, header, keys, rows);
-    const fileName = buildFileName(input.type, job.id, format);
+    const fileName = buildFileName(input.type, job.id, format, input.periodStart, input.periodEnd);
     const storagePath = await writeExportArtifact({
       organizationId: input.organizationId,
       jobId: job.id,
