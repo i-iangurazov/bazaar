@@ -1,4 +1,3 @@
-import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
 
 import { getServerAuthToken } from "@/server/auth/token";
@@ -48,8 +47,7 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
       },
     });
 
-    const stream = createReadStream(download.storagePath);
-    const body = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+    const body = Readable.toWeb(download.stream) as ReadableStream<Uint8Array>;
 
     return new Response(body, {
       status: 200,

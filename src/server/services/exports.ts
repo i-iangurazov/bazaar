@@ -1,6 +1,8 @@
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { Readable } from "node:stream";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import {
   CashDrawerMovementType,
   CustomerOrderStatus,
@@ -14,9 +16,11 @@ import {
   StockMovementType,
   type ExportJob,
 } from "@prisma/client";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import * as XLSX from "xlsx";
 
 import { prisma } from "@/server/db/prisma";
+import { isProductionRuntime } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { sanitizeSpreadsheetValue, toCsv } from "@/server/services/csv";
@@ -55,6 +59,8 @@ const DEFAULT_EXPORT_FORMAT: ExportFormat = "csv";
 const DEFAULT_EXPORT_LIST_LIMIT = 50;
 const MAX_EXPORT_LIST_LIMIT = 200;
 const MAX_ACTIVE_EXPORT_JOBS_PER_ORG = 20;
+const R2_STORAGE_PREFIX = "r2://";
+const EXPORT_R2_KEY_PREFIX = "exports";
 
 const formatDay = (date: Date) => date.toISOString().slice(0, 10);
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
@@ -80,19 +86,228 @@ const buildFileName = (type: ExportType, jobId: string, format: ExportFormat) =>
 
 type ExportDownloadUnavailableReason = "exportFileMissing";
 
+type ExportR2Config = {
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucketName: string;
+  endpoint: string;
+};
+
+type ExportArtifactStats = {
+  size: number;
+};
+
+type ExportArtifactStream = {
+  stream: Readable;
+  fileSize: number;
+};
+
+const normalizePathSegment = (value: string) =>
+  value.replace(/[^a-zA-Z0-9_-]/g, "").trim() || "default";
+
+const resolveExportR2Config = (): ExportR2Config | null => {
+  const accountId = process.env.R2_ACCOUNT_ID?.trim() ?? "";
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim() ?? "";
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim() ?? "";
+  const bucketName = process.env.R2_BUCKET_NAME?.trim() ?? "";
+  const endpoint =
+    process.env.R2_ENDPOINT?.trim() ||
+    (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
+
+  if (!accessKeyId || !secretAccessKey || !bucketName || !endpoint) {
+    return null;
+  }
+
+  return {
+    accessKeyId,
+    secretAccessKey,
+    bucketName,
+    endpoint,
+  };
+};
+
+const shouldUseR2ExportStorage = () => {
+  const explicitProvider = process.env.EXPORT_STORAGE_PROVIDER?.trim().toLowerCase();
+  if (explicitProvider) {
+    return explicitProvider === "r2";
+  }
+  return (
+    isProductionRuntime() && process.env.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() === "r2"
+  );
+};
+
+let exportR2Client: S3Client | null = null;
+
+const getExportR2Client = (config: ExportR2Config) => {
+  if (exportR2Client) {
+    return exportR2Client;
+  }
+
+  exportR2Client = new S3Client({
+    region: "auto",
+    endpoint: config.endpoint,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+  });
+
+  return exportR2Client;
+};
+
+const buildExportR2Key = (organizationId: string, jobId: string, fileName: string) =>
+  [
+    EXPORT_R2_KEY_PREFIX,
+    normalizePathSegment(organizationId),
+    normalizePathSegment(jobId),
+    fileName.replace(/[^a-zA-Z0-9_.-]/g, "_"),
+  ].join("/");
+
+const formatR2StoragePath = (bucketName: string, key: string) =>
+  `${R2_STORAGE_PREFIX}${bucketName}/${key}`;
+
+const parseR2StoragePath = (storagePath: string) => {
+  if (!storagePath.startsWith(R2_STORAGE_PREFIX)) {
+    return null;
+  }
+  const withoutPrefix = storagePath.slice(R2_STORAGE_PREFIX.length);
+  const slashIndex = withoutPrefix.indexOf("/");
+  if (slashIndex <= 0) {
+    return null;
+  }
+
+  const bucketName = withoutPrefix.slice(0, slashIndex);
+  const key = withoutPrefix.slice(slashIndex + 1);
+  const config = resolveExportR2Config();
+  if (!key || !config || config.bucketName !== bucketName) {
+    return null;
+  }
+
+  return { config, key };
+};
+
+const toReadable = (body: unknown): Readable => {
+  if (body instanceof Readable) {
+    return body;
+  }
+  if (body && typeof (body as { transformToWebStream?: unknown }).transformToWebStream === "function") {
+    return Readable.fromWeb(
+      (
+        body as { transformToWebStream: () => NodeReadableStream<Uint8Array> }
+      ).transformToWebStream(),
+    );
+  }
+  if (body && typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] === "function") {
+    return Readable.from(body as AsyncIterable<Uint8Array>);
+  }
+  throw new AppError("exportFileMissing", "CONFLICT", 410);
+};
+
+const writeExportArtifact = async (input: {
+  organizationId: string;
+  jobId: string;
+  fileName: string;
+  content: Buffer;
+  mimeType: string;
+}) => {
+  if (shouldUseR2ExportStorage()) {
+    const config = resolveExportR2Config();
+    if (!config) {
+      throw new AppError("exportStorageNotConfigured", "INTERNAL_SERVER_ERROR", 500);
+    }
+    const key = buildExportR2Key(input.organizationId, input.jobId, input.fileName);
+    await getExportR2Client(config).send(
+      new PutObjectCommand({
+        Bucket: config.bucketName,
+        Key: key,
+        Body: input.content,
+        ContentType: input.mimeType,
+        CacheControl: "private, no-store",
+      }),
+    );
+    return formatR2StoragePath(config.bucketName, key);
+  }
+
+  const directory = await ensureExportDir();
+  const storagePath = join(directory, input.fileName);
+  await fs.writeFile(storagePath, input.content);
+  return storagePath;
+};
+
+const openExportArtifactStream = async (
+  storagePath: string,
+): Promise<ExportArtifactStream | null> => {
+  if (storagePath.startsWith(R2_STORAGE_PREFIX)) {
+    const location = parseR2StoragePath(storagePath);
+    if (!location) {
+      return null;
+    }
+    try {
+      const response = await getExportR2Client(location.config).send(
+        new GetObjectCommand({
+          Bucket: location.config.bucketName,
+          Key: location.key,
+        }),
+      );
+      const fileSize =
+        typeof response.ContentLength === "number"
+          ? response.ContentLength
+          : (await readExportFileStats(storagePath))?.size;
+      if (!response.Body || typeof fileSize !== "number") {
+        return null;
+      }
+      return {
+        stream: toReadable(response.Body),
+        fileSize,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const stats = await readExportFileStats(storagePath);
+  if (!stats) {
+    return null;
+  }
+  return {
+    stream: createReadStream(storagePath),
+    fileSize: stats.size,
+  };
+};
+
 export type ExportJobWithDownloadState = ExportJob & {
   downloadAvailable: boolean;
   downloadUrl: string | null;
   downloadUnavailableReason: ExportDownloadUnavailableReason | null;
 };
 
-const readExportFileStats = async (storagePath?: string | null) => {
+const readExportFileStats = async (
+  storagePath?: string | null,
+): Promise<ExportArtifactStats | null> => {
   if (!storagePath) {
     return null;
   }
+  if (storagePath.startsWith(R2_STORAGE_PREFIX)) {
+    const location = parseR2StoragePath(storagePath);
+    if (!location) {
+      return null;
+    }
+    try {
+      const response = await getExportR2Client(location.config).send(
+        new HeadObjectCommand({
+          Bucket: location.config.bucketName,
+          Key: location.key,
+        }),
+      );
+      return typeof response.ContentLength === "number" ? { size: response.ContentLength } : null;
+    } catch {
+      return null;
+    }
+  }
   try {
     const stats = await fs.stat(storagePath);
-    return stats.isFile() ? stats : null;
+    return stats.isFile() ? { size: stats.size } : null;
   } catch {
     return null;
   }
@@ -2027,7 +2242,7 @@ export const resolveExportJobDownload = async (input: {
   jobId: string;
   user: StoreAccessUser;
 }) => {
-  const job = await prisma.exportJob.findFirst({
+  let job = await prisma.exportJob.findFirst({
     where: {
       id: input.jobId,
       organizationId: input.organizationId,
@@ -2041,8 +2256,23 @@ export const resolveExportJobDownload = async (input: {
     throw new AppError("exportNotReady", "CONFLICT", 409);
   }
 
-  const stats = await readExportFileStats(job.storagePath);
-  if (!stats || !job.storagePath) {
+  let artifact = job.storagePath ? await openExportArtifactStream(job.storagePath) : null;
+  if (!artifact) {
+    await runExportJob({
+      jobId: job.id,
+      organizationId: input.organizationId,
+      requestId: `export-download-rebuild-${job.id}`,
+    });
+    job = await prisma.exportJob.findFirst({
+      where: {
+        id: input.jobId,
+        organizationId: input.organizationId,
+      },
+    });
+    artifact = job?.storagePath ? await openExportArtifactStream(job.storagePath) : null;
+  }
+
+  if (!job || !artifact || !job.storagePath) {
     throw new AppError("exportFileMissing", "CONFLICT", 410);
   }
 
@@ -2056,7 +2286,8 @@ export const resolveExportJobDownload = async (input: {
     storagePath: job.storagePath,
     fileName: job.fileName ?? `export-${job.id}.${defaultExtension}`,
     mimeType: job.mimeType ?? "text/csv;charset=utf-8",
-    fileSize: stats.size,
+    fileSize: artifact.fileSize,
+    stream: artifact.stream,
   };
 };
 
@@ -2233,11 +2464,14 @@ const runExportJob = async (
     const { header, keys, rows } = await buildExportData(input, store, compliance);
     const format = input.format ?? DEFAULT_EXPORT_FORMAT;
     const file = buildExportFile(format, header, keys, rows);
-    const directory = await ensureExportDir();
     const fileName = buildFileName(input.type, job.id, format);
-    const storagePath = join(directory, fileName);
-
-    await fs.writeFile(storagePath, file.content);
+    const storagePath = await writeExportArtifact({
+      organizationId: input.organizationId,
+      jobId: job.id,
+      fileName,
+      content: file.content,
+      mimeType: file.mimeType,
+    });
 
     const updated = await prisma.exportJob.update({
       where: { id: job.id },

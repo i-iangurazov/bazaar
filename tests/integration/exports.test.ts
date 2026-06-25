@@ -7,6 +7,7 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
 import { runJob } from "../../src/server/jobs";
 import { prisma } from "../../src/server/db/prisma";
+import { resolveExportJobDownload } from "../../src/server/services/exports";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -202,5 +203,59 @@ describeDb("exports", () => {
     expect(missing?.downloadAvailable).toBe(false);
     expect(missing?.downloadUrl).toBeNull();
     expect(missing?.downloadUnavailableReason).toBe("exportFileMissing");
+  });
+
+  it("regenerates a missing completed export when the download route is opened", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+
+    const created = await caller.exports.create({
+      storeId: store.id,
+      type: ExportType.PRICE_LIST,
+      format: "csv",
+      periodStart: new Date("2025-01-01T00:00:00Z"),
+      periodEnd: new Date("2025-01-31T23:59:59Z"),
+    });
+
+    await runJob("export-job", { jobId: created.id });
+    const completed = await caller.exports.get({ jobId: created.id });
+    expect(completed?.storagePath).toBeTruthy();
+    if (!completed?.storagePath) {
+      throw new Error("export storage path missing");
+    }
+    await fs.unlink(completed.storagePath);
+
+    const download = await resolveExportJobDownload({
+      organizationId: org.id,
+      jobId: created.id,
+      user: {
+        id: adminUser.id,
+        organizationId: org.id,
+        role: adminUser.role,
+        isOrgOwner: true,
+        isPlatformOwner: false,
+      },
+    });
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of download.stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const csv = Buffer.concat(chunks).toString("utf8");
+
+    expect(download.fileName).toBe(`price_list-${created.id}.csv`);
+    expect(download.fileSize).toBe(Buffer.byteLength(csv));
+    expect(csv.startsWith("\ufeff")).toBe(true);
+    expect(csv).toContain("orgId,storeCode,sku,productName");
+
+    const refreshed = await caller.exports.get({ jobId: created.id });
+    expect(refreshed?.downloadAvailable).toBe(true);
+    expect(refreshed?.downloadUrl).toBe(`/api/exports/${created.id}`);
+    expect(refreshed?.downloadUnavailableReason).toBeNull();
   });
 });
