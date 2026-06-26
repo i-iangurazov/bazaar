@@ -2559,7 +2559,8 @@
         "scannerUnavailableDescription": "Камерный сканер пока не подключён. Используйте аппаратный сканер или введите штрихкод ниже.",
         "hardwareScannerPlaceholder": "Сканер или штрихкод",
         "salePrice": "Цена продажи",
-        "quantity": "Количество"
+        "quantity": "Количество",
+        "removeProduct": "Удалить товар"
       }
     },
     "shifts": {

@@ -2559,7 +2559,8 @@
         "scannerUnavailableDescription": "Камера сканери азырынча туташкан эмес. Аппараттык сканерди колдонуңуз же штрихкодду төмөндө киргизиңиз.",
         "hardwareScannerPlaceholder": "Сканер же штрихкод",
         "salePrice": "Сатуу баасы",
-        "quantity": "Саны"
+        "quantity": "Саны",
+        "removeProduct": "Товарды өчүрүү"
       }
     },
     "shifts": {

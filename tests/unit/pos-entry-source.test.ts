@@ -322,10 +322,18 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("keepPreviousData: !useImmediateCatalogSearch");
     expect(pageSource).toContain("refetchOnWindowFocus: false");
     expect(handleAddLineBlock.indexOf("pendingAddProductIdsRef.current.has(productId)")).toBeLessThan(
-      handleAddLineBlock.indexOf("applyOptimisticAdd(productForCart)"),
+      handleAddLineBlock.indexOf("applyOptimisticAdd(productForCart"),
+    );
+    expect(handleAddLineBlock).toContain("const shouldIncrementExisting = options.incrementExisting ?? true;");
+    expect(handleAddLineBlock).toContain(
+      "applyOptimisticAdd(productForCart, { incrementExisting: shouldIncrementExisting });",
     );
     expect(mobileSelectBlock).toContain("mobilePendingProductId === product.id");
+    expect(mobileSelectBlock).toContain("mobileProductSelectLocksRef.current[product.id]");
     expect(mobileSelectBlock).toContain("setMobilePendingProductId(product.id)");
+    expect(mobileSelectBlock).toContain(
+      "handleAddLine(product.id, product, { refocusSearch: false, incrementExisting: false })",
+    );
     expect(pageSource).toContain("const isPendingProduct = mobilePendingProductId === product.id;");
     expect(pageSource).toContain("data-product-id={product.id}");
   });

@@ -630,6 +630,7 @@ const PosSellPage = () => {
   const pendingCartMutationCountRef = useRef(0);
   const removedOptimisticLineIdsRef = useRef<Set<string>>(new Set());
   const pendingAddProductIdsRef = useRef<Set<string>>(new Set());
+  const mobileProductSelectLocksRef = useRef<Record<string, number>>({});
   const pendingCartSyncPromisesRef = useRef<Set<Promise<void>>>(new Set());
   const draftCreationRef = useRef<Promise<{ id: string }> | null>(null);
   const lineSyncTimersRef = useRef<Record<string, number>>({});
@@ -1225,7 +1226,7 @@ const PosSellPage = () => {
       shiftQuery.data?.store ?? selectedRegister?.store ?? null,
     ),
   );
-  const saleLines = optimisticSaleLines ?? sale?.lines ?? [];
+  const saleLines: PosCartLine[] = optimisticSaleLines ?? (sale?.lines as PosCartLine[] | undefined) ?? [];
   const hasCartLines = saleLines.length > 0;
   const cartSubtotalKgs = calculateCartSubtotalKgs(saleLines);
   const discountDraftActive = discountEditorOpen || discountDraft.trim().length > 0;
@@ -1556,13 +1557,16 @@ const PosSellPage = () => {
   );
 
   const applyOptimisticAdd = useCallback(
-    (product: PosCartProduct) => {
+    (product: PosCartProduct, options: { incrementExisting?: boolean } = {}) => {
       setOptimisticSaleLines((current) => {
         const baseLines = current ?? getCurrentCartLines();
         const existingLine = findCartLineForProduct(baseLines, product.id);
         const existingIndex = existingLine ? baseLines.indexOf(existingLine) : -1;
 
         if (existingIndex >= 0) {
+          if (options.incrementExisting === false) {
+            return baseLines;
+          }
           return baseLines.map((line, index) =>
             index === existingIndex ? recalculateCartLine(line, { qty: line.qty + 1 }) : line,
           );
@@ -1745,7 +1749,7 @@ const PosSellPage = () => {
     async (
       productId: string,
       product?: PosCartProduct,
-      options: { refocusSearch?: boolean } = {},
+      options: { refocusSearch?: boolean; incrementExisting?: boolean } = {},
     ): Promise<boolean> => {
       if (!registerId) {
         return false;
@@ -1764,8 +1768,9 @@ const PosSellPage = () => {
       const existingLineBeforeAdd = productForCart
         ? findCartLineForProduct(linesBeforeOptimisticAdd, productId)
         : null;
+      const shouldIncrementExisting = options.incrementExisting ?? true;
       if (productForCart) {
-        applyOptimisticAdd(productForCart);
+        applyOptimisticAdd(productForCart, { incrementExisting: shouldIncrementExisting });
         setLastCompletedSale(null);
         setAutoReceiptStatus("idle");
         setMobileCheckoutOpen(true);
@@ -1775,6 +1780,9 @@ const PosSellPage = () => {
       }
 
       if (existingLineBeforeAdd) {
+        if (!shouldIncrementExisting) {
+          return true;
+        }
         const localLineId = existingLineBeforeAdd?.id ?? optimisticLineId;
         const nextQty = (existingLineBeforeAdd?.qty ?? 0) + 1;
         if (nextQty > 0) {
@@ -1792,6 +1800,14 @@ const PosSellPage = () => {
           return false;
         }
         setSaleId(targetSaleId);
+        const currentLineBeforeServerAdd = findCartLineForProduct(getCurrentCartLines(), productId);
+        if (
+          !shouldIncrementExisting &&
+          currentLineBeforeServerAdd &&
+          (currentLineBeforeServerAdd.serverLineId || !isOptimisticLineId(currentLineBeforeServerAdd.id))
+        ) {
+          return true;
+        }
 
         const updatedLine = await trackCartSyncPromise(
           addLineMutation.mutateAsync({
@@ -5751,7 +5767,15 @@ const PosSellPage = () => {
     if (mobileRedesignActive) {
       const showMobileRegisterPanel = !registerId || !selectedRegister || !hasOpenShift;
       const activeLine = mobileActiveLineId
-        ? saleLines.find((line) => line.id === mobileActiveLineId) ?? null
+        ? saleLines.find((line) => line.id === mobileActiveLineId) ??
+          saleLines.find((line) => line.serverLineId === mobileActiveLineId) ??
+          saleLines.find((line) => {
+            const remoteLineId = optimisticLineServerIdsRef.current[mobileActiveLineId];
+            return Boolean(
+              remoteLineId && (line.id === remoteLineId || line.serverLineId === remoteLineId),
+            );
+          }) ??
+          null
         : null;
       const documentDate = new Date(sale?.createdAt ?? Date.now());
       const documentDateLabel = new Intl.DateTimeFormat(locale, {
@@ -5801,6 +5825,8 @@ const PosSellPage = () => {
         setMobilePendingProductId(null);
         setMobilePendingLineInputMode("qty");
         setMobileKeypadReplaceNext(true);
+        setMobileScreen("sale");
+        setMobileSaleTab("document");
       };
 
       const confirmMobileLineSheet = () => {
@@ -5810,9 +5836,21 @@ const PosSellPage = () => {
       };
 
       const handleMobileProductSelect = (product: PosCatalogProduct) => {
-        if (pendingAddProductIdsRef.current.has(product.id) || mobilePendingProductId === product.id) {
+        const now = Date.now();
+        if (
+          pendingAddProductIdsRef.current.has(product.id) ||
+          mobilePendingProductId === product.id ||
+          (mobileProductSelectLocksRef.current[product.id] ?? 0) > now
+        ) {
           return;
         }
+        mobileProductSelectLocksRef.current[product.id] = now + 700;
+        window.setTimeout(() => {
+          if ((mobileProductSelectLocksRef.current[product.id] ?? 0) <= Date.now()) {
+            delete mobileProductSelectLocksRef.current[product.id];
+          }
+        }, 700);
+
         const existingLine = findCartLineForProduct(getCurrentCartLines(), product.id);
         const startsWithPrice = (product.effectivePriceKgs ?? product.basePriceKgs) === null;
         setMobileLineInputMode(startsWithPrice ? "price" : "qty");
@@ -5825,7 +5863,23 @@ const PosSellPage = () => {
         }
 
         setMobilePendingProductId(product.id);
-        void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: false }));
+        void trackCartSyncPromise(
+          handleAddLine(product.id, product, { refocusSearch: false, incrementExisting: false }),
+        );
+      };
+
+      const handleMobileRemoveActiveLine = () => {
+        if (!activeLine) {
+          return;
+        }
+        const lineId = activeLine.id;
+        setMobileActiveLineId(null);
+        setMobilePendingProductId(null);
+        setMobilePendingLineInputMode("qty");
+        setMobileKeypadReplaceNext(true);
+        setMobileScreen("sale");
+        setMobileSaleTab("document");
+        void trackCartSyncPromise(handleRemoveLine(lineId));
       };
 
       const activeLineInputValue = () => {
@@ -6279,10 +6333,10 @@ const PosSellPage = () => {
             </div>
           ) : null}
           {renderOrderSection()}
+          {renderMobileLines()}
+          {renderAddProductsBar()}
           {renderPropertiesSection()}
           {renderCounterpartiesSection()}
-          {renderAddProductsBar()}
-          {renderMobileLines()}
           {renderCommentBar()}
           {hasCartLines ? (
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
@@ -6793,6 +6847,17 @@ const PosSellPage = () => {
                   </span>
                 </button>
               </div>
+
+              <button
+                type="button"
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-[#5a2525] bg-[#2b1717] px-3 text-[14px] font-semibold text-[#ff8a8a] disabled:opacity-50"
+                data-testid="pos-line-remove"
+                onClick={handleMobileRemoveActiveLine}
+                disabled={isLineBusy || completeMutation.isLoading}
+              >
+                <DeleteIcon className="h-4 w-4" aria-hidden />
+                {t("sell.mobile.removeProduct")}
+              </button>
 
               <div className="mt-3 grid grid-cols-4 gap-2.5">
                 {["1", "2", "3", "+", "4", "5", "6", "-", "7", "8", "9", "=", ",", "0"].map((key) => (

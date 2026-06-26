@@ -2559,7 +2559,8 @@
         "scannerUnavailableDescription": "Camera scanning is not connected yet. Use a hardware scanner or enter a barcode below.",
         "hardwareScannerPlaceholder": "Scanner or barcode",
         "salePrice": "Sale price",
-        "quantity": "Quantity"
+        "quantity": "Quantity",
+        "removeProduct": "Remove product"
       }
     },
     "shifts": {
