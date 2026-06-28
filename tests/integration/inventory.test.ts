@@ -86,21 +86,21 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, product.id);
   });
 
-  it("blocks negative stock when not allowed", async () => {
+  it("allows stock correction to create negative stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
-    await expect(
-      adjustStock({
-        storeId: store.id,
-        productId: product.id,
-        qtyDelta: -5,
-        reason: "Shrink",
-        actorId: adminUser.id,
-        organizationId: org.id,
-        requestId: "req-negative",
-        idempotencyKey: "idem-negative",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    const result = await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: -5,
+      reason: "Shrink",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-negative",
+      idempotencyKey: "idem-negative",
+    });
+
+    expect(result.onHand).toBe(-5);
   });
 
   it("rejects zero manual adjustments", async () => {
@@ -862,6 +862,49 @@ describeDb("inventory service", () => {
     expect(movements.map((movement) => movement.qtyDelta)).toEqual([-3, 2]);
   });
 
+  it("bulk set-on-hand can correct selected rows to negative stock", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 3,
+      reason: "Seed stock",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-negative-seed",
+      idempotencyKey: "idem-bulk-negative-seed",
+    });
+
+    const snapshot = await prisma.inventorySnapshot.findUniqueOrThrow({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+
+    const result = await bulkSetOnHand({
+      storeId: store.id,
+      snapshotIds: [snapshot.id],
+      targetOnHand: -2,
+      reason: "Recount correction",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-bulk-negative",
+      idempotencyKey: "idem-bulk-negative",
+    });
+
+    expect(result.updatedCount).toBe(1);
+
+    const updated = await prisma.inventorySnapshot.findUniqueOrThrow({
+      where: { id: snapshot.id },
+    });
+    expect(updated.onHand).toBe(-2);
+  });
+
   it("creates paired transfer movements and updates both snapshots", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const caller = createTestCaller({
@@ -1458,7 +1501,7 @@ describeDb("inventory service", () => {
     expect(document?.lines.some((line) => line.productId === product.id)).toBe(false);
   });
 
-  it("rejects write-off quantity above stock when negative stock is disabled", async () => {
+  it("allows write-off quantity above stock and records negative stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     await adjustStock({
@@ -1472,17 +1515,17 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-write-off-over-seed",
     });
 
-    await expect(
-      postStockWriteOff({
-        storeId: store.id,
-        reason: "Потеря",
-        lines: [{ productId: product.id, qty: 3 }],
-        actorId: adminUser.id,
-        organizationId: org.id,
-        requestId: "req-write-off-over",
-        idempotencyKey: "idem-write-off-over",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    const result = await postStockWriteOff({
+      storeId: store.id,
+      reason: "Потеря",
+      lines: [{ productId: product.id, qty: 3 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-write-off-over",
+      idempotencyKey: "idem-write-off-over",
+    });
+
+    expect(result.lines[0]?.onHand).toBe(-1);
 
     const snapshot = await prisma.inventorySnapshot.findUnique({
       where: {
@@ -1493,7 +1536,7 @@ describeDb("inventory service", () => {
         },
       },
     });
-    expect(snapshot?.onHand).toBe(2);
+    expect(snapshot?.onHand).toBe(-1);
   });
 
   it("assigns the product to the destination store when transferring stock", async () => {
@@ -1545,7 +1588,7 @@ describeDb("inventory service", () => {
     expect(destinationAssignment?.assignedById).toBe(adminUser.id);
   });
 
-  it("rejects transfer quantity above available stock when negative stock is disabled", async () => {
+  it("allows transfer quantity above available source stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const storeB = await prisma.store.create({
       data: {
@@ -1573,19 +1616,20 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-transfer-over-seed",
     });
 
-    await expect(
-      transferStock({
-        fromStoreId: store.id,
-        toStoreId: storeB.id,
-        productId: product.id,
-        qty: 4,
-        note: "Too much",
-        actorId: adminUser.id,
-        organizationId: org.id,
-        requestId: "req-transfer-over",
-        idempotencyKey: "idem-transfer-over",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    const result = await transferStock({
+      fromStoreId: store.id,
+      toStoreId: storeB.id,
+      productId: product.id,
+      qty: 4,
+      note: "Move more than available",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-transfer-over",
+      idempotencyKey: "idem-transfer-over",
+    });
+
+    expect(result.lines[0]?.outOnHand).toBe(-1);
+    expect(result.lines[0]?.inOnHand).toBe(4);
 
     const snapshot = await prisma.inventorySnapshot.findUnique({
       where: {
@@ -1596,7 +1640,7 @@ describeDb("inventory service", () => {
         },
       },
     });
-    expect(snapshot?.onHand).toBe(3);
+    expect(snapshot?.onHand).toBe(-1);
   });
 
   it("treats transfer idempotency keys as replay safe", async () => {

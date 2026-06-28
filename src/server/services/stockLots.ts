@@ -13,6 +13,7 @@ export const applyStockLotAdjustment = async (
     qtyDelta: number;
     expiryDate?: Date | null;
     organizationId: string;
+    allowNegativeStock?: boolean;
   },
 ) => {
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
@@ -33,11 +34,12 @@ export const applyStockLotAdjustment = async (
     },
   });
 
+  const allowNegativeStock = store.allowNegativeStock || input.allowNegativeStock === true;
   const nextQty = (existing?.onHandQty ?? 0) + input.qtyDelta;
-  if (!store.allowNegativeStock && nextQty < 0) {
+  if (!allowNegativeStock && nextQty < 0) {
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }
-  if (!existing && input.qtyDelta < 0) {
+  if (!existing && input.qtyDelta < 0 && !allowNegativeStock) {
     throw new AppError("lotNotFound", "NOT_FOUND", 404);
   }
 

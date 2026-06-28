@@ -631,7 +631,7 @@ const InventoryPage = () => {
   const bulkOnHandSchema = useMemo(
     () =>
       z.object({
-        targetOnHand: z.coerce.number().int().min(0, t("onHandNonNegative")),
+        targetOnHand: z.coerce.number().int(),
         reason: z.string().trim().min(3, t("reasonRequired")),
       }),
     [t],
@@ -3668,7 +3668,6 @@ const InventoryPage = () => {
                         {...field}
                         type="number"
                         inputMode="numeric"
-                        min={0}
                         placeholder={t("qtyPlaceholder")}
                       />
                     </FormControl>

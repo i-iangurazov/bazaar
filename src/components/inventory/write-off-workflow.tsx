@@ -440,11 +440,6 @@ export const InventoryWriteOffsPage = ({
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
         const quantityValid = Number.isInteger(quantity) && quantity > 0;
-        const exceedsStock =
-          !isEditMode &&
-          quantityValid &&
-          !selectedStore?.allowNegativeStock &&
-          quantity > line.currentStock;
         const lineTotal =
           quantityValid && typeof line.unitCostKgs === "number"
             ? quantity * line.unitCostKgs
@@ -453,19 +448,17 @@ export const InventoryWriteOffsPage = ({
           key: line.key,
           quantity,
           quantityValid,
-          exceedsStock,
           stockAfter: quantityValid ? line.currentStock - quantity : line.currentStock,
           lineTotal,
         };
       }),
-    [isEditMode, lines, selectedStore?.allowNegativeStock],
+    [lines],
   );
   const metricByKey = useMemo(
     () => new Map(lineMetrics.map((metric) => [metric.key, metric])),
     [lineMetrics],
   );
   const invalidQuantity = lineMetrics.some((metric) => !metric.quantityValid);
-  const hasExceededStock = lineMetrics.some((metric) => metric.exceedsStock);
   const hasTotalCost = lines.some((line) => typeof line.unitCostKgs === "number");
   const summary = useMemo(
     () => ({
@@ -488,9 +481,7 @@ export const InventoryWriteOffsPage = ({
         ? t("writeOffValidationNoProducts")
         : invalidQuantity
           ? t("writeOffValidationInvalidQuantity")
-          : hasExceededStock
-            ? t("writeOffValidationExceedsStock")
-            : "";
+          : "";
 
   const writeOffMutation = trpc.inventory.postStockWriteOff.useMutation({
     onSuccess: async (result) => {
@@ -743,11 +734,7 @@ export const InventoryWriteOffsPage = ({
                 {t("writeOffSearchTitle")}
               </h3>
               {selectedStore ? (
-                <Badge variant={selectedStore.allowNegativeStock ? "warning" : "muted"}>
-                  {selectedStore.allowNegativeStock
-                    ? t("writeOffNegativeAllowed")
-                    : selectedStore.name}
-                </Badge>
+                <Badge variant="muted">{selectedStore.name}</Badge>
               ) : null}
             </div>
             <div className="relative">
@@ -918,7 +905,7 @@ export const InventoryWriteOffsPage = ({
                           data-write-off-input="quantity"
                           className={cn(
                             "h-8 px-2",
-                            (!metric?.quantityValid || metric?.exceedsStock) && "border-danger/60",
+                            !metric?.quantityValid && "border-danger/60",
                           )}
                         />
                       </div>

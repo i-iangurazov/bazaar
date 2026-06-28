@@ -234,6 +234,7 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           note: input.reason,
           actorId: input.actorId,
           organizationId: input.organizationId,
+          allowNegativeStock: true,
         });
 
         const lot = await applyStockLotAdjustment(tx, {
@@ -243,6 +244,7 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           qtyDelta,
           expiryDate: input.expiryDate ?? null,
           organizationId: input.organizationId,
+          allowNegativeStock: true,
         });
         if (lot) {
           await tx.stockMovement.update({
@@ -304,9 +306,6 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
   const snapshotIds = Array.from(new Set(input.snapshotIds.filter(Boolean)));
   if (!snapshotIds.length) {
     throw new AppError("inventorySelectionRequired", "BAD_REQUEST", 400);
-  }
-  if (input.targetOnHand < 0) {
-    throw new AppError("inventoryOnHandNonNegative", "BAD_REQUEST", 400);
   }
 
   const chunks: string[][] = [];
@@ -374,6 +373,7 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
                 note: input.reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
+                allowNegativeStock: true,
               });
 
               const lot = await applyStockLotAdjustment(tx, {
@@ -383,6 +383,7 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
                 qtyDelta,
                 expiryDate: null,
                 organizationId: input.organizationId,
+                allowNegativeStock: true,
               });
               if (lot) {
                 await tx.stockMovement.update({
@@ -1062,6 +1063,7 @@ export const postStockWriteOff = async (
             actorId: input.actorId,
             organizationId: input.organizationId,
             movementDate: input.date ?? null,
+            allowNegativeStock: true,
           });
 
           await writeAuditLog(tx, {
@@ -1355,6 +1357,7 @@ export const transferStock = async (input: TransferStockInput) => {
             note: input.note ?? undefined,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowNegativeStock: true,
           });
 
           const inMovement = await applyStockMovement(tx, {
@@ -1378,6 +1381,7 @@ export const transferStock = async (input: TransferStockInput) => {
             qtyDelta: -Math.abs(qty),
             expiryDate: line.expiryDate ?? null,
             organizationId: input.organizationId,
+            allowNegativeStock: true,
           });
           if (outLot) {
             await tx.stockMovement.update({
@@ -1894,7 +1898,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
-                allowNegativeStock: qtyDelta > 0,
+                allowNegativeStock: true,
               });
               if (desiredLine && qtyDelta > 0 && unitCostKgs !== null) {
                 await updateProductCost(tx, {
@@ -1932,6 +1936,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
+                allowNegativeStock: true,
               });
               changedItems.set(`${sourceStoreId}:${key}`, {
                 storeId: sourceStoreId,
@@ -1962,6 +1967,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
               note: reason,
               actorId: input.actorId,
               organizationId: input.organizationId,
+              allowNegativeStock: true,
             });
             changedItems.set(`${sourceStoreId}:${key}`, {
               storeId: sourceStoreId,
@@ -2007,6 +2013,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
+                allowNegativeStock: true,
               });
               changedItems.set(`${oldDestinationStoreId}:${key}`, {
                 storeId: oldDestinationStoreId,
@@ -2384,12 +2391,9 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
       const onHand = onHandMap.get(snapshotKey) ?? 0;
       const onOrder = onOrderMap.get(snapshotKey) ?? 0;
 
-      if (!store.allowNegativeStock && onHand < 0) {
-        throw new AppError("negativeStockNotAllowed", "CONFLICT", 409);
-      }
-
       const before = snapshotMap.get(snapshotKey) ?? null;
       const resolvedVariantId = before?.variantId ?? (variantKey === "BASE" ? null : variantKey);
+      const allowNegativeStock = store.allowNegativeStock || onHand < 0;
       const updated = await tx.inventorySnapshot.upsert({
         where: {
           storeId_productId_variantKey: {
@@ -2401,7 +2405,7 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
         update: {
           onHand,
           onOrder,
-          allowNegativeStock: store.allowNegativeStock,
+          allowNegativeStock,
         },
         create: {
           storeId: input.storeId,
@@ -2410,7 +2414,7 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
           variantId: resolvedVariantId,
           onHand,
           onOrder,
-          allowNegativeStock: store.allowNegativeStock,
+          allowNegativeStock,
         },
       });
 
